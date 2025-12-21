@@ -1,0 +1,12 @@
+[project]
+name = "idb"
+version = "0.1"
+dependencies = [
+  "starlette",
+  "openapi-core",
+  "aioitertools",
+  "cryptography",
+  "sqlalchemy",
+  "databases",
+  "aiosqlite",
+]
