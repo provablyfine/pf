@@ -37,20 +37,19 @@ class Config:
 
 
 def _config_function(args):
+    response = requests.get(args.directory)
+    response.raise_for_status()
     config = Config(
         directory_url=args.directory,
         root_key_id=args.root_key_id,
-        ignore_ssh_agent=args.ignore_ssh_agent
+        ignore_ssh_agent=args.ignore_ssh_agent,
+        directory=response.json()
     )
     config.save(args.config)
 
 
 def _register_function(args):
-    config = Config.load(args.config)
-    response = requests.get(config.directory_url)
-    response.raise_for_status()
-    config.directory = response.json()
-    config.save(args.config)
+    pass
 
 
 def _login_function(args):

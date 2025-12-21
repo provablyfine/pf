@@ -3,6 +3,21 @@ import sqlalchemy
 # Database table definitions.
 metadata = sqlalchemy.MetaData()
 
+
+identity_key = sqlalchemy.Table(
+    "identity_key",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.String, index=True, unique=True, nullable=False),
+    sqlalchemy.Column("identity_key", sqlalchemy.JSON, nullable=False),
+)
+
+identity_invitation = sqlalchemy.Table(
+    "identity_invitation",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.String, index=True, unique=True, nullable=False),
+    sqlalchemy.Column("identity_invitation", sqlalchemy.JSON, nullable=False),
+)
+
 identity = sqlalchemy.Table(
     "identity",
     metadata,
