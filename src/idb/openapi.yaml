@@ -42,6 +42,20 @@ components:
           schema:
             $ref: '#/components/schemas/ProblemDocument'
 
+    InitializeResponse:
+      description: First identity created
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [key_id, key]
+            additionalProperties: false
+            properties:
+              key_id:
+                type: string
+              key:
+                type: string
+
 
 paths:
   /admin/directory:
@@ -55,3 +69,13 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Directory"
+
+  /admin/initialize:
+    post:
+      summary: Initialize
+      description: Setup the application after first startup
+      responses:
+        "204":
+          description: Allready created
+        "200":
+          $ref: '#/components/responses/InitializeResponse'
