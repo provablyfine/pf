@@ -3,49 +3,26 @@ import sys
 import traceback
 import os
 import os.path
-import json
-import dataclasses
+import logging
 
 import requests
 
 from . import exceptions
-from . import admin_ctl
-from . import ssh_ctl
-
-
-@dataclasses.dataclass
-class Config:
-    directory_url: str
-    root_key_id: str
-    ignore_ssh_agent: bool
-    directory: dict = None
-
-    @staticmethod
-    def load(filename):
-        with open(filename) as f:
-            data = json.load(f)
-            return Config(**data)
-
-    def save(self, filename):
-        with open(filename, 'w+') as f:
-            json.dump(dict(
-                directory_url=self.directory_url,
-                root_key_id=self.root_key_id,
-                ignore_ssh_agent=self.ignore_ssh_agent,
-                directory=self.directory,
-            ), f)
+from . import admin
+from . import ssh
+from . import config
 
 
 def _config_function(args):
     response = requests.get(args.directory)
     response.raise_for_status()
-    config = Config(
+    c = config.Config(
         directory_url=args.directory,
         root_key_id=args.root_key_id,
         ignore_ssh_agent=args.ignore_ssh_agent,
         directory=response.json()
     )
-    config.save(args.config)
+    c.save(args.config)
 
 
 def _register_function(args):
@@ -62,11 +39,12 @@ def _ping_function(args):
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument('-d', '--debug', help='Increase debugging level', action='count', default=0)
     parser.add_argument('-c', '--config', help='configuration file', default=os.path.abspath(os.path.join(os.getcwd(), 'config.json')))
     subparsers = parser.add_subparsers()
 
     config_parser = subparsers.add_parser('config', help='Create a configuration file')
-    parser.add_argument('-d', '--directory', default='http://127.0.0.1:8000/admin/directory', help='Directory to connect to')
+    parser.add_argument('--directory', default='http://127.0.0.1:8000/admin/directory', help='Directory to connect to')
     parser.add_argument('--root-key-id', help='Key id of the public key of the root certificate.', default=None)
     parser.add_argument('--ignore-ssh-agent', action='store_true', help='Read and write keys from/to disk, regardless of whether or not there is an SSH agent')
     config_parser.set_defaults(func=_config_function)
@@ -86,12 +64,23 @@ def main():
     ping_parser.set_defaults(func=_ping_function)
 
     admin_parser = subparsers.add_parser('admin', help='Admin-related functions')
-    admin_ctl.add_subparsers(admin_parser)
+    admin.add_subparsers(admin_parser)
 
     ssh_parser = subparsers.add_parser('ssh', help='SSH-related functions')
-    ssh_ctl.add_subparsers(ssh_parser)
+    ssh.add_subparsers(ssh_parser)
 
     args = parser.parse_args()
+
+    if args.debug > 0:
+        match args.debug:
+            case 3:
+                level = logging.DEBUG
+            case 2:
+                level = logging.INFO
+            case 1:
+                level = logging.WARN
+        logging.basicConfig(stream=sys.stdout, level=level)
+
 
     try:
         args.func(args)
