@@ -4,11 +4,53 @@ info:
   description: IDB API to control users and hosts
   version: '1.0'
 
+x-bundles:
+  invitation-signature: &InvitationSignature
+    - HMACSignature: []
+      ED25519Signature: []
+    - HMACSignature: []
+      ECDSASignature: []
+  identity-signature: &IdentitySignature
+    - ED25519Signature: []
+    - ECDSASignature: []
+  session-signature: &SessionSignature
+    - ED25519Signature: []
+    - ECDSASignature: []
+
 servers:
   - url: https://api.example.com/idb
     description: IDB directory base path
 
 components:
+  securitySchemes:
+
+    HMACSignature:
+      type: http
+      scheme: signature
+      description: >
+        Signatures are generated according to RFC 9421 via hmac-sha256.
+        The signature must be included in the `Signature` and `Signature-Input`
+        headers.
+      x-signatureAlgorithm: hmac-sha256
+
+    ED25519Signature:
+      type: http
+      scheme: signature
+      description: >
+        Signatures are generated according to RFC 9421 via ed25519.
+        The signature must be included in the `Signature` and `Signature-Input`
+        headers.
+      x-signatureAlgorithm: ed25519
+
+    ECDSASignature:
+      type: http
+      scheme: signature
+      description: >
+        Signatures are generated according to RFC 9421 via ecdsa-p256-sha256.
+        The signature must be included in the `Signature` and `Signature-Input`
+        headers.
+      x-signatureAlgorithm: ecdsa-p256-sha256
+
   schemas:
     ProblemDocument:
       type: object
@@ -33,6 +75,60 @@ components:
       properties:
         initialize:
           type: string
+        accept-invitation:
+          type: string
+
+    ECDSAPublicJWK:
+      description: RFC 7517
+      type: object
+      required: [crv, kty, x, y]
+      additionalProperties: false
+      properties:
+        crv:
+          type: string
+          enum: [P-256]
+        kty:
+          type: string
+          enum: [EC]
+        x:
+          type: string
+        y:
+          type: string
+
+    ED25519PublicJWK:
+      description: RFC 8037
+      type: object
+      required: [crv, kty, x]
+      additionalProperties: false
+      properties:
+        crv:
+          type: string
+          enum: [Ed25519]
+        kty:
+          type: string
+          enum: [OKP]
+        x:
+          type: string
+
+    PublicJWK:
+      description: >
+        We currently support only two types because we do not need to support
+        more. Patches to suport alternatives are welcome :)
+      $oneOf:
+        - $ref: '#/components/schemas/ECDSAPublicJWK'
+        - $ref: '#/components/schemas/ED25519PublicJWK'
+
+    AcceptInvitationRequest:
+      type: object
+      required: [account_public_key, key_id, nonce]
+      additionalProperties: false
+      properties:
+        account_public_key:
+          $ref: '#/components/schemas/PublicJWK'
+        key_id:
+          type: string
+        nonce:
+          type: string
 
   responses:
     ErrorResponse:
@@ -56,6 +152,12 @@ components:
               key:
                 type: string
 
+    AcceptInvitationResponse:
+      description: Invitation accepted
+      content:
+        application/json:
+          schema:
+            type: object
 
 paths:
   /idb/directory:
@@ -79,3 +181,19 @@ paths:
           description: Allready created
         "200":
           $ref: '#/components/responses/InitializeResponse'
+
+  /idb/accept-invitation:
+    post:
+      security: *InvitationSignature
+      summary: Accept invitation
+      description: Bind a local account key with the invitation
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AcceptInvitationRequest'
+      responses:
+        "204":
+          description: Invitation accepted
+        default:
+          $ref: '#/components/responses/ErrorResponse'

@@ -18,6 +18,7 @@ from . import base64url
 async def idb_directory(request):
     return starlette.responses.JSONResponse({
         'initialize': f'{config.BASE_URL}/idb/initialize',
+        'accept-invitation': f'{config.BASE_URL}/idb/accept-invitation',
     })
 
 
@@ -54,6 +55,13 @@ async def idb_initialize(request):
     )
 
 
+@decorators.transaction
+async def idb_accept_invitation(request) -> starlette.responses.Response:
+    pass
+#    return starlette.responses.Response(
+#        status_code=204
+#    )
+
 @contextlib.asynccontextmanager
 async def lifespan(app):
     database = databases.Database(config.DATABASE_URL)
@@ -75,6 +83,7 @@ def create_application():
         routes=[
             starlette.routing.Route('/idb/directory', idb_directory, methods=['GET']),
             starlette.routing.Route('/idb/initialize', idb_initialize, methods=['POST']),
+            starlette.routing.Route('/idb/accept-invitation', idb_accept_invitation, methods=['POST']),
             #starlette.routing.Route('/idb/identity/create', create_identity, methods=['POST']),
             #starlette.routing.Route('/idb/identity/list', list_identities, methods=['POST']),
             #starlette.routing.Route('/idb/identity/{identity_id}/update', update_identity, methods=['POST']),

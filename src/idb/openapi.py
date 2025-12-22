@@ -37,7 +37,6 @@ class ErrorsHandler(openapi_core.contrib.starlette.middlewares.StarletteOpenAPIE
 class Middleware(openapi_core.contrib.starlette.middlewares.StarletteOpenAPIMiddleware):
     errors_handler = ErrorsHandler()
 
-
 def _load_specification():
     filename = os.path.join(os.path.dirname(__file__), 'openapi.yaml')
     with open(filename) as f:
@@ -52,9 +51,47 @@ def _validate_uri(value):
     parsed = urllib.parse.urlparse(value)
     return parsed.scheme in ['http', 'https']
 
+class NoSecurityProvider(openapi_core.security.providers.BaseProvider):
+    def __call__(self, parameters):
+        return None
+
+class NoSecurityProviderFactory(openapi_core.security.factories.SecurityProviderFactory):
+    def create(self, scheme):
+        return NoSecurityProvider(scheme)
+
+class CheckResponseIsNotNoneMiddleware(starlette.middleware.base.BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        try:
+            response = call_next(request)
+        except:
+            import traceback
+            traceback.print_exc()
+            print('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
+            return starlette.responses.Response(
+                status_code=204
+            )
+        if response is None:
+            print('XXXXXXXXXXXXXXXXXXXXXXXXXXXX')
+            return starlette.responses.Response(
+                status_code=204
+            )
+        print(response)
+        try:
+            response = await response
+        except:
+            import traceback
+            traceback.print_exc()
+            print('BBBBBBBBBBBBBBBBBBBB')
+            return starlette.responses.Response(
+                status_code=204
+            )
+        return response
+
 
 def create_middleware():
-    openapi_config = openapi_core.Config()
+    openapi_config = openapi_core.Config(
+        security_provider_factory=NoSecurityProviderFactory(),
+    )
     openapi_config.extra_format_validators = {
         'uri': _validate_uri
     }
@@ -63,5 +100,6 @@ def create_middleware():
             Middleware,
             openapi=openapi_core.OpenAPI.from_dict(_load_specification(), config=openapi_config)
         ),
+        starlette.middleware.Middleware(CheckResponseIsNotNoneMiddleware)
     ]
     return middleware
