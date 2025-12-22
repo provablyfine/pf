@@ -1,12 +1,12 @@
 openapi: 3.1.0
 info:
-  title: ADMIN API implementation
-  description: ADMIN API to control users and hosts
+  title: IDB API implementation
+  description: IDB API to control users and hosts
   version: '1.0'
 
 servers:
-  - url: https://api.example.com/admin
-    description: ADMIN directory base path
+  - url: https://api.example.com/idb
+    description: IDB directory base path
 
 components:
   schemas:
@@ -58,10 +58,10 @@ components:
 
 
 paths:
-  /admin/directory:
+  /idb/directory:
     get:
       summary: Directory
-      description: The ADMIN directory
+      description: The IDB directory
       responses:
         "200":
           description: OK
@@ -70,7 +70,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Directory"
 
-  /admin/initialize:
+  /idb/initialize:
     post:
       summary: Initialize
       description: Setup the application after first startup

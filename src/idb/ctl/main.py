@@ -26,11 +26,11 @@ def _config_function(args):
 
 
 def _register_function(args):
-    pass
+    c = config.Config.load(args.config)
 
 
 def _login_function(args):
-    pass
+    c = config.Config.load(args.config)
 
 
 def _ping_function(args):
@@ -44,7 +44,7 @@ def main():
     subparsers = parser.add_subparsers(required=True)
 
     config_parser = subparsers.add_parser('config', help='Create a configuration file')
-    parser.add_argument('--directory', default='http://127.0.0.1:8000/admin/directory', help='Directory to connect to')
+    parser.add_argument('--directory', default='http://127.0.0.1:8000/idb/directory', help='Directory to connect to')
     parser.add_argument('--root-key-id', help='Key id of the public key of the root certificate.', default=None)
     parser.add_argument('--ignore-ssh-agent', action='store_true', help='Read and write keys from/to disk, regardless of whether or not there is an SSH agent')
     config_parser.set_defaults(func=_config_function)
@@ -59,7 +59,7 @@ def main():
     login_parser.add_argument('-o', '--output', help='Temporary key to associate with account', default='session.key')
     login_parser.set_defaults(func=_login_function)
 
-    ping_parser = subparsers.add_parser('ping', help='Ping admin')
+    ping_parser = subparsers.add_parser('ping', help='Ping IDB')
     ping_parser.add_argument('--session-key', help='key to use to sign requests to the remote', default='session.key')
     ping_parser.set_defaults(func=_ping_function)
 

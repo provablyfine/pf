@@ -15,14 +15,14 @@ from . import model
 from . import base64url
 
 
-async def admin_directory(request):
+async def idb_directory(request):
     return starlette.responses.JSONResponse({
-        'initialize': f'{config.BASE_URL}/admin/initialize',
+        'initialize': f'{config.BASE_URL}/idb/initialize',
     })
 
 
 @decorators.transaction
-async def admin_initialize(request):
+async def idb_initialize(request):
     one = await request.state.dao.identity.read_one()
     if one is not None:
         return starlette.responses.Response(
@@ -73,21 +73,21 @@ def create_application():
     acme = starlette.applications.Starlette(
         debug=config.DEBUG,
         routes=[
-            starlette.routing.Route('/admin/directory', admin_directory, methods=['GET']),
-            starlette.routing.Route('/admin/initialize', admin_initialize, methods=['POST']),
-            #starlette.routing.Route('/admin/identity/create', create_identity, methods=['POST']),
-            #starlette.routing.Route('/admin/identity/list', list_identities, methods=['POST']),
-            #starlette.routing.Route('/admin/identity/{identity_id}/update', update_identity, methods=['POST']),
-            #starlette.routing.Route('/admin/role/create', create_role, methods=['POST']),
-            #starlette.routing.Route('/admin/role/list', list_roles, methods=['POST']),
-            #starlette.routing.Route('/admin/role/{role_id}/update', update_role, methods=['POST']),
-            #starlette.routing.Route('/admin/group/create', create_group, methods=['POST']),
-            #starlette.routing.Route('/admin/group/list', list_group, methods=['POST']),
-            #starlette.routing.Route('/admin/group/{group_id}/update', update_group, methods=['POST']),
-            #starlette.routing.Route('/admin/boundary/create', create_boundary, methods=['POST']),
-            #starlette.routing.Route('/admin/boundary/list', list_boundary, methods=['POST']),
-            #starlette.routing.Route('/admin/boundary/{boundary_id}/update', update_boundary, methods=['POST']),
-            #starlette.routing.Route('/admin/boundary/{boundary_id}/set-default', set_default_boundary, methods=['POST']),
+            starlette.routing.Route('/idb/directory', idb_directory, methods=['GET']),
+            starlette.routing.Route('/idb/initialize', idb_initialize, methods=['POST']),
+            #starlette.routing.Route('/idb/identity/create', create_identity, methods=['POST']),
+            #starlette.routing.Route('/idb/identity/list', list_identities, methods=['POST']),
+            #starlette.routing.Route('/idb/identity/{identity_id}/update', update_identity, methods=['POST']),
+            #starlette.routing.Route('/idb/role/create', create_role, methods=['POST']),
+            #starlette.routing.Route('/idb/role/list', list_roles, methods=['POST']),
+            #starlette.routing.Route('/idb/role/{role_id}/update', update_role, methods=['POST']),
+            #starlette.routing.Route('/idb/group/create', create_group, methods=['POST']),
+            #starlette.routing.Route('/idb/group/list', list_group, methods=['POST']),
+            #starlette.routing.Route('/idb/group/{group_id}/update', update_group, methods=['POST']),
+            #starlette.routing.Route('/idb/boundary/create', create_boundary, methods=['POST']),
+            #starlette.routing.Route('/idb/boundary/list', list_boundary, methods=['POST']),
+            #starlette.routing.Route('/idb/boundary/{boundary_id}/update', update_boundary, methods=['POST']),
+            #starlette.routing.Route('/idb/boundary/{boundary_id}/set-default', set_default_boundary, methods=['POST']),
         ],
         lifespan=lifespan,
         middleware=openapi.create_middleware(),
