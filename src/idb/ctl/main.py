@@ -56,11 +56,11 @@ def main():
 
     login_parser = subparsers.add_parser('login', help='Login')
     login_parser.add_argument('--key', help='Key to login with', default='account.key')
-    login_parser.add_argument('-o', '--output', help='Temporary key to associate with account', default='tmp.key')
+    login_parser.add_argument('-o', '--output', help='Temporary key to associate with account', default='session.key')
     login_parser.set_defaults(func=_login_function)
 
     ping_parser = subparsers.add_parser('ping', help='Ping admin')
-    ping_parser.add_argument('--tmp-key', help='key to use to sign requests to the remote', default='tmp.key')
+    ping_parser.add_argument('--session-key', help='key to use to sign requests to the remote', default='session.key')
     ping_parser.set_defaults(func=_ping_function)
 
     admin_parser = subparsers.add_parser('admin', help='Admin-related functions')

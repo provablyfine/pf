@@ -19,7 +19,7 @@ def _list_remotes_function(args):
 
 
 def add_subparsers(parser):
-    parser.add_argument('--tmp-key', help='key to use to sign requests to the remote', default='tmp.key')
+    parser.add_argument('--session-key', help='key to use to sign requests to the remote', default='session.key')
     subparsers = parser.add_subparsers(required=True)
 
     sign_host_key_parser = subparsers.add_parser('sign-host-key', help='Request signing a host key and download the resulting certificate')
