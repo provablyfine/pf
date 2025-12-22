@@ -41,7 +41,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-d', '--debug', help='Increase debugging level', action='count', default=0)
     parser.add_argument('-c', '--config', help='configuration file', default=os.path.abspath(os.path.join(os.getcwd(), 'config.json')))
-    subparsers = parser.add_subparsers()
+    subparsers = parser.add_subparsers(required=True)
 
     config_parser = subparsers.add_parser('config', help='Create a configuration file')
     parser.add_argument('--directory', default='http://127.0.0.1:8000/admin/directory', help='Directory to connect to')
