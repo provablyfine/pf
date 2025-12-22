@@ -48,11 +48,9 @@ components:
         application/json:
           schema:
             type: object
-            required: [identity_id, key_id, key]
+            required: [key_id, key]
             additionalProperties: false
             properties:
-              identity_id:
-                type: string
               key_id:
                 type: string
               key:

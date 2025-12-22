@@ -12,11 +12,7 @@ def _initialize_function(args):
         raise exceptions.UI(f'Unable to initialize app: it is already initialized.')
     response.raise_for_status()
     data = response.json()
-    if args.format == 'json':
-        print(json.dumps(data, indent=2))
-    elif args.format == 'text':
-        rows = [['identity_id', data['identity_id']], ['invitation', f'{data["key_id"]}:{data["key"]}']]
-        print(tabulate.tabulate(rows))
+    print(f'{data["key_id"]}:{data["key"]}')
 
 
 def add_subparsers(parser):
