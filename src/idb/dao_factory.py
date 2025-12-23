@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 class Table:
     def __init__(self, connection, table):
-        self._connection = connection 
+        self._connection = connection
         self._table = table
         names = [col_name for col_name, col in table.columns.items()]
         self._tup = collections.namedtuple(table.name, names)
@@ -38,8 +38,8 @@ class Table:
     def read_all(self, **kwargs):
         statement = self._table.select()
         statement = self._where(statement, **kwargs)
-        rows = self._database.fetch_all(statement)
-        return [self._tup(**row) for row in rows]
+        rows = self._connection.execute(statement)
+        return [self._tup(*row) for row in rows]
 
     def update(self, **kwargs):
         class Update:
@@ -49,14 +49,14 @@ class Table:
 
             def where(self, **kwargs):
                 statement = self._outer._where(self._statement, **kwargs)
-                self._outer._database.execute(statement)
+                self._outer._connection.execute(statement)
         statement = self._table.update().values(**kwargs)
         return Update(self, statement)
 
     def delete(self, **kwargs):
         statement = self._table.delete()
         statement = self._where(statement, **kwargs)
-        self._database.execute(statement)
+        self._connection.execute(statement)
 
 
 class Dao:
