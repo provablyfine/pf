@@ -29,3 +29,5 @@ class Request:
     path_params: PathParams
     form: webob.multidict.MultiDict
     state: types.SimpleNamespace
+    body: bytes
+    cookies: dict

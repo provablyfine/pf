@@ -102,6 +102,8 @@ class Application:
                 path_params=match.params,
                 form=webob_request.POST,
                 state=types.SimpleNamespace(),
+                body=webob_request.body,
+                cookies=webob.cookies
             )
             iterator = iter(self._middlewares + [LastMiddleware(match.handler)])
             first = next(iterator, None)
@@ -112,7 +114,6 @@ class Application:
                 if response is None:
                     response = ProblemResponse(status_code=500, title='InternalServerError', detail=f'Server endpoint did not return a response path: {request.url.path} method: {request.method}')
             except HTTPException as e:
-                print('aaaaaaaaaaaaaa')
                 response = e.response
             except BaseException:
                 if self._debug:
