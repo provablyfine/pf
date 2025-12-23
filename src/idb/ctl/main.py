@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 def _config_function(args):
     response = requests.get(args.directory)
+    print(response.text, response.headers)
     response.raise_for_status()
     c = config.Config(
         directory_url=args.directory,
