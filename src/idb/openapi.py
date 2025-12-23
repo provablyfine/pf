@@ -9,6 +9,7 @@ import openapi_core.contrib.starlette.middlewares
 import openapi_core
 
 
+from . import wa
 from . import config
 
 
@@ -34,15 +35,12 @@ class ErrorsHandler(openapi_core.contrib.starlette.middlewares.StarletteOpenAPIE
         return starlette.responses.JSONResponse(body, status_code=status_code)
 
 
-class Middleware(openapi_core.contrib.starlette.middlewares.StarletteOpenAPIMiddleware):
-    errors_handler = ErrorsHandler()
-
-def _load_specification():
+def _load_specification(base_url):
     filename = os.path.join(os.path.dirname(__file__), 'openapi.yaml')
     with open(filename) as f:
         specification = yaml.safe_load(f)
     specification['servers'] = [
-        {"url": config.BASE_URL, 'description': specification['servers'][0]['description']}
+        {"url": base_url, 'description': specification['servers'][0]['description']}
     ]
     return specification
 
@@ -59,47 +57,12 @@ class NoSecurityProviderFactory(openapi_core.security.factories.SecurityProvider
     def create(self, scheme):
         return NoSecurityProvider(scheme)
 
-class CheckResponseIsNotNoneMiddleware(starlette.middleware.base.BaseHTTPMiddleware):
-    async def dispatch(self, request, call_next):
-        try:
-            response = call_next(request)
-        except:
-            import traceback
-            traceback.print_exc()
-            print('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
-            return starlette.responses.Response(
-                status_code=204
-            )
-        if response is None:
-            print('XXXXXXXXXXXXXXXXXXXXXXXXXXXX')
-            return starlette.responses.Response(
-                status_code=204
-            )
-        print(response)
-        try:
-            response = await response
-        except:
-            import traceback
-            traceback.print_exc()
-            print('BBBBBBBBBBBBBBBBBBBB')
-            return starlette.responses.Response(
-                status_code=204
-            )
-        return response
-
-
-def create_middleware():
+def create_middleware(base_url):
     openapi_config = openapi_core.Config(
         security_provider_factory=NoSecurityProviderFactory(),
     )
     openapi_config.extra_format_validators = {
         'uri': _validate_uri
     }
-    middleware = [
-        starlette.middleware.Middleware(
-            Middleware,
-            openapi=openapi_core.OpenAPI.from_dict(_load_specification(), config=openapi_config)
-        ),
-        starlette.middleware.Middleware(CheckResponseIsNotNoneMiddleware)
-    ]
-    return middleware
+    openapi = openapi_core.OpenAPI.from_dict(_load_specification(base_url), config=openapi_config)
+    return wa.openapi.Middleware(openapi)

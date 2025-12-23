@@ -57,10 +57,12 @@ def idb_initialize(request):
 
 @decorators.transaction
 def idb_accept_invitation(request) -> wa.Response:
-    pass
-#    return starlette.responses.Response(
-#        status_code=204
-#    )
+    #print(list(request.headers.items()))
+    #pass
+    return wa.JSONResponse(
+        json={'hoy': 'haha'},
+        status_code=200
+    )
 
 
 @contextlib.contextmanager
@@ -77,7 +79,12 @@ def lifespan(config: config.Config, state: types.SimpleNamespace):
 def create(filename):
     conf = config.Config.load(filename)
     db.create_tables(conf.database_url)
-    app = wa.Application(config=conf, lifespan=lifespan, debug=conf.debug)
+    middlewares = [
+        wa.debug_store.DebugStoreMiddleware(wa.debug_store.InMemoryDebugStore()),
+#        wa.backtrace.BacktraceMiddleware(),
+        openapi.create_middleware(conf.base_url),
+    ]
+    app = wa.Application(config=conf, middlewares=middlewares, lifespan=lifespan, debug=conf.debug)
     app.add('/idb/directory', idb_directory, methods=['GET'])
     app.add('/idb/initialize', idb_initialize, methods=['POST'])
     app.add('/idb/accept-invitation', idb_accept_invitation, methods=['POST'])
