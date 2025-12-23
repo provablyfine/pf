@@ -12,11 +12,14 @@ class App:
 
 
 class PathParams:
-    def __init__(self, params):
-        self._params = params
+    def __init__(self):
+        self._params = {}
 
     def __getattr__(self, name):
         return self._params[name]
+
+    def set(self, kv):
+        self._params.update(kv)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -26,8 +29,8 @@ class Request:
     url: urllib.parse.ParseResult
     headers: webob.multidict.MultiDict
     query_params: webob.multidict.MultiDict
-    path_params: PathParams
     form: webob.multidict.MultiDict
     state: types.SimpleNamespace
     body: bytes
     cookies: dict
+    path_params: PathParams = dataclasses.field(default_factory=PathParams)

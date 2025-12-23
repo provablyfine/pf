@@ -79,5 +79,6 @@ class Middleware(middleware.Middleware):
             self._openapi.validate_response(oapi_request, oapi_response)
         except openapi_core.validation.response.exceptions.ResponseValidationError as e:
             error_path = request.state.debug_store.add({'method': request.method, 'path': request.url.path, 'validation_error': str(e), 'at': int(time.time())})
-            return response.ProblemResponse(status_code=500, title='Response validation error', instance=error_path)
+            error_url = request.app.config.base_url + error_path
+            return response.ProblemResponse(status_code=500, title='Response validation error', instance=error_url)
         return next_response

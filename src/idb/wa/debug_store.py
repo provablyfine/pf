@@ -42,9 +42,9 @@ class DebugStoreMiddleware(Middleware):
             remaining = request.url.path[len(self._store.prefix):]
             slash = remaining.find('/')
             if slash == -1:
-                data = self._store.get(id)
+                data = self._store.get(remaining)
                 if data is None:
-                    return ProblemResponse(status_code=404, title=f'Debug data could not be found', detail=f'Missing {id}')
+                    return ProblemResponse(status_code=404, title=f'Debug data could not be found', detail=f'Missing {remaining}')
                 return JSONResponse(status_code=200, json=data)
 
         request.state.debug_store = self._store

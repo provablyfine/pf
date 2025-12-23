@@ -10,7 +10,7 @@ import webob
 from .request import Request, App
 from .response import Response, ProblemResponse
 from .exceptions import HTTPException
-from .middleware import LastMiddleware
+from .middleware import Middleware
 
 
 @dataclasses.dataclass(frozen=True)
@@ -52,28 +52,15 @@ class Route:
         return Match(handler=self._handler, params=params)
 
 
-class Application:
+class RoutingMiddleware(Middleware):
     """
-    A WSGI application that does simple request routing
-    and handles request parsing/response generation
+    An internal middleware used by the main application to hold
+    the endpoint handler that will be processed at the bottom
+    of the middleware stack
     """
 
-    def __init__(self, config, middlewares=None, lifespan=None, debug=False):
-        if middlewares is None:
-            middlewares = []
+    def __init__(self):
         self._routes = []
-        self._config = config
-        self._state = types.SimpleNamespace()
-        self._middlewares = middlewares
-        self._debug = debug
-        if lifespan is None:
-            self._lifespan = None
-        else:
-            self._lifespan = lifespan(self._config, self._state).__enter__()
-
-    def __del__(self):
-        if self._lifespan is not None:
-            self._lifespan.__exit__(None, None, None)
 
     def add(self, path, handler, methods=None):
         self._routes.append(Route(path=path, handler=handler, methods=methods))
@@ -87,38 +74,71 @@ class Application:
             return match
         return None
 
+    def __call__(self, request: Request, iterator: collections.abc.Iterator[Middleware]) -> Response:
+        next_middleware = next(iterator, None)
+        if next_middleware is not None:
+            return ProblemResponse(status_code=500, title='Routing middleware should be last')
+        match = self._find_route(request.method, request.url.path)
+        if match is None:
+            return ProblemResponse(status_code=404, title='No handler found for request')
+        request.path_params.set(match.params)
+        response = match.handler(request)
+        return response
+
+
+class Application:
+    """
+    A WSGI application that does simple request routing
+    and handles request parsing/response generation
+    """
+
+    def __init__(self, config, middlewares=None, lifespan=None, debug=False):
+        if middlewares is None:
+            middlewares = []
+        self._config = config
+        self._state = types.SimpleNamespace()
+        self._middlewares = middlewares
+        self._debug = debug
+        self._router = RoutingMiddleware()
+        if lifespan is None:
+            self._lifespan = None
+        else:
+            self._lifespan = lifespan(self._config, self._state).__enter__()
+
+    def __del__(self):
+        if self._lifespan is not None:
+            self._lifespan.__exit__(None, None, None)
+
+    def add(self, path, handler, methods=None):
+        self._router.add(path, handler, methods=methods)
+
     def __call__(self, environ, start_response):
         webob_request = webob.Request(environ)
-        match = self._find_route(webob_request.method, webob_request.path)
-        if match is None:
-            response = ProblemResponse(status_code=404, title='No handler found for request')
-        else:
-            request = Request(
-                app=App(config=self._config, state=self._state),
-                method=webob_request.method,
-                url=urllib.parse.urlparse(webob_request.url),
-                headers=webob_request.headers,
-                query_params=webob_request.GET,
-                path_params=match.params,
-                form=webob_request.POST,
-                state=types.SimpleNamespace(),
-                body=webob_request.body,
-                cookies=webob.cookies
-            )
-            iterator = iter(self._middlewares + [LastMiddleware(match.handler)])
-            first = next(iterator, None)
-            assert first is not None, 'The list has at least ONE element'
+        request = Request(
+            app=App(config=self._config, state=self._state),
+            method=webob_request.method,
+            url=urllib.parse.urlparse(webob_request.url),
+            headers=webob_request.headers,
+            query_params=webob_request.GET,
+            form=webob_request.POST,
+            state=types.SimpleNamespace(),
+            body=webob_request.body,
+            cookies=webob.cookies
+        )
+        iterator = iter(self._middlewares + [self._router])
+        first = next(iterator, None)
+        assert first is not None, 'The list has at least ONE element'
 
-            try:
-                response = first(request, iterator)
-                if response is None:
-                    response = ProblemResponse(status_code=500, title='InternalServerError', detail=f'Server endpoint did not return a response path: {request.url.path} method: {request.method}')
-            except HTTPException as e:
-                response = e.response
-            except BaseException:
-                if self._debug:
-                    print(traceback.format_exc())
-                response = ProblemResponse(status_code=500, title='Internal Server Error', detail='Unexpected error. Setup the backtrace middleware to get more details')
+        try:
+            response = first(request, iterator)
+            if response is None:
+                response = ProblemResponse(status_code=500, title='InternalServerError', detail=f'Server endpoint did not return a response path: {request.url.path} method: {request.method}')
+        except HTTPException as e:
+            response = e.response
+        except BaseException:
+            if self._debug:
+                print(traceback.format_exc())
+            response = ProblemResponse(status_code=500, title='Internal Server Error', detail='Unexpected error. Setup the backtrace middleware to get more details')
         status_str = http.client.responses[response.status_code]
         start_response(f'{response.status_code} {status_str}', list(response.headers.items()))
         yield response.body

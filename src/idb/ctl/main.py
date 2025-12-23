@@ -151,6 +151,14 @@ def _accept_invitation_function(args):
     logger.info(f'rx {response.status_code}')
     logger.debug(f'rx headers: {response.headers}')
     logger.debug(f'rx body: {response.content}')
+    if response.headers['Content-Type'] == 'application/json':
+        problem = response.json()
+        instance = problem.get('instance')
+        title = problem.get('title')
+        detail = problem.get('detail')
+        type = problem.get('type')
+        if instance is not None and type is not None:
+            logger.warn(f'{title} {detail} {instance}')
 
 
 def _login_function(args):
