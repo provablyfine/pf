@@ -186,14 +186,19 @@ def idb_accept_invitation(request) -> wa.Response:
         return wa.ProblemResponse(status_code=400, title=f'Invitation is expired. Get a new one.')
 
     verifiers = {
-        'sig-hmac': http_message_signatures.HTTPMessageVerifier(
+        'invitation': http_message_signatures.HTTPMessageVerifier(
             signature_algorithm=http_message_signatures.algorithms.HMAC_SHA256,
             key_resolver=KeyResolver(invitation.key, invitation.key)
         ),
-        'sig-priv-pub': jwk_to_verifier(data['account_public_key'])
+        'account': jwk_to_verifier(data['account_public_key'])
     }
     verify_signatures(request, verifiers)
 
+    invitation.accept()
+    request.state.dao.identity_invitation.update(identity_invitation=invitation.serialize(request.app.state.kek)).where(id=invitation.id)
+#    request.state.dao.identity_key.create(
+#        
+#    )
     print(data)
     #print(list(request.headers.items()))
     #pass

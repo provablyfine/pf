@@ -12,7 +12,7 @@ def _initialize_function(args):
         raise exceptions.UI(f'Unable to initialize app: it is already initialized.')
     response.raise_for_status()
     data = response.json()
-    print(f'{data["key_id"]}:{data["key"]}')
+    print(data["key"])
 
 
 def add_subparsers(parser):

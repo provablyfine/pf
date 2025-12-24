@@ -5,10 +5,11 @@ import time
 from . import db
 from . import config
 from . import base64url
+from . import jwk
 
 
 class IdentityInvitation:
-    def __init__(self, id, key, identity_id, is_accepted, created_at, expires_at):
+    def __init__(self, id, key: bytes, identity_id, is_accepted, created_at, expires_at):
         self._id = id
         self._key = key
         self._identity_id = identity_id
@@ -26,7 +27,7 @@ class IdentityInvitation:
         return self._id
 
     @property
-    def key(self):
+    def key(self) -> bytes:
         return self._key
 
     @property
@@ -49,11 +50,11 @@ class IdentityInvitation:
 
     @staticmethod
     def create(identity_id, expiration_delay_s):
-        id = secrets.token_hex(4)
-        key = secrets.token_bytes(32)
+        key = jwk.Symmetric.generate()
+        id = key.thumbprint()
         now = int(time.time())
         expires_at = now + expiration_delay_s
-        ii = IdentityInvitation(id=id, key=key, identity_id=identity_id, is_accepted=False, created_at=now, expires_at=expires_at)
+        ii = IdentityInvitation(id=id, key=key.to_bytes(), identity_id=identity_id, is_accepted=False, created_at=now, expires_at=expires_at)
         ii._audit_log.append(AuditLog.create('identity-invitation-create', id=id, identity=identity_id, expires_at=expires_at))
         return ii
 
@@ -89,7 +90,6 @@ class IdentityInvitation:
 
     def format(self):
         return {
-            'key_id': self._id,
             'key': base64url.encode(self._key)
         }
 

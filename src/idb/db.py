@@ -9,6 +9,11 @@ identity_key = sqlalchemy.Table(
     metadata,
     sqlalchemy.Column("id", sqlalchemy.String, index=True, unique=True, nullable=False),
     sqlalchemy.Column("identity_key", sqlalchemy.JSON, nullable=False),
+    #    sqlalchemy.Column("identity_id", sqlalchemy.String, index=False, unique=False, nullable=False),
+    #    sqlalchemy.Column("jwk", sqlalchemy.JSON, nullable=False),
+    #    sqlalchemy.Column("created_at", sqlalchemy.INTEGER, nullable=False),
+    #    sqlalchemy.Column("is_revoked", sqlalchemy.Boolean, nullable=False),
+    #    sqlalchemy.Column("revoked_at", sqlalchemy.INTEGER, nullable=False),
 )
 
 identity_invitation = sqlalchemy.Table(

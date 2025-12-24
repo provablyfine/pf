@@ -144,11 +144,9 @@ components:
         application/json:
           schema:
             type: object
-            required: [key_id, key]
+            required: [key]
             additionalProperties: false
             properties:
-              key_id:
-                type: string
               key:
                 type: string
 

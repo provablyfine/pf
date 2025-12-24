@@ -19,13 +19,13 @@ from . import admin
 from . import ssh
 from . import config
 from .. import base64url
+from .. import jwk
 
 
 logger = logging.getLogger(__name__)
 
 def _config_function(args):
     response = requests.get(args.directory)
-    print(response.text, response.headers)
     response.raise_for_status()
     c = config.Config(
         directory_url=args.directory,
@@ -48,43 +48,28 @@ class KeyResolver:
 
 
 class Auth(requests.auth.AuthBase):
-    def __init__(self, private_key_filename, hmac_key_id, hmac_key):
-        self._hmac_key_id = hmac_key_id
-        self._hmac_key = hmac_key
+    def __init__(self, private_key_filename, invitation_key):
+        self._invitation_key = invitation_key
 
         if os.path.exists(private_key_filename):
             with open(private_key_filename, 'rb') as f:
                 data = f.read()
-                private_key = cryptography.hazmat.primitives.serialization.load_pem_private_key(data, password=None)
-                public_key = private_key.public_key()
-                match private_key:
-                    case cryptography.hazmat.primitives.asymmetric.ed25519.Ed25519PrivateKey():
+                private_key = jwk.Private.from_pem(data, password=None)
+                match private_key.type:
+                    case jwk.KeyType.ED25519:
                         self._private_key_algorithm = http_message_signatures.algorithms.ED25519
-                    case cryptography.hazmat.primitives.asymmetric.ec.ECDSA():
+                    case jwk.KeyType.EC:
                         self._private_key_algorithm = http_message_signatures.algorithms.ECDSA_P256_SHA256
                     case _:
                         assert False
-                self._private_key_resolver=KeyResolver(private_key)
+                self._private_key = private_key
+                self._private_key_resolver = KeyResolver(private_key.to_crypto())
         else:
             # Try to connect to ssh-agent
             assert False
 
-        match public_key:
-            case cryptography.hazmat.primitives.asymmetric.ed25519.Ed25519PublicKey():
-                x = base64url.encode(public_key.public_bytes(
-                    encoding=cryptography.hazmat.primitives.serialization.Encoding.Raw,
-                    format=cryptography.hazmat.primitives.serialization.PublicFormat.Raw,
-                ))
-                self._public_jwk = {'kty': 'OKP', 'crv': 'Ed25519', 'x': x}
-            case cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePublicKey():
-                x = base64url.encode(public_key.public_numbers().x)
-                y = base64url.encode(public_key.public_numbers().y)
-                self._public_jwk = {'kty': 'EC', 'crv': 'P-256', 'x': x, 'y': y}
-            case _:
-                assert False
-
     def public_jwk(self):
-        return self._public_jwk
+        return self._private_key.public().to_dict()
 
     def __call__(self, request):
         if 'Content-Digest' not in request.headers:
@@ -97,8 +82,8 @@ class Auth(requests.auth.AuthBase):
         )
         private_signer.sign(
             request,
-            key_id="private-key",
-            label="sig-priv-pub",
+            key_id=self._private_key.thumbprint(),
+            label="account",
             covered_component_ids=covered
         )
 
@@ -107,12 +92,12 @@ class Auth(requests.auth.AuthBase):
 
         hmac_signer = http_message_signatures.HTTPMessageSigner(
             signature_algorithm=http_message_signatures.algorithms.HMAC_SHA256,
-            key_resolver=KeyResolver(self._hmac_key)
+            key_resolver=KeyResolver(self._invitation_key.to_bytes())
         )
         hmac_signer.sign(
             request,
-            key_id="hmac-key",
-            label="sig-hmac",
+            key_id=self._invitation_key.thumbprint(),
+            label="invitation",
             covered_component_ids=covered
         )
 
@@ -126,20 +111,15 @@ class Auth(requests.auth.AuthBase):
 
 def _accept_invitation_function(args):
     c = config.Config.load(args.config)
-    colon = args.invitation.find(':')
-    if colon == -1:
-        raise exceptions.UI('Invitation is invalid')
-    invitation_key_id = args.invitation[:colon]
-    invitation_key = base64url.decode(args.invitation[colon+1:])
+    invitation_key = jwk.Symmetric.from_bytes(base64url.decode(args.invitation))
     nonce = secrets.token_hex(16)
     auth = Auth(
         private_key_filename=args.key,
-        hmac_key_id=invitation_key_id,
-        hmac_key=invitation_key,
+        invitation_key=invitation_key,
     )
     request = requests.Request(method='POST', url=c.directory['accept-invitation'], json={
         'account_public_key': auth.public_jwk(),
-        'key_id': invitation_key_id,
+        'key_id': invitation_key.thumbprint(),
         'nonce': nonce,
     }, auth=auth)
     request = request.prepare()

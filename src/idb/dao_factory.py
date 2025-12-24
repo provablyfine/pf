@@ -29,7 +29,6 @@ class Table:
     def read_one(self, **kwargs):
         statement = self._table.select()
         statement = self._where(statement, **kwargs)
-        print(statement)
         rows = self._connection.execute(statement)
         for row in rows:
             return self._tup(*row)
