@@ -89,7 +89,7 @@ class Auth(requests.auth.AuthBase):
     def __call__(self, request):
         if 'Content-Digest' not in request.headers:
             request.headers['Content-Digest'] = str(http_message_signatures.http_sfv.Dictionary({"sha-256": hashlib.sha256(request.body).digest()}))
-        coverred =  ("@method", "@authority", "@target-uri", "content-digest")
+        covered =  ("@method", "@authority", "@target-uri", "content-digest")
 
         private_signer = http_message_signatures.HTTPMessageSigner(
             signature_algorithm=self._private_key_algorithm,
@@ -98,8 +98,8 @@ class Auth(requests.auth.AuthBase):
         private_signer.sign(
             request,
             key_id="private-key",
-            label="sig-priv",
-            covered_component_ids=coverred
+            label="sig-priv-pub",
+            covered_component_ids=covered
         )
 
         first_signature_input = request.headers['Signature-Input']
@@ -113,7 +113,7 @@ class Auth(requests.auth.AuthBase):
             request,
             key_id="hmac-key",
             label="sig-hmac",
-            covered_component_ids=coverred
+            covered_component_ids=covered
         )
 
         second_signature_input = request.headers['Signature-Input']
@@ -151,7 +151,7 @@ def _accept_invitation_function(args):
     logger.info(f'rx {response.status_code}')
     logger.debug(f'rx headers: {response.headers}')
     logger.debug(f'rx body: {response.content}')
-    if response.headers['Content-Type'] == 'application/json':
+    if 'Content-Type' in response.headers and response.headers['Content-Type'] == 'application/json':
         problem = response.json()
         instance = problem.get('instance')
         title = problem.get('title')

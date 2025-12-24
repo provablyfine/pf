@@ -8,11 +8,11 @@ from . import base64url
 
 
 class IdentityInvitation:
-    def __init__(self, id, key, identity_id, bound, created_at, expires_at):
+    def __init__(self, id, key, identity_id, is_accepted, created_at, expires_at):
         self._id = id
         self._key = key
         self._identity_id = identity_id
-        self._bound = bound
+        self._is_accepted = is_accepted
         self._created_at = created_at
         self._expires_at = expires_at
         self._audit_log = []
@@ -34,13 +34,18 @@ class IdentityInvitation:
         return self._identity_id
 
     @property
-    def is_bound(self):
-        return self._bound
+    def is_expired(self):
+        now = int(time.time())
+        return now >= self._expires_at
 
-    def bind(self):
-        assert not self._bound
-        self._bound = True
-        self._audit_log.append(AuditLog.create('external-account-bind', id=self._id, identity=self._identity_id))
+    @property
+    def is_accepted(self):
+        return self._is_accepted
+
+    def accept(self):
+        assert not self._is_accepted
+        self._is_accepted = True
+        self._audit_log.append(AuditLog.create('identity-invitation-accepted', id=self._id, identity=self._identity_id))
 
     @staticmethod
     def create(identity_id, expiration_delay_s):
@@ -48,16 +53,23 @@ class IdentityInvitation:
         key = secrets.token_bytes(32)
         now = int(time.time())
         expires_at = now + expiration_delay_s
-        ii = IdentityInvitation(id=id, key=key, identity_id=identity_id, bound=False, created_at=now, expires_at=expires_at)
+        ii = IdentityInvitation(id=id, key=key, identity_id=identity_id, is_accepted=False, created_at=now, expires_at=expires_at)
         ii._audit_log.append(AuditLog.create('identity-invitation-create', id=id, identity=identity_id, expires_at=expires_at))
         return ii
+
+    @staticmethod
+    def from_id(dao, id, kek):
+        invitation = dao.identity_invitation.read_one(id=id)
+        if invitation is None:
+            return None
+        return IdentityInvitation.deserialize(invitation.identity_invitation, kek)
 
     def serialize(self, kek):
         return {
             'id': self._id,
             'key': kek.encrypt(self._key).hex(),
             'identity_id': self._identity_id,
-            'bound': self._bound,
+            'is_accepted': self._is_accepted,
             'created_at': self._created_at,
             'expires_at': self._expires_at,
         }
@@ -69,7 +81,7 @@ class IdentityInvitation:
             id=data['id'],
             key=key,
             identity_id=data['identity_id'],
-            bound=data['bound'],
+            is_accepted=data['is_accepted'],
             created_at=data['created_at'],
             expires_at=data['expires_at']
         )
