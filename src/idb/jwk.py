@@ -125,6 +125,13 @@ class Public:
             case _:
                 assert False
 
+    def to_crypto(self):
+        return self._key
+
+    @classmethod
+    def from_crypto(klass, key) -> Private:
+        return Public(key)
+
     def to_pem(self) -> bytes:
         return self._key.public_bytes(
             encoding=cryptography.hazmat.primitives.serialization.Encoding.PEM,

@@ -109,34 +109,27 @@ class KeyResolver:
 
 def verify_signatures(request: wa.Request, expected_keys):
     def _parse_signature_input(signature_input):
+        d = http_message_signatures.http_sfv.Dictionary()
+        try:
+            d.parse(signature_input.encode())
+        except Exception as e:
+            raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Invalid Signature-Input header', detail=str(e)))
         keyid_by_label = {}
-        for item in signature_input.split(','):
-            item = item.strip()
-
-            equal = item.find('=')
-            if equal == -1:
-                raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Invalid Signature-Input: no label'))
-            label = item[:equal]
-
-            members = item.split(';')
-            for i, member in enumerate(members):
-                kv = member.split('=')
-                if len(kv) != 2:
-                    raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Invalid Signature-Input'))
-                if kv[0] == 'keyid':
-                    keyid_by_label[label] = (kv[1], item[equal+1:])
+        for label, v in d.items():
+            if 'keyid' not in v.params:
+                raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Invalid Signature-Input', detail=f'Missing keyid in {label}'))
+            keyid_by_label[label] = (v.params['keyid'], d[label])
         return keyid_by_label
 
     def _parse_signature(signature):
+        d = http_message_signatures.http_sfv.Dictionary()
+        try:
+            d.parse(signature.encode())
+        except Exception as e:
+            raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Invalid Signature header', detail=str(e)))
         signature_by_label = {}
-        for item in signature.split(','):
-            item = item.strip()
-
-            equal = item.find('=')
-            if equal == -1:
-                raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Invalid Signature-Input: no label'))
-            label = item[:equal]
-            signature_by_label[label] = item[equal+1:]
+        for label, v in d.items():
+            signature_by_label[label] = v
         return signature_by_label
 
     content_digest = str(http_message_signatures.http_sfv.Dictionary({"sha-256": hashlib.sha256(request.body).digest()}))
@@ -151,7 +144,7 @@ def verify_signatures(request: wa.Request, expected_keys):
     signature_by_label = _parse_signature(request.headers['Signature'])
     if set(keyid_by_label) != set(signature_by_label):
         raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Signature and Signature-Input are not coherent'))
-    n_got_signatures = len(set(keyid_by_label.values()))
+    n_got_signatures = len(keyid_by_label.values())
     if n_got_signatures != len(expected_keys):
         raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Number of signatures does not match number of expected signatures', detail=f'Got: {n_got_signatures} Expected: {len(expected_keys)}'))
 
