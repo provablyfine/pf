@@ -11,6 +11,13 @@ import cryptography.hazmat.primitives.asymmetric.ec
 import cryptography.hazmat.primitives.serialization
 
 
+@enum.unique
+class KeyType(enum.Enum):
+    ED25519 = 1
+    EC = 2
+    SYMMETRIC = 3
+
+
 def rfc7638_thumbprint(data):
     needed = {
         # RFC 7638 Section 3.2
@@ -31,6 +38,10 @@ def rfc7638_thumbprint(data):
 class Symmetric:
     def __init__(self, data: dict):
         self._data = data
+
+    @property
+    def type(self):
+        return KeyType.SYMMETRIC
 
     @classmethod
     def generate(klass) -> Symmetric:
@@ -61,12 +72,6 @@ ec_nist_to_secg = {
     'P-384': cryptography.hazmat.primitives.asymmetric.ec.SECP384R1,
     'P-521': cryptography.hazmat.primitives.asymmetric.ec.SECP521R1,
 }
-
-
-@enum.unique
-class KeyType(enum.Enum):
-    ED25519 = 1
-    EC = 2
 
 
 class Public:

@@ -16,6 +16,7 @@ from . import decorators
 from . import openapi
 from . import model
 from . import base64url
+from . import jwk
 
 
 
@@ -106,40 +107,81 @@ class KeyResolver:
         return self._private_key
 
 
-def verify_signatures(request: wa.Request, verifiers):
-    def _parse(request, header):
-        if header not in request.headers:
-            raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Missing header', detail=header))
-        value = request.headers[header]
-        output = {}
-        for item in value.split(','):
+def verify_signatures(request: wa.Request, expected_keys):
+    def _parse_signature_input(signature_input):
+        keyid_by_label = {}
+        for item in signature_input.split(','):
             item = item.strip()
+
             equal = item.find('=')
             if equal == -1:
-                raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Invalid header: no label', detail=header))
+                raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Invalid Signature-Input: no label'))
             label = item[:equal]
-            label_value = item[equal+1:]
-            output[label] = label_value
-        return output
+
+            members = item.split(';')
+            for i, member in enumerate(members):
+                kv = member.split('=')
+                if len(kv) != 2:
+                    raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Invalid Signature-Input'))
+                if kv[0] == 'keyid':
+                    keyid_by_label[label] = (kv[1], item[equal+1:])
+        return keyid_by_label
+
+    def _parse_signature(signature):
+        signature_by_label = {}
+        for item in signature.split(','):
+            item = item.strip()
+
+            equal = item.find('=')
+            if equal == -1:
+                raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Invalid Signature-Input: no label'))
+            label = item[:equal]
+            signature_by_label[label] = item[equal+1:]
+        return signature_by_label
 
     content_digest = str(http_message_signatures.http_sfv.Dictionary({"sha-256": hashlib.sha256(request.body).digest()}))
     if request.headers['Content-Digest'] != content_digest:
         raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Content hash does not match Content-Digest header'))
-    signatures = _parse(request, 'Signature')
-    signatures_input = _parse(request, 'Signature-Input')
-    signatures_labels = set(signatures.keys())
-    signatures_input_labels = set(signatures_input.keys())
-    if signatures_labels != signatures_input_labels:
+    if 'Signature' not in request.headers:
+        raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Missing Signature header'))
+    if 'Signature-Input' not in request.headers:
+        raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Missing Signature-Input header'))
+
+    keyid_by_label = _parse_signature_input(request.headers['Signature-Input'])
+    signature_by_label = _parse_signature(request.headers['Signature'])
+    if set(keyid_by_label) != set(signature_by_label):
         raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Signature and Signature-Input are not coherent'))
-    if len(signatures_labels) != len(verifiers):
-        raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Not enough labels provided', detail=f'Got: {signatures_labels} Expected: {verifiers.keys()}'))
-    for label in signatures:
-        message = RequestMessage(request, label, signatures[label], signatures_input[label])
+    n_got_signatures = len(set(keyid_by_label.values()))
+    if n_got_signatures != len(expected_keys):
+        raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Number of signatures does not match number of expected signatures', detail=f'Got: {n_got_signatures} Expected: {len(expected_keys)}'))
 
-        if label not in verifiers:
-            raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='No verifier for label', detail=label))
+    key_by_keyid = {key.thumbprint(): key for key in expected_keys}
 
-        verifier = verifiers[label]
+    for label, signature in signature_by_label.items():
+
+        keyid, signature_input = keyid_by_label[label]
+        if keyid not in key_by_keyid:
+            raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='No key matches keyid', detail=keyid))
+
+        key = key_by_keyid[keyid]
+        match key.type:
+            case jwk.KeyType.SYMMETRIC:
+                algorithm = http_message_signatures.algorithms.HMAC_SHA256
+                resolver = KeyResolver(private_key=key.to_bytes(), public_key=key.to_bytes())
+            case jwk.KeyType.ED25519:
+                algorithm = http_message_signatures.algorithms.ED25519
+                resolver = KeyResolver(private_key=None, public_key=key.to_crypto())
+            case jwk.KeyType.EC:
+                algorithm = http_message_signatures.algorithms.ECDSA_P256_SHA256
+                resolver = KeyResolver(private_key=None, public_key=key.to_crypto())
+            case _:
+                raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Unsupported key type', detail=keyid))
+        verifier = http_message_signatures.HTTPMessageVerifier(
+            signature_algorithm=algorithm,
+            key_resolver=resolver,
+        )
+
+        message = RequestMessage(request, label, signature, signature_input)
         try:
             verified = verifier.verify(message, max_age=datetime.timedelta(hours=5))#minutes=5))
         except http_message_signatures.InvalidSignature as e:
@@ -148,30 +190,6 @@ def verify_signatures(request: wa.Request, verifiers):
         expected = set(["@authority", "@method", "@target-uri", "@signature-params", "content-digest"])
         if covered != expected:
             raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Signature does not cover the expected fields', detail=f'Got: {covered}. Expected: {expected}'))
-
-
-def jwk_to_verifier(jwk):
-    if jwk['kty'] == 'OKP' and jwk['crv'] =='Ed25519':
-        x = base64url.decode(jwk['x'])
-        public_key = cryptography.hazmat.primitives.asymmetric.ed25519.Ed25519PublicKey.from_public_bytes(x)
-        algorithm = http_message_signatures.algorithms.ED25519
-    elif jwk['kty'] == 'EC' and jwk['crv'] == 'P-256':
-        x = base64url.decode(jwk['x'])
-        y = base64url.decode(jwk['y'])
-        numbers = cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePublicNumbers(x=x, y=y, curve=cryptography.hazmat.primitives.asymmetric.ec.SECP256R1)
-        public_key = numbers.public_key()
-        algorithm = http_message_signatures.algorithms.ECDSA_P256_SHA256
-    else:
-        raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Unsuported public jwk', detail=str(jwk)))
-
-    pem = public_key.public_bytes(
-        encoding=cryptography.hazmat.primitives.serialization.Encoding.PEM,
-        format=cryptography.hazmat.primitives.serialization.PublicFormat.SubjectPublicKeyInfo,
-    )
-    return http_message_signatures.HTTPMessageVerifier(
-        signature_algorithm=algorithm,
-        key_resolver=KeyResolver(private_key=None, public_key=pem)
-    )
 
 
 @decorators.transaction
@@ -185,17 +203,14 @@ def idb_accept_invitation(request) -> wa.Response:
     if invitation.is_expired:
         return wa.ProblemResponse(status_code=400, title=f'Invitation is expired. Get a new one.')
 
-    verifiers = {
-        'invitation': http_message_signatures.HTTPMessageVerifier(
-            signature_algorithm=http_message_signatures.algorithms.HMAC_SHA256,
-            key_resolver=KeyResolver(invitation.key, invitation.key)
-        ),
-        'account': jwk_to_verifier(data['account_public_key'])
-    }
-    verify_signatures(request, verifiers)
+    expected_keys = [
+        jwk.Symmetric.from_bytes(invitation.key),
+        jwk.Public.from_dict(data['account_public_key']),
+    ]
+    verify_signatures(request, expected_keys)
 
-    invitation.accept()
-    request.state.dao.identity_invitation.update(identity_invitation=invitation.serialize(request.app.state.kek)).where(id=invitation.id)
+#    invitation.accept()
+#    request.state.dao.identity_invitation.update(identity_invitation=invitation.serialize(request.app.state.kek)).where(id=invitation.id)
 #    request.state.dao.identity_key.create(
 #        
 #    )
