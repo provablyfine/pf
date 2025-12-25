@@ -80,9 +80,10 @@ class Auth(requests.auth.AuthBase):
             signature_algorithm=self._private_key_algorithm,
             key_resolver=self._private_key_resolver,
         )
+        account_key_id = f'account:{self._private_key.thumbprint()}'
         private_signer.sign(
             request,
-            key_id=self._private_key.thumbprint(),
+            key_id=account_key_id,
             label="account",
             covered_component_ids=covered
         )
@@ -94,9 +95,10 @@ class Auth(requests.auth.AuthBase):
             signature_algorithm=http_message_signatures.algorithms.HMAC_SHA256,
             key_resolver=KeyResolver(self._invitation_key.to_bytes())
         )
+        invitation_key_id = f'invitation:{self._invitation_key.thumbprint()}'
         hmac_signer.sign(
             request,
-            key_id=self._invitation_key.thumbprint(),
+            key_id=invitation_key_id,
             label="invitation",
             covered_component_ids=covered
         )
