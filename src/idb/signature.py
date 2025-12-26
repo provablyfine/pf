@@ -2,6 +2,7 @@ import urllib.parse
 import hashlib
 import datetime
 import functools
+import time
 
 from . import wa
 from . import jwk
@@ -141,19 +142,23 @@ def _get_keyid(request: wa.Request, prefix: str) -> str:
         if not keyid.startswith(f'{prefix}:'):
             continue
         return keyid[len(f'{prefix}:'):]
-    raise wa.HTTPException(wa.ProblemResponse(status_code=403, title='Missing signature for {prefix}'))
+    raise wa.HTTPException(wa.ProblemResponse(status_code=403, title='Missing signature for prefix', detail=prefix))
 
 
 def verify_invitation(f):
     @functools.wraps(f)
     def wrapper(request, *args, **kwargs):
         key_id = _get_keyid(request, 'invitation')
-        identity_invitation = ctx.db.identity_invitation.read_one(id=key_id)
-        # XXX: check invitaion validity
-        key = jwk.Symmetric.from_dict(identity_invitation.key)
+        invitation = ctx.db.identity_invitation_key.read_one(id=key_id)
+        if invitation.is_revoked:
+            return wa.ProblemResponse(status_code=403, title='Invitation is revoked')
+        now = int(time.time())
+        if invitation.expires_at <= now:
+            return wa.ProblemResponse(status_code=403, title='Invitation is expired')
+        key = jwk.Symmetric.from_dict(invitation.key)
         assert key.thumbprint() == key_id
         verify(request, key_id=f'invitation:{key_id}', key=key)
-        with ctx.set_identity_id(identity_invitation.identity_id):
+        with ctx.set_identity_id(invitation.identity_id):
             return f(request, *args, **kwargs)
     return wrapper
 
@@ -162,11 +167,13 @@ def verify_identity(f):
     @functools.wraps(f)
     def wrapper(request, *args, **kwargs):
         key_id = _get_keyid(request, 'identity')
-        identity_key = request.state.dao.identity_key.read_one(id=key_id)
-        key = jwk.Public.from_dict(identity_key.public_key)
+        account_key = ctx.db.identity_account_key.read_one(id=key_id)
+        if account_key.is_revoked:
+            return wa.ProblemResponse(status_code=403, title='Account key is revoked')
+        key = jwk.Public.from_dict(account_key.public_key)
         assert key.thumbprint() == key_id
         verify(request, key_id=f'identity:{key_id}', key=key)
-        with ctx.set_identity_id(identity_key.identity_id):
+        with ctx.set_identity_id(account_key.identity_id):
             return f(request, *args, **kwargs)
     return wrapper
 
@@ -176,6 +183,11 @@ def verify_session(f):
     def wrapper(request, *args, **kwargs):
         key_id = _get_keyid(request, 'session')
         session_key = request.state.dao.session_key.read_one(id=key_id)
+        if session_key.is_revoked:
+            return wa.ProblemResponse(status_code=403, title='Session key is revoked')
+        now = int(time.time())
+        if session_key.expires_at <= now:
+            return wa.ProblemResponse(status_code=403, title='Session key is expired')
         key = jwk.Public.from_dict(session_key.public_key)
         assert key.thumbprint() == key_id
         verify(request, key_id=f'session:{key_id}', key=key)
