@@ -3,7 +3,7 @@ import enum
 import sqlalchemy
 
 @enum.unique
-class AuditLogLevel(enum.Enum):
+class AuditLogLevel(enum.IntEnum):
     INFO = 1
     WARNING = 2
 
@@ -28,7 +28,7 @@ identity_account_key = sqlalchemy.Table(
     sqlalchemy.Column("identity_id", sqlalchemy.Integer, index=False, unique=False, nullable=False),
     sqlalchemy.Column("created_at", sqlalchemy.INTEGER, nullable=False),
     sqlalchemy.Column("is_revoked", sqlalchemy.Boolean, nullable=False),
-    sqlalchemy.Column("revoked_at", sqlalchemy.INTEGER, nullable=False),
+    sqlalchemy.Column("revoked_at", sqlalchemy.INTEGER, nullable=True),
 )
 
 identity_session_key = sqlalchemy.Table(
@@ -70,8 +70,10 @@ identity = sqlalchemy.Table(
 role = sqlalchemy.Table(
     "role",
     metadata,
-    sqlalchemy.Column("id", sqlalchemy.String, index=True, unique=True, nullable=False),
-    sqlalchemy.Column("role", sqlalchemy.JSON, nullable=False),
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
+    sqlalchemy.Column("name", sqlalchemy.String, index=False, unique=False, nullable=False),
+    sqlalchemy.Column("description", sqlalchemy.String, index=False, unique=False, nullable=False),
+    sqlalchemy.Column("permissions", sqlalchemy.JSON, index=False, unique=False, nullable=False),
 )
 
 role_identity_grant = sqlalchemy.Table(
@@ -128,7 +130,7 @@ audit_log = sqlalchemy.Table(
     sqlalchemy.Column("at", sqlalchemy.Integer, nullable=False),
     sqlalchemy.Column("level", sqlalchemy.Integer, index=True, unique=False, nullable=False),
     sqlalchemy.Column("type", sqlalchemy.String, index=True, unique=False, nullable=False),
-    sqlalchemy.Column("by_identity_id", sqlalchemy.String, index=True, unique=False, nullable=False),
+    sqlalchemy.Column("by_identity_id", sqlalchemy.String, index=True, unique=False, nullable=True),
     sqlalchemy.Column("details", sqlalchemy.JSON, nullable=False),
 )
 

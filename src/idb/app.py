@@ -71,7 +71,7 @@ def idb_accept_invitation(request) -> wa.Response:
     account_key = jwk.Public.from_dict(data['account_public_key'])
 
     # is the requesting public key in a global denylist ?
-    denylist_entry = ctx.db.public_key_denylist.read_one(public_key_id=account_key.thumbprint())
+    denylist_entry = ctx.db.public_key_denylist.read_one(key_id=account_key.thumbprint())
     if denylist_entry:
         model.audit_log.create_warning(type='identity-invitation-key-denylist', public_key_id=account_key.thumbprint())
         # Purposedly return an error that is not reality because the client is probably

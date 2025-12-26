@@ -6,6 +6,7 @@ import time
 
 from . import wa
 from . import jwk
+from . import model
 from .context import ctx
 
 import http_message_signatures
@@ -149,13 +150,13 @@ def verify_invitation(f):
     @functools.wraps(f)
     def wrapper(request, *args, **kwargs):
         key_id = _get_keyid(request, 'invitation')
-        invitation = ctx.db.identity_invitation_key.read_one(id=key_id)
+        invitation = model.identity_invitation_key.read(key_id)
         if invitation.is_revoked:
             return wa.ProblemResponse(status_code=403, title='Invitation is revoked')
         now = int(time.time())
         if invitation.expires_at <= now:
             return wa.ProblemResponse(status_code=403, title='Invitation is expired')
-        key = jwk.Symmetric.from_dict(invitation.key)
+        key = jwk.Symmetric.from_bytes(invitation.key)
         assert key.thumbprint() == key_id
         verify(request, key_id=f'invitation:{key_id}', key=key)
         request.state.invitation = invitation

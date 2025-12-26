@@ -123,7 +123,7 @@ components:
       type: object
       required: [kty, k]
       additionalProperties: false
-      propertyes:
+      properties:
         kty:
           type: string
           enum: [oct]
@@ -133,7 +133,7 @@ components:
 
     AcceptInvitationRequest:
       type: object
-      required: [account_public_key, key_id, nonce]
+      required: [account_public_key, nonce]
       additionalProperties: false
       properties:
         account_public_key:

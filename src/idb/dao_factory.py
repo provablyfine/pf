@@ -15,7 +15,13 @@ class Table:
     def create(self, **kwargs):
         statement = self._table.insert().values(**kwargs)
         result = self._connection.execute(statement)
-        return result
+        primary_key = result.inserted_primary_key
+        if len(primary_key) == 0:
+            return None
+        elif len(primary_key) == 1:
+            return primary_key[0]
+        else:
+            assert False
 
     def _where(self, statement, **kwargs):
         for k, v in kwargs.items():

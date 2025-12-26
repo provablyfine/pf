@@ -37,7 +37,7 @@ class DbContext:
         next_iterator = next(iterator)
         with request.app.state.db_engine.begin() as connection:
             dao = dao_factory.create(connection, db.metadata)
-            with ctx.set_db(dao), ctx.set_kek(request.app.state.kek):
+            with ctx.set_db(dao):
                 return next_iterator(request, iterator)
 
 

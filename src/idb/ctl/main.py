@@ -121,7 +121,6 @@ def _accept_invitation_function(args):
     )
     request = requests.Request(method='POST', url=c.directory['accept-invitation'], json={
         'account_public_key': auth.public_jwk(),
-        'key_id': invitation_key.thumbprint(),
         'nonce': nonce,
     }, auth=auth)
     request = request.prepare()

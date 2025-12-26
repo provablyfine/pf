@@ -32,7 +32,7 @@ def accept(id: str, public_key_id):
     assert invitation is not None
     assert not invitation.is_accepted
     assert not invitation.is_revoked
-    assert invitation.expires_at <= now
+    assert invitation.expires_at > now
     ctx.db.identity_invitation_key.update(
         is_accepted=True,
         accepted_at=now,
@@ -45,18 +45,20 @@ def revoke(invitation: str):
     now = int(time.time())
     assert not invitation.is_accepted
     assert not invitation.is_revoked
-    assert invitation.expires_at <= now
+    assert invitation.expires_at > now
     ctx.db.identity_invitation_key.update(is_revoked=True, revoked_at=now).where(id=invitation.id)
     audit_log.create('identity-invitation-revoked', id=invitation.id, identity_id=invitation.identity_id)
 
 
 def read(id: str):
-    return ctx.db.identity_invitation_key.read_one(id=id)
+    invitation = ctx.db.identity_invitation_key.read_one(id=id)
+    key =  ctx.kek.decrypt(invitation.key)
+    return invitation._replace(key=key)
 
 
 def format(id: str):
-    invitation = ctx.db.identity_invitation_key.read_one(id=id)
-    key = jwk.Symmetric.from_bytes(ctx.kek.decrypt(invitation.key))
+    invitation = read(id)
+    key = jwk.Symmetric.from_bytes(invitation.key)
     return {
         'key': key.to_dict()
     }

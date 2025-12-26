@@ -3,7 +3,7 @@ from . import audit_log
 
 
 def create(name: str, description: str, permissions: list[str]) -> int:
-    role_id = ctx.db.audit_log.create(name=name, description=description, permissions=permissions)
+    role_id = ctx.db.role.create(name=name, description=description, permissions=permissions)
     audit_log.create('role-create', id=role_id, name=name, description=description, permissions=permissions)
     return role_id
 
