@@ -4,48 +4,50 @@ import sqlalchemy
 metadata = sqlalchemy.MetaData()
 
 
-identity_key = sqlalchemy.Table(
-    "identity_key",
-    metadata,
-    sqlalchemy.Column("id", sqlalchemy.String, index=True, unique=True, nullable=False),
-    sqlalchemy.Column("identity_key", sqlalchemy.JSON, nullable=False),
-    #    sqlalchemy.Column("public_key", sqlalchemy.JSON, nullable=False),
-    #    sqlalchemy.Column("identity_id", sqlalchemy.String, index=False, unique=False, nullable=False),
-    #    sqlalchemy.Column("created_at", sqlalchemy.INTEGER, nullable=False),
-    #    sqlalchemy.Column("is_revoked", sqlalchemy.Boolean, nullable=False),
-    #    sqlalchemy.Column("revoked_at", sqlalchemy.INTEGER, nullable=False),
-)
-
-session_key = sqlalchemy.Table(
-    "session_key",
+identity_account_key = sqlalchemy.Table(
+    "identity_account_key",
     metadata,
     sqlalchemy.Column("id", sqlalchemy.String, index=True, unique=True, nullable=False),
     sqlalchemy.Column("public_key", sqlalchemy.JSON, nullable=False),
-    sqlalchemy.Column("identity_id", sqlalchemy.String, index=False, unique=False, nullable=False),
+    sqlalchemy.Column("identity_id", sqlalchemy.Integer, index=False, unique=False, nullable=False),
+    sqlalchemy.Column("created_at", sqlalchemy.INTEGER, nullable=False),
+    sqlalchemy.Column("is_revoked", sqlalchemy.Boolean, nullable=False),
+    sqlalchemy.Column("revoked_at", sqlalchemy.INTEGER, nullable=False),
+)
+
+identity_session_key = sqlalchemy.Table(
+    "identity_session_key",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.String, index=True, unique=True, nullable=False),
+    sqlalchemy.Column("public_key", sqlalchemy.JSON, nullable=False),
+    sqlalchemy.Column("identity_id", sqlalchemy.Integer, index=False, unique=False, nullable=False),
     sqlalchemy.Column("created_at", sqlalchemy.INTEGER, nullable=False),
     sqlalchemy.Column("is_revoked", sqlalchemy.Boolean, nullable=False),
     sqlalchemy.Column("revoked_at", sqlalchemy.INTEGER, nullable=False),
     sqlalchemy.Column("expires_at", sqlalchemy.INTEGER, nullable=False),
 )
 
-identity_invitation = sqlalchemy.Table(
-    "identity_invitation",
+identity_invitation_key = sqlalchemy.Table(
+    "identity_invitation_key",
     metadata,
     sqlalchemy.Column("id", sqlalchemy.String, index=True, unique=True, nullable=False),
-    sqlalchemy.Column("identity_invitation", sqlalchemy.JSON, nullable=False),
-    #    sqlalchemy.Column("key", sqlalchemy.String, nullable=False),
-    #    sqlalchemy.Column("identity_id", sqlalchemy.String, index=False, unique=False, nullable=False),
-    #    sqlalchemy.Column("created_at", sqlalchemy.INTEGER, nullable=False),
-    #    sqlalchemy.Column("is_revoked", sqlalchemy.Boolean, nullable=False),
-    #    sqlalchemy.Column("revoked_at", sqlalchemy.INTEGER, nullable=False),
-    #    sqlalchemy.Column("expires_at", sqlalchemy.INTEGER, nullable=False),
+    sqlalchemy.Column("key", sqlalchemy.LargeBinary, nullable=False),
+    sqlalchemy.Column("identity_id", sqlalchemy.Integer, index=False, unique=False, nullable=False),
+    sqlalchemy.Column("created_at", sqlalchemy.INTEGER, nullable=False),
+    sqlalchemy.Column("revoked_at", sqlalchemy.INTEGER, nullable=True),
+    sqlalchemy.Column("accepted_at", sqlalchemy.INTEGER, nullable=True),
+    sqlalchemy.Column("expires_at", sqlalchemy.INTEGER, nullable=False),
+    sqlalchemy.Column("is_revoked", sqlalchemy.Boolean, nullable=False),
+    sqlalchemy.Column("is_accepted", sqlalchemy.Boolean, nullable=False),
 )
 
 identity = sqlalchemy.Table(
     "identity",
     metadata,
-    sqlalchemy.Column("id", sqlalchemy.String, index=True, unique=True, nullable=False),
-    sqlalchemy.Column("identity", sqlalchemy.JSON, nullable=False),
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
+    sqlalchemy.Column("boundary_id", sqlalchemy.Integer, index=False, unique=False, nullable=False),
+    sqlalchemy.Column("name", sqlalchemy.String, index=False, unique=False, nullable=False),
+    sqlalchemy.Column("detail", sqlalchemy.JSON, index=False, unique=False, nullable=False),
 )
 
 role = sqlalchemy.Table(
@@ -89,21 +91,27 @@ group_membership = sqlalchemy.Table(
 boundary = sqlalchemy.Table(
     "boundary",
     metadata,
-    sqlalchemy.Column("id", sqlalchemy.String, index=True, unique=True, nullable=False),
-    sqlalchemy.Column("boundary", sqlalchemy.JSON, nullable=False),
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
+    sqlalchemy.Column("name", sqlalchemy.String, index=False, unique=False, nullable=False),
+    sqlalchemy.Column("description", sqlalchemy.String, index=False, unique=False, nullable=False),
+    sqlalchemy.Column("denies", sqlalchemy.JSON, nullable=False),
 )
 
 default = sqlalchemy.Table(
     "default",
     metadata,
     sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
-    sqlalchemy.Column("boundary_id", sqlalchemy.String, index=True, unique=False, nullable=False),
+    sqlalchemy.Column("boundary_id", sqlalchemy.Integer, index=True, unique=False, nullable=False),
 )
 
 audit_log = sqlalchemy.Table(
     "audit_log",
     metadata,
-    sqlalchemy.Column("log", sqlalchemy.JSON, nullable=False),
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
+    sqlalchemy.Column("at", sqlalchemy.INTEGER, nullable=False),
+    sqlalchemy.Column("type", sqlalchemy.String, index=True, unique=False, nullable=False),
+    sqlalchemy.Column("by_identity_id", sqlalchemy.String, index=True, unique=False, nullable=False),
+    sqlalchemy.Column("details", sqlalchemy.JSON, nullable=False),
 )
 
 def create_tables(url):

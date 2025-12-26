@@ -118,6 +118,19 @@ components:
         - $ref: '#/components/schemas/ECDSAPublicJWK'
         - $ref: '#/components/schemas/ED25519PublicJWK'
 
+    SymmetricJWK:
+      description: A private key represented as a JWK
+      type: object
+      required: [kty, k]
+      additionalProperties: false
+      propertyes:
+        kty:
+          type: string
+          enum: [oct]
+        k:
+          description: base64url encoded symmetric key bytes
+          type: string
+
     AcceptInvitationRequest:
       type: object
       required: [account_public_key, key_id, nonce]
@@ -148,7 +161,7 @@ components:
             additionalProperties: false
             properties:
               key:
-                type: string
+                $ref: '#/components/schemas/SymmetricJWK'
 
     AcceptInvitationResponse:
       description: Invitation accepted
