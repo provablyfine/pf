@@ -6,7 +6,7 @@ from ..context import ctx
 from . import audit_log
 
 
-def create(identity_id: int, expiration_delay_s: int) -> int:
+def create(identity_id: int, expiration_delay_s: int) -> str:
     key = jwk.Symmetric.generate()
     id = key.thumbprint()
     now = int(time.time())
@@ -26,16 +26,22 @@ def create(identity_id: int, expiration_delay_s: int) -> int:
     return id
 
 
-def accept(invitation):
+def accept(id: str, public_key_id):
     now = int(time.time())
+    invitation = ctx.db.identity_invitation_key.read_one(id=id)
+    assert invitation is not None
     assert not invitation.is_accepted
     assert not invitation.is_revoked
     assert invitation.expires_at <= now
-    ctx.db.identity_invitation_key.update(is_accepted=True, accepted_at=now).where(id=invitation.id)
+    ctx.db.identity_invitation_key.update(
+        is_accepted=True,
+        accepted_at=now,
+        accepted_public_key_id=public_key_id,
+    ).where(id=invitation.id)
     audit_log.create('identity-invitation-accepted', id=invitation.id, identity_id=invitation.identity_id)
 
 
-def revoke(invitation):
+def revoke(invitation: str):
     now = int(time.time())
     assert not invitation.is_accepted
     assert not invitation.is_revoked

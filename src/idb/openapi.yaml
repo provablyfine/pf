@@ -138,8 +138,6 @@ components:
       properties:
         account_public_key:
           $ref: '#/components/schemas/PublicJWK'
-        key_id:
-          type: string
         nonce:
           type: string
 

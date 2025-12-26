@@ -1,4 +1,5 @@
 import json
+import time
 
 from . import wa
 from . import config
@@ -67,25 +68,49 @@ def idb_initialize(_: wa.Request):
 @signature.verify_invitation
 def idb_accept_invitation(request) -> wa.Response:
     data = json.loads(request.body)
-    invitation = model.IdentityInvitation.from_id(request.state.dao, data['key_id'], request.app.state.kek)
-    if invitation is None:
-        return wa.ProblemResponse(status_code=400, title=f'Invitation does not exist', detail=data['key_id'])
-    if invitation.is_accepted:
-        return wa.ProblemResponse(status_code=400, title=f'Invitation was already accepted. Get a new one.')
-    if invitation.is_expired:
-        return wa.ProblemResponse(status_code=400, title=f'Invitation is expired. Get a new one.')
+    account_key = jwk.Public.from_dict(data['account_public_key'])
 
-    key = jwk.Public.from_dict(data['account_public_key'])
-    signature.verify(request, f'account:{key.thumbprint()}', key)
+    # is the requesting public key in a global denylist ?
+    denylist_entry = ctx.db.public_key_denylist.read_one(public_key_id=account_key.thumbprint())
+    if denylist_entry:
+        model.audit_log.create_warning(type='identity-invitation-key-denylist', public_key_id=account_key.thumbprint())
+        # Purposedly return an error that is not reality because the client is probably
+        # malevolent
+        return wa.ProblemResponse(status_code=403, title='Invitation was already accepted')
 
-#    invitation.accept()
-#    request.state.dao.identity_invitation.update(identity_invitation=invitation.serialize(request.app.state.kek)).where(id=invitation.id)
-#    request.state.dao.identity_key.create(
-#        
-#    )
-    print(data)
-    #print(list(request.headers.items()))
-    #pass
+    # if invitation has been accepted already, we do some checking to detect malevolent clients
+    if request.state.invitation.is_accepted:
+        if request.state.invitation.accepted_public_key_id == account_key.thumbprint():
+            # The same key already accepted this invitation. This is probably some
+            # kind of client-side or proxy retry
+            return wa.Response(status_code=204)
+        else:
+            ctx.db.public_key_denylist.create(key_id=account_key.thumbprint(), created_at=int(time.time()))
+            model.audit_log.create_warning(
+                type='identity-invitation-key-double-accept',
+                identity_invitation_id=request.state.invitation.id,
+                second_public_key_id=account_key.thumbprint()
+            )
+            return wa.ProblemResponse(status_code=403, title='Invitation was already accepted')
+
+    # we can do the signature verification for the public account key
+    signature.verify(request, f'account:{account_key.thumbprint()}', account_key)
+
+    # all verification passed. Bind the public account key with the identity
+    # that was configured in the invitation.
+    model.identity_invitation_key.accept(
+        id=request.state.invitation.id,
+        public_key_id=account_key.thumbprint(),
+    )
+    now = int(time.time())
+    ctx.db.identity_account_key.create(
+        id=account_key.thumbprint(),
+        public_key=account_key.to_dict(),
+        identity_id=ctx.identity_id,
+        created_at=now,
+        is_revoked=False,
+        revoked_at=None
+    )
     return wa.Response(
         status_code=204
     )

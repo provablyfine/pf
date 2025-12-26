@@ -1,8 +1,24 @@
+import enum
+
 import sqlalchemy
+
+@enum.unique
+class AuditLogLevel(enum.Enum):
+    INFO = 1
+    WARNING = 2
+
 
 # Database table definitions.
 metadata = sqlalchemy.MetaData()
 
+
+public_key_denylist = sqlalchemy.Table(
+    "public_key_denylist",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.String, index=True, unique=True, nullable=False),
+    sqlalchemy.Column("key_id", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("created_at", sqlalchemy.Integer, nullable=False),
+)
 
 identity_account_key = sqlalchemy.Table(
     "identity_account_key",
@@ -39,6 +55,7 @@ identity_invitation_key = sqlalchemy.Table(
     sqlalchemy.Column("expires_at", sqlalchemy.INTEGER, nullable=False),
     sqlalchemy.Column("is_revoked", sqlalchemy.Boolean, nullable=False),
     sqlalchemy.Column("is_accepted", sqlalchemy.Boolean, nullable=False),
+    sqlalchemy.Column("accepted_public_key_id", sqlalchemy.String, nullable=True),
 )
 
 identity = sqlalchemy.Table(
@@ -108,7 +125,8 @@ audit_log = sqlalchemy.Table(
     "audit_log",
     metadata,
     sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
-    sqlalchemy.Column("at", sqlalchemy.INTEGER, nullable=False),
+    sqlalchemy.Column("at", sqlalchemy.Integer, nullable=False),
+    sqlalchemy.Column("level", sqlalchemy.Integer, index=True, unique=False, nullable=False),
     sqlalchemy.Column("type", sqlalchemy.String, index=True, unique=False, nullable=False),
     sqlalchemy.Column("by_identity_id", sqlalchemy.String, index=True, unique=False, nullable=False),
     sqlalchemy.Column("details", sqlalchemy.JSON, nullable=False),

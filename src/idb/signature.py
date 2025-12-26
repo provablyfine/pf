@@ -158,6 +158,7 @@ def verify_invitation(f):
         key = jwk.Symmetric.from_dict(invitation.key)
         assert key.thumbprint() == key_id
         verify(request, key_id=f'invitation:{key_id}', key=key)
+        request.state.invitation = invitation
         with ctx.set_identity_id(invitation.identity_id):
             return f(request, *args, **kwargs)
     return wrapper
@@ -173,6 +174,7 @@ def verify_identity(f):
         key = jwk.Public.from_dict(account_key.public_key)
         assert key.thumbprint() == key_id
         verify(request, key_id=f'identity:{key_id}', key=key)
+        request.state.account_key = account_key
         with ctx.set_identity_id(account_key.identity_id):
             return f(request, *args, **kwargs)
     return wrapper
@@ -191,6 +193,7 @@ def verify_session(f):
         key = jwk.Public.from_dict(session_key.public_key)
         assert key.thumbprint() == key_id
         verify(request, key_id=f'session:{key_id}', key=key)
+        request.state.session_key = session_key
         with ctx.set_identity_id(session_key.identity_id):
             return f(request, *args, **kwargs)
     return wrapper
