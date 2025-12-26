@@ -19,6 +19,7 @@ def lifespan(config: config.Config, state: types.SimpleNamespace):
     engine = sqlalchemy.create_engine(config.database_url, echo=config.debug_sql)
     with open(config.kek_filename, 'rb') as f:
         kek = base64url.encode(f.read()) + '======'
+    state.config = config
     state.db_engine = engine
     state.kek = kek
     yield
