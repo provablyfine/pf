@@ -1,13 +1,4 @@
-import contextlib
-import types
 import json
-import datetime
-import urllib.parse
-import hashlib
-
-import sqlalchemy
-import cryptography.fernet
-import http_message_signatures
 
 from . import wa
 from . import config
@@ -15,9 +6,9 @@ from . import db
 from . import decorators
 from . import openapi
 from . import model
-from . import base64url
 from . import jwk
 from . import signature
+from . import middleware
 
 
 
@@ -74,7 +65,8 @@ def idb_accept_invitation(request) -> wa.Response:
     if invitation.is_expired:
         return wa.ProblemResponse(status_code=400, title=f'Invitation is expired. Get a new one.')
 
-    signature.verify(request, jwk.Public.from_dict(data['account_public_key']))
+    key = jwk.Public.from_dict(data['account_public_key'])
+    signature.verify(request, f'account:{key.thumbprint()}', key)
 
 #    invitation.accept()
 #    request.state.dao.identity_invitation.update(identity_invitation=invitation.serialize(request.app.state.kek)).where(id=invitation.id)
@@ -89,17 +81,6 @@ def idb_accept_invitation(request) -> wa.Response:
     )
 
 
-@contextlib.contextmanager
-def lifespan(config: config.Config, state: types.SimpleNamespace):
-    engine = sqlalchemy.create_engine(config.database_url, echo=config.debug_sql)
-    with open(config.kek_filename, 'rb') as f:
-        kek = base64url.encode(f.read()) + '======'
-        kek = cryptography.fernet.Fernet(kek)
-    state.db_engine = engine
-    state.kek = kek
-    yield
-
-
 def create(filename):
     conf = config.Config.load(filename)
     db.create_tables(conf.database_url)
@@ -107,8 +88,11 @@ def create(filename):
         wa.debug_store.DebugStoreMiddleware(wa.debug_store.InMemoryDebugStore()),
 #        wa.backtrace.BacktraceMiddleware(),
         openapi.create_middleware(conf.base_url),
+        middleware.KekContext(),
+        middleware.ConfigContext(),
+        middleware.DbContext(),
     ]
-    app = wa.Application(config=conf, middlewares=middlewares, lifespan=lifespan, debug=conf.debug)
+    app = wa.Application(config=conf, middlewares=middlewares, lifespan=middleware.lifespan, debug=conf.debug)
     app.add('/idb/directory', idb_directory, methods=['GET'])
     app.add('/idb/initialize', idb_initialize, methods=['POST'])
     app.add('/idb/accept-invitation', idb_accept_invitation, methods=['POST'])
