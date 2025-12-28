@@ -63,7 +63,7 @@ class RequestMessage:
 
     @property
     def url(self):
-        return urllib.parse.urlunparse(self._request.url)
+        return self._request.url
 
     @property
     def headers(self):
@@ -204,20 +204,17 @@ class Client:
     def no_auth(self) -> HttpClient:
         return HttpClient(auth=None, public_key=None)
 
-    @property
-    def invitation_auth(self, account_filename: str, invitation: str) -> HttpClient:
-        account_signer, account_public_key = private_key_signer('account', account_filename)
+    def invitation_auth(self, account: str, invitation: str) -> HttpClient:
+        account_signer, account_public_key = private_key_signer('account', account)
         signers = [hmac_signer('invitation', invitation), account_signer]
         return HttpClient(auth=RequestsAuth(signers), public_key=account_public_key)
 
-    @property
-    def login_auth(self, account_filename: str, session_filename: str) -> HttpClient:
-        account_signer, account_public_key = private_key_signer('account', account_filename)
-        session_signer, session_public_key = private_key_signer('session', session_filename)
+    def login_auth(self, account: str, session: str) -> HttpClient:
+        account_signer, account_public_key = private_key_signer('account', account)
+        session_signer, session_public_key = private_key_signer('session', session)
         signers = [account_signer, session_signer]
         return HttpClient(auth=RequestsAuth(signers), public_key=session_public_key)
 
-    @property
-    def session_auth(self, session_filename: str) -> HttpClient:
-        signer, public_key = private_key_signer('session', session_filename),
+    def session_auth(self, session: str) -> HttpClient:
+        signer, public_key = private_key_signer('session', session),
         return HttpClient(auth=RequestsAuth([signer]), public_key=public_key)

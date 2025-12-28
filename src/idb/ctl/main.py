@@ -34,12 +34,13 @@ def _accept_invitation_function(args):
     c = config.Config.load(args.config)
     idb = client.Client(c)
     nonce = secrets.token_hex(16)
-    auth = idb.invitation_auth
+    auth = idb.invitation_auth(account=args.key, invitation=args.invitation)
     response = auth.post(url=c.directory['accept-invitation'], json={
-        'account_public_key': auth.public_key(),
+        'account_public_key': auth.public_key,
         'nonce': nonce,
     })
-    print(response.json())
+    if response.status_code != 204:
+        raise exceptions.UI(f'Unable to accept invitation successfully: {response.text}')
 
 
 def _login_function(args):
