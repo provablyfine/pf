@@ -4,13 +4,16 @@ import tabulate
 
 from . import config
 from . import exceptions
+from . import client
 
 def _initialize_function(args):
     c = config.Config.load(args.config)
-    response = requests.post(c.directory['initialize'])
+    idb = client.Client(c)
+    response = idb.no_auth.post(c.directory['initialize'])
     if response.status_code == 204:
         raise exceptions.UI(f'Unable to initialize app: it is already initialized.')
-    response.raise_for_status()
+    if response.status_code != 200:
+        raise exceptions.UI(f'Unable to initialize app: expected error.')
     data = response.json()
     print(data["key"]['k'])
 
