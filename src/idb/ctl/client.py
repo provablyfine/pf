@@ -8,6 +8,7 @@ import requests
 import http_message_signatures
 
 from . import exceptions
+from . import ssh_agent
 from .. import base64url
 from .. import jwk
 
@@ -97,6 +98,29 @@ def hmac_signer(prefix: str, key: str):
     return Signer(prefix, key, signer)
 
 
+def create_algorithm_class(ssh: ssh_agent.Client, key: jwk.Public):
+    match key.type:
+        case jwk.KeyType.ED25519:
+            algorithm_id = 'ed25519'
+        case _:
+            assert False, key.type
+    def custom_init(self, *args, **kwargs):
+        pass
+    def custom_sign(self, message):
+        return ssh.sign(key.to_ssh_bytes(), message, 0)
+
+    Type = type(
+        'CustomSshAgentAlgorithm',
+        (http_message_signatures.HTTPSignatureAlgorithm,),
+        {
+            "__init__": custom_init,
+            "sign": custom_sign,
+            'algorithm_id': algorithm_id
+        }
+    )
+    return Type
+
+
 def private_key_signer(prefix: str, filename: str):
     if os.path.exists(filename):
         with open(filename, 'rb') as f:
@@ -114,11 +138,24 @@ def private_key_signer(prefix: str, filename: str):
             signature_algorithm=algorithm,
             key_resolver=resolver,
         )
+        public_key = key.public()
     else:
-        # XXX: SSH agent
-        assert False
-    public_key = key.public().to_dict()
-    return Signer(prefix, key, signer), public_key
+        ssh = ssh_agent.Client()
+        algorithm = None
+        for id in ssh.list_identities():
+            public_key = jwk.Public.from_ssh_bytes(id.public_key)
+            if id.comment == filename or public_key.match_ssh_fingerprint(filename):
+                algorithm = create_algorithm_class(ssh, public_key)
+                break
+        if algorithm is None:
+            raise exceptions.UI(f'Unable to find key matching {filename}')
+        http_message_signatures._algorithms.signature_algorithms[algorithm.algorithm_id] = algorithm
+        resolver = KeyResolver(None)
+        signer = http_message_signatures.HTTPMessageSigner(
+            signature_algorithm=algorithm,
+            key_resolver=resolver,
+        )
+    return Signer(prefix, public_key, signer), public_key.to_dict()
 
 
 class RequestsAuth(requests.auth.AuthBase):
