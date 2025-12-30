@@ -30,7 +30,7 @@ def _config_function(args):
     c.save(args.config)
 
 
-def _accept_invitation_function(args):
+def _accept_function(args):
     c = config.Config.load(args.config)
     idb = client.Client(c)
     nonce = secrets.token_hex(16)
@@ -63,10 +63,10 @@ def main():
     parser.add_argument('--ignore-ssh-agent', action='store_true', help='Read and write keys from/to disk, regardless of whether or not there is an SSH agent')
     config_parser.set_defaults(func=_config_function)
 
-    register_parser = subparsers.add_parser('accept-invitation', help='Accept an invitation')
+    register_parser = subparsers.add_parser('accept', help='Accept an invitation')
     register_parser.add_argument('--key', help='Private key to register', default='account.key')
     register_parser.add_argument('--invitation', help='Invitation you were given')
-    register_parser.set_defaults(func=_accept_invitation_function)
+    register_parser.set_defaults(func=_accept_function)
 
     login_parser = subparsers.add_parser('login', help='Login')
     login_parser.add_argument('--key', help='Key to login with', default='account.key')

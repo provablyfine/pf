@@ -1,3 +1,5 @@
+import tabulate
+
 from . import ssh_agent
 from . import exceptions
 from .. import jwk
@@ -22,15 +24,18 @@ def _list_remotes_function(args):
     pass
 
 
-def _debug_list_identities_function(args):
+def _agent_list_identities_function(args):
     ssh = ssh_agent.Client()
+    rows = []
     for id in ssh.list_identities():
         key = jwk.Public.from_ssh_bytes(id.public_key)
-        print(key.ssh_fingerprint())
+        rows.append((key.ssh_fingerprint(), str(key.type)[len('KeyType.'):]))
         serialized = key.to_ssh_bytes()
         assert serialized == id.public_key
+    print(tabulate.tabulate(rows, headers=['fingerprint', 'key type']))
 
-def _debug_find_by_fingerprint(ssh, fingerprint):
+
+def _agent_find_by_fingerprint(ssh, fingerprint):
     for identity in ssh.list_identities():
         key = jwk.Public.from_ssh_bytes(identity.public_key)
         if key.match_ssh_fingerprint(fingerprint):
@@ -38,9 +43,9 @@ def _debug_find_by_fingerprint(ssh, fingerprint):
     raise exceptions.UI(f'Unable to find key {fingerprint}')
 
 
-def _debug_sign_function(args):
+def _agent_sign_function(args):
     ssh = ssh_agent.Client()
-    identity = _debug_find_by_fingerprint(ssh, args.fingerprint)
+    identity = _agent_find_by_fingerprint(ssh, args.fingerprint)
     with open(args.data, 'rb') as f:
         data = f.read()
     match args.flags:
@@ -60,17 +65,17 @@ def add_subparsers(parser):
     parser.add_argument('--session-key', help='key to use to sign requests to the remote', default='session.key')
     subparsers = parser.add_subparsers(required=True)
 
-    debug_parser = subparsers.add_parser('debug', help='Low-level commands for debugging')
-    debug_subparsers = debug_parser.add_subparsers(required=True)
+    agent_parser = subparsers.add_parser('agent', help='ssh-agent')
+    agent_subparsers = agent_parser.add_subparsers(required=True)
 
-    debug_list_identities_parser = debug_subparsers.add_parser('list-identities')
-    debug_list_identities_parser.set_defaults(func=_debug_list_identities_function)
+    agent_list_identities_parser = agent_subparsers.add_parser('ls')
+    agent_list_identities_parser.set_defaults(func=_agent_list_identities_function)
 
-    debug_sign_parser = debug_subparsers.add_parser('sign')
-    debug_sign_parser.add_argument('--flags', choices=['SHA2_256', 'SHA2_512'], default=None)
-    debug_sign_parser.add_argument('--fingerprint', required=True)
-    debug_sign_parser.add_argument('--data', required=True)
-    debug_sign_parser.set_defaults(func=_debug_sign_function)
+    agent_sign_parser = agent_subparsers.add_parser('sign')
+    agent_sign_parser.add_argument('--flags', choices=['SHA2_256', 'SHA2_512'], default=None)
+    agent_sign_parser.add_argument('--fingerprint', required=True)
+    agent_sign_parser.add_argument('--data', required=True)
+    agent_sign_parser.set_defaults(func=_agent_sign_function)
 
     sign_host_key_parser = subparsers.add_parser('sign-host-key', help='Request signing a host key and download the resulting certificate')
     sign_host_key_parser.add_argument('--public-key', help='path to public key for which a certificate should be generated')
