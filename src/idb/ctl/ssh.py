@@ -1,3 +1,7 @@
+from . import ssh_agent
+from . import exceptions
+from .. import jwk
+
 def _sign_host_key_function(args):
     pass
 
@@ -18,9 +22,55 @@ def _list_remotes_function(args):
     pass
 
 
+def _list_identities_function(args):
+    ssh = ssh_agent.Client()
+    for id in ssh.list_identities():
+        key = jwk.Public.from_ssh_bytes(id.public_key)
+        print(key.ssh_fingerprint())
+        serialized = key.to_ssh_bytes()
+        assert serialized == id.public_key
+
+def _find_by_fingerprint(ssh, fingerprint):
+    for identity in ssh.list_identities():
+        key = jwk.Public.from_ssh_bytes(identity.public_key)
+        if key.match_ssh_fingerprint(fingerprint):
+            return identity
+    raise exceptions.UI(f'Unable to find key {fingerprint}')
+
+
+def _sign_function(args):
+    ssh = ssh_agent.Client()
+    identity = _find_by_fingerprint(ssh, args.fingerprint)
+    with open(args.data, 'rb') as f:
+        data = f.read()
+    match args.flags:
+        case None:
+            flags = 0
+        case 'SHA2_256':
+            flags = ssh_agent.RSA.SHA2_256
+        case 'SHA2_512':
+            flags = ssh_agent.RSA.SHA2_512
+        case _:
+            assert False
+    signature = ssh.sign(identity.public_key, data, flags=flags)
+    print(signature)
+
+
 def add_subparsers(parser):
     parser.add_argument('--session-key', help='key to use to sign requests to the remote', default='session.key')
     subparsers = parser.add_subparsers(required=True)
+
+    debug_parser = subparsers.add_parser('debug', help='Low-level commands for debugging')
+    debug_subparsers = debug_parser.add_subparsers(required=True)
+
+    list_identities_parser = debug_subparsers.add_parser('list-identities')
+    list_identities_parser.set_defaults(func=_list_identities_function)
+
+    sign_parser = debug_subparsers.add_parser('sign')
+    sign_parser.add_argument('--flags', choices=['SHA2_256', 'SHA2_512'], default=None)
+    sign_parser.add_argument('--fingerprint', required=True)
+    sign_parser.add_argument('--data', required=True)
+    sign_parser.set_defaults(func=_sign_function)
 
     sign_host_key_parser = subparsers.add_parser('sign-host-key', help='Request signing a host key and download the resulting certificate')
     sign_host_key_parser.add_argument('--public-key', help='path to public key for which a certificate should be generated')

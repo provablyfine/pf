@@ -100,6 +100,19 @@ class Public:
     def thumbprint(self) -> str:
         return rfc7638_thumbprint(self.to_dict())
 
+    def match_ssh_fingerprint(self, expected_fingerprint):
+        colon = expected_fingerprint.find(':')
+        prefix = expected_fingerprint[:colon]
+        match prefix:
+            case 'MD5':
+                format = SshFingerprintFormat.MD5
+            case 'SHA1':
+                format = SshFingerprintFormat.SHA1
+            case 'SHA256':
+                format = SshFingerprintFormat.SHA256
+        got_fingerprint = self.ssh_fingerprint(format=format)
+        return expected_fingerprint == got_fingerprint
+
     def ssh_fingerprint(self, format: SshFingerprintFormat = SshFingerprintFormat.SHA256) -> str:
         match format:
             case SshFingerprintFormat.SHA256:
