@@ -9,6 +9,7 @@ from . import model
 from . import jwk
 from . import signature
 from . import middleware
+from . import crypto_policy
 from .context import ctx
 
 
@@ -69,6 +70,7 @@ def idb_initialize(_: wa.Request):
 def idb_accept_invitation(request) -> wa.Response:
     data = json.loads(request.body)
     account_key = jwk.Public.from_dict(data['account_public_key'])
+    crypto_policy.enforce_key_is_allowed(account_key)
 
     # is the requesting public key in a global denylist ?
     denylist_entry = ctx.db.public_key_denylist.read_one(key_id=account_key.thumbprint())

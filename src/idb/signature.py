@@ -4,6 +4,7 @@ import datetime
 import functools
 import time
 
+from . import crypto_policy
 from . import wa
 from . import jwk
 from . import model
@@ -173,6 +174,7 @@ def verify_identity(f):
         if account_key.is_revoked:
             return wa.ProblemResponse(status_code=403, title='Account key is revoked')
         key = jwk.Public.from_dict(account_key.public_key)
+        crypto_policy.enforce_key_is_allowed(key)
         assert key.thumbprint() == key_id
         verify(request, key_id=f'identity:{key_id}', key=key)
         request.state.account_key = account_key
@@ -192,6 +194,7 @@ def verify_session(f):
         if session_key.expires_at <= now:
             return wa.ProblemResponse(status_code=403, title='Session key is expired')
         key = jwk.Public.from_dict(session_key.public_key)
+        crypto_policy.enforce_key_is_allowed(key)
         assert key.thumbprint() == key_id
         verify(request, key_id=f'session:{key_id}', key=key)
         request.state.session_key = session_key
