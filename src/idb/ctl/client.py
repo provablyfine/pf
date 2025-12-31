@@ -126,13 +126,9 @@ def private_key_signer(prefix: str, filename: str):
         with open(filename, 'rb') as f:
             data = f.read()
         key = jwk.Private.from_pem(data, password=None)
-        match key.type:
-            case jwk.KeyType.ED25519:
-                algorithm = http_message_signatures.algorithms.ED25519
-            case jwk.KeyType.EC:
-                algorithm = http_message_signatures.algorithms.ECDSA_P256_SHA256
-            case _:
-                assert False
+        if key.type != jwk.KeyType.ED25519:
+            raise exceptions.UI(f'Unsupported: {key.type}')
+        algorithm = http_message_signatures.algorithms.ED25519
         resolver = KeyResolver(key.to_crypto())
         signer = http_message_signatures.HTTPMessageSigner(
             signature_algorithm=algorithm,
@@ -145,6 +141,8 @@ def private_key_signer(prefix: str, filename: str):
         for id in ssh.list_identities():
             public_key = jwk.Public.from_ssh_bytes(id.public_key)
             if id.comment == filename or public_key.match_ssh_fingerprint(filename):
+                if public_key.type != jwk.KeyType.ED25519:
+                    raise exceptions.UI(f'Unsupported: {key.type}')
                 algorithm = create_algorithm_class(ssh, public_key)
                 break
         if algorithm is None:
