@@ -170,6 +170,7 @@ class Public:
                 public_numbers = cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePublicNumbers(x, y, curve)
                 key = public_numbers.public_key()
                 return Public(key)
+
             case 'RSA':
                 # RFC 7518 Section 6.3.1
                 e = base64url.decode(data['e'])
