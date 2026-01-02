@@ -10,7 +10,7 @@ x-bundles:
       ED25519Signature: []
     - HMACSignature: []
       ECDSASignature: []
-  identity-signature: &IdentitySignature
+  identity-signature: &AccountSignature
     - ED25519Signature: []
     - ECDSASignature: []
   session-signature: &SessionSignature
@@ -141,6 +141,16 @@ components:
         nonce:
           type: string
 
+    LoginRequest:
+      type: object
+      required: [session_public_key, nonce]
+      additionalProperties: false
+      properties:
+        session_public_key:
+          $ref: '#/components/schemas/PublicJWK'
+        nonce:
+          type: string
+
   responses:
     ErrorResponse:
       description: Error
@@ -204,5 +214,23 @@ paths:
       responses:
         "204":
           description: Invitation accepted
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /idb/login:
+    post:
+      security: *AccountSignature
+      summary: Login
+      description: >
+        Bind a local session key with the identity associated with
+        the account
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        "204":
+          description: Login OK
         default:
           $ref: '#/components/responses/ErrorResponse'

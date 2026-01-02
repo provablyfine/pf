@@ -72,13 +72,7 @@ def idb_accept_invitation(request) -> wa.Response:
     account_key = jwk.Public.from_dict(data['account_public_key'])
     crypto_policy.enforce_key_is_allowed(account_key)
 
-    # is the requesting public key in a global denylist ?
-    denylist_entry = ctx.db.public_key_denylist.read_one(key_id=account_key.thumbprint())
-    if denylist_entry:
-        model.audit_log.create_warning(type='identity-invitation-key-denylist', public_key_id=account_key.thumbprint())
-        # Purposedly return an error that is not reality because the client is probably
-        # malevolent
-        return wa.ProblemResponse(status_code=403, title='Invitation was already accepted')
+    model.denylist.enforce_not_denied(account_key.thumbprint())
 
     # if invitation has been accepted already, we do some checking to detect malevolent clients
     if request.state.invitation.is_accepted:
@@ -87,11 +81,9 @@ def idb_accept_invitation(request) -> wa.Response:
             # kind of client-side or proxy retry
             return wa.Response(status_code=204)
         else:
-            ctx.db.public_key_denylist.create(key_id=account_key.thumbprint(), created_at=int(time.time()))
-            model.audit_log.create_warning(
-                type='identity-invitation-key-double-accept',
+            model.denylist.create(
+                key_id=account_key.thumbprint(),
                 identity_invitation_id=request.state.invitation.id,
-                second_public_key_id=account_key.thumbprint()
             )
             return wa.ProblemResponse(status_code=403, title='Invitation was already accepted')
 
@@ -118,6 +110,35 @@ def idb_accept_invitation(request) -> wa.Response:
     )
 
 
+@signature.verify_account
+def idb_login(request) -> wa.Response:
+    data = json.loads(request.body)
+    session_key = jwk.Public.from_dict(data['session_public_key'])
+    crypto_policy.enforce_key_is_allowed(session_key)
+
+    model.denylist.enforce_not_denied(session_key.thumbprint())
+
+    # we can do the signature verification for the public session key
+    signature.verify(request, f'session:{session_key.thumbprint()}', session_key)
+
+    # all verification passed. Bind the public session key with the identity
+    # that was configured in the account
+    now = int(time.time())
+    ctx.db.identity_session_key.create(
+        id=session_key.thumbprint(),
+        public_key=session_key.to_dict(),
+        identity_id=ctx.identity_id,
+        created_at=now,
+        is_revoked=False,
+        revoked_at=None,
+        expires_at=now+ctx.config.session_duration_s
+    )
+
+    return wa.Response(
+        status_code=204
+    )
+
+
 def create(filename):
     conf = config.Config.load(filename)
     db.create_tables(conf.database_url)
@@ -133,4 +154,5 @@ def create(filename):
     app.add('/idb/directory', idb_directory, methods=['GET'])
     app.add('/idb/initialize', idb_initialize, methods=['POST'])
     app.add('/idb/accept-invitation', idb_accept_invitation, methods=['POST'])
+    app.add('/idb/login', idb_login, methods=['POST'])
     return app

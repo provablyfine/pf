@@ -166,17 +166,18 @@ def verify_invitation(f):
     return wrapper
 
 
-def verify_identity(f):
+def verify_account(f):
     @functools.wraps(f)
     def wrapper(request, *args, **kwargs):
-        key_id = _get_keyid(request, 'identity')
+        key_id = _get_keyid(request, 'account')
         account_key = ctx.db.identity_account_key.read_one(id=key_id)
         if account_key.is_revoked:
             return wa.ProblemResponse(status_code=403, title='Account key is revoked')
         key = jwk.Public.from_dict(account_key.public_key)
         crypto_policy.enforce_key_is_allowed(key)
         assert key.thumbprint() == key_id
-        verify(request, key_id=f'identity:{key_id}', key=key)
+        model.denylist.enforce_not_denied(key.thumbprint())
+        verify(request, key_id=f'account:{key_id}', key=key)
         request.state.account_key = account_key
         with ctx.set_identity_id(account_key.identity_id):
             return f(request, *args, **kwargs)
@@ -196,6 +197,7 @@ def verify_session(f):
         key = jwk.Public.from_dict(session_key.public_key)
         crypto_policy.enforce_key_is_allowed(key)
         assert key.thumbprint() == key_id
+        model.denylist.enforce_not_denied(key.thumbprint())
         verify(request, key_id=f'session:{key_id}', key=key)
         request.state.session_key = session_key
         with ctx.set_identity_id(session_key.identity_id):

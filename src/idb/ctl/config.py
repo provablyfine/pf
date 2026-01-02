@@ -8,6 +8,8 @@ class Config:
     root_key_id: str
     ignore_ssh_agent: bool
     directory: dict = None
+    account_key: str = None
+    session_key: str = None
 
     @staticmethod
     def load(filename):

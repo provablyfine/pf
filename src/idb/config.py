@@ -12,6 +12,7 @@ class Config:
     base_url: str = 'http://127.0.0.1:8000'
     database_url: str = 'sqlite:///idb.db'
     kek_filename: str = 'kek.key'
+    session_duration_s: int = 3600
 
 
     @staticmethod
