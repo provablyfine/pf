@@ -394,7 +394,7 @@ class Private:
                 # https://datatracker.ietf.org/doc/html/draft-miller-ssh-agent#name-rsa-keys
                 writer.write_string(b'ssh-rsa')
                 private_numbers = self._key.private_numbers()
-                public_numbers = private_numbers.public_numbers()
+                public_numbers = private_numbers.public_numbers
                 writer.write_mpint(public_numbers.n)
                 writer.write_mpint(public_numbers.e)
                 writer.write_mpint(private_numbers.d)
@@ -413,7 +413,7 @@ class Private:
                         curve = b'nistp521'
                 writer.write_string(b'ecdsa-sha2-' + curve)
                 writer.write_string(curve)
-                q = self._key.public_bytes(
+                q = self._key.public_key().public_bytes(
                     encoding= cryptography.hazmat.primitives.serialization.Encoding.X962,
                     format=cryptography.hazmat.primitives.serialization.PublicFormat.UncompressedPoint,
                 )

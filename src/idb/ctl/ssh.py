@@ -64,7 +64,7 @@ def _agent_sign_function(args):
 
 def _agent_add_function(args):
     ssh = ssh_agent.Client()
-    with open(args.key, 'rb') as f:
+    with open(args.filename, 'rb') as f:
         data = f.read()
     key = jwk.Private.from_ssh(data)
     ssh.add(key.to_ssh_bytes(), comment=args.comment)
@@ -98,8 +98,8 @@ def add_subparsers(parser):
     agent_sign_parser.set_defaults(func=_agent_sign_function)
 
     agent_add_key_parser = agent_subparsers.add_parser('add')
-    agent_add_key_parser.add_argument('--key', required=True)
     agent_add_key_parser.add_argument('--comment', default='')
+    agent_add_key_parser.add_argument('filename')
     agent_add_key_parser.set_defaults(func=_agent_add_function)
 
     agent_del_key_parser = agent_subparsers.add_parser('del')
