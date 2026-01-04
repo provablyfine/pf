@@ -17,6 +17,7 @@ def idb_directory(request):
     return wa.JSONResponse(status_code=200, json={
         'initialize': f'{request.app.config.base_url}/idb/initialize',
         'accept-invitation': f'{request.app.config.base_url}/idb/accept-invitation',
+        'login': f'{request.app.config.base_url}/idb/login',
     })
 
 

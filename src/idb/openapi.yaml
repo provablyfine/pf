@@ -77,6 +77,8 @@ components:
           type: string
         accept-invitation:
           type: string
+        login:
+          type: string
 
     ECDSAPublicJWK:
       description: RFC 7517

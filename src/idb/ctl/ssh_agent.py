@@ -23,6 +23,9 @@ class Client:
     SSH_AGENTC_ADD_IDENTITY = 17
     SSH_AGENTC_REMOVE_IDENTITY = 18
     SSH_AGENTC_REMOVE_ALL_IDENTITIES = 19
+    SSH_AGENTC_ADD_ID_CONSTRAINED = 25
+    SSH_AGENT_CONSTRAIN_LIFETIME = 1
+    SSH_AGENT_CONSTRAIN_CONFIRM = 2
     SSH_AGENT_FAILURE = 5
     Message = collections.namedtuple('Message', ['type', 'contents'])
     Identity = collections.namedtuple('Identity', ['public_key', 'comment'])
@@ -85,14 +88,19 @@ class Client:
         signature = response.read_string()
         return signature
 
-    def add(self, key: bytes, comment: str):
+    def add(self, key: bytes, comment: str, lifetime: int=None, require_confirmation: bool=False):
         request = ssh_buffer.Writer()
         request.write_bytes(key)
         request.write_string(comment.encode('utf-8'))
-        request = ssh_buffer.Writer()
-        request.write_bytes(key)
-        request.write_string(comment.encode('utf-8'))
-        self._send_request(Client.SSH_AGENTC_ADD_IDENTITY, request)
+        request_id = Client.SSH_AGENTC_ADD_IDENTITY
+        if lifetime is not None:
+            request_id = Client.SSH_AGENTC_ADD_ID_CONSTRAINED
+            request.write_byte(Client.SSH_AGENT_CONSTRAIN_LIFETIME)
+            request.write_uint32(lifetime)
+        if require_confirmation:
+            request_id = Client.SSH_AGENTC_ADD_ID_CONSTRAINED
+            request.write_byte(Client.SSH_AGENT_CONSTRAIN_CONFIRM)
+        self._send_request(request_id, request)
         message = self._recv_message()
         if message.type == Client.SSH_AGENT_FAILURE:
             raise exceptions.UI(f'Unable to add key to agent: {message.contents}')

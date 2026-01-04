@@ -39,7 +39,7 @@ identity_session_key = sqlalchemy.Table(
     sqlalchemy.Column("identity_id", sqlalchemy.Integer, index=False, unique=False, nullable=False),
     sqlalchemy.Column("created_at", sqlalchemy.INTEGER, nullable=False),
     sqlalchemy.Column("is_revoked", sqlalchemy.Boolean, nullable=False),
-    sqlalchemy.Column("revoked_at", sqlalchemy.INTEGER, nullable=False),
+    sqlalchemy.Column("revoked_at", sqlalchemy.INTEGER, nullable=True),
     sqlalchemy.Column("expires_at", sqlalchemy.INTEGER, nullable=False),
 )
 

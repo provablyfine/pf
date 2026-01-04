@@ -29,11 +29,11 @@ def _agent_list_identities_function(args):
     rows = []
     for id in ssh.list_identities():
         key = jwk.Public.from_ssh_bytes(id.public_key)
-        rows.append((key.ssh_fingerprint(), str(key.type)[len('KeyType.'):]))
+        rows.append((key.ssh_fingerprint(), str(key.type)[len('KeyType.'):], id.comment))
         serialized = key.to_ssh_bytes()
         assert serialized == id.public_key
     if len(rows) > 0:
-        print(tabulate.tabulate(rows, headers=['fingerprint', 'key type']))
+        print(tabulate.tabulate(rows, headers=['fingerprint', 'key type', 'comment']))
 
 
 def _agent_find_by_fingerprint(ssh, fingerprint):
@@ -67,7 +67,7 @@ def _agent_add_function(args):
     with open(args.filename, 'rb') as f:
         data = f.read()
     key = jwk.Private.from_ssh(data)
-    ssh.add(key.to_ssh_bytes(), comment=args.comment)
+    ssh.add(key.to_ssh_bytes(), comment=args.comment, lifetime=args.lifetime, require_confirmation=args.require_confirmation)
 
 
 def _agent_del_function(args):
@@ -99,6 +99,8 @@ def add_subparsers(parser):
 
     agent_add_key_parser = agent_subparsers.add_parser('add')
     agent_add_key_parser.add_argument('--comment', default='')
+    agent_add_key_parser.add_argument('--lifetime', default=None, type=int)
+    agent_add_key_parser.add_argument('--require-confirmation', action='store_true')
     agent_add_key_parser.add_argument('filename')
     agent_add_key_parser.set_defaults(func=_agent_add_function)
 

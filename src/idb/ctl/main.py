@@ -22,7 +22,8 @@ logger = logging.getLogger(__name__)
 
 def _config_function(args):
     response = requests.get(args.directory)
-    response.raise_for_status()
+    if response.status_code != 200:
+        raise exceptions.UI(f'Unable to read directory: {response.text}')
     c = config.Config(
         directory_url=args.directory,
         root_key_id=args.root_key_id,
@@ -54,15 +55,22 @@ def _login_function(args):
         try:
             ssh = ssh_agent.Client()
         except:
-            raise exceptions.UI("Unable to connect to user' SSH agent")
+            raise exceptions.UI("Unable to connect to user's SSH agent")
         session_key = jwk.Private.generate_ed25519()
-        ssh.add_key(session_key.to_ssh_bytes())
+        ssh.add(session_key.to_ssh_bytes(), comment='idb-session', lifetime=1800)
     else:
         with open(args.session_key, 'rb') as f:
             data = f.read()
         session_key = jwk.Private.from_pem(data)
     c.session_key = session_key.public().ssh_fingerprint()
-    idb.login_auth(account=c.account_key, session=c.session_key)
+    nonce = secrets.token_hex(16)
+    auth = idb.login_auth(account=c.account_key, session=c.session_key)
+    response = auth.post(url=c.directory['login'], json={
+        'session_public_key': session_key.public().to_dict(),
+        'nonce': nonce
+    })
+    if response.status_code != 204:
+        raise exceptions.UI(f'Unable to login successfully: {response.text}')
     c.save(args.config)
 
 

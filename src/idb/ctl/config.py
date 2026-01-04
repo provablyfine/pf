@@ -24,4 +24,6 @@ class Config:
                 root_key_id=self.root_key_id,
                 ignore_ssh_agent=self.ignore_ssh_agent,
                 directory=self.directory,
+                account_key=self.account_key,
+                session_key=self.session_key,
             ), f)
