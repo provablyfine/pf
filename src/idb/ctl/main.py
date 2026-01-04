@@ -83,8 +83,8 @@ def main():
     config_parser.set_defaults(func=_config_function)
 
     register_parser = subparsers.add_parser('accept', help='Accept an invitation')
-    register_parser.add_argument('--key', help='Private key to register', default='account.key')
-    register_parser.add_argument('--invitation', help='Invitation you were given')
+    register_parser.add_argument('--key', help='Private key to register', required=True)
+    register_parser.add_argument('--invitation', help='Invitation you were given', required=True)
     register_parser.set_defaults(func=_accept_function)
 
     login_parser = subparsers.add_parser('login', help='Login')

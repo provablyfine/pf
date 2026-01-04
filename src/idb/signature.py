@@ -152,6 +152,8 @@ def verify_invitation(f):
     def wrapper(request, *args, **kwargs):
         key_id = _get_keyid(request, 'invitation')
         invitation = model.identity_invitation_key.read(key_id)
+        if invitation is None:
+            return wa.ProblemResponse(status_code=403, title='Invitation does not exist')
         if invitation.is_revoked:
             return wa.ProblemResponse(status_code=403, title='Invitation is revoked')
         now = int(time.time())

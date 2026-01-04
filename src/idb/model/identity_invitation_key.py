@@ -52,6 +52,8 @@ def revoke(invitation: str):
 
 def read(id: str):
     invitation = ctx.db.identity_invitation_key.read_one(id=id)
+    if invitation is None:
+        return None
     key =  ctx.kek.decrypt(invitation.key)
     return invitation._replace(key=key)
 
