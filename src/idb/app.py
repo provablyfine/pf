@@ -74,6 +74,9 @@ def idb_accept_invitation(request) -> wa.Response:
 
     model.denylist.enforce_not_denied(account_key.thumbprint())
 
+    # we can do the signature verification for the public account key
+    signature.verify(request, f'account:{account_key.thumbprint()}', account_key)
+
     # if invitation has been accepted already, we do some checking to detect malevolent clients
     if request.state.invitation.is_accepted:
         if request.state.invitation.accepted_public_key_id == account_key.thumbprint():
@@ -86,9 +89,6 @@ def idb_accept_invitation(request) -> wa.Response:
                 identity_invitation_id=request.state.invitation.id,
             )
             return wa.ProblemResponse(status_code=403, title='Invitation was already accepted')
-
-    # we can do the signature verification for the public account key
-    signature.verify(request, f'account:{account_key.thumbprint()}', account_key)
 
     # all verification passed. Bind the public account key with the identity
     # that was configured in the invitation.

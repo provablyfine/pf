@@ -129,7 +129,7 @@ def verify(request: wa.Request, key_id: str, key):
     try:
         verified = verifier.verify(message, max_age=datetime.timedelta(hours=5))#minutes=5))
     except http_message_signatures.InvalidSignature as e:
-        raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Invalid signature', detail=f'{label}: {e}'))
+        raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Invalid signature', detail=f'{key_id}'))
     covered = set(c.strip('"') for c in verified[0].covered_components.keys())
     expected = set(["@authority", "@method", "@target-uri", "@signature-params", "content-digest"])
     if covered != expected:
@@ -173,6 +173,8 @@ def verify_account(f):
     def wrapper(request, *args, **kwargs):
         key_id = _get_keyid(request, 'account')
         account_key = ctx.db.identity_account_key.read_one(id=key_id)
+        if account_key is None:
+            return wa.ProblemResponse(status_code=403, title='Account does not exist')
         if account_key.is_revoked:
             return wa.ProblemResponse(status_code=403, title='Account key is revoked')
         key = jwk.Public.from_dict(account_key.public_key)
