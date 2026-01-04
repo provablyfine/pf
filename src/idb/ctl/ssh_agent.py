@@ -4,6 +4,7 @@ import socket
 import enum
 
 
+from . import exceptions
 from .. import ssh_buffer
 
 Method = collections.namedtuple('Method', ['encrypt', 'decrypt'])
@@ -19,6 +20,9 @@ class Client:
     SSH_AGENTC_REQUEST_IDENTITIES = 11
     SSH_AGENT_IDENTITIES_ANSWER = 12
     SSH_AGENTC_SIGN_REQUEST = 13
+    SSH_AGENTC_ADD_IDENTITY = 17
+    SSH_AGENTC_REMOVE_IDENTITY = 18
+    SSH_AGENTC_REMOVE_ALL_IDENTITIES = 19
     SSH_AGENT_FAILURE = 5
     Message = collections.namedtuple('Message', ['type', 'contents'])
     Identity = collections.namedtuple('Identity', ['public_key', 'comment'])
@@ -74,10 +78,35 @@ class Client:
         self._send_request(Client.SSH_AGENTC_SIGN_REQUEST, request)
         message = self._recv_message()
         if message.type == Client.SSH_AGENT_FAILURE:
-            print(message)
-            raise Exception('Unable to obtain signature from agent')
+            raise exceptions.UI(f'Unable to obtain signature from agent: {message.contents}')
         response = ssh_buffer.Reader(message.contents)
         length = response.read_uint32()
         key_type = response.read_string()
         signature = response.read_string()
         return signature
+
+    def add(self, key: bytes, comment: str):
+        request = ssh_buffer.Writer()
+        request.write_bytes(key)
+        request.write_string(comment.encode('utf-8'))
+        request = ssh_buffer.Writer()
+        request.write_bytes(key)
+        request.write_string(comment.encode('utf-8'))
+        self._send_request(Client.SSH_AGENTC_ADD_IDENTITY, request)
+        message = self._recv_message()
+        if message.type == Client.SSH_AGENT_FAILURE:
+            raise exceptions.UI(f'Unable to add key to agent: {message.contents}')
+
+    def remove_all(self):
+        self._send_request(Client.SSH_AGENTC_REMOVE_ALL_IDENTITIES, b'')
+        message = self._recv_message()
+        if message.type == Client.SSH_AGENT_FAILURE:
+            raise exceptions.UI(f'Unable to remove keys from agent: {message.contents}')
+
+    def remove(self, key: bytes):
+        request = ssh_buffer.Writer()
+        request.write_string(key)
+        self._send_request(Client.SSH_AGENTC_REMOVE_IDENTITY, request)
+        message = self._recv_message()
+        if message.type == Client.SSH_AGENT_FAILURE:
+            raise exceptions.UI(f'Unable to remove key from agent: {message.contents}')

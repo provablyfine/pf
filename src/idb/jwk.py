@@ -370,6 +370,56 @@ class Private:
         )
 
     @classmethod
-    def from_pem(klass, data: bytes, password=None) -> Private:
+    def from_pem(klass, data: bytes, password: str=None) -> Private:
         key = cryptography.hazmat.primitives.serialization.load_pem_private_key(data, password=password)
         return Private(key)
+
+    @classmethod
+    def from_ssh(klass, data: bytes, password: str=None) -> Private:
+        key = cryptography.hazmat.primitives.serialization.load_ssh_private_key(data, password=password)
+        return Private(key)
+
+    def to_ssh_bytes(self) -> bytes:
+        writer = ssh_buffer.Writer()
+        match self._key:
+            case cryptography.hazmat.primitives.asymmetric.ed25519.Ed25519PrivateKey():
+                # https://datatracker.ietf.org/doc/html/draft-miller-ssh-agent#name-eddsa-keys
+                writer.write_string(b'ssh-ed25519')
+                public_key = self._key.public_key().public_bytes_raw()
+                private_key = self._key.private_bytes_raw()
+                writer.write_string(public_key)
+                writer.write_string(private_key + public_key)
+                return writer.to_bytes()
+            case cryptography.hazmat.primitives.asymmetric.rsa.RSAPrivateKey():
+                # https://datatracker.ietf.org/doc/html/draft-miller-ssh-agent#name-rsa-keys
+                writer.write_string(b'ssh-rsa')
+                private_numbers = self._key.private_numbers()
+                public_numbers = private_numbers.public_numbers()
+                writer.write_mpint(public_numbers.n)
+                writer.write_mpint(public_numbers.e)
+                writer.write_mpint(private_numbers.d)
+                writer.write_mpint(private_numbers.iqmp)
+                writer.write_mpint(private_numbers.p)
+                writer.write_mpint(private_numbers.q)
+                return writer.to_bytes()
+            case cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePrivateKey():
+                # https://datatracker.ietf.org/doc/html/draft-miller-ssh-agent#name-ecdsa-keys
+                match self._key.curve:
+                    case cryptography.hazmat.primitives.asymmetric.ec.SECP256R1():
+                        curve = b'nistp256'
+                    case cryptography.hazmat.primitives.asymmetric.ec.SECP384R1():
+                        curve = b'nistp384'
+                    case cryptography.hazmat.primitives.asymmetric.ec.SECP521R1():
+                        curve = b'nistp521'
+                writer.write_string(b'ecdsa-sha2-' + curve)
+                writer.write_string(curve)
+                q = self._key.public_bytes(
+                    encoding= cryptography.hazmat.primitives.serialization.Encoding.X962,
+                    format=cryptography.hazmat.primitives.serialization.PublicFormat.UncompressedPoint,
+                )
+                d = self._key.private_numbers().private_value
+                writer.write_string(q)
+                writer.write_mpint(d)
+                return writer.to_bytes()
+            case _:
+                assert False
