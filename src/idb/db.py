@@ -62,7 +62,7 @@ identity = sqlalchemy.Table(
     "identity",
     metadata,
     sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
-    sqlalchemy.Column("boundary_id", sqlalchemy.Integer, index=False, unique=False, nullable=False),
+    sqlalchemy.Column("boundaries", sqlalchemy.JSON, index=False, unique=False, nullable=False),
     sqlalchemy.Column("name", sqlalchemy.String, index=False, unique=False, nullable=False),
     sqlalchemy.Column("detail", sqlalchemy.JSON, index=False, unique=False, nullable=False),
 )
@@ -81,29 +81,6 @@ role_identity_grant = sqlalchemy.Table(
     metadata,
     sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
     sqlalchemy.Column("role_id", sqlalchemy.String, index=True, unique=False, nullable=False),
-    sqlalchemy.Column("identity_id", sqlalchemy.String, index=True, unique=False, nullable=False),
-)
-
-role_group_grant = sqlalchemy.Table(
-    "role_group_grant",
-    metadata,
-    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
-    sqlalchemy.Column("role_id", sqlalchemy.String, index=True, unique=False, nullable=False),
-    sqlalchemy.Column("group_id", sqlalchemy.String, index=True, unique=False, nullable=False),
-)
-
-group = sqlalchemy.Table(
-    "group",
-    metadata,
-    sqlalchemy.Column("id", sqlalchemy.String, index=True, unique=True, nullable=False),
-    sqlalchemy.Column("group", sqlalchemy.JSON, nullable=False),
-)
-
-group_membership = sqlalchemy.Table(
-    "group_membership",
-    metadata,
-    sqlalchemy.Column("id", sqlalchemy.String, index=True, unique=True, nullable=False),
-    sqlalchemy.Column("group_id", sqlalchemy.String, index=True, unique=False, nullable=False),
     sqlalchemy.Column("identity_id", sqlalchemy.String, index=True, unique=False, nullable=False),
 )
 

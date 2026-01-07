@@ -28,7 +28,7 @@ def idb_initialize(_: wa.Request):
             status_code=204
         )
     # setup restricted boundary as default
-    restricted_denies = ['identity:*', 'role:*', 'group:*', 'tag:*', 'boundary:*']
+    restricted_denies = ['identity:*', 'role:*', 'tag:*', 'boundary:*']
     restricted_boundary_id = model.boundary.create(
         name='Restricted Boundary',
         description='The Restricted boundary does not allow anything',
@@ -38,13 +38,13 @@ def idb_initialize(_: wa.Request):
 
     # root user
     root_boundary_id = model.boundary.create(
-        name='Root Boundary',
+        name='root',
         description='The Root boundary is not a boundary at all.',
         denies=[],
     )
     root_id = model.identity.create(
         name='root',
-        boundary_id=root_boundary_id,
+        boundaries=[root_boundary_id],
     )
     root_role_id = model.role.create(
         name='root',

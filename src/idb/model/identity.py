@@ -2,9 +2,9 @@ from ..context import ctx
 from . import audit_log
 
 
-def create(name: str, boundary_id: int) -> int:
-    identity_id = ctx.db.identity.create(name=name, boundary_id=boundary_id, detail={})
-    audit_log.create('identity-create', id=identity_id, name=name, boundary_id=boundary_id)
+def create(name: str, boundaries: list[int]) -> int:
+    identity_id = ctx.db.identity.create(name=name, boundaries=boundaries, detail={})
+    audit_log.create('identity-create', id=identity_id, name=name, boundaries=boundaries)
     return identity_id
 
 
@@ -13,5 +13,5 @@ def format(id: int):
     return {
         'id': identity.id,
         'name': identity.name,
-        'boundary_id': identity.boundary_id,
+        'boundaries': identity.boundaries,
     }
