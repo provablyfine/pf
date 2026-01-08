@@ -3,7 +3,7 @@ from . import audit_log
 
 
 def create(name: str, boundaries: list[int]) -> int:
-    identity_id = ctx.db.identity.create(name=name, boundaries=boundaries, detail={})
+    identity_id = ctx.db.identity.create(name=name, boundaries=boundaries, detail={}, tag_id=[])
     audit_log.create('identity-create', id=identity_id, name=name, boundaries=boundaries)
     return identity_id
 

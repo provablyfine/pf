@@ -58,13 +58,23 @@ identity_invitation_key = sqlalchemy.Table(
     sqlalchemy.Column("accepted_public_key_id", sqlalchemy.String, nullable=True),
 )
 
+tags = sqlalchemy.Table(
+    "tags",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
+    sqlalchemy.Column("name", sqlalchemy.String, index=True, unique=False, nullable=False),
+    sqlalchemy.Column("value", sqlalchemy.String, index=True, unique=False, nullable=False),
+)
+
 identity = sqlalchemy.Table(
     "identity",
     metadata,
     sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
+    sqlalchemy.Column("created_by", sqlalchemy.Integer, index=False, unique=False, nullable=True),
     sqlalchemy.Column("boundaries", sqlalchemy.JSON, index=False, unique=False, nullable=False),
     sqlalchemy.Column("name", sqlalchemy.String, index=False, unique=False, nullable=False),
     sqlalchemy.Column("detail", sqlalchemy.JSON, index=False, unique=False, nullable=False),
+    sqlalchemy.Column("tag_id", sqlalchemy.JSON, index=False, unique=False, nullable=False),
 )
 
 role = sqlalchemy.Table(
@@ -76,8 +86,8 @@ role = sqlalchemy.Table(
     sqlalchemy.Column("permissions", sqlalchemy.JSON, index=False, unique=False, nullable=False),
 )
 
-role_identity_grant = sqlalchemy.Table(
-    "role_identity_grant",
+role_grant = sqlalchemy.Table(
+    "role_grant",
     metadata,
     sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
     sqlalchemy.Column("role_id", sqlalchemy.String, index=True, unique=False, nullable=False),

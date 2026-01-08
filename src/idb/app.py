@@ -10,6 +10,7 @@ from . import jwk
 from . import signature
 from . import middleware
 from . import crypto_policy
+from . import permissions
 from .context import ctx
 
 
@@ -27,12 +28,17 @@ def idb_initialize(_: wa.Request):
         return wa.Response(
             status_code=204
         )
+    all_grants = [
+        permissions.identity.create_grant().to_dict(),
+        permissions.role.create_grant().to_dict(),
+        permissions.tag.create_grant().to_dict(),
+        permissions.boundary.create_grant().to_dict(),
+    ]
     # setup restricted boundary as default
-    restricted_denies = ['identity:*', 'role:*', 'tag:*', 'boundary:*']
     restricted_boundary_id = model.boundary.create(
         name='Restricted Boundary',
         description='The Restricted boundary does not allow anything',
-        denies=restricted_denies,
+        denies=all_grants,
     )
     ctx.db.default.create(boundary_id=restricted_boundary_id)
 
@@ -51,9 +57,9 @@ def idb_initialize(_: wa.Request):
         description="""The "root" role identifies a user that is able to do anything.
         It is created once at startup and should be deleted once a proper permission
         model is deployed.""",
-        permissions=['*:*']
+        permissions=all_grants
     )
-    ctx.db.role_identity_grant.create(role_id=root_role_id, identity_id=root_id)
+    ctx.db.role_grant.create(role_id=root_role_id, identity_id=root_id)
 
     # invitation for root user
     identity_invitation_key_id = model.identity_invitation_key.create(
@@ -140,6 +146,42 @@ def idb_login(request) -> wa.Response:
     )
 
 
+@signature.verify_session
+def idb_boundary_list(request) -> wa.Response:
+    verifier = permissions.Verifier()
+    boundaries = ctx.db.boundary.read_all()
+    output = []
+    for boundary in boundaries:
+        request = verifier.create_boundary_request(instance=boundary, action='show')
+        if verifier.is_allowed(request):
+            output.append(boundary)
+    return wa.JSONResponse(
+        status_code=200,
+        json={'boundaries': [{'id': boundary.id, 'denies': boundary.denies} for boundary in output]}
+    )
+
+
+@signature.verify_session
+def idb_boundary_create(request) -> wa.Response:
+    return wa.Response(
+        status_code=400
+    )
+
+
+@signature.verify_session
+def idb_boundary_read(request) -> wa.Response:
+    return wa.Response(
+        status_code=400
+    )
+
+
+@signature.verify_session
+def idb_boundary_update(request) -> wa.Response:
+    return wa.Response(
+        status_code=400
+    )
+
+
 def create(filename):
     conf = config.Config.load(filename)
     db.create_tables(conf.database_url)
@@ -156,4 +198,8 @@ def create(filename):
     app.add('/idb/initialize', idb_initialize, methods=['POST'])
     app.add('/idb/accept-invitation', idb_accept_invitation, methods=['POST'])
     app.add('/idb/login', idb_login, methods=['POST'])
+    app.add('/idb/boundary', idb_boundary_create, methods=['POST'])
+    app.add('/idb/boundary', idb_boundary_list, methods=['GET'])
+    app.add('/idb/boundary/<boundary_id:int>', idb_boundary_read, methods=['GET'])
+    app.add('/idb/boundary/<boundary_id:int>', idb_boundary_update, methods=['PATCH'])
     return app
