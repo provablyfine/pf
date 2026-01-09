@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import dataclasses
 
 from . import wa
@@ -34,8 +36,19 @@ class PermissionGrant:
     object_fields: list[PermissionField]
     action_fields: list[PermissionField]
 
+    def to_string(self) -> str:
+        pass
+
+    @classmethod
+    def from_string(cls, s) -> PermissionGrant:
+        pass
+
     def to_dict(self) -> dict:
         return dataclasses.asdict(self)
+
+    @classmethod
+    def from_dict(cls, data):
+        return PermissionGrant(*data)
 
 
 class PermissionRequest:

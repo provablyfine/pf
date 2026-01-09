@@ -79,6 +79,17 @@ components:
           type: string
         login:
           type: string
+        boundary-list:
+          type: string
+        boundary-create:
+          type: string
+        boundary-read:
+          type: string
+        boundary-delete:
+          type: string
+        boundary-update:
+          type: string
+
 
     ECDSAPublicJWK:
       description: RFC 7517

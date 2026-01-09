@@ -19,6 +19,11 @@ def idb_directory(request):
         'initialize': f'{request.app.config.base_url}/idb/initialize',
         'accept-invitation': f'{request.app.config.base_url}/idb/accept-invitation',
         'login': f'{request.app.config.base_url}/idb/login',
+        'boundary-list': f'{request.app.config.base_url}/idb/boundary/list',
+        'boundary-create': f'{request.app.config.base_url}/idb/boundary/create',
+        'boundary-delete': f'{request.app.config.base_url}/idb/boundary/delete',
+        'boundary-read': f'{request.app.config.base_url}/idb/boundary/read',
+        'boundary-update': f'{request.app.config.base_url}/idb/boundary/update',
     })
 
 
@@ -169,6 +174,13 @@ def idb_boundary_create(request) -> wa.Response:
 
 
 @signature.verify_session
+def idb_boundary_delete(request) -> wa.Response:
+    return wa.Response(
+        status_code=400
+    )
+
+
+@signature.verify_session
 def idb_boundary_read(request) -> wa.Response:
     return wa.Response(
         status_code=400
@@ -198,8 +210,9 @@ def create(filename):
     app.add('/idb/initialize', idb_initialize, methods=['POST'])
     app.add('/idb/accept-invitation', idb_accept_invitation, methods=['POST'])
     app.add('/idb/login', idb_login, methods=['POST'])
-    app.add('/idb/boundary', idb_boundary_create, methods=['POST'])
-    app.add('/idb/boundary', idb_boundary_list, methods=['GET'])
-    app.add('/idb/boundary/<boundary_id:int>', idb_boundary_read, methods=['GET'])
-    app.add('/idb/boundary/<boundary_id:int>', idb_boundary_update, methods=['PATCH'])
+    app.add('/idb/boundary/create', idb_boundary_create, methods=['POST'])
+    app.add('/idb/boundary/list', idb_boundary_list, methods=['POST'])
+    app.add('/idb/boundary/read', idb_boundary_read, methods=['POST'])
+    app.add('/idb/boundary/update', idb_boundary_update, methods=['POST'])
+    app.add('/idb/boundary/delete', idb_boundary_delete, methods=['POST'])
     return app
