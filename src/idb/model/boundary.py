@@ -3,6 +3,7 @@ import copy
 from ..context import ctx
 
 from . import audit_log
+from . import permission
 
 
 def create(name: str, description: str, denies: list[str] = None) -> int:
@@ -13,11 +14,10 @@ def create(name: str, description: str, denies: list[str] = None) -> int:
     return boundary_id
 
 
-def format(id: int):
-    boundary = ctx.db.boundary.read_one(id=id)
+def format(boundary):
     return {
         'id': boundary.id,
         'name': boundary.name,
         'description': boundary.description,
-        'denies': boundary.denies,
+        'denies': [permission.format(p) for p in boundary.denies],
     }

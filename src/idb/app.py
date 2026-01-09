@@ -157,7 +157,7 @@ def idb_boundary_list(request) -> wa.Response:
             output.append(boundary)
     return wa.JSONResponse(
         status_code=200,
-        json={'boundaries': [{'id': boundary.id, 'denies': boundary.denies} for boundary in output]}
+        json={'boundaries': [model.boundary.format(boundary) for boundary in output]}
     )
 
 
