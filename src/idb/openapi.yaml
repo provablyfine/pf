@@ -127,7 +127,7 @@ components:
       description: >
         We currently support only two types because we do not need to support
         more. Patches to suport alternatives are welcome :)
-      $oneOf:
+      oneOf:
         - $ref: '#/components/schemas/ECDSAPublicJWK'
         - $ref: '#/components/schemas/ED25519PublicJWK'
 
@@ -143,6 +143,55 @@ components:
         k:
           description: base64url encoded symmetric key bytes
           type: string
+
+    PermissionObjectFieldsWithId:
+      type: [array, "null"]
+      maxItems: 1
+      items:
+        type: object
+        required: [name, value]
+        properties:
+          name:
+            type: string
+            enum: ['id']
+          value:
+            type: int
+
+    BoundaryPermission:
+      type: object
+      required: [object, action, object_fields, action_fields]
+      properties:
+        object:
+          type: string
+          enum: ['boundary']
+        action:
+          type: string
+          enum: ['show', 'create', 'delete', 'add-deny', 'del-deny']
+        object_fields:
+          $ref: '#/components/schemas/PermissionObjectFieldsWithId'
+        action_fields:
+          type: "null"
+
+    Permission:
+      oneOf:
+        - $ref: '#/components/schemas/BoundaryPermission'
+
+    Boundary:
+      description: A boundary
+      type: object
+      required: [id, name, description, denies]
+      additionalProperties: false
+      properties:
+        id:
+          type: int
+        name:
+          type: string
+        description:
+          type: string
+        denies:
+          type: array
+          items:
+            $ref: '#/components/schemas/Permission'
 
     AcceptInvitationRequest:
       type: object
@@ -183,6 +232,20 @@ components:
             properties:
               key:
                 $ref: '#/components/schemas/SymmetricJWK'
+
+    BoundaryListResponse:
+      description: OK
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [boundaries]
+            additionalProperties: false
+            properties:
+              boundaries:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Boundary'
 
     AcceptInvitationResponse:
       description: Invitation accepted
@@ -247,3 +310,16 @@ paths:
           description: Login OK
         default:
           $ref: '#/components/responses/ErrorResponse'
+
+  /idb/boundary/list:
+    post:
+      security: *SessionSignature
+      summary: List Boundaries
+      description: >
+        Return the list of boundaries the user is allowed to see
+      responses:
+        "200":
+          $ref: "#/components/responses/BoundaryListResponse"
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
