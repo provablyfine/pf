@@ -136,30 +136,33 @@ components:
           description: base64url encoded symmetric key bytes
           type: string
 
-    PermissionObjectFieldsWithId:
+    PermissionObjectFieldsWithName:
       type: array
       maxItems: 1
       items:
         type: object
         required: [name, value]
+        additionalProperties: false
         properties:
           name:
             type: string
-            enum: ['id']
+            enum: ['name']
           value:
-            type: integer
+            type: string
 
-    PermissionObjectFieldsWithIdAndTagId:
+    PermissionObjectFieldsWithNameAndTagNameAndCreatedByName:
       type: array
       items:
         type: object
         required: [name, value]
+        additionalProperties: false
         properties:
           name:
             type: string
-            enum: ['id', 'tag_id']
+            enum: ['name', 'tag', 'created_by']
           value:
-            type: integer
+            type: string
+
 
     EmptyList:
       type: array
@@ -178,7 +181,7 @@ components:
           type: string
           enum: ['*', 'show', 'create', 'delete', 'add-deny', 'del-deny']
         object_fields:
-          $ref: '#/components/schemas/PermissionObjectFieldsWithId'
+          $ref: '#/components/schemas/PermissionObjectFieldsWithName'
         action_fields:
           $ref: '#/components/schemas/EmptyList'
 
@@ -193,7 +196,7 @@ components:
           type: string
           enum: ['*', 'show', 'create', 'delete']
         object_fields:
-          $ref: '#/components/schemas/PermissionObjectFieldsWithId'
+          $ref: '#/components/schemas/PermissionObjectFieldsWithName'
         action_fields:
           $ref: '#/components/schemas/EmptyList'
 
@@ -208,7 +211,7 @@ components:
           type: string
           enum: ['*', 'show', 'create', 'delete', 'update', 'add-grant', 'del-grant', 'add-member', 'del-member']
         object_fields:
-          $ref: '#/components/schemas/PermissionObjectFieldsWithId'
+          $ref: '#/components/schemas/PermissionObjectFieldsWithName'
         action_fields:
           $ref: '#/components/schemas/EmptyList'
 
@@ -223,7 +226,7 @@ components:
           type: string
           enum: ['*', 'show', 'create', 'add-tag', 'del-tag', 'ssh-shell', 'ssh-tunnel', 'ssh-tunnel', 'ssh-exec', 'cert']
         object_fields:
-          $ref: '#/components/schemas/PermissionObjectFieldsWithIdAndTagId'
+          $ref: '#/components/schemas/PermissionObjectFieldsWithNameAndTagAndCreatedBy'
         action_fields:
           $ref: '#/components/schemas/EmptyList'
 

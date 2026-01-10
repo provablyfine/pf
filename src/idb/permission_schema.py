@@ -3,8 +3,6 @@ from __future__ import annotations
 import dataclasses
 import logging
 
-from .context import ctx
-
 
 logger = logging.getLogger(__name__)
 
@@ -27,23 +25,23 @@ class ListOfInt:
 
 
 @dataclasses.dataclass
-class PermissionField:
+class Field:
     name: str
     value: int | str
 
     @classmethod
-    def from_dict(cls, data) -> PermissionField:
-        return PermissionField(name=data['name'], value=data['value'])
+    def from_dict(cls, data) -> Field:
+        return Field(name=data['name'], value=data['value'])
 
 
 @dataclasses.dataclass
-class PermissionGrant:
+class Grant:
     object: str
     action: str
-    object_fields: list[PermissionField]
-    action_fields: list[PermissionField]
+    object_fields: list[Field]
+    action_fields: list[Field]
 
-    def __init__(self, object: str, action: str=None, object_fields: list[PermissionField]=None, action_fields: list[PermissionField]=None):
+    def __init__(self, object: str, action: str=None, object_fields: list[Field]=None, action_fields: list[Field]=None):
         if action is None:
             action = '*'
         if object_fields is None:
@@ -55,31 +53,17 @@ class PermissionGrant:
         self.object_fields = object_fields
         self.action_fields = action_fields
 
-
-    def to_string(self) -> str:
-        output = [self.object]
-        if len(self.object_fields) == 0:
-            output.append('*')
-        output.append(self.action)
-        if len(self.action_fields) == 0:
-            output.append('*')
-        return ':'.join(output)
-
-    @classmethod
-    def from_string(cls, s) -> PermissionGrant:
-        pass
-
     def to_dict(self) -> dict:
         return dataclasses.asdict(self)
 
     @classmethod
     def from_dict(cls, data):
-        object_fields = [PermissionField.from_dict(field) for field in data['object_fields']]
-        action_fields = [PermissionField.from_dict(field) for field in data['action_fields']]
-        return PermissionGrant(object=data['object'], action=data['action'], object_fields=object_fields, action_fields=action_fields)
+        object_fields = [Field.from_dict(field) for field in data['object_fields']]
+        action_fields = [Field.from_dict(field) for field in data['action_fields']]
+        return Grant(object=data['object'], action=data['action'], object_fields=object_fields, action_fields=action_fields)
 
 
-class PermissionRequest:
+class Request:
     def __init__(self, schema, instance, action, parameters):
         self._schema = schema
         self._instance = instance
@@ -98,7 +82,7 @@ class PermissionRequest:
         request_value = getattr(self._instance, granted_field.name)
         return field.matches(request_value, granted_field.value)
 
-    def matches(self, grant: PermissionGrant):
+    def matches(self, grant: Grant):
         if grant.object != self._schema._name:
             logger.debug(f'fail match object {grant.object} != {self._schema._name}')
             return False
@@ -112,11 +96,15 @@ class PermissionRequest:
         return True
 
 
-class PermissionSchema:
+class Schema:
     def __init__(self, name):
         self._name = name
         self._object_fields = {}
         self._actions_fields = {}
+
+    @property
+    def name(self):
+        return self._name
 
     def add_fields(self, **kwargs):
         for k, v in kwargs.items():
@@ -134,10 +122,10 @@ class PermissionSchema:
             assert name in action_fields
             field = action_fields[name]
             assert field.check_compatible(value)
-        return PermissionRequest(self, instance, action, parameters)
+        return Request(self, instance, action, parameters)
 
-    def create_grant(self, object_fields: list[PermissionField]=None, action: str=None, action_fields: list[PermissionField]=None):
-        return PermissionGrant(
+    def create_grant(self, object_fields: list[Field]=None, action: str=None, action_fields: list[Field]=None):
+        return Grant(
             object=self._name,
             object_fields=object_fields,
             action=action,
@@ -146,8 +134,8 @@ class PermissionSchema:
 
 
 identity = (
-    PermissionSchema('identity')
-        .add_fields(id=Int(), tag_id=ListOfInt())
+    Schema('identity')
+        .add_fields(id=Int(), tag_id=ListOfInt(), created_by=Int())
         .add_action('read')
         .add_action('create')
         .add_action('add-tag', tag_id=Int())
@@ -159,7 +147,7 @@ identity = (
 )
 
 role = (
-    PermissionSchema('role')
+    Schema('role')
         .add_fields(id=Int())
         .add_action('read')
         .add_action('create')
@@ -172,7 +160,7 @@ role = (
 )
 
 tag = (
-    PermissionSchema('tag')
+    Schema('tag')
         .add_fields(id=Int())
         .add_action('read')
         .add_action('create')
@@ -180,7 +168,7 @@ tag = (
 )
 
 boundary = (
-    PermissionSchema('boundary')
+    Schema('boundary')
         .add_fields(id=Int())
         .add_action('read')
         .add_action('create')
@@ -188,24 +176,3 @@ boundary = (
         .add_action('add-deny')
         .add_action('del-deny')
 )
-
-class Verifier:
-    def __init__(self):
-        identity = ctx.db.identity.read_one(id=ctx.identity_id)
-        assert identity is not None
-        assert len(identity.boundaries) > 0
-        boundaries = ctx.db.boundary.read_all(id=identity.boundaries)
-        grants = ctx.db.role_grant.read_all(identity_id=identity.id)
-        roles = ctx.db.role.read_all(id=list(set(g.role_id for g in grants)))
-        self._denied = [PermissionGrant(**denied) for boundary in boundaries for denied in boundary.denies]
-        self._allowed = [PermissionGrant(**permission) for role in roles for permission in role.permissions]
-
-    def create_boundary_request(self, instance, action, **parameters):
-        return boundary.create_request(instance, action, **parameters)
-
-    def is_allowed(self, request: PermissionRequest) -> bool:
-        if any(request.matches(denied) for denied in self._denied):
-            return False
-        if any(request.matches(allowed) for allowed in self._allowed):
-            return True
-        return False

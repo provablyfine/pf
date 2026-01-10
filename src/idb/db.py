@@ -72,7 +72,7 @@ identity = sqlalchemy.Table(
     sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
     sqlalchemy.Column("created_by", sqlalchemy.Integer, index=False, unique=False, nullable=True),
     sqlalchemy.Column("boundaries", sqlalchemy.JSON, index=False, unique=False, nullable=False),
-    sqlalchemy.Column("name", sqlalchemy.String, index=False, unique=False, nullable=False),
+    sqlalchemy.Column("name", sqlalchemy.String, index=False, unique=True, nullable=False),
     sqlalchemy.Column("detail", sqlalchemy.JSON, index=False, unique=False, nullable=False),
     sqlalchemy.Column("tag_id", sqlalchemy.JSON, index=False, unique=False, nullable=False),
 )
@@ -81,7 +81,7 @@ role = sqlalchemy.Table(
     "role",
     metadata,
     sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
-    sqlalchemy.Column("name", sqlalchemy.String, index=False, unique=False, nullable=False),
+    sqlalchemy.Column("name", sqlalchemy.String, index=False, unique=True, nullable=False),
     sqlalchemy.Column("description", sqlalchemy.String, index=False, unique=False, nullable=False),
     sqlalchemy.Column("permissions", sqlalchemy.JSON, index=False, unique=False, nullable=False),
 )
@@ -98,7 +98,7 @@ boundary = sqlalchemy.Table(
     "boundary",
     metadata,
     sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
-    sqlalchemy.Column("name", sqlalchemy.String, index=False, unique=False, nullable=False),
+    sqlalchemy.Column("name", sqlalchemy.String, index=False, unique=True, nullable=False),
     sqlalchemy.Column("description", sqlalchemy.String, index=False, unique=False, nullable=False),
     sqlalchemy.Column("denies", sqlalchemy.JSON, nullable=False),
 )

@@ -1,11 +1,12 @@
-import requests
 import json
+
+import requests
 import tabulate
 
 from . import config
 from . import exceptions
 from . import client
-from .. import permissions
+from . import permission
 
 
 def _initialize_function(args):
@@ -56,7 +57,7 @@ def _boundary_read_function(args):
             rows.append(('name', data['name']))
             rows.append(('description', data['description']))
             for denies in data['denies']:
-                rows.append(('denies', permissions.PermissionGrant.from_dict(denies).to_string()))
+                rows.append(('denies', permission.dict_to_string(denies)))
             output = tabulate.tabulate(rows, tablefmt='plain')
     print(output)
 
