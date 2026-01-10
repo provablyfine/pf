@@ -79,15 +79,7 @@ components:
           type: string
         login:
           type: string
-        boundary-list:
-          type: string
-        boundary-create:
-          type: string
-        boundary-read:
-          type: string
-        boundary-delete:
-          type: string
-        boundary-update:
+        boundary:
           type: string
 
 
@@ -313,6 +305,13 @@ components:
                 items:
                   $ref: '#/components/schemas/Boundary'
 
+    BoundaryResponse:
+      description: OK
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Boundary'
+
     AcceptInvitationResponse:
       description: Invitation accepted
       content:
@@ -377,8 +376,8 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
-  /idb/boundary/list:
-    post:
+  /idb/boundary:
+    get:
       security: *SessionSignature
       summary: List Boundaries
       description: >
@@ -389,3 +388,21 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /idb/boundary/{boundary_id}:
+    get:
+      security: *SessionSignature
+      summary: Read one boundary
+      description: >
+        Details on one boundary
+      parameters:
+        - in: path
+          name: boundary_id
+          schema:
+            type: integer
+          required: true
+          description: The unique identifier of the boundary requested
+      responses:
+        "200":
+          $ref: "#/components/responses/BoundaryResponse"
+        default:
+          $ref: '#/components/responses/ErrorResponse'

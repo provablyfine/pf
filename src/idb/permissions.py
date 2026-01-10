@@ -3,7 +3,6 @@ from __future__ import annotations
 import dataclasses
 import logging
 
-from . import wa
 from .context import ctx
 
 
@@ -32,6 +31,10 @@ class PermissionField:
     name: str
     value: int | str
 
+    @classmethod
+    def from_dict(cls, data) -> PermissionField:
+        return PermissionField(name=data['name'], value=data['value'])
+
 
 @dataclasses.dataclass
 class PermissionGrant:
@@ -54,7 +57,13 @@ class PermissionGrant:
 
 
     def to_string(self) -> str:
-        pass
+        output = [self.object]
+        if len(self.object_fields) == 0:
+            output.append('*')
+        output.append(self.action)
+        if len(self.action_fields) == 0:
+            output.append('*')
+        return ':'.join(output)
 
     @classmethod
     def from_string(cls, s) -> PermissionGrant:
@@ -65,7 +74,9 @@ class PermissionGrant:
 
     @classmethod
     def from_dict(cls, data):
-        return PermissionGrant(*data)
+        object_fields = [PermissionField.from_dict(field) for field in data['object_fields']]
+        action_fields = [PermissionField.from_dict(field) for field in data['action_fields']]
+        return PermissionGrant(object=data['object'], action=data['action'], object_fields=object_fields, action_fields=action_fields)
 
 
 class PermissionRequest:
@@ -137,7 +148,7 @@ class PermissionSchema:
 identity = (
     PermissionSchema('identity')
         .add_fields(id=Int(), tag_id=ListOfInt())
-        .add_action('show')
+        .add_action('read')
         .add_action('create')
         .add_action('add-tag', tag_id=Int())
         .add_action('del-tag', tag_id=Int())
@@ -150,7 +161,7 @@ identity = (
 role = (
     PermissionSchema('role')
         .add_fields(id=Int())
-        .add_action('show')
+        .add_action('read')
         .add_action('create')
         .add_action('delete')
         .add_action('update')
@@ -163,7 +174,7 @@ role = (
 tag = (
     PermissionSchema('tag')
         .add_fields(id=Int())
-        .add_action('show')
+        .add_action('read')
         .add_action('create')
         .add_action('delete')
 )
@@ -171,7 +182,7 @@ tag = (
 boundary = (
     PermissionSchema('boundary')
         .add_fields(id=Int())
-        .add_action('show')
+        .add_action('read')
         .add_action('create')
         .add_action('delete')
         .add_action('add-deny')

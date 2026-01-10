@@ -19,11 +19,7 @@ def idb_directory(request):
         'initialize': f'{request.app.config.base_url}/idb/initialize',
         'accept-invitation': f'{request.app.config.base_url}/idb/accept-invitation',
         'login': f'{request.app.config.base_url}/idb/login',
-        'boundary-list': f'{request.app.config.base_url}/idb/boundary/list',
-        'boundary-create': f'{request.app.config.base_url}/idb/boundary/create',
-        'boundary-delete': f'{request.app.config.base_url}/idb/boundary/delete',
-        'boundary-read': f'{request.app.config.base_url}/idb/boundary/read',
-        'boundary-update': f'{request.app.config.base_url}/idb/boundary/update',
+        'boundary': f'{request.app.config.base_url}/idb/boundary',
     })
 
 
@@ -153,11 +149,12 @@ def idb_login(request) -> wa.Response:
 
 @signature.verify_session
 def idb_boundary_list(request) -> wa.Response:
+    print('got in boundary list')
     verifier = permissions.Verifier()
     boundaries = ctx.db.boundary.read_all()
     output = []
     for boundary in boundaries:
-        request = verifier.create_boundary_request(instance=boundary, action='show')
+        request = verifier.create_boundary_request(instance=boundary, action='read')
         if verifier.is_allowed(request):
             output.append(boundary)
     return wa.JSONResponse(
@@ -182,8 +179,16 @@ def idb_boundary_delete(request) -> wa.Response:
 
 @signature.verify_session
 def idb_boundary_read(request) -> wa.Response:
-    return wa.Response(
-        status_code=400
+    boundary = ctx.db.boundary.read_one(id=request.path_params.boundary_id)
+    if boundary is None:
+        return wa.ProblemResponse(status_code=404, title='Boundary not found')
+    verifier = permissions.Verifier()
+    permission_request = verifier.create_boundary_request(instance=boundary, action='read')
+    if not verifier.is_allowed(permission_request):
+        return wa.ProblemResponse(status_code=403, title='Not allowed to read boundary')
+    return wa.JSONResponse(
+        status_code=200,
+        json=model.boundary.format(boundary),
     )
 
 
@@ -210,9 +215,9 @@ def create(filename):
     app.add('/idb/initialize', idb_initialize, methods=['POST'])
     app.add('/idb/accept-invitation', idb_accept_invitation, methods=['POST'])
     app.add('/idb/login', idb_login, methods=['POST'])
-    app.add('/idb/boundary/create', idb_boundary_create, methods=['POST'])
-    app.add('/idb/boundary/list', idb_boundary_list, methods=['POST'])
-    app.add('/idb/boundary/read', idb_boundary_read, methods=['POST'])
-    app.add('/idb/boundary/update', idb_boundary_update, methods=['POST'])
-    app.add('/idb/boundary/delete', idb_boundary_delete, methods=['POST'])
+    app.add('/idb/boundary', idb_boundary_create, methods=['POST'])
+    app.add('/idb/boundary', idb_boundary_list, methods=['GET'])
+    app.add('/idb/boundary/<int:boundary_id>', idb_boundary_read, methods=['GET'])
+    app.add('/idb/boundary/<int:boundary_id>', idb_boundary_update, methods=['PATCH'])
+    app.add('/idb/boundary/<int:boundary_id>', idb_boundary_delete, methods=['DELETE'])
     return app

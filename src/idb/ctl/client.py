@@ -219,7 +219,7 @@ class HttpClient:
         return self.request('POST', *args, **kwargs)
 
     def get(self, *args, **kwargs) -> requests.Response:
-        return self.request(method='POST', *args, **kwargs)
+        return self.request('GET', *args, **kwargs)
 
 
 class Client:
