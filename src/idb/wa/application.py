@@ -28,6 +28,8 @@ class Route:
     def match(self, method: str, segments: list[str]) -> Match:
         if len(segments) != len(self._segments):
             return None
+        if method not in self._methods:
+            return None
         params = {}
         for expected, got in zip(self._segments, segments):
             if expected != got:
