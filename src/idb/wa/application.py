@@ -4,6 +4,7 @@ import dataclasses
 import traceback
 import http.client
 import urllib.parse
+import logging
 
 import webob
 
@@ -11,6 +12,9 @@ from .request import Request, App
 from .response import Response, ProblemResponse
 from .exceptions import HTTPException
 from .middleware import Middleware
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -41,7 +45,7 @@ class Route:
                 if colon == -1:
                     return None
                 type_str = expected[1:colon]
-                name_str = expected[colon+1:]
+                name_str = expected[colon+1:-1]
                 match type_str:
                     case 'int':
                         try:
@@ -50,6 +54,9 @@ class Route:
                             return None
                     case 'str':
                         value = got
+                    case _:
+                        logger.error(f'Unexpected path parameter type: {type_str}')
+                        return None
                 params[name_str] = value
         return Match(handler=self._handler, params=params)
 
