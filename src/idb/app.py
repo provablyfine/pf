@@ -151,7 +151,6 @@ def idb_login(request) -> wa.Response:
 
 @signature.verify_session
 def idb_boundary_list(request) -> wa.Response:
-    print('got in boundary list')
     verifier = permission.Verifier()
     boundaries = ctx.db.boundary.read_all()
     output = []
@@ -160,7 +159,7 @@ def idb_boundary_list(request) -> wa.Response:
         if verifier.is_allowed(request):
             output.append(boundary)
 
-    permissions = [permission for boundary in output for permission in boundary.denies] 
+    permissions = [p for boundary in output for p in boundary.denies]
     permission_by_id = permission.serializer.convert(permissions)
     return wa.JSONResponse(
         status_code=200,

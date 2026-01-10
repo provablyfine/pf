@@ -150,7 +150,7 @@ components:
           value:
             type: string
 
-    PermissionObjectFieldsWithNameAndTagNameAndCreatedByName:
+    PermissionObjectFieldsWithNameAndTagAndCreatedBy:
       type: array
       items:
         type: object
