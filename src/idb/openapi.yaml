@@ -173,6 +173,7 @@ components:
     BoundaryPermission:
       type: object
       required: [object, action, object_fields, action_fields]
+      additionalProperties: false
       properties:
         object:
           type: string
@@ -188,6 +189,7 @@ components:
     TagPermission:
       type: object
       required: [object, action, object_fields, action_fields]
+      additionalProperties: false
       properties:
         object:
           type: string
@@ -203,6 +205,7 @@ components:
     RolePermission:
       type: object
       required: [object, action, object_fields, action_fields]
+      additionalProperties: false
       properties:
         object:
           type: string
@@ -218,6 +221,7 @@ components:
     IdentityPermission:
       type: object
       required: [object, action, object_fields, action_fields]
+      additionalProperties: false
       properties:
         object:
           type: string
