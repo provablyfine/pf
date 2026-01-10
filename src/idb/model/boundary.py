@@ -14,10 +14,10 @@ def create(name: str, description: str, denies: list[str] = None) -> int:
     return boundary_id
 
 
-def format(boundary):
+def format(boundary, permission_by_id):
     return {
         'id': boundary.id,
         'name': boundary.name,
         'description': boundary.description,
-        'denies': [permission.format(p) for p in boundary.denies],
+        'denies': [permission_by_id[id(p)] for p in boundary.denies],
     }

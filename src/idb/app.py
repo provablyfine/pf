@@ -1,5 +1,6 @@
-import json
 import time
+
+import json
 
 from . import wa
 from . import config
@@ -10,7 +11,8 @@ from . import jwk
 from . import signature
 from . import middleware
 from . import crypto_policy
-from . import permissions
+from . import permission
+from . import permission_schema
 from .context import ctx
 
 
@@ -30,10 +32,10 @@ def idb_initialize(_: wa.Request):
             status_code=204
         )
     all_grants = [
-        permissions.identity.create_grant().to_db_dict(),
-        permissions.role.create_grant().to_db_dict(),
-        permissions.tag.create_grant().to_db_dict(),
-        permissions.boundary.create_grant().to_db_dict(),
+        permission_schema.identity.create_grant().to_db_dict(),
+        permission_schema.role.create_grant().to_db_dict(),
+        permission_schema.tag.create_grant().to_db_dict(),
+        permission_schema.boundary.create_grant().to_db_dict(),
     ]
     # setup restricted boundary as default
     restricted_boundary_id = model.boundary.create(
@@ -150,16 +152,19 @@ def idb_login(request) -> wa.Response:
 @signature.verify_session
 def idb_boundary_list(request) -> wa.Response:
     print('got in boundary list')
-    verifier = permissions.Verifier()
+    verifier = permission.Verifier()
     boundaries = ctx.db.boundary.read_all()
     output = []
     for boundary in boundaries:
         request = verifier.create_boundary_request(instance=boundary, action='read')
         if verifier.is_allowed(request):
             output.append(boundary)
+
+    permissions = [permission for boundary in output for permission in boundary.denies] 
+    permission_by_id = permission.serializer.convert(permissions)
     return wa.JSONResponse(
         status_code=200,
-        json={'boundaries': [model.boundary.format(boundary) for boundary in output]}
+        json={'boundaries': [model.boundary.format(boundary, permission_by_id) for boundary in output]}
     )
 
 
@@ -182,13 +187,14 @@ def idb_boundary_read(request) -> wa.Response:
     boundary = ctx.db.boundary.read_one(id=request.path_params.boundary_id)
     if boundary is None:
         return wa.ProblemResponse(status_code=404, title='Boundary not found')
-    verifier = permissions.Verifier()
+    verifier = permission.Verifier()
     permission_request = verifier.create_boundary_request(instance=boundary, action='read')
     if not verifier.is_allowed(permission_request):
         return wa.ProblemResponse(status_code=403, title='Not allowed to read boundary')
+    permission_by_id = permission.serializer.convert(boundary.denies)
     return wa.JSONResponse(
         status_code=200,
-        json=model.boundary.format(boundary),
+        json=model.boundary.format(boundary, permission_by_id),
     )
 
 

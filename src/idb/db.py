@@ -59,6 +59,7 @@ identity_invitation_key = sqlalchemy.Table(
 )
 
 tags = sqlalchemy.Table(
+    # XXX: define unicity constraint on name+value combination
     "tags",
     metadata,
     sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),

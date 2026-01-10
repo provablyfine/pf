@@ -118,6 +118,10 @@ class Schema:
     def name(self):
         return self._name
 
+    @property
+    def object_fields(self):
+        return self._object_fields
+
     def add_fields(self, **kwargs):
         for k, v in kwargs.items():
             self._object_fields[k] = v
@@ -188,3 +192,8 @@ boundary = (
         .add_action('add-deny')
         .add_action('del-deny')
 )
+
+def lookup(name):
+    all_schemas = [identity, role, tag, boundary]
+    schema_by_name = {s.name: s for s in all_schemas}
+    return schema_by_name.get(name)
