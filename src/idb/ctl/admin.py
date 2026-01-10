@@ -29,7 +29,7 @@ def _boundary_list_function(args):
     data = response.json()
     match args.format:
         case 'json':
-            output = json.dumps(data)
+            output = json.dumps(data['boundaries'], indent=2)
         case 'text':
             rows = []
             for boundary in data['boundaries']:
