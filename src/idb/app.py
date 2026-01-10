@@ -30,10 +30,10 @@ def idb_initialize(_: wa.Request):
             status_code=204
         )
     all_grants = [
-        permissions.identity.create_grant().to_dict(),
-        permissions.role.create_grant().to_dict(),
-        permissions.tag.create_grant().to_dict(),
-        permissions.boundary.create_grant().to_dict(),
+        permissions.identity.create_grant().to_db_dict(),
+        permissions.role.create_grant().to_db_dict(),
+        permissions.tag.create_grant().to_db_dict(),
+        permissions.boundary.create_grant().to_db_dict(),
     ]
     # setup restricted boundary as default
     restricted_boundary_id = model.boundary.create(

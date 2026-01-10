@@ -30,8 +30,14 @@ class Field:
     value: int | str
 
     @classmethod
-    def from_dict(cls, data) -> Field:
+    def from_db_dict(cls, data) -> Field:
         return Field(name=data['name'], value=data['value'])
+
+    def to_db_dict(self) -> dict:
+        return {
+            'name': self.name,
+            'value': self.value,
+        }
 
 
 @dataclasses.dataclass
@@ -53,13 +59,19 @@ class Grant:
         self.object_fields = object_fields
         self.action_fields = action_fields
 
-    def to_dict(self) -> dict:
+    def to_db_dict(self) -> dict:
+        return {
+            'object': self.object,
+            'action': self.action,
+            'object_fields': [field.to_db_dict() for field in self.object_fields],
+            'action_fields': [field.to_db_dict() for field in self.action_fields],
+        }
         return dataclasses.asdict(self)
 
     @classmethod
-    def from_dict(cls, data):
-        object_fields = [Field.from_dict(field) for field in data['object_fields']]
-        action_fields = [Field.from_dict(field) for field in data['action_fields']]
+    def from_db_dict(cls, data):
+        object_fields = [Field.from_db_dict(field) for field in data['object_fields']]
+        action_fields = [Field.from_db_dict(field) for field in data['action_fields']]
         return Grant(object=data['object'], action=data['action'], object_fields=object_fields, action_fields=action_fields)
 
 
