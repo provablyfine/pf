@@ -145,7 +145,7 @@ components:
           type: string
 
     PermissionObjectFieldsWithId:
-      type: [array, "null"]
+      type: array
       maxItems: 1
       items:
         type: object
@@ -155,7 +155,25 @@ components:
             type: string
             enum: ['id']
           value:
-            type: int
+            type: integer
+
+    PermissionObjectFieldsWithIdAndTagId:
+      type: array
+      items:
+        type: object
+        required: [name, value]
+        properties:
+          name:
+            type: string
+            enum: ['id', 'tag_id']
+          value:
+            type: integer
+
+    EmptyList:
+      type: array
+      maxItems: 0
+      items:
+        type: "null"
 
     BoundaryPermission:
       type: object
@@ -166,15 +184,63 @@ components:
           enum: ['boundary']
         action:
           type: string
-          enum: ['show', 'create', 'delete', 'add-deny', 'del-deny']
+          enum: ['*', 'show', 'create', 'delete', 'add-deny', 'del-deny']
         object_fields:
           $ref: '#/components/schemas/PermissionObjectFieldsWithId'
         action_fields:
-          type: "null"
+          $ref: '#/components/schemas/EmptyList'
+
+    TagPermission:
+      type: object
+      required: [object, action, object_fields, action_fields]
+      properties:
+        object:
+          type: string
+          enum: ['tag']
+        action:
+          type: string
+          enum: ['*', 'show', 'create', 'delete']
+        object_fields:
+          $ref: '#/components/schemas/PermissionObjectFieldsWithId'
+        action_fields:
+          $ref: '#/components/schemas/EmptyList'
+
+    RolePermission:
+      type: object
+      required: [object, action, object_fields, action_fields]
+      properties:
+        object:
+          type: string
+          enum: ['role']
+        action:
+          type: string
+          enum: ['*', 'show', 'create', 'delete', 'update', 'add-grant', 'del-grant', 'add-member', 'del-member']
+        object_fields:
+          $ref: '#/components/schemas/PermissionObjectFieldsWithId'
+        action_fields:
+          $ref: '#/components/schemas/EmptyList'
+
+    IdentityPermission:
+      type: object
+      required: [object, action, object_fields, action_fields]
+      properties:
+        object:
+          type: string
+          enum: ['identity']
+        action:
+          type: string
+          enum: ['*', 'show', 'create', 'add-tag', 'del-tag', 'ssh-shell', 'ssh-tunnel', 'ssh-tunnel', 'ssh-exec', 'cert']
+        object_fields:
+          $ref: '#/components/schemas/PermissionObjectFieldsWithIdAndTagId'
+        action_fields:
+          $ref: '#/components/schemas/EmptyList'
 
     Permission:
       oneOf:
         - $ref: '#/components/schemas/BoundaryPermission'
+        - $ref: '#/components/schemas/TagPermission'
+        - $ref: '#/components/schemas/RolePermission'
+        - $ref: '#/components/schemas/IdentityPermission'
 
     Boundary:
       description: A boundary
@@ -183,7 +249,7 @@ components:
       additionalProperties: false
       properties:
         id:
-          type: int
+          type: integer
         name:
           type: string
         description:

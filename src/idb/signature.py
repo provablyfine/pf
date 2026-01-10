@@ -192,7 +192,9 @@ def verify_session(f):
     @functools.wraps(f)
     def wrapper(request, *args, **kwargs):
         key_id = _get_keyid(request, 'session')
-        session_key = request.state.dao.session_key.read_one(id=key_id)
+        session_key = ctx.db.identity_session_key.read_one(id=key_id)
+        if session_key is None:
+            return wa.ProblemResponse(status_code=403, title='Session does not exist')
         if session_key.is_revoked:
             return wa.ProblemResponse(status_code=403, title='Session key is revoked')
         now = int(time.time())

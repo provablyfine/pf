@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import dataclasses
+import logging
 
 from . import wa
 from .context import ctx
+
+
+logger = logging.getLogger(__name__)
 
 
 class Int:
@@ -35,6 +39,19 @@ class PermissionGrant:
     action: str
     object_fields: list[PermissionField]
     action_fields: list[PermissionField]
+
+    def __init__(self, object: str, action: str=None, object_fields: list[PermissionField]=None, action_fields: list[PermissionField]=None):
+        if action is None:
+            action = '*'
+        if object_fields is None:
+            object_fields = []
+        if action_fields is None:
+            action_fields = []
+        self.object = object
+        self.action = action
+        self.object_fields = object_fields
+        self.action_fields = action_fields
+
 
     def to_string(self) -> str:
         pass
@@ -72,10 +89,12 @@ class PermissionRequest:
 
     def matches(self, grant: PermissionGrant):
         if grant.object != self._schema._name:
+            logger.debug(f'fail match object {grant.object} != {self._schema._name}')
             return False
         if not all(self._instance_matches(field) for field in grant.object_fields):
             return False
-        if grant.action is not None and grant.action != self._action:
+        if grant.action not in ['*', self._action]:
+            logger.debug(f'fail match action {grant.action} != {self._action}')
             return False
         if not all(self._action_matches(field) for field in grant.action_fields):
             return False
@@ -106,12 +125,7 @@ class PermissionSchema:
             assert field.check_compatible(value)
         return PermissionRequest(self, instance, action, parameters)
 
-    object: str
-    action: str
-    object_fields: list[PermissionField]
-    action_fields: list[PermissionField]
-
-    def create_grant(self, object_fields: dict=None, action: str=None, action_fields: dict=None):
+    def create_grant(self, object_fields: list[PermissionField]=None, action: str=None, action_fields: list[PermissionField]=None):
         return PermissionGrant(
             object=self._name,
             object_fields=object_fields,
@@ -173,14 +187,14 @@ class Verifier:
         grants = ctx.db.role_grant.read_all(identity_id=identity.id)
         roles = ctx.db.role.read_all(id=list(set(g.role_id for g in grants)))
         self._denied = [PermissionGrant(**denied) for boundary in boundaries for denied in boundary.denies]
-        self._allowed = [PermissionGrant(**permission) for role in roles for permission in role.permisions]
+        self._allowed = [PermissionGrant(**permission) for role in roles for permission in role.permissions]
 
     def create_boundary_request(self, instance, action, **parameters):
         return boundary.create_request(instance, action, **parameters)
 
     def is_allowed(self, request: PermissionRequest) -> bool:
-        if any(request.match(denied) for denied in self._denied):
+        if any(request.matches(denied) for denied in self._denied):
             return False
-        if any(request.match(allowed) for allowed in self._allowed):
+        if any(request.matches(allowed) for allowed in self._allowed):
             return True
         return False

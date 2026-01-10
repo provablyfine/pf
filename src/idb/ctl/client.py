@@ -164,7 +164,8 @@ class RequestsAuth(requests.auth.AuthBase):
 
     def __call__(self, request):
         if 'Content-Digest' not in request.headers:
-            request.headers['Content-Digest'] = str(http_message_signatures.http_sfv.Dictionary({"sha-256": hashlib.sha256(request.body).digest()}))
+            body = b'' if request.body is None else request.body
+            request.headers['Content-Digest'] = str(http_message_signatures.http_sfv.Dictionary({"sha-256": hashlib.sha256(body).digest()}))
         covered =  ("@method", "@authority", "@target-uri", "content-digest")
         signatures_input = []
         signatures = []
@@ -251,5 +252,5 @@ class Client:
         return HttpClient(auth=RequestsAuth(signers), public_key=session_public_key)
 
     def session_auth(self, session: str) -> HttpClient:
-        signer, public_key = private_key_signer('session', session),
+        signer, public_key = private_key_signer('session', session)
         return HttpClient(auth=RequestsAuth([signer]), public_key=public_key)
