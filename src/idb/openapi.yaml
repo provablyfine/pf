@@ -396,20 +396,28 @@ paths:
           $ref: '#/components/responses/ErrorResponse'
 
   /idb/boundary/{boundary_id}:
+    parameters:
+      - in: path
+        name: boundary_id
+        schema:
+          type: integer
+        required: true
+        description: The unique identifier of the boundary requested
     get:
       security: *SessionSignature
       summary: Read one boundary
       description: >
         Details on one boundary
-      parameters:
-        - in: path
-          name: boundary_id
-          schema:
-            type: integer
-          required: true
-          description: The unique identifier of the boundary requested
       responses:
         "200":
           $ref: "#/components/responses/BoundaryResponse"
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    delete:
+      security: *SessionSignature
+      summary: Delete one boundary
+      responses:
+        "204":
+          description: Delete OK
         default:
           $ref: '#/components/responses/ErrorResponse'

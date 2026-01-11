@@ -8,18 +8,30 @@ logger = logging.getLogger(__name__)
 
 
 class Int:
-    def matches(self, got, expected):
+    def __init__(self, field_name):
+        self._field_name = field_name
+
+    def matches(self, instance, expected):
+        got = getattr(instance, self._field_name)
         assert isinstance(got, int) and isinstance(expected, int)
         return got == expected
 
 
 class Str:
-    def matches(self, got, expected):
+    def __init__(self, field_name):
+        self._field_name = field_name
+
+    def matches(self, instance, expected):
+        got = getattr(instance, self._field_name)
         assert isinstance(got, str) and isinstance(expected, str)
         return got == expected
 
 class ListOfInt:
-    def matches(self, got, expected):
+    def __init__(self, field_name):
+        self._field_name = field_name
+
+    def matches(self, instance, expected):
+        got = getattr(instance, self._field_name)
         assert isinstance(got, list) and all(map(lambda i: isinstance(i, int), got)) and isinstance(expected, int)
         return expected in got
 
@@ -85,14 +97,12 @@ class Request:
     def _instance_matches(self, granted_field):
         assert granted_field.name in self._schema.object_fields
         field = self._schema.object_fields[granted_field.name]
-        request_value = getattr(self._instance, granted_field.name)
-        return field.matches(request_value, granted_field.value)
+        return field.matches(self._instance, granted_field.value)
 
     def _action_matches(self, granted_field):
         assert granted_field.name in self._schema.action_fields
         field = self._schema.action_fields[granted_field.name]
-        request_value = getattr(self._instance, granted_field.name)
-        return field.matches(request_value, granted_field.value)
+        return field.matches(self._parameters, granted_field.value)
 
     def matches(self, grant: Grant):
         if grant.object != self._schema._name:
@@ -151,20 +161,20 @@ class Schema:
 
 identity = (
     Schema('identity')
-        .add_fields(id=Int(), tag_id=ListOfInt(), created_by=Int())
+        .add_fields(id=Int('id'), tag_id=ListOfInt('tag_ids'), created_by=Int('created_by'))
         .add_action('read')
         .add_action('create')
-        .add_action('add-tag', tag_id=Int())
-        .add_action('del-tag', tag_id=Int())
-        .add_action('ssh-shell', username=Str())
-        .add_action('ssh-tunnel', username=Str(), dport=Int())
-        .add_action('ssh-exec', username=Str(), command=Str())
-        .add_action('cert', domain=Str())
+        .add_action('add-tag', tag_id=Int('tag_id'))
+        .add_action('del-tag', tag_id=Int('tag_id'))
+        .add_action('ssh-shell', username=Str('username'))
+        .add_action('ssh-tunnel', username=Str('username'), dport=Int('dport'))
+        .add_action('ssh-exec', username=Str('username'), command=Str('command'))
+        .add_action('cert', domain=Str('domain'))
 )
 
 role = (
     Schema('role')
-        .add_fields(id=Int())
+        .add_fields(id=Int('id'))
         .add_action('read')
         .add_action('create')
         .add_action('delete')
@@ -177,7 +187,7 @@ role = (
 
 tag = (
     Schema('tag')
-        .add_fields(id=Int())
+        .add_fields(id=Int('id'))
         .add_action('read')
         .add_action('create')
         .add_action('delete')
@@ -185,7 +195,7 @@ tag = (
 
 boundary = (
     Schema('boundary')
-        .add_fields(id=Int())
+        .add_fields(id=Int('id'))
         .add_action('read')
         .add_action('create')
         .add_action('delete')

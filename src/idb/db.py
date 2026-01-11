@@ -72,10 +72,26 @@ identity = sqlalchemy.Table(
     metadata,
     sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
     sqlalchemy.Column("created_by", sqlalchemy.Integer, index=False, unique=False, nullable=True),
-    sqlalchemy.Column("boundaries", sqlalchemy.JSON, index=False, unique=False, nullable=False),
     sqlalchemy.Column("name", sqlalchemy.String, index=False, unique=True, nullable=False),
     sqlalchemy.Column("detail", sqlalchemy.JSON, index=False, unique=False, nullable=False),
-    sqlalchemy.Column("tag_id", sqlalchemy.JSON, index=False, unique=False, nullable=False),
+)
+
+identity_boundary = sqlalchemy.Table(
+    'identity_boundary',
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
+    sqlalchemy.Column("identity_id", sqlalchemy.Integer, index=True, unique=False, nullable=False),
+    sqlalchemy.Column("boundary_id", sqlalchemy.Integer, index=True, unique=False, nullable=False),
+    sqlalchemy.UniqueConstraint('identity_id', 'boundary_id', name='uix_identity_id_boundary_id'),
+)
+
+identity_tag = sqlalchemy.Table(
+    'identity_tag',
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
+    sqlalchemy.Column("identity_id", sqlalchemy.Integer, index=True, unique=False, nullable=False),
+    sqlalchemy.Column("tag_id", sqlalchemy.Integer, index=True, unique=False, nullable=False),
+    sqlalchemy.UniqueConstraint('identity_id', 'tag_id', name='uix_identity_id_tag_id'),
 )
 
 role = sqlalchemy.Table(

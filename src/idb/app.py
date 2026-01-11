@@ -176,8 +176,19 @@ def idb_boundary_create(request) -> wa.Response:
 
 @signature.verify_session
 def idb_boundary_delete(request) -> wa.Response:
+    boundary = ctx.db.boundary.read_one(id=request.path_params.boundary_id)
+    if boundary is None:
+        return wa.ProblemResponse(status_code=404, title='Boundary not found')
+    identity = ctx.db.identity_boundary.read_one(boundary_id=boundary.id)
+    if identity is not None:
+        return wa.ProblemResponse(status_code=400, title='Unable to delete boundary: it is still in use')
+    verifier = permission.Verifier()
+    request = verifier.create_boundary_request(instance=boundary, action='delete')
+    if not verifier.is_allowed(request):
+        return wa.ProblemResponse(status_code=403, title='Not allowed to delete boundary')
+    ctx.db.boundary.delete(id=boundary.id)
     return wa.Response(
-        status_code=400
+        status_code=204
     )
 
 

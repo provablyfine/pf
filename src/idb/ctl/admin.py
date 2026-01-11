@@ -35,8 +35,8 @@ def _boundary_list_function(args):
         case 'text':
             rows = []
             for boundary in data['boundaries']:
-                rows.append([boundary['id'], boundary['name']])
-            output = tabulate.tabulate(rows, headers=['id', 'name'])
+                rows.append([boundary['id'], boundary['name'], boundary['description']])
+            output = tabulate.tabulate(rows, headers=['id', 'name', 'description'])
     print(output)
 
 
@@ -62,10 +62,19 @@ def _boundary_read_function(args):
     print(output)
 
 
+def _boundary_delete_function(args):
+    c = config.Config.load(args.config)
+    idb = client.Client(c)
+    auth = idb.session_auth(c.session_key)
+    response = auth.delete(f'{c.directory["boundary"]}/{args.id}')
+    if response.status_code != 204:
+        raise exceptions.UI(f'Unable to delete boundary: {response.json()["title"]}')
+
+
 def _add_boundary_subparser(parser):
     subparsers = parser.add_subparsers(required=True)
 
-    list_parser = subparsers.add_parser('list')
+    list_parser = subparsers.add_parser('list', help='List boundaries we have access to')
     list_parser.add_argument('-f', '--format', choices=['json', 'text'], default='text', help='Output format')
     list_parser.set_defaults(func=_boundary_list_function)
 
@@ -73,6 +82,10 @@ def _add_boundary_subparser(parser):
     read_parser.add_argument('-f', '--format', choices=['json', 'text'], default='text', help='Output format')
     read_parser.add_argument('id', type=int, help='Boundary id')
     read_parser.set_defaults(func=_boundary_read_function)
+
+    delete_parser = subparsers.add_parser('delete', help='Delete an unused boundary')
+    delete_parser.add_argument('id', type=int, help='Boundary id')
+    delete_parser.set_defaults(func=_boundary_delete_function)
 
 
 def add_subparsers(parser):

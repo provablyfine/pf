@@ -214,12 +214,20 @@ class HttpClient:
                 raise exceptions.UI(str(debug.json()))
         return response
 
-
     def post(self, *args, **kwargs) -> requests.Response:
         return self.request('POST', *args, **kwargs)
 
     def get(self, *args, **kwargs) -> requests.Response:
         return self.request('GET', *args, **kwargs)
+
+    def delete(self, *args, **kwargs) -> requests.Response:
+        return self.request('DELETE', *args, **kwargs)
+
+    def put(self, *args, **kwargs) -> requests.Response:
+        return self.request('PUT', *args, **kwargs)
+
+    def patch(self, *args, **kwargs) -> requests.Response:
+        return self.request('PATCH', *args, **kwargs)
 
 
 class Client:

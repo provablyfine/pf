@@ -131,8 +131,9 @@ class Verifier:
     def __init__(self):
         identity = ctx.db.identity.read_one(id=ctx.identity_id)
         assert identity is not None
-        assert len(identity.boundaries) > 0
-        boundaries = ctx.db.boundary.read_all(id=identity.boundaries)
+        identity_boundaries = ctx.db.identity_boundary.read_all(identity_id=identity.id)
+        assert len(identity_boundaries) > 0
+        boundaries = ctx.db.boundary.read_all(id=[i.boundary_id for i in identity_boundaries])
         grants = ctx.db.role_grant.read_all(identity_id=identity.id)
         roles = ctx.db.role.read_all(id=list(set(g.role_id for g in grants)))
         self._denied = [permission_schema.Grant.from_db_dict(denied) for boundary in boundaries for denied in boundary.denies]
