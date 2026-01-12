@@ -244,7 +244,7 @@ components:
     Boundary:
       description: A boundary
       type: object
-      required: [id, name, description, denies]
+      required: [id, name, description, ceiling_list, denied_list]
       additionalProperties: false
       properties:
         id:
@@ -253,7 +253,11 @@ components:
           type: string
         description:
           type: string
-        denies:
+        ceiling_list:
+          type: array
+          items:
+            $ref: '#/components/schemas/Permission'
+        denied_list:
           type: array
           items:
             $ref: '#/components/schemas/Permission'

@@ -45,6 +45,26 @@ class Request:
         self._action = action
         self._parameters = parameters
 
+    def __str__(self):
+        output = [self._schema.name, self._action]
+        if self._instance is not None:
+            fields = []
+            for field_name in self._schema.object_fields:
+                value = getattr(self._instance, field_name)
+                fields.append(f'{field_name}/{value}')
+            output.append('&'.join(fields))
+        else:
+            output.append('')
+        if self._parameters is not None:
+            fields = []
+            for field_name in self._schema.actions_fields(self._action):
+                value = getattr(self._parameters, field_name)
+                fields.append(f'{field_name}/{value}')
+            output.append('&'.join(fields))
+        else:
+            output.append('')
+        return ':'.join(output)
+
     def _instance_matches(self, granted_field):
         assert granted_field.name in self._schema.object_fields
         field = self._schema.object_fields[granted_field.name]
@@ -80,8 +100,11 @@ class Schema:
         return self._name
 
     @property
-    def object_fields(self):
+    def object_fields(self) -> dict:
         return self._object_fields
+
+    def actions_fields(self, action: str) -> dict:
+        return self._actions_fields[action]
 
     def add_fields(self, **kwargs):
         for k, v in kwargs.items():

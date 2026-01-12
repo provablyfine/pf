@@ -50,12 +50,12 @@ class Converter:
         object_converter = self._by_object[permission.object]
         object_fields = convert_fields(permission.object_fields, object_converter.object_fields)
         action_fields = convert_fields(permission.action_fields, object_converter.action_fields)
-        return {
-            'object': permission.object,
-            'action': permission.action,
-            'object_fields': object_fields,
-            'action_fields': action_fields,
-        }
+        return Grant(
+            object=permission.object,
+            action=permission.action,
+            object_fields=object_fields,
+            action_fields=action_fields,
+        )
 
 def _500(title, detail):
     return wa.HTTPException(wa.ProblemResponse(status_code=500, title=f'Permission field invalid. {title}', detail=detail))

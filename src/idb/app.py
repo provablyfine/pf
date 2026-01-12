@@ -1,4 +1,6 @@
 import time
+import logging
+import sys
 
 import json
 
@@ -32,10 +34,10 @@ def idb_initialize(_: wa.Request):
             status_code=204
         )
     all_grants = [
-        permission_schema.identity.create_grant().to_db_dict(),
-        permission_schema.role.create_grant().to_db_dict(),
-        permission_schema.tag.create_grant().to_db_dict(),
-        permission_schema.boundary.create_grant().to_db_dict(),
+        permission_schema.identity.create_grant(),
+        permission_schema.role.create_grant(),
+        permission_schema.tag.create_grant(),
+        permission_schema.boundary.create_grant(),
     ]
     # setup restricted boundary as default
     restricted_boundary_id = model.boundary.create(
@@ -62,7 +64,7 @@ def idb_initialize(_: wa.Request):
         description="""The "root" role identifies a user that is able to do anything.
         It is created once at startup and should be deleted once a proper permission
         model is deployed.""",
-        permissions=all_grants
+        permission_list=all_grants
     )
     ctx.db.role_grant.create(role_id=root_role_id, identity_id=root_id)
 
@@ -162,7 +164,7 @@ def idb_boundary_list(request) -> wa.Response:
         if verifier.is_allowed(request):
             output.append(boundary)
 
-    client_converter = permission.to_client()
+    client_converter = model.permission.to_client()
     return wa.JSONResponse(
         status_code=200,
         json={'boundaries': [model.boundary.serialize(b, client_converter) for b in output]}
@@ -203,7 +205,7 @@ def idb_boundary_read(request) -> wa.Response:
     permission_request = verifier.create_boundary_request(instance=boundary, action='read')
     if not verifier.is_allowed(permission_request):
         return wa.ProblemResponse(status_code=403, title='Not allowed to read boundary')
-    client_converter = permission.to_client()
+    client_converter = model.permission.to_client()
     return wa.JSONResponse(
         status_code=200,
         json=model.boundary.serialize(boundary, client_converter),
@@ -219,6 +221,16 @@ def idb_boundary_update(request) -> wa.Response:
 
 def create(filename):
     conf = config.Config.load(filename)
+    match conf.log_level:
+        case 'DEBUG':
+            level = logging.DEBUG
+        case 'INFO':
+            level = logging.INFO
+        case 'WARNING':
+            level = logging.WARN
+        case 'ERROR':
+            level = logging.ERROR
+    logging.basicConfig(stream=sys.stdout, level=level)
     db.create_tables(conf.database_url)
     middlewares = [
         wa.debug_store.DebugStoreMiddleware(wa.debug_store.InMemoryDebugStore()),

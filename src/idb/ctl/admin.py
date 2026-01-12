@@ -56,8 +56,10 @@ def _boundary_read_function(args):
             rows.append(('id', data['id']))
             rows.append(('name', data['name']))
             rows.append(('description', data['description']))
-            for denies in data['denies']:
-                rows.append(('denies', permission.dict_to_string(denies)))
+            for denied in data['denied_list']:
+                rows.append(('denied', permission.dict_to_string(denied)))
+            for ceiling in data['ceiling_list']:
+                rows.append(('ceiling', permission.dict_to_string(ceiling)))
             output = tabulate.tabulate(rows, tablefmt='plain')
     print(output)
 
