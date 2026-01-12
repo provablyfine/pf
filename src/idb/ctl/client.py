@@ -3,6 +3,7 @@ import os.path
 import logging
 import hashlib
 import urllib.parse
+import secrets
 
 import requests
 import http_message_signatures
@@ -80,11 +81,13 @@ class Signer:
     def sign(self, request, covered):
         message = RequestMessage(request)
         key_id = f'{self._prefix}:{self._key.thumbprint()}'
+        nonce = secrets.token_hex(16)
         self._signer.sign(
             message,
             key_id=key_id,
             label=self._prefix,
-            covered_component_ids=covered
+            covered_component_ids=covered,
+            nonce=nonce,
         )
         return message.headers.signature_input, message.headers.signature
 
