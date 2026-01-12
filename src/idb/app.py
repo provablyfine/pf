@@ -39,14 +39,6 @@ def idb_initialize(_: wa.Request):
         permission_schema.tag.create_grant(),
         permission_schema.boundary.create_grant(),
     ]
-    # setup restricted boundary as default
-    restricted_boundary_id = model.boundary.create(
-        name='Restricted Boundary',
-        description='The Restricted boundary does not allow anything',
-        ceiling_list=[],
-        denied_list=all_grants,
-    )
-    ctx.db.default.create(boundary_id=restricted_boundary_id)
 
     # root user
     root_boundary_id = model.boundary.create(

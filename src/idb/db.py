@@ -125,7 +125,6 @@ default = sqlalchemy.Table(
     "default",
     metadata,
     sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
-    sqlalchemy.Column("boundary_id", sqlalchemy.Integer, index=True, unique=False, nullable=False),
 )
 
 audit_log = sqlalchemy.Table(
