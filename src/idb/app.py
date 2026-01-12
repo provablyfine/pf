@@ -33,14 +33,6 @@ def idb_initialize(_: wa.Request):
         return wa.Response(
             status_code=204
         )
-    all_grants = [
-        permission_schema.identity.create_grant(),
-        permission_schema.role.create_grant(),
-        permission_schema.tag.create_grant(),
-        permission_schema.boundary.create_grant(),
-    ]
-
-    # root user
     root_boundary_id = model.boundary.create(
         name='root',
         description='The Root boundary is not a boundary at all.',
@@ -51,6 +43,12 @@ def idb_initialize(_: wa.Request):
         name='root',
         boundaries=[root_boundary_id],
     )
+    all_grants = [
+        permission_schema.identity.create_grant(),
+        permission_schema.role.create_grant(),
+        permission_schema.tag.create_grant(),
+        permission_schema.boundary.create_grant(),
+    ]
     root_role_id = model.role.create(
         name='root',
         description="""The "root" role identifies a user that is able to do anything.
@@ -60,7 +58,6 @@ def idb_initialize(_: wa.Request):
     )
     ctx.db.role_grant.create(role_id=root_role_id, identity_id=root_id)
 
-    # invitation for root user
     identity_invitation_key_id = model.identity_invitation_key.create(
         identity_id=root_id,
         expiration_delay_s=600
