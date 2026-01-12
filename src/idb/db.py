@@ -100,15 +100,15 @@ role = sqlalchemy.Table(
     sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
     sqlalchemy.Column("name", sqlalchemy.String, index=False, unique=True, nullable=False),
     sqlalchemy.Column("description", sqlalchemy.String, index=False, unique=False, nullable=False),
-    sqlalchemy.Column("permissions", sqlalchemy.JSON, index=False, unique=False, nullable=False),
+    sqlalchemy.Column("permission_list", sqlalchemy.JSON, index=False, unique=False, nullable=False),
 )
 
 role_grant = sqlalchemy.Table(
     "role_grant",
     metadata,
     sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
-    sqlalchemy.Column("role_id", sqlalchemy.String, index=True, unique=False, nullable=False),
-    sqlalchemy.Column("identity_id", sqlalchemy.String, index=True, unique=False, nullable=False),
+    sqlalchemy.Column("role_id", sqlalchemy.Integer, index=True, unique=False, nullable=False),
+    sqlalchemy.Column("identity_id", sqlalchemy.Integer, index=True, unique=False, nullable=False),
 )
 
 boundary = sqlalchemy.Table(
@@ -117,7 +117,8 @@ boundary = sqlalchemy.Table(
     sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
     sqlalchemy.Column("name", sqlalchemy.String, index=False, unique=True, nullable=False),
     sqlalchemy.Column("description", sqlalchemy.String, index=False, unique=False, nullable=False),
-    sqlalchemy.Column("denies", sqlalchemy.JSON, nullable=False),
+    sqlalchemy.Column("ceiling_list", sqlalchemy.JSON, nullable=False),
+    sqlalchemy.Column("denied_list", sqlalchemy.JSON, nullable=False),
 )
 
 default = sqlalchemy.Table(

@@ -41,7 +41,8 @@ def idb_initialize(_: wa.Request):
     restricted_boundary_id = model.boundary.create(
         name='Restricted Boundary',
         description='The Restricted boundary does not allow anything',
-        denies=all_grants,
+        ceiling_list=[],
+        denied_list=all_grants,
     )
     ctx.db.default.create(boundary_id=restricted_boundary_id)
 
@@ -49,7 +50,8 @@ def idb_initialize(_: wa.Request):
     root_boundary_id = model.boundary.create(
         name='root',
         description='The Root boundary is not a boundary at all.',
-        denies=[],
+        ceiling_list=[],
+        denied_list=[],
     )
     root_id = model.identity.create(
         name='root',
@@ -151,19 +153,19 @@ def idb_login(request) -> wa.Response:
 
 @signature.verify_session
 def idb_boundary_list(request) -> wa.Response:
-    verifier = permission.Verifier()
-    boundaries = ctx.db.boundary.read_all()
     output = []
+
+    verifier = permission.Verifier()
+    boundaries = model.boundary.read_all()
     for boundary in boundaries:
         request = verifier.create_boundary_request(instance=boundary, action='read')
         if verifier.is_allowed(request):
             output.append(boundary)
 
-    permissions = [p for boundary in output for p in boundary.denies]
-    permission_by_id = permission.serializer.convert(permissions)
+    client_converter = permission.to_client()
     return wa.JSONResponse(
         status_code=200,
-        json={'boundaries': [model.boundary.format(boundary, permission_by_id) for boundary in output]}
+        json={'boundaries': [model.boundary.serialize(b, client_converter) for b in output]}
     )
 
 
@@ -176,7 +178,7 @@ def idb_boundary_create(request) -> wa.Response:
 
 @signature.verify_session
 def idb_boundary_delete(request) -> wa.Response:
-    boundary = ctx.db.boundary.read_one(id=request.path_params.boundary_id)
+    boundary = model.boundary.read_one(id=request.path_params.boundary_id)
     if boundary is None:
         return wa.ProblemResponse(status_code=404, title='Boundary not found')
     identity = ctx.db.identity_boundary.read_one(boundary_id=boundary.id)
@@ -194,17 +196,17 @@ def idb_boundary_delete(request) -> wa.Response:
 
 @signature.verify_session
 def idb_boundary_read(request) -> wa.Response:
-    boundary = ctx.db.boundary.read_one(id=request.path_params.boundary_id)
+    boundary = model.boundary.read_one(id=request.path_params.boundary_id)
     if boundary is None:
         return wa.ProblemResponse(status_code=404, title='Boundary not found')
     verifier = permission.Verifier()
     permission_request = verifier.create_boundary_request(instance=boundary, action='read')
     if not verifier.is_allowed(permission_request):
         return wa.ProblemResponse(status_code=403, title='Not allowed to read boundary')
-    permission_by_id = permission.serializer.convert(boundary.denies)
+    client_converter = permission.to_client()
     return wa.JSONResponse(
         status_code=200,
-        json=model.boundary.format(boundary, permission_by_id),
+        json=model.boundary.serialize(boundary, client_converter),
     )
 
 

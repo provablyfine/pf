@@ -3,6 +3,8 @@ from __future__ import annotations
 import dataclasses
 import logging
 
+from . import model
+
 
 logger = logging.getLogger(__name__)
 
@@ -36,57 +38,6 @@ class ListOfInt:
         return expected in got
 
 
-@dataclasses.dataclass
-class Field:
-    name: str
-    value: int | str
-
-    @classmethod
-    def from_db_dict(cls, data) -> Field:
-        return Field(name=data['name'], value=data['value'])
-
-    def to_db_dict(self) -> dict:
-        return {
-            'name': self.name,
-            'value': self.value,
-        }
-
-
-@dataclasses.dataclass
-class Grant:
-    object: str
-    action: str
-    object_fields: list[Field]
-    action_fields: list[Field]
-
-    def __init__(self, object: str, action: str=None, object_fields: list[Field]=None, action_fields: list[Field]=None):
-        if action is None:
-            action = '*'
-        if object_fields is None:
-            object_fields = []
-        if action_fields is None:
-            action_fields = []
-        self.object = object
-        self.action = action
-        self.object_fields = object_fields
-        self.action_fields = action_fields
-
-    def to_db_dict(self) -> dict:
-        return {
-            'object': self.object,
-            'action': self.action,
-            'object_fields': [field.to_db_dict() for field in self.object_fields],
-            'action_fields': [field.to_db_dict() for field in self.action_fields],
-        }
-        return dataclasses.asdict(self)
-
-    @classmethod
-    def from_db_dict(cls, data):
-        object_fields = [Field.from_db_dict(field) for field in data['object_fields']]
-        action_fields = [Field.from_db_dict(field) for field in data['action_fields']]
-        return Grant(object=data['object'], action=data['action'], object_fields=object_fields, action_fields=action_fields)
-
-
 class Request:
     def __init__(self, schema, instance, action, parameters):
         self._schema = schema
@@ -104,7 +55,7 @@ class Request:
         field = self._schema.action_fields[granted_field.name]
         return field.matches(self._parameters, granted_field.value)
 
-    def matches(self, grant: Grant):
+    def matches(self, grant: model.permission.Grant):
         if grant.object != self._schema._name:
             logger.debug(f'fail match object {grant.object} != {self._schema._name}')
             return False
@@ -150,8 +101,8 @@ class Schema:
             assert field.check_compatible(value)
         return Request(self, instance, action, parameters)
 
-    def create_grant(self, object_fields: list[Field]=None, action: str=None, action_fields: list[Field]=None):
-        return Grant(
+    def create_grant(self, object_fields: list[model.permission.Field]=None, action: str=None, action_fields: list[model.permission.Field]=None):
+        return model.permission.Grant(
             object=self._name,
             object_fields=object_fields,
             action=action,
@@ -203,7 +154,7 @@ boundary = (
         .add_action('del-deny')
 )
 
-def lookup(name):
+def lookup(name: str):
     all_schemas = [identity, role, tag, boundary]
     schema_by_name = {s.name: s for s in all_schemas}
     return schema_by_name.get(name)
