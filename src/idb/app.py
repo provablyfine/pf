@@ -145,13 +145,15 @@ def idb_login(request) -> wa.Response:
 
 @signature.verify_session
 def idb_boundary_list(request) -> wa.Response:
-    output = []
-
     query = {}
     if 'name' in request.query_params:
         query['name'] = request.query_params['name']
+    if 'id' in request.query_params:
+        query['id'] = int(request.query_params['id'])
     verifier = permission.Verifier()
     boundaries = model.boundary.read_all(**query)
+
+    output = []
     for boundary in boundaries:
         request = verifier.create_boundary_request(instance=boundary, action='read')
         if verifier.is_allowed(request):

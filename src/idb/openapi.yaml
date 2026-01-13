@@ -180,7 +180,7 @@ components:
           enum: ['boundary']
         action:
           type: string
-          enum: ['*', 'show', 'create', 'delete', 'add-deny', 'del-deny']
+          enum: ['*', 'read', 'create', 'delete', 'add-deny', 'del-deny']
         object_fields:
           $ref: '#/components/schemas/PermissionObjectFieldsWithName'
         action_fields:
@@ -196,7 +196,7 @@ components:
           enum: ['tag']
         action:
           type: string
-          enum: ['*', 'show', 'create', 'delete']
+          enum: ['*', 'read', 'create', 'delete']
         object_fields:
           $ref: '#/components/schemas/PermissionObjectFieldsWithName'
         action_fields:
@@ -212,7 +212,7 @@ components:
           enum: ['role']
         action:
           type: string
-          enum: ['*', 'show', 'create', 'delete', 'update', 'add-grant', 'del-grant', 'add-member', 'del-member']
+          enum: ['*', 'read', 'create', 'delete', 'update', 'add-grant', 'del-grant', 'add-member', 'del-member']
         object_fields:
           $ref: '#/components/schemas/PermissionObjectFieldsWithName'
         action_fields:
@@ -228,7 +228,7 @@ components:
           enum: ['identity']
         action:
           type: string
-          enum: ['*', 'show', 'create', 'add-tag', 'del-tag', 'ssh-shell', 'ssh-tunnel', 'ssh-tunnel', 'ssh-exec', 'cert']
+          enum: ['*', 'read', 'create', 'add-tag', 'del-tag', 'ssh-shell', 'ssh-tunnel', 'ssh-tunnel', 'ssh-exec', 'cert']
         object_fields:
           $ref: '#/components/schemas/PermissionObjectFieldsWithNameAndTagAndCreatedBy'
         action_fields:
@@ -425,6 +425,12 @@ paths:
             type: string
           required: false
           description: If specified, return boundaries that match this name
+        - in: query
+          name: id
+          schema:
+            type: string
+          required: false
+          description: If specified, return boundaries that match this id
       responses:
         "200":
           $ref: "#/components/responses/BoundaryListResponse"
