@@ -127,7 +127,24 @@ def _boundary_denied_function(args):
 
 
 def _boundary_ceiling_function(args):
-    pass
+    c = config.Config.load(args.config)
+    idb = client.Client(c)
+    auth = idb.session_auth(c.session_key)
+    boundary = _boundary(args, auth)
+    ceiling_list = boundary['ceiling_list']
+    for added in args.add:
+        to_add = permission.dict_from_string(added)
+        ceiling_list.append(to_add)
+    for deleted in args.delete:
+        to_del = permission.dict_from_string(deleted)
+        ceiling_list.remove(to_del)
+    if args.set is not None:
+        ceiling_list = args.set
+    response = auth.patch(f'{idb.directory.boundary}/{boundary["id"]}', json={
+        'ceiling_list': ceiling_list,
+    })
+    if response.status_code != 200:
+        raise exceptions.UI(f'Unable to update boundary: {response.json()["title"]}.')
 
 
 def add_subparser(parser):
@@ -171,8 +188,8 @@ def add_subparser(parser):
     group.add_argument('-n', '--name', type=str, help='Name of boundary.')
     group.add_argument('-i', '--id', type=int, help='Id of boundary.')
     ceiling_parser.add_argument('-a', '--add', type=str, help='Add permission to ceiling list', nargs='*', default=[])
-    ceiling_parser.add_argument('-d', '--del', type=str, help='Delete permission from celing list', nargs='*', default=[])
-    ceiling_parser.add_argument('-s', '--set', type=str, help='Set ceiling list', nargs='*', default=[])
+    ceiling_parser.add_argument('-d', '--del', dest='delete', type=str, help='Delete permission from celing list', nargs='*', default=[])
+    ceiling_parser.add_argument('-s', '--set', type=str, help='Set ceiling list', nargs='*', default=None)
     ceiling_parser.set_defaults(func=_boundary_ceiling_function)
 
     delete_parser = subparsers.add_parser('delete', help='Delete an unused boundary')
