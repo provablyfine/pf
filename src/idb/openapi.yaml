@@ -282,6 +282,31 @@ components:
         nonce:
           type: string
 
+    CreateBoundaryRequest:
+      type: object
+      required: [name]
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+
+    UpdateBoundaryRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        description:
+          type: string
+        denied_list:
+          type: array
+          items:
+            $ref: '#/components/schemas/Permission'
+        ceiling_list:
+          type: array
+          items:
+            $ref: '#/components/schemas/Permission'
+
   responses:
     ErrorResponse:
       description: Error
@@ -393,11 +418,34 @@ paths:
       summary: List Boundaries
       description: >
         Return the list of boundaries the user is allowed to see
+      parameters:
+        - in: query
+          name: name
+          schema:
+            type: string
+          required: false
+          description: If specified, return boundaries that match this name
       responses:
         "200":
           $ref: "#/components/responses/BoundaryListResponse"
         default:
           $ref: '#/components/responses/ErrorResponse'
+    post:
+      security: *SessionSignature
+      summary: Create boundary
+      description: >
+        Create a new boundary
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBoundaryRequest'
+      responses:
+        "201":
+          $ref: "#/components/responses/BoundaryResponse"
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
 
   /idb/boundary/{boundary_id}:
     parameters:
@@ -412,6 +460,21 @@ paths:
       summary: Read one boundary
       description: >
         Details on one boundary
+      responses:
+        "200":
+          $ref: "#/components/responses/BoundaryResponse"
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    patch:
+      security: *SessionSignature
+      summary: Update boundary
+      description: >
+        Update boundary parameters
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateBoundaryRequest'
       responses:
         "200":
           $ref: "#/components/responses/BoundaryResponse"

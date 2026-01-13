@@ -183,18 +183,27 @@ class RequestsAuth(requests.auth.AuthBase):
 
 
 class HttpClient:
-    def __init__(self, auth, public_key):
+    def __init__(self, client, auth, public_key):
+        self._client = client
         self._auth = auth
         self._public_key = public_key
         self._session = requests.Session()
 
     @property
+    def config(self):
+        return self._client.config
+
+    @property
+    def directory(self):
+        return self._client.directory
+
+    @property
     def public_key(self):
         return self._public_key
 
-    def request(self, method, url, data=None, json=None, headers=None, timeout=None) -> requests.Response:
+    def request(self, method, url, data=None, json=None, headers=None, timeout=None, params=None) -> requests.Response:
 
-        request = requests.Request(method=method, url=url, data=data, json=json, headers=headers, auth=self._auth)
+        request = requests.Request(method=method, url=url, data=data, json=json, headers=headers, auth=self._auth, params=params)
         request = request.prepare()
 
         logger.info(f'tx {request.method} to {request.url}')
@@ -239,6 +248,10 @@ class Client:
         self._directory = None
 
     @property
+    def config(self):
+        return self._config
+
+    @property
     def directory(self):
         if self._directory is not None:
             return self._directory
@@ -249,19 +262,19 @@ class Client:
 
     @property
     def no_auth(self) -> HttpClient:
-        return HttpClient(auth=None, public_key=None)
+        return HttpClient(self, auth=None, public_key=None)
 
     def invitation_auth(self, account: str, invitation: str) -> HttpClient:
         account_signer, account_public_key = private_key_signer('account', account)
         signers = [hmac_signer('invitation', invitation), account_signer]
-        return HttpClient(auth=RequestsAuth(signers), public_key=account_public_key)
+        return HttpClient(self, auth=RequestsAuth(signers), public_key=account_public_key)
 
     def login_auth(self, account: str, session: str) -> HttpClient:
         account_signer, account_public_key = private_key_signer('account', account)
         session_signer, session_public_key = private_key_signer('session', session)
         signers = [account_signer, session_signer]
-        return HttpClient(auth=RequestsAuth(signers), public_key=session_public_key)
+        return HttpClient(self, auth=RequestsAuth(signers), public_key=session_public_key)
 
     def session_auth(self, session: str) -> HttpClient:
         signer, public_key = private_key_signer('session', session)
-        return HttpClient(auth=RequestsAuth([signer]), public_key=public_key)
+        return HttpClient(self, auth=RequestsAuth([signer]), public_key=public_key)

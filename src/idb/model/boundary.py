@@ -53,7 +53,6 @@ def read_one(**kwargs):
         return None
     return _from_db(boundary)
 
-
 def serialize(boundary, to_client: permission.Converter) -> dict:
     return {
         'id': boundary.id,

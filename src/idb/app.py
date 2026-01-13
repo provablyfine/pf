@@ -3,6 +3,7 @@ import logging
 import sys
 
 import json
+import sqlalchemy
 
 from . import wa
 from . import config
@@ -146,8 +147,11 @@ def idb_login(request) -> wa.Response:
 def idb_boundary_list(request) -> wa.Response:
     output = []
 
+    query = {}
+    if 'name' in request.query_params:
+        query['name'] = request.query_params['name']
     verifier = permission.Verifier()
-    boundaries = model.boundary.read_all()
+    boundaries = model.boundary.read_all(**query)
     for boundary in boundaries:
         request = verifier.create_boundary_request(instance=boundary, action='read')
         if verifier.is_allowed(request):
@@ -162,8 +166,16 @@ def idb_boundary_list(request) -> wa.Response:
 
 @signature.verify_session
 def idb_boundary_create(request) -> wa.Response:
-    return wa.Response(
-        status_code=400
+    data = json.loads(request.body)
+    try:
+        boundary_id = model.boundary.create(name=data['name'], description=data.get('description'))
+    except sqlalchemy.exc.IntegrityError:
+        return wa.ProblemResponse(status_code=400, title='Boundary already exists. Name must be unique.', detail=data['name'])
+    boundary = model.boundary.read_one(id=boundary_id)
+    client_converter = model.permission.to_client()
+    return wa.JSONResponse(
+        status_code=201,
+        json=model.boundary.serialize(boundary, client_converter),
     )
 
 
@@ -203,8 +215,13 @@ def idb_boundary_read(request) -> wa.Response:
 
 @signature.verify_session
 def idb_boundary_update(request) -> wa.Response:
-    return wa.Response(
-        status_code=400
+    data = json.loads(request.body)
+    ctx.db.boundary.update(**data).where(id=request.path_params.boundary_id)
+    boundary = model.boundary.read_one(id=request.path_params.boundary_id)
+    client_converter = model.permission.to_client()
+    return wa.JSONResponse(
+        status_code=200,
+        json=model.boundary.serialize(boundary, client_converter),
     )
 
 
