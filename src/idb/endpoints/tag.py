@@ -9,7 +9,7 @@ from ..context import ctx
 
 
 @signature.verify_session
-def list(request) -> wa.Response:
+def list(request: wa.Request) -> wa.Response:
     query = {}
     if 'id' in request.query_params:
         query['id'] = int(request.query_params['id'])
@@ -33,20 +33,31 @@ def list(request) -> wa.Response:
 
 
 @signature.verify_session
-def create(request) -> wa.Response:
+def create(request: wa.Request) -> wa.Response:
+    verifier = permission.Verifier()
+    create_request = verifier.tag(None).create()
+    if not verifier.is_allowed(create_request):
+        return wa.ProblemResponse(status_code=403, title='Not allowed to create tag')
+
+    data = json.loads(request.body)
+    tag_id = ctx.db.tag.create(name=data['name'], value=data['value'])
+    tag = ctx.db.tag.read_one(id=tag_id)
+    return wa.JSONResponse(
+        status_code=201,
+        json=model.tag.serialize(tag),
+    )
+
+
+@signature.verify_session
+def delete(request: wa.Request) -> wa.Response:
     pass
 
 
 @signature.verify_session
-def delete(request) -> wa.Response:
+def read(request: wa.Request) -> wa.Response:
     pass
 
 
 @signature.verify_session
-def read(request) -> wa.Response:
-    pass
-
-
-@signature.verify_session
-def update(request) -> wa.Response:
+def update(request: wa.Request) -> wa.Response:
     pass
