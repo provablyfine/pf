@@ -13,7 +13,6 @@ from . import jwk
 from . import signature
 from . import middleware
 from . import crypto_policy
-from . import permission_schema
 from . import endpoints
 from .context import ctx
 
