@@ -307,6 +307,29 @@ components:
           items:
             $ref: '#/components/schemas/Permission'
 
+    Tag:
+      description: A tag
+      type: object
+      required: [id, name, value]
+      additionalProperties: false
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        value:
+          type: string
+
+    CreateTagRequest:
+      type: object
+      required: [name, value]
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+        value:
+          type: string
+
   responses:
     ErrorResponse:
       description: Error
@@ -347,6 +370,27 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/Boundary'
+
+    TagListResponse:
+      description: OK
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [tags]
+            additionalProperties: false
+            properties:
+              tags:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Tag'
+
+    TagResponse:
+      description: OK
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Tag'
 
     AcceptInvitationResponse:
       description: Invitation accepted
@@ -494,3 +538,51 @@ paths:
           description: Delete OK
         default:
           $ref: '#/components/responses/ErrorResponse'
+
+  /idb/tag:
+    get:
+      security: *SessionSignature
+      summary: List Tags
+      description: >
+        Return the list of tags the user is allowed to see
+      parameters:
+        - in: query
+          name: value
+          schema:
+            type: string
+          required: false
+          description: If specified, return tags that match this value
+        - in: query
+          name: name
+          schema:
+            type: string
+          required: false
+          description: If specified, return tags that match this name
+        - in: query
+          name: id
+          schema:
+            type: string
+          required: false
+          description: If specified, return tags that match this id
+      responses:
+        "200":
+          $ref: "#/components/responses/TagListResponse"
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    post:
+      security: *SessionSignature
+      summary: Create Tag
+      description: >
+        Create a new Tag
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTagRequest'
+      responses:
+        "201":
+          $ref: "#/components/responses/TagResponse"
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+

@@ -22,13 +22,13 @@ def list(request) -> wa.Response:
 
     output = []
     for tag in tags:
-        request = verifier.create_tag_request(tag=tag, action='read')
+        request = verifier.tag(tag).read()
         if verifier.is_allowed(request):
             output.append(tag)
 
     return wa.JSONResponse(
         status_code=200,
-        json={'boundaries': [model.tag.serialize(tag) for tag in output]}
+        json={'tags': [model.tag.serialize(tag) for tag in output]}
     )
 
 
@@ -49,4 +49,4 @@ def read(request) -> wa.Response:
 
 @signature.verify_session
 def update(request) -> wa.Response:
-    padd
+    pass
