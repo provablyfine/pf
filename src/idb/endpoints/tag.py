@@ -40,7 +40,10 @@ def create(request: wa.Request) -> wa.Response:
         return wa.ProblemResponse(status_code=403, title='Not allowed to create tag')
 
     data = json.loads(request.body)
-    tag_id = ctx.db.tag.create(name=data['name'], value=data['value'])
+    try:
+        tag_id = ctx.db.tag.create(name=data['name'], value=data['value'])
+    except sqlalchemy.exc.IntegrityError:
+        return wa.ProblemResponse(status_code=400, title='Tag already exists')
     tag = ctx.db.tag.read_one(id=tag_id)
     return wa.JSONResponse(
         status_code=201,

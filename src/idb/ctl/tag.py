@@ -64,7 +64,7 @@ def _tag_create_function(args):
         'value': value,
     })
     if response.status_code != 201:
-        raise exceptions.UI(f'Unable to create boundary: {response.json()["title"]}')
+        raise exceptions.UI(f'Unable to create tag: {response.json()["title"]}')
 
 
 def _add_filter_group(parser, required=False):
