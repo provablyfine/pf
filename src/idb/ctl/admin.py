@@ -1,13 +1,8 @@
-import json
-
-import requests
-import tabulate
-
 from . import config
 from . import exceptions
 from . import client
-from . import permission
 from . import boundary
+from . import tag
 
 
 def _initialize_function(args):
@@ -28,5 +23,8 @@ def add_subparsers(parser):
     initialize_parser = subparsers.add_parser('initialize')
     initialize_parser.set_defaults(func=_initialize_function)
 
-    boundary_parser = subparsers.add_parser('boundary')
+    boundary_parser = subparsers.add_parser('boundary', help='View and edit boundaries')
     boundary.add_subparser(boundary_parser)
+
+    tag_parser = subparsers.add_parser('tag', help='View and edit tags')
+    tag.add_subparser(tag_parser)
