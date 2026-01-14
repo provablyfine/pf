@@ -81,6 +81,7 @@ def _boundary_id(args, auth):
         boundary_id = response.json()['boundaries'][0]['id']
     return boundary_id
 
+
 def _boundary(args, auth):
     params = {}
     if args.id is not None:
@@ -92,6 +93,7 @@ def _boundary(args, auth):
         raise exceptions.UI(f'Unable to find boundary {",".join("=".join(kv) for kv in params.items())}')
     boundary = response.json()['boundaries'][0]
     return boundary
+
 
 def _boundary_update_function(args):
     c = config.Config.load(args.config)
@@ -105,46 +107,33 @@ def _boundary_update_function(args):
         raise exceptions.UI(f'Unable to update boundary: {response.json()["title"]}.')
 
 
-def _boundary_denied_function(args):
+def _boundary_permission_function(args, name):
     c = config.Config.load(args.config)
     idb = client.Client(c)
     auth = idb.session_auth(c.session_key)
     boundary = _boundary(args, auth)
-    denied_list = boundary['denied_list']
+    permission_list = boundary[name]
     for added in args.add:
         to_add = permission.dict_from_string(added)
-        denied_list.append(to_add)
+        permission_list.append(to_add)
     for deleted in args.delete:
         to_del = permission.dict_from_string(deleted)
-        denied_list.remove(to_del)
+        permission_list.remove(to_del)
     if args.set is not None:
-        denied_list = args.set
+        permission_list = args.set
     response = auth.patch(f'{idb.directory.boundary}/{boundary["id"]}', json={
-        'denied_list': denied_list,
+        name: permission_list,
     })
     if response.status_code != 200:
         raise exceptions.UI(f'Unable to update boundary: {response.json()["title"]}.')
+
+
+def _boundary_denied_function(args):
+    _boundary_permission_function(args, 'denied_list')
 
 
 def _boundary_ceiling_function(args):
-    c = config.Config.load(args.config)
-    idb = client.Client(c)
-    auth = idb.session_auth(c.session_key)
-    boundary = _boundary(args, auth)
-    ceiling_list = boundary['ceiling_list']
-    for added in args.add:
-        to_add = permission.dict_from_string(added)
-        ceiling_list.append(to_add)
-    for deleted in args.delete:
-        to_del = permission.dict_from_string(deleted)
-        ceiling_list.remove(to_del)
-    if args.set is not None:
-        ceiling_list = args.set
-    response = auth.patch(f'{idb.directory.boundary}/{boundary["id"]}', json={
-        'ceiling_list': ceiling_list,
-    })
-    if response.status_code != 200:
-        raise exceptions.UI(f'Unable to update boundary: {response.json()["title"]}.')
+    _boundary_permission_function(args, 'ceiling_list')
 
 
 def add_subparser(parser):
