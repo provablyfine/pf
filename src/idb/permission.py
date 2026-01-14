@@ -1,13 +1,90 @@
 import collections
 import logging
 
-from . import permission_schema
 from . import wa
 from .context import ctx
 from . import model
 
 
 logger = logging.getLogger(__name__)
+
+
+def _500():
+    return wa.HTTPException(wa.ProblemResponse(status_code=500, title='Unable to verify permission grant'))
+
+
+class Checker:
+    def __init__(self, object_checker, action_checker):
+        self._object_checker = object_checker
+        self._action_checker = action_checker
+
+    def matches(self, grant: model.permission.Grant):
+        if not self._object_checker.matches(grant):
+            return False
+        if not self._action_checker.matches(grant):
+            return False
+        return True
+
+
+class IdObjectChecker:
+    def __init__(self, object, instance):
+        self._object = object
+        self._instance = instance
+
+    def _instance_matches(self, granted_field):
+        if granted_field != 'id':
+            raise _500()
+        return self._instance.id == granted_field.value
+
+    def matches(self, grant: model.permission.Grant):
+        if grant.object != self._object:
+            return False
+        if not all(self._instance_matches(field) for field in grant.object_fields):
+            return False
+        return True
+
+
+class ArgsActionChecker:
+    def __init__(self, action: str, **kwargs):
+        self._action = action
+        self._requested = kwargs
+
+    def matches(self, grant: model.permission.Grant):
+        if grant.action not in ['*', self._action]:
+            return False
+        if not all(self._requested.get(g.name) == g.value for g in grant.action_fields):
+            return False
+        return True
+
+
+def read_action_checker():
+    return ArgsActionChecker('read')
+
+def create_action_checker():
+    return ArgsActionChecker('create')
+
+def delete_action_checker():
+    return ArgsActionChecker('delete')
+
+def update_field_action_checker(name: str):
+    return ArgsActionChecker('update', field=name)
+
+
+class CRUD:
+    def __init__(self, name, instance):
+        self._object_checker = IdObjectChecker(name, instance)
+
+    def read(self) -> Checker:
+        return Checker(self._object_checker, read_action_checker())
+
+    def create(self) -> Checker:
+        return Checker(self._object_checker, create_action_checker())
+
+    def delete(self) -> Checker:
+        return Checker(self._object_checker, delete_action_checker())
+
+    def update(self, field: str) -> Checker:
+        return Checker(self._object_checker, update_field_action_checker(field))
 
 
 class Verifier:
@@ -17,23 +94,19 @@ class Verifier:
         identity_boundaries = ctx.db.identity_boundary.read_all(identity_id=identity.id)
         assert len(identity_boundaries) > 0
         self._boundaries = model.boundary.read_all(id=[i.boundary_id for i in identity_boundaries])
-        grants = ctx.db.role_grant.read_all(identity_id=identity.id)
-        self._roles = model.role.read_all(id=list(set(g.role_id for g in grants)))
+        member_of = ctx.db.role_member.read_all(identity_id=identity.id)
+        self._roles = model.role.read_all(id=list(set(member.role_id for member in member_of)))
 
-    def create_boundary_request(self, boundary, action, **parameters) -> permission_schema.Request:
-        return permission_schema.boundary.create_request(boundary, action, **parameters)
+    def boundary(self, boundary) -> CRUD:
+        return CRUD('boundary', boundary)
 
-    def create_tag_request(self, tag, action, **parameters) -> permission_schema.Request:
-        return permission_schema.tag.create_request(tag, action, **parameters)
+    def tag(self, tag) -> CRUD:
+        return CRUD('tag', tag)
 
-    def create_role_request(self, role, action, **parameters) -> permission_schema.Request:
-        return permission_schema.role.create_request(role, action, **parameters)
+    def role(self, role) -> CRUD:
+        return CRUD('role', role)
 
-    def create_identity_request(self, identity, action, **parameters) -> permission_schema.Request:
-        return permission_schema.identity.create_request(identity, action, **parameters)
-
-    def is_allowed(self, request: permission_schema.Request) -> bool:
-        logger.info(f'is_allowed("{request}")')
+    def is_allowed(self, request: Checker) -> bool:
         for boundary in self._boundaries:
             if any(request.matches(denied) for denied in boundary.denied_list):
                 logger.info(f'request denied by boundary id={boundary.id}')

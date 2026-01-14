@@ -85,14 +85,18 @@ def to_client() -> Converter:
             raise _500('Boundary cannot be found', detail=boundary_id)
         return boundary.name
 
+    def _identity_self(identity_id):
+        if identity_id != 'self':
+            raise _500('Identity not supported', detail=identity_id)
+        return identity_id
+
     converter = (Converter()
         .add_object_field(object='tag', from_name='id', to_name='name', convert=_tag_id_to_name)
         .add_object_field(object='role', from_name='id', to_name='name', convert=_role_id_to_name)
         .add_object_field(object='boundary', from_name='id', to_name='name', convert=_boundary_id_to_name)
         .add_object_field(object='identity', from_name='id', to_name='name', convert=_identity_id_to_name)
         .add_object_field(object='identity', from_name='tag_id', to_name='tag', convert=_tag_id_to_name)
-        .add_object_field(object='identity', from_name='created_by_id', to_name='created_by', convert=_identity_id_to_name)
-        .add_action_field(object='identity', from_name='tag_id', to_name='tag', convert=_tag_id_to_name)
+        .add_object_field(object='identity', from_name='created_by', to_name='created_by', convert=_identity_self)
     )
     return converter
 
@@ -129,14 +133,18 @@ def from_client() -> Converter:
             raise _400('Boundary cannot be found', detail=name)
         return boundary.id
 
+    def _identity_self(identity_id):
+        if identity_id != 'self':
+            raise _400('Identity not supported', detail=identity_id)
+        return identity_id
+
     converter = (Converter()
         .add_object_field(object='tag', from_name='name', to_name='id', convert=_tag_name_to_id)
         .add_object_field(object='role', from_name='name', to_name='id', convert=_role_name_to_id)
         .add_object_field(object='boundary', from_name='name', to_name='id', convert=_boundary_name_to_id)
         .add_object_field(object='identity', from_name='name', to_name='id', convert=_identity_name_to_id)
         .add_object_field(object='identity', from_name='tag', to_name='tag_id', convert=_tag_name_to_id)
-        .add_object_field(object='identity', from_name='created_by', to_name='created_by_id', convert=_identity_name_to_id)
-        .add_action_field(object='identity', from_name='tag', to_name='tag_id', convert=_tag_name_to_id)
+        .add_object_field(object='identity', from_name='created_by', to_name='created_by', convert=_identity_self)
     )
     return converter
 

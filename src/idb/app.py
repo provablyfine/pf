@@ -57,7 +57,7 @@ def idb_initialize(_: wa.Request):
         model is deployed.""",
         permission_list=all_grants
     )
-    ctx.db.role_grant.create(role_id=root_role_id, identity_id=root_id)
+    ctx.db.role_member.create(role_id=root_role_id, identity_id=root_id)
 
     identity_invitation_key_id = model.identity_invitation_key.create(
         identity_id=root_id,

@@ -1,4 +1,5 @@
 import dataclasses
+import time
 
 from ..context import ctx
 from . import audit_log
@@ -13,7 +14,8 @@ class Identity:
 
 
 def create(name: str, boundaries: list[int]) -> int:
-    identity_id = ctx.db.identity.create(name=name, detail={})
+    now = int(time.time())
+    identity_id = ctx.db.identity.create(name=name, created_at=now)
     for boundary_id in boundaries:
         ctx.db.identity_boundary.create(identity_id=identity_id, boundary_id=boundary_id)
     audit_log.create('identity-create', id=identity_id, name=name, boundaries=boundaries)
