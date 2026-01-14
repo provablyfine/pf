@@ -53,7 +53,18 @@ def create(request: wa.Request) -> wa.Response:
 
 @signature.verify_session
 def delete(request: wa.Request) -> wa.Response:
-    pass
+    tag = ctx.db.tag.read_one(id=request.path_params.tag_id)
+    if tag is None:
+        return wa.ProblemResponse(status_code=404, title='Tag does not exist')
+
+    verifier = permission.Verifier()
+    delete_request = verifier.tag(tag).delete()
+    if not verifier.is_allowed(delete_request):
+        return wa.ProblemResponse(status_code=403, title='Not allowed to delete tag')
+
+    ctx.db.tag.delete(id=request.path_params.tag_id)
+
+    return wa.Response(status_code=204)
 
 
 @signature.verify_session

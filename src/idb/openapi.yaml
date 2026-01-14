@@ -585,4 +585,44 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
-
+  /idb/tag/{tag_id}:
+    parameters:
+      - in: path
+        name: tag_id
+        schema:
+          type: integer
+        required: true
+        description: The unique identifier of the tag targeted
+    get:
+      security: *SessionSignature
+      summary: Read one tag
+      description: >
+        Details on one tag
+      responses:
+        "200":
+          $ref: "#/components/responses/TagResponse"
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    patch:
+      security: *SessionSignature
+      summary: Update tag
+      description: >
+        Update tag parameters
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTagRequest'
+      responses:
+        "200":
+          $ref: "#/components/responses/TagResponse"
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    delete:
+      security: *SessionSignature
+      summary: Delete one tag
+      responses:
+        "204":
+          description: Delete OK
+        default:
+          $ref: '#/components/responses/ErrorResponse'

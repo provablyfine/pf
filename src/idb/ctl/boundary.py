@@ -7,17 +7,6 @@ from . import exceptions
 from . import permission
 
 
-def _boundary_id(args, auth):
-    if args.id:
-        boundary_id = args.id
-    else:
-        response = auth.get(auth.directory.boundary, params={'name': args.name})
-        if response.status_code != 200:
-            raise exceptions.UI(f'Unable to find boundary name="{args.name}"')
-        boundary_id = response.json()['boundaries'][0]['id']
-    return boundary_id
-
-
 def _boundaries(args, auth):
     params = {}
     if args.id is not None:
@@ -32,8 +21,16 @@ def _boundaries(args, auth):
 
 
 def _boundary(args, auth):
-    return _boundaries(args, auth)[0]
+    boundaries = _boundaries(args, auth)
+    if len(boundaries) == 0:
+        raise exceptions.UI('No boundary found')
+    assert len(boundaries) == 1
+    return boundaries[0]
 
+
+def _boundary_id(args, auth):
+    boundary = _boundary(args, auth)
+    return boundary['id']
 
 def _boundary_list_function(args):
     c = config.Config.load(args.config)
@@ -77,7 +74,7 @@ def _boundary_delete_function(args):
     idb = client.Client(c)
     auth = idb.session_auth(c.session_key)
     boundary_id = _boundary_id(args, auth)
-    response = auth.delete(f'{c.directory["boundary"]}/{boundary_id}')
+    response = auth.delete(f'{idb.directory.boundary}/{boundary_id}')
     if response.status_code != 204:
         raise exceptions.UI(f'Unable to delete boundary: {response.json()["title"]}')
 
