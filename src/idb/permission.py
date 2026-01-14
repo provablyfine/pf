@@ -20,8 +20,17 @@ class Verifier:
         grants = ctx.db.role_grant.read_all(identity_id=identity.id)
         self._roles = model.role.read_all(id=list(set(g.role_id for g in grants)))
 
-    def create_boundary_request(self, instance, action, **parameters) -> permission_schema.Request:
-        return permission_schema.boundary.create_request(instance, action, **parameters)
+    def create_boundary_request(self, boundary, action, **parameters) -> permission_schema.Request:
+        return permission_schema.boundary.create_request(boundary, action, **parameters)
+
+    def create_tag_request(self, tag, action, **parameters) -> permission_schema.Request:
+        return permission_schema.tag.create_request(tag, action, **parameters)
+
+    def create_role_request(self, role, action, **parameters) -> permission_schema.Request:
+        return permission_schema.role.create_request(role, action, **parameters)
+
+    def create_identity_request(self, identity, action, **parameters) -> permission_schema.Request:
+        return permission_schema.identity.create_request(identity, action, **parameters)
 
     def is_allowed(self, request: permission_schema.Request) -> bool:
         logger.info(f'is_allowed("{request}")')

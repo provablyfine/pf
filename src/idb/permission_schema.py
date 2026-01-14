@@ -135,11 +135,12 @@ class Schema:
 
 identity = (
     Schema('identity')
-        .add_fields(id=Int('id'), tag_id=ListOfInt('tag_ids'), created_by=Int('created_by'))
+        .add_fields(id=Int('id'), tag_id=ListOfInt('tag_ids'), created_by_id=Int('created_by_id'))
         .add_action('read')
         .add_action('create')
-        .add_action('add-tag', tag_id=Int('tag_id'))
-        .add_action('del-tag', tag_id=Int('tag_id'))
+        .add_action('update', field=Str('field'))
+        .add_action('add-tag', tag_id=Int('id'))
+        .add_action('del-tag', tag_id=Int('id'))
         .add_action('ssh-shell', username=Str('username'))
         .add_action('ssh-tunnel', username=Str('username'), dport=Int('dport'))
         .add_action('ssh-exec', username=Str('username'), command=Str('command'))
@@ -152,11 +153,7 @@ role = (
         .add_action('read')
         .add_action('create')
         .add_action('delete')
-        .add_action('update')
-        .add_action('add-grant')
-        .add_action('del-grant')
-        .add_action('add-member')
-        .add_action('del-member')
+        .add_action('update', field=Str('field'))
 )
 
 tag = (
@@ -165,6 +162,7 @@ tag = (
         .add_action('read')
         .add_action('create')
         .add_action('delete')
+        .add_action('update', field=Str('field'))
 )
 
 boundary = (
@@ -173,8 +171,7 @@ boundary = (
         .add_action('read')
         .add_action('create')
         .add_action('delete')
-        .add_action('add-deny')
-        .add_action('del-deny')
+        .add_action('update', field=Str('field'))
 )
 
 def lookup(name: str):

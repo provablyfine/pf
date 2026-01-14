@@ -3,7 +3,6 @@ import logging
 import sys
 
 import json
-import sqlalchemy
 
 from . import wa
 from . import config
@@ -14,8 +13,8 @@ from . import jwk
 from . import signature
 from . import middleware
 from . import crypto_policy
-from . import permission
 from . import permission_schema
+from . import endpoints
 from .context import ctx
 
 
@@ -25,6 +24,7 @@ def idb_directory(request):
         'accept-invitation': f'{request.app.config.base_url}/idb/accept-invitation',
         'login': f'{request.app.config.base_url}/idb/login',
         'boundary': f'{request.app.config.base_url}/idb/boundary',
+        'tag': f'{request.app.config.base_url}/idb/tag',
     })
 
 
@@ -143,90 +143,6 @@ def idb_login(request) -> wa.Response:
     )
 
 
-@signature.verify_session
-def idb_boundary_list(request) -> wa.Response:
-    query = {}
-    if 'name' in request.query_params:
-        query['name'] = request.query_params['name']
-    if 'id' in request.query_params:
-        query['id'] = int(request.query_params['id'])
-    verifier = permission.Verifier()
-    boundaries = model.boundary.read_all(**query)
-
-    output = []
-    for boundary in boundaries:
-        request = verifier.create_boundary_request(instance=boundary, action='read')
-        if verifier.is_allowed(request):
-            output.append(boundary)
-
-    client_converter = model.permission.to_client()
-    return wa.JSONResponse(
-        status_code=200,
-        json={'boundaries': [model.boundary.serialize(b, client_converter) for b in output]}
-    )
-
-
-@signature.verify_session
-def idb_boundary_create(request) -> wa.Response:
-    data = json.loads(request.body)
-    try:
-        boundary_id = model.boundary.create(name=data['name'], description=data.get('description'))
-    except sqlalchemy.exc.IntegrityError:
-        return wa.ProblemResponse(status_code=400, title='Boundary already exists. Name must be unique.', detail=data['name'])
-    boundary = model.boundary.read_one(id=boundary_id)
-    client_converter = model.permission.to_client()
-    return wa.JSONResponse(
-        status_code=201,
-        json=model.boundary.serialize(boundary, client_converter),
-    )
-
-
-@signature.verify_session
-def idb_boundary_delete(request) -> wa.Response:
-    boundary = model.boundary.read_one(id=request.path_params.boundary_id)
-    if boundary is None:
-        return wa.ProblemResponse(status_code=404, title='Boundary not found')
-    identity = ctx.db.identity_boundary.read_one(boundary_id=boundary.id)
-    if identity is not None:
-        return wa.ProblemResponse(status_code=400, title='Unable to delete boundary: it is still in use')
-    verifier = permission.Verifier()
-    request = verifier.create_boundary_request(instance=boundary, action='delete')
-    if not verifier.is_allowed(request):
-        return wa.ProblemResponse(status_code=403, title='Not allowed to delete boundary')
-    ctx.db.boundary.delete(id=boundary.id)
-    return wa.Response(
-        status_code=204
-    )
-
-
-@signature.verify_session
-def idb_boundary_read(request) -> wa.Response:
-    boundary = model.boundary.read_one(id=request.path_params.boundary_id)
-    if boundary is None:
-        return wa.ProblemResponse(status_code=404, title='Boundary not found')
-    verifier = permission.Verifier()
-    permission_request = verifier.create_boundary_request(instance=boundary, action='read')
-    if not verifier.is_allowed(permission_request):
-        return wa.ProblemResponse(status_code=403, title='Not allowed to read boundary')
-    client_converter = model.permission.to_client()
-    return wa.JSONResponse(
-        status_code=200,
-        json=model.boundary.serialize(boundary, client_converter),
-    )
-
-
-@signature.verify_session
-def idb_boundary_update(request) -> wa.Response:
-    data = json.loads(request.body)
-    ctx.db.boundary.update(**data).where(id=request.path_params.boundary_id)
-    boundary = model.boundary.read_one(id=request.path_params.boundary_id)
-    client_converter = model.permission.to_client()
-    return wa.JSONResponse(
-        status_code=200,
-        json=model.boundary.serialize(boundary, client_converter),
-    )
-
-
 def create(filename):
     conf = config.Config.load(filename)
     match conf.log_level:
@@ -253,9 +169,14 @@ def create(filename):
     app.add('/idb/initialize', idb_initialize, methods=['POST'])
     app.add('/idb/accept-invitation', idb_accept_invitation, methods=['POST'])
     app.add('/idb/login', idb_login, methods=['POST'])
-    app.add('/idb/boundary', idb_boundary_create, methods=['POST'])
-    app.add('/idb/boundary', idb_boundary_list, methods=['GET'])
-    app.add('/idb/boundary/<int:boundary_id>', idb_boundary_read, methods=['GET'])
-    app.add('/idb/boundary/<int:boundary_id>', idb_boundary_update, methods=['PATCH'])
-    app.add('/idb/boundary/<int:boundary_id>', idb_boundary_delete, methods=['DELETE'])
+    app.add('/idb/boundary', endpoints.boundary.create, methods=['POST'])
+    app.add('/idb/boundary', endpoints.boundary.list, methods=['GET'])
+    app.add('/idb/boundary/<int:boundary_id>', endpoints.boundary.read, methods=['GET'])
+    app.add('/idb/boundary/<int:boundary_id>', endpoints.boundary.update, methods=['PATCH'])
+    app.add('/idb/boundary/<int:boundary_id>', endpoints.boundary.delete, methods=['DELETE'])
+    #app.add('/idb/tag', idb_tag_create, methods=['POST'])
+    #app.add('/idb/tag', idb_tag_list, methods=['GET'])
+    #app.add('/idb/tag/<int:tag_id>', idb_tag_read, methods=['GET'])
+    #app.add('/idb/tag/<int:tag_id>', idb_tag_update, methods=['PATCH'])
+    #app.add('/idb/tag/<int:tag_id>', idb_tag_delete, methods=['DELETE'])
     return app
