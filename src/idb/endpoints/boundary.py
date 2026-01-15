@@ -75,6 +75,10 @@ def delete(request) -> wa.Response:
 
 @signature.verify_session
 def update(request) -> wa.Response:
+    identity = model.identity.read_one(ctx.identity_id)
+    if request.path_params.boundary_id in identity.boundary_ids:
+        return wa.ProblemResponse(status_code=403, title='Not allowed to update boundary that applies to self')
+
     boundary = model.boundary.read_one(id=request.path_params.boundary_id)
 
     verifier = permission.Verifier()

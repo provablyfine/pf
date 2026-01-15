@@ -24,7 +24,7 @@ def create(name: str, boundaries: list[int]) -> int:
 
 def read_one(id: int):
     identity = ctx.db.identity.read_one(id=id)
-    tag_ids = [i.tag_id for i in ctx.db.identity_tags.read_all(identity_id=id)]
+    tag_ids = [i.tag_id for i in ctx.db.identity_tag.read_all(identity_id=id)]
     boundary_ids = [i.boundary_id for i in ctx.db.identity_boundary.read_all(identity_id=id)]
     return Identity(id=identity.id, name=identity.name, tag_ids=tag_ids, boundary_ids=boundary_ids)
 
