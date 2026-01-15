@@ -65,13 +65,3 @@ def delete(request: wa.Request) -> wa.Response:
     ctx.db.tag.delete(id=request.path_params.tag_id)
 
     return wa.Response(status_code=204)
-
-
-@signature.verify_session
-def read(request: wa.Request) -> wa.Response:
-    pass
-
-
-@signature.verify_session
-def update(request: wa.Request) -> wa.Response:
-    pass

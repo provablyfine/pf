@@ -74,24 +74,6 @@ def delete(request) -> wa.Response:
 
 
 @signature.verify_session
-def read(request) -> wa.Response:
-    boundary = model.boundary.read_one(id=request.path_params.boundary_id)
-    if boundary is None:
-        return wa.ProblemResponse(status_code=404, title='Boundary not found')
-
-    verifier = permission.Verifier()
-    permission_request = verifier.boundary(boundary).read()
-    if not verifier.is_allowed(permission_request):
-        return wa.ProblemResponse(status_code=403, title='Not allowed to read boundary')
-
-    client_converter = model.permission.to_client()
-    return wa.JSONResponse(
-        status_code=200,
-        json=model.boundary.serialize(boundary, client_converter),
-    )
-
-
-@signature.verify_session
 def update(request) -> wa.Response:
     boundary = model.boundary.read_one(id=request.path_params.boundary_id)
 

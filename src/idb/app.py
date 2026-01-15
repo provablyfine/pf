@@ -170,12 +170,9 @@ def create(filename):
     app.add('/idb/login', idb_login, methods=['POST'])
     app.add('/idb/boundary', endpoints.boundary.create, methods=['POST'])
     app.add('/idb/boundary', endpoints.boundary.list, methods=['GET'])
-    app.add('/idb/boundary/<int:boundary_id>', endpoints.boundary.read, methods=['GET'])
     app.add('/idb/boundary/<int:boundary_id>', endpoints.boundary.update, methods=['PATCH'])
     app.add('/idb/boundary/<int:boundary_id>', endpoints.boundary.delete, methods=['DELETE'])
     app.add('/idb/tag', endpoints.tag.create, methods=['POST'])
     app.add('/idb/tag', endpoints.tag.list, methods=['GET'])
-    app.add('/idb/tag/<int:tag_id>', endpoints.tag.read, methods=['GET'])
-    app.add('/idb/tag/<int:tag_id>', endpoints.tag.update, methods=['PATCH'])
     app.add('/idb/tag/<int:tag_id>', endpoints.tag.delete, methods=['DELETE'])
     return app

@@ -505,16 +505,6 @@ paths:
           type: integer
         required: true
         description: The unique identifier of the boundary requested
-    get:
-      security: *SessionSignature
-      summary: Read one boundary
-      description: >
-        Details on one boundary
-      responses:
-        "200":
-          $ref: "#/components/responses/BoundaryResponse"
-        default:
-          $ref: '#/components/responses/ErrorResponse'
     patch:
       security: *SessionSignature
       summary: Update boundary
@@ -593,31 +583,6 @@ paths:
           type: integer
         required: true
         description: The unique identifier of the tag targeted
-    get:
-      security: *SessionSignature
-      summary: Read one tag
-      description: >
-        Details on one tag
-      responses:
-        "200":
-          $ref: "#/components/responses/TagResponse"
-        default:
-          $ref: '#/components/responses/ErrorResponse'
-    patch:
-      security: *SessionSignature
-      summary: Update tag
-      description: >
-        Update tag parameters
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UpdateTagRequest'
-      responses:
-        "200":
-          $ref: "#/components/responses/TagResponse"
-        default:
-          $ref: '#/components/responses/ErrorResponse'
     delete:
       security: *SessionSignature
       summary: Delete one tag
