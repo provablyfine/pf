@@ -50,7 +50,7 @@ class Converter:
         object_converter = self._by_object[permission.object]
         object_fields = convert_fields(permission.object_fields, object_converter.object_fields)
         action_fields = convert_fields(permission.action_fields, object_converter.action_fields)
-        return Grant(
+        return Grant.create(
             object=permission.object,
             action=permission.action,
             object_fields=object_fields,
@@ -172,17 +172,15 @@ class Grant:
     object_fields: tuple[Field]
     action_fields: tuple[Field]
 
-    def __init__(self, object: str, action: str=None, object_fields: tuple[Field]=None, action_fields: tuple[Field]=None):
+    @classmethod
+    def create(cls, object: str, action: str=None, object_fields: tuple[Field]=None, action_fields: tuple[Field]=None):
         if action is None:
             action = '*'
         if object_fields is None:
             object_fields = []
         if action_fields is None:
             action_fields = []
-        self.object = object
-        self.action = action
-        self.object_fields = sorted(object_fields)
-        self.action_fields = sorted(action_fields)
+        return Grant(object=object, action=action, object_fields=sorted(object_fields), action_fields=sorted(action_fields))
 
     def to_dict(self) -> dict:
         return {
@@ -197,4 +195,9 @@ class Grant:
     def from_dict(cls, data):
         object_fields = tuple(Field.from_dict(field) for field in data['object_fields'])
         action_fields = tuple(Field.from_dict(field) for field in data['action_fields'])
-        return Grant(object=data['object'], action=data['action'], object_fields=object_fields, action_fields=action_fields)
+        return Grant.create(object=data['object'], action=data['action'], object_fields=object_fields, action_fields=action_fields)
+
+identity_all = Grant.create(object='identity', action='*', object_fields=None, action_fields=None)
+tag_all = Grant.create(object='tag', action='*', object_fields=None, action_fields=None)
+role_all = Grant.create(object='role', action='*', object_fields=None, action_fields=None)
+boundary_all = Grant.create(object='boundary', action='*', object_fields=None, action_fields=None)

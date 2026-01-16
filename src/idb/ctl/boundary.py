@@ -117,7 +117,7 @@ def _boundary_permission_function(args, name):
         to_del = permission.dict_from_string(deleted)
         permission_list.remove(to_del)
     if args.set is not None:
-        permission_list = args.set
+        permission_list = [permission.dict_from_string(p) for p in args.set]
     response = auth.patch(f'{idb.directory.boundary}/{boundary["id"]}', json={
         name: permission_list,
     })

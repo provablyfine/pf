@@ -3,6 +3,7 @@ from . import exceptions
 from . import client
 from . import boundary
 from . import tag
+from . import role
 
 
 def _initialize_function(args):
@@ -28,3 +29,6 @@ def add_subparsers(parser):
 
     tag_parser = subparsers.add_parser('tag', help='View and edit tags')
     tag.add_subparser(tag_parser)
+
+    role_parser = subparsers.add_parser('role', help='View and edit roles')
+    role.add_subparser(role_parser)

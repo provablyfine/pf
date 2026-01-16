@@ -41,7 +41,7 @@ def create(request) -> wa.Response:
 
     data = json.loads(request.body)
     try:
-        role_id = model.role.create(name=data['name'], description=data.get('description'))
+        role_id = model.role.create(name=data['name'], description=data.get('description'), permission_list=[])
     except sqlalchemy.exc.IntegrityError:
         return wa.ProblemResponse(status_code=400, title='Role already exists. Name must be unique.', detail=data['name'])
 

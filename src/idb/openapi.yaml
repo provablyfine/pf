@@ -83,6 +83,8 @@ components:
           type: string
         tag:
           type: string
+        role:
+          type: string
 
 
     ECDSAPublicJWK:
@@ -262,6 +264,34 @@ components:
           items:
             $ref: '#/components/schemas/Permission'
 
+    Role:
+      description: A role
+      type: object
+      required: [id, name, description, permissions, members]
+      additionalProperties: false
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Permission'
+        members:
+          type: array
+          items:
+            type: object
+            required: [id, name]
+            additionalProperties: false
+            properties:
+              id:
+                type: integer
+              name:
+                type: string
+
     AcceptInvitationRequest:
       type: object
       required: [account_public_key, nonce]
@@ -330,6 +360,37 @@ components:
         value:
           type: string
 
+    CreateRoleRequest:
+      type: object
+      required: [name]
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+
+    UpdateRoleRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        description:
+          type: string
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Permission'
+        members:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            properties:
+              id:
+                type: integer
+              name:
+                type: string
+
   responses:
     ErrorResponse:
       description: Error
@@ -391,6 +452,27 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/Tag'
+
+    RoleListResponse:
+      description: OK
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [roles]
+            additionalProperties: false
+            properties:
+              roles:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Role'
+
+    RoleResponse:
+      description: OK
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Role'
 
     AcceptInvitationResponse:
       description: Invitation accepted
@@ -586,6 +668,79 @@ paths:
     delete:
       security: *SessionSignature
       summary: Delete one tag
+      responses:
+        "204":
+          description: Delete OK
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /idb/role:
+    get:
+      security: *SessionSignature
+      summary: List Roles
+      description: >
+        Return the list of roles the user is allowed to see
+      parameters:
+        - in: query
+          name: name
+          schema:
+            type: string
+          required: false
+          description: If specified, return roles that match this name
+        - in: query
+          name: id
+          schema:
+            type: string
+          required: false
+          description: If specified, return roles that match this id
+      responses:
+        "200":
+          $ref: "#/components/responses/RoleListResponse"
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    post:
+      security: *SessionSignature
+      summary: Create role
+      description: >
+        Create a new role
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRoleRequest'
+      responses:
+        "201":
+          $ref: "#/components/responses/RoleResponse"
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+
+  /idb/role/{role_id}:
+    parameters:
+      - in: path
+        name: role_id
+        schema:
+          type: integer
+        required: true
+        description: The unique identifier of the role requested
+    patch:
+      security: *SessionSignature
+      summary: Update role
+      description: >
+        Update role parameters
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRoleRequest'
+      responses:
+        "200":
+          $ref: "#/components/responses/RoleResponse"
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    delete:
+      security: *SessionSignature
+      summary: Delete one role
       responses:
         "204":
           description: Delete OK

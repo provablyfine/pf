@@ -9,11 +9,10 @@ from . import permission
 
 def _group_by(l, key):
     sorted_list = sorted(l, key=key)
-    groups = {key: list(values) for key, values in itertools.groupby(sorted_list, key=key)}
-    return groups
+    return [(key, list(values)) for key, values in itertools.groupby(sorted_list, key=key)]
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class Role:
     id: int
     name: str
@@ -22,13 +21,14 @@ class Role:
     member_id_list: list[int]
 
 
-def create(name: str, description: str) -> int:
+def create(name: str, description: str, permission_list: list[permission.Grant]) -> int:
+    permissions = [p.to_dict() for p in permission_list]
     role_id = ctx.db.role.create(
         name=name,
         description=description,
-        permission_list=[],
+        permission_list=permissions,
     )
-    audit_log.create('role-create', id=role_id, name=name, description=description)
+    audit_log.create('role-create', id=role_id, name=name, description=description, permissions=permissions)
     return role_id
 
 
@@ -45,8 +45,8 @@ def _from_db(role, member_id_list: list[int]) -> Role:
 def read_all(**kwargs):
     roles = ctx.db.role.read_all(**kwargs)
     members = ctx.db.role_member.read_all(role_id=list(set(r.id for r in roles)))
-    member_id_by_role_id = _group_by(members, key=lambda m: m.role_id)
-    return [_from_db(r, member_id_by_role_id[r.id]) for r in roles]
+    member_id_list_by_role_id = {key: [r.identity_id for r in group] for key, group in _group_by(members, key=lambda m: m.role_id)}
+    return [_from_db(r, member_id_list_by_role_id[r.id]) for r in roles]
 
 
 def read_one(id):
@@ -101,12 +101,13 @@ def update(role: Role, description: str=None, permission_list: list[permission.G
 
 
 def serialize(role: Role, to_client: permission.Converter):
-    members = ctx.db.identity.read_all(id=list(set(role.member_ids)))
+    members = ctx.db.identity.read_all(id=list(set(role.member_id_list)))
     serialized_members = [{'id': m.id, 'name': m.name} for m in members]
-    return  {
+    serialized = {
         'id': role.id,
         'name': role.name,
         'description': role.description,
-        'permissions': [to_client.convert(permission) for permission in role.permissions],
+        'permissions': [to_client.convert(permission).to_dict() for permission in role.permission_list],
         'members': serialized_members,
     }
+    return serialized

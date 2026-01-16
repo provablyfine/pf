@@ -24,6 +24,7 @@ def idb_directory(request):
         'login': f'{request.app.config.base_url}/idb/login',
         'boundary': f'{request.app.config.base_url}/idb/boundary',
         'tag': f'{request.app.config.base_url}/idb/tag',
+        'role': f'{request.app.config.base_url}/idb/role',
     })
 
 
@@ -44,16 +45,18 @@ def idb_initialize(_: wa.Request):
         boundaries=[root_boundary_id],
     )
     all_grants = [
-        permission_schema.identity.create_grant(),
-        permission_schema.role.create_grant(),
-        permission_schema.tag.create_grant(),
-        permission_schema.boundary.create_grant(),
+        model.permission.identity_all,
+        model.permission.tag_all,
+        model.permission.role_all,
+        model.permission.boundary_all,
     ]
     root_role_id = model.role.create(
         name='root',
-        description="""The "root" role identifies a user that is able to do anything.
-        It is created once at startup and should be deleted once a proper permission
-        model is deployed.""",
+        description=(
+            'The "root" role identifies a user that is able to do anything.'
+            'It is created once at startup and should be deleted once a proper'
+            'permission model is deployed.'
+        ),
         permission_list=all_grants
     )
     ctx.db.role_member.create(role_id=root_role_id, identity_id=root_id)
