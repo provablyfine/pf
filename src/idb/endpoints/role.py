@@ -92,12 +92,13 @@ def update(request) -> wa.Response:
     role_update = {}
     if 'description' in data:
         role_update['description'] = data['description']
-    if 'permission_list' in data:
+    if 'permissions' in data:
         from_client = model.permission.from_client()
         permission_list = [model.permission.Grant.from_dict(p) for p in data['permissions']]
         role_update['permission_list'] = [from_client.convert(p) for p in permission_list]
     if 'members' in data:
         role_update['member_id_list'] = [m['id'] for m in data['members']]
+
     model.role.update(role, **role_update)
     role = model.role.read_one(id=request.path_params.role_id)
 

@@ -173,14 +173,14 @@ class Grant:
     action_fields: tuple[Field]
 
     @classmethod
-    def create(cls, object: str, action: str=None, object_fields: tuple[Field]=None, action_fields: tuple[Field]=None):
+    def create(cls, object: str, action: str=None, object_fields: list[Field]=None, action_fields: list[Field]=None):
         if action is None:
             action = '*'
         if object_fields is None:
             object_fields = []
         if action_fields is None:
             action_fields = []
-        return Grant(object=object, action=action, object_fields=sorted(object_fields), action_fields=sorted(action_fields))
+        return Grant(object=object, action=action, object_fields=tuple(sorted(object_fields)), action_fields=tuple(sorted(action_fields)))
 
     def to_dict(self) -> dict:
         return {
