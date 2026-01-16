@@ -150,7 +150,7 @@ def from_client() -> Converter:
 
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class Field:
     name: str
     value: int | str
@@ -165,14 +165,14 @@ class Field:
             'value': self.value,
         }
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class Grant:
     object: str
     action: str
-    object_fields: list[Field]
-    action_fields: list[Field]
+    object_fields: tuple[Field]
+    action_fields: tuple[Field]
 
-    def __init__(self, object: str, action: str=None, object_fields: list[Field]=None, action_fields: list[Field]=None):
+    def __init__(self, object: str, action: str=None, object_fields: tuple[Field]=None, action_fields: tuple[Field]=None):
         if action is None:
             action = '*'
         if object_fields is None:
@@ -181,8 +181,8 @@ class Grant:
             action_fields = []
         self.object = object
         self.action = action
-        self.object_fields = object_fields
-        self.action_fields = action_fields
+        self.object_fields = sorted(object_fields)
+        self.action_fields = sorted(action_fields)
 
     def to_dict(self) -> dict:
         return {
@@ -195,6 +195,6 @@ class Grant:
 
     @classmethod
     def from_dict(cls, data):
-        object_fields = [Field.from_dict(field) for field in data['object_fields']]
-        action_fields = [Field.from_dict(field) for field in data['action_fields']]
+        object_fields = tuple(Field.from_dict(field) for field in data['object_fields'])
+        action_fields = tuple(Field.from_dict(field) for field in data['action_fields'])
         return Grant(object=data['object'], action=data['action'], object_fields=object_fields, action_fields=action_fields)
