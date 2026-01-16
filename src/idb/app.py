@@ -177,7 +177,7 @@ def create(filename):
     app.add('/idb/boundary/<int:boundary_id>', endpoints.boundary.delete, methods=['DELETE'])
     app.add('/idb/tag', endpoints.tag.create, methods=['POST'])
     app.add('/idb/tag', endpoints.tag.list, methods=['GET'])
-    app.add('/idb/role/<int:tag_id>', endpoints.tag.delete, methods=['DELETE'])
+    app.add('/idb/tag/<int:tag_id>', endpoints.tag.delete, methods=['DELETE'])
     app.add('/idb/role', endpoints.role.create, methods=['POST'])
     app.add('/idb/role', endpoints.role.list, methods=['GET'])
     app.add('/idb/role/<int:role_id>', endpoints.role.update, methods=['PATCH'])

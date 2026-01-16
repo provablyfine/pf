@@ -45,8 +45,12 @@ def _role_list_function(args):
             rows = []
             for role in roles:
                 rows.append([role['id'], role['name'], role['description']])
-            output = tabulate.tabulate(rows, headers=['id', 'name', 'description'], maxcolwidths=80)
-    print(output)
+            if len(rows) == 0:
+                output = ''
+            else:
+                output = tabulate.tabulate(rows, headers=['id', 'name', 'description'], maxcolwidths=80)
+    if output:
+        print(output)
 
 
 def _role_read_function(args):
@@ -62,8 +66,8 @@ def _role_read_function(args):
             rows.append(('id', role['id']))
             rows.append(('name', role['name']))
             rows.append(('description', role['description']))
-            for permission in role['permissions']:
-                rows.append(('permission', permission.dict_to_string(permission)))
+            for p in role['permissions']:
+                rows.append(('permission', permission.dict_to_string(p)))
             for member in role['members']:
                 rows.append(('member', member['name']))
             output = tabulate.tabulate(rows, tablefmt='plain')

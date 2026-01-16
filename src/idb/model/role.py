@@ -46,7 +46,7 @@ def read_all(**kwargs):
     roles = ctx.db.role.read_all(**kwargs)
     members = ctx.db.role_member.read_all(role_id=list(set(r.id for r in roles)))
     member_id_list_by_role_id = {key: [r.identity_id for r in group] for key, group in _group_by(members, key=lambda m: m.role_id)}
-    return [_from_db(r, member_id_list_by_role_id[r.id]) for r in roles]
+    return [_from_db(r, member_id_list_by_role_id.get(r.id, [])) for r in roles]
 
 
 def read_one(id):
@@ -80,7 +80,7 @@ def update(role: Role, description: str=None, permission_list: list[permission.G
         )
 
     if len(role_fields) > 0:
-        ctx.db.role.update(role_fields).where(id=role.id)
+        ctx.db.role.update(**role_fields).where(id=role.id)
 
     if member_id_list is not None:
         current_member_ids = set(role.member_id_list)
