@@ -61,7 +61,7 @@ def read_all(**kwargs):
         query['id'] = list(id_set)
     if 'name' in kwargs:
         query['name'] = kwargs['name']
-    print(query, id_filter)
+
     # run query
     identities = ctx.db.identity.read_all(**query)
 
@@ -97,4 +97,4 @@ def serialize(identities: list[Identity]) -> dict:
 
 def serialize_one(identity: Identity) -> dict:
     by = serialize([identity])
-    return b[identity.id]
+    return by[identity.id]

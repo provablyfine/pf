@@ -1,3 +1,4 @@
+from __future__ import annotations
 import json
 import sqlalchemy
 
@@ -39,22 +40,69 @@ def list(request) -> wa.Response:
     )
 
 
+def _read_boundary_ids(boundaries) -> list[int]:
+    # This code is definitely more complicated than it should but:
+    # - we want to allow users to provide boundaries either as ids or as names
+    # - we want to refuse boundaries that do not exist either as ids or as names
+    # - we want to refuse boundaries if there are duplicates to help users
+    #   detect potential security problems early in case of a typo or something else
+    # --> This is painfully complex to do
+
+    # Check that boundaries provided as names exist and are not provided more than once
+    boundary_names = [b['name'] for b in boundaries if 'name' in b]
+    if len(boundary_names) > 0:
+        b_by_name = {b.name: b for b in ctx.db.boundary.read_all(name=boundary_names)}
+        if not all(name in b_by_name for name in boundary_names):
+            raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Unable to find boundary'))
+        if len(b_by_name) != len(boundary_names):
+            raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='A boundary is duplicated'))
+    else:
+        b_by_name = {}
+
+    # Check that boundaries provided as id exist and are not provided more than once
+    boundary_ids = [b['id'] for b in boundaries if 'id' in b]
+    if len(boundary_ids) > 0:
+        b_by_id = {b.id: b for b in ctx.db.boundary.read_all(id=boundary_ids)}
+        if not all(id in b_by_id for id in boundary_ids):
+            raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Unable to find boundary'))
+        if len(b_by_id) != len(boundary_ids):
+            raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='A boundary is duplicated'))
+    else:
+        b_by_id = {}
+
+    # Check that we did not provide a boundary more than once, once as an id and once as a name
+    for b in b_by_id.values():
+        if b.name in b_by_name:
+            raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='A boundary is duplicated'))
+
+    additional_boundary_ids = [bid for bid in b_by_id.keys()] + [b.id for b in b_by_name.values()]
+    identity = model.identity.read_one(id=ctx.identity_id)
+    current_boundary_ids = set(identity.boundary_ids)
+    if any(bid in current_boundary_ids for bid in additional_boundary_ids):
+        # Technically, we could ignore this silently but we really want the user
+        # to notice if this happens.
+        raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='One (or more than one) of the additional boundary requested is already enforced'))
+
+    # The line of code below is CRITICAL to our security model.
+    # It ensures that identities cannot escape the boundaries that apply to them
+    # by creating a new identity with a smaller boundary. The boundaries
+    # of newly-created identities are always a superset of the boundaries
+    # that apply to the identity that is creating an identity.
+    return identity.boundary_ids + additional_boundary_ids
+
+
 @signature.verify_session
 def create(request) -> wa.Response:
-    data = json.loads(request.body)
     verifier = permission.Verifier()
     permission_request = verifier.identity(None).create()
     if not verifier.is_allowed(permission_request):
         return wa.ProblemResponse(status_code=403, title='Not allowed to create identity')
 
-    identity = ctx.db.identity.read_one(id=ctx.identity_id)
-    boundary_ids = data.get('boundary_ids', [])
-    boundaries = ctx.db.boundary.read_all(id=boundary_ids)
-    if len(boundaries) != len(boundary_ids):
-        return wa.ProblemResponse(status_code=400, title='Boundary does not exist')
-    
+    data = json.loads(request.body)
+    boundary_ids = _read_boundary_ids(data.get('boundaries', []))
+
     try:
-        identity_id = model.identity.create(name=data['name'], boundary_ids=identity.boundary_ids + boundary_ids)
+        identity_id = model.identity.create(name=data['name'], boundary_ids=boundary_ids)
     except sqlalchemy.exc.IntegrityError:
         return wa.ProblemResponse(status_code=400, title='Boundary already exists. Name must be unique.', detail=data['name'])
 

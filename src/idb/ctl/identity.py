@@ -95,9 +95,15 @@ def _identity_create_function(args):
     c = config.Config.load(args.config)
     idb = client.Client(c)
     auth = idb.session_auth(c.session_key)
+    def boundary(s: str):
+        if s.isdigit():
+            return {'id': int(s)}
+        else:
+            return {'name': s}
+    boundaries = [boundary(s) for s in args.boundary]
     response = auth.post(idb.directory.identity, json={
         'name': args.name,
-        'description': '' if args.description is None else args.description
+        'boundaries': boundaries
     })
     if response.status_code != 201:
         raise exceptions.UI(f'Unable to create identity: {response.json()["title"]}')
@@ -147,7 +153,7 @@ def add_subparser(parser):
 
     create_parser = subparsers.add_parser('create', help='Create a new identity')
     create_parser.add_argument('name', type=str, help='Name of identity. Must be globally unique.')
-    create_parser.add_argument('-b', '--boundary', help='Boundary to enforce on newly-created user', nargs='*')
+    create_parser.add_argument('-b', '--boundary', help='Boundary to enforce on newly-created user', nargs='*', default=[])
     create_parser.set_defaults(func=_identity_create_function)
 
     delete_parser = subparsers.add_parser('delete', help='Delete an unused identity')

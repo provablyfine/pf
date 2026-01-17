@@ -437,15 +437,21 @@ components:
 
     CreateIdentityRequest:
       type: object
-      required: [name, boundary_ids]
+      required: [name, boundaries]
       additionalProperties: false
       properties:
         name:
           type: string
-        boundary_ids:
+        boundaries:
           type: array
           items:
-            type: integer
+            type: object
+            additionalProperties: false
+            properties:
+              id:
+                type: integer
+              name:
+                type: string
 
     UpdateIdentityRequest:
       type: object
@@ -901,7 +907,7 @@ paths:
               $ref: '#/components/schemas/CreateIdentityRequest'
       responses:
         "201":
-          $ref: "#/components/responses/RoleResponse"
+          $ref: "#/components/responses/IdentityResponse"
         default:
           $ref: '#/components/responses/ErrorResponse'
 
