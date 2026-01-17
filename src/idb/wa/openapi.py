@@ -71,6 +71,8 @@ class Middleware(middleware.Middleware):
             self._openapi.validate_request(oapi_request)
         except openapi_core.validation.request.exceptions.InvalidRequestBody as e:
             return response.ProblemResponse(status_code=400, title='Request validation error', detail=str(e.__cause__))
+        except openapi_core.templating.paths.exceptions.PathNotFound:
+            return response.ProblemResponse(status_code=404, title='Path not found')
         next_response = next_middleware(request, iterator)
         if next_response is None:
             return response.ProblemResponse(status_code=500, title='Internal Server Error', detail='Unexpected error. Setup the backtrace middleware to get more details')
