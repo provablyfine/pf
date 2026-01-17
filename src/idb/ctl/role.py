@@ -113,18 +113,50 @@ def _role_permission_function(args):
     idb = client.Client(c)
     auth = idb.session_auth(c.session_key)
     role = _role(args, auth)
-    permission_list = role['permissions']
-    for added in args.add:
-        to_add = permission.dict_from_string(added)
-        permission_list.append(to_add)
-    for deleted in args.delete:
-        to_del = permission.dict_from_string(deleted)
-        # XXX: does remove work here ?
-        permission_list.remove(to_del)
-    if args.set is not None:
-        permission_list = [permission.dict_from_string(p) for p in args.set]
+    permission_list = permission.update_list(role['permissions'], args.add, args.delete, args.set)
+
     response = auth.patch(f'{idb.directory.role}/{role["id"]}', json={
         'permissions': permission_list,
+    })
+    if response.status_code != 200:
+        raise exceptions.UI(f'Unable to update role: {response.json()["title"]}.')
+
+
+def _role_member_function(args):
+
+    def to_dict(member):
+        if member.isdigit():
+            return {'id': int(member)}
+        else:
+            return {'name': member}
+
+    def is_equal(a, b):
+        if 'id' in a and 'id' in b and a['id'] == b['id']:
+            return True
+        if 'name' in a and 'name' in b and a['name'] == b['name']:
+            return True
+        return False
+
+    c = config.Config.load(args.config)
+    idb = client.Client(c)
+    auth = idb.session_auth(c.session_key)
+    role = _role(args, auth)
+    member_list = role['members']
+
+    for added in args.add:
+        member = to_dict(added)
+        if not any(is_equal(member, m) for m in member_list):
+            member_list.append(member)
+
+    for deleted in args.delete:
+        member = to_dict(deleted)
+        member_list = [m for m in member_list if not is_equal(m, member)]
+
+    if args.set is not None:
+        member_list = [to_dict(m) for m in args.set]
+
+    response = auth.patch(f'{idb.directory.role}/{role["id"]}', json={
+        'members': member_list,
     })
     if response.status_code != 200:
         raise exceptions.UI(f'Unable to update role: {response.json()["title"]}.')
@@ -169,3 +201,10 @@ def add_subparser(parser):
     permissions_parser.add_argument('-d', '--del', dest='delete', type=str, help='Delete permission from role', nargs='*', default=[])
     permissions_parser.add_argument('-s', '--set', type=str, help='Set permission list', nargs='*', default=None)
     permissions_parser.set_defaults(func=_role_permission_function)
+
+    members_parser = subparsers.add_parser('member', help='Update the list of members assigned to this role')
+    _add_filter_group(members_parser, required=True)
+    members_parser.add_argument('-a', '--add', type=str, help='Add member to role', nargs='*', default=[])
+    members_parser.add_argument('-d', '--del', dest='delete', type=str, help='Delete member from role', nargs='*', default=[])
+    members_parser.add_argument('-s', '--set', type=str, help='Set member list', nargs='*', default=None)
+    members_parser.set_defaults(func=_role_member_function)

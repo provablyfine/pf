@@ -44,3 +44,31 @@ def dict_from_string(s: str) -> dict:
         'object_fields': _parse_fields(object_fields),
         'action_fields': _parse_fields(action_fields)
     }
+
+
+def is_equal(a: dict, b: dict):
+    if a['object'] != b['object']:
+        return False
+    if a['action'] != b['action']:
+        return False
+    if sorted(a['object_fields']) != sorted(b['object_fields']):
+        return False
+    if sorted(a['action_fields']) != sorted(b['action_fields']):
+        return False
+    return True
+
+
+def update_list(permissions: list[dict], to_add: list[str], to_delete: list[str], to_set: list[str]) -> list[dict]:
+    for permission in to_add:
+        one = dict_from_string(permission)
+        if not any(is_equal(one, p) for p in permissions):
+            permissions.append(one)
+
+    for permission in to_delete:
+        one = dict_from_string(permission)
+        permissions = [p for p in permissions if not is_equal(p, one)]
+
+    if to_set is not None:
+        permissions = [dict_from_string(p) for p in to_set]
+
+    return permissions
