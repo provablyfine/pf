@@ -17,9 +17,9 @@ def list(request: wa.Request) -> wa.Response:
         query['name'] = request.query_params['name']
     if 'value' in request.query_params:
         query['value'] = request.query_params['value']
-    verifier = permission.Verifier()
     tags = ctx.db.tag.read_all(**query)
 
+    verifier = permission.Verifier()
     output = []
     for tag in tags:
         request = verifier.tag(tag).read()

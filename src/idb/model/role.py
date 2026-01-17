@@ -1,15 +1,10 @@
 from __future__ import annotations
 import dataclasses
-import itertools
 
 from ..context import ctx
+from . import utils
 from . import audit_log
 from . import permission
-
-
-def _group_by(l, key):
-    sorted_list = sorted(l, key=key)
-    return [(key, list(values)) for key, values in itertools.groupby(sorted_list, key=key)]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -45,7 +40,7 @@ def _from_db(role, member_id_list: list[int]) -> Role:
 def read_all(**kwargs):
     roles = ctx.db.role.read_all(**kwargs)
     members = ctx.db.role_member.read_all(role_id=list(set(r.id for r in roles)))
-    member_id_list_by_role_id = {key: [r.identity_id for r in group] for key, group in _group_by(members, key=lambda m: m.role_id)}
+    member_id_list_by_role_id = {key: [r.identity_id for r in group] for key, group in utils.group_by(members, key=lambda m: m.role_id)}
     return [_from_db(r, member_id_list_by_role_id.get(r.id, [])) for r in roles]
 
 

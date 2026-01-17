@@ -182,4 +182,8 @@ def create(filename):
     app.add('/idb/role', endpoints.role.list, methods=['GET'])
     app.add('/idb/role/<int:role_id>', endpoints.role.update, methods=['PATCH'])
     app.add('/idb/role/<int:role_id>', endpoints.role.delete, methods=['DELETE'])
+    app.add('/idb/identity', endpoints.identity.create, methods=['POST'])
+    app.add('/idb/identity', endpoints.identity.list, methods=['GET'])
+    app.add('/idb/identity/<int:identity_id>', endpoints.identity.update, methods=['PATCH'])
+    app.add('/idb/identity/<int:identity_id>', endpoints.identity.delete, methods=['DELETE'])
     return app

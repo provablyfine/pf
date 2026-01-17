@@ -106,6 +106,9 @@ class Verifier:
     def role(self, role) -> CRUD:
         return CRUD('role', role)
 
+    def identity(self, identity) -> CRUD:
+        return CRUD('identity', identity)
+
     def is_allowed(self, request: Checker) -> bool:
         for boundary in self._boundaries:
             if any(request.matches(denied) for denied in boundary.denied_list):
