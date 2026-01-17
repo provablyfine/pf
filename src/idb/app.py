@@ -25,6 +25,7 @@ def idb_directory(request):
         'boundary': f'{request.app.config.base_url}/idb/boundary',
         'tag': f'{request.app.config.base_url}/idb/tag',
         'role': f'{request.app.config.base_url}/idb/role',
+        'identity': f'{request.app.config.base_url}/idb/identity',
     })
 
 
@@ -42,7 +43,7 @@ def idb_initialize(_: wa.Request):
     )
     root_id = model.identity.create(
         name='root',
-        boundaries=[root_boundary_id],
+        boundary_ids=[root_boundary_id],
     )
     all_grants = [
         model.permission.identity_all,

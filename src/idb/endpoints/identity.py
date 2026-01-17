@@ -10,8 +10,20 @@ from ..context import ctx
 
 @signature.verify_session
 def list(request) -> wa.Response:
-    print(request.query_params)
-    identities = model.identity.read_all(**request.query_params)
+    query = {}
+    if 'id' in request.query_params:
+        query['id'] = int(request.query_params['id'])
+    if 'name' in request.query_params:
+        query['name'] = request.query_params['name']
+    if 'tag_id' in request.query_params:
+        query['tag_id'] = int(request.query_params['tag_id'])
+    if 'tag_name' in request.query_params:
+        query['tag_name'] = request.query_params['tag_name']
+    if 'boundary_id' in request.query_params:
+        query['boundary_id'] = int(request.query_params['boundary_id'])
+    if 'boundary_name' in request.query_params:
+        query['boundary_name'] = request.query_params['boundary_name']
+    identities = model.identity.read_all(**query)
 
     output = []
     verifier = permission.Verifier()
@@ -23,7 +35,7 @@ def list(request) -> wa.Response:
     identities_by_id = model.identity.serialize(output)
     return wa.JSONResponse(
         status_code=200,
-        json={'identities': identities_by_id.values()},
+        json={'identities': [i for i in identities_by_id.values()]},
     )
 
 
@@ -82,6 +94,7 @@ def update(request) -> wa.Response:
 
     identity = model.identity.read_one(id=request.path_params.identity_id)
 
+    # XXX: Must code from scratch
     verifier = permission.Verifier()
     data = json.loads(request.body)
     for name, value in data.items():

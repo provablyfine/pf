@@ -41,13 +41,13 @@ def read_all(**kwargs):
     if 'tag_id' in kwargs:
         tag_identity_ids = [it.identity_id for it in ctx.db.identity_tag.read_all(tag_id=kwargs['tag_id'])]
         id_filter.append(tag_identity_ids)
-    if 'boundary_id' in kwargs:
-        boundary_identity_ids = [ib.identity_id for ib in ctx.db.identity_boundary.read_all(boundary_id=kwargs['boundary_id'])]
-        id_filter.append(boundary_identity_ids)
     if 'tag_name' in kwargs:
         tag_ids = [t.id for t in ctx.db.tag.read_all(name=kwargs['tag_name'])]
         tag_identity_ids = [it.identity_id for it in ctx.db.identity_tag.read_all(tag_id=tag_ids)]
         id_filter.append(tag_identity_ids)
+    if 'boundary_id' in kwargs:
+        boundary_identity_ids = [ib.identity_id for ib in ctx.db.identity_boundary.read_all(boundary_id=kwargs['boundary_id'])]
+        id_filter.append(boundary_identity_ids)
     if 'boundary_name' in kwargs:
         boundary_ids = [b.id for b in ctx.db.boundary.read_all(name=kwargs['boundary_name'])]
         boundary_identity_ids = [ib.identity_id for ib in ctx.db.identity_boundary.read_all(boundary_id=boundary_ids)]
@@ -55,11 +55,13 @@ def read_all(**kwargs):
     query = {}
     if len(id_filter) > 0:
         id_set = set(id_filter[0])
-        id_set = id_set.intersection(set(i) for i in id_filter[1:])
+        remaining_id_filter = id_filter[1:]
+        if len(remaining_id_filter) > 0:
+            id_set = id_set.intersection(set(i) for i in remaining_id_filter)
         query['id'] = list(id_set)
     if 'name' in kwargs:
         query['name'] = kwargs['name']
-
+    print(query, id_filter)
     # run query
     identities = ctx.db.identity.read_all(**query)
 
@@ -70,7 +72,7 @@ def read_all(**kwargs):
     identity_boundaries = ctx.db.identity_boundary.read_all(identity_id=identity_ids)
     boundary_ids_by_identity_id = {boundary_id: [ib.boundary_id for ib in group] for boundary_id, group in utils.group_by(identity_boundaries, key=lambda ib: ib.identity_id)}
 
-    output = [Identity(id=i.id, name=i.name, tag_ids=tag_ids_by_identity_id[i.id], boundary_ids=boundary_ids_by_identity_id[i.id]) for i in identities]
+    output = [Identity(id=i.id, name=i.name, tag_ids=tag_ids_by_identity_id.get(i.id, []), boundary_ids=boundary_ids_by_identity_id[i.id]) for i in identities]
     return output
 
 

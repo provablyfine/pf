@@ -85,6 +85,8 @@ components:
           type: string
         role:
           type: string
+        identity:
+          type: string
 
 
     ECDSAPublicJWK:
@@ -292,6 +294,48 @@ components:
               name:
                 type: string
 
+    IdentityTag:
+      type: object
+      required: [id, name, value]
+      additionalProperties: false
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        value:
+          type: string
+
+    IdentityBoundary:
+      type: object
+      required: [id, name]
+      additionalProperties: false
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+
+    Identity:
+      description: An identity (a human or a host)
+      type: object
+      required: [id, name, tags, boundaries]
+      additionalProperties: false
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/IdentityTag'
+        boundaries:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/IdentityBoundary'
+
     AcceptInvitationRequest:
       type: object
       required: [account_public_key, nonce]
@@ -391,6 +435,35 @@ components:
               name:
                 type: string
 
+    CreateIdentityRequest:
+      type: object
+      required: [name, boundary_ids]
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+        boundary_ids:
+          type: array
+          items:
+            type: integer
+
+    UpdateIdentityRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        tags:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            properties:
+              id:
+                type: integer
+              name:
+                type: string
+              value:
+                type: string
+
   responses:
     ErrorResponse:
       description: Error
@@ -473,6 +546,27 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/Role'
+
+    IdentityListResponse:
+      description: OK
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [identities]
+            additionalProperties: false
+            properties:
+              identities:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Identity'
+
+    IdentityResponse:
+      description: OK
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Identity'
 
     AcceptInvitationResponse:
       description: Invitation accepted
@@ -741,6 +835,103 @@ paths:
     delete:
       security: *SessionSignature
       summary: Delete one role
+      responses:
+        "204":
+          description: Delete OK
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /idb/identity:
+    get:
+      security: *SessionSignature
+      summary: List identities
+      description: >
+        Return the list of identities the user is allowed to see
+      parameters:
+        - in: query
+          name: name
+          schema:
+            type: string
+          required: false
+          description: If specified, return identities that match this name
+        - in: query
+          name: id
+          schema:
+            type: integer
+          required: false
+          description: If specified, return identities that match this id
+        - in: query
+          name: tag_id
+          schema:
+            type: integer
+          required: false
+          description: If specified, return identities that are tagged with this id
+        - in: query
+          name: tag_name
+          schema:
+            type: string
+          required: false
+          description: If specified, return identities that are tagged with this name
+        - in: query
+          name: boundary_id
+          schema:
+            type: integer
+          required: false
+          description: If specified, return identities to which this boundary id applies
+        - in: query
+          name: boundary_name
+          schema:
+            type: string
+          required: false
+          description: If specified, return identities to which this boundary name applies
+      responses:
+        "200":
+          $ref: "#/components/responses/IdentityListResponse"
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    post:
+      security: *SessionSignature
+      summary: Create identity
+      description: >
+        Create a new identity
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateIdentityRequest'
+      responses:
+        "201":
+          $ref: "#/components/responses/RoleResponse"
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+
+  /idb/identity/{identity_id}:
+    parameters:
+      - in: path
+        name: identity_id
+        schema:
+          type: integer
+        required: true
+        description: The unique identifier of the identity requested
+    patch:
+      security: *SessionSignature
+      summary: Update identity
+      description: >
+        Update identity parameters
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateIdentityRequest'
+      responses:
+        "200":
+          $ref: "#/components/responses/RoleResponse"
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+    delete:
+      security: *SessionSignature
+      summary: Delete one identity
       responses:
         "204":
           description: Delete OK

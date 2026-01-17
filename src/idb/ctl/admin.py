@@ -4,6 +4,7 @@ from . import client
 from . import boundary
 from . import tag
 from . import role
+from . import identity
 
 
 def _initialize_function(args):
@@ -32,3 +33,6 @@ def add_subparsers(parser):
 
     role_parser = subparsers.add_parser('role', help='View and edit roles')
     role.add_subparser(role_parser)
+
+    identity_parser = subparsers.add_parser('identity', help='View and edit identities')
+    identity.add_subparser(identity_parser)
