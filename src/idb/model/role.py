@@ -102,7 +102,7 @@ def serialize(role: Role, to_client: permission.Converter):
         'id': role.id,
         'name': role.name,
         'description': role.description,
-        'permissions': [to_client.convert(permission).to_dict() for permission in role.permission_list],
-        'members': serialized_members,
+        'permission_list': [to_client.convert(permission).to_dict() for permission in role.permission_list],
+        'member_list': serialized_members,
     }
     return serialized
