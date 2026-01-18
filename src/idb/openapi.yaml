@@ -176,7 +176,7 @@ components:
       items:
         type: "null"
 
-    CRDPermission:
+    CRDAction:
       type: object
       required: [action, action_fields]
       properties:
@@ -186,7 +186,7 @@ components:
         action_fields:
           $ref: '#/components/schemas/EmptyList'
 
-    UPermission:
+    BoundaryUpdateAction:
       type: object
       required: [action, action_fields]
       properties:
@@ -195,10 +195,9 @@ components:
           enum: ['update']
         action_fields:
           type: array
-          maxItems: 1
           items:
             type: object
-            required: ['name', 'value']
+            required: [name, value]
             additionalProperties: false
             properties:
               name:
@@ -206,43 +205,179 @@ components:
                 enum: ['field']
               value:
                 type: string
+                enum: ['name', 'description', 'denied_list', 'ceiling_list']
 
-    CRUDPermission:
-      oneOf:
-        - $ref: '#/components/schemas/CRDPermission'
-        - $ref: '#/components/schemas/UPermission'
-
-    SimplePermission:
+    BoundaryPermission:
       unevaluatedProperties: false
       anyOf:
-        - $ref: '#/components/schemas/CRUDPermission'
         - type: object
-          required: [object, action, object_fields, action_fields]
+          required: [object, object_fields]
           properties:
             object:
               type: string
-              enum: ['boundary', 'tag', 'role']
+              enum: ['boundary']
             object_fields:
               $ref: '#/components/schemas/PermissionObjectFieldsWithName'
+        - oneOf:
+            - $ref: '#/components/schemas/CRDAction'
+            - $ref: '#/components/schemas/BoundaryUpdateAction'
 
-    IdentityPermission:
+    TagPermission:
+      unevaluatedProperties: false
+      anyOf:
+        - type: object
+          required: [object, object_fields]
+          properties:
+            object:
+              type: string
+              enum: ['tag']
+            object_fields:
+              $ref: '#/components/schemas/PermissionObjectFieldsWithName'
+        - oneOf:
+            - $ref: '#/components/schemas/CRDAction'
+
+    RoleUpdateAction:
       type: object
-      required: [object, action, object_fields, action_fields]
+      required: [action, action_fields]
       properties:
-        object:
-          type: string
-          enum: ['identity']
         action:
           type: string
-          enum: ['*', 'read', 'create', 'add-tag', 'del-tag', 'ssh-shell', 'ssh-tunnel', 'ssh-tunnel', 'ssh-exec', 'cert']
-        object_fields:
-          $ref: '#/components/schemas/PermissionObjectFieldsWithNameAndTagAndCreatedBy'
+          enum: ['update']
         action_fields:
-          $ref: '#/components/schemas/EmptyList'
+          type: array
+          items:
+            type: object
+            required: [name, value]
+            additionalProperties: false
+            properties:
+              name:
+                type: string
+                enum: ['field']
+              value:
+                type: string
+                enum: ['name', 'description', 'member_list', 'permission_list']
+
+    RolePermission:
+      unevaluatedProperties: false
+      anyOf:
+        - type: object
+          required: [object, object_fields]
+          properties:
+            object:
+              type: string
+              enum: ['role']
+            object_fields:
+              $ref: '#/components/schemas/PermissionObjectFieldsWithName'
+        - oneOf:
+            - $ref: '#/components/schemas/CRDAction'
+            - $ref: '#/components/schemas/RoleUpdateAction'
+
+    IdentityTagAction:
+      type: object
+      required: [action, action_fields]
+      properties:
+        action:
+          type: string
+          enum: ['add-tag', 'del-tag']
+        action_fields:
+          type: array
+          items:
+            type: object
+            required: [name, value]
+            additionalProperties: false
+            properties:
+              name:
+                type: string
+                enum: ['tag']
+              value:
+                type: string
+
+    IdentitySshShellAction:
+      type: object
+      required: [action, action_fields]
+      properties:
+        action:
+          type: string
+          enum: ['ssh-shell']
+        action_fields:
+          type: array
+          maxItems: 1
+          items:
+            type: object
+            required: [name, value]
+            additionalProperties: false
+            properties:
+              name:
+                type: string
+                enum: ['username']
+              value:
+                type: string
+
+    IdentitySshExecAction:
+      type: object
+      required: [action, action_fields]
+      properties:
+        action:
+          type: string
+          enum: ['ssh-exec']
+        action_fields:
+          type: array
+          maxItems: 2
+          items:
+            type: object
+            required: [name, value]
+            additionalProperties: false
+            properties:
+              name:
+                type: string
+                enum: ['username', 'command']
+              value:
+                type: string
+
+    IdentitySshForwardAction:
+      type: object
+      required: [action, action_fields]
+      properties:
+        action:
+          type: string
+          enum: ['ssh-forward-local', 'ssh-forward-remote']
+        action_fields:
+          type: array
+          maxItems: 2
+          items:
+            type: object
+            required: [name, value]
+            additionalProperties: false
+            properties:
+              name:
+                type: string
+                enum: ['username', 'rport']
+              value:
+                type: string
+
+    IdentityPermission:
+      unevaluatedProperties: false
+      anyOf:
+        - type: object
+          required: [object, object_fields]
+          properties:
+            object:
+              type: string
+              enum: ['identity']
+            object_fields:
+              $ref: '#/components/schemas/PermissionObjectFieldsWithNameAndTagAndCreatedBy'
+        - oneOf:
+            - $ref: '#/components/schemas/CRDAction'
+            - $ref: '#/components/schemas/IdentityTagAction'
+            - $ref: '#/components/schemas/IdentitySshShellAction'
+            - $ref: '#/components/schemas/IdentitySshExecAction'
+            - $ref: '#/components/schemas/IdentitySshForwardAction'
 
     Permission:
       oneOf:
-        - $ref: '#/components/schemas/SimplePermission'
+        - $ref: '#/components/schemas/BoundaryPermission'
+        - $ref: '#/components/schemas/TagPermission'
+        - $ref: '#/components/schemas/RolePermission'
         - $ref: '#/components/schemas/IdentityPermission'
 
     Boundary:
@@ -269,7 +404,7 @@ components:
     Role:
       description: A role
       type: object
-      required: [id, name, description, permissions, members]
+      required: [id, name, description, permission_list, member_list]
       additionalProperties: false
       properties:
         id:
@@ -278,11 +413,11 @@ components:
           type: string
         description:
           type: string
-        permissions:
+        permission_list:
           type: array
           items:
             $ref: '#/components/schemas/Permission'
-        members:
+        member_list:
           type: array
           items:
             type: object

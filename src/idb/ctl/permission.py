@@ -8,14 +8,14 @@ def dict_to_string(data: dict) -> str:
         output.append('*')
     else:
         object_fields = []
-        for name, value in data['object_fields']:
-            object_fields.append(f'{name}/{value}')
+        for field in data['object_fields']:
+            object_fields.append(f'{field["name"]}/{field["value"]}')
         output.append('&'.join(object_fields))
 
     if len(data['action_fields']) == 0:
         output.append('*')
     else:
-        output.append('&'.join(f'{name}={value}' for name, value in data['action_fields']))
+        output.append('&'.join(f'{field["name"]}/{field["value"]}' for field in data['action_fields']))
 
     return ':'.join(output)
 
