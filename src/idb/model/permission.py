@@ -13,15 +13,16 @@ ObjectConverter = collections.namedtuple('ObjectConverter', ['object_fields', 'a
 class Converter:
     def __init__(self):
         self._by_object = collections.defaultdict(lambda: ObjectConverter(object_fields={}, action_fields={}))
-        self._data_by_read_and_key = {}
+        self._data_by_convert_and_key = {}
     
-    def _read(self, read, read_key):
-        key = (read, read_key)
-        value = self._data_by_read_and_key.get(key)
+    def _convert(self, convert, convert_key):
+        key = (convert, convert_key)
+        value = self._data_by_convert_and_key.get(key)
         if value is not None:
             return value
-        value = read(read_key)
-        self._data_by_read_and_key[key] = value
+        value = convert(convert_key)
+        self._data_by_convert_and_key[key] = value
+        return value
 
     def add_object_field(self, object: str, from_name: str, to_name: str, convert):
         self._by_object[object].object_fields[from_name] = FieldConverter(to_name, convert)
@@ -39,7 +40,7 @@ class Converter:
                 if field_converter is None:
                     output_fields.append(field)
                 else:
-                    converted_value = self._read(field_converter.read, field.value)
+                    converted_value = self._convert(field_converter.convert, field.value)
                     converted_field = Field(
                         name=field_converter.to_name,
                         value=converted_value,
@@ -74,6 +75,7 @@ def to_client() -> Converter:
         return identity.name
 
     def _role_id_to_name(role_id):
+        assert role_id is not None
         role = ctx.db.role.read_one(id=role_id)
         if role is None:
             raise _500('Role cannot be found', detail=role_id)
@@ -124,7 +126,7 @@ def from_client() -> Converter:
     def _identity_name_to_id(name):
         identity = ctx.db.identity.read_one(name=name)
         if identity is None:
-            raise _400('Role cannot be found', detail=name)
+            raise _400('Identity cannot be found', detail=name)
         return identity.id
 
     def _boundary_name_to_id(name):

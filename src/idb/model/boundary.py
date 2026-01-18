@@ -64,6 +64,8 @@ def update(id: int, **kwargs):
         update['ceiling_list'] = [g.to_dict() for g in kwargs['ceiling_list']]
     if 'denied_list' in kwargs:
         update['denied_list'] = [g.to_dict() for g in kwargs['denied_list']]
+    if len(update) == 0:
+        return
     ctx.db.boundary.update(**update).where(id=id)
 
 

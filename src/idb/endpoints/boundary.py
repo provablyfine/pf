@@ -96,7 +96,7 @@ def update(request) -> wa.Response:
         update_query['description'] = data['description']
     if 'denied_list' in data:
         denied_list = [model.permission.Grant.from_dict(p) for p in data['denied_list']]
-        update_query['denied_query'] = [from_client.convert(p) for p in denied_list]
+        update_query['denied_list'] = [from_client.convert(p) for p in denied_list]
     if 'ceiling_list' in data:
         ceiling_list = [model.permission.Grant.from_dict(p) for p in data['ceiling_list']]
         update_query['ceiling_list'] = [from_client.convert(p) for p in ceiling_list]
