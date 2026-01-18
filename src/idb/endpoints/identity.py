@@ -118,9 +118,10 @@ def delete(request) -> wa.Response:
     identity = model.identity.read_one(id=request.path_params.identity_id)
     if identity is None:
         return wa.ProblemResponse(status_code=404, title='Boundary not found')
-    identity = ctx.db.identity_identity.read_one(identity_id=identity.id)
-    if identity is not None:
-        return wa.ProblemResponse(status_code=400, title='Unable to delete identity: it is still in use')
+    if ctx.identity_id == request.path_params.identity_id:
+        return wa.ProblemResponse(status_code=400, title='You cannot delete yourself')
+    # XXX: Should we check that this identity cannot be deleted because
+    # someone depends on it in some way ?
 
     verifier = permission.Verifier()
     request = verifier.identity(identity).delete()
