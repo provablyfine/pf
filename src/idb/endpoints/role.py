@@ -89,19 +89,22 @@ def update(request) -> wa.Response:
         if not verifier.is_allowed(permission_request):
             return wa.ProblemResponse(status_code=403, title='Not allowed to update role field', detail=field_name)
 
+    from_client = model.permission.from_client()
     role_update = {}
     if 'description' in data:
         role_update['description'] = data['description']
     if 'permissions' in data:
-        from_client = model.permission.from_client()
-        permission_list = [model.permission.Grant.from_dict(p) for p in data['permissions']]
-        role_update['permission_list'] = [from_client.convert(p) for p in permission_list]
+        role_update['permission_list'] = [model.permission.deserialize(p, from_client) for p in data['permissions']]
     if 'members' in data:
-        role_update['member_id_list'] = [m['id'] for m in data['members']]
-
+        members = ctx.db.identity.read_all(name=[m['name'] for m in data['members']])
+        member_by_name = {m.name: m for m in members}
+        member_id_list = [member_by_name[m['name']] for m in data['members'] if m['name'] in member_by_name]
+        if len(member_id_list) != len(data['members']):
+            return wa.ProblemResponse(status_code=400, title='Unable to resolve some members')
+        role_update['member_id_list'] = member_id_list
     model.role.update(role, **role_update)
-    role = model.role.read_one(id=request.path_params.role_id)
 
+    role = model.role.read_one(id=request.path_params.role_id)
     to_client = model.permission.to_client()
     return wa.JSONResponse(
         status_code=200,

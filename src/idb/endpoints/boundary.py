@@ -95,16 +95,14 @@ def update(request) -> wa.Response:
     if 'description' in data:
         update_query['description'] = data['description']
     if 'denied_list' in data:
-        denied_list = [model.permission.Grant.from_dict(p) for p in data['denied_list']]
-        update_query['denied_list'] = [from_client.convert(p) for p in denied_list]
+        update_query['denied_list'] = [model.permission.deserialize(p, from_client) for p in data['denied_list']]
     if 'ceiling_list' in data:
-        ceiling_list = [model.permission.Grant.from_dict(p) for p in data['ceiling_list']]
-        update_query['ceiling_list'] = [from_client.convert(p) for p in ceiling_list]
+        update_query['ceiling_list'] = [model.permission.deserialize(p, from_client) for p in data['ceiling_list']]
     model.boundary.update(id=request.path_params.boundary_id, **update_query)
 
     boundary = model.boundary.read_one(id=request.path_params.boundary_id)
-    client_converter = model.permission.to_client()
+    to_client = model.permission.to_client()
     return wa.JSONResponse(
         status_code=200,
-        json=model.boundary.serialize(boundary, client_converter),
+        json=model.boundary.serialize(boundary, to_client),
     )

@@ -51,8 +51,15 @@ def read_one(id):
     return roles[0]
 
 
-def update(role: Role, description: str=None, permission_list: list[permission.Grant]=None, member_id_list: list[int]=None):
+def update(role: Role, name: str=None, description: str=None, permission_list: list[permission.Grant]=None, member_id_list: list[int]=None):
     role_fields = {}
+    if name is not None and role.name != name:
+        role_fields['name'] = name
+        audit_log.create(
+            'role-update-name',
+            id=role.id,
+            name=name,
+        )
     if description is not None and role.description != description:
         role_fields['description'] = description
         audit_log.create(
@@ -63,15 +70,11 @@ def update(role: Role, description: str=None, permission_list: list[permission.G
 
     if permission_list is not None:
         role_fields['permission_list'] = [p.to_dict() for p in permission_list]
-        current_permission_list = set(role.permission_list)
-        new_permission_list = set(permission_list)
-        added_permission_list = new_permission_list.difference(current_permission_list)
-        deleted_permission_list = current_permission_list.difference(new_permission_list)
         audit_log.create(
             'role-update-permissions',
             id=role.id,
-            permissions_added=[p.to_dict() for p in added_permission_list],
-            permissions_deleted=[p.to_dict() for p in deleted_permission_list],
+            permission_list=[p.to_dict() for p in permission_list],
+
         )
 
     if len(role_fields) > 0:
@@ -102,7 +105,7 @@ def serialize(role: Role, to_client: permission.Converter):
         'id': role.id,
         'name': role.name,
         'description': role.description,
-        'permission_list': [to_client.convert(permission).to_dict() for permission in role.permission_list],
+        'permission_list': permission.serialize_list(role.permission_list, to_client),
         'member_list': serialized_members,
     }
     return serialized

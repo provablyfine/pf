@@ -203,3 +203,15 @@ identity_all = Grant.create(object='identity', action='*', object_fields=None, a
 tag_all = Grant.create(object='tag', action='*', object_fields=None, action_fields=None)
 role_all = Grant.create(object='role', action='*', object_fields=None, action_fields=None)
 boundary_all = Grant.create(object='boundary', action='*', object_fields=None, action_fields=None)
+
+
+def serialize(grant: Grant, to_client: Converter) -> dict:
+    return to_client.convert(grant).to_dict()
+
+
+def serialize_list(grants: list[Grant], to_client: Converter) -> list:
+    return [serialize(g, to_client) for g in grants]
+
+
+def deserialize(data: dict, from_client: Converter) -> Grant:
+    return from_client.convert(Grant.from_dict(data))
