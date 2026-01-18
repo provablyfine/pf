@@ -21,14 +21,6 @@ def _tags(args, auth):
     return tags
 
 
-def _tag(args, auth):
-    tags = _tags(args, auth)
-    if len(tags) == 0:
-        raise exceptions.UI('No tag found')
-    assert len(tags) == 1
-    return tags[0]
-
-
 def tag_list_function(args):
     c = config.Config.load(args.config)
     idb = client.Client(c)
@@ -77,8 +69,7 @@ def _tag_delete_function(args):
     c = config.Config.load(args.config)
     idb = client.Client(c)
     auth = idb.session_auth(c.session_key)
-    tag = _tag(args, auth)
-    response = auth.delete(f'{idb.directory.tag}/{tag["id"]}')
+    response = auth.delete(f'{idb.directory.tag}/{args.id}')
     if response.status_code != 204:
         raise exceptions.UI(f'Unable to delete tag: {response.json()["title"]}')
 
@@ -109,8 +100,5 @@ def add_subparser(parser):
     create_parser.set_defaults(func=_tag_create_function)
 
     delete_parser = subparsers.add_parser('delete', help='Delete a tag')
-    group = delete_parser.add_argument_group(title='Filter criteria')
-    group.add_argument('-i', '--id', type=int, help='Id of tag.')
-    group.add_argument('-n', '--name', type=str, help='Name of tag.')
-    group.add_argument('-v', '--value', type=str, help='Value of tag.')
+    delete_parser.add_argument('-i', '--id', type=int, help='Id of tag.')
     delete_parser.set_defaults(func=_tag_delete_function)
