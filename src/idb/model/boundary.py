@@ -53,6 +53,20 @@ def read_one(**kwargs):
         return None
     return _from_db(boundary)
 
+
+def update(id: int, **kwargs):
+    update = {}
+    if 'name' in kwargs:
+        update['name'] = kwargs['name']
+    if 'description' in kwargs:
+        update['description'] = kwargs['description']
+    if 'ceiling_list' in kwargs:
+        update['ceiling_list'] = [g.to_dict() for g in kwargs['ceiling_list']]
+    if 'denied_list' in kwargs:
+        update['denied_list'] = [g.to_dict() for g in kwargs['denied_list']]
+    ctx.db.boundary.update(**update).where(id=id)
+
+
 def serialize(boundary, to_client: permission.Converter) -> dict:
     return {
         'id': boundary.id,
