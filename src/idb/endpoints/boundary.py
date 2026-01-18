@@ -11,10 +11,10 @@ from ..context import ctx
 @signature.verify_session
 def list(request) -> wa.Response:
     query = {}
-    if 'name' in request.query_params:
-        query['name'] = request.query_params['name']
     if 'id' in request.query_params:
         query['id'] = int(request.query_params['id'])
+    if 'name' in request.query_params:
+        query['name'] = request.query_params['name']
     boundaries = model.boundary.read_all(**query)
 
     output = []

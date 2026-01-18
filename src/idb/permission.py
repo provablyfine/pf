@@ -70,21 +70,50 @@ def update_field_action_checker(name: str):
     return ArgsActionChecker('update', field=name)
 
 
-class CRUD:
+class CRD:
     def __init__(self, name, instance):
         self._object_checker = IdObjectChecker(name, instance)
 
-    def read(self) -> Checker:
-        return Checker(self._object_checker, read_action_checker())
+    def _checker(self, action_checker):
+        return Checker(self._object_checker, action_checker)
 
     def create(self) -> Checker:
-        return Checker(self._object_checker, create_action_checker())
+        return self._checker(create_action_checker())
+
+    def read(self) -> Checker:
+        return self._checker(read_action_checker())
 
     def delete(self) -> Checker:
-        return Checker(self._object_checker, delete_action_checker())
+        return self._checker(delete_action_checker())
+
+
+class CRUD(CRD):
+    def __init__(self, name, instance, update_fields):
+        super().__init__(name, instance)
+        self._update_fields = update_fields
 
     def update(self, field: str) -> Checker:
-        return Checker(self._object_checker, update_field_action_checker(field))
+        if field not in self._update_fields:
+            # This should be caught upstream by the openapi structural checks
+            # We are just being a bit paranoid.
+            raise _500()
+        return self._checker(update_field_action_checker(field))
+
+
+class BoundaryChecker(CRUD):
+    def __init__(self, instance):
+        super().__init__('boundary', instance, ['name', 'description', 'denied_list', 'ceiling_list'])
+
+
+class TagChecker(CRD):
+    def __init__(self, instance):
+        super().__init__('tag', instance)
+
+
+class RoleChecker(CRUD):
+    def __init__(self, instance):
+        super().__init__('role', instance, ['name', 'description', 'permissions', 'members'])
+
 
 
 class Verifier:
@@ -97,14 +126,14 @@ class Verifier:
         member_of = ctx.db.role_member.read_all(identity_id=identity.id)
         self._roles = model.role.read_all(id=list(set(member.role_id for member in member_of)))
 
-    def boundary(self, boundary) -> CRUD:
-        return CRUD('boundary', boundary)
+    def boundary(self, boundary) -> BoundaryChecker:
+        return BoundaryChecker(boundary)
 
-    def tag(self, tag) -> CRUD:
-        return CRUD('tag', tag)
+    def tag(self, tag) -> TagChecker:
+        return TagChecker(tag)
 
-    def role(self, role) -> CRUD:
-        return CRUD('role', role)
+    def role(self, role) -> RoleChecker:
+        return RoleChecker(role)
 
     def identity(self, identity) -> CRUD:
         return CRUD('identity', identity)

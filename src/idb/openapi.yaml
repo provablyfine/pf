@@ -372,6 +372,8 @@ components:
       properties:
         description:
           type: string
+        name:
+          type: string
         denied_list:
           type: array
           items:

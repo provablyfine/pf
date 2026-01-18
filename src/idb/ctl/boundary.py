@@ -103,9 +103,12 @@ def _boundary_update_function(args):
     c = config.Config.load(args.config)
     idb = client.Client(c)
     auth = idb.session_auth(c.session_key)
-    response = auth.patch(f'{idb.directory.boundary}/{args.id}', json={
-        'description': '' if args.description is None else args.description
-    })
+    query = {}
+    if args.name is not None:
+        query['name'] = args.name
+    if args.description is not None:
+        query['description'] = args.description
+    response = auth.patch(f'{idb.directory.boundary}/{args.id}', json=query)
     if response.status_code != 200:
         raise exceptions.UI(f'Unable to update boundary: {response.json()["title"]}.')
 
@@ -157,6 +160,7 @@ def add_subparser(parser):
 
     update_parser = subparsers.add_parser('update', help='Update description')
     update_parser.add_argument('-i', '--id', type=int, help='Id of boundary.', required=True)
+    update_parser.add_argument('-n', '--name', type=str, help='Name')
     update_parser.add_argument('-d', '--description', type=str, help='Description')
     update_parser.set_defaults(func=_boundary_update_function)
 
