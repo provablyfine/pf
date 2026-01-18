@@ -48,7 +48,8 @@ def tag_list_function(args):
             output = tabulate.tabulate(rows, headers=['id', 'name', 'value'])
         case _:
             assert False, args.format
-    print(output)
+    if output:
+        print(output)
 
 
 def _tag_create_function(args):
