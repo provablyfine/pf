@@ -37,7 +37,7 @@ def _boundary_list_function(args):
         case 'id':
             sort_function = lambda b: b['id']
         case 'name':
-            sort_function = lambda b: (b['name'], b['value'], b['id'])
+            sort_function = lambda b: (b['name'], b['id'])
     if args.quiet:
         args.format = 'quiet'
     match args.format:
@@ -49,9 +49,10 @@ def _boundary_list_function(args):
             rows = []
             for boundary in boundaries:
                 rows.append([boundary['id'], boundary['name'], boundary['description']])
-            output = tabulate.tabulate(rows, headers=['id', 'name', 'description'])
-        case _:
-            assert False, args.format
+            if len(rows) == 0:
+                output = ''
+            else:
+                output = tabulate.tabulate(rows, headers=['id', 'name', 'description'], maxcolwidths=80)
     if output:
         print(output)
 

@@ -91,6 +91,8 @@ def update(request) -> wa.Response:
 
     from_client = model.permission.from_client()
     role_update = {}
+    if 'name' in data:
+        role_update['name'] = data['name']
     if 'description' in data:
         role_update['description'] = data['description']
     if 'permissions' in data:

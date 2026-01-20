@@ -7,12 +7,12 @@ from . import exceptions
 from . import permission
 
 
-def _roles(args, auth):
+def _roles(auth, id=None, name=None):
     params = {}
-    if args.id is not None:
-        params['id'] = args.id
-    if args.name is not None:
-        params['name'] = args.name
+    if id is not None:
+        params['id'] = id
+    if name is not None:
+        params['name'] = name
     response = auth.get(auth.directory.role, params=params)
     if response.status_code != 200:
         raise exceptions.UI(f'Unable to find role {",".join("=".join(kv) for kv in params.items())}')
@@ -21,24 +21,28 @@ def _roles(args, auth):
 
 
 def _role(args, auth):
-    roles = _roles(args, auth)
+    roles = _roles(auth, id=args.id)
     if len(roles) == 0:
         raise exceptions.UI('No role found')
     assert len(roles) == 1
     return roles[0]
 
 
-def _role_id(args, auth):
-    role = _role(args, auth)
-    return role['id']
-
-
 def _role_list_function(args):
     c = config.Config.load(args.config)
     idb = client.Client(c)
     auth = idb.session_auth(c.session_key)
-    roles = _roles(args, auth)
+    roles = _roles(auth, id=args.id, name=args.name)
+    match args.sort:
+        case 'id':
+            sort_function = lambda i: i['id']
+        case 'name':
+            sort_function = lambda i: (i['name'], i['id'])
+    if args.quiet:
+        args.format = 'quiet'
     match args.format:
+        case 'quiet':
+            output = '\n'.join(str(b['id']) for r in roles)
         case 'json':
             output = json.dumps(roles, indent=2)
         case 'text':
@@ -66,9 +70,9 @@ def _role_read_function(args):
             rows.append(('id', role['id']))
             rows.append(('name', role['name']))
             rows.append(('description', role['description']))
-            for p in role['permissions']:
+            for p in role['permission_list']:
                 rows.append(('permission', permission.dict_to_string(p)))
-            for member in role['members']:
+            for member in role['member_list']:
                 rows.append(('member', member['name']))
             output = tabulate.tabulate(rows, tablefmt='plain')
     print(output)
@@ -78,8 +82,7 @@ def _role_delete_function(args):
     c = config.Config.load(args.config)
     idb = client.Client(c)
     auth = idb.session_auth(c.session_key)
-    role_id = _role_id(args, auth)
-    response = auth.delete(f'{idb.directory.role}/{role_id}')
+    response = auth.delete(f'{idb.directory.role}/{args.id}')
     if response.status_code != 204:
         raise exceptions.UI(f'Unable to delete role: {response.json()["title"]}')
 
@@ -100,10 +103,12 @@ def _role_update_function(args):
     c = config.Config.load(args.config)
     idb = client.Client(c)
     auth = idb.session_auth(c.session_key)
-    role_id = _role_id(args, auth)
-    response = auth.patch(f'{idb.directory.role}/{role_id}', json={
-        'description': args.description,
-    })
+    query = {}
+    if args.name is not None:
+        query['name'] = args.name
+    if args.description is not None:
+        query['description'] = args.description
+    response = auth.patch(f'{idb.directory.role}/{args.id}', json=query)
     if response.status_code != 200:
         raise exceptions.UI(f'Unable to update role: {response.json()["title"]}.')
 
@@ -162,22 +167,21 @@ def _role_member_function(args):
         raise exceptions.UI(f'Unable to update role: {response.json()["title"]}.')
 
 
-def _add_filter_group(parser, required=False):
-    group = parser.add_mutually_exclusive_group(required=required)
-    group.add_argument('-n', '--name', type=str, help='Name of role.')
-    group.add_argument('-i', '--id', type=int, help='Id of role.')
-
-
 def add_subparser(parser):
     subparsers = parser.add_subparsers(required=True)
 
     list_parser = subparsers.add_parser('list', help='List roles we have access to')
-    _add_filter_group(list_parser)
-    list_parser.add_argument('-f', '--format', choices=['json', 'text'], default='text', help='Output format')
+    group = list_parser.add_argument_group(title='Filter criteria')
+    group.add_argument('-n', '--name', type=str, help='Name of role.')
+    group.add_argument('-i', '--id', type=int, help='Id of role.')
+    group = list_parser.add_argument_group(title='Formatting criteria')
+    group.add_argument('-s', '--sort', choices=['id', 'name'], default='name', help='Sort criterion. Default: %(default)s')
+    group.add_argument('-q', '--quiet', help='Equivalent to -f quiet', action='store_true')
+    group.add_argument('-f', '--format', choices=['json', 'text', 'quiet'], default='text', help='Output format')
     list_parser.set_defaults(func=_role_list_function)
 
     read_parser = subparsers.add_parser('read', help='Show details on a specific role')
-    _add_filter_group(read_parser, required=True)
+    read_parser.add_argument('-i', '--id', type=int, help='Id of role.', required=True)
     read_parser.add_argument('-f', '--format', choices=['json', 'text'], default='text', help='Output format')
     read_parser.set_defaults(func=_role_read_function)
 
@@ -187,23 +191,24 @@ def add_subparser(parser):
     create_parser.set_defaults(func=_role_create_function)
 
     delete_parser = subparsers.add_parser('delete', help='Delete an unused role')
-    _add_filter_group(delete_parser, required=True)
+    delete_parser.add_argument('-i', '--id', type=int, help='Id of role.', required=True)
     delete_parser.set_defaults(func=_role_delete_function)
 
     update_parser = subparsers.add_parser('update', help='Update a role')
-    _add_filter_group(update_parser, required=True)
-    update_parser.add_argument('-d', '--description', type=str, help='Description', required=True)
+    update_parser.add_argument('-i', '--id', type=int, help='Id of role.', required=True)
+    update_parser.add_argument('-n', '--name', type=str, help='Name')
+    update_parser.add_argument('-d', '--description', type=str, help='Description')
     update_parser.set_defaults(func=_role_update_function)
 
     permissions_parser = subparsers.add_parser('permission', help='Update the list of permissions granted by role')
-    _add_filter_group(permissions_parser, required=True)
+    permissions_parser.add_argument('-i', '--id', type=int, help='Id of role.', required=True)
     permissions_parser.add_argument('-a', '--add', type=str, help='Add permission to role', nargs='*', default=[])
     permissions_parser.add_argument('-d', '--del', dest='delete', type=str, help='Delete permission from role', nargs='*', default=[])
     permissions_parser.add_argument('-s', '--set', type=str, help='Set permission list', nargs='*', default=None)
     permissions_parser.set_defaults(func=_role_permission_function)
 
     members_parser = subparsers.add_parser('member', help='Update the list of members assigned to this role')
-    _add_filter_group(members_parser, required=True)
+    members_parser.add_argument('-i', '--id', type=int, help='Id of role.', required=True)
     members_parser.add_argument('-a', '--add', type=str, help='Add member to role', nargs='*', default=[])
     members_parser.add_argument('-d', '--del', dest='delete', type=str, help='Delete member from role', nargs='*', default=[])
     members_parser.add_argument('-s', '--set', type=str, help='Set member list', nargs='*', default=None)
