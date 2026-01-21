@@ -7,20 +7,20 @@ from . import exceptions
 from . import permission
 
 
-def _identities(args, auth):
+def _identities(auth, id:int=None, name:str=None, tag_id:int=None, tag_name:str=None, boundary_id:int=None, boundary_name:str=None):
     params = {}
-    if args.id is not None:
-        params['id'] = args.id
-    if args.name is not None:
-        params['name'] = args.name
-    if args.tag_id is not None:
-        params['tag_id'] = args.tag_id
-    if args.tag_name is not None:
-        params['tag_name'] = args.tag_name
-    if args.boundary_id is not None:
-        params['boundary_id'] = args.boundary_id
-    if args.boundary_name is not None:
-        params['boundary_name'] = args.boundary_name
+    if id is not None:
+        params['id'] = id
+    if name is not None:
+        params['name'] = name
+    if tag_id is not None:
+        params['tag_id'] = tag_id
+    if tag_name is not None:
+        params['tag_name'] = tag_name
+    if boundary_id is not None:
+        params['boundary_id'] = boundary_id
+    if boundary_name is not None:
+        params['boundary_name'] = boundary_name
     response = auth.get(auth.directory.identity, params=params)
     if response.status_code != 200:
         raise exceptions.UI(f'Unable to find identity {",".join("=".join(kv) for kv in params.items())}')
@@ -29,23 +29,18 @@ def _identities(args, auth):
 
 
 def _identity(args, auth):
-    identities = _identities(args, auth)
+    identities = _identities(auth, id=args.id)
     if len(identities) == 0:
         raise exceptions.UI('No identity found')
     assert len(identities) == 1
     return identities[0]
 
 
-def _identity_id(args, auth):
-    identity = _identity(args, auth)
-    return identity['id']
-
-
 def _identity_list_function(args):
     c = config.Config.load(args.config)
     idb = client.Client(c)
     auth = idb.session_auth(c.session_key)
-    identities = _identities(args, auth)
+    identities = _identities(auth, id=args.id, name=args.name, tag_id=args.tag_id, tag_name=args.tag_name, boundary_id=args.boundary_id, boundary_name=args.boundary_name)
     match args.format:
         case 'json':
             output = json.dumps(identities, indent=2)
@@ -85,8 +80,7 @@ def _identity_delete_function(args):
     c = config.Config.load(args.config)
     idb = client.Client(c)
     auth = idb.session_auth(c.session_key)
-    identity_id = _identity_id(args, auth)
-    response = auth.delete(f'{idb.directory.identity}/{identity_id}')
+    response = auth.delete(f'{idb.directory.identity}/{args.id}')
     if response.status_code != 204:
         raise exceptions.UI(f'Unable to delete identity: {response.json()["title"]}')
 
@@ -123,12 +117,6 @@ def _identity_tag_function(args):
         raise exceptions.UI(f'Unable to update identity: {response.json()["title"]}.')
 
 
-def _add_filter_group(parser):
-    group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument('-n', '--name', type=str, help='Name of identity.')
-    group.add_argument('-i', '--id', type=int, help='Id of identity.')
-
-
 def add_subparser(parser):
     subparsers = parser.add_subparsers(required=True)
 
@@ -147,7 +135,7 @@ def add_subparser(parser):
     list_parser.set_defaults(func=_identity_list_function)
 
     read_parser = subparsers.add_parser('read', help='Show details on a specific identity')
-    _add_filter_group(read_parser)
+    read_parser.add_argument('-i', '--id', type=int, help='Id of identity')
     read_parser.add_argument('-f', '--format', choices=['json', 'text'], default='text', help='Output format')
     read_parser.set_defaults(func=_identity_read_function)
 
@@ -157,11 +145,11 @@ def add_subparser(parser):
     create_parser.set_defaults(func=_identity_create_function)
 
     delete_parser = subparsers.add_parser('delete', help='Delete an unused identity')
-    _add_filter_group(delete_parser)
+    delete_parser.add_argument('-i', '--id', type=int, help='Id of identity')
     delete_parser.set_defaults(func=_identity_delete_function)
 
     tag_parser = subparsers.add_parser('tag', help='Update the list of tags assigned to an identity')
-    _add_filter_group(tag_parser)
+    tag_parser.add_argument('-i', '--id', type=int, help='Id of identity')
     tag_parser.add_argument('-a', '--add', type=str, help='Add tag to identity', nargs='*', default=[])
     tag_parser.add_argument('-d', '--del', dest='delete', type=str, help='Delete tag from identity', nargs='*', default=[])
     tag_parser.add_argument('-s', '--set', type=str, help='Set list of tags', nargs='*', default=None)
