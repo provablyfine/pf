@@ -114,16 +114,45 @@ def _identity_update_function(args):
     if response.status_code != 200:
         raise exceptions.UI(f'Unable to update identity: {response.json()["title"]}.')
 
-
 def _identity_tag_function(args):
+
+    def _is_equal(a: dict, b: dict):
+        if 'id' in a and 'id' in b and a['id'] == b['id']:
+            return True
+        if 'name' in a and 'name' in b and a['name'] == b['name']:
+            return True
+        return False
+
+    def _tag(tag: str):
+        if tag.isdigit():
+            return {'id': int(tag)}
+        else:
+            equal = tag.find('=')
+            if equal == -1:
+                raise exceptions.UI(f'Tag format is name=value, not {tag}')
+            name = tag[:equal]
+            value = tag[equal+1:]
+            return {'name': name, 'value': value}
+
     c = config.Config.load(args.config)
     idb = client.Client(c)
     auth = idb.session_auth(c.session_key)
     identity = _identity(args, auth)
-    permission_list = permission.update_list(identity['permissions'], args.add, args.delete, args.set)
+
+    tags = identity['tags']
+    to_add = [_tag(tag) for tag in args.add]
+    to_delete = [_tag(tag) for tag in args.delete]
+    for tag in to_add:
+        if any(_is_equal(tag, t) for t in tags):
+            continue
+        tags.append(tag)
+    for tag in to_delete:
+        tags = [t for t in tags if not _is_equal(t, tag)]
+    if args.set is not None:
+        tags = [_tag(tag) for tag in args.set]
 
     response = auth.patch(f'{idb.directory.identity}/{identity["id"]}', json={
-        'permissions': permission_list,
+        'tags': tags,
     })
     if response.status_code != 200:
         raise exceptions.UI(f'Unable to update identity: {response.json()["title"]}.')

@@ -51,20 +51,20 @@ def read_one(id):
     return roles[0]
 
 
-def update(role: Role, name: str=None, description: str=None, permission_list: list[permission.Grant]=None, added_member_id_list: list[int]=None, deleted_member_id_list: list[int]=None):
+def update(id: int, name: str=None, description: str=None, permission_list: list[permission.Grant]=None, added_member_id_list: list[int]=None, deleted_member_id_list: list[int]=None):
     role_fields = {}
-    if name is not None and role.name != name:
+    if name is not None:
         role_fields['name'] = name
         audit_log.create(
             'role-update-name',
-            id=role.id,
+            id=id,
             name=name,
         )
-    if description is not None and role.description != description:
+    if description is not None:
         role_fields['description'] = description
         audit_log.create(
             'role-update-description',
-            id=role.id,
+            id=id,
             description=description,
         )
 
@@ -72,27 +72,27 @@ def update(role: Role, name: str=None, description: str=None, permission_list: l
         role_fields['permission_list'] = [p.to_dict() for p in permission_list]
         audit_log.create(
             'role-update-permissions',
-            id=role.id,
+            id=id,
             permission_list=[p.to_dict() for p in permission_list],
 
         )
 
     if len(role_fields) > 0:
-        ctx.db.role.update(**role_fields).where(id=role.id)
+        ctx.db.role.update(**role_fields).where(id=id)
 
     if added_member_id_list is not None and len(added_member_id_list) > 0:
         for member_id in added_member_id_list:
-            ctx.db.role_member.create(role_id=role.id, identity_id=member_id)
+            ctx.db.role_member.create(role_id=id, identity_id=member_id)
         audit_log.create(
             'role-add-members',
-            id=role.id,
+            id=id,
             added_member_id_list=added_member_id_list,
         )
     if deleted_member_id_list is not None and len(deleted_member_id_list) > 0:
-        ctx.db.role_member.delete(role_id=role.id, identity_id=deleted_member_id_list)
+        ctx.db.role_member.delete(role_id=id, identity_id=deleted_member_id_list)
         audit_log.create(
             'role-delete-members',
-            id=role.id,
+            id=id,
             deleted_member_id_list=deleted_member_id_list,
         )
 

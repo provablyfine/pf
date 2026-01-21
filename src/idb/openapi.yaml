@@ -592,6 +592,24 @@ components:
               name:
                 type: string
 
+    IdentityTagId:
+      type: object
+      additionalProperties: false
+      required: [id]
+      properties:
+        id:
+          type: integer
+
+    IdentityTagNameValue:
+      type: object
+      additionalProperties: false
+      required: [name, value]
+      properties:
+        name:
+          type: string
+        value:
+          type: string
+
     UpdateIdentityRequest:
       type: object
       additionalProperties: false
@@ -601,15 +619,9 @@ components:
         tags:
           type: array
           items:
-            type: object
-            additionalProperties: false
-            properties:
-              id:
-                type: integer
-              name:
-                type: string
-              value:
-                type: string
+            oneOf:
+              - $ref: '#/components/schemas/IdentityTagId'
+              - $ref: '#/components/schemas/IdentityTagNameValue'
 
   responses:
     ErrorResponse:

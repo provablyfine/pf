@@ -10,16 +10,16 @@ from . import utils
 class Identity:
     id: int
     name: str
-    tag_ids: tuple[int]
-    boundary_ids: tuple[int]
+    tag_id_list: tuple[int]
+    boundary_id_list: tuple[int]
 
 
-def create(name: str, boundary_ids: list[int]) -> int:
+def create(name: str, boundary_id_list: list[int]) -> int:
     now = int(time.time())
     identity_id = ctx.db.identity.create(name=name, created_at=now)
-    for boundary_id in boundary_ids:
+    for boundary_id in boundary_id_list:
         ctx.db.identity_boundary.create(identity_id=identity_id, boundary_id=boundary_id)
-    audit_log.create('identity-create', id=identity_id, name=name, boundary_ids=boundary_ids)
+    audit_log.create('identity-create', id=identity_id, name=name, boundary_id_list=boundary_id_list)
     return identity_id
 
 
@@ -72,14 +72,43 @@ def read_all(**kwargs):
     identity_boundaries = ctx.db.identity_boundary.read_all(identity_id=identity_ids)
     boundary_ids_by_identity_id = {boundary_id: [ib.boundary_id for ib in group] for boundary_id, group in utils.group_by(identity_boundaries, key=lambda ib: ib.identity_id)}
 
-    output = [Identity(id=i.id, name=i.name, tag_ids=tag_ids_by_identity_id.get(i.id, []), boundary_ids=boundary_ids_by_identity_id[i.id]) for i in identities]
+    output = [Identity(id=i.id, name=i.name, tag_id_list=tag_ids_by_identity_id.get(i.id, []), boundary_id_list=boundary_ids_by_identity_id[i.id]) for i in identities]
     return output
+
+
+def update(id: int, name: str=None, added_tag_id_list: list[int]=None, deleted_tag_id_list: list[int]=None):
+    update_fields = {}
+    if name is not None:
+        audit_log.create(
+            'identity-update-name',
+            id=id,
+            name=name,
+        )
+        update_fields['name'] = name
+
+    ctx.db.identity.update(**update_fields).where(id=id)
+
+    if added_tag_ids is not None and len(added_tag_ids) > 0:
+        for tag_id in added_tag_ids:
+            ctx.db.identity_tag.create(tag_id=tag_id, identity_id=id)
+        audit_log.create(
+            'identity-add-tags',
+            id=id,
+            added_tag_ids=added_tag_ids,
+        )
+    if deleted_tag_ids is not None and len(deleted_tag_ids) > 0:
+        ctx.db.identity_tag.delete(identity_id=id, tag_id=deleted_tag_ids)
+        audit_log.create(
+            'identity-delete-tags',
+            id=id,
+            deleted_tag_id_list=deleted_tag_ids,
+        )
 
 
 def serialize(identities: list[Identity]) -> dict:
     # read the data we need to format fully the output.
-    tags = ctx.db.tag.read_all(id=list(set(tag_id for i in identities for tag_id in i.tag_ids)))
-    boundaries = ctx.db.boundary.read_all(id=list(set(boundary_id for i in identities for boundary_id in i.boundary_ids)))
+    tags = ctx.db.tag.read_all(id=list(set(tag_id for i in identities for tag_id in i.tag_id_list)))
+    boundaries = ctx.db.boundary.read_all(id=list(set(boundary_id for i in identities for boundary_id in i.boundary_id_list)))
     tag_by_id = {t.id: {'id': t.id, 'name': t.name, 'value': t.value} for t in tags}
     boundary_by_id = {b.id: {'id': b.id, 'name': b.name} for b in boundaries}
 
@@ -87,8 +116,8 @@ def serialize(identities: list[Identity]) -> dict:
         return {
             'id': i.id,
             'name': i.name,
-            'tags': [tag_by_id[tag_id] for tag_id in i.tag_ids],
-            'boundaries': [boundary_by_id[boundary_id] for boundary_id in i.boundary_ids],
+            'tags': [tag_by_id[tag_id] for tag_id in i.tag_id_list],
+            'boundaries': [boundary_by_id[boundary_id] for boundary_id in i.boundary_id_list],
         }
 
     # format the output in one go.

@@ -87,9 +87,9 @@ def update(request) -> wa.Response:
 
     from_client = model.permission.from_client()
     role_update = {}
-    if 'name' in data:
+    if 'name' in data and data['name'] != role.name:
         role_update['name'] = data['name']
-    if 'description' in data:
+    if 'description' in data and data['description'] != role.description:
         role_update['description'] = data['description']
     if 'permissions' in data:
         if ctx.identity_id in role.member_id_list:
@@ -109,7 +109,7 @@ def update(request) -> wa.Response:
             return wa.ProblemResponse(status_code=403, title='Not allowed to remove self from role')
         role_update['added_member_id_list'] = list(added_member_id_list)
         role_update['deleted_member_id_list'] = list(deleted_member_id_list)
-    model.role.update(role, **role_update)
+    model.role.update(role.id, **role_update)
 
     role = model.role.read_one(id=request.path_params.role_id)
     to_client = model.permission.to_client()

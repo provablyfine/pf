@@ -29,8 +29,8 @@ def list(request) -> wa.Response:
     output = []
     verifier = permission.Verifier()
     for identity in identities:
-        request = verifier.identity(identity=identity).read()
-        if verifier.is_allowed(request):
+        permission_request = permission.Identity(identity).read()
+        if verifier.is_allowed(permission_request):
             output.append(identity)
 
     identities_by_id = model.identity.serialize(output)
@@ -94,7 +94,7 @@ def _read_boundary_ids(boundaries) -> list[int]:
 @signature.verify_session
 def create(request) -> wa.Response:
     verifier = permission.Verifier()
-    permission_request = verifier.identity(None).create()
+    permission_request = permission.Identity(None).create()
     if not verifier.is_allowed(permission_request):
         return wa.ProblemResponse(status_code=403, title='Not allowed to create identity')
 
@@ -102,7 +102,7 @@ def create(request) -> wa.Response:
     boundary_ids = _read_boundary_ids(data.get('boundaries', []))
 
     try:
-        identity_id = model.identity.create(name=data['name'], boundary_ids=boundary_ids)
+        identity_id = model.identity.create(name=data['name'], boundary_id_list=boundary_ids)
     except sqlalchemy.exc.IntegrityError:
         return wa.ProblemResponse(status_code=400, title='Boundary already exists. Name must be unique.', detail=data['name'])
 
@@ -124,8 +124,8 @@ def delete(request) -> wa.Response:
     # someone depends on it in some way ?
 
     verifier = permission.Verifier()
-    request = verifier.identity(identity).delete()
-    if not verifier.is_allowed(request):
+    permission_request = permission.Identity(identity).delete()
+    if not verifier.is_allowed(permission_request):
         return wa.ProblemResponse(status_code=403, title='Not allowed to delete identity')
 
     ctx.db.identity.delete(id=identity.id)
@@ -142,15 +142,38 @@ def update(request) -> wa.Response:
 
     identity = model.identity.read_one(id=request.path_params.identity_id)
 
-    # XXX: Must code from scratch
     verifier = permission.Verifier()
     data = json.loads(request.body)
-    for name, value in data.items():
-        permission_request = verifier.identity(identity).update(name)
-        if not verifier.is_allowed(permission_request):
-            return wa.ProblemResponse(status_code=403, title='Not allowed to update identity field', detail=name)
+    permission_request = permission.Identity(identity)
+    update_params = {}
+    if 'name' in data:
+        if not verifier.is_allowed(permission_request.update('name')):
+            return wa.ProblemResponse(status_code=403, title='Not allowed to update identity field', detail='name')
+        update_params['name'] = data['name']
+    if 'tags' in data:
+        tag_ids = []
+        for tag in data['tags']:
+            if 'id' in tag:
+                tag_ids.append(tag['id'])
+            else:
+                db_tag = ctx.db.tag.read_one(name=tag['name'], value=tag['value'])
+                if db_tag is None:
+                    return wa.ProblemResponse(status_code=400, title='Tag does not exist', detail=f'{tag["name"]}={tag["value"]}')
+                tag_ids.append(db_tag.id)
+        new_tag_ids = set(tag_ids)
+        current_tag_ids = set(identity.tag_id_list)
+        added_tag_ids = new_tag_ids.difference(current_tag_ids)
+        deleted_tag_ids = current_tag_ids.difference(new_tag_ids)
+        for tag_id in added_tag_ids:
+            if not verifier.is_allowed(permission_request.add_tag(tag_id)):
+                return wa.ProblemResponse(status_code=403, title='Not allowed to add tag to identity', detail=tag_id)
+        for tag_id in deleted_tag_ids:
+            if not verifier.is_allowed(permission_request.del_tag(tag_id)):
+                return wa.ProblemResponse(status_code=403, title='Not allowed to delete tag from identity', detail=tag_id)
+        update_params['added_tag_id_list'] = added_tag_ids
+        update_params['deleted_tag_id_list'] = deleted_tag_ids
 
-    ctx.db.identity.update(**data).where(id=request.path_params.identity_id)
+    model.identity.update(id=request.path_params.identity_id, **update_params)
     identity = model.identity.read_one(id=request.path_params.identity_id)
 
     return wa.JSONResponse(

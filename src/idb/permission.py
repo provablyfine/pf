@@ -57,19 +57,6 @@ class ArgsActionChecker:
         return True
 
 
-def read_action_checker():
-    return ArgsActionChecker('read')
-
-def create_action_checker():
-    return ArgsActionChecker('create')
-
-def delete_action_checker():
-    return ArgsActionChecker('delete')
-
-def update_field_action_checker(name: str):
-    return ArgsActionChecker('update', field=name)
-
-
 class CRD:
     def __init__(self, name, instance):
         self._object_checker = IdObjectChecker(name, instance)
@@ -78,13 +65,13 @@ class CRD:
         return Checker(self._object_checker, action_checker)
 
     def create(self) -> Checker:
-        return self._checker(create_action_checker())
+        return self._checker(ArgsActionChecker('create'))
 
     def read(self) -> Checker:
-        return self._checker(read_action_checker())
+        return self._checker(ArgsActionChecker('read'))
 
     def delete(self) -> Checker:
-        return self._checker(delete_action_checker())
+        return self._checker(ArgsActionChecker('delete'))
 
 
 class CRUD(CRD):
@@ -97,7 +84,8 @@ class CRUD(CRD):
             # This should be caught upstream by the openapi structural checks
             # We are just being a bit paranoid.
             raise _500()
-        return self._checker(update_field_action_checker(field))
+        action_checker = ArgsActionChecker('update', field=field)
+        return self._checker(action_checker)
 
 
 class BoundaryChecker(CRUD):
@@ -115,9 +103,17 @@ class RoleChecker(CRUD):
         super().__init__('role', instance, ['name', 'description', 'permissions', 'members'])
 
 
-class IdentityChecker(CRUD):
+class Identity(CRUD):
     def __init__(self, instance):
         super().__init__('identity', instance, ['name'])
+
+    def add_tag(self, tag_id: int) -> Checker:
+        action_checker = ArgsActionChecker('add-tag', id=tag_id)
+        return self._checker(action_checker)
+
+    def del_tag(self, tag_id: int) -> Checker:
+        action_checker = ArgsActionChecker('del-tag', id=tag_id)
+        return self._checker(action_checker)
 
 
 class Verifier:
@@ -138,9 +134,6 @@ class Verifier:
 
     def role(self, role) -> RoleChecker:
         return RoleChecker(role)
-
-    def identity(self, identity) -> CRUD:
-        return IdentityChecker(identity)
 
     def is_allowed(self, request: Checker) -> bool:
         for boundary in self._boundaries:
