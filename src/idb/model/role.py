@@ -51,7 +51,7 @@ def read_one(id):
     return roles[0]
 
 
-def update(role: Role, name: str=None, description: str=None, permission_list: list[permission.Grant]=None, member_id_list: list[int]=None):
+def update(role: Role, name: str=None, description: str=None, permission_list: list[permission.Grant]=None, added_member_id_list: list[int]=None, deleted_member_id_list: list[int]=None):
     role_fields = {}
     if name is not None and role.name != name:
         role_fields['name'] = name
@@ -80,21 +80,20 @@ def update(role: Role, name: str=None, description: str=None, permission_list: l
     if len(role_fields) > 0:
         ctx.db.role.update(**role_fields).where(id=role.id)
 
-    if member_id_list is not None:
-        current_member_ids = set(role.member_id_list)
-        new_member_ids = set(member_id_list)
-        added_member_ids = new_member_ids.difference(current_member_ids)
-        deleted_member_ids = current_member_ids.difference(new_member_ids)
-        if len(deleted_member_ids) > 0:
-            ctx.db.role_member.delete(role_id=role.id, identity_id=deleted_member_ids)
-        if len(added_member_ids):
-            for member_id in added_member_ids:
-                ctx.db.role_member.create(role_id=role.id, identity_id=member_id)
+    if added_member_id_list is not None and len(added_member_id_list) > 0:
+        for member_id in added_member_id_list:
+            ctx.db.role_member.create(role_id=role.id, identity_id=member_id)
         audit_log.create(
-            'role-update-members',
+            'role-add-members',
             id=role.id,
-            member_id_added_list=list(added_member_ids),
-            member_id_deleted_list=list(deleted_member_ids)
+            added_member_id_list=added_member_id_list,
+        )
+    if deleted_member_id_list is not None and len(deleted_member_id_list) > 0:
+        ctx.db.role_member.delete(role_id=role.id, identity_id=deleted_member_id_list)
+        audit_log.create(
+            'role-delete-members',
+            id=role.id,
+            deleted_member_id_list=deleted_member_id_list,
         )
 
 
