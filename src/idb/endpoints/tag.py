@@ -9,7 +9,7 @@ from ..context import ctx
 
 
 @signature.verify_session
-def list(request: wa.Request) -> wa.Response:
+def list_endpoint(request: wa.Request) -> wa.Response:
     query = {}
     if 'id' in request.query_params:
         query['id'] = int(request.query_params['id'])
@@ -33,7 +33,7 @@ def list(request: wa.Request) -> wa.Response:
 
 
 @signature.verify_session
-def create(request: wa.Request) -> wa.Response:
+def create_endpoint(request: wa.Request) -> wa.Response:
     verifier = permission.Verifier()
     create_request = verifier.tag(None).create()
     if not verifier.is_allowed(create_request):
@@ -52,7 +52,7 @@ def create(request: wa.Request) -> wa.Response:
 
 
 @signature.verify_session
-def delete(request: wa.Request) -> wa.Response:
+def delete_endpoint(request: wa.Request) -> wa.Response:
     tag = ctx.db.tag.read_one(id=request.path_params.tag_id)
     if tag is None:
         return wa.ProblemResponse(status_code=404, title='Tag does not exist')

@@ -10,7 +10,7 @@ from ..context import ctx
 
 
 @signature.verify_session
-def list(request) -> wa.Response:
+def list_endpoint(request: wa.Request) -> wa.Response:
     query = {}
     if 'id' in request.query_params:
         query['id'] = int(request.query_params['id'])
@@ -92,7 +92,7 @@ def _read_boundary_ids(boundaries) -> list[int]:
 
 
 @signature.verify_session
-def create(request) -> wa.Response:
+def create_endpoint(request: wa.Request) -> wa.Response:
     verifier = permission.Verifier()
     permission_request = permission.Identity(None).create()
     if not verifier.is_allowed(permission_request):
@@ -114,7 +114,7 @@ def create(request) -> wa.Response:
 
 
 @signature.verify_session
-def delete(request) -> wa.Response:
+def delete_endpoint(request: wa.Request) -> wa.Response:
     identity = model.identity.read_one(id=request.path_params.identity_id)
     if identity is None:
         return wa.ProblemResponse(status_code=404, title='Boundary not found')
@@ -136,7 +136,7 @@ def delete(request) -> wa.Response:
 
 
 @signature.verify_session
-def update(request) -> wa.Response:
+def update_endpoint(request: wa.Request) -> wa.Response:
     if request.path_params.identity_id == ctx.identity_id:
         return wa.ProblemResponse(status_code=403, title='Not allowed to update self')
 

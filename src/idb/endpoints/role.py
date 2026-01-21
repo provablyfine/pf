@@ -9,7 +9,7 @@ from ..context import ctx
 
 
 @signature.verify_session
-def list(request) -> wa.Response:
+def list_endpoint(request: wa.Request) -> wa.Response:
     query = {}
     if 'name' in request.query_params:
         query['name'] = request.query_params['name']
@@ -33,7 +33,7 @@ def list(request) -> wa.Response:
 
 
 @signature.verify_session
-def create(request) -> wa.Response:
+def create_endpoint(request: wa.Request) -> wa.Response:
     verifier = permission.Verifier()
     permission_request = verifier.role(None).create()
     if not verifier.is_allowed(permission_request):
@@ -54,7 +54,7 @@ def create(request) -> wa.Response:
 
 
 @signature.verify_session
-def delete(request) -> wa.Response:
+def delete_endpoint(request: wa.Request) -> wa.Response:
     role = model.role.read_one(id=request.path_params.role_id)
     if role is None:
         return wa.ProblemResponse(status_code=404, title='Role not found')
@@ -75,7 +75,7 @@ def delete(request) -> wa.Response:
 
 
 @signature.verify_session
-def update(request) -> wa.Response:
+def update_endpoint(request: wa.Request) -> wa.Response:
     role = model.role.read_one(id=request.path_params.role_id)
 
     data = json.loads(request.body)
@@ -117,4 +117,3 @@ def update(request) -> wa.Response:
         status_code=200,
         json=model.role.serialize(role, to_client),
     )
-

@@ -139,7 +139,7 @@ def _identity_tag_function(args):
     auth = idb.session_auth(c.session_key)
     identity = _identity(args, auth)
 
-    tags = identity['tags']
+    tags = [{'id': t['id']} for t in identity['tags']]
     to_add = [_tag(tag) for tag in args.add]
     to_delete = [_tag(tag) for tag in args.delete]
     for tag in to_add:

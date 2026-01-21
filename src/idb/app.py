@@ -17,7 +17,7 @@ from . import endpoints
 from .context import ctx
 
 
-def idb_directory(request):
+def directory_endpoint(request: wa.Request) -> wa.Response:
     return wa.JSONResponse(status_code=200, json={
         'initialize': f'{request.app.config.base_url}/idb/initialize',
         'accept-invitation': f'{request.app.config.base_url}/idb/accept-invitation',
@@ -29,7 +29,7 @@ def idb_directory(request):
     })
 
 
-def idb_initialize(_: wa.Request):
+def initialize_endpoint(_: wa.Request) -> wa.Response:
     one = ctx.db.identity.read_one()
     if one is not None:
         return wa.Response(
@@ -43,7 +43,7 @@ def idb_initialize(_: wa.Request):
     )
     root_id = model.identity.create(
         name='root',
-        boundary_ids=[root_boundary_id],
+        boundary_id_list=[root_boundary_id],
     )
     all_grants = [
         model.permission.identity_all,
@@ -74,7 +74,7 @@ def idb_initialize(_: wa.Request):
 
 
 @signature.verify_invitation
-def idb_accept_invitation(request) -> wa.Response:
+def accept_invitation_endpoint(request: wa.Request) -> wa.Response:
     data = json.loads(request.body)
     account_key = jwk.Public.from_dict(data['account_public_key'])
     crypto_policy.enforce_key_is_allowed(account_key)
@@ -118,7 +118,7 @@ def idb_accept_invitation(request) -> wa.Response:
 
 
 @signature.verify_account
-def idb_login(request) -> wa.Response:
+def login_endpoint(request: wa.Request) -> wa.Response:
     data = json.loads(request.body)
     session_key = jwk.Public.from_dict(data['session_public_key'])
     crypto_policy.enforce_key_is_allowed(session_key)
@@ -168,23 +168,23 @@ def create(filename):
         middleware.DbContext(),
     ]
     app = wa.Application(config=conf, middlewares=middlewares, lifespan=middleware.lifespan, debug=conf.debug)
-    app.add('/idb/directory', idb_directory, methods=['GET'])
-    app.add('/idb/initialize', idb_initialize, methods=['POST'])
-    app.add('/idb/accept-invitation', idb_accept_invitation, methods=['POST'])
-    app.add('/idb/login', idb_login, methods=['POST'])
-    app.add('/idb/boundary', endpoints.boundary.create, methods=['POST'])
-    app.add('/idb/boundary', endpoints.boundary.list, methods=['GET'])
-    app.add('/idb/boundary/<int:boundary_id>', endpoints.boundary.update, methods=['PATCH'])
-    app.add('/idb/boundary/<int:boundary_id>', endpoints.boundary.delete, methods=['DELETE'])
-    app.add('/idb/tag', endpoints.tag.create, methods=['POST'])
-    app.add('/idb/tag', endpoints.tag.list, methods=['GET'])
-    app.add('/idb/tag/<int:tag_id>', endpoints.tag.delete, methods=['DELETE'])
-    app.add('/idb/role', endpoints.role.create, methods=['POST'])
-    app.add('/idb/role', endpoints.role.list, methods=['GET'])
-    app.add('/idb/role/<int:role_id>', endpoints.role.update, methods=['PATCH'])
-    app.add('/idb/role/<int:role_id>', endpoints.role.delete, methods=['DELETE'])
-    app.add('/idb/identity', endpoints.identity.create, methods=['POST'])
-    app.add('/idb/identity', endpoints.identity.list, methods=['GET'])
-    app.add('/idb/identity/<int:identity_id>', endpoints.identity.update, methods=['PATCH'])
-    app.add('/idb/identity/<int:identity_id>', endpoints.identity.delete, methods=['DELETE'])
+    app.add('/idb/directory', directory_endpoint, methods=['GET'])
+    app.add('/idb/initialize', initialize_endpoint, methods=['POST'])
+    app.add('/idb/accept-invitation', accept_invitation_endpoint, methods=['POST'])
+    app.add('/idb/login', login_endpoint, methods=['POST'])
+    app.add('/idb/boundary', endpoints.boundary.create_endpoint, methods=['POST'])
+    app.add('/idb/boundary', endpoints.boundary.list_endpoint, methods=['GET'])
+    app.add('/idb/boundary/<int:boundary_id>', endpoints.boundary.update_endpoint, methods=['PATCH'])
+    app.add('/idb/boundary/<int:boundary_id>', endpoints.boundary.delete_endpoint, methods=['DELETE'])
+    app.add('/idb/tag', endpoints.tag.create_endpoint, methods=['POST'])
+    app.add('/idb/tag', endpoints.tag.list_endpoint, methods=['GET'])
+    app.add('/idb/tag/<int:tag_id>', endpoints.tag.delete_endpoint, methods=['DELETE'])
+    app.add('/idb/role', endpoints.role.create_endpoint, methods=['POST'])
+    app.add('/idb/role', endpoints.role.list_endpoint, methods=['GET'])
+    app.add('/idb/role/<int:role_id>', endpoints.role.update_endpoint, methods=['PATCH'])
+    app.add('/idb/role/<int:role_id>', endpoints.role.delete_endpoint, methods=['DELETE'])
+    app.add('/idb/identity', endpoints.identity.create_endpoint, methods=['POST'])
+    app.add('/idb/identity', endpoints.identity.list_endpoint, methods=['GET'])
+    app.add('/idb/identity/<int:identity_id>', endpoints.identity.update_endpoint, methods=['PATCH'])
+    app.add('/idb/identity/<int:identity_id>', endpoints.identity.delete_endpoint, methods=['DELETE'])
     return app
