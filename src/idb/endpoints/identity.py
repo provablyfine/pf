@@ -137,9 +137,8 @@ def delete(request) -> wa.Response:
 
 @signature.verify_session
 def update(request) -> wa.Response:
-    identity = model.identity.read_one(ctx.identity_id)
-    if request.path_params.identity_id in identity.identity_ids:
-        return wa.ProblemResponse(status_code=403, title='Not allowed to update identity that applies to self')
+    if request.path_params.identity_id == ctx.identity_id:
+        return wa.ProblemResponse(status_code=403, title='Not allowed to update self')
 
     identity = model.identity.read_one(id=request.path_params.identity_id)
 

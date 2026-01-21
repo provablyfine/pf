@@ -115,6 +115,10 @@ class RoleChecker(CRUD):
         super().__init__('role', instance, ['name', 'description', 'permissions', 'members'])
 
 
+class IdentityChecker(CRUD):
+    def __init__(self, instance):
+        super().__init__('identity', instance, ['name'])
+
 
 class Verifier:
     def __init__(self):
@@ -136,7 +140,7 @@ class Verifier:
         return RoleChecker(role)
 
     def identity(self, identity) -> CRUD:
-        return CRUD('identity', identity)
+        return IdentityChecker(identity)
 
     def is_allowed(self, request: Checker) -> bool:
         for boundary in self._boundaries:

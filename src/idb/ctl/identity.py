@@ -103,6 +103,18 @@ def _identity_create_function(args):
         raise exceptions.UI(f'Unable to create identity: {response.json()["title"]}')
 
 
+def _identity_update_function(args):
+    c = config.Config.load(args.config)
+    idb = client.Client(c)
+    auth = idb.session_auth(c.session_key)
+    query = {}
+    if args.name is not None:
+        query['name'] = args.name
+    response = auth.patch(f'{idb.directory.identity}/{args.id}', json=query)
+    if response.status_code != 200:
+        raise exceptions.UI(f'Unable to update identity: {response.json()["title"]}.')
+
+
 def _identity_tag_function(args):
     c = config.Config.load(args.config)
     idb = client.Client(c)
@@ -147,6 +159,11 @@ def add_subparser(parser):
     delete_parser = subparsers.add_parser('delete', help='Delete an unused identity')
     delete_parser.add_argument('-i', '--id', type=int, help='Id of identity')
     delete_parser.set_defaults(func=_identity_delete_function)
+
+    update_parser = subparsers.add_parser('update', help='Update an existing identity')
+    update_parser.add_argument('-i', '--id', type=int, help='Id of identity')
+    update_parser.add_argument('-n', '--name', help='New name of identity')
+    update_parser.set_defaults(func=_identity_update_function)
 
     tag_parser = subparsers.add_parser('tag', help='Update the list of tags assigned to an identity')
     tag_parser.add_argument('-i', '--id', type=int, help='Id of identity')
