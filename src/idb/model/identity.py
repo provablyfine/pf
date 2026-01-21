@@ -86,22 +86,23 @@ def update(id: int, name: str=None, added_tag_id_list: list[int]=None, deleted_t
         )
         update_fields['name'] = name
 
-    ctx.db.identity.update(**update_fields).where(id=id)
+    if len(update_fields) > 0:
+        ctx.db.identity.update(**update_fields).where(id=id)
 
-    if added_tag_ids is not None and len(added_tag_ids) > 0:
-        for tag_id in added_tag_ids:
+    if added_tag_id_list is not None and len(added_tag_id_list) > 0:
+        for tag_id in added_tag_id_list:
             ctx.db.identity_tag.create(tag_id=tag_id, identity_id=id)
         audit_log.create(
             'identity-add-tags',
             id=id,
-            added_tag_ids=added_tag_ids,
+            added_tag_id_list=added_tag_id_list,
         )
-    if deleted_tag_ids is not None and len(deleted_tag_ids) > 0:
-        ctx.db.identity_tag.delete(identity_id=id, tag_id=deleted_tag_ids)
+    if deleted_tag_id_list is not None and len(deleted_tag_id_list) > 0:
+        ctx.db.identity_tag.delete(identity_id=id, tag_id=deleted_tag_id_list)
         audit_log.create(
             'identity-delete-tags',
             id=id,
-            deleted_tag_id_list=deleted_tag_ids,
+            deleted_tag_id_list=deleted_tag_id_list,
         )
 
 

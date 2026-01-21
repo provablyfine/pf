@@ -170,8 +170,8 @@ def update(request) -> wa.Response:
         for tag_id in deleted_tag_ids:
             if not verifier.is_allowed(permission_request.del_tag(tag_id)):
                 return wa.ProblemResponse(status_code=403, title='Not allowed to delete tag from identity', detail=tag_id)
-        update_params['added_tag_id_list'] = added_tag_ids
-        update_params['deleted_tag_id_list'] = deleted_tag_ids
+        update_params['added_tag_id_list'] = list(added_tag_ids)
+        update_params['deleted_tag_id_list'] = list(deleted_tag_ids)
 
     model.identity.update(id=request.path_params.identity_id, **update_params)
     identity = model.identity.read_one(id=request.path_params.identity_id)
