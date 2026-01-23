@@ -114,6 +114,7 @@ def _identity_update_function(args):
     if response.status_code != 200:
         raise exceptions.UI(f'Unable to update identity: {response.json()["title"]}.')
 
+
 def _identity_tag_function(args):
 
     def _is_equal(a: dict, b: dict):
