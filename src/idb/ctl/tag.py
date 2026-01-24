@@ -45,7 +45,10 @@ def tag_list_function(args):
             rows = []
             for tag in tags:
                 rows.append([tag['id'], tag['name'], tag['value']])
-            output = tabulate.tabulate(rows, headers=['id', 'name', 'value'])
+            if rows:
+                output = tabulate.tabulate(rows, headers=['id', 'name', 'value'])
+            else:
+                output = ''
         case _:
             assert False, args.format
     if output:
@@ -73,12 +76,6 @@ def _tag_delete_function(args):
     response = auth.delete(f'{idb.directory.tag}/{args.id}')
     if response.status_code != 204:
         raise exceptions.UI(f'Unable to delete tag: {response.json()["title"]}')
-
-
-def _add_filter_group(parser, required=False):
-    group = parser.add_mutually_exclusive_group(required=required)
-    group.add_argument('-i', '--id', type=int, help='Id of tag.')
-    group.add_argument('--kv', type=str, help='Name/value of tag.')
 
 
 def add_subparser(parser):
