@@ -26,7 +26,7 @@ class Config:
             elif filename.endswith('.json'):
                 with open(filename) as f:
                     data = json.load(f)
-            elif filename.endswith('.yaml'):
+            elif filename.endswith('.yaml') or filename.endswith('.yml'):
                 with open(filename) as f:
                     data = yaml.safe_load(f)
             else:

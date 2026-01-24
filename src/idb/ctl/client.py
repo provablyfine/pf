@@ -125,10 +125,15 @@ def create_algorithm_class(ssh: ssh_agent.Client, key: jwk.Public):
 
 
 def private_key_signer(prefix: str, filename: str):
-    if os.path.exists(filename):
+    if filename is None:
+        raise exceptions.UI('Did you forget to login ?')
+    elif os.path.exists(filename):
         with open(filename, 'rb') as f:
             data = f.read()
-        key = jwk.Private.from_pem(data, password=None)
+        try:
+            key = jwk.Private.from_data(data, password=None)
+        except ValueError:
+            raise exceptions.UI('Unable to parse data either as PEM or SSH format')
         if key.type != jwk.KeyType.ED25519:
             raise exceptions.UI(f'Unsupported: {key.type}')
         algorithm = http_message_signatures.algorithms.ED25519

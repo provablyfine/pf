@@ -1,6 +1,8 @@
 import dataclasses
 import json
 
+from . import exceptions
+
 
 @dataclasses.dataclass
 class Config:
@@ -12,12 +14,15 @@ class Config:
     session_key: str = None
 
     @staticmethod
-    def load(filename):
-        with open(filename) as f:
-            data = json.load(f)
-            return Config(**data)
+    def load(filename: str):
+        try:
+            with open(filename) as f:
+                data = json.load(f)
+                return Config(**data)
+        except:
+            raise exceptions.UI(f'Unable to load {filename}')
 
-    def save(self, filename):
+    def save(self, filename: str):
         with open(filename, 'w+') as f:
             json.dump(dict(
                 directory_url=self.directory_url,

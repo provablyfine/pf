@@ -375,6 +375,13 @@ class Private:
         return Private(key)
 
     @classmethod
+    def from_data(klass, data: bytes, password: str=None) -> Private:
+        try:
+            return klass.from_pem(data, password=password)
+        except ValueError:
+            return klass.from_ssh(data, password=password)
+
+    @classmethod
     def from_ssh(klass, data: bytes, password: str=None) -> Private:
         key = cryptography.hazmat.primitives.serialization.load_ssh_private_key(data, password=password)
         return Private(key)

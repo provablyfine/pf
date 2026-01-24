@@ -58,11 +58,16 @@ def _login_function(args):
             raise exceptions.UI("Unable to connect to user's SSH agent")
         session_key = jwk.Private.generate_ed25519()
         ssh.add(session_key.to_ssh_bytes(), comment='idb-session', lifetime=1800)
+        c.session_key = session_key.public().ssh_fingerprint()
     else:
         with open(args.session_key, 'rb') as f:
             data = f.read()
-        session_key = jwk.Private.from_pem(data)
-    c.session_key = session_key.public().ssh_fingerprint()
+        try:
+            session_key = jwk.Private.from_data(data)
+        except ValueError:
+            raise exceptions.UI('Unable to parse data either as PEM or SSH format')
+        c.session_key = args.session_key
+
     nonce = secrets.token_hex(16)
     auth = idb.login_auth(account=c.account_key, session=c.session_key)
     response = auth.post(url=c.directory['login'], json={
@@ -85,9 +90,9 @@ def main():
     subparsers = parser.add_subparsers(required=True)
 
     config_parser = subparsers.add_parser('config', help='Create a configuration file')
-    parser.add_argument('--directory', default='http://127.0.0.1:8000/idb/directory', help='Directory to connect to')
-    parser.add_argument('--root-key-id', help='Key id of the public key of the root certificate.', default=None)
-    parser.add_argument('--ignore-ssh-agent', action='store_true', help='Read and write keys from/to disk, regardless of whether or not there is an SSH agent')
+    config_parser.add_argument('--directory', default='http://127.0.0.1:8000/idb/directory', help='Directory to connect to')
+    config_parser.add_argument('--root-key-id', help='Key id of the public key of the root certificate.', default=None)
+    config_parser.add_argument('--ignore-ssh-agent', action='store_true', help='Read and write keys from/to disk, regardless of whether or not there is an SSH agent')
     config_parser.set_defaults(func=_config_function)
 
     register_parser = subparsers.add_parser('accept', help='Accept an invitation')
