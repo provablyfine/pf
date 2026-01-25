@@ -20,7 +20,7 @@ def list_endpoint(request: wa.Request) -> wa.Response:
     output = []
     verifier = permission.Verifier()
     for role in roles:
-        request = verifier.role(role=role).read()
+        request = permission.RoleChecker(role).read()
         if verifier.is_allowed(request):
             output.append(role)
 
@@ -35,7 +35,7 @@ def list_endpoint(request: wa.Request) -> wa.Response:
 @signature.verify_session
 def create_endpoint(request: wa.Request) -> wa.Response:
     verifier = permission.Verifier()
-    permission_request = verifier.role(None).create()
+    permission_request = permission.RoleChecker(None).create()
     if not verifier.is_allowed(permission_request):
         return wa.ProblemResponse(status_code=403, title='Not allowed to create role')
 
@@ -60,7 +60,7 @@ def delete_endpoint(request: wa.Request) -> wa.Response:
         return wa.ProblemResponse(status_code=404, title='Role not found')
 
     verifier = permission.Verifier()
-    request = verifier.role(role).delete()
+    request = permission.RoleChecker(role).delete()
     if not verifier.is_allowed(request):
         return wa.ProblemResponse(status_code=403, title='Not allowed to delete role')
 
@@ -81,7 +81,7 @@ def update_endpoint(request: wa.Request) -> wa.Response:
     data = json.loads(request.body)
     verifier = permission.Verifier()
     for field_name, value in data.items():
-        permission_request = verifier.role(role).update(field_name)
+        permission_request = permission.RoleChecker(role).update(field_name)
         if not verifier.is_allowed(permission_request):
             return wa.ProblemResponse(status_code=403, title='Not allowed to update role field', detail=field_name)
 

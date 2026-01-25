@@ -128,15 +128,6 @@ class Verifier:
         member_of = ctx.db.role_member.read_all(identity_id=identity.id)
         self._roles = model.role.read_all(id=list(set(member.role_id for member in member_of)))
 
-    def boundary(self, boundary) -> BoundaryChecker:
-        return BoundaryChecker(boundary)
-
-    def tag(self, tag) -> TagChecker:
-        return TagChecker(tag)
-
-    def role(self, role) -> RoleChecker:
-        return RoleChecker(role)
-
     def is_allowed(self, request: Checker) -> bool:
         for boundary in self._boundaries:
             if any(request.matches(denied) for denied in boundary.denied_list):

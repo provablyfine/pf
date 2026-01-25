@@ -30,7 +30,7 @@ Create tags to be able to define tag-related permissions in role
 Create a new role
   $ idbctl admin role create -n developer
   $ ROLE_ID=$(idbctl admin role list -n developer -q)
-  $ idbctl -ddd admin role permission -i $ROLE_ID --stdin <<EOF
+  $ idbctl admin role permission -i $ROLE_ID --stdin <<EOF
   > identity:create:*:*
   > identity:add-tag:created_by/self:tag/env=dev
   > identity:del-tag:tag/env=dev:*
