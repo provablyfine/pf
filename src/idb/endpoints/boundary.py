@@ -76,7 +76,7 @@ def delete_endpoint(request: wa.Request) -> wa.Response:
 @signature.verify_session
 def update_endpoint(request: wa.Request) -> wa.Response:
     identity = model.identity.read_one(ctx.identity_id)
-    if request.path_params.boundary_id in identity.boundary_ids:
+    if request.path_params.boundary_id in identity.boundary_id_list:
         return wa.ProblemResponse(status_code=403, title='Not allowed to update boundary that applies to self')
 
     boundary = model.boundary.read_one(id=request.path_params.boundary_id)
