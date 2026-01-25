@@ -42,7 +42,7 @@ def _role_list_function(args):
         args.format = 'quiet'
     match args.format:
         case 'quiet':
-            output = '\n'.join(str(b['id']) for r in roles)
+            output = '\n'.join(str(r['id']) for r in roles)
         case 'json':
             output = json.dumps(roles, indent=2)
         case 'text':
@@ -118,10 +118,10 @@ def _role_permission_function(args):
     idb = client.Client(c)
     auth = idb.session_auth(c.session_key)
     role = _role(args, auth)
-    permission_list = permission.update_list(role['permissions'], args.add, args.delete, args.set)
+    permission_list = permission.update_list(role['permission_list'], args.add, args.delete, args.set, args.stdin)
 
     response = auth.patch(f'{idb.directory.role}/{role["id"]}', json={
-        'permissions': permission_list,
+        'permission_list': permission_list,
     })
     if response.status_code != 200:
         raise exceptions.UI(f'Unable to update role: {response.json()["title"]}.')
@@ -146,7 +146,7 @@ def _role_member_function(args):
     idb = client.Client(c)
     auth = idb.session_auth(c.session_key)
     role = _role(args, auth)
-    member_list = role['members']
+    member_list = role['member_list']
 
     for added in args.add:
         member = to_dict(added)
@@ -161,7 +161,7 @@ def _role_member_function(args):
         member_list = [to_dict(m) for m in args.set]
 
     response = auth.patch(f'{idb.directory.role}/{role["id"]}', json={
-        'members': member_list,
+        'member_list': member_list,
     })
     if response.status_code != 200:
         raise exceptions.UI(f'Unable to update role: {response.json()["title"]}.')
@@ -186,7 +186,7 @@ def add_subparser(parser):
     read_parser.set_defaults(func=_role_read_function)
 
     create_parser = subparsers.add_parser('create', help='Create a new role')
-    create_parser.add_argument('name', type=str, help='Name of role. Must be globally unique.')
+    create_parser.add_argument('-n', '--name', type=str, help='Name of role. Must be globally unique.', required=True)
     create_parser.add_argument('-d', '--description', type=str, help='Description')
     create_parser.set_defaults(func=_role_create_function)
 
@@ -204,7 +204,9 @@ def add_subparser(parser):
     permissions_parser.add_argument('-i', '--id', type=int, help='Id of role.', required=True)
     permissions_parser.add_argument('-a', '--add', type=str, help='Add permission to role', nargs='*', default=[])
     permissions_parser.add_argument('-d', '--del', dest='delete', type=str, help='Delete permission from role', nargs='*', default=[])
-    permissions_parser.add_argument('-s', '--set', type=str, help='Set permission list', nargs='*', default=None)
+    group = permissions_parser.add_mutually_exclusive_group()
+    group.add_argument('-s', '--set', type=str, help='Set permission list', nargs='*', default=None)
+    group.add_argument('--stdin', action='store_true', help='Read list of permissions from stdin, one permission per line.')
     permissions_parser.set_defaults(func=_role_permission_function)
 
     members_parser = subparsers.add_parser('member', help='Update the list of members assigned to this role')

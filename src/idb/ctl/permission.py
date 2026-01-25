@@ -1,3 +1,5 @@
+import sys
+
 from . import exceptions
 
 
@@ -58,7 +60,7 @@ def is_equal(a: dict, b: dict):
     return True
 
 
-def update_list(permissions: list[dict], to_add: list[str], to_delete: list[str], to_set: list[str]) -> list[dict]:
+def update_list(permissions: list[dict], to_add: list[str], to_delete: list[str], to_set: list[str], stdin: bool) -> list[dict]:
     for permission in to_add:
         one = dict_from_string(permission)
         if not any(is_equal(one, p) for p in permissions):
@@ -72,5 +74,8 @@ def update_list(permissions: list[dict], to_add: list[str], to_delete: list[str]
 
     if to_set is not None:
         permissions = [dict_from_string(p) for p in to_set]
+
+    if stdin:
+        permissions = [dict_from_string(line.strip('\n')) for line in sys.stdin]
 
     return permissions

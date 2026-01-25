@@ -33,6 +33,7 @@ class IdObjectChecker:
 
     def _instance_matches(self, granted_field):
         if granted_field != 'id':
+            logger.error('I have no fucking clue')
             raise _500()
         return self._instance.id == granted_field.value
 
@@ -83,6 +84,7 @@ class CRUD(CRD):
         if field not in self._update_fields:
             # This should be caught upstream by the openapi structural checks
             # We are just being a bit paranoid.
+            logger.error(f'Update on field={field} was allowed by openapi checks. It is invalid.')
             raise _500()
         action_checker = ArgsActionChecker('update', field=field)
         return self._checker(action_checker)
@@ -100,7 +102,7 @@ class TagChecker(CRD):
 
 class RoleChecker(CRUD):
     def __init__(self, instance):
-        super().__init__('role', instance, ['name', 'description', 'permissions', 'members'])
+        super().__init__('role', instance, ['name', 'description', 'permission_list', 'member_list'])
 
 
 class Identity(CRUD):

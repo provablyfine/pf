@@ -22,3 +22,20 @@ List existing roles (there is one)
   permission   boundary:*:*:*
   member       root
 
+Create tags to be able to define tag-related permissions in role
+  $ idbctl admin tag create -n env -v dev
+  $ idbctl admin tag create -n env -v preprod
+  $ idbctl admin tag create -n env -v prod
+
+Create a new role
+  $ idbctl admin role create -n developer
+  $ ROLE_ID=$(idbctl admin role list -n developer -q)
+  $ idbctl -ddd admin role permission -i $ROLE_ID --stdin <<EOF
+  > identity:create:*:*
+  > identity:add-tag:created_by/self:tag/env=dev
+  > identity:del-tag:tag/env=dev:*
+  > identity:ssh-shell:tag/env=dev:username/root
+  > identity:ssh-sftp:tag/env=dev:username/app
+  > identity:ssh-forward-remote:tag/env=prod:rport/8080
+  > identity:ssh-forward-local:tag/env=prod:rport/8080
+  > EOF

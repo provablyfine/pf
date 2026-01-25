@@ -313,6 +313,27 @@ components:
               value:
                 type: string
 
+    IdentitySshSftpAction:
+      type: object
+      required: [action, action_fields]
+      properties:
+        action:
+          type: string
+          enum: ['ssh-sftp']
+        action_fields:
+          type: array
+          maxItems: 1
+          items:
+            type: object
+            required: [name, value]
+            additionalProperties: false
+            properties:
+              name:
+                type: string
+                enum: ['username']
+              value:
+                type: string
+
     IdentitySshExecAction:
       type: object
       required: [action, action_fields]
@@ -370,6 +391,7 @@ components:
             - $ref: '#/components/schemas/CRDAction'
             - $ref: '#/components/schemas/IdentityTagAction'
             - $ref: '#/components/schemas/IdentitySshShellAction'
+            - $ref: '#/components/schemas/IdentitySshSftpAction'
             - $ref: '#/components/schemas/IdentitySshExecAction'
             - $ref: '#/components/schemas/IdentitySshForwardAction'
 
@@ -559,11 +581,11 @@ components:
           type: string
         description:
           type: string
-        permissions:
+        permission_list:
           type: array
           items:
             $ref: '#/components/schemas/Permission'
-        members:
+        member_list:
           type: array
           items:
             type: object

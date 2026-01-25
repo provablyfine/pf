@@ -9,7 +9,7 @@ cat > $SERVER_CONFIG <<EOF
 database_url: sqlite:///$SERVER_DB
 debug: true
 log_level: DEBUG
-debug_sql: true
+#debug_sql: true
 EOF
 
 PYTHONUNBUFFERED=1 idb -c $SERVER_CONFIG --port-file $SERVER_PORT_FILE >$SERVER_LOG 2>&1 &

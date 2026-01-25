@@ -91,17 +91,17 @@ def update_endpoint(request: wa.Request) -> wa.Response:
         role_update['name'] = data['name']
     if 'description' in data and data['description'] != role.description:
         role_update['description'] = data['description']
-    if 'permissions' in data:
+    if 'permission_list' in data:
         if ctx.identity_id in role.member_id_list:
             return wa.ProblemResponse(status_code=403, title='Not allowed to update permissions on a role that applies to self')
-        role_update['permission_list'] = [model.permission.deserialize(p, from_client) for p in data['permissions']]
-    if 'members' in data:
-        members = ctx.db.identity.read_all(name=[m['name'] for m in data['members']])
+        role_update['permission_list'] = [model.permission.deserialize(p, from_client) for p in data['permission_list']]
+    if 'member_list' in data:
+        members = ctx.db.identity.read_all(name=[m['name'] for m in data['member_list']])
         member_by_name = {m.name: m for m in members}
-        unresolved_members = [m['name'] for m in data['members'] if m['name'] not in member_by_name]
+        unresolved_members = [m['name'] for m in data['member_list'] if m['name'] not in member_by_name]
         if len(unresolved_members) > 0:
             return wa.ProblemResponse(status_code=400, title='Unable to resolve members', detail=', '.join(unresolved_members))
-        new_member_id_list = set(member_by_name[m['name']].id for m in data['members'])
+        new_member_id_list = set(member_by_name[m['name']].id for m in data['member_list'])
         current_member_id_list = set(role.member_id_list)
         deleted_member_id_list = current_member_id_list.difference(new_member_id_list)
         added_member_id_list = new_member_id_list.difference(current_member_id_list)

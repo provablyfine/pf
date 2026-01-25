@@ -119,7 +119,7 @@ def _boundary_permission_function(args, name):
     idb = client.Client(c)
     auth = idb.session_auth(c.session_key)
     boundary = _boundary(auth, args.id)
-    permission_list = permission.update_list(boundary[name], args.add, args.delete, args.set)
+    permission_list = permission.update_list(boundary[name], args.add, args.delete, args.set, False)
 
     response = auth.patch(f'{idb.directory.boundary}/{boundary["id"]}', json={
         name: permission_list,
