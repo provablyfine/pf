@@ -2,6 +2,7 @@ NULL:=
 TESTS := \
  tags.t \
  boundaries.t \
+ roles.t \
  $(NULL)
 ROOT_DIR := $(patsubst %/,%,$(dir $(abspath $(firstword $(MAKEFILE_LIST)))))
 

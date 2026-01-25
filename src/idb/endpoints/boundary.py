@@ -76,8 +76,6 @@ def delete_endpoint(request: wa.Request) -> wa.Response:
 @signature.verify_session
 def update_endpoint(request: wa.Request) -> wa.Response:
     identity = model.identity.read_one(ctx.identity_id)
-    if request.path_params.boundary_id in identity.boundary_id_list:
-        return wa.ProblemResponse(status_code=403, title='Not allowed to update boundary that applies to self')
 
     boundary = model.boundary.read_one(id=request.path_params.boundary_id)
 
@@ -95,8 +93,12 @@ def update_endpoint(request: wa.Request) -> wa.Response:
     if 'description' in data:
         update_query['description'] = data['description']
     if 'denied_list' in data:
+        if request.path_params.boundary_id in identity.boundary_id_list:
+            return wa.ProblemResponse(status_code=403, title='Not allowed to update denied list on boundary that applies to self')
         update_query['denied_list'] = [model.permission.deserialize(p, from_client) for p in data['denied_list']]
     if 'ceiling_list' in data:
+        if request.path_params.boundary_id in identity.boundary_id_list:
+            return wa.ProblemResponse(status_code=403, title='Not allowed to update ceiling list on boundary that applies to self')
         update_query['ceiling_list'] = [model.permission.deserialize(p, from_client) for p in data['ceiling_list']]
     model.boundary.update(id=request.path_params.boundary_id, **update_query)
 

@@ -34,9 +34,17 @@ Try to delete it (we cannot)
   Unable to delete boundary: Unable to delete boundary: it is still in use
   [2]
 
-Try to update it (we cannot)
+Update name and description
   $ idbctl admin boundary update -i 1 -d hello -n hello
-  Unable to update boundary: Not allowed to update boundary that applies to self.
+  $ idbctl admin boundary read -i 1
+  id           1
+  name         hello
+  description  hello
+  $ idbctl admin boundary denied -i 1 -a identity:*:*:*
+  Unable to update boundary: Not allowed to update denied list on boundary that applies to self.
+  [2]
+  $ idbctl admin boundary ceiling -i 1 -a identity:*:*:*
+  Unable to update boundary: Not allowed to update ceiling list on boundary that applies to self.
   [2]
 
 Create a new boundary

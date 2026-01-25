@@ -54,8 +54,8 @@ def initialize_endpoint(_: wa.Request) -> wa.Response:
     root_role_id = model.role.create(
         name='root',
         description=(
-            'The "root" role identifies a user that is able to do anything.'
-            'It is created once at startup and should be deleted once a proper'
+            'The "root" role identifies a user that is able to do anything. '
+            'It is created once at startup and should be deleted once a proper '
             'permission model is deployed.'
         ),
         permission_list=all_grants

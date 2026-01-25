@@ -66,7 +66,7 @@ def delete_endpoint(request: wa.Request) -> wa.Response:
 
     member = ctx.db.role_member.read_one(role_id=role.id)
     if member is not None:
-        return wa.ProblemResponse(status_code=400, title='Unable to delete role: it is still in use')
+        return wa.ProblemResponse(status_code=400, title='Role is still in use')
 
     ctx.db.role.delete(id=role.id)
     return wa.Response(
