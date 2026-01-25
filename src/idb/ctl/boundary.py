@@ -155,7 +155,7 @@ def add_subparser(parser):
     read_parser.set_defaults(func=_boundary_read_function)
 
     create_parser = subparsers.add_parser('create', help='Create a new boundary')
-    create_parser.add_argument('name', type=str, help='Name of boundary. Must be globally unique.')
+    create_parser.add_argument('-n', '--name', type=str, help='Name of boundary. Must be globally unique.', required=True)
     create_parser.add_argument('-d', '--description', type=str, help='Description')
     create_parser.set_defaults(func=_boundary_create_function)
 

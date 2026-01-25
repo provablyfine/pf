@@ -86,7 +86,7 @@ def update(id: int, name: str=None, description: str=None, ceiling_list: list[pe
             id=id,
             denied_list=tmp,
         )
-    if len(update) == 0:
+    if len(update_fields) == 0:
         return
     ctx.db.boundary.update(**update_fields).where(id=id)
 

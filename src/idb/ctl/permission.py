@@ -66,6 +66,8 @@ def update_list(permissions: list[dict], to_add: list[str], to_delete: list[str]
 
     for permission in to_delete:
         one = dict_from_string(permission)
+        if not any(is_equal(one, p) for p in permissions):
+            raise exceptions.UI(f'Cannot remove permission. It is not in the list. {permission}')
         permissions = [p for p in permissions if not is_equal(p, one)]
 
     if to_set is not None:
