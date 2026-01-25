@@ -1,5 +1,8 @@
+NULL:=
 TESTS := \
- tags.t
+ tags.t \
+ boundaries.t \
+ $(NULL)
 ROOT_DIR := $(patsubst %/,%,$(dir $(abspath $(firstword $(MAKEFILE_LIST)))))
 
 TEST_TARGETS=$(addprefix tests/,$(addsuffix .test,$(basename $(strip $(TESTS)))))

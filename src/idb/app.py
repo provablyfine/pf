@@ -146,8 +146,7 @@ def login_endpoint(request: wa.Request) -> wa.Response:
     )
 
 
-def create(filename):
-    conf = config.Config.load(filename)
+def create(conf):
     match conf.log_level:
         case 'DEBUG':
             level = logging.DEBUG
