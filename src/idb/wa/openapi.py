@@ -73,6 +73,8 @@ class Middleware(middleware.Middleware):
             return response.ProblemResponse(status_code=400, title='Request validation error', detail=str(e.__cause__))
         except openapi_core.templating.paths.exceptions.PathNotFound:
             return response.ProblemResponse(status_code=404, title='Path not found')
+        except openapi_core.templating.paths.exceptions.ServerNotFound:
+            return response.ProblemResponse(status_code=404, title='Server not found')
         next_response = next_middleware(request, iterator)
         if next_response is None:
             return response.ProblemResponse(status_code=500, title='Internal Server Error', detail='Unexpected error. Setup the backtrace middleware to get more details')
