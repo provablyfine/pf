@@ -20,7 +20,7 @@ def list_endpoint(request: wa.Request) -> wa.Response:
     output = []
     verifier = permission.Verifier()
     for boundary in boundaries:
-        request = permission.BoundaryChecker(boundary).read()
+        request = permission.BoundaryChecker(boundary.id).read()
         if verifier.is_allowed(request):
             output.append(boundary)
 
@@ -63,7 +63,7 @@ def delete_endpoint(request: wa.Request) -> wa.Response:
         return wa.ProblemResponse(status_code=400, title='Unable to delete boundary: it is still in use')
 
     verifier = permission.Verifier()
-    request = permission.BoundaryChecker(boundary).delete()
+    request = permission.BoundaryChecker(boundary.id).delete()
     if not verifier.is_allowed(request):
         return wa.ProblemResponse(status_code=403, title='Not allowed to delete boundary')
 
@@ -82,7 +82,7 @@ def update_endpoint(request: wa.Request) -> wa.Response:
     verifier = permission.Verifier()
     data = json.loads(request.body)
     for name, value in data.items():
-        permission_request = permission.BoundaryChecker(boundary).update(name)
+        permission_request = permission.BoundaryChecker(boundary.id).update(name)
         if not verifier.is_allowed(permission_request):
             return wa.ProblemResponse(status_code=403, title='Not allowed to update boundary field', detail=name)
 

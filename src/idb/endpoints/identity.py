@@ -29,7 +29,7 @@ def list_endpoint(request: wa.Request) -> wa.Response:
     output = []
     verifier = permission.Verifier()
     for identity in identities:
-        permission_request = permission.Identity(identity).read()
+        permission_request = permission.IdentityChecker(identity.id, identity.tag_id_list).read()
         if verifier.is_allowed(permission_request):
             output.append(identity)
 
@@ -94,7 +94,8 @@ def _read_boundary_ids(boundaries) -> list[int]:
 @signature.verify_session
 def create_endpoint(request: wa.Request) -> wa.Response:
     verifier = permission.Verifier()
-    permission_request = permission.Identity(None).create()
+    # XXX: give tag_ids from request body
+    permission_request = permission.IdentityChecker(None, None).create()
     if not verifier.is_allowed(permission_request):
         return wa.ProblemResponse(status_code=403, title='Not allowed to create identity')
 
@@ -124,7 +125,7 @@ def delete_endpoint(request: wa.Request) -> wa.Response:
     # someone depends on it in some way ?
 
     verifier = permission.Verifier()
-    permission_request = permission.Identity(identity).delete()
+    permission_request = permission.IdentityChecker(identity.id, identity.tag_id_list).delete()
     if not verifier.is_allowed(permission_request):
         return wa.ProblemResponse(status_code=403, title='Not allowed to delete identity')
 
@@ -144,7 +145,7 @@ def update_endpoint(request: wa.Request) -> wa.Response:
 
     verifier = permission.Verifier()
     data = json.loads(request.body)
-    permission_request = permission.Identity(identity)
+    permission_request = permission.IdentityChecker(identity.id, identity.tag_id_list)
     update_params = {}
     if 'name' in data:
         if not verifier.is_allowed(permission_request.update('name')):

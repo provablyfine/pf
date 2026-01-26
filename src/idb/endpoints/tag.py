@@ -22,7 +22,7 @@ def list_endpoint(request: wa.Request) -> wa.Response:
     verifier = permission.Verifier()
     output = []
     for tag in tags:
-        request = permission.TagChecker(tag).read()
+        request = permission.TagChecker(tag.id).read()
         if verifier.is_allowed(request):
             output.append(tag)
 
@@ -58,7 +58,7 @@ def delete_endpoint(request: wa.Request) -> wa.Response:
         return wa.ProblemResponse(status_code=404, title='Tag does not exist')
 
     verifier = permission.Verifier()
-    delete_request = permission.TagChecker(tag).delete()
+    delete_request = permission.TagChecker(tag.id).delete()
     if not verifier.is_allowed(delete_request):
         return wa.ProblemResponse(status_code=403, title='Not allowed to delete tag')
 

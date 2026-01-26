@@ -26,26 +26,26 @@ class Checker:
         return True
 
 
-class IdObjectChecker:
-    def __init__(self, object, instance):
+class ObjectChecker:
+    def __init__(self, object, **fields):
         self._object = object
-        self._instance = instance
+        self._fields = fields
 
-    def _instance_matches(self, granted_field):
-        if granted_field != 'id':
-            logger.error('I have no fucking clue')
-            raise _500()
-        return self._instance.id == granted_field.value
+    def _field_match(self, granted_field):
+        if not hasattr(self._fields, granted_field.name):
+            return False
+        field_checker = getattr(self._fields, granted_field.name)
+        return field_checker(granted_field.value)
 
     def matches(self, grant: model.permission.Grant):
         if grant.object != self._object:
             return False
-        if not all(self._instance_matches(field) for field in grant.object_fields):
+        if not all(self._field_match(field) for field in grant.object_fields):
             return False
         return True
 
 
-class ArgsActionChecker:
+class ActionChecker:
     def __init__(self, action: str, **kwargs):
         self._action = action
         self._requested = kwargs
@@ -58,64 +58,84 @@ class ArgsActionChecker:
         return True
 
 
-class CRD:
-    def __init__(self, name, instance):
-        self._object_checker = IdObjectChecker(name, instance)
-
-    def _checker(self, action_checker):
-        return Checker(self._object_checker, action_checker)
+class TagChecker:
+    def __init__(self, tag_id: int):
+        self._object_checker = ObjectChecker('tag', id=lambda v: v == tag_id)
 
     def create(self) -> Checker:
-        return self._checker(ArgsActionChecker('create'))
+        return Checker(self._object_checker, ActionChecker('create'))
 
     def read(self) -> Checker:
-        return self._checker(ArgsActionChecker('read'))
+        return Checker(self._object_checker, ActionChecker('read'))
 
     def delete(self) -> Checker:
-        return self._checker(ArgsActionChecker('delete'))
+        return Checker(self._object_checker, ActionChecker('delete'))
 
 
-class CRUD(CRD):
-    def __init__(self, name, instance, update_fields):
-        super().__init__(name, instance)
-        self._update_fields = update_fields
+class BoundaryChecker:
+    def __init__(self, boundary_id: int):
+        self._object_checker = ObjectChecker('boundary', id=lambda v: v == boundary_id)
+
+    def create(self) -> Checker:
+        return Checker(self._object_checker, ActionChecker('create'))
+
+    def read(self) -> Checker:
+        return Checker(self._object_checker, ActionChecker('read'))
 
     def update(self, field: str) -> Checker:
-        if field not in self._update_fields:
-            # This should be caught upstream by the openapi structural checks
-            # We are just being a bit paranoid.
+        if field not in ['name', 'description', 'denied_list', 'ceiling_list']:
             logger.error(f'Update on field={field} was allowed by openapi checks. It is invalid.')
             raise _500()
-        action_checker = ArgsActionChecker('update', field=field)
-        return self._checker(action_checker)
+        return Checker(self._object_checker, ActionChecker('update', field=field))
+
+    def delete(self) -> Checker:
+        return Checker(self._object_checker, ActionChecker('delete'))
 
 
-class BoundaryChecker(CRUD):
-    def __init__(self, instance):
-        super().__init__('boundary', instance, ['name', 'description', 'denied_list', 'ceiling_list'])
+class RoleChecker:
+    def __init__(self, role_id: int):
+        self._object_checker = ObjectChecker('role', id=lambda v: v==role_id)
+
+    def create(self) -> Checker:
+        return Checker(self._object_checker, ActionChecker('create'))
+
+    def read(self) -> Checker:
+        return Checker(self._object_checker, ActionChecker('read'))
+
+    def update(self, field: str) -> Checker:
+        if field not in ['name', 'description', 'permission_list', 'member_list']:
+            logger.error(f'Update on field={field} was allowed by openapi checks. It is invalid.')
+            raise _500()
+        return Checker(self._object_checker, ActionChecker('update', field=field))
+
+    def delete(self) -> Checker:
+        return Checker(self._object_checker, ActionChecker('delete'))
 
 
-class TagChecker(CRD):
-    def __init__(self, instance):
-        super().__init__('tag', instance)
+class IdentityChecker:
+    def __init__(self, identity_id: int, tag_ids: list[int]):
+        self._object_checker = ObjectChecker('identity', id=lambda v: v==identity_id, tag_id=lambda v: v in tag_ids)
 
+    def create(self) -> Checker:
+        return Checker(self._object_checker, ActionChecker('create'))
 
-class RoleChecker(CRUD):
-    def __init__(self, instance):
-        super().__init__('role', instance, ['name', 'description', 'permission_list', 'member_list'])
+    def read(self) -> Checker:
+        return Checker(self._object_checker, ActionChecker('read'))
 
+    def update(self, field: str) -> Checker:
+        if field not in ['name']:
+            logger.error(f'Update on field={field} was allowed by openapi checks. It is invalid.')
+            raise _500()
+        return Checker(self._object_checker, ActionChecker('update', field=field))
 
-class Identity(CRUD):
-    def __init__(self, instance):
-        super().__init__('identity', instance, ['name'])
+    def delete(self) -> Checker:
+        return Checker(self._object_checker, ActionChecker('delete'))
 
     def add_tag(self, tag_id: int) -> Checker:
-        action_checker = ArgsActionChecker('add-tag', id=tag_id)
-        return self._checker(action_checker)
+        return Checker(self._object_checker, ActionChecker('add-tag', id=tag_id))
 
     def del_tag(self, tag_id: int) -> Checker:
-        action_checker = ArgsActionChecker('del-tag', id=tag_id)
-        return self._checker(action_checker)
+        return Checker(self._object_checker, ActionChecker('del-tag', id=tag_id))
 
 
 class Verifier:
