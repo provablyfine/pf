@@ -66,7 +66,7 @@ def to_client() -> Converter:
         tag = ctx.db.tag.read_one(id=tag_id)
         if tag is None:
             raise _500('Tag cannot be found', detail=tag_id)
-        return tag.name
+        return f'{tag.name}={tag.value}'
 
     def _identity_id_to_name(identity_id):
         identity = ctx.db.identity.read_one(id=identity_id)
@@ -105,7 +105,7 @@ def from_client() -> Converter:
     def _tag_name_to_id(name):
         items = name.split('=')
         if len(items) != 2:
-            raise _400('Expected: a=b', detail=name)
+            raise _400('Expected: name=value', detail=name)
         name, value = items
         tag = ctx.db.tag.read_one(name=name, value=value)
         if tag is None:
