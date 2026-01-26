@@ -73,3 +73,12 @@ Delete a tag that does not exist
   $ idbctl admin tag delete -i 15
   Unable to delete tag: Tag does not exist
   [2]
+
+Delete all tags (check ids are never reused)
+  $ for tag_id in $(idbctl admin tag list -q); do idbctl admin tag delete -i $tag_id; done
+  $ idbctl admin tag list -n env -v dev
+  $ idbctl admin tag create -n env -v dev
+  $ idbctl admin tag list -n env -v dev
+    id  name    value
+  ----  ------  -------
+     7  env     dev

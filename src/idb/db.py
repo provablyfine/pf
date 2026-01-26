@@ -65,6 +65,8 @@ tag = sqlalchemy.Table(
     sqlalchemy.Column("name", sqlalchemy.String, index=True, unique=False, nullable=False),
     sqlalchemy.Column("value", sqlalchemy.String, index=True, unique=False, nullable=False),
     sqlalchemy.UniqueConstraint('name', 'value', name='uix_name_value'),
+    # We need autoincrement to make sure ids are not recycled EVER.
+    sqlite_autoincrement=True,
 )
 
 identity = sqlalchemy.Table(
@@ -74,6 +76,8 @@ identity = sqlalchemy.Table(
     sqlalchemy.Column("created_by_id", sqlalchemy.Integer, index=False, unique=False, nullable=True),
     sqlalchemy.Column("created_at", sqlalchemy.Integer, nullable=False),
     sqlalchemy.Column("name", sqlalchemy.String, index=True, unique=True, nullable=False),
+    # We need autoincrement to make sure ids are not recycled EVER.
+    sqlite_autoincrement=True,
 )
 
 identity_boundary = sqlalchemy.Table(
@@ -101,6 +105,8 @@ role = sqlalchemy.Table(
     sqlalchemy.Column("name", sqlalchemy.String, index=True, unique=True, nullable=False),
     sqlalchemy.Column("description", sqlalchemy.String, index=False, unique=False, nullable=False),
     sqlalchemy.Column("permission_list", sqlalchemy.JSON, index=False, unique=False, nullable=False),
+    # We need autoincrement to make sure ids are not recycled EVER.
+    sqlite_autoincrement=True,
 )
 
 role_member = sqlalchemy.Table(
@@ -119,6 +125,8 @@ boundary = sqlalchemy.Table(
     sqlalchemy.Column("description", sqlalchemy.String, index=False, unique=False, nullable=False),
     sqlalchemy.Column("ceiling_list", sqlalchemy.JSON, nullable=False),
     sqlalchemy.Column("denied_list", sqlalchemy.JSON, nullable=False),
+    # We need autoincrement to make sure ids are not recycled EVER.
+    sqlite_autoincrement=True,
 )
 
 default = sqlalchemy.Table(
