@@ -156,7 +156,7 @@ components:
           value:
             type: string
 
-    PermissionObjectFieldsWithNameAndTagAndCreatedBy:
+    PermissionObjectFieldsWithNameAndTag:
       type: array
       items:
         type: object
@@ -165,7 +165,7 @@ components:
         properties:
           name:
             type: string
-            enum: ['name', 'tag', 'created_by']
+            enum: ['name', 'tag']
           value:
             type: string
 
@@ -386,7 +386,7 @@ components:
               type: string
               enum: ['identity']
             object_fields:
-              $ref: '#/components/schemas/PermissionObjectFieldsWithNameAndTagAndCreatedBy'
+              $ref: '#/components/schemas/PermissionObjectFieldsWithNameAndTag'
         - oneOf:
             - $ref: '#/components/schemas/CRDAction'
             - $ref: '#/components/schemas/IdentityTagAction'
@@ -613,6 +613,12 @@ components:
                 type: integer
               name:
                 type: string
+        tags:
+          type: array
+          items:
+            oneOf:
+              - $ref: '#/components/schemas/IdentityTagId'
+              - $ref: '#/components/schemas/IdentityTagNameValue'
 
     IdentityTagId:
       type: object

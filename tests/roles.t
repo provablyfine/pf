@@ -31,8 +31,8 @@ Create a new role
   $ idbctl admin role create -n developer
   $ ROLE_ID=$(idbctl admin role list -n developer -q)
   $ idbctl admin role permission -i $ROLE_ID --stdin <<EOF
-  > identity:create:*:*
-  > identity:add-tag:created_by/self:tag/env=dev
+  > identity:create:tag/env=dev:*
+  > identity:add-tag:tag/env=dev:tag/env=dev
   > identity:del-tag:tag/env=dev:*
   > identity:ssh-shell:tag/env=dev:username/root
   > identity:ssh-sftp:tag/env=dev:username/app

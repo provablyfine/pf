@@ -14,12 +14,14 @@ class Identity:
     boundary_id_list: tuple[int]
 
 
-def create(name: str, boundary_id_list: list[int]) -> int:
+def create(name: str, boundary_id_list: list[int], tag_id_list: list[int]) -> int:
     now = int(time.time())
     identity_id = ctx.db.identity.create(name=name, created_at=now)
     for boundary_id in boundary_id_list:
         ctx.db.identity_boundary.create(identity_id=identity_id, boundary_id=boundary_id)
-    audit_log.create('identity-create', id=identity_id, name=name, boundary_id_list=boundary_id_list)
+    for tag_id in tag_id_list:
+        ctx.db.identity_tag.create(tag_id=tag_id, identity_id=identity_id)
+    audit_log.create('identity-create', id=identity_id, name=name, boundary_id_list=boundary_id_list, tag_id_list=tag_id_list)
     return identity_id
 
 

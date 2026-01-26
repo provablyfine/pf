@@ -44,6 +44,7 @@ def initialize_endpoint(_: wa.Request) -> wa.Response:
     root_id = model.identity.create(
         name='root',
         boundary_id_list=[root_boundary_id],
+        tag_id_list=[],
     )
     all_grants = [
         model.permission.identity_all,

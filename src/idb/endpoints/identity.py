@@ -29,7 +29,7 @@ def list_endpoint(request: wa.Request) -> wa.Response:
     output = []
     verifier = permission.Verifier()
     for identity in identities:
-        permission_request = permission.IdentityChecker(identity.id, identity.tag_id_list).read()
+        permission_request = permission.IdentityChecker(identity.id, identity.tag_id_list, identity.boundary_id_list).read()
         if verifier.is_allowed(permission_request):
             output.append(identity)
 
@@ -41,69 +41,67 @@ def list_endpoint(request: wa.Request) -> wa.Response:
 
 
 def _read_boundary_ids(boundaries) -> list[int]:
-    # This code is definitely more complicated than it should but:
-    # - we want to allow users to provide boundaries either as ids or as names
-    # - we want to refuse boundaries that do not exist either as ids or as names
-    # - we want to refuse boundaries if there are duplicates to help users
-    #   detect potential security problems early in case of a typo or something else
-    # --> This is painfully complex to do
+    boundary_id_list = []
+    for boundary in boundaries:
+        if 'id' in boundary:
+            db_boundary = ctx.db.boundary.read_one(id=boundary['id'])
+            if db_boundary is None:
+                raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Request contains invalid fields'))
+            boundary_id_list.append(boundary['id'])
+        else:
+            if not 'name' in boundary:
+                raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Boundary is missing a name', detail=str(boundary)))
+            db_boundary = ctx.db.boundary.read_one(name=boundary['name'])
+            if db_boundary is None:
+                raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Request contains invalid fields'))
+            boundary_id_list.append(db_boundary.id)
+    if len(set(boundary_id_list)) != len(boundary_id_list):
+        raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Request contains invalid fields'))
+    return boundary_id_list
 
-    # Check that boundaries provided as names exist and are not provided more than once
-    boundary_names = [b['name'] for b in boundaries if 'name' in b]
-    if len(boundary_names) > 0:
-        b_by_name = {b.name: b for b in ctx.db.boundary.read_all(name=boundary_names)}
-        if not all(name in b_by_name for name in boundary_names):
-            raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Unable to find boundary'))
-        if len(b_by_name) != len(boundary_names):
-            raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='A boundary is duplicated'))
-    else:
-        b_by_name = {}
 
-    # Check that boundaries provided as id exist and are not provided more than once
-    boundary_ids = [b['id'] for b in boundaries if 'id' in b]
-    if len(boundary_ids) > 0:
-        b_by_id = {b.id: b for b in ctx.db.boundary.read_all(id=boundary_ids)}
-        if not all(id in b_by_id for id in boundary_ids):
-            raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Unable to find boundary'))
-        if len(b_by_id) != len(boundary_ids):
-            raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='A boundary is duplicated'))
-    else:
-        b_by_id = {}
 
-    # Check that we did not provide a boundary more than once, once as an id and once as a name
-    for b in b_by_id.values():
-        if b.name in b_by_name:
-            raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='A boundary is duplicated'))
+def _read_tag_ids(tags) -> list[int]:
+    tag_id_list = []
+    for tag in tags:
+        if 'id' in tag:
+            db_tag = ctx.db.tag.read_one(id=tag['id'])
+            if db_tag is None:
+                raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Request contains invalid fields'))
+            tag_id_list.append(tag['id'])
+        else:
+            if 'name' not in tag or 'value' not in tag:
+                raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Tag is missing a name or value', detail=str(tag)))
+            db_tag = ctx.db.tag.read_one(name=tag['name'], value=tag['value'])
+            if db_tag is None:
+                raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Request contains invalid fields'))
+            tag_id_list.append(db_tag.id)
+    if len(set(tag_id_list)) != len(tag_id_list):
+        raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Request contains invalid fields'))
+    return tag_id_list
 
-    additional_boundary_ids = [bid for bid in b_by_id.keys()] + [b.id for b in b_by_name.values()]
-    identity = model.identity.read_one(id=ctx.identity_id)
-    current_boundary_ids = set(identity.boundary_ids)
-    if any(bid in current_boundary_ids for bid in additional_boundary_ids):
-        # Technically, we could ignore this silently but we really want the user
-        # to notice if this happens.
-        raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='One (or more than one) of the additional boundary requested is already enforced'))
+
+
+@signature.verify_session
+def create_endpoint(request: wa.Request) -> wa.Response:
+    data = json.loads(request.body)
+    additional_boundary_ids = _read_boundary_ids(data.get('boundaries', []))
+    tag_ids = _read_tag_ids(data.get('tags', []))
+
+    verifier = permission.Verifier()
+    permission_request = permission.IdentityChecker(None, tag_id_list=tag_ids, boundary_id_list=additional_boundary_ids).create()
+    if not verifier.is_allowed(permission_request):
+        return wa.ProblemResponse(status_code=403, title='Not allowed to create identity')
 
     # The line of code below is CRITICAL to our security model.
     # It ensures that identities cannot escape the boundaries that apply to them
     # by creating a new identity with a smaller boundary. The boundaries
     # of newly-created identities are always a superset of the boundaries
     # that apply to the identity that is creating an identity.
-    return identity.boundary_ids + additional_boundary_ids
-
-
-@signature.verify_session
-def create_endpoint(request: wa.Request) -> wa.Response:
-    verifier = permission.Verifier()
-    # XXX: give tag_ids from request body
-    permission_request = permission.IdentityChecker(None, None).create()
-    if not verifier.is_allowed(permission_request):
-        return wa.ProblemResponse(status_code=403, title='Not allowed to create identity')
-
-    data = json.loads(request.body)
-    boundary_ids = _read_boundary_ids(data.get('boundaries', []))
-
+    identity = ctx.db.identity.read_one(id=ctx.db.identity_id)
+    identity_boundary_ids = identity.boundary_ids + additional_boundary_ids
     try:
-        identity_id = model.identity.create(name=data['name'], boundary_id_list=boundary_ids)
+        identity_id = model.identity.create(name=data['name'], boundary_id_list=identity_boundary_ids, tag_id_list=tag_ids)
     except sqlalchemy.exc.IntegrityError:
         return wa.ProblemResponse(status_code=400, title='Boundary already exists. Name must be unique.', detail=data['name'])
 
@@ -125,7 +123,7 @@ def delete_endpoint(request: wa.Request) -> wa.Response:
     # someone depends on it in some way ?
 
     verifier = permission.Verifier()
-    permission_request = permission.IdentityChecker(identity.id, identity.tag_id_list).delete()
+    permission_request = permission.IdentityChecker(identity.id, identity.tag_id_list, identity.boundary_id_list).delete()
     if not verifier.is_allowed(permission_request):
         return wa.ProblemResponse(status_code=403, title='Not allowed to delete identity')
 
@@ -145,7 +143,7 @@ def update_endpoint(request: wa.Request) -> wa.Response:
 
     verifier = permission.Verifier()
     data = json.loads(request.body)
-    permission_request = permission.IdentityChecker(identity.id, identity.tag_id_list)
+    permission_request = permission.IdentityChecker(identity.id, identity.tag_id_list, identity.boundary_id_list)
     update_params = {}
     if 'name' in data:
         if not verifier.is_allowed(permission_request.update('name')):

@@ -113,8 +113,13 @@ class RoleChecker:
 
 
 class IdentityChecker:
-    def __init__(self, identity_id: int, tag_ids: list[int]):
-        self._object_checker = ObjectChecker('identity', id=lambda v: v==identity_id, tag_id=lambda v: v in tag_ids)
+    def __init__(self, identity_id: int, tag_id_list: list[int], boundary_id_list: list[int]):
+        self._object_checker = ObjectChecker(
+            'identity',
+            id=lambda v: v==identity_id,
+            tag_id=lambda v: v in tag_id_list,
+            boundary_id=lambda v: v in boundary_id_list,
+        )
 
     def create(self) -> Checker:
         return Checker(self._object_checker, ActionChecker('create'))
