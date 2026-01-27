@@ -272,6 +272,27 @@ components:
             - $ref: '#/components/schemas/CRDAction'
             - $ref: '#/components/schemas/RoleUpdateAction'
 
+    IdentityInviteAction:
+      type: object
+      required: [action, action_fields]
+      properties:
+        action:
+          type: string
+          enum: ['invite']
+        action_fields:
+          type: array
+          items:
+            type: object
+            required: [name, value]
+            additionalProperties: false
+            properties:
+              name:
+                type: string
+                enum: ['delivery']
+              value:
+                type: string
+                enum: ['email', 'manual', 'sms', 'slack']
+
     IdentityTagAction:
       type: object
       required: [action, action_fields]
@@ -389,6 +410,7 @@ components:
               $ref: '#/components/schemas/IdentityObjectFields'
         - oneOf:
             - $ref: '#/components/schemas/CRDAction'
+            - $ref: '#/components/schemas/IdentityInviteAction'
             - $ref: '#/components/schemas/IdentityTagAction'
             - $ref: '#/components/schemas/IdentitySshShellAction'
             - $ref: '#/components/schemas/IdentitySshSftpAction'

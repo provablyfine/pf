@@ -34,6 +34,7 @@ Create a new role
   > identity:create:tag/env=dev:*
   > identity:add-tag:tag/env=dev:tag/env=dev
   > identity:del-tag:tag/env=dev:*
+  > identity:invite:tag/env=dev:delivery/email
   > identity:ssh-shell:tag/env=dev:username/root
   > identity:ssh-sftp:tag/env=dev:username/app
   > identity:ssh-forward-remote:tag/env=prod:rport/8080
