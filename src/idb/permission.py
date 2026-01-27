@@ -142,6 +142,9 @@ class IdentityChecker:
     def del_tag(self, tag_id: int) -> Checker:
         return Checker(self._object_checker, ActionChecker('del-tag', id=tag_id))
 
+    def invite(self, delivery: str) -> Checker:
+        return Checker(self._object_checker, ActionChecker('invite', delivery=delivery))
+
 
 class Verifier:
     def __init__(self):

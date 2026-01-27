@@ -103,6 +103,20 @@ def _identity_create_function(args):
         raise exceptions.UI(f'Unable to create identity: {response.json()["title"]}')
 
 
+def _identity_invite_function(args):
+    c = config.Config.load(args.config)
+    idb = client.Client(c)
+    auth = idb.session_auth(c.session_key)
+    response = auth.post(f'{idb.directory.identity}/{args.id}/invite', params={'delivery': args.delivery})
+    if response.status_code == 204:
+        return
+    elif response.status_code == 200:
+        data = response.json()
+        print(data["key"]['k'])
+    else:
+        raise exceptions.UI(f'Unable to invite identity: {response.json()["title"]}')
+
+
 def _identity_update_function(args):
     c = config.Config.load(args.config)
     idb = client.Client(c)
@@ -186,6 +200,13 @@ def add_subparser(parser):
     create_parser.add_argument('-n', '--name', type=str, help='Name of identity. Must be globally unique.')
     create_parser.add_argument('-b', '--boundary', help='Boundary to enforce on newly-created user', nargs='*', default=[])
     create_parser.set_defaults(func=_identity_create_function)
+
+    invite_parser = subparsers.add_parser('invite', help='Invite an identity')
+    invite_parser.add_argument('-i', '--id', type=int, help='Id of identity')
+    group = invite_parser.add_mutually_exclusive_group(required=True)
+    group.add_argument('--manual', action='store_const', const='manual', dest='delivery', help='Print the invitation. You are responsible for sharing this invitation securely with the user.')
+    group.add_argument('--email', action='store_const', const='email', dest='delivery', help='Send the invitation by email')
+    invite_parser.set_defaults(func=_identity_invite_function)
 
     delete_parser = subparsers.add_parser('delete', help='Delete an unused identity')
     delete_parser.add_argument('-i', '--id', type=int, help='Id of identity')

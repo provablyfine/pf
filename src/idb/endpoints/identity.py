@@ -179,3 +179,29 @@ def update_endpoint(request: wa.Request) -> wa.Response:
         status_code=200,
         json=model.identity.serialize_one(identity),
     )
+
+
+@signature.verify_session
+def invite_endpoint(request: wa.Request) -> wa.Response:
+    identity = model.identity.read_one(id=request.path_params.identity_id)
+    delivery = request.query_params['delivery']
+
+    verifier = permission.Verifier()
+    permission_request = permission.IdentityChecker(identity.id, identity.tag_id_list, identity.boundary_id_list)
+    if not verifier.is_allowed(permission_request.invite(delivery=delivery)):
+        return wa.ProblemResponse(status_code=403, title='Not allowed to invite identity', detail=delivery)
+
+    identity_invitation_key_id = model.identity_invitation_key.create(
+        identity_id=identity.id,
+        # XXX Should be a security policy parameter
+        expiration_delay_s=600
+    )
+
+    if delivery == 'manual':
+        return wa.JSONResponse(
+            json=model.identity_invitation_key.format(identity_invitation_key_id),
+            status_code=200
+        )
+    return wa.Response(
+        status_code=204,
+    )

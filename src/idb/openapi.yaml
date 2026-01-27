@@ -493,6 +493,14 @@ components:
           items:
             $ref: '#/components/schemas/IdentityBoundary'
 
+    Invitation:
+      type: object
+      required: [key]
+      additionalProperties: false
+      properties:
+        key:
+          $ref: '#/components/schemas/SymmetricJWK'
+
     AcceptInvitationRequest:
       type: object
       required: [account_public_key, nonce]
@@ -664,12 +672,7 @@ components:
       content:
         application/json:
           schema:
-            type: object
-            required: [key]
-            additionalProperties: false
-            properties:
-              key:
-                $ref: '#/components/schemas/SymmetricJWK'
+            $ref: '#/components/schemas/Invitation'
 
     BoundaryListResponse:
       description: OK
@@ -754,6 +757,13 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/Identity'
+
+    InvitationResponse:
+      description: OK
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Invitation'
 
     AcceptInvitationResponse:
       description: Invitation accepted
@@ -1092,6 +1102,27 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+
+  /idb/identity/{identity_id}/invite:
+    parameters:
+      - in: path
+        name: identity_id
+        schema:
+          type: integer
+        required: true
+        description: The unique identifier of the identity requested
+    post:
+      security: *SessionSignature
+      summary: Update identity
+      description: >
+        Update identity parameters
+      responses:
+        "204":
+          description: Invitation sent
+        "200":
+          $ref: "#/components/responses/InvitationResponse"
+        default:
+          $ref: '#/components/responses/ErrorResponse'
 
   /idb/identity/{identity_id}:
     parameters:

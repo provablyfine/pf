@@ -187,4 +187,5 @@ def create(conf):
     app.add('/idb/identity', endpoints.identity.list_endpoint, methods=['GET'])
     app.add('/idb/identity/<int:identity_id>', endpoints.identity.update_endpoint, methods=['PATCH'])
     app.add('/idb/identity/<int:identity_id>', endpoints.identity.delete_endpoint, methods=['DELETE'])
+    app.add('/idb/identity/<int:identity_id>/invite', endpoints.identity.invite_endpoint, methods=['POST'])
     return app
