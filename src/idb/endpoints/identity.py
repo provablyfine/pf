@@ -98,8 +98,8 @@ def create_endpoint(request: wa.Request) -> wa.Response:
     # by creating a new identity with a smaller boundary. The boundaries
     # of newly-created identities are always a superset of the boundaries
     # that apply to the identity that is creating an identity.
-    identity = ctx.db.identity.read_one(id=ctx.db.identity_id)
-    identity_boundary_ids = identity.boundary_ids + additional_boundary_ids
+    identity = model.identity.read_one(id=ctx.identity_id)
+    identity_boundary_ids = identity.boundary_id_list + additional_boundary_ids
     try:
         identity_id = model.identity.create(name=data['name'], boundary_id_list=identity_boundary_ids, tag_id_list=tag_ids)
     except sqlalchemy.exc.IntegrityError:
