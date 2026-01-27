@@ -183,7 +183,7 @@ def add_subparser(parser):
     read_parser.set_defaults(func=_identity_read_function)
 
     create_parser = subparsers.add_parser('create', help='Create a new identity')
-    create_parser.add_argument('name', type=str, help='Name of identity. Must be globally unique.')
+    create_parser.add_argument('-n', '--name', type=str, help='Name of identity. Must be globally unique.')
     create_parser.add_argument('-b', '--boundary', help='Boundary to enforce on newly-created user', nargs='*', default=[])
     create_parser.set_defaults(func=_identity_create_function)
 
