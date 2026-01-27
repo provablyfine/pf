@@ -12,6 +12,18 @@ class AuditLogLevel(enum.IntEnum):
 metadata = sqlalchemy.MetaData()
 
 
+auth = sqlalchemy.Table(
+    "auth",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
+    sqlalchemy.Column("name", sqlalchemy.String, nullable=False, unique=True, index=True),
+    sqlalchemy.Column("tag_id_list", sqlalchemy.JSON, nullable=False),
+    sqlalchemy.Column("created_at", sqlalchemy.Integer, nullable=False),
+    sqlalchemy.Column("is_enabled", sqlalchemy.Boolean, nullable=False),
+    sqlalchemy.Column("type", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("config", sqlalchemy.JSON, nullable=False),
+)
+
 public_key_denylist = sqlalchemy.Table(
     "public_key_denylist",
     metadata,
