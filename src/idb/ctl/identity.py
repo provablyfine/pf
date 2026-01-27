@@ -41,7 +41,11 @@ def _identity_list_function(args):
     idb = client.Client(c)
     auth = idb.session_auth(c.session_key)
     identities = _identities(auth, id=args.id, name=args.name, tag_id=args.tag_id, tag_name=args.tag_name, boundary_id=args.boundary_id, boundary_name=args.boundary_name)
+    if args.quiet:
+        args.format = 'quiet'
     match args.format:
+        case 'quiet':
+            output = '\n'.join(str(i['id']) for i in identities)
         case 'json':
             output = json.dumps(identities, indent=2)
         case 'text':
@@ -82,7 +86,7 @@ def _identity_delete_function(args):
     auth = idb.session_auth(c.session_key)
     response = auth.delete(f'{idb.directory.identity}/{args.id}')
     if response.status_code != 204:
-        raise exceptions.UI(f'Unable to delete identity: {response.json()["title"]}')
+        raise exceptions.UI(f'Unable to delete identity. {response.json()["title"]}')
 
 
 def _identity_create_function(args):
@@ -100,7 +104,7 @@ def _identity_create_function(args):
         'boundaries': boundaries
     })
     if response.status_code != 201:
-        raise exceptions.UI(f'Unable to create identity: {response.json()["title"]}')
+        raise exceptions.UI(f'Unable to create identity. {response.json()["title"]}')
 
 
 def _identity_invite_function(args):
@@ -114,7 +118,7 @@ def _identity_invite_function(args):
         data = response.json()
         print(data["key"]['k'])
     else:
-        raise exceptions.UI(f'Unable to invite identity: {response.json()["title"]}')
+        raise exceptions.UI(f'Unable to invite identity. {response.json()["title"]}')
 
 
 def _identity_update_function(args):
@@ -126,7 +130,7 @@ def _identity_update_function(args):
         query['name'] = args.name
     response = auth.patch(f'{idb.directory.identity}/{args.id}', json=query)
     if response.status_code != 200:
-        raise exceptions.UI(f'Unable to update identity: {response.json()["title"]}.')
+        raise exceptions.UI(f'Unable to update identity. {response.json()["title"]}.')
 
 
 def _identity_tag_function(args):
