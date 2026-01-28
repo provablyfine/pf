@@ -8,7 +8,11 @@ TESTS := \
  $(NULL)
 ROOT_DIR := $(patsubst %/,%,$(dir $(abspath $(firstword $(MAKEFILE_LIST)))))
 
+
 TEST_TARGETS=$(addprefix tests/,$(addsuffix .test,$(basename $(strip $(TESTS)))))
+
+%.t: %.t.jinja
+	jinja2 $^ > $@
 
 tests: $(TEST_TARGETS)
 

@@ -32,10 +32,11 @@ class ObjectChecker:
         self._fields = fields
 
     def _field_match(self, granted_field):
-        if not hasattr(self._fields, granted_field.name):
+        field_checker = self._fields.get(granted_field.name)
+        if field_checker is None:
             return False
-        field_checker = getattr(self._fields, granted_field.name)
-        return field_checker(granted_field.value)
+        match = field_checker(granted_field.value)
+        return match
 
     def matches(self, grant: model.permission.Grant):
         if grant.object != self._object:

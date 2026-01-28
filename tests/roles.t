@@ -9,7 +9,7 @@ List existing roles (there is one)
                 once at startup and should be deleted once a proper permission model is
                 deployed.
   $ idbctl admin role delete -i 1
-  Unable to delete role: Role is still in use
+  Unable to delete role. Role is still in use
   [2]
   $ idbctl admin role update -i 1 -n hello
   $ idbctl admin role read -i 1

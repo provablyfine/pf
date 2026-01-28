@@ -313,6 +313,27 @@ components:
               value:
                 type: string
 
+    IdentityUpdateNameAction:
+      type: object
+      required: [action, action_fields]
+      properties:
+        action:
+          type: string
+          enum: ['update']
+        action_fields:
+          type: array
+          items:
+            type: object
+            required: [name, value]
+            additionalProperties: false
+            properties:
+              name:
+                type: string
+                enum: ['field']
+              value:
+                type: string
+                enum: ['name']
+
     IdentitySshShellAction:
       type: object
       required: [action, action_fields]
@@ -410,6 +431,7 @@ components:
               $ref: '#/components/schemas/IdentityObjectFields'
         - oneOf:
             - $ref: '#/components/schemas/CRDAction'
+            - $ref: '#/components/schemas/IdentityUpdateNameAction'
             - $ref: '#/components/schemas/IdentityInviteAction'
             - $ref: '#/components/schemas/IdentityTagAction'
             - $ref: '#/components/schemas/IdentitySshShellAction'

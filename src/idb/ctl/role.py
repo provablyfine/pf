@@ -84,7 +84,7 @@ def _role_delete_function(args):
     auth = idb.session_auth(c.session_key)
     response = auth.delete(f'{idb.directory.role}/{args.id}')
     if response.status_code != 204:
-        raise exceptions.UI(f'Unable to delete role: {response.json()["title"]}')
+        raise exceptions.UI(f'Unable to delete role. {response.json()["title"]}')
 
 
 def _role_create_function(args):
@@ -96,7 +96,7 @@ def _role_create_function(args):
         'description': '' if args.description is None else args.description
     })
     if response.status_code != 201:
-        raise exceptions.UI(f'Unable to create role: {response.json()["title"]}')
+        raise exceptions.UI(f'Unable to create role. {response.json()["title"]}')
 
 
 def _role_update_function(args):
@@ -110,7 +110,7 @@ def _role_update_function(args):
         query['description'] = args.description
     response = auth.patch(f'{idb.directory.role}/{args.id}', json=query)
     if response.status_code != 200:
-        raise exceptions.UI(f'Unable to update role: {response.json()["title"]}.')
+        raise exceptions.UI(f'Unable to update role. {response.json()["title"]}.')
 
 
 def _role_permission_function(args):
@@ -124,7 +124,7 @@ def _role_permission_function(args):
         'permission_list': permission_list,
     })
     if response.status_code != 200:
-        raise exceptions.UI(f'Unable to update role: {response.json()["title"]}.')
+        raise exceptions.UI(f'Unable to update role. {response.json()["title"]}.')
 
 
 def _role_member_function(args):
@@ -164,7 +164,7 @@ def _role_member_function(args):
         'member_list': member_list,
     })
     if response.status_code != 200:
-        raise exceptions.UI(f'Unable to update role: {response.json()["title"]}.')
+        raise exceptions.UI(f'Unable to update role. {response.json()["title"]}.')
 
 
 def add_subparser(parser):

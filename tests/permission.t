@@ -13,22 +13,22 @@ Find root id
 
 Add invalid permissions to role
   $ idbctl admin role permission -i $ROLE_ID -a identity:create:haha/hoy:*
-  Unable to update role: Request validation error.
+  Unable to update role. Request validation error.
   [2]
   $ idbctl admin role permission -i $ROLE_ID -a identity:create:name/unknown:*
-  Unable to update role: Permission field invalid. Identity cannot be found.
+  Unable to update role. Permission field invalid. Identity cannot be found.
   [2]
   $ idbctl admin role permission -i $ROLE_ID -a identity:create:tag/hoy:*
-  Unable to update role: Permission field invalid. Expected: name=value.
+  Unable to update role. Permission field invalid. Expected: name=value.
   [2]
   $ idbctl admin role permission -i $ROLE_ID -a identity:create:tag/hoy=bar:*
-  Unable to update role: Permission field invalid. Tag cannot be found.
+  Unable to update role. Permission field invalid. Tag cannot be found.
   [2]
   $ idbctl admin role permission -i $ROLE_ID -a identity:create:tag/env=prod:*
-  Unable to update role: Permission field invalid. Tag cannot be found.
+  Unable to update role. Permission field invalid. Tag cannot be found.
   [2]
   $ idbctl admin role permission -i $ROLE_ID -a identity:create:boundary/unknown:*
-  Unable to update role: Permission field invalid. Boundary cannot be found.
+  Unable to update role. Permission field invalid. Boundary cannot be found.
   [2]
 
 Add a real permission to role
