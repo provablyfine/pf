@@ -64,7 +64,7 @@ def _tag_create_function(args):
         'value': args.value,
     })
     if response.status_code != 201:
-        raise exceptions.UI(f'Unable to create tag: {response.json()["title"]}')
+        raise exceptions.UI(f'Unable to create tag. {response.json()["title"]}')
 
 
 def _tag_delete_function(args):
@@ -75,7 +75,7 @@ def _tag_delete_function(args):
     auth = idb.session_auth(c.session_key)
     response = auth.delete(f'{idb.directory.tag}/{args.id}')
     if response.status_code != 204:
-        raise exceptions.UI(f'Unable to delete tag: {response.json()["title"]}')
+        raise exceptions.UI(f'Unable to delete tag. {response.json()["title"]}')
 
 
 def add_subparser(parser):

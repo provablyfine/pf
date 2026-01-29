@@ -31,7 +31,7 @@ Search for the root boundary explicitely
 
 Try to delete it (we cannot)
   $ idbctl admin boundary delete -i $(idbctl admin boundary list -n root -q)
-  Unable to delete boundary: Unable to delete boundary: it is still in use
+  Unable to delete boundary. Boundary is still in use
   [2]
 
 Update name and description
@@ -41,10 +41,10 @@ Update name and description
   name         hello
   description  hello
   $ idbctl admin boundary denied -i 1 -a identity:*:*:*
-  Unable to update boundary: Not allowed to update denied list on boundary that applies to self.
+  Unable to update boundary. Not allowed to update denied list on boundary that applies to self.
   [2]
   $ idbctl admin boundary ceiling -i 1 -a identity:*:*:*
-  Unable to update boundary: Not allowed to update ceiling list on boundary that applies to self.
+  Unable to update boundary. Not allowed to update ceiling list on boundary that applies to self.
   [2]
 
 Create a new boundary

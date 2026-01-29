@@ -16,7 +16,7 @@ List existing tags (there is one now)
 
 Create an existing tag
   $ idbctl admin tag create -n env -v prod
-  Unable to create tag: Tag already exists
+  Unable to create tag. Tag already exists
   [2]
 
 Create more tags
@@ -71,7 +71,7 @@ Check that the tag is gone
 
 Delete a tag that does not exist
   $ idbctl admin tag delete -i 15
-  Unable to delete tag: Tag does not exist
+  Unable to delete tag. Tag does not exist
   [2]
 
 Delete all tags (check ids are never reused)

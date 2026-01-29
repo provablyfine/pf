@@ -84,7 +84,7 @@ def _boundary_delete_function(args):
     auth = idb.session_auth(c.session_key)
     response = auth.delete(f'{idb.directory.boundary}/{args.id}')
     if response.status_code != 204:
-        raise exceptions.UI(f'Unable to delete boundary: {response.json()["title"]}')
+        raise exceptions.UI(f'Unable to delete boundary. {response.json()["title"]}')
 
 
 def _boundary_create_function(args):
@@ -96,7 +96,7 @@ def _boundary_create_function(args):
         'description': '' if args.description is None else args.description
     })
     if response.status_code != 201:
-        raise exceptions.UI(f'Unable to create boundary: {response.json()["title"]}')
+        raise exceptions.UI(f'Unable to create boundary. {response.json()["title"]}')
 
 
 
@@ -111,7 +111,7 @@ def _boundary_update_function(args):
         query['description'] = args.description
     response = auth.patch(f'{idb.directory.boundary}/{args.id}', json=query)
     if response.status_code != 200:
-        raise exceptions.UI(f'Unable to update boundary: {response.json()["title"]}.')
+        raise exceptions.UI(f'Unable to update boundary. {response.json()["title"]}.')
 
 
 def _boundary_permission_function(args, name):
@@ -125,7 +125,7 @@ def _boundary_permission_function(args, name):
         name: permission_list,
     })
     if response.status_code != 200:
-        raise exceptions.UI(f'Unable to update boundary: {response.json()["title"]}.')
+        raise exceptions.UI(f'Unable to update boundary. {response.json()["title"]}.')
 
 
 def _boundary_denied_function(args):

@@ -60,7 +60,7 @@ def delete_endpoint(request: wa.Request) -> wa.Response:
         return wa.ProblemResponse(status_code=404, title='Boundary not found')
     identity = ctx.db.identity_boundary.read_one(boundary_id=boundary.id)
     if identity is not None:
-        return wa.ProblemResponse(status_code=400, title='Unable to delete boundary: it is still in use')
+        return wa.ProblemResponse(status_code=400, title='Boundary is still in use')
 
     verifier = permission.Verifier()
     request = permission.BoundaryChecker(boundary.id).delete()
