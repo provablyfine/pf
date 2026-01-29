@@ -690,6 +690,20 @@ components:
         value:
           type: string
 
+    UpdateIdentityTagOperation:
+      description: Operations are processed in order server-side
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [set, add, del]
+        values:
+          type: array
+          items:
+            oneOf:
+              - $ref: '#/components/schemas/IdentityTagId'
+              - $ref: '#/components/schemas/IdentityTagNameValue'
+
     UpdateIdentityRequest:
       type: object
       additionalProperties: false
@@ -699,9 +713,7 @@ components:
         tags:
           type: array
           items:
-            oneOf:
-              - $ref: '#/components/schemas/IdentityTagId'
-              - $ref: '#/components/schemas/IdentityTagNameValue'
+            $ref: '#/components/schemas/UpdateIdentityTagOperation'
 
   responses:
     ErrorResponse:

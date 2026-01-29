@@ -1,3 +1,4 @@
+import argparse
 import json
 import tabulate
 
@@ -132,16 +133,18 @@ def _identity_update_function(args):
     if response.status_code != 200:
         raise exceptions.UI(f'Unable to update identity. {response.json()["title"]}.')
 
+class TagAction(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        # Get the current list or initialize a new one
+        items = getattr(namespace, self.dest, [])
+        if items is None: items = []
+
+        items.append((self.const, values))
+
+        setattr(namespace, self.dest, items)
+
 
 def _identity_tag_function(args):
-
-    def _is_equal(a: dict, b: dict):
-        if 'id' in a and 'id' in b and a['id'] == b['id']:
-            return True
-        if 'name' in a and 'name' in b and a['name'] == b['name'] \
-                and 'value' in a and 'value' in b and a['value'] == b['value']:
-            return True
-        return False
 
     def _tag(tag: str):
         if tag.isdigit():
@@ -157,25 +160,14 @@ def _identity_tag_function(args):
     c = config.Config.load(args.config)
     idb = client.Client(c)
     auth = idb.session_auth(c.session_key)
-    identity = _identity(args, auth)
 
-    tags = identity['tags']
-    to_add = [_tag(tag) for tag in args.add]
-    to_delete = [_tag(tag) for tag in args.delete]
-    for tag in to_delete:
-        tags = [t for t in tags if not _is_equal(t, tag)]
-    tags = [{'id': tag['id']} for tag in tags]
-    for tag in to_add:
-        if any(_is_equal(tag, t) for t in tags):
-            continue
-        tags.append(tag)
-    if args.set is not None:
-        tags = [_tag(tag) for tag in args.set]
-    response = auth.patch(f'{idb.directory.identity}/{identity["id"]}', json={
-        'tags': tags,
+    ops = [{'type': op, 'values': [_tag(value) for value in values]} for op, values in args.ops]
+
+    response = auth.patch(f'{idb.directory.identity}/{args.id}', json={
+        'tags': ops,
     })
     if response.status_code != 200:
-        raise exceptions.UI(f'Unable to update identity: {response.json()["title"]}.')
+        raise exceptions.UI(f'Unable to update identity. {response.json()["title"]}.')
 
 
 def add_subparser(parser):
@@ -221,9 +213,9 @@ def add_subparser(parser):
     update_parser.add_argument('-n', '--name', help='New name of identity')
     update_parser.set_defaults(func=_identity_update_function)
 
-    tag_parser = subparsers.add_parser('tag', help='Update the list of tags assigned to an identity')
+    tag_parser = subparsers.add_parser('tag', help='Update the list of tags assigned to an identity. Commands are processed in-order')
     tag_parser.add_argument('-i', '--id', type=int, help='Id of identity')
-    tag_parser.add_argument('-a', '--add', type=str, help='Add tag to identity', nargs='*', default=[])
-    tag_parser.add_argument('-d', '--del', dest='delete', type=str, help='Delete tag from identity', nargs='*', default=[])
-    tag_parser.add_argument('-s', '--set', type=str, help='Set list of tags', nargs='*', default=None)
+    tag_parser.add_argument('-s', '--set', metavar='tag', dest='ops', const='set', help='Set list of tags', action=TagAction, nargs='*')
+    tag_parser.add_argument('-a', '--add', metavar='tag', dest='ops', const='add', help='Add tag to identity', action=TagAction, nargs='*')
+    tag_parser.add_argument('-d', '--del', metavar='tag', dest='ops', const='del', help='Delete tag from identity', action=TagAction, nargs='*')
     tag_parser.set_defaults(func=_identity_tag_function)

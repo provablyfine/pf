@@ -24,9 +24,9 @@ class ProblemResponse(JSONResponse):
             type = 'about:blank'
         problem = {'status': status_code, 'type': type}
         if title is not None:
-            problem['title'] = title
+            problem['title'] = str(title)
         if detail is not None:
-            problem['detail'] = detail
+            problem['detail'] = str(detail)
         if instance is not None:
             problem['instance'] = instance
         super().__init__(status_code=status_code, json=problem)

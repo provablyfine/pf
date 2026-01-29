@@ -133,6 +133,44 @@ def delete_endpoint(request: wa.Request) -> wa.Response:
         status_code=204
     )
 
+def _403_tag() -> wa.HTTPException:
+    # We purposedly do not return detailed information to the client
+    # to make sure we do not leak information that the client should not know
+    return wa.HTTPException(wa.ProblemResponse(status_code=403, title='Not allowed to update tag'))
+
+def _read_tag_id_list(tags):
+    tag_ids = []
+    for tag in tags:
+        if 'id' in tag:
+            tag_ids.append(tag['id'])
+        else:
+            db_tag = ctx.db.tag.read_one(name=tag['name'], value=tag['value'])
+            if db_tag is None:
+                raise _403_tag()
+            tag_ids.append(db_tag.id)
+    return tag_ids
+
+
+def _check_set_tags(verifier, permission_request, current_tag_id_list, new_tag_ids):
+    current_tag_ids = set(current_tag_id_list)
+    added_tag_id_list = list(new_tag_ids.difference(current_tag_ids))
+    deleted_tag_id_list = list(current_tag_ids.difference(new_tag_ids))
+    _check_add_tags(verifier, permission_request, added_tag_id_list)
+    _check_del_tags(verifier, permission_request, deleted_tag_id_list)
+    return added_tag_id_list, deleted_tag_id_list
+
+
+def _check_add_tags(verifier, permission_request, tag_id_list):
+    for tag_id in tag_id_list:
+        if not verifier.is_allowed(permission_request.add_tag(tag_id)):
+            raise _403_tag()
+
+
+def _check_del_tags(verifier, permission_request, tag_id_list):
+    for tag_id in tag_id_list:
+        if not verifier.is_allowed(permission_request.del_tag(tag_id)):
+            raise _403_tag()
+
 
 @signature.verify_session
 def update_endpoint(request: wa.Request) -> wa.Response:
@@ -150,30 +188,42 @@ def update_endpoint(request: wa.Request) -> wa.Response:
             return wa.ProblemResponse(status_code=403, title='Not allowed to update identity field', detail='name')
         update_params['name'] = data['name']
     if 'tags' in data:
-        tag_ids = []
-        for tag in data['tags']:
-            if 'id' in tag:
-                tag_ids.append(tag['id'])
-            else:
-                db_tag = ctx.db.tag.read_one(name=tag['name'], value=tag['value'])
-                if db_tag is None:
-                    return wa.ProblemResponse(status_code=400, title='Tag does not exist', detail=f'{tag["name"]}={tag["value"]}')
-                tag_ids.append(db_tag.id)
-        new_tag_ids = set(tag_ids)
-        current_tag_ids = set(identity.tag_id_list)
-        added_tag_ids = new_tag_ids.difference(current_tag_ids)
-        deleted_tag_ids = current_tag_ids.difference(new_tag_ids)
-        for tag_id in added_tag_ids:
-            if not verifier.is_allowed(permission_request.add_tag(tag_id)):
-                return wa.ProblemResponse(status_code=403, title='Not allowed to add tag to identity', detail=tag_id)
-        for tag_id in deleted_tag_ids:
-            if not verifier.is_allowed(permission_request.del_tag(tag_id)):
-                return wa.ProblemResponse(status_code=403, title='Not allowed to delete tag from identity', detail=tag_id)
-        update_params['added_tag_id_list'] = list(added_tag_ids)
-        update_params['deleted_tag_id_list'] = list(deleted_tag_ids)
+        # 1. We need to have native add and del operations because we have an identity:add-tag
+        #    permission. If we did not have add and del operations, the client would need to be
+        #    able to read the identity before it is able to add tag so, implicitely using the
+        #    the add-tag permission would also require using the read permission. We want to make
+        #    sure permissions DO NOT DEPEND UPON EACH OTHER
+        # 2. I am fully aware that this operation data structure looks a lot like
+        #    application/json-patch+json. I decided against bringing in the entire json-patch+json
+        #    stuff because this is really a one-off. If we decide to have more operations with
+        #    fine-grained set/add/delete, we should reconsider more generally the use of json-patch+json
+        new_tag_ids = set(identity.tag_id_list)
+        for operation in data['tags']:
+            match operation['type']:
+                case 'set':
+                    new_tag_ids = set(_read_tag_id_list(operation['tags']))
+                    _, _ =_check_set_tags(verifier, permission_request, identity.tag_id_list, new_tag_ids)
+                case 'add':
+                    add_tag_ids = _read_tag_id_list(operation['values'])
+                    _check_add_tags(verifier, permission_request, add_tag_ids)
+                    new_tag_ids = new_tag_ids.union(set(add_tag_ids))
+                case 'del':
+                    del_tag_ids = _read_tag_id_list(operation['values'])
+                    _check_del_tags(verifier, permission_request, del_tag_ids)
+                    new_tag_ids = new_tag_ids.difference(set(del_tag_ids))
+
+        # No, you are not hallucinating, we are checking permissions here
+        # even though we did it above. We do this in both locations to catch
+        # weird corner cases. For example, if the user wants to delete a tag that
+        # is not here and for which the user does not have permission, 
+        # we need to check it above to catch it.
+        added_tag_id_list, deleted_tag_id_list = _check_set_tags(verifier, permission_request, identity.tag_id_list, new_tag_ids)
+        update_params['added_tag_id_list'] = added_tag_id_list
+        update_params['deleted_tag_id_list'] = deleted_tag_id_list
 
     model.identity.update(id=request.path_params.identity_id, **update_params)
     identity = model.identity.read_one(id=request.path_params.identity_id)
+    print(model.identity.serialize_one(identity))
 
     return wa.JSONResponse(
         status_code=200,
