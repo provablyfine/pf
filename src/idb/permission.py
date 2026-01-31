@@ -138,10 +138,10 @@ class IdentityChecker:
         return Checker(self._object_checker, ActionChecker('delete'))
 
     def add_tag(self, tag_id: int) -> Checker:
-        return Checker(self._object_checker, ActionChecker('add-tag', id=tag_id))
+        return Checker(self._object_checker, ActionChecker('add-tag', tag_id=tag_id))
 
     def del_tag(self, tag_id: int) -> Checker:
-        return Checker(self._object_checker, ActionChecker('del-tag', id=tag_id))
+        return Checker(self._object_checker, ActionChecker('del-tag', tag_id=tag_id))
 
     def invite(self, delivery: str) -> Checker:
         return Checker(self._object_checker, ActionChecker('invite', delivery=delivery))

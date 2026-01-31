@@ -7,12 +7,12 @@ from ..context import ctx
 from .. import wa
 
 FieldConverter = collections.namedtuple('FieldConverter', ['to_name', 'convert'])
-ObjectConverter = collections.namedtuple('ObjectConverter', ['object_fields', 'action_fields'])
+ObjectConverter = collections.namedtuple('ObjectConverter', ['object_fields', 'actions'])
 
 
 class Converter:
     def __init__(self):
-        self._by_object = collections.defaultdict(lambda: ObjectConverter(object_fields={}, action_fields={}))
+        self._by_object = collections.defaultdict(lambda: ObjectConverter(object_fields={}, actions=collections.defaultdict(lambda: {})))
         self._data_by_convert_and_key = {}
     
     def _convert(self, convert, convert_key):
@@ -28,8 +28,8 @@ class Converter:
         self._by_object[object].object_fields[from_name] = FieldConverter(to_name, convert)
         return self
 
-    def add_action_field(self, object: str, from_name: str, to_name: str, convert):
-        self._by_object[object].action_fields[from_name] = FieldConverter(to_name, convert)
+    def add_action_field(self, object: str, action: str, from_name: str, to_name: str, convert):
+        self._by_object[object].actions[action][from_name] = FieldConverter(to_name, convert)
         return self
 
     def convert(self, permission: Grant) -> Grant:
@@ -50,7 +50,7 @@ class Converter:
 
         object_converter = self._by_object[permission.object]
         object_fields = convert_fields(permission.object_fields, object_converter.object_fields)
-        action_fields = convert_fields(permission.action_fields, object_converter.action_fields)
+        action_fields = convert_fields(permission.action_fields, object_converter.actions[permission.action])
         return Grant.create(
             object=permission.object,
             action=permission.action,
@@ -94,6 +94,8 @@ def to_client() -> Converter:
         .add_object_field(object='identity', from_name='id', to_name='name', convert=_identity_id_to_name)
         .add_object_field(object='identity', from_name='tag_id', to_name='tag', convert=_tag_id_to_name)
         .add_object_field(object='identity', from_name='boundary_id', to_name='boundary', convert=_boundary_id_to_name)
+        .add_action_field(object='identity', action='add-tag', from_name='tag_id', to_name='tag', convert=_tag_id_to_name)
+        .add_action_field(object='identity', action='del-tag', from_name='tag_id', to_name='tag', convert=_tag_id_to_name)
     )
     return converter
 
@@ -137,6 +139,8 @@ def from_client() -> Converter:
         .add_object_field(object='identity', from_name='name', to_name='id', convert=_identity_name_to_id)
         .add_object_field(object='identity', from_name='tag', to_name='tag_id', convert=_tag_name_to_id)
         .add_object_field(object='identity', from_name='boundary', to_name='boundary_id', convert=_boundary_name_to_id)
+        .add_action_field(object='identity', action='add-tag', from_name='tag', to_name='tag_id', convert=_tag_name_to_id)
+        .add_action_field(object='identity', action='del-tag', from_name='tag', to_name='tag_id', convert=_tag_name_to_id)
     )
     return converter
 

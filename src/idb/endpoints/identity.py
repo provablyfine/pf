@@ -1,5 +1,7 @@
 from __future__ import annotations
 import json
+import logging
+
 import sqlalchemy
 
 from .. import signature
@@ -8,6 +10,8 @@ from .. import permission
 from .. import model
 from ..context import ctx
 
+
+logger = logging.getLogger(__name__)
 
 @signature.verify_session
 def list_endpoint(request: wa.Request) -> wa.Response:
