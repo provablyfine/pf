@@ -55,3 +55,41 @@ Check that permission "{{permission}}" is actually enforcing access control
   $ TAG_ID=$(idbctl admin tag list -n env -v prod -q)
   $ idbctl admin tag delete -i $TAG_ID
 {% endfor %}
+
+{% for permission in [
+  "tag:*:*:*",
+  "tag:delete:*:*",
+]
+%}
+Check that permission "{{permission}}" is actually enforcing access control
+  $ idbctl admin tag create -n env -v prod
+  $ TAG_ID=$(idbctl admin tag list -n env -v prod -q)
+  $ idbctl -c user1.json admin tag delete -i $TAG_ID
+  Unable to delete tag. Not allowed to delete tag
+  [2]
+  $ idbctl admin role permission -i $ROLE_ID -a {{permission}}
+  $ idbctl -c user1.json admin tag delete -i $TAG_ID
+  $ idbctl admin role permission -i $ROLE_ID -d {{permission}}
+{% endfor %}
+
+{% for permission in [
+  "tag:*:name/env=prod:*",
+  "tag:delete:name/env=prod:*",
+]
+%}
+Check that permission "{{permission}}" is actually enforcing access control
+  $ idbctl admin tag create -n env -v prod
+  $ TAG_ID=$(idbctl admin tag list -n env -v prod -q)
+  $ idbctl -c user1.json admin tag delete -i $TAG_ID
+  Unable to delete tag. Not allowed to delete tag
+  [2]
+  $ idbctl admin role permission -i $ROLE_ID -a {{permission}}
+  $ idbctl -c user1.json admin tag delete -i $TAG_ID
+  $ idbctl admin role read -i $ROLE_ID
+  id           2
+  name         role
+  description
+  permission   invalid:invalid:*:*
+  member       user1
+  $ idbctl admin role permission -i $ROLE_ID -d invalid:invalid:*:*
+{% endfor %}
