@@ -15,7 +15,7 @@ def _roles(auth, id=None, name=None):
         params['name'] = name
     response = auth.get(auth.directory.role, params=params)
     if response.status_code != 200:
-        raise exceptions.UI(f'Unable to find role {",".join("=".join(kv) for kv in params.items())}')
+        raise exceptions.UI(f'Unable to find role {",".join(f'{k}={v}' for k, v in params.items())}')
     roles = response.json()['roles']
     return roles
 
