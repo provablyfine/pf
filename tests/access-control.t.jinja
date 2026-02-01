@@ -141,11 +141,15 @@ Check that permission "{{permission}}" is actually enforcing access control
 
 {% for permission in [
   "identity:*:*:*",
+  "identity:*:tag/id=person:*",
+  "identity:*:boundary/boundary:*",
+  "identity:*:boundary/boundary&tag/id=person:*",
   "identity:create:*:*",
+  "identity:create:tag/id=person:*",
+  "identity:create:boundary/boundary:*",
 ]
 %}
 Check that permission "{{permission}}" is actually enforcing access control
-  $ idbctl admin identity tag -i $USER2_ID -a $PERSON_ID
   $ idbctl -c user1.json admin identity create -n user4 -b boundary -t $PERSON_ID
   Unable to create identity. Not allowed to create identity
   [2]
