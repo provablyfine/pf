@@ -4,6 +4,7 @@ TESTS := \
  tags.t \
  boundaries.t \
  roles.t \
+ identity.t \
  permission.t \
  access-control.t \
  $(NULL)

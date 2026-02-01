@@ -67,7 +67,6 @@ def _read_boundary_ids(boundaries) -> list[int]:
     return boundary_id_list
 
 
-
 def _read_tag_ids(tags) -> list[int]:
     tag_id_list = []
     for tag in tags:
@@ -104,13 +103,16 @@ def create_endpoint(request: wa.Request) -> wa.Response:
     if not verifier.is_allowed(permission_request):
         return wa.ProblemResponse(status_code=403, title='Not allowed to create identity')
 
+    identity = model.identity.read_one(id=ctx.identity_id)
     # The line of code below is CRITICAL to our security model.
     # It ensures that identities cannot escape the boundaries that apply to them
     # by creating a new identity with a smaller boundary. The boundaries
     # of newly-created identities are always a superset of the boundaries
     # that apply to the identity that is creating an identity.
-    identity = model.identity.read_one(id=ctx.identity_id)
     identity_boundary_ids = identity.boundary_id_list + additional_boundary_ids
+    if len(set(identity_boundary_ids)) != len(identity_boundary_ids):
+        logger.info('Some boundaries are specified twice, once in the parent boundary and once in the user-requested boundaries')
+        return wa.ProblemResponse(status_code=400, title='Request contains invalid fields')
     try:
         identity_id = model.identity.create(name=data['name'], boundary_id_list=identity_boundary_ids, tag_id_list=tag_ids)
     except sqlalchemy.exc.IntegrityError:
