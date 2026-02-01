@@ -53,9 +53,9 @@ def is_equal(a: dict, b: dict):
         return False
     if a['action'] != b['action']:
         return False
-    if sorted(a['object_fields']) != sorted(b['object_fields']):
+    if a['object_fields'] != b['object_fields']:
         return False
-    if sorted(a['action_fields']) != sorted(b['action_fields']):
+    if a['action_fields'] != b['action_fields']:
         return False
     return True
 
