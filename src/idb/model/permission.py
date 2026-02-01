@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import logging
 import dataclasses
 import collections
 
 from ..context import ctx
 from .. import wa
+
+
+logger = logging.getLogger(__name__)
+
 
 FieldConverter = collections.namedtuple('FieldConverter', ['to_name', 'convert'])
 ObjectConverter = collections.namedtuple('ObjectConverter', ['object_fields', 'actions'])
@@ -59,6 +64,7 @@ class Converter:
         )
 
 def _500(title, detail):
+    logger.error(f'Unable to process permission. {title} {detail}')
     return wa.HTTPException(wa.ProblemResponse(status_code=500, title=f'Permission field invalid. {title}', detail=detail))
 
 def to_client() -> Converter:
