@@ -183,7 +183,6 @@ Check that permission "{{permission}}" is actually enforcing access control
   $ idbctl admin role permission -i $ROLE_ID -d '{{permission}}'
 {% endfor %}
 
-
 {% for permission in [
   "identity:*:name/user4:*",
   "identity:delete:name/user4:*",
@@ -205,4 +204,26 @@ and becomes invalid after the identity is deleted
   permission   invalid:invalid:*:*
   member       user1
   $ idbctl admin role permission -i $ROLE_ID -d invalid:invalid:*:*
+{% endfor %}
+
+Create temporary user for tests below
+  $ idbctl admin identity create -n user4 -b boundary -t $PERSON_ID
+  $ USER4_ID=$(idbctl admin identity list -n user4 -q)
+
+{% for permission in [
+  "identity:*:*:*",
+  "identity:*:name/user4:*",
+  "identity:*:tag/id=person:*",
+  "identity:*:boundary/boundary:*",
+  "identity:*:boundary/boundary&tag/id=person:*",
+]
+%}
+Check that permission "{{permission}}" is actually enforcing access control
+  $ idbctl -c user1.json admin identity invite -i $USER4_ID --manual
+  Unable to invite identity. Not allowed to invite identity
+  [2]
+  $ idbctl admin role permission -i $ROLE_ID -a '{{permission}}'
+  $ idbctl -c user1.json admin identity invite -i $USER4_ID --manual
+  [A-Za-z0-9_-]+ (re)
+  $ idbctl admin role permission -i $ROLE_ID -d '{{permission}}'
 {% endfor %}
