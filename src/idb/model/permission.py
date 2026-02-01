@@ -146,7 +146,7 @@ def from_client() -> Converter:
 
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, order=True)
 class Field:
     name: str
     value: int | str
