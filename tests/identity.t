@@ -48,8 +48,6 @@ We can add and remove tags from identities
   boundary  root
   boundary  boundary1
   $ idbctl admin identity tag -i $USER2_ID -a env=prod
-  [2]
-
 
 And yes, we can delete an identity
   $ idbctl admin identity delete -i $USER2_ID

@@ -228,7 +228,7 @@ def update_endpoint(request: wa.Request) -> wa.Response:
         # No, you are not hallucinating, we are checking permissions here
         # even though we did it above. We do this in both locations to catch
         # weird corner cases. For example, if the user wants to delete a tag that
-        # is not here and for which the user does not have permission, 
+        # is not here and for which the user does not have permission to delete,
         # we need to check it above to catch it.
         added_tag_id_list, deleted_tag_id_list = _check_set_tags(verifier, permission_request, identity.tag_id_list, new_tag_ids)
         update_params['added_tag_id_list'] = added_tag_id_list
