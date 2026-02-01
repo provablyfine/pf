@@ -2,6 +2,9 @@ Initialize server and login
   $ bash $TESTDIR/fixture.sh
   $ ROOT_ID=$(idbctl admin identity list -n root -q)
 
+Create Boundary
+  $ idbctl admin boundary create -n boundary
+
 Create tag
   $ idbctl admin tag create -n id -v person
   $ idbctl admin tag create -n id -v device
@@ -134,4 +137,21 @@ Check that permission "{{permission}}" is actually enforcing access control
   $ idbctl admin role permission -i $ROLE_ID -a '{{permission}}'
   $ idbctl -c user1.json admin identity tag -i $USER2_ID -d $PERSON_ID
   $ idbctl admin role permission -i $ROLE_ID -d '{{permission}}'
+{% endfor %}
+
+{% for permission in [
+  "identity:*:*:*",
+  "identity:create:*:*",
+]
+%}
+Check that permission "{{permission}}" is actually enforcing access control
+  $ idbctl admin identity tag -i $USER2_ID -a $PERSON_ID
+  $ idbctl -c user1.json admin identity create -n user4 -b boundary -t $PERSON_ID
+  Unable to create identity. Not allowed to create identity
+  [2]
+  $ idbctl admin role permission -i $ROLE_ID -a '{{permission}}'
+  $ idbctl -c user1.json admin identity create -n user4 -b boundary -t id=person
+  $ idbctl admin role permission -i $ROLE_ID -d '{{permission}}'
+  $ USER4_ID=$(idbctl admin identity list -n user4 -q)
+  $ idbctl admin identity delete -i $USER4_ID
 {% endfor %}
