@@ -216,6 +216,16 @@ Create temporary user for tests below
   "identity:*:tag/id=person:*",
   "identity:*:boundary/boundary:*",
   "identity:*:boundary/boundary&tag/id=person:*",
+  "identity:invite:*:*",
+  "identity:invite:name/user4:*",
+  "identity:invite:tag/id=person:*",
+  "identity:invite:boundary/boundary:*",
+  "identity:invite:boundary/boundary&tag/id=person:*",
+  "identity:invite:*:delivery/manual",
+  "identity:invite:name/user4:delivery/manual",
+  "identity:invite:tag/id=person:delivery/manual",
+  "identity:invite:boundary/boundary:delivery/manual",
+  "identity:invite:boundary/boundary&tag/id=person:delivery/manual",
 ]
 %}
 Check that permission "{{permission}}" is actually enforcing access control
