@@ -1,2 +1,3 @@
 access-control.t
+access-control-tag.t
 *.t.err

@@ -7,6 +7,7 @@ TESTS := \
  identity.t \
  permission.t \
  access-control.t \
+ access-control-tag.t \
  $(NULL)
 
 DOCS := \

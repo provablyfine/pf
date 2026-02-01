@@ -1,0 +1,41 @@
+Initialize server and login
+  $ bash $TESTDIR/fixture.sh
+  $ ROOT_ID=$(idbctl admin identity list -n root -q)
+
+Create role
+  $ idbctl admin role create -n role
+  $ ROLE_ID=$(idbctl admin role list -n role -q)
+
+Create identity user1
+  $ idbctl admin identity create -n user1
+  $ USER1_ID=$(idbctl admin identity list -n user1 -q)
+  $ INVITATION=$(idbctl admin identity invite -i $USER1_ID --manual)
+
+Add identity to role
+  $ idbctl admin role member -i $ROLE_ID -a user1
+
+New user accepts invitation and logs in
+  $ DIRECTORY_URL=http://127.0.0.1:$SERVER_PORT/idb/directory
+  $ idbctl -c user1.json config --directory $DIRECTORY_URL
+  $ ssh-keygen -t ed25519 -f user1 -N "" > /dev/null
+  $ idbctl -c user1.json accept --invitation $INVITATION --key user1
+  $ ssh-keygen -t ed25519 -f user1-session -N "" > /dev/null
+  $ idbctl -c user1.json login --session-key user1-session
+
+Create a tag for testing
+  $ idbctl admin tag create -n env -v dev
+
+{% for permission in [
+  "tag:*:*:*",
+  "tag:*:name/env=dev:*",
+  "tag:read:*:*",
+  "tag:read:name/env=dev:*",
+]
+%}
+Check that permission "{{permission}}" is actually enforcing access control
+  $ idbctl -c user1.json admin tag list -q
+  $ idbctl admin role permission -i $ROLE_ID -a {{permission}}
+  $ idbctl -c user1.json admin tag list -q
+  1
+  $ idbctl admin role permission -i $ROLE_ID -d {{permission}}
+{% endfor %}
