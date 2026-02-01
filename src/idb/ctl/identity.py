@@ -37,6 +37,25 @@ def _identity(args, auth):
     return identities[0]
 
 
+def _tag(tag: str):
+    if tag.isdigit():
+        return {'id': int(tag)}
+    else:
+        equal = tag.find('=')
+        if equal == -1:
+            raise exceptions.UI(f'Tag format is name=value, not {tag}')
+        name = tag[:equal]
+        value = tag[equal+1:]
+        return {'name': name, 'value': value}
+
+
+def _boundary(s: str):
+    if s.isdigit():
+        return {'id': int(s)}
+    else:
+        return {'name': s}
+
+
 def _identity_list_function(args):
     c = config.Config.load(args.config)
     idb = client.Client(c)
@@ -94,15 +113,12 @@ def _identity_create_function(args):
     c = config.Config.load(args.config)
     idb = client.Client(c)
     auth = idb.session_auth(c.session_key)
-    def boundary(s: str):
-        if s.isdigit():
-            return {'id': int(s)}
-        else:
-            return {'name': s}
-    boundaries = [boundary(s) for s in args.boundary]
+    boundaries = [_boundary(s) for s in args.boundary]
+    tags = [_tag(t) for t in args.tag]
     response = auth.post(idb.directory.identity, json={
         'name': args.name,
-        'boundaries': boundaries
+        'boundaries': boundaries,
+        'tags': tags,
     })
     if response.status_code != 201:
         raise exceptions.UI(f'Unable to create identity. {response.json()["title"]}')
@@ -146,17 +162,6 @@ class TagAction(argparse.Action):
 
 def _identity_tag_function(args):
 
-    def _tag(tag: str):
-        if tag.isdigit():
-            return {'id': int(tag)}
-        else:
-            equal = tag.find('=')
-            if equal == -1:
-                raise exceptions.UI(f'Tag format is name=value, not {tag}')
-            name = tag[:equal]
-            value = tag[equal+1:]
-            return {'name': name, 'value': value}
-
     c = config.Config.load(args.config)
     idb = client.Client(c)
     auth = idb.session_auth(c.session_key)
@@ -194,7 +199,8 @@ def add_subparser(parser):
 
     create_parser = subparsers.add_parser('create', help='Create a new identity')
     create_parser.add_argument('-n', '--name', type=str, help='Name of identity. Must be globally unique.')
-    create_parser.add_argument('-b', '--boundary', help='Boundary to enforce on newly-created user', nargs='*', default=[])
+    create_parser.add_argument('-b', '--boundary', help='Boundary to enforce on newly-created identity', nargs='*', default=[])
+    create_parser.add_argument('-t', '--tag', help='Tag to apply on the newly-created identity', nargs='*', default=[])
     create_parser.set_defaults(func=_identity_create_function)
 
     invite_parser = subparsers.add_parser('invite', help='Invite an identity')
