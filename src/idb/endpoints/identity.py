@@ -50,6 +50,7 @@ def _read_boundary_ids(boundaries) -> list[int]:
         if 'id' in boundary:
             db_boundary = ctx.db.boundary.read_one(id=boundary['id'])
             if db_boundary is None:
+                logger.info(f'No boundary found for id={boundary["id"]}')
                 raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Request contains invalid fields'))
             boundary_id_list.append(boundary['id'])
         else:
@@ -57,9 +58,11 @@ def _read_boundary_ids(boundaries) -> list[int]:
                 raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Boundary is missing a name', detail=str(boundary)))
             db_boundary = ctx.db.boundary.read_one(name=boundary['name'])
             if db_boundary is None:
+                logger.info(f'No boundary found for name={boundary["name"]}')
                 raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Request contains invalid fields'))
             boundary_id_list.append(db_boundary.id)
     if len(set(boundary_id_list)) != len(boundary_id_list):
+        logger.info('Some boundaries are specified twice')
         raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Request contains invalid fields'))
     return boundary_id_list
 
@@ -71,16 +74,20 @@ def _read_tag_ids(tags) -> list[int]:
         if 'id' in tag:
             db_tag = ctx.db.tag.read_one(id=tag['id'])
             if db_tag is None:
+                logger.info(f'No tag found for id={tag["id"]}')
                 raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Request contains invalid fields'))
             tag_id_list.append(tag['id'])
         else:
             if 'name' not in tag or 'value' not in tag:
+                logger.info(f'Tag structure invalid: missing name or value')
                 raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Tag is missing a name or value', detail=str(tag)))
             db_tag = ctx.db.tag.read_one(name=tag['name'], value=tag['value'])
             if db_tag is None:
+                logger.info(f'No tag found for {tag["name"]}={tag["value"]}')
                 raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Request contains invalid fields'))
             tag_id_list.append(db_tag.id)
     if len(set(tag_id_list)) != len(tag_id_list):
+        logger.info('Some tags are specified twice')
         raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Request contains invalid fields'))
     return tag_id_list
 
@@ -107,7 +114,7 @@ def create_endpoint(request: wa.Request) -> wa.Response:
     try:
         identity_id = model.identity.create(name=data['name'], boundary_id_list=identity_boundary_ids, tag_id_list=tag_ids)
     except sqlalchemy.exc.IntegrityError:
-        return wa.ProblemResponse(status_code=400, title='Boundary already exists. Name must be unique.', detail=data['name'])
+        return wa.ProblemResponse(status_code=400, title='Identity already exists. Name must be unique.', detail=data['name'])
 
     identity = model.identity.read_one(id=identity_id)
     return wa.JSONResponse(
@@ -227,7 +234,6 @@ def update_endpoint(request: wa.Request) -> wa.Response:
 
     model.identity.update(id=request.path_params.identity_id, **update_params)
     identity = model.identity.read_one(id=request.path_params.identity_id)
-    print(model.identity.serialize_one(identity))
 
     return wa.JSONResponse(
         status_code=200,
