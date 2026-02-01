@@ -131,7 +131,7 @@ def main():
         args.func(args)
         exitcode = 0
     except exceptions.UI as e:
-        print(e)
+        sys.stderr.write(f'{str(e)}\n')
         exitcode = 2
     except:
         traceback.print_exc()
