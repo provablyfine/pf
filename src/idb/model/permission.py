@@ -14,6 +14,9 @@ logger = logging.getLogger(__name__)
 FieldConverter = collections.namedtuple('FieldConverter', ['to_name', 'convert'])
 ObjectConverter = collections.namedtuple('ObjectConverter', ['object_fields', 'actions'])
 
+class InvalidPermission(BaseException):
+    pass
+
 
 class Converter:
     def __init__(self):
@@ -54,8 +57,11 @@ class Converter:
             return output_fields
 
         object_converter = self._by_object[permission.object]
-        object_fields = convert_fields(permission.object_fields, object_converter.object_fields)
-        action_fields = convert_fields(permission.action_fields, object_converter.actions[permission.action])
+        try:
+            object_fields = convert_fields(permission.object_fields, object_converter.object_fields)
+            action_fields = convert_fields(permission.action_fields, object_converter.actions[permission.action])
+        except InvalidPermission:
+            return Grant.create(object='invalid', action='invalid', object_fields=[], action_fields=[])
         return Grant.create(
             object=permission.object,
             action=permission.action,
@@ -63,34 +69,35 @@ class Converter:
             action_fields=action_fields,
         )
 
-def _500(title, detail):
-    logger.error(f'Unable to process permission. {title} {detail}')
-    return wa.HTTPException(wa.ProblemResponse(status_code=500, title=f'Permission field invalid. {title}', detail=detail))
 
 def to_client() -> Converter:
     def _tag_id_to_name(tag_id):
         tag = ctx.db.tag.read_one(id=tag_id)
         if tag is None:
-            raise _500('Tag cannot be found', detail=tag_id)
+            logger.error(f'Tag cannot be found: tag_id={tag_id}')
+            raise InvalidPermission()
         return f'{tag.name}={tag.value}'
 
     def _identity_id_to_name(identity_id):
         identity = ctx.db.identity.read_one(id=identity_id)
         if identity is None:
-            raise _500('Identity cannot be found', detail=identity_id)
+            logger.error(f'Identity cannot be found: identity_id={identity_id}')
+            raise InvalidPermission()
         return identity.name
 
     def _role_id_to_name(role_id):
         assert role_id is not None
         role = ctx.db.role.read_one(id=role_id)
         if role is None:
-            raise _500('Role cannot be found', detail=role_id)
+            logger.error(f'Role cannot be found: role_id={role_id}')
+            raise InvalidPermission()
         return role.name
 
     def _boundary_id_to_name(boundary_id):
         boundary = ctx.db.boundary.read_one(id=boundary_id)
         if boundary is None:
-            raise _500('Boundary cannot be found', detail=boundary_id)
+            logger.error(f'Boundary cannot be found: boundary_id={boundary_id}')
+            raise InvalidPermission()
         return boundary.name
 
     converter = (Converter()

@@ -439,8 +439,29 @@ components:
             - $ref: '#/components/schemas/IdentitySshExecAction'
             - $ref: '#/components/schemas/IdentitySshForwardAction'
 
+    InvalidPermission:
+      type: object
+      properties:
+        object:
+          type: string
+          enum: ['invalid']
+        action:
+          type: string
+          enum: ['invalid']
+        object_fields:
+          type: array
+          maxItems: 0
+          items:
+            type: integer
+        action_fields:
+          type: array
+          maxItems: 0
+          items:
+            type: integer
+
     Permission:
       oneOf:
+        - $ref: '#/components/schemas/InvalidPermission'
         - $ref: '#/components/schemas/BoundaryPermission'
         - $ref: '#/components/schemas/TagPermission'
         - $ref: '#/components/schemas/RolePermission'
