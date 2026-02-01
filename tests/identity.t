@@ -38,6 +38,18 @@ Create a new identity to be able to update and delete it
   boundary  boundary1
   $ idbctl admin identity invite -i $USER2_ID --manual
   [A-Za-z0-9_-]+ (re)
+
+We can add and remove tags from identities
+  $ idbctl admin identity tag -i $USER2_ID -a env=prod -d env=dev
+  $ idbctl admin identity read -i $USER2_ID
+  id        2
+  name      hello
+  tag       env=prod
+  boundary  root
+  boundary  boundary1
+  $ idbctl admin identity tag -i $USER2_ID -a env=prod
+  [2]
+
+
+And yes, we can delete an identity
   $ idbctl admin identity delete -i $USER2_ID
-
-
