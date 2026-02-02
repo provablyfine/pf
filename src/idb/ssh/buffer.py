@@ -4,9 +4,25 @@ class Reader:
         self._buffer = buffer
         self._current = 0
 
+    def __len__(self):
+        return len(self._buffer)
+
+    @property
+    def offset(self) -> int:
+        return self._current
+
+    @property
+    def has_left(self) -> bool:
+        return self._current < len(self._buffer)
+
     def read_uint32(self) -> int:
         value = int.from_bytes(self._buffer[self._current:self._current+4], byteorder='big')
         self._current += 4
+        return value
+
+    def read_uint64(self) -> int:
+        value = int.from_bytes(self._buffer[self._current:self._current+8], byteorder='big')
+        self._current += 8
         return value
 
     def read_string(self) -> bytes:
