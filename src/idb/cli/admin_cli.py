@@ -1,10 +1,10 @@
 from . import config
 from . import exceptions
 from . import client
-from . import boundary
-from . import tag
-from . import role
-from . import identity
+from . import boundary_cli
+from . import tag_cli
+from . import role_cli
+from . import identity_cli
 
 
 def _initialize_function(args):
@@ -26,13 +26,13 @@ def add_subparsers(parser):
     initialize_parser.set_defaults(func=_initialize_function)
 
     boundary_parser = subparsers.add_parser('boundary', help='View and edit boundaries')
-    boundary.add_subparser(boundary_parser)
+    boundary_cli.add_subparser(boundary_parser)
 
     tag_parser = subparsers.add_parser('tag', help='View and edit tags')
-    tag.add_subparser(tag_parser)
+    tag_cli.add_subparser(tag_parser)
 
     role_parser = subparsers.add_parser('role', help='View and edit roles')
-    role.add_subparser(role_parser)
+    role_cli.add_subparser(role_parser)
 
     identity_parser = subparsers.add_parser('identity', help='View and edit identities')
-    identity.add_subparser(identity_parser)
+    identity_cli.add_subparser(identity_parser)

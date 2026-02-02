@@ -1,17 +1,9 @@
 import tabulate
 
 from . import exceptions
+from . import ssh_utils
 from .. import ssh
 from .. import jwk
-
-
-def ssh_exception(f):
-    def wrapper(*args, **kwargs):
-        try:
-            return f(*args, **kwargs)
-        except ssh.exceptions.Error as e:
-            raise exceptions.UI(str(e))
-    return wrapper
 
 
 def _sign_host_key_function(args):
@@ -33,7 +25,7 @@ def _download_user_signing_key_function(args):
 def _list_remotes_function(args):
     pass
 
-@ssh_exception
+@ssh_utils.exception
 def _agent_list_identities_function(args):
     ssh_agent = ssh.agent.Client()
     rows = []
@@ -54,7 +46,7 @@ def _agent_find_by_fingerprint(ssh_agent, fingerprint):
     raise exceptions.UI(f'Unable to find key {fingerprint}')
 
 
-@ssh_exception
+@ssh_utils.exception
 def _agent_sign_function(args):
     ssh_agent = ssh.agent.Client()
     identity = _agent_find_by_fingerprint(ssh_agent, args.fingerprint)
@@ -73,7 +65,7 @@ def _agent_sign_function(args):
     print(signature)
 
 
-@ssh_exception
+@ssh_utils.exception
 def _agent_add_function(args):
     ssh_agent = ssh.agent.Client()
     with open(args.filename, 'rb') as f:
@@ -82,7 +74,7 @@ def _agent_add_function(args):
     ssh_agent.add(key.to_ssh_bytes(), comment=args.comment, lifetime=args.lifetime, require_confirmation=args.require_confirmation)
 
 
-@ssh_exception
+@ssh_utils.exception
 def _agent_del_function(args):
     ssh_agent = ssh.agent.Client()
     if args.all:

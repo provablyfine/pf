@@ -11,11 +11,12 @@ import requests.auth
 
 from .. import jwk
 from .. import ssh
-from . import exceptions
-from . import admin
 from . import config
 from . import client
-from . import ssh_commands
+from . import exceptions
+from . import ssh_utils
+from . import admin_cli
+from . import ssh_cli
 
 
 logger = logging.getLogger(__name__)
@@ -48,7 +49,7 @@ def _accept_function(args):
     c.save(args.config)
 
 
-@ssh_commands.ssh_exception
+@ssh_utils.exception
 def _login_function(args):
     c = config.Config.load(args.config)
     idb = client.Client(c)
@@ -110,10 +111,10 @@ def main():
     ping_parser.set_defaults(func=_ping_function)
 
     admin_parser = subparsers.add_parser('admin', help='Admin-related functions')
-    admin.add_subparsers(admin_parser)
+    admin_cli.add_subparsers(admin_parser)
 
     ssh_parser = subparsers.add_parser('ssh', help='SSH-related functions')
-    ssh_commands.add_subparsers(ssh_parser)
+    ssh_cli.add_subparsers(ssh_parser)
 
     args = parser.parse_args()
 

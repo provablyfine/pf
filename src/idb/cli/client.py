@@ -9,7 +9,7 @@ import requests
 import http_message_signatures
 
 from . import exceptions
-from . import ssh_commands
+from . import ssh_utils
 from .. import ssh
 from .. import base64url
 from .. import jwk
@@ -125,7 +125,7 @@ def create_algorithm_class(agent: ssh.agent.Client, key: jwk.Public):
     return Type
 
 
-@ssh_commands.ssh_exception
+@ssh_utils.exception
 def private_key_signer(prefix: str, filename: str):
     if filename is None:
         raise exceptions.UI('Did you forget to login ?')

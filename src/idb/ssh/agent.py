@@ -36,11 +36,11 @@ class Client:
         sock.connect(path)
         self._sock = sock
 
-    def _send_request(self, type, buffer):
+    def _send_request(self, type, data):
         request = buffer.Writer()
-        request.write_uint32(len(buffer)+1)
+        request.write_uint32(len(data)+1)
         request.write_byte(type)
-        request.write_bytes(buffer)
+        request.write_bytes(data)
         written = self._sock.send(request.to_bytes())
         assert written == len(request)
 
@@ -48,11 +48,11 @@ class Client:
         remaining = n
         data = []
         while remaining > 0:
-            buffer = self._sock.recv(remaining)
-            if len(buffer) == 0:
+            partial = self._sock.recv(remaining)
+            if len(partial) == 0:
                 raise Exception('fuck')
-            remaining -= len(buffer)
-            data.append(buffer)
+            remaining -= len(partial)
+            data.append(partial)
         return b''.join(data)
 
     def _recv_message(self):
@@ -66,11 +66,11 @@ class Client:
         rx = self._recv_message()
         assert rx.type == Client.SSH_AGENT_IDENTITIES_ANSWER
         assert len(rx.contents) >= 4
-        buffer = buffer.Reader(rx.contents)
-        nkeys = buffer.read_uint32()
+        response = buffer.Reader(rx.contents)
+        nkeys = response.read_uint32()
         for _ in range(nkeys):
-            key = buffer.read_string()
-            comment = buffer.read_string()
+            key = response.read_string()
+            comment = response.read_string()
             yield Client.Identity(public_key=key, comment=comment)
 
     def sign(self, public_key: bytes, data: bytes, flags: int) -> bytes:

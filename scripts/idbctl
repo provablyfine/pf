@@ -10,7 +10,7 @@
 # [tool.uv.sources]
 # idb = { path = "../", editable = true }
 # ///
-import idb.cli.main
+import idb.cli.main_cli
 
 if __name__ == '__main__':
-    idb.cli.main.main()
+    idb.cli.main_cli.main()
