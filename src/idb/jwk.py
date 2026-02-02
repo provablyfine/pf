@@ -6,7 +6,7 @@ import secrets
 import base64
 
 from . import base64url
-from . import ssh_buffer
+from . import ssh
 
 import cryptography.hazmat.primitives.asymmetric.ed25519
 import cryptography.hazmat.primitives.asymmetric.ec
@@ -183,7 +183,7 @@ class Public:
 
     @classmethod
     def from_ssh_bytes(klass, data: bytes) -> Public:
-        reader = ssh_buffer.Reader(data)
+        reader = ssh.buffer.Reader(data)
         key_type = reader.read_string()
         match key_type:
             case b'ssh-ed25519':
@@ -224,7 +224,7 @@ class Public:
                 return Public(crypto_key)
 
     def to_ssh_bytes(self) -> bytes:
-        writer = ssh_buffer.Writer()
+        writer = ssh.buffer.Writer()
         match self._key:
             case cryptography.hazmat.primitives.asymmetric.ed25519.Ed25519PublicKey():
                 # RFC 8709 Section 4
@@ -387,7 +387,7 @@ class Private:
         return Private(key)
 
     def to_ssh_bytes(self) -> bytes:
-        writer = ssh_buffer.Writer()
+        writer = ssh.buffer.Writer()
         match self._key:
             case cryptography.hazmat.primitives.asymmetric.ed25519.Ed25519PrivateKey():
                 # https://datatracker.ietf.org/doc/html/draft-miller-ssh-agent#name-eddsa-keys

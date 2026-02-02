@@ -9,7 +9,8 @@ import requests
 import http_message_signatures
 
 from . import exceptions
-from . import ssh_agent
+from . import ssh_commands
+from .. import ssh
 from .. import base64url
 from .. import jwk
 
@@ -101,7 +102,7 @@ def hmac_signer(prefix: str, key: str):
     return Signer(prefix, key, signer)
 
 
-def create_algorithm_class(ssh: ssh_agent.Client, key: jwk.Public):
+def create_algorithm_class(agent: ssh.agent.Client, key: jwk.Public):
     match key.type:
         case jwk.KeyType.ED25519:
             algorithm_id = 'ed25519'
@@ -110,7 +111,7 @@ def create_algorithm_class(ssh: ssh_agent.Client, key: jwk.Public):
     def custom_init(self, *args, **kwargs):
         pass
     def custom_sign(self, message):
-        return ssh.sign(key.to_ssh_bytes(), message, 0)
+        return agent.sign(key.to_ssh_bytes(), message, 0)
 
     Type = type(
         'CustomSshAgentAlgorithm',
@@ -124,6 +125,7 @@ def create_algorithm_class(ssh: ssh_agent.Client, key: jwk.Public):
     return Type
 
 
+@ssh_commands.ssh_exception
 def private_key_signer(prefix: str, filename: str):
     if filename is None:
         raise exceptions.UI('Did you forget to login ?')
@@ -144,14 +146,14 @@ def private_key_signer(prefix: str, filename: str):
         )
         public_key = key.public()
     else:
-        ssh = ssh_agent.Client()
+        ssh_agent = ssh.agent.Client()
         algorithm = None
-        for id in ssh.list_identities():
+        for id in ssh_agent.list_identities():
             public_key = jwk.Public.from_ssh_bytes(id.public_key)
             if id.comment == filename or public_key.match_ssh_fingerprint(filename):
                 if public_key.type != jwk.KeyType.ED25519:
                     raise exceptions.UI(f'Unsupported: {key.type}')
-                algorithm = create_algorithm_class(ssh, public_key)
+                algorithm = create_algorithm_class(ssh_agent, public_key)
                 break
         if algorithm is None:
             raise exceptions.UI(f'Unable to find key matching {filename}')

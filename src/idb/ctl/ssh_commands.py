@@ -1,8 +1,18 @@
 import tabulate
 
-from . import ssh_agent
 from . import exceptions
+from .. import ssh
 from .. import jwk
+
+
+def ssh_exception(f):
+    def wrapper(*args, **kwargs):
+        try:
+            return f(*args, **kwargs)
+        except ssh.exceptions.Error as e:
+            raise exceptions.UI(str(e))
+    return wrapper
+
 
 def _sign_host_key_function(args):
     pass
@@ -23,11 +33,11 @@ def _download_user_signing_key_function(args):
 def _list_remotes_function(args):
     pass
 
-
+@ssh_exception
 def _agent_list_identities_function(args):
-    ssh = ssh_agent.Client()
+    ssh_agent = ssh.agent.Client()
     rows = []
-    for id in ssh.list_identities():
+    for id in ssh_agent.list_identities():
         key = jwk.Public.from_ssh_bytes(id.public_key)
         rows.append((key.ssh_fingerprint(), str(key.type)[len('KeyType.'):], id.comment))
         serialized = key.to_ssh_bytes()
@@ -36,47 +46,50 @@ def _agent_list_identities_function(args):
         print(tabulate.tabulate(rows, headers=['fingerprint', 'key type', 'comment']))
 
 
-def _agent_find_by_fingerprint(ssh, fingerprint):
-    for identity in ssh.list_identities():
+def _agent_find_by_fingerprint(ssh_agent, fingerprint):
+    for identity in ssh_agent.list_identities():
         key = jwk.Public.from_ssh_bytes(identity.public_key)
         if key.match_ssh_fingerprint(fingerprint):
             return identity
     raise exceptions.UI(f'Unable to find key {fingerprint}')
 
 
+@ssh_exception
 def _agent_sign_function(args):
-    ssh = ssh_agent.Client()
-    identity = _agent_find_by_fingerprint(ssh, args.fingerprint)
+    ssh_agent = ssh.agent.Client()
+    identity = _agent_find_by_fingerprint(ssh_agent, args.fingerprint)
     with open(args.data, 'rb') as f:
         data = f.read()
     match args.flags:
         case None:
             flags = 0
         case 'SHA2_256':
-            flags = ssh_agent.RSA.SHA2_256
+            flags = ssh.agent.RSA.SHA2_256
         case 'SHA2_512':
-            flags = ssh_agent.RSA.SHA2_512
+            flags = ssh.agent.RSA.SHA2_512
         case _:
             assert False
-    signature = ssh.sign(identity.public_key, data, flags=flags)
+    signature = ssh_agent.sign(identity.public_key, data, flags=flags)
     print(signature)
 
 
+@ssh_exception
 def _agent_add_function(args):
-    ssh = ssh_agent.Client()
+    ssh_agent = ssh.agent.Client()
     with open(args.filename, 'rb') as f:
         data = f.read()
     key = jwk.Private.from_ssh(data)
-    ssh.add(key.to_ssh_bytes(), comment=args.comment, lifetime=args.lifetime, require_confirmation=args.require_confirmation)
+    ssh_agent.add(key.to_ssh_bytes(), comment=args.comment, lifetime=args.lifetime, require_confirmation=args.require_confirmation)
 
 
+@ssh_exception
 def _agent_del_function(args):
-    ssh = ssh_agent.Client()
+    ssh_agent = ssh.agent.Client()
     if args.all:
-        ssh.remove_all()
+        ssh_agent.remove_all()
     elif args.fingerprint:
         identity = _agent_find_by_fingerprint(ssh, args.fingerprint)
-        ssh.remove(identity.public_key)
+        ssh_agent.remove(identity.public_key)
     else:
         assert False
 

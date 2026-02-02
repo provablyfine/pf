@@ -10,12 +10,12 @@ import requests
 import requests.auth
 
 from .. import jwk
+from .. import ssh
 from . import exceptions
 from . import admin
-from . import ssh
 from . import config
 from . import client
-from . import ssh_agent
+from . import ssh_commands
 
 
 logger = logging.getLogger(__name__)
@@ -48,16 +48,17 @@ def _accept_function(args):
     c.save(args.config)
 
 
+@ssh_commands.ssh_exception
 def _login_function(args):
     c = config.Config.load(args.config)
     idb = client.Client(c)
     if args.session_key is None:
         try:
-            ssh = ssh_agent.Client()
+            ssh_agent = ssh.agent.Client()
         except:
             raise exceptions.UI("Unable to connect to user's SSH agent")
         session_key = jwk.Private.generate_ed25519()
-        ssh.add(session_key.to_ssh_bytes(), comment='idb-session', lifetime=1800)
+        ssh_agent.add(session_key.to_ssh_bytes(), comment='idb-session', lifetime=1800)
         c.session_key = session_key.public().ssh_fingerprint()
     else:
         with open(args.session_key, 'rb') as f:
@@ -112,7 +113,7 @@ def main():
     admin.add_subparsers(admin_parser)
 
     ssh_parser = subparsers.add_parser('ssh', help='SSH-related functions')
-    ssh.add_subparsers(ssh_parser)
+    ssh_commands.add_subparsers(ssh_parser)
 
     args = parser.parse_args()
 
