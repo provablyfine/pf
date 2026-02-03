@@ -1,4 +1,4 @@
-
+# XXX: Should I check if there is enough in buffer and return an exception ?
 class Reader:
     def __init__(self, buffer):
         self._buffer = buffer
@@ -49,6 +49,9 @@ class Writer:
     def write_uint32(self, value: int):
         self._bytes.extend(value.to_bytes(4, byteorder='big'))
 
+    def write_uint64(self, value: int):
+        self._bytes.extend(value.to_bytes(8, byteorder='big'))
+
     def write_bytes(self, buffer):
         if isinstance(buffer, Writer):
             self._bytes.extend(buffer._bytes)
@@ -58,6 +61,11 @@ class Writer:
     def write_string(self, buffer: bytes):
         self.write_uint32(len(buffer))
         self.write_bytes(buffer)
+
+    def write_nested_string(self, buffer: bytes):
+        writer = Writer()
+        writer.write_string(buffer)
+        self.write_string(writer.to_bytes())
 
     def write_mpint(self, n: int):
         # RFC 4251 Section 5
