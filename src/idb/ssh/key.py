@@ -2,8 +2,11 @@ from __future__ import annotations
 import enum
 import hashlib
 import base64
+import dataclasses
 
 from . import buffer
+from . import constants
+from . import exceptions
 
 import cryptography.hazmat.primitives.asymmetric.ed25519
 import cryptography.hazmat.primitives.asymmetric.ec
@@ -16,9 +19,65 @@ class FingerprintFormat(enum.Enum):
     SHA1 = 2
     SHA256 = 3
 
+
+@dataclasses.dataclass(frozen=True)
+class SerializedPublicKey:
+    key_type: bytes
+    key: bytes
+
+
 class Public:
     def __init__(self, key):
         self._key = key
+
+    def verify(self, signature: bytes, data: bytes):
+        try:
+            self._verify(signature, data)
+        except cryptography.exceptions.InvalidSignature:
+            raise exceptions.InvalidSignature()
+
+    def _verify(self, signature: bytes, data: bytes):
+        # We read the signature from the SSH signature format
+        reader = buffer.Reader(signature)
+        signature_type = reader.read_string()
+        signature = reader.read_string()
+
+        match self._key:
+            case cryptography.hazmat.primitives.asymmetric.dsa.DSAPublicKey():
+                if signature_type != b'ssh-dss':
+                    raise exceptions.InvalidSignature('Invalid signature type')
+                self._key.verify(signature, data, cryptography.hazmat.primitives.hashes.SHA1())
+            case cryptography.hazmat.primitives.asymmetric.ed25519.Ed25519PublicKey():
+                if signature_type != b'ssh-ed25519':
+                    raise exceptions.InvalidSignature('Invalid signature type')
+                self._key.verify(signature, data)
+            case cryptography.hazmat.primitives.asymmetric.ed448.Ed448PrivateKey():
+                if signature_type != b'ssh-ed448':
+                    raise exceptions.InvalidSignature('Invalid signature type')
+                self._key.verify(signature, data)
+            case cryptography.hazmat.primitives.asymmetric.rsa.RSAPrivateKey():
+                match signature_type:
+                    case b'ssh-rsa':
+                        h = cryptography.hazmat.primitives.hashes.SHA1()
+                    case b'rsa-sha2-256':
+                        h = cryptography.hazmat.primitives.hashes.SHA256()
+                    case b'rsa-sha2-512':
+                        h = cryptography.hazmat.primitives.hashes.SHA512()
+                    case _:
+                        raise exceptions.InvalidSignature('Invalid signature type')
+                self._key.verify(data, cryptography.hazmat.primitives.asymmetric.padding.PKCS1v15(), h)
+            case cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePrivateKey():
+                # RFC 5656
+                match signature_type:
+                    case b'ecdsa-sha2-nistp256':
+                        h = cryptography.hazmat.primitives.hashes.SHA256()
+                    case b'ecdsa-sha2-nistp384':
+                        h = cryptography.hazmat.primitives.hashes.SHA384()
+                    case b'ecdsa-sha2-nistp512':
+                        h = cryptography.hazmat.primitives.hashes.SHA512()
+                    case _:
+                        raise exceptions.InvalidSignature('Invalid signature type')
+                return self._key.verify(signature, data, cryptography.hazmat.primitives.asymmetric.ec.ECDSA(h))
 
 
     def match_ssh_fingerprint(self, expected_fingerprint):
@@ -60,23 +119,30 @@ class Public:
         return Public(key)
 
     def to_bytes(self) -> bytes:
+        serialized = self.to_serialized()
+        writer = buffer.Writer()
+        writer.write_string(serialized.key_type)
+        writer.write_bytes(serialized.key)
+        return writer.to_bytes()
+
+    def to_serialized(self) -> SerializedPublicKey:
         writer = buffer.Writer()
         match self._key:
             case cryptography.hazmat.primitives.asymmetric.ed25519.Ed25519PublicKey():
                 # RFC 8709 Section 4
+                key_type = b'ssh-ed25519'
                 key = self._key.public_bytes_raw()
-                writer.write_string(b'ssh-ed25519')
                 writer.write_string(key)
                 return writer.to_bytes()
             case cryptography.hazmat.primitives.asymmetric.ed448.Ed448PublicKey():
                 # RFC 8709 Section 4
+                key_type = b'ssh-ed448'
                 key = self._key.public_bytes_raw()
-                writer.write_string(b'ssh-ed448')
                 writer.write_string(key)
                 return writer.to_bytes()
             case cryptography.hazmat.primitives.asymmetric.rsa.RSAPublicKey():
                 # RFC 4253 section 6.6
-                writer.write_string(b'ssh-rsa')
+                key_type = b'ssh-rsa'
                 numbers = self._key.public_numbers()
                 writer.write_mpint(numbers.e)
                 writer.write_mpint(numbers.n)
@@ -90,7 +156,7 @@ class Public:
                         curve = b'nistp384'
                     case cryptography.hazmat.primitives.asymmetric.ec.SECP521R1():
                         curve = b'nistp521'
-                writer.write_string(b'ecdsa-sha2-' + curve)
+                key_type = b'ecdsa-sha2-' + curve
                 writer.write_string(curve)
                 q = self._key.public_bytes(
                     encoding= cryptography.hazmat.primitives.serialization.Encoding.X962,
@@ -99,16 +165,16 @@ class Public:
                 writer.write_string(q)
                 return writer.to_bytes()
             case cryptography.hazmat.primitives.asymmetric.dsa.DSAPublicKey():
-                writer.write_string(b'ssh-dss')
+                key_type = b'ssh-dss'
                 public_numbers = self._key.public_numbers()
                 parameter_numbers = public_numbers.parameter.numbers
                 writer.write_mpint(parameter_numbers.p)
                 writer.write_mpint(parameter_numbers.q)
                 writer.write_mpint(parameter_numbers.g)
                 writer.write_mpint(public_numbers.y)
-                return writer.to_bytes()
             case _:
                 assert False
+        return SerializedPublicKey(key_type=key_type, key=writer.to_bytes())
 
     @classmethod
     def from_ed25519_reader(klass, reader: buffer.Reader) -> Public:
@@ -135,32 +201,17 @@ class Public:
         return Public(numbers.public_key())
 
     @classmethod
-    def from_ecdsa_256_reader(klass, reader: buffer.Reader) -> Public:
+    def from_ecdsa_reader(klass, reader: buffer.Reader) -> Public:
         # RFC 5656 section 3.1
         curve = reader.read_string()
-        assert curve == b'nistp256'
         q = reader.read_string()
-        crypto_curve = cryptography.hazmat.primitives.asymmetric.ec.SECP256R1()
-        crypto_key = cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePublicKey.from_encoded_point(crypto_curve, q)
-        return Public(crypto_key)
-
-    @classmethod
-    def from_ecdsa_384_reader(klass, reader: buffer.Reader) -> Public:
-        # RFC 5656 section 3.1
-        curve = reader.read_string()
-        assert curve == b'nistp384'
-        q = reader.read_string()
-        crypto_curve = cryptography.hazmat.primitives.asymmetric.ec.SECP384R1()
-        crypto_key = cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePublicKey.from_encoded_point(crypto_curve, q)
-        return Public(crypto_key)
-
-    @classmethod
-    def from_ecdsa_521_reader(klass, reader: buffer.Reader) -> Public:
-        # RFC 5656 section 3.1
-        curve = reader.read_string()
-        assert curve == b'nistp521'
-        q = reader.read_string()
-        crypto_curve = cryptography.hazmat.primitives.asymmetric.ec.SECP521R1()
+        match curve:
+            case b'nistp256':
+                crypto_curve = cryptography.hazmat.primitives.asymmetric.ec.SECP256R1()
+            case b'nistp384':
+                crypto_curve = cryptography.hazmat.primitives.asymmetric.ec.SECP384R1()
+            case b'nistp521':
+                crypto_curve = cryptography.hazmat.primitives.asymmetric.ec.SECP521R1()
         crypto_key = cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePublicKey.from_encoded_point(crypto_curve, q)
         return Public(crypto_key)
 
@@ -189,11 +240,11 @@ class Public:
             case b'ssh-rsa':
                 return klass.from_rsa_reader(reader)
             case b'ecdsa-sha2-nistp256':
-                return klass.from_ecdsa_256_reader(reader)
+                return klass.from_ecdsa_reader(reader)
             case b'ecdsa-sha2-nistp384':
-                return klass.from_ecdsa_384_reader(reader)
+                return klass.from_ecdsa_reader(reader)
             case b'ecdsa-sha2-nistp521':
-                return klass.from_ecdsa_521_reader(reader)
+                return klass.from_ecdsa_reader(reader)
             case _:
                 assert False
 
@@ -206,6 +257,49 @@ class Public:
 class Private:
     def __init__(self, key):
         self._key = key
+
+    def sign(self, data: bytes, flags: int) -> bytes:
+        match self._key:
+            case cryptography.hazmat.primitives.asymmetric.dsa.DSAPrivateKey():
+                signature = self._key.sign(data, cryptography.hazmat.primitives.hashes.SHA1())
+                signature_type = b'ssh-dss'
+            case cryptography.hazmat.primitives.asymmetric.ed25519.Ed25519PrivateKey():
+                signature = self._key.sign(data)
+                signature_type = b'ssh-ed25519'
+            case cryptography.hazmat.primitives.asymmetric.ed448.Ed448PrivateKey():
+                signature = self._key.sign(data)
+                signature_type = b'ssh-ed448'
+            case cryptography.hazmat.primitives.asymmetric.rsa.RSAPrivateKey():
+                match flags:
+                    case constants.RSA.SHA2_256:
+                        h = cryptography.hazmat.primitives.hashes.SHA256()
+                        signature_type = b'rsa-sha2-256'
+                    case constants.RSA.SHA2_512:
+                        h = cryptography.hazmat.primitives.hashes.SHA512()
+                        signature_type = b'rsa-sha2-512'
+                    case _:
+                        # If you are here, you are oh so badly fucked
+                        h = cryptography.hazmat.primitives.hashes.SHA1()
+                        signature_type = b'ssh-rsa'
+                signature = self._key.sign(data, cryptography.hazmat.primitives.asymmetric.padding.PKCS1v15(), h)
+            case cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePrivateKey():
+                match self._key.curve:
+                    case cryptography.hazmat.primitives.asymmetric.ec.SECP256R1():
+                        h = cryptography.hazmat.primitives.hashes.SHA256()
+                        signature_type = b'ecdsa-sha2-nistp256'
+                    case cryptography.hazmat.primitives.asymmetric.ec.SECP384R1():
+                        h = cryptography.hazmat.primitives.hashes.SHA384()
+                        signature_type = b'ecdsa-sha2-nistp384'
+                    case cryptography.hazmat.primitives.asymmetric.ec.SECP521R1():
+                        h = cryptography.hazmat.primitives.hashes.SHA512()
+                        signature_type = b'ecdsa-sha2-nistp512'
+                    case _:
+                        raise exceptions.Error('Invalid ECDSA curve')
+                signature = self._key.sign(data, cryptography.hazmat.primitives.asymmetric.ec.ECDSA(h))
+        writer = buffer.Writer()
+        writer.write_string(signature_type)
+        writer.write_string(signature)
+        return writer.to_bytes()
 
     def public(self):
         return Public(self._key.public_key())
