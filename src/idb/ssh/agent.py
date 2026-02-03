@@ -9,11 +9,6 @@ from . import buffer
 
 Method = collections.namedtuple('Method', ['encrypt', 'decrypt'])
 
-@enum.unique
-class RSA(enum.IntEnum):
-    SHA2_256 = 0x02
-    SHA2_512 = 0x04
-
 
 class Client:
     # https://datatracker.ietf.org/doc/html/draft-miller-ssh-agent
