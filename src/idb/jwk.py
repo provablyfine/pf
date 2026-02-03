@@ -6,7 +6,6 @@ import secrets
 import base64
 
 from . import base64url
-from . import ssh
 
 import cryptography.hazmat.primitives.asymmetric.ed25519
 import cryptography.hazmat.primitives.asymmetric.ec
@@ -19,13 +18,6 @@ class KeyType(enum.Enum):
     EC = 2
     SYMMETRIC = 3
     RSA = 4
-
-@enum.unique
-class SshFingerprintFormat(enum.Enum):
-    MD5 = 1
-    SHA1 = 2
-    SHA256 = 3
-
 
 def rfc7638_thumbprint(data):
     needed = {
@@ -100,37 +92,6 @@ class Public:
     def thumbprint(self) -> str:
         return rfc7638_thumbprint(self.to_dict())
 
-    def match_ssh_fingerprint(self, expected_fingerprint):
-        colon = expected_fingerprint.find(':')
-        prefix = expected_fingerprint[:colon]
-        match prefix:
-            case 'MD5':
-                format = SshFingerprintFormat.MD5
-            case 'SHA1':
-                format = SshFingerprintFormat.SHA1
-            case 'SHA256':
-                format = SshFingerprintFormat.SHA256
-        got_fingerprint = self.ssh_fingerprint(format=format)
-        return expected_fingerprint == got_fingerprint
-
-    def ssh_fingerprint(self, format: SshFingerprintFormat = SshFingerprintFormat.SHA256) -> str:
-        match format:
-            case SshFingerprintFormat.SHA256:
-                # Spec from OpenSSH source code
-                h = hashlib.sha256(self.to_ssh_bytes())
-                fingerprint = base64.b64encode(h.digest()).rstrip(b'=').decode('ascii')
-                return f'SHA256:{fingerprint}'
-            case SshFingerprintFormat.SHA1:
-                # Spec from OpenSSH source code
-                h = hashlib.sha1(self.to_ssh_bytes())
-                fingerprint = base64.b64encode(h.digest()).rstrip(b'=').decode('ascii')
-                return f'SHA1:{fingerprint}'
-            case SshFingerprintFormat.MD5:
-                # RFC 4716 Section 4
-                h = hashlib.md5(self.to_ssh_bytes())
-                fingerprint = ':'.join('%02x' % i for i in h.digest())
-                return f'MD5:{fingerprint}'
-
     def to_dict(self) -> dict:
         match self._key:
             case cryptography.hazmat.primitives.asymmetric.ed25519.Ed25519PublicKey():
@@ -178,84 +139,6 @@ class Public:
                 numbers = cryptography.hazmat.primitives.asymmetric.rsa.RSAPublicNumbers(e=e, n=n)
                 return Public(numbers.public_key())
 
-            case _:
-                assert False
-
-    @classmethod
-    def from_ssh_bytes(klass, data: bytes) -> Public:
-        reader = ssh.buffer.Reader(data)
-        key_type = reader.read_string()
-        match key_type:
-            case b'ssh-ed25519':
-                # RFC 8709 Section 4
-                key = reader.read_string()
-                assert len(key) == 32
-                crypto_key = cryptography.hazmat.primitives.asymmetric.ed25519.Ed25519PublicKey.from_public_bytes(key)
-                return Public(crypto_key)
-            case b'ssh-rsa':
-                # RFC 4253 section 6.6
-                e = reader.read_mpint()
-                n = reader.read_mpint()
-                numbers = cryptography.hazmat.primitives.asymmetric.rsa.RSAPublicNumbers(e=e, n=n)
-                return Public(numbers.public_key())
-            case b'ecdsa-sha2-nistp256':
-                # RFC 5656 section 3.1
-                curve = reader.read_string()
-                assert curve == b'nistp256'
-                q = reader.read_string()
-                crypto_curve = cryptography.hazmat.primitives.asymmetric.ec.SECP256R1()
-                crypto_key = cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePublicKey.from_encoded_point(crypto_curve, q)
-                return Public(crypto_key)
-            case b'ecdsa-sha2-nistp384':
-                # RFC 5656 section 3.1
-                curve = reader.read_string()
-                assert curve == b'nistp384'
-                q = reader.read_string()
-                crypto_curve = cryptography.hazmat.primitives.asymmetric.ec.SECP384R1()
-                crypto_key = cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePublicKey.from_encoded_point(crypto_curve, q)
-                return Public(crypto_key)
-            case b'ecdsa-sha2-nistp521':
-                # RFC 5656 section 3.1
-                curve = reader.read_string()
-                assert curve == b'nistp521'
-                q = reader.read_string()
-                crypto_curve = cryptography.hazmat.primitives.asymmetric.ec.SECP521R1()
-                crypto_key = cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePublicKey.from_encoded_point(crypto_curve, q)
-                return Public(crypto_key)
-
-    def to_ssh_bytes(self) -> bytes:
-        writer = ssh.buffer.Writer()
-        match self._key:
-            case cryptography.hazmat.primitives.asymmetric.ed25519.Ed25519PublicKey():
-                # RFC 8709 Section 4
-                key = self._key.public_bytes_raw()
-                writer.write_string(b'ssh-ed25519')
-                writer.write_string(key)
-                return writer.to_bytes()
-            case cryptography.hazmat.primitives.asymmetric.rsa.RSAPublicKey():
-                # RFC 4253 section 6.6
-                writer.write_string(b'ssh-rsa')
-                numbers = self._key.public_numbers()
-                writer.write_mpint(numbers.e)
-                writer.write_mpint(numbers.n)
-                return writer.to_bytes()
-            case cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePublicKey():
-                # RFC 5656 section 3.1
-                match self._key.curve:
-                    case cryptography.hazmat.primitives.asymmetric.ec.SECP256R1():
-                        curve = b'nistp256'
-                    case cryptography.hazmat.primitives.asymmetric.ec.SECP384R1():
-                        curve = b'nistp384'
-                    case cryptography.hazmat.primitives.asymmetric.ec.SECP521R1():
-                        curve = b'nistp521'
-                writer.write_string(b'ecdsa-sha2-' + curve)
-                writer.write_string(curve)
-                q = self._key.public_bytes(
-                    encoding= cryptography.hazmat.primitives.serialization.Encoding.X962,
-                    format=cryptography.hazmat.primitives.serialization.PublicFormat.UncompressedPoint,
-                )
-                writer.write_string(q)
-                return writer.to_bytes()
             case _:
                 assert False
 
@@ -325,7 +208,7 @@ class Private:
                 y = base64url.encode(public_numbers.y)
                 d = base64url.encode(private_numbers.private_value)
                 secg_to_nist = {v.name: k for k, v in ec_nist_to_secg.items()}
-                return {'kty': 'EC', 'crv': ec_secg_to_nist[public_numbers.curve], 'x': x, 'y': y, 'd': d}
+                return {'kty': 'EC', 'crv': secg_to_nist[public_numbers.curve], 'x': x, 'y': y, 'd': d}
             case _:
                 assert False
 
@@ -373,60 +256,3 @@ class Private:
     def from_pem(klass, data: bytes, password: str=None) -> Private:
         key = cryptography.hazmat.primitives.serialization.load_pem_private_key(data, password=password)
         return Private(key)
-
-    @classmethod
-    def from_data(klass, data: bytes, password: str=None) -> Private:
-        try:
-            return klass.from_pem(data, password=password)
-        except ValueError:
-            return klass.from_ssh(data, password=password)
-
-    @classmethod
-    def from_ssh(klass, data: bytes, password: str=None) -> Private:
-        key = cryptography.hazmat.primitives.serialization.load_ssh_private_key(data, password=password)
-        return Private(key)
-
-    def to_ssh_bytes(self) -> bytes:
-        writer = ssh.buffer.Writer()
-        match self._key:
-            case cryptography.hazmat.primitives.asymmetric.ed25519.Ed25519PrivateKey():
-                # https://datatracker.ietf.org/doc/html/draft-miller-ssh-agent#name-eddsa-keys
-                writer.write_string(b'ssh-ed25519')
-                public_key = self._key.public_key().public_bytes_raw()
-                private_key = self._key.private_bytes_raw()
-                writer.write_string(public_key)
-                writer.write_string(private_key + public_key)
-                return writer.to_bytes()
-            case cryptography.hazmat.primitives.asymmetric.rsa.RSAPrivateKey():
-                # https://datatracker.ietf.org/doc/html/draft-miller-ssh-agent#name-rsa-keys
-                writer.write_string(b'ssh-rsa')
-                private_numbers = self._key.private_numbers()
-                public_numbers = private_numbers.public_numbers
-                writer.write_mpint(public_numbers.n)
-                writer.write_mpint(public_numbers.e)
-                writer.write_mpint(private_numbers.d)
-                writer.write_mpint(private_numbers.iqmp)
-                writer.write_mpint(private_numbers.p)
-                writer.write_mpint(private_numbers.q)
-                return writer.to_bytes()
-            case cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePrivateKey():
-                # https://datatracker.ietf.org/doc/html/draft-miller-ssh-agent#name-ecdsa-keys
-                match self._key.curve:
-                    case cryptography.hazmat.primitives.asymmetric.ec.SECP256R1():
-                        curve = b'nistp256'
-                    case cryptography.hazmat.primitives.asymmetric.ec.SECP384R1():
-                        curve = b'nistp384'
-                    case cryptography.hazmat.primitives.asymmetric.ec.SECP521R1():
-                        curve = b'nistp521'
-                writer.write_string(b'ecdsa-sha2-' + curve)
-                writer.write_string(curve)
-                q = self._key.public_key().public_bytes(
-                    encoding= cryptography.hazmat.primitives.serialization.Encoding.X962,
-                    format=cryptography.hazmat.primitives.serialization.PublicFormat.UncompressedPoint,
-                )
-                d = self._key.private_numbers().private_value
-                writer.write_string(q)
-                writer.write_mpint(d)
-                return writer.to_bytes()
-            case _:
-                assert False
