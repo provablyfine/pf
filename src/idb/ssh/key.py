@@ -16,10 +16,10 @@ class FingerprintFormat(enum.Enum):
     SHA1 = 2
     SHA256 = 3
 
-
 class Public:
     def __init__(self, key):
         self._key = key
+
 
     def match_ssh_fingerprint(self, expected_fingerprint):
         colon = expected_fingerprint.find(':')
@@ -68,6 +68,12 @@ class Public:
                 writer.write_string(b'ssh-ed25519')
                 writer.write_string(key)
                 return writer.to_bytes()
+            case cryptography.hazmat.primitives.asymmetric.ed448.Ed448PublicKey():
+                # RFC 8709 Section 4
+                key = self._key.public_bytes_raw()
+                writer.write_string(b'ssh-ed448')
+                writer.write_string(key)
+                return writer.to_bytes()
             case cryptography.hazmat.primitives.asymmetric.rsa.RSAPublicKey():
                 # RFC 4253 section 6.6
                 writer.write_string(b'ssh-rsa')
@@ -92,6 +98,15 @@ class Public:
                 )
                 writer.write_string(q)
                 return writer.to_bytes()
+            case cryptography.hazmat.primitives.asymmetric.dsa.DSAPublicKey():
+                writer.write_string(b'ssh-dss')
+                public_numbers = self._key.public_numbers()
+                parameter_numbers = public_numbers.parameter.numbers
+                writer.write_mpint(parameter_numbers.p)
+                writer.write_mpint(parameter_numbers.q)
+                writer.write_mpint(parameter_numbers.g)
+                writer.write_mpint(public_numbers.y)
+                return writer.to_bytes()
             case _:
                 assert False
 
@@ -101,6 +116,14 @@ class Public:
         key = reader.read_string()
         assert len(key) == 32
         crypto_key = cryptography.hazmat.primitives.asymmetric.ed25519.Ed25519PublicKey.from_public_bytes(key)
+        return Public(crypto_key)
+
+    @classmethod
+    def from_ed448_reader(klass, reader: buffer.Reader) -> Public:
+        # RFC 8709 Section 4
+        key = reader.read_string()
+        assert len(key) == 57
+        crypto_key = cryptography.hazmat.primitives.asymmetric.ed448.Ed448PublicKey.from_public_bytes(key)
         return Public(crypto_key)
 
     @classmethod
@@ -142,12 +165,27 @@ class Public:
         return Public(crypto_key)
 
     @classmethod
+    def from_dss_reader(klass, reader: buffer.Reader) -> Public:
+        # RFC 4253 Section 6.6
+        p = reader.read_mpint()
+        q = reader.read_mpint()
+        g = reader.read_mpint()
+        y = reader.read_mpint()
+        parameter_numbers =  cryptography.hazmat.primitives.asymmetric.dsa.DSAParameterNumbers(p, q, g)
+        public_numbers =  cryptography.hazmat.primitives.asymmetric.dsa.DSAPublicNumbers(y, parameter_numbers)
+        return Public(public_numbers.public_key())
+
+    @classmethod
     def from_bytes(klass, data: bytes) -> Public:
         reader = buffer.Reader(data)
         key_type = reader.read_string()
         match key_type:
+            case b'ssh-dss':
+                return klass.from_dss_reader(reader)
             case b'ssh-ed25519':
                 return klass.from_ed25519_reader(reader)
+            case b'ssh-ed448':
+                return klass.from_ed448_reader(reader)
             case b'ssh-rsa':
                 return klass.from_rsa_reader(reader)
             case b'ecdsa-sha2-nistp256':
@@ -168,6 +206,9 @@ class Public:
 class Private:
     def __init__(self, key):
         self._key = key
+
+    def public(self):
+        return Public(self._key.public_key())
 
     @classmethod
     def from_openssh_file(klass, data: bytes, password: str=None) -> Private:
