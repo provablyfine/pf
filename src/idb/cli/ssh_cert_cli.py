@@ -19,8 +19,8 @@ def _read_function(args):
 
     rows = [
         ('validity_period', 'ok' if cert.is_valid() else 'ko'),
-        ('is_signature_valid', 'yes' if cert.is_signature_valid else 'no'),
-        ('key_type', cert.key_type),
+        ('key_fingerprint', cert.public_key.fingerprint()),
+        ('signer_key_fingerprint', cert.signature_public_key.fingerprint()),
         ('serial_number', cert.serial_number),
         ('role', role),
         ('identifier', cert.identifier),
