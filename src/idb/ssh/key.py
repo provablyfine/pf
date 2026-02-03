@@ -133,20 +133,17 @@ class Public:
                 key_type = b'ssh-ed25519'
                 key = self._key.public_bytes_raw()
                 writer.write_string(key)
-                return writer.to_bytes()
             case cryptography.hazmat.primitives.asymmetric.ed448.Ed448PublicKey():
                 # RFC 8709 Section 4
                 key_type = b'ssh-ed448'
                 key = self._key.public_bytes_raw()
                 writer.write_string(key)
-                return writer.to_bytes()
             case cryptography.hazmat.primitives.asymmetric.rsa.RSAPublicKey():
                 # RFC 4253 section 6.6
                 key_type = b'ssh-rsa'
                 numbers = self._key.public_numbers()
                 writer.write_mpint(numbers.e)
                 writer.write_mpint(numbers.n)
-                return writer.to_bytes()
             case cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePublicKey():
                 # RFC 5656 section 3.1
                 match self._key.curve:
@@ -163,7 +160,6 @@ class Public:
                     format=cryptography.hazmat.primitives.serialization.PublicFormat.UncompressedPoint,
                 )
                 writer.write_string(q)
-                return writer.to_bytes()
             case cryptography.hazmat.primitives.asymmetric.dsa.DSAPublicKey():
                 key_type = b'ssh-dss'
                 public_numbers = self._key.public_numbers()
