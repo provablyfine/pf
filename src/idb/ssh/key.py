@@ -218,9 +218,29 @@ class Private:
     def to_bytes(self) -> bytes:
         writer = buffer.Writer()
         match self._key:
+            case cryptography.hazmat.primitives.asymmetric.dsa.DSAPrivateKey():
+                # https://datatracker.ietf.org/doc/html/draft-miller-ssh-agent#section-3.2.1
+                writer.write_string(b'ssh-dss')
+                private_numbers = self._key.private_numbers()
+                public_numbers = private_numbers.public_numbers
+                parameter_numbers = public_numbers.parameter.numbers
+                writer.write_mpint(parameter_numbers.p)
+                writer.write_mpint(parameter_numbers.q)
+                writer.write_mpint(parameter_numbers.g)
+                writer.write_mpint(public_numbers.y)
+                writer.write_mpint(private_numbers.x)
+                return writer.to_bytes()
             case cryptography.hazmat.primitives.asymmetric.ed25519.Ed25519PrivateKey():
                 # https://datatracker.ietf.org/doc/html/draft-miller-ssh-agent#name-eddsa-keys
                 writer.write_string(b'ssh-ed25519')
+                public_key = self._key.public_key().public_bytes_raw()
+                private_key = self._key.private_bytes_raw()
+                writer.write_string(public_key)
+                writer.write_string(private_key + public_key)
+                return writer.to_bytes()
+            case cryptography.hazmat.primitives.asymmetric.ed448.Ed448PrivateKey():
+                # https://datatracker.ietf.org/doc/html/draft-miller-ssh-agent#name-eddsa-keys
+                writer.write_string(b'ssh-ed448')
                 public_key = self._key.public_key().public_bytes_raw()
                 private_key = self._key.private_bytes_raw()
                 writer.write_string(public_key)
