@@ -1,5 +1,7 @@
 import datetime
+
 import tabulate
+import dateparser
 
 from .. import ssh
 from . import ssh_utils
@@ -61,7 +63,36 @@ def _read_function(args):
 
 
 def _sign_host_function(args):
-    pass
+    with open(args.key, 'rb') as f:
+        data = f.read()
+    public_key = ssh_utils.load_public_key(data)
+    with open(args.with_key, 'rb') as f:
+        data = f.read()
+    signer_private_key = ssh_utils.load_private_key(data, password=None)
+    if args.identifier is not None:
+        identifier = args.identifier
+    else:
+        identifier = public_key.fingerprint().encode('ascii')
+    if args.valid_after is None:
+        valid_after = 0
+    else:
+        valid_after = int(dateparser.parser(args.valid_after).timestamp())
+    if args.valid_before is None:
+        valid_before = 0xffffffffffffffff
+    else:
+        valid_before = int(dateparser.parser(args.valid_before).timestamp())
+
+    cert = ssh.cert.Cert.create_host(
+        public_key=public_key,
+        serial_number=args.serial_number,
+        identifier=identifier,
+        principals=args.principal,
+        valid_after=valid_after,
+        valid_before=valid_before,
+        signer_public_key=signer_private_key.public(),
+    )
+    certificate = cert.to_base64(signer_private_key, flags=0)
+    print(certificate.decode('utf-8'))
 
 
 def add_subparsers(parser):
@@ -73,9 +104,10 @@ def add_subparsers(parser):
 
     sign_host_parser = subparsers.add_parser('sign-host', help='Generate host certificate')
     sign_host_parser.add_argument('--key', help='Public key to generate a certificate for', required=True)
-    sign_host_parser.add_argument('--with', help='Private key to sign the certificate with', required=True)
+    sign_host_parser.add_argument('--with', dest='with_key', help='Private key to sign the certificate with', required=True)
     sign_host_parser.add_argument('-i', '--identifier', help='Identifier of this host. If unspecified, ssh fingerprint of the public key.')
     sign_host_parser.add_argument('-p', '--principal', help='Which principal this certificate will be valid for. Typically, the host FQDN.', required=True, nargs='+', default=[])
     sign_host_parser.add_argument('--valid-after', help='If specified, the certificate will be valid only after this date')
     sign_host_parser.add_argument('--valid-before', help='If specified, the certificate will be valid only before this date')
+    sign_host_parser.add_argument('--serial-number', type=int, help='Serial number of certificate. Default: %(default)s', default=0)
     sign_host_parser.set_defaults(func=_sign_host_function)

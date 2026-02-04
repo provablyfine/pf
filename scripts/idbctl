@@ -5,6 +5,7 @@
 #   "http-message-signatures",
 #   "tabulate",
 #   "pytest",
+#   "dateparser",
 #   "idb",
 # ]
 # [tool.uv.sources]

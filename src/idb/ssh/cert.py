@@ -5,6 +5,8 @@ import datetime
 import enum
 import time
 import secrets
+import getpass
+import socket
 
 import cryptography.exceptions
 
@@ -121,7 +123,7 @@ class Cert:
 
 
     @classmethod
-    def create_host(klass, public_key: key.Public, serial_number: int, identifier: str, principals: list[str], valid_after: datetime.datetime, valid_before: datetime.datetime, signer_public_key: key.Public) -> Cert:
+    def create_host(klass, public_key: key.Public, serial_number: int, identifier: str, principals: list[str], valid_after: int, valid_before: int, signer_public_key: key.Public) -> Cert:
         return Cert(
             public_key=public_key,
             serial_number=serial_number,
@@ -134,6 +136,18 @@ class Cert:
             extensions=Extensions(),
             signer_public_key=signer_public_key,
         )
+
+    def to_base64(self, signer: key.Private, flags: int) -> bytes:
+        data = self.to_bytes(signer, flags)
+        serialized_public_key = self.public_key.to_serialized()
+        username = getpass.getuser()
+        hostname = socket.gethostname()
+        items = [
+            (serialized_public_key.key_type + b'-cert').decode('ascii'),
+            base64.b64encode(data).decode('ascii'),
+            f'{username}@{hostname}',
+        ]
+        return ' '.join(items).encode('utf-8')
 
     @classmethod
     def from_base64(klass, data):
