@@ -63,7 +63,7 @@ class Cert:
             raise exceptions.Error('Unable to sign with a private key that does not match the signer public key')
         writer = buffer.Writer()
         serialized_public_key = self.public_key.to_serialized()
-        writer.write_string(serialized_public_key.key_type + b'-cert')
+        writer.write_string(serialized_public_key.key_type + b'-cert-v01@openssh.com')
         writer.write_string(secrets.token_bytes(32))
         writer.write_bytes(serialized_public_key.key)
         writer.write_uint64(self.serial_number)
@@ -120,8 +120,6 @@ class Cert:
 
         return writer.to_bytes()
 
-
-
     @classmethod
     def create_host(klass, public_key: key.Public, serial_number: int, identifier: str, principals: list[str], valid_after: int, valid_before: int, signer_public_key: key.Public) -> Cert:
         return Cert(
@@ -143,7 +141,7 @@ class Cert:
         username = getpass.getuser()
         hostname = socket.gethostname()
         items = [
-            (serialized_public_key.key_type + b'-cert').decode('ascii'),
+            (serialized_public_key.key_type + b'-cert-v01@openssh.com').decode('ascii'),
             base64.b64encode(data).decode('ascii'),
             f'{username}@{hostname}',
         ]

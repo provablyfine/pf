@@ -4,6 +4,8 @@ from . import exceptions
 from . import ssh_utils
 from . import ssh_agent_cli
 from . import ssh_cert_cli
+from . import ssh_key_cli
+
 from .. import ssh
 from .. import jwk
 
@@ -57,6 +59,9 @@ def add_subparsers(parser):
 
     cert_parser = subparsers.add_parser('cert', help='certificates')
     ssh_cert_cli.add_subparsers(cert_parser)
+
+    key_parser = subparsers.add_parser('key', help='key')
+    ssh_key_cli.add_subparsers(key_parser)
 
     #login_parser = subparsers.add_argument('login')
     #login_parser.set_defaults(func=_login_function)

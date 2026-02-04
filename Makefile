@@ -8,6 +8,7 @@ TESTS := \
  permission.t \
  access-control.t \
  access-control-tag.t \
+ ssh-certificates.t \
  $(NULL)
 
 DOCS := \

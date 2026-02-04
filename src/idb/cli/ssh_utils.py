@@ -17,7 +17,11 @@ def load_public_key(data: bytes) -> ssh.key.Public:
         key = jwk.Public.from_pem(data)
         return ssh.key.Public(key.to_crypto())
     except:
-        return ssh.key.Public.from_openssh_file(data)
+        pass
+    try:
+        return ssh.key.Public.from_openssh(data)
+    except:
+        raise exceptions.UI('Unable to load key as either a PEM or an OpenSSH-formatted public key')
 
 
 def load_private_key(data: bytes, password: str=None) -> ssh.key.Private:
@@ -25,4 +29,8 @@ def load_private_key(data: bytes, password: str=None) -> ssh.key.Private:
         key = jwk.Private.from_pem(data, password)
         return ssh.key.Private(key.to_crypto())
     except:
-        return ssh.key.Private.from_openssh_file(data)
+        pass
+    try:
+        return ssh.key.Private.from_openssh(data)
+    except:
+        raise exceptions.UI('Unable to load key as either a PEM or an OpenSSH-formatted public key')

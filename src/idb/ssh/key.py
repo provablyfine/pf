@@ -9,6 +9,7 @@ from . import constants
 from . import exceptions
 
 import cryptography.hazmat.primitives.asymmetric.ed25519
+import cryptography.hazmat.primitives.asymmetric.ed448
 import cryptography.hazmat.primitives.asymmetric.ec
 import cryptography.hazmat.primitives.serialization
 
@@ -245,9 +246,31 @@ class Public:
                 assert False
 
     @classmethod
-    def from_openssh_file(klass, data: bytes) -> Public:
+    def from_openssh(klass, data: bytes) -> Public:
         key = cryptography.hazmat.primitives.serialization.load_ssh_public_key(data)
         return Public(key)
+
+
+    def _to_openssh(self) -> bytes:
+        return self._key.public_bytes(
+            cryptography.hazmat.primitives.serialization.Encoding.PEM,
+            cryptography.hazmat.primitives.serialization.PublicFormat.OpenSSH,
+            cryptography.hazmat.primitives.serialization.NoEncryption(),
+        )
+
+    def to_openssh(self) -> bytes:
+        match self._key:
+            case cryptography.hazmat.primitives.asymmetric.dsa.DSAPublicKey():
+                raise exceptions.Error('Unsupported format')
+            case cryptography.hazmat.primitives.asymmetric.ed448.Ed448PublicKey():
+                raise exceptions.Error('Unsupported format')
+            case cryptography.hazmat.primitives.asymmetric.ed25519.Ed25519PublicKey():
+                return self._to_openssh()
+            case cryptography.hazmat.primitives.asymmetric.rsa.RSAPublicKey():
+                return self._to_openssh()
+            case cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePublicKey():
+                return self._to_openssh()
+
 
 
 class Private:
@@ -301,9 +324,29 @@ class Private:
         return Public(self._key.public_key())
 
     @classmethod
-    def from_openssh_file(klass, data: bytes, password: str=None) -> Private:
+    def from_openssh(klass, data: bytes, password: str=None) -> Private:
         key = cryptography.hazmat.primitives.serialization.load_ssh_private_key(data, password=password)
         return Private(key)
+
+    def _to_openssh(self):
+        return self._key.private_bytes(
+            cryptography.hazmat.primitives.serialization.Encoding.PEM,
+            cryptography.hazmat.primitives.serialization.PrivateFormat.OpenSSH,
+            cryptography.hazmat.primitives.serialization.NoEncryption(),
+        )
+
+    def to_openssh(self, password: str=None) -> bytes:
+        match self._key:
+            case cryptography.hazmat.primitives.asymmetric.dsa.DSAPrivateKey():
+                raise exceptions.Error('Unsupported format')
+            case cryptography.hazmat.primitives.asymmetric.ed448.Ed448PrivateKey():
+                raise exceptions.Error('Unsupported format')
+            case cryptography.hazmat.primitives.asymmetric.ed25519.Ed25519PrivateKey():
+                return self._to_openssh()
+            case cryptography.hazmat.primitives.asymmetric.rsa.RSAPrivateKey():
+                return self._to_openssh()
+            case cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePrivateKey():
+                return self._to_openssh()
 
     def to_bytes(self) -> bytes:
         writer = buffer.Writer()
