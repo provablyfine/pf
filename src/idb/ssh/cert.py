@@ -73,7 +73,7 @@ class Cert:
                 type = cryptography.hazmat.primitives.serialization.SSHCertificateType.HOST
             case Role.USER:
                 type = cryptography.hazmat.primitives.serialization.SSHCertificateType.USER
-        
+
         builder = (
             cryptography.hazmat.primitives.serialization.SSHCertificateBuilder()
             .public_key(self.public_key.to_crypto())
