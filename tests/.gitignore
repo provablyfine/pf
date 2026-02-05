@@ -1,3 +1,4 @@
 access-control.t
 access-control-tag.t
+ssh-certificates.t
 *.t.err
