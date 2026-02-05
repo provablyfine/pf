@@ -95,6 +95,55 @@ def _sign_host_function(args):
     print(certificate.decode('utf-8'))
 
 
+def _sign_user_function(args):
+    with open(args.key, 'rb') as f:
+        data = f.read()
+    public_key = ssh_utils.load_public_key(data)
+    with open(args.with_key, 'rb') as f:
+        data = f.read()
+    signer_private_key = ssh_utils.load_private_key(data, password=None)
+    if args.identifier is not None:
+        identifier = args.identifier
+    else:
+        identifier = public_key.ssh_fingerprint().encode('ascii')
+    if args.valid_after is None:
+        valid_after = 0
+    else:
+        valid_after = int(dateparser.parser(args.valid_after).timestamp())
+    if args.valid_before is None:
+        valid_before = 0xffffffffffffffff
+    else:
+        valid_before = int(dateparser.parser(args.valid_before).timestamp())
+
+    critical_options = ssh.cert.CriticalOptions(
+        force_command=args.force_command,
+        source_address=args.source_address,
+        verify_required=args.verify_required,
+    )
+    extensions = ssh.cert.Extensions(
+        no_touch_required=args.no_touch_required,
+        permit_agent_forwarding=args.permit_agent_forwarding,
+        permit_port_forwarding=args.permit_port_forwarding,
+        permit_pty=args.permit_pty,
+        permit_user_rc=args.permit_user_rc,
+        permit_x11_forwarding=args.permit_x11_forwarding,
+    )
+
+    cert = ssh.cert.Cert.create_user(
+        public_key=public_key,
+        serial_number=args.serial_number,
+        identifier=identifier,
+        principals=args.principal,
+        valid_after=valid_after,
+        valid_before=valid_before,
+        critical_options=critical_options,
+        extensions=extensions,
+        signer_public_key=signer_private_key.public(),
+    )
+    certificate = cert.to_openssh(signer_private_key)
+    print(certificate.decode('utf-8'))
+
+
 def add_subparsers(parser):
     subparsers = parser.add_subparsers(required=True)
 
@@ -111,3 +160,24 @@ def add_subparsers(parser):
     sign_host_parser.add_argument('--valid-before', help='If specified, the certificate will be valid only before this date')
     sign_host_parser.add_argument('--serial-number', type=int, help='Serial number of certificate. Default: %(default)s', default=0)
     sign_host_parser.set_defaults(func=_sign_host_function)
+
+    sign_user_parser = subparsers.add_parser('sign-user', help='Generate user certificate')
+    sign_user_parser.add_argument('--key', help='Public key to generate a certificate for', required=True)
+    sign_user_parser.add_argument('--with', dest='with_key', help='Private key to sign the certificate with', required=True)
+    sign_user_parser.add_argument('-i', '--identifier', help='Identifier of this host. If unspecified, ssh fingerprint of the public key.')
+    sign_user_parser.add_argument('-p', '--principal', help='Which principal this certificate will be valid for. Typically, the host FQDN.', required=True, nargs='+', default=[])
+    sign_user_parser.add_argument('--valid-after', help='If specified, the certificate will be valid only after this date')
+    sign_user_parser.add_argument('--valid-before', help='If specified, the certificate will be valid only before this date')
+    sign_user_parser.add_argument('--serial-number', type=int, help='Serial number of certificate. Default: %(default)s', default=0)
+    group = sign_user_parser.add_argument_group(title='Critical options')
+    group.add_argument('--force-command', help='The only command a user is going to be able to execute upon login')
+    group.add_argument('--source-address', action='append', help='Allow list of source addresses from which the certificate is valid. CIDR range or wildcard addresses are accepted.')
+    group.add_argument('--verify-required', action='store_true')
+    group = sign_user_parser.add_argument_group(title='Extensions')
+    group.add_argument('--no-touch-required', action='store_true', help='Signatures made with this certificate that do not assert user-presence should be accepted')
+    group.add_argument('--permit-agent-forwarding', action='store_true', help='Authentication agent forwarding is allowed')
+    group.add_argument('--permit-port-forwarding', action='store_true', help='TCP forwarding is allowed')
+    group.add_argument('--permit-pty', action='store_true', help='Pseudo-terminal allocation is allowed')
+    group.add_argument('--permit-user-rc', action='store_true', help='~/.ssh/rc can be used')
+    group.add_argument('--permit-x11-forwarding', action='store_true', help='X11 protocol forwarding is allowed')
+    sign_user_parser.set_defaults(func=_sign_user_function)

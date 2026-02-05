@@ -17,6 +17,7 @@ class Role(enum.IntEnum):
 
 @dataclasses.dataclass(frozen=True)
 class CriticalOptions:
+    # https://www.ietf.org/archive/id/draft-miller-ssh-cert-01.html#name-critical-options
     force_command: str = None
     source_address: list[str] = None
     verify_required: bool = None
@@ -24,6 +25,7 @@ class CriticalOptions:
 
 @dataclasses.dataclass(frozen=True)
 class Extensions:
+    # https://www.ietf.org/archive/id/draft-miller-ssh-cert-01.html#name-certificate-extensions
     no_touch_required: bool = None
     permit_agent_forwarding: bool = None
     permit_port_forwarding: bool = None
@@ -67,6 +69,21 @@ class Cert:
             signer_public_key=signer_public_key,
         )
 
+    @classmethod
+    def create_user(klass, public_key: jwk.Public, serial_number: int, identifier: str, principals: list[str], valid_after: int, valid_before: int, critical_options: CriticalOptions, extensions: Extensions, signer_public_key: jwk.Public) -> Cert:
+        return Cert(
+            public_key=public_key,
+            serial_number=serial_number,
+            role=Role.USER,
+            identifier=identifier,
+            principals=tuple(principals),
+            valid_after=valid_after,
+            valid_before=valid_before,
+            critical_options=critical_options,
+            extensions=extensions,
+            signer_public_key=signer_public_key,
+        )
+
     def to_openssh(self, signer: jwk.Private) -> bytes:
         match self.role:
             case Role.HOST:
@@ -83,7 +100,24 @@ class Cert:
             .key_id(self.identifier)
             .valid_principals([p.encode('utf-8') for p in self.principals])
         )
-        # XXX extensions and critical_options
+        if self.critical_options.force_command is not None:
+            builder = builder.add_critical_option(b'force-command', self.critical_options.force_command.encode('utf-8'))
+        if self.critical_options.source_address is not None:
+            builder = builder.add_critical_option(b'source-address', ','.join(self.critical_options.source_address).encode('utf-8'))
+        if self.critical_options.verify_required:
+            builder = builder.add_critical_option(b'verify-required', b'')
+        if self.extensions.no_touch_required:
+            builder = builder.add_extension(b'no-touch-required', b'')
+        if self.extensions.permit_agent_forwarding:
+            builder = builder.add_extension(b'permit-agent-forwarding', b'')
+        if self.extensions.permit_port_forwarding:
+            builder = builder.add_extension(b'permit-port-forwarding', b'')
+        if self.extensions.permit_pty:
+            builder = builder.add_extension(b'permit-pty', b'')
+        if self.extensions.permit_user_rc:
+            builder = builder.add_extension(b'permit-user-rc', b'')
+        if self.extensions.permit_x11_forwarding:
+            builder = builder.add_extension(b'permit-X11-forwarding', b'')
         data = builder.sign(signer.to_crypto()).public_bytes()
         return data
 
