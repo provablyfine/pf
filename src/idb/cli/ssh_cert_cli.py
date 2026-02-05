@@ -10,7 +10,7 @@ from . import ssh_utils
 def _read_function(args):
     with open(args.filename, 'rb') as f:
         data = f.read()
-    cert = ssh.cert.Cert.from_base64(data)
+    cert = ssh.cert.Cert.from_openssh(data)
     match cert.role:
         case ssh.cert.Role.HOST:
             role = 'host'
@@ -21,8 +21,8 @@ def _read_function(args):
 
     rows = [
         ('validity_period', 'ok' if cert.is_valid() else 'ko'),
-        ('key_fingerprint', cert.public_key.fingerprint()),
-        ('signer_key_fingerprint', cert.signer_public_key.fingerprint()),
+        ('key_fingerprint', cert.public_key.ssh_fingerprint()),
+        ('signer_key_fingerprint', cert.signer_public_key.ssh_fingerprint()),
         ('serial_number', cert.serial_number),
         ('role', role),
         ('identifier', cert.identifier),
@@ -72,7 +72,7 @@ def _sign_host_function(args):
     if args.identifier is not None:
         identifier = args.identifier
     else:
-        identifier = public_key.fingerprint().encode('ascii')
+        identifier = public_key.ssh_fingerprint().encode('ascii')
     if args.valid_after is None:
         valid_after = 0
     else:
@@ -91,7 +91,7 @@ def _sign_host_function(args):
         valid_before=valid_before,
         signer_public_key=signer_private_key.public(),
     )
-    certificate = cert.to_base64(signer_private_key, flags=0)
+    certificate = cert.to_openssh(signer_private_key)
     print(certificate.decode('utf-8'))
 
 

@@ -8,7 +8,9 @@ TESTS := \
  permission.t \
  access-control.t \
  access-control-tag.t \
+ ssh-keys.t \
  ssh-certificates.t \
+ ssh-ecdsa-certificates.t \
  $(NULL)
 
 DOCS := \

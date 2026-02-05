@@ -1,6 +1,7 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # dependencies = [
+#   "cryptography>=45.0.0",
 #   "requests",
 #   "http-message-signatures",
 #   "tabulate",

@@ -1,4 +1,5 @@
-# XXX: Should I check if there is enough in buffer and return an exception ?
+from . import exceptions
+
 class Reader:
     def __init__(self, buffer):
         self._buffer = buffer
@@ -15,21 +16,26 @@ class Reader:
     def has_left(self) -> bool:
         return self._current < len(self._buffer)
 
+    def read_bytes(self, n: int) -> bytes:
+        if self._current + n > len(self._buffer):
+            raise exceptions.Error('Unable to parse ssh data buffer')
+        value = self._buffer[self._current:self._current+n]
+        self._current += n
+        return value
+
     def read_uint32(self) -> int:
-        value = int.from_bytes(self._buffer[self._current:self._current+4], byteorder='big')
-        self._current += 4
+        buffer = self.read_bytes(4)
+        value = int.from_bytes(buffer, byteorder='big')
         return value
 
     def read_uint64(self) -> int:
-        value = int.from_bytes(self._buffer[self._current:self._current+8], byteorder='big')
-        self._current += 8
+        buffer = self.read_bytes(8)
+        value = int.from_bytes(buffer, byteorder='big')
         return value
 
     def read_string(self) -> bytes:
         length = self.read_uint32()
-        s = self._buffer[self._current:self._current+length]
-        self._current += length
-        return s
+        return self.read_bytes(length)
 
     def read_mpint(self) -> int:
         # RFC 4251 Section 5

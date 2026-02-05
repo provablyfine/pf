@@ -6,6 +6,7 @@ import secrets
 import base64
 
 from . import base64url
+from . import ssh
 
 import cryptography.hazmat.primitives.asymmetric.ed25519
 import cryptography.hazmat.primitives.asymmetric.ec
@@ -13,11 +14,26 @@ import cryptography.hazmat.primitives.serialization
 
 
 @enum.unique
+class SshFingerprintFormat(enum.Enum):
+    MD5 = 1
+    SHA1 = 2
+    SHA256 = 3
+
+
+@enum.unique
 class KeyType(enum.Enum):
     ED25519 = 1
-    EC = 2
+    ECDSA = 2
     SYMMETRIC = 3
     RSA = 4
+    ECDSA_NISTP256 = 5
+    ECDSA_NISTP384 = 6
+    ECDSA_NISTP521 = 7
+    # We do not provide smaller keys because the
+    # current secure minimum key size for RSA is 3072
+    RSA_3072 = 8
+    RSA_7680 = 9
+    RSA_15360 = 10
 
 def rfc7638_thumbprint(data):
     needed = {
@@ -85,12 +101,56 @@ class Public:
             case cryptography.hazmat.primitives.asymmetric.ed25519.Ed25519PublicKey():
                 return KeyType.ED25519
             case cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePublicKey():
-                return KeyType.EC
+                match self._key.curve:
+                    case cryptography.hazmat.primitives.asymmetric.ec.SECP256R1():
+                        return KeyType.ECDSA_NISTP256
+                    case cryptography.hazmat.primitives.asymmetric.ec.SECP384R1():
+                        return KeyType.ECDSA_NISTP384
+                    case cryptography.hazmat.primitives.asymmetric.ec.SECP521R1():
+                        return KeyType.ECDSA_NISTP521
             case cryptography.hazmat.primitives.asymmetric.rsa.RSAPublicKey():
+                # XXX key size
                 return KeyType.RSA
 
     def thumbprint(self) -> str:
         return rfc7638_thumbprint(self.to_dict())
+
+    def match_ssh_fingerprint(self, expected_fingerprint):
+        colon = expected_fingerprint.find(':')
+        prefix = expected_fingerprint[:colon]
+        match prefix:
+            case 'MD5':
+                format = SshFingerprintFormat.MD5
+            case 'SHA1':
+                format = SshFingerprintFormat.SHA1
+            case 'SHA256':
+                format = SshFingerprintFormat.SHA256
+        got_fingerprint = self.ssh_fingerprint(format=format)
+        return expected_fingerprint == got_fingerprint
+
+    def ssh_fingerprint(self, format: SshFingerprintFormat = SshFingerprintFormat.SHA256) -> str:
+        match format:
+            case SshFingerprintFormat.SHA256:
+                h = cryptography.hazmat.primitives.serialization.ssh_key_fingerprint(
+                    self.to_crypto(),
+                    cryptography.hazmat.primitives.hashes.SHA256(),
+                )
+                fingerprint = base64.b64encode(h).rstrip(b'=').decode('ascii')
+                return f'SHA256:{fingerprint}'
+            case SshFingerprintFormat.SHA1:
+                h = cryptography.hazmat.primitives.serialization.ssh_key_fingerprint(
+                    self.to_crypto(),
+                    cryptography.hazmat.primitives.hashes.SHA1(),
+                )
+                fingerprint = base64.b64encode(h).rstrip(b'=').decode('ascii')
+                return f'SHA1:{fingerprint}'
+            case SshFingerprintFormat.MD5:
+                h = cryptography.hazmat.primitives.serialization.ssh_key_fingerprint(
+                    self.to_crypto(),
+                    cryptography.hazmat.primitives.hashes.MD5(),
+                )
+                fingerprint = ':'.join('%02x' % i for i in h)
+                return f'MD5:{fingerprint}'
 
     def to_dict(self) -> dict:
         match self._key:
@@ -160,6 +220,35 @@ class Public:
         key = cryptography.hazmat.primitives.serialization.load_pem_public_key(data)
         return Private(key)
 
+    def to_openssh(self) -> bytes:
+        return self._key.public_bytes(
+            encoding=cryptography.hazmat.primitives.serialization.Encoding.OpenSSH,
+            format=cryptography.hazmat.primitives.serialization.PublicFormat.OpenSSH,
+        )
+
+    @classmethod
+    def from_openssh(klass, data: bytes) -> Private:
+        key = cryptography.hazmat.primitives.serialization.load_ssh_public_key(data)
+        return Public(key)
+
+    def to_ssh(self) -> bytes:
+        data = self.to_openssh()
+        items = data.split(b' ')
+        assert len(items) == 2
+        return base64.b64decode(items[1])
+
+    @classmethod
+    def from_ssh(klass, data: bytes):
+        # Extract the key type from the ssh buffer
+        reader = ssh.buffer.Reader(data)
+        key_type = reader.read_string()
+        openssh = [
+            key_type,
+            base64.b64encode(data),
+            b'username@host',
+        ]
+        return klass.from_openssh(b' '.join(openssh))
+
 
 class Private:
     def __init__(self, key):
@@ -174,8 +263,18 @@ class Private:
         match key_type:
             case KeyType.ED25519:
                 return klass.generate_ed25519()
-            case KeyType.EC:
-                return klass.generate_ec()
+            case KeyType.ECDSA_NISTP256 | KeyType.ECDSA:
+                return klass.generate_ecdsa_nistp256()
+            case KeyType.ECDSA_NISTP384:
+                return klass.generate_ecdsa_nistp384()
+            case KeyType.ECDSA_NISTP521:
+                return klass.generate_ecdsa_nistp521()
+            case KeyType.RSA_3072:
+                return klass.generate_rsa(3072)
+            case KeyType.RSA_7680:
+                return klass.generate_rsa(7680)
+            case KeyType.RSA_15360:
+                return klass.generate_rsa(15360)
             case _:
                 assert False
 
@@ -185,9 +284,24 @@ class Private:
         return Private(key)
 
     @classmethod
-    def generate_ec(klass) -> Private:
-        key = cryptography.hazmat.primitives.asymmetric.ec.generate_private_key(cryptography.hazmat.primitives.asymmetric.ec.SECP256R1)
-        return key
+    def generate_ecdsa_nistp256(klass) -> Private:
+        key = cryptography.hazmat.primitives.asymmetric.ec.generate_private_key(cryptography.hazmat.primitives.asymmetric.ec.SECP256R1())
+        return Private(key)
+
+    @classmethod
+    def generate_ecdsa_nistp384(klass) -> Private:
+        key = cryptography.hazmat.primitives.asymmetric.ec.generate_private_key(cryptography.hazmat.primitives.asymmetric.ec.SECP384R1())
+        return Private(key)
+
+    @classmethod
+    def generate_ecdsa_nistp521(klass) -> Private:
+        key = cryptography.hazmat.primitives.asymmetric.ec.generate_private_key(cryptography.hazmat.primitives.asymmetric.ec.SECP521R1())
+        return Private(key)
+
+    @classmethod
+    def generate_rsa(klass, size: int) -> Private:
+        key = cryptography.hazmat.primitives.asymmetric.rsa.generate_private_key(public_exponent=65537, key_size=size)
+        return Private(key)
 
     def thumbprint(self) -> str:
         return rfc7638_thumbprint(self.to_dict())
@@ -237,7 +351,6 @@ class Private:
     def public(self) -> Public:
         return Public(self._key.public_key())
 
-
     def to_crypto(self):
         return self._key
 
@@ -249,10 +362,76 @@ class Private:
         return self._key.private_bytes(
             encoding=cryptography.hazmat.primitives.serialization.Encoding.PEM,
             format=cryptography.hazmat.primitives.serialization.PrivateFormat.PKCS8,
-            encryption_algorithm=cryptography.hazmat.primitives.serialization.NoEncryption,
+            encryption_algorithm=cryptography.hazmat.primitives.serialization.NoEncryption(),
         )
 
     @classmethod
     def from_pem(klass, data: bytes, password: str=None) -> Private:
         key = cryptography.hazmat.primitives.serialization.load_pem_private_key(data, password=password)
         return Private(key)
+
+    def to_openssh(self) -> bytes:
+        return self._key.private_bytes(
+            encoding=cryptography.hazmat.primitives.serialization.Encoding.PEM,
+            format=cryptography.hazmat.primitives.serialization.PrivateFormat.OpenSSH,
+            encryption_algorithm=cryptography.hazmat.primitives.serialization.NoEncryption(),
+        )
+
+    @classmethod
+    def from_openssh(klass, data: bytes, password: str=None) -> Private:
+        key = cryptography.hazmat.primitives.serialization.load_ssh_private_key(data, password=password)
+        return Private(key)
+
+    def to_ssh(self) -> bytes:
+        # The purpose of this method is to generate a binary blob for the private key
+        # that is compatible with the ssh-agent protocol. Because this binary blob format
+        # is pretty much the one used to store private keys within openssn private key files,
+        # one might think that we just need to call to_openssh() above and extract from the
+        # base64 output the private key binary blob and return it. Sadly, doing this correctly
+        # would require us to know exactly the format of each private key type because
+        # the private key blob is not framed.
+        # Based on this, I decided to just generate the binary blob manually.
+        # Hence, the code below.
+        writer = ssh.buffer.Writer()
+        match self._key:
+            case cryptography.hazmat.primitives.asymmetric.ed25519.Ed25519PrivateKey():
+                # https://datatracker.ietf.org/doc/html/draft-miller-ssh-agent#name-eddsa-keys
+                writer.write_string(b'ssh-ed25519')
+                public_key = self._key.public_key().public_bytes_raw()
+                private_key = self._key.private_bytes_raw()
+                writer.write_string(public_key)
+                writer.write_string(private_key + public_key)
+                return writer.to_bytes()
+            case cryptography.hazmat.primitives.asymmetric.rsa.RSAPrivateKey():
+                # https://datatracker.ietf.org/doc/html/draft-miller-ssh-agent#name-rsa-keys
+                writer.write_string(b'ssh-rsa')
+                private_numbers = self._key.private_numbers()
+                public_numbers = private_numbers.public_numbers
+                writer.write_mpint(public_numbers.n)
+                writer.write_mpint(public_numbers.e)
+                writer.write_mpint(private_numbers.d)
+                writer.write_mpint(private_numbers.iqmp)
+                writer.write_mpint(private_numbers.p)
+                writer.write_mpint(private_numbers.q)
+                return writer.to_bytes()
+            case cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePrivateKey():
+                # https://datatracker.ietf.org/doc/html/draft-miller-ssh-agent#name-ecdsa-keys
+                match self._key.curve:
+                    case cryptography.hazmat.primitives.asymmetric.ec.SECP256R1():
+                        curve = b'nistp256'
+                    case cryptography.hazmat.primitives.asymmetric.ec.SECP384R1():
+                        curve = b'nistp384'
+                    case cryptography.hazmat.primitives.asymmetric.ec.SECP521R1():
+                        curve = b'nistp521'
+                writer.write_string(b'ecdsa-sha2-' + curve)
+                writer.write_string(curve)
+                q = self._key.public_key().public_bytes(
+                    encoding= cryptography.hazmat.primitives.serialization.Encoding.X962,
+                    format=cryptography.hazmat.primitives.serialization.PublicFormat.UncompressedPoint,
+                )
+                d = self._key.private_numbers().private_value
+                writer.write_string(q)
+                writer.write_mpint(d)
+                return writer.to_bytes()
+            case _:
+                assert False

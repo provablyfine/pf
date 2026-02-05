@@ -12,25 +12,23 @@ def exception(f):
     return wrapper
 
 
-def load_public_key(data: bytes) -> ssh.key.Public:
+def load_public_key(data: bytes) -> jwk.Public:
     try:
-        key = jwk.Public.from_pem(data)
-        return ssh.key.Public(key.to_crypto())
+        return jwk.Public.from_pem(data)
     except:
         pass
     try:
-        return ssh.key.Public.from_openssh(data)
+        return jwk.Public.from_openssh(data)
     except:
         raise exceptions.UI('Unable to load key as either a PEM or an OpenSSH-formatted public key')
 
 
-def load_private_key(data: bytes, password: str=None) -> ssh.key.Private:
+def load_private_key(data: bytes, password: str=None) -> jwk.Private:
     try:
-        key = jwk.Private.from_pem(data, password)
-        return ssh.key.Private(key.to_crypto())
+        return jwk.Private.from_pem(data, password)
     except:
         pass
     try:
-        return ssh.key.Private.from_openssh(data)
+        return jwk.Private.from_openssh(data)
     except:
         raise exceptions.UI('Unable to load key as either a PEM or an OpenSSH-formatted public key')

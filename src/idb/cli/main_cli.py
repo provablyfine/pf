@@ -59,13 +59,13 @@ def _login_function(args):
         except:
             raise exceptions.UI("Unable to connect to user's SSH agent")
         session_key = jwk.Private.generate_ed25519()
-        ssh_agent.add(session_key.to_ssh_bytes(), comment='idb-session', lifetime=1800)
+        ssh_agent.add(session_key.to_ssh(), comment='idb-session', lifetime=1800)
         c.session_key = session_key.public().ssh_fingerprint()
     else:
         with open(args.session_key, 'rb') as f:
             data = f.read()
         try:
-            session_key = jwk.Private.from_data(data)
+            session_key = ssh_utils.load_private_key(data)
         except ValueError:
             raise exceptions.UI('Unable to parse data either as PEM or SSH format')
         c.session_key = args.session_key

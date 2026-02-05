@@ -111,7 +111,7 @@ def create_algorithm_class(agent: ssh.agent.Client, key: jwk.Public):
     def custom_init(self, *args, **kwargs):
         pass
     def custom_sign(self, message):
-        return agent.sign(key.to_ssh_bytes(), message, 0)
+        return agent.sign(key.to_ssh(), message, 0)
 
     Type = type(
         'CustomSshAgentAlgorithm',
@@ -133,7 +133,7 @@ def private_key_signer(prefix: str, filename: str):
         with open(filename, 'rb') as f:
             data = f.read()
         try:
-            key = jwk.Private.from_data(data, password=None)
+            key = ssh_utils.load_private_key(data, password=None)
         except ValueError:
             raise exceptions.UI('Unable to parse data either as PEM or SSH format')
         if key.type != jwk.KeyType.ED25519:
@@ -149,7 +149,7 @@ def private_key_signer(prefix: str, filename: str):
         ssh_agent = ssh.agent.Client()
         algorithm = None
         for id in ssh_agent.list_identities():
-            public_key = jwk.Public.from_ssh_bytes(id.public_key)
+            public_key = jwk.Public.from_ssh(id.public_key)
             if id.comment == filename or public_key.match_ssh_fingerprint(filename):
                 if public_key.type != jwk.KeyType.ED25519:
                     raise exceptions.UI(f'Unsupported: {key.type}')
