@@ -111,7 +111,7 @@ def create_algorithm_class(agent: ssh.agent.Client, key: jwk.Public):
     def custom_init(self, *args, **kwargs):
         pass
     def custom_sign(self, message):
-        return agent.sign(key.to_ssh(), message, 0)
+        return agent.sign(key, message, 0)
 
     Type = type(
         'CustomSshAgentAlgorithm',
@@ -149,11 +149,11 @@ def private_key_signer(prefix: str, filename: str):
         ssh_agent = ssh.agent.Client()
         algorithm = None
         for id in ssh_agent.list_identities():
-            public_key = jwk.Public.from_ssh(id.public_key)
-            if id.comment == filename or public_key.match_ssh_fingerprint(filename):
-                if public_key.type != jwk.KeyType.ED25519:
+            if id.comment == filename or id.public_key.match_ssh_fingerprint(filename):
+                if id.public_key.type != jwk.KeyType.ED25519:
                     raise exceptions.UI(f'Unsupported: {key.type}')
-                algorithm = create_algorithm_class(ssh_agent, public_key)
+                algorithm = create_algorithm_class(ssh_agent, id.public_key)
+                public_key = id.public_key
                 break
         if algorithm is None:
             raise exceptions.UI(f'Unable to find key matching {filename}')

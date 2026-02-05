@@ -6,6 +6,8 @@ import enum
 
 from . import exceptions
 from . import buffer
+from . import serde
+from .. import jwk
 
 Method = collections.namedtuple('Method', ['encrypt', 'decrypt'])
 
@@ -64,13 +66,13 @@ class Client:
         response = buffer.Reader(rx.contents)
         nkeys = response.read_uint32()
         for _ in range(nkeys):
-            key = response.read_string()
+            key = serde.deserialize_public(response.read_string())
             comment = response.read_string()
             yield Client.Identity(public_key=key, comment=comment)
 
-    def sign(self, public_key: bytes, data: bytes, flags: int) -> bytes:
+    def sign(self, public_key: jwk.Public, data: bytes, flags: int) -> bytes:
         request = buffer.Writer()
-        request.write_string(public_key)
+        request.write_string(serde.serialize_public(public_key))
         request.write_string(data)
         request.write_uint32(flags)
         self._send_request(Client.SSH_AGENTC_SIGN_REQUEST, request)
@@ -83,9 +85,9 @@ class Client:
         signature = response.read_string()
         return signature
 
-    def add(self, key: bytes, comment: str, lifetime: int=None, require_confirmation: bool=False):
+    def add(self, private_key: jwk.Private, comment: str, lifetime: int=None, require_confirmation: bool=False):
         request = buffer.Writer()
-        request.write_bytes(key)
+        request.write_bytes(serde.serialize_private(private_key))
         request.write_string(comment.encode('utf-8'))
         request_id = Client.SSH_AGENTC_ADD_IDENTITY
         if lifetime is not None:
@@ -106,9 +108,9 @@ class Client:
         if message.type == Client.SSH_AGENT_FAILURE:
             raise exceptions.Error(f'Unable to remove keys from agent: {message.contents}')
 
-    def remove(self, key: bytes):
+    def remove(self, public_key: jwk.Public):
         request = buffer.Writer()
-        request.write_string(key)
+        request.write_string(serde.serialize_public(public_key))
         self._send_request(Client.SSH_AGENTC_REMOVE_IDENTITY, request)
         message = self._recv_message()
         if message.type == Client.SSH_AGENT_FAILURE:

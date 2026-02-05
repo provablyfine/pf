@@ -59,7 +59,7 @@ def _login_function(args):
         except:
             raise exceptions.UI("Unable to connect to user's SSH agent")
         session_key = jwk.Private.generate_ed25519()
-        ssh_agent.add(session_key.to_ssh(), comment='idb-session', lifetime=1800)
+        ssh_agent.add(session_key, comment='idb-session', lifetime=1800)
         c.session_key = session_key.public().ssh_fingerprint()
     else:
         with open(args.session_key, 'rb') as f:

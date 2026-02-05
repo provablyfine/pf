@@ -12,18 +12,14 @@ def _agent_list_identities_function(args):
     ssh_agent = ssh.agent.Client()
     rows = []
     for id in ssh_agent.list_identities():
-        key = jwk.Public.from_ssh_bytes(id.public_key)
-        rows.append((key.ssh_fingerprint(), str(key.type)[len('KeyType.'):], id.comment))
-        serialized = key.to_ssh_bytes()
-        assert serialized == id.public_key
+        rows.append((id.public_key.ssh_fingerprint(), str(id.public_key.type)[len('KeyType.'):], id.comment))
     if len(rows) > 0:
         print(tabulate.tabulate(rows, headers=['fingerprint', 'key type', 'comment']))
 
 
 def _agent_find_by_fingerprint(ssh_agent, fingerprint):
     for identity in ssh_agent.list_identities():
-        key = jwk.Public.from_ssh_bytes(identity.public_key)
-        if key.match_ssh_fingerprint(fingerprint):
+        if identity.public_key.match_ssh_fingerprint(fingerprint):
             return identity
     raise exceptions.UI(f'Unable to find key {fingerprint}')
 
@@ -38,9 +34,9 @@ def _agent_sign_function(args):
         case None:
             flags = 0
         case 'SHA2_256':
-            flags = ssh.agent.RSA.SHA2_256
+            flags = ssh.constants.RSA.SHA2_256
         case 'SHA2_512':
-            flags = ssh.agent.RSA.SHA2_512
+            flags = ssh.constants.RSA.SHA2_512
         case _:
             assert False
     signature = ssh_agent.sign(identity.public_key, data, flags=flags)
@@ -52,8 +48,8 @@ def _agent_add_function(args):
     ssh_agent = ssh.agent.Client()
     with open(args.filename, 'rb') as f:
         data = f.read()
-    key = jwk.Private.from_ssh(data)
-    ssh_agent.add(key.to_ssh_bytes(), comment=args.comment, lifetime=args.lifetime, require_confirmation=args.require_confirmation)
+    key = jwk.Private.from_openssh(data)
+    ssh_agent.add(key, comment=args.comment, lifetime=args.lifetime, require_confirmation=args.require_confirmation)
 
 
 @ssh_utils.exception
@@ -62,7 +58,7 @@ def _agent_del_function(args):
     if args.all:
         ssh_agent.remove_all()
     elif args.fingerprint:
-        identity = _agent_find_by_fingerprint(ssh, args.fingerprint)
+        identity = _agent_find_by_fingerprint(ssh_agent, args.fingerprint)
         ssh_agent.remove(identity.public_key)
     else:
         assert False
