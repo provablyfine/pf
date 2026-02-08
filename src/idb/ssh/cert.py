@@ -34,19 +34,82 @@ class Extensions:
     permit_x11_forwarding: bool = None
 
 
-@dataclasses.dataclass(frozen=True)
 class Cert:
-    public_key: jwk.Public
-    serial_number: int
-    role: Role
-    identifier: str
-    principals: tuple[str]
-    valid_after: int
-    valid_before: int
-    critical_options: CriticalOptions
-    extensions: Extensions
-    signer_public_key: jwk.Public
+    def __init__(self, cert):
+        self._cert = cert
 
+    @property
+    def public_key(self) -> jwk.Public:
+        public_key = jwk.Public(self._cert.public_key())
+        return public_key
+
+    @property
+    def serial_number(self) -> int:
+        return self._cert.serial
+
+    @property
+    def role(self) -> Role:
+        match self._cert.type:
+            case cryptography.hazmat.primitives.serialization.SSHCertificateType.HOST:
+                role = Role.HOST
+            case cryptography.hazmat.primitives.serialization.SSHCertificateType.USER:
+                role = Role.USER
+        return role
+
+    @property
+    def identifier(self) -> str:
+        return self._cert.key_id.decode('utf-8')
+
+    @property
+    def principals(self) -> tuple[str]:
+        return tuple([p.decode('utf-8') for p in self._cert.valid_principals])
+
+    @property
+    def valid_after(self) -> int:
+        return self._cert.valid_after
+
+    @property
+    def valid_before(self) -> int:
+        return self._cert.valid_before
+
+    @property
+    def critical_options(self) -> CriticalOptions:
+        if b'force-command' in self._cert.critical_options:
+            force_command = self._cert.critical_options[b'force-command'].decode('utf-8')
+        else:
+            force_command = None
+        if b'source-address' in self._cert.critical_options:
+            source_address = self._cert.critical_options[b'source-address'].decode('utf-8').split(',')
+        else:
+            source_address = None
+        verify_required = self._cert.critical_options.get(b'verify-required', False)
+        return CriticalOptions(
+            force_command=force_command,
+            source_address=source_address,
+            verify_required=verify_required
+        )
+
+    @property
+    def extensions(self) -> Extensions:
+        no_touch_required = self._cert.extensions.get(b'no-touch-required', False)
+        permit_agent_forwarding = self._cert.extensions.get(b'permit-agent-forwarding', False)
+        permit_port_forwarding = self._cert.extensions.get(b'permit-port-forwarding', False)
+        permit_pty = self._cert.extensions.get(b'permit-pty', False)
+        permit_user_rc = self._cert.extensions.get(b'permit-user-rc', False)
+        permit_x11_forwarding = self._cert.extensions.get(b'permit-X11-forwarding', False)
+
+        return Extensions(
+            no_touch_required=no_touch_required,
+            permit_agent_forwarding=permit_agent_forwarding,
+            permit_port_forwarding=permit_port_forwarding,
+            permit_pty=permit_pty,
+            permit_user_rc=permit_user_rc,
+            permit_x11_forwarding=permit_x11_forwarding,
+        )
+
+    @property
+    def signer_public_key(self) -> jwk.Public:
+        return jwk.Public(self._cert.signature_key())
 
     def is_valid(self) -> bool:
         now = int(time.time())
@@ -55,71 +118,53 @@ class Cert:
         return True
 
     @classmethod
-    def create_host(klass, public_key: jwk.Public, serial_number: int, identifier: str, principals: list[str], valid_after: int, valid_before: int, signer_public_key: jwk.Public) -> Cert:
-        return Cert(
-            public_key=public_key,
-            serial_number=serial_number,
-            role=Role.HOST,
-            identifier=identifier,
-            principals=tuple(principals),
-            valid_after=valid_after,
-            valid_before=valid_before,
-            critical_options=CriticalOptions(),
-            extensions=Extensions(),
-            signer_public_key=signer_public_key,
-        )
-
-    @classmethod
-    def create_user(klass, public_key: jwk.Public, serial_number: int, identifier: str, principals: list[str], valid_after: int, valid_before: int, critical_options: CriticalOptions, extensions: Extensions, signer_public_key: jwk.Public) -> Cert:
-        return Cert(
-            public_key=public_key,
-            serial_number=serial_number,
-            role=Role.USER,
-            identifier=identifier,
-            principals=tuple(principals),
-            valid_after=valid_after,
-            valid_before=valid_before,
-            critical_options=critical_options,
-            extensions=extensions,
-            signer_public_key=signer_public_key,
-        )
-
-    def to_openssh(self, signer: jwk.Private) -> bytes:
-        match self.role:
-            case Role.HOST:
-                type = cryptography.hazmat.primitives.serialization.SSHCertificateType.HOST
-            case Role.USER:
-                type = cryptography.hazmat.primitives.serialization.SSHCertificateType.USER
-
+    def create_host(klass, public_key: jwk.Public, serial_number: int, identifier: str, principals: list[str], valid_after: int, valid_before: int, signer: jwk.Private) -> Cert:
         builder = (
             cryptography.hazmat.primitives.serialization.SSHCertificateBuilder()
-            .public_key(self.public_key.to_crypto())
-            .type(type)
-            .valid_before(self.valid_before)
-            .valid_after(self.valid_after)
-            .key_id(self.identifier)
-            .valid_principals([p.encode('utf-8') for p in self.principals])
+            .public_key(public_key.to_crypto())
+            .type(cryptography.hazmat.primitives.serialization.SSHCertificateType.HOST)
+            .valid_before(valid_before)
+            .valid_after(valid_after)
+            .key_id(identifier)
+            .valid_principals([p.encode('utf-8') for p in principals])
         )
-        if self.critical_options.force_command is not None:
-            builder = builder.add_critical_option(b'force-command', self.critical_options.force_command.encode('utf-8'))
-        if self.critical_options.source_address is not None:
-            builder = builder.add_critical_option(b'source-address', ','.join(self.critical_options.source_address).encode('utf-8'))
-        if self.critical_options.verify_required:
+        cert = builder.sign(signer.to_crypto())
+        return Cert(cert)
+
+    @classmethod
+    def create_user(klass, public_key: jwk.Public, serial_number: int, identifier: str, principals: list[str], valid_after: int, valid_before: int, critical_options: CriticalOptions, extensions: Extensions, signer: jwk.Private) -> Cert:
+        builder = (
+            cryptography.hazmat.primitives.serialization.SSHCertificateBuilder()
+            .public_key(public_key.to_crypto())
+            .type(cryptography.hazmat.primitives.serialization.SSHCertificateType.USER)
+            .valid_before(valid_before)
+            .valid_after(valid_after)
+            .key_id(identifier)
+            .valid_principals([p.encode('utf-8') for p in principals])
+        )
+        if critical_options.force_command is not None:
+            builder = builder.add_critical_option(b'force-command', critical_options.force_command.encode('utf-8'))
+        if critical_options.source_address is not None:
+            builder = builder.add_critical_option(b'source-address', ','.join(critical_options.source_address).encode('utf-8'))
+        if critical_options.verify_required:
             builder = builder.add_critical_option(b'verify-required', b'')
-        if self.extensions.no_touch_required:
+        if extensions.no_touch_required:
             builder = builder.add_extension(b'no-touch-required', b'')
-        if self.extensions.permit_agent_forwarding:
+        if extensions.permit_agent_forwarding:
             builder = builder.add_extension(b'permit-agent-forwarding', b'')
-        if self.extensions.permit_port_forwarding:
+        if extensions.permit_port_forwarding:
             builder = builder.add_extension(b'permit-port-forwarding', b'')
-        if self.extensions.permit_pty:
+        if extensions.permit_pty:
             builder = builder.add_extension(b'permit-pty', b'')
-        if self.extensions.permit_user_rc:
+        if extensions.permit_user_rc:
             builder = builder.add_extension(b'permit-user-rc', b'')
-        if self.extensions.permit_x11_forwarding:
+        if extensions.permit_x11_forwarding:
             builder = builder.add_extension(b'permit-X11-forwarding', b'')
-        data = builder.sign(signer.to_crypto()).public_bytes()
-        return data
+        cert = builder.sign(signer.to_crypto())
+        return Cert(cert)
+
+    def to_openssh(self) -> bytes:
+        return self._cert.public_bytes()
 
     @classmethod
     def from_openssh(klass, data: bytes) -> Cert:
@@ -131,55 +176,4 @@ class Cert:
             raise exceptions.Error('Failed to load certificate. Unsupported algorithm.')
         if len(cert.nonce) < 16:
             raise exceptions.Error('Nonce must be bigger than 16 bytes')
-        public_key = jwk.Public(cert.public_key())
-
-        if b'force-command' in cert.critical_options:
-            force_command = cert.critical_options[b'force-command'].decode('utf-8')
-        else:
-            force_command = None
-        if b'source-address' in cert.critical_options:
-            source_address = cert.critical_options[b'source-address'].decode('utf-8').split(',')
-        else:
-            source_address = None
-        verify_required = cert.critical_options.get(b'verify-required', False)
-        critical_options = CriticalOptions(
-            force_command=force_command,
-            source_address=source_address,
-            verify_required=verify_required
-        )
-
-        no_touch_required = cert.extensions.get(b'no-touch-required', False)
-        permit_agent_forwarding = cert.extensions.get(b'permit-agent-forwarding', False)
-        permit_port_forwarding = cert.extensions.get(b'permit-port-forwarding', False)
-        permit_pty = cert.extensions.get(b'permit-pty', False)
-        permit_user_rc = cert.extensions.get(b'permit-user-rc', False)
-        permit_x11_forwarding = cert.extensions.get(b'permit-X11-forwarding', False)
-
-        extensions = Extensions(
-            no_touch_required=no_touch_required,
-            permit_agent_forwarding=permit_agent_forwarding,
-            permit_port_forwarding=permit_port_forwarding,
-            permit_pty=permit_pty,
-            permit_user_rc=permit_user_rc,
-            permit_x11_forwarding=permit_x11_forwarding,
-        )
-
-        signature_public_key = jwk.Public(cert.signature_key())
-        match cert.type:
-            case cryptography.hazmat.primitives.serialization.SSHCertificateType.HOST:
-                role = Role.HOST
-            case cryptography.hazmat.primitives.serialization.SSHCertificateType.USER:
-                role = Role.USER
-
-        return Cert(
-            public_key=public_key,
-            serial_number=cert.serial,
-            role=role,
-            identifier=cert.key_id.decode('utf-8'),
-            principals=[p.decode('utf-8') for p in cert.valid_principals],
-            valid_after=cert.valid_after,
-            valid_before=cert.valid_before,
-            critical_options=critical_options,
-            extensions=extensions,
-            signer_public_key=signature_public_key,
-        )
+        return Cert(cert)

@@ -17,6 +17,7 @@ from . import exceptions
 from . import ssh_utils
 from . import admin_cli
 from . import ssh_cli
+from . import openssh_cli
 
 
 logger = logging.getLogger(__name__)
@@ -112,6 +113,9 @@ def main():
 
     admin_parser = subparsers.add_parser('admin', help='Admin-related functions')
     admin_cli.add_subparsers(admin_parser)
+
+    openssh_parser = subparsers.add_parser('openssh', help='OpenSSH integration')
+    openssh_cli.add_subparsers(openssh_parser)
 
     ssh_parser = subparsers.add_parser('ssh', help='SSH-related functions')
     ssh_cli.add_subparsers(ssh_parser)

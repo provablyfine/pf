@@ -60,6 +60,14 @@ def _generate_function(args):
     sys.stdout.write(output.decode('utf-8'))
 
 
+def _public_function(args):
+    with open(args.filename, 'rb') as f:
+        data = f.read()
+    key = ssh_utils.load_private_key(data)
+    output = _format(key.public(), args.format)
+    sys.stdout.write(output.decode('utf-8'))
+
+
 def add_subparsers(parser):
     # commands for debugging and testing
     subparsers = parser.add_subparsers(required=True)
@@ -73,3 +81,8 @@ def add_subparsers(parser):
     convert_parser.add_argument('filename')
     convert_parser.add_argument('--to', choices=['openssh', 'pem'], help='Output format. Default: %(default)s', default='openssh')
     convert_parser.set_defaults(func=_convert_function)
+
+    public_parser = subparsers.add_parser('public', help='Generate public key from private key')
+    public_parser.add_argument('filename')
+    public_parser.add_argument('--format', choices=['openssh', 'pem'], help='Output format. Default: %(default)s', default='openssh')
+    public_parser.set_defaults(func=_public_function)

@@ -1,3 +1,4 @@
+from __future__ import annotations
 import collections
 import os
 import socket
@@ -6,6 +7,7 @@ import enum
 
 from . import exceptions
 from . import buffer
+from . import cert
 from . import serde
 from .. import jwk
 
@@ -25,7 +27,7 @@ class Client:
     SSH_AGENT_CONSTRAIN_CONFIRM = 2
     SSH_AGENT_FAILURE = 5
     Message = collections.namedtuple('Message', ['type', 'contents'])
-    Identity = collections.namedtuple('Identity', ['public_key', 'comment'])
+    Identity = collections.namedtuple('Identity', ['public_key', 'comment', 'raw'])
 
     def __init__(self):
         path = os.getenv('SSH_AUTH_SOCK')
@@ -66,9 +68,10 @@ class Client:
         response = buffer.Reader(rx.contents)
         nkeys = response.read_uint32()
         for _ in range(nkeys):
-            key = serde.deserialize_public(response.read_string())
+            raw_key = response.read_string()
+            key = serde.deserialize_public(raw_key)
             comment = response.read_string()
-            yield Client.Identity(public_key=key, comment=comment)
+            yield Client.Identity(public_key=key, comment=comment, raw=raw_key)
 
     def sign(self, public_key: jwk.Public, data: bytes, flags: int) -> bytes:
         request = buffer.Writer()
@@ -85,9 +88,16 @@ class Client:
         signature = response.read_string()
         return signature
 
-    def add(self, private_key: jwk.Private, comment: str, lifetime: int=None, require_confirmation: bool=False):
+    def add(self, private_key: jwk.Private, cert: cert.Cert=None, comment: str=None, lifetime: int=None, require_confirmation: bool=False):
+        if cert is None:
+            key = serde.serialize_private(private_key)
+        else:
+            key = serde.serialize_private_certificate(private_key, cert)
+        self._add(key, comment, lifetime, require_confirmation)
+
+    def _add(self, key: bytes, comment: str, lifetime: int=None, require_confirmation: bool=False):
         request = buffer.Writer()
-        request.write_bytes(serde.serialize_private(private_key))
+        request.write_bytes(key)
         request.write_string(comment.encode('utf-8'))
         request_id = Client.SSH_AGENTC_ADD_IDENTITY
         if lifetime is not None:
@@ -108,9 +118,9 @@ class Client:
         if message.type == Client.SSH_AGENT_FAILURE:
             raise exceptions.Error(f'Unable to remove keys from agent: {message.contents}')
 
-    def remove(self, public_key: jwk.Public):
+    def remove(self, identity: Client.Identity):
         request = buffer.Writer()
-        request.write_string(serde.serialize_public(public_key))
+        request.write_string(identity.raw)
         self._send_request(Client.SSH_AGENTC_REMOVE_IDENTITY, request)
         message = self._recv_message()
         if message.type == Client.SSH_AGENT_FAILURE:

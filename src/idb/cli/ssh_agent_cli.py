@@ -3,6 +3,7 @@ import tabulate
 
 from . import ssh_utils
 from . import exceptions
+from . import ssh_utils
 from .. import ssh
 from .. import jwk
 
@@ -46,10 +47,15 @@ def _agent_sign_function(args):
 @ssh_utils.exception
 def _agent_add_function(args):
     ssh_agent = ssh.agent.Client()
-    with open(args.filename, 'rb') as f:
+    with open(args.key, 'rb') as f:
         data = f.read()
-    key = jwk.Private.from_openssh(data)
-    ssh_agent.add(key, comment=args.comment, lifetime=args.lifetime, require_confirmation=args.require_confirmation)
+    key = ssh_utils.load_private_key(data)
+    if args.certificate is None:
+        cert = None
+    else:
+        with open(args.certificate, 'rb') as f:
+            cert = ssh.cert.Cert.from_openssh(f.read())
+    ssh_agent.add(key, cert=cert, comment=args.comment, lifetime=args.lifetime, require_confirmation=args.require_confirmation)
 
 
 @ssh_utils.exception
@@ -59,7 +65,7 @@ def _agent_del_function(args):
         ssh_agent.remove_all()
     elif args.fingerprint:
         identity = _agent_find_by_fingerprint(ssh_agent, args.fingerprint)
-        ssh_agent.remove(identity.public_key)
+        ssh_agent.remove(identity)
     else:
         assert False
 
@@ -80,7 +86,8 @@ def add_subparsers(parser):
     agent_add_key_parser.add_argument('--comment', default='')
     agent_add_key_parser.add_argument('--lifetime', default=None, type=int)
     agent_add_key_parser.add_argument('--require-confirmation', action='store_true')
-    agent_add_key_parser.add_argument('filename')
+    agent_add_key_parser.add_argument('--key', required=True)
+    agent_add_key_parser.add_argument('--certificate')
     agent_add_key_parser.set_defaults(func=_agent_add_function)
 
     agent_del_key_parser = agent_subparsers.add_parser('del')

@@ -5,7 +5,15 @@ import cryptography.hazmat.primitives.asymmetric.ec
 import cryptography.hazmat.primitives.serialization
 
 from . import buffer
+from . import cert
 from .. import jwk
+
+
+def serialize_cert(cert: cert.Cert) -> bytes:
+    data = cert.to_openssh()
+    items = data.split(b' ')
+    assert len(items) >= 2
+    return base64.b64decode(items[1])
 
 
 def serialize_public(key: jwk.Public) -> bytes:
@@ -25,6 +33,28 @@ def deserialize_public(data: bytes) -> jwk.Public:
         b'username@host',
     ]
     return jwk.Public.from_openssh(b' '.join(openssh))
+
+
+def serialize_private_certificate(key: jwk.Private, cert: cert.Cert) -> bytes:
+    k = key.to_crypto()
+    writer = buffer.Writer()
+    match k:
+        case cryptography.hazmat.primitives.asymmetric.ed25519.Ed25519PrivateKey():
+            writer.write_string(b'ssh-ed25519-cert-v01@openssh.com')
+            writer.write_string(serialize_cert(cert))
+            public_key = k.public_key().public_bytes_raw()
+            private_key = k.private_bytes_raw()
+            writer.write_string(public_key)
+            writer.write_string(private_key + public_key)
+            return writer.to_bytes()
+        case cryptography.hazmat.primitives.asymmetric.rsa.RSAPrivateKey():
+            # XXX
+            assert False
+        case cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePrivateKey():
+            # XXX
+            assert False
+        case _:
+            assert False
 
 
 def serialize_private(key: jwk.Private) -> bytes:

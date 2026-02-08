@@ -89,9 +89,9 @@ def _sign_host_function(args):
         principals=args.principal,
         valid_after=valid_after,
         valid_before=valid_before,
-        signer_public_key=signer_private_key.public(),
+        signer=signer_private_key,
     )
-    certificate = cert.to_openssh(signer_private_key)
+    certificate = cert.to_openssh()
     print(certificate.decode('utf-8'))
 
 
@@ -138,9 +138,9 @@ def _sign_user_function(args):
         valid_before=valid_before,
         critical_options=critical_options,
         extensions=extensions,
-        signer_public_key=signer_private_key.public(),
+        signer=signer_private_key,
     )
-    certificate = cert.to_openssh(signer_private_key)
+    certificate = cert.to_openssh()
     print(certificate.decode('utf-8'))
 
 
