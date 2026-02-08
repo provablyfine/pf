@@ -189,4 +189,11 @@ def create(conf):
     app.add('/idb/identity/<int:identity_id>', endpoints.identity.update_endpoint, methods=['PATCH'])
     app.add('/idb/identity/<int:identity_id>', endpoints.identity.delete_endpoint, methods=['DELETE'])
     app.add('/idb/identity/<int:identity_id>/invite', endpoints.identity.invite_endpoint, methods=['POST'])
+    #app.add('/idb/ssh/host/certificate', endpoints.ssh.sign_host_certificate, methods=['POST'])
+    #app.add('/idb/ssh/host/ca', endpoints.ssh.read_host_ca, methods=['GET'])
+    #app.add('/idb/ssh/host/krl', endpoints.ssh.read_host_krl, methods=['GET'])
+    #app.add('/idb/ssh/user/certificate', endpoints.ssh.sign_user_certificate, methods=['POST'])
+    #app.add('/idb/ssh/user/ca', endpoints.ssh.read_user_ca, methods=['GET'])
+    #app.add('/idb/ssh/user/krl', endpoints.ssh.read_user_krl, methods=['GET'])
+    #app.add('/idb/ssh/user/allowed', endpoints.ssh.read_user_allowed, methods=['GET'])
     return app
