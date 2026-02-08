@@ -2,6 +2,7 @@ from . import config
 from . import client
 from . import exceptions
 from .. import jwk
+from .. import ssh
 
 
 def _auth_function(args):
@@ -23,6 +24,13 @@ def _auth_function(args):
     host_krl_response = auth.get(f'{auth.directory.ssh}/host/krl')
     if host_krl_response.status_code != 200:
         raise exceptions.UI(host_krl_response.json()['title'])
+
+    try:
+        ssh_agent = ssh.agent.Client()
+    except:
+        raise exceptions.UI("Unable to connect to user's SSH agent")
+
+    ssh_agent.add(user_key, cert=cert_response.content, comment=args.host, lifetime=60)
 
     # Write all output
     with open(args.identity_file, 'wb+') as f:
