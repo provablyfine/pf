@@ -44,6 +44,18 @@ def list_endpoint(request: wa.Request) -> wa.Response:
     )
 
 
+@signature.verify_session
+def read_self_endpoint(request: wa.Request) -> wa.Response:
+    identity = model.identity.read_one(id=ctx.identity_id)
+    assert identity is not None
+
+    identities_by_id = model.identity.serialize([identity])
+    return wa.JSONResponse(
+        status_code=200,
+        json=identities_by_id[ctx.identity_id],
+    )
+
+
 def _read_boundary_ids(boundaries) -> list[int]:
     boundary_id_list = []
     for boundary in boundaries:

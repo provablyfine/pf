@@ -185,6 +185,7 @@ def create(conf):
     app.add('/idb/role/<int:role_id>', endpoints.role.delete_endpoint, methods=['DELETE'])
     app.add('/idb/identity', endpoints.identity.create_endpoint, methods=['POST'])
     app.add('/idb/identity', endpoints.identity.list_endpoint, methods=['GET'])
+    app.add('/idb/identity/self', endpoints.identity.read_self_endpoint, methods=['GET'])
     app.add('/idb/identity/<int:identity_id>', endpoints.identity.update_endpoint, methods=['PATCH'])
     app.add('/idb/identity/<int:identity_id>', endpoints.identity.delete_endpoint, methods=['DELETE'])
     app.add('/idb/identity/<int:identity_id>/invite', endpoints.identity.invite_endpoint, methods=['POST'])
