@@ -1,0 +1,37 @@
+{% for type in [
+  "rsa-3072",
+  "ed25519",
+  "ecdsa-256",
+  "ecdsa-384",
+  "ecdsa-521"
+] %}
+
+Create key
+  $ idbctl ssh key generate --type {{type}} > {{type}}
+  $ idbctl ssh key public {{type}} > {{type}}.pub
+
+Create user certificate
+  $ idbctl ssh cert sign-user -p hello --key {{type}}.pub --with {{type}} > {{type}}-cert.pub
+
+Load user certificate in agent
+  $ idbctl ssh agent add --key ./{{type}} --certificate ./{{type}}-cert.pub
+  $ FINGERPRINT=$(idbctl ssh agent ls -q)
+
+Check certificate has been loaded
+  $ idbctl ssh agent ls
+  fingerprint\s+key type\s+comment (re)
+  -+ + -+ + -+ (re)
+  SHA256:[^ ]+ +[^ ]+ (re)
+
+
+Check we can sign with the key associated with this certificate
+  $ dd if=/dev/random of=./data count=1 bs=16
+  1+0 records in
+  1+0 records out
+  16 bytes copied, .* (re)
+  $ idbctl ssh agent sign --fingerprint $FINGERPRINT --data ./data > signature.bin
+
+Delete the certificate from the agent
+  $ idbctl ssh agent del $FINGERPRINT
+
+{% endfor %}

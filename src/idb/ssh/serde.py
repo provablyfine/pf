@@ -48,11 +48,27 @@ def serialize_private_certificate(key: jwk.Private, cert: cert.Cert) -> bytes:
             writer.write_string(private_key + public_key)
             return writer.to_bytes()
         case cryptography.hazmat.primitives.asymmetric.rsa.RSAPrivateKey():
-            # XXX
-            assert False
+            writer.write_string(b'ssh-rsa-cert-v01@openssh.com')
+            writer.write_string(serialize_cert(cert))
+            private_numbers = k.private_numbers()
+            writer.write_mpint(private_numbers.d)
+            writer.write_mpint(private_numbers.iqmp)
+            writer.write_mpint(private_numbers.p)
+            writer.write_mpint(private_numbers.q)
+            return writer.to_bytes()
         case cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePrivateKey():
-            # XXX
-            assert False
+            match k.curve:
+                case cryptography.hazmat.primitives.asymmetric.ec.SECP256R1():
+                    curve = b'nistp256'
+                case cryptography.hazmat.primitives.asymmetric.ec.SECP384R1():
+                    curve = b'nistp384'
+                case cryptography.hazmat.primitives.asymmetric.ec.SECP521R1():
+                    curve = b'nistp521'
+            writer.write_string(b'ecdsa-sha2-' + curve + b'-cert-v01@openssh.com')
+            writer.write_string(serialize_cert(cert))
+            d = k.private_numbers().private_value
+            writer.write_mpint(d)
+            return writer.to_bytes()
         case _:
             assert False
 

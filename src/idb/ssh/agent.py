@@ -73,9 +73,9 @@ class Client:
             comment = response.read_string()
             yield Client.Identity(public_key=key, comment=comment, raw=raw_key)
 
-    def sign(self, public_key: jwk.Public, data: bytes, flags: int) -> bytes:
+    def sign(self, identity: Client.Identity, data: bytes, flags: int) -> bytes:
         request = buffer.Writer()
-        request.write_string(serde.serialize_public(public_key))
+        request.write_string(identity.raw)
         request.write_string(data)
         request.write_uint32(flags)
         self._send_request(Client.SSH_AGENTC_SIGN_REQUEST, request)

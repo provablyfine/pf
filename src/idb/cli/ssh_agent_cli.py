@@ -1,3 +1,4 @@
+import sys
 
 import tabulate
 
@@ -11,11 +12,21 @@ from .. import jwk
 @ssh_utils.exception
 def _agent_list_identities_function(args):
     ssh_agent = ssh.agent.Client()
-    rows = []
-    for id in ssh_agent.list_identities():
-        rows.append((id.public_key.ssh_fingerprint(), str(id.public_key.type)[len('KeyType.'):], id.comment))
-    if len(rows) > 0:
-        print(tabulate.tabulate(rows, headers=['fingerprint', 'key type', 'comment']))
+    if args.quiet:
+        rows = []
+        for id in ssh_agent.list_identities():
+            rows.append(id.public_key.ssh_fingerprint())
+        output = '\n'.join(rows)
+    else:
+        rows = []
+        for id in ssh_agent.list_identities():
+            rows.append((id.public_key.ssh_fingerprint(), str(id.public_key.type)[len('KeyType.'):], id.comment))
+        if len(rows) > 0:
+            output = tabulate.tabulate(rows, headers=['fingerprint', 'key type', 'comment'])
+        else:
+            output = ''
+    if output:
+        print(output)
 
 
 def _agent_find_by_fingerprint(ssh_agent, fingerprint):
@@ -27,21 +38,30 @@ def _agent_find_by_fingerprint(ssh_agent, fingerprint):
 
 @ssh_utils.exception
 def _agent_sign_function(args):
+    def is_rsa(key):
+        return key.type in [
+            jwk.KeyType.RSA_3072,
+            jwk.KeyType.RSA_7680,
+            jwk.KeyType.RSA_15360,
+        ]
     ssh_agent = ssh.agent.Client()
     identity = _agent_find_by_fingerprint(ssh_agent, args.fingerprint)
     with open(args.data, 'rb') as f:
         data = f.read()
     match args.flags:
         case None:
-            flags = 0
+            if is_rsa(identity.public_key):
+                flags = ssh.constants.RSA.SHA2_256
+            else:
+                flags = 0
         case 'SHA2_256':
             flags = ssh.constants.RSA.SHA2_256
         case 'SHA2_512':
             flags = ssh.constants.RSA.SHA2_512
         case _:
             assert False
-    signature = ssh_agent.sign(identity.public_key, data, flags=flags)
-    print(signature)
+    signature = ssh_agent.sign(identity, data, flags=flags)
+    sys.stdout.buffer.write(signature)
 
 
 @ssh_utils.exception
@@ -74,6 +94,7 @@ def add_subparsers(parser):
     agent_subparsers = parser.add_subparsers(required=True)
 
     agent_list_identities_parser = agent_subparsers.add_parser('ls')
+    agent_list_identities_parser.add_argument('-q', '--quiet', action='store_true')
     agent_list_identities_parser.set_defaults(func=_agent_list_identities_function)
 
     agent_sign_parser = agent_subparsers.add_parser('sign')

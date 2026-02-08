@@ -108,8 +108,17 @@ class Public:
                     case cryptography.hazmat.primitives.asymmetric.ec.SECP521R1():
                         return KeyType.ECDSA_NISTP521
             case cryptography.hazmat.primitives.asymmetric.rsa.RSAPublicKey():
-                # XXX key size
-                return KeyType.RSA
+                match self._key.key_size:
+                    case 3072:
+                        return KeyType.RSA_3072
+                    case 7680:
+                        return KeyType.RSA_7680
+                    case 15360:
+                        return KeyType.RSA_15360
+                    case _:
+                        assert False
+            case _:
+                assert False
 
     def thumbprint(self) -> str:
         return rfc7638_thumbprint(self.to_dict())

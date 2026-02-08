@@ -1,4 +1,5 @@
-access-control.t
-access-control-tag.t
-ssh-certificates.t
+idb-access-control.t
+idb-access-control-tag.t
+idb-ssh-certificates.t
+idb-ssh-agent-keys.t
 *.t.err
