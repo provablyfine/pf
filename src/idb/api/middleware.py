@@ -6,10 +6,11 @@ import collections.abc
 import sqlalchemy
 import cryptography
 
-from . import wa
+from .. import wa
+from .. import base64url
+
 from . import config
 from . import dao_factory
-from . import base64url
 from . import db
 from .context import ctx
 

@@ -1,8 +1,9 @@
 import json
 import sqlalchemy
 
+from ... import wa
+
 from .. import signature
-from .. import wa
 from .. import permission
 from .. import model
 from ..context import ctx

@@ -1,9 +1,10 @@
 import collections
 import logging
 
-from . import wa
-from .context import ctx
+from .. import wa
+
 from . import model
+from .context import ctx
 
 
 logger = logging.getLogger(__name__)

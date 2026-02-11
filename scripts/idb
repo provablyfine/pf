@@ -16,8 +16,8 @@ import argparse
 import urllib.parse
 import wsgiref.simple_server
 
-import idb.app
-import idb.config
+import idb.api.app
+import idb.api.config
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -32,10 +32,10 @@ if __name__ == '__main__':
     if args.port_file is not None:
         with open(args.port_file, 'w+') as f:
             f.write(f'{server.server_address[1]}')
-    conf = idb.config.Config.load(args.config)
+    conf = idb.api.config.Config.load(args.config)
     base_url = urllib.parse.urlparse(conf.base_url)
     base_url = base_url._replace(netloc=f'{server.server_address[0]}:{server.server_address[1]}')
     conf.base_url = urllib.parse.urlunparse(base_url)
-    app = idb.app.create(conf)
+    app = idb.api.app.create(conf)
     server.set_app(app)
     server.serve_forever()

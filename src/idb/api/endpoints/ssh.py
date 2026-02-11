@@ -1,5 +1,6 @@
+from ... import wa
+
 from .. import signature
-from .. import wa
 
 
 @signature.verify_session

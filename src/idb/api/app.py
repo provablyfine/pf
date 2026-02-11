@@ -4,12 +4,13 @@ import sys
 
 import json
 
-from . import wa
+from .. import wa
+from .. import jwk
+
 from . import config
 from . import db
 from . import openapi
 from . import model
-from . import jwk
 from . import signature
 from . import middleware
 from . import crypto_policy

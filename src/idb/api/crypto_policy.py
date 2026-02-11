@@ -1,5 +1,5 @@
-from . import jwk
-from . import wa
+from .. import jwk
+from .. import wa
 
 def enforce_key_is_allowed(key):
     if key.type != jwk.KeyType.ED25519:

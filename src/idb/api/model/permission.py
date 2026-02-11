@@ -4,8 +4,8 @@ import logging
 import dataclasses
 import collections
 
+from ... import wa
 from ..context import ctx
-from .. import wa
 
 
 logger = logging.getLogger(__name__)

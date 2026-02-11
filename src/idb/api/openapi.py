@@ -8,8 +8,8 @@ import starlette
 import openapi_core.contrib.starlette.middlewares
 import openapi_core
 
+from .. import wa
 
-from . import wa
 from . import config
 
 
