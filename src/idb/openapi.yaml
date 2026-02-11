@@ -70,7 +70,7 @@ components:
 
     Directory:
       type: object
-      required: [initialize]
+      required: [initialize, accept-invitation, login, boundary, tag, role, identity, ssh]
       additionalProperties: false
       properties:
         initialize:
@@ -866,7 +866,6 @@ components:
       content:
         application/octet-stream:
           schema:
-            type: string
             format: binary
 
 paths:

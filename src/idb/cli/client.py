@@ -108,10 +108,17 @@ def create_algorithm_class(agent: ssh.agent.Client, key: jwk.Public):
             algorithm_id = 'ed25519'
         case _:
             assert False, key.type
+    def _search_identity():
+        for identity in agent.list_identities():
+            if identity.public_key.thumbprint() == key.thumbprint():
+                return identity
+        raise exceptions.UI('Unable to find key {key.ssh_fingerprint()}')
+                
     def custom_init(self, *args, **kwargs):
         pass
     def custom_sign(self, message):
-        return agent.sign(key, message, 0)
+        identity = _search_identity()
+        return agent.sign(identity, message, 0)
 
     Type = type(
         'CustomSshAgentAlgorithm',

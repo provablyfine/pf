@@ -6,8 +6,11 @@ IDB_TESTS := \
  idb-roles.t \
  idb-identity.t \
  idb-permission.t \
- idb-access-control.t \
+ idb-access-control-identity.t \
  idb-access-control-tag.t \
+ # idb-access-control-role.t \
+ # idb-access-control-boundary.t \
+ idb-openssh.t \
  $(NULL)
 
 SSH_TESTS := \

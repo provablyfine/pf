@@ -26,6 +26,7 @@ def directory_endpoint(request: wa.Request) -> wa.Response:
         'tag': f'{request.app.config.base_url}/idb/tag',
         'role': f'{request.app.config.base_url}/idb/role',
         'identity': f'{request.app.config.base_url}/idb/identity',
+        'ssh': f'{request.app.config.base_url}/idb/ssh',
     })
 
 

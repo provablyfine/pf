@@ -1,10 +1,12 @@
 from . import config
 from . import client
 from . import exceptions
+from . import ssh_utils
 from .. import jwk
 from .. import ssh
 
 
+@ssh_utils.exception
 def _auth_function(args):
     c = config.Config.load(args.config)
     idb = client.Client(c)
@@ -13,7 +15,7 @@ def _auth_function(args):
     user_key = jwk.Private.generate_ed25519()
     cert_response = auth.post(f'{auth.directory.ssh}/user/certificate', json={
         'public_key': user_key.public().to_dict(),
-        'name': args.hostname,
+        'name': args.host,
     })
     if cert_response.status_code != 200:
         raise exceptions.UI(cert_response.json()['title'])
@@ -25,12 +27,13 @@ def _auth_function(args):
     #if host_krl_response.status_code != 200:
     #    raise exceptions.UI(host_krl_response.json()['title'])
 
+    cert = ssh.cert.Cert.from_openssh(cert_response.content)
     try:
         ssh_agent = ssh.agent.Client()
     except:
         raise exceptions.UI("Unable to connect to user's SSH agent")
 
-    ssh_agent.add(user_key, cert=cert_response.content, comment=args.host, lifetime=60)
+    ssh_agent.add(user_key, cert=cert, comment=args.host, lifetime=60)
 
     #with open(args.identity_file, 'wb+') as f:
     #    f.write(user_key.public().to_openssh())
@@ -47,7 +50,7 @@ def add_subparsers(parser):
 
 
     parser = subparsers.add_parser('auth')
-    parser.add_argument('--hostname', help='Name of host we want to connect to')
+    parser.add_argument('--host', help='Name of host we want to connect to')
     parser.add_argument('--known-hosts', help='Known hosts file to generate')
     parser.add_argument('--host-krl', help='KRL file to generate')
     parser.add_argument('--identity-file', help='Public key of the generated key')
