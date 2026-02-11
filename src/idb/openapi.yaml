@@ -87,6 +87,8 @@ components:
           type: string
         identity:
           type: string
+        ssh:
+          type: string
 
 
     ECDSAPublicJWK:
@@ -736,6 +738,16 @@ components:
           items:
             $ref: '#/components/schemas/UpdateIdentityTagOperation'
 
+    SshCertificateRequest:
+      type: object
+      required: [name, public_key]
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+        public_key:
+          $ref: '#/components/schemas/PublicJWK'
+
   responses:
     ErrorResponse:
       description: Error
@@ -848,6 +860,14 @@ components:
         application/json:
           schema:
             type: object
+
+    SshCertificateResponse:
+      description: OK
+      content:
+        application/octet-stream:
+          schema:
+            type: string
+            format: binary
 
 paths:
   /idb/directory:
@@ -1232,3 +1252,21 @@ paths:
           description: Delete OK
         default:
           $ref: '#/components/responses/ErrorResponse'
+
+  /idb/ssh/user/certificate:
+    post:
+      security: *SessionSignature
+      summary: Generate Certificate
+      description: >
+        Request the generation of a SSH Certificate
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SshCertificateRequest'
+      responses:
+        "200":
+          $ref: "#/components/responses/SshCertificateResponse"
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+

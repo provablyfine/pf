@@ -18,12 +18,12 @@ def _auth_function(args):
     if cert_response.status_code != 200:
         raise exceptions.UI(cert_response.json()['title'])
 
-    host_ca_response = auth.get(f'{auth.directory.ssh}/host/ca')
-    if host_ca_response.status_code != 200:
-        raise exceptions.UI(host_ca_response.json()['title'])
-    host_krl_response = auth.get(f'{auth.directory.ssh}/host/krl')
-    if host_krl_response.status_code != 200:
-        raise exceptions.UI(host_krl_response.json()['title'])
+    #host_ca_response = auth.get(f'{auth.directory.ssh}/host/ca')
+    #if host_ca_response.status_code != 200:
+    #    raise exceptions.UI(host_ca_response.json()['title'])
+    #host_krl_response = auth.get(f'{auth.directory.ssh}/host/krl')
+    #if host_krl_response.status_code != 200:
+    #    raise exceptions.UI(host_krl_response.json()['title'])
 
     try:
         ssh_agent = ssh.agent.Client()
@@ -32,15 +32,14 @@ def _auth_function(args):
 
     ssh_agent.add(user_key, cert=cert_response.content, comment=args.host, lifetime=60)
 
-    # Write all output
-    with open(args.identity_file, 'wb+') as f:
-        f.write(user_key.public().to_openssh())
-    with open(args.certificate_file, 'wb+') as f:
-        f.write(cert_response.content)
-    with open(args.known_hosts, 'wb+') as f:
-        f.write(host_ca_response.content)
-    with open(args.host_krl, 'wb+') as f:
-        f.write(host_krl_response.content)
+    #with open(args.identity_file, 'wb+') as f:
+    #    f.write(user_key.public().to_openssh())
+    #with open(args.certificate_file, 'wb+') as f:
+    #    f.write(cert_response.content)
+    #with open(args.known_hosts, 'wb+') as f:
+    #    f.write(host_ca_response.content)
+    #with open(args.host_krl, 'wb+') as f:
+    #    f.write(host_krl_response.content)
 
 
 def add_subparsers(parser):
