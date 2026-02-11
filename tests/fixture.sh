@@ -1,4 +1,4 @@
-DIRECTORY_URL=http://127.0.0.1:$SERVER_PORT/idb/directory
+DIRECTORY_URL=http://127.0.0.1:$API_PORT/idb/directory
 idbctl config --directory $DIRECTORY_URL
 INVITATION=$(idbctl admin initialize)
 ssh-keygen -t ed25519 -f account -N "" > /dev/null
