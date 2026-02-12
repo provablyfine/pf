@@ -11,7 +11,10 @@ class Config:
     log_level: str = 'ERROR'
     base_url: str = 'http://127.0.0.1:8000'
     kek_filename: str = 'kek.key'
-    key_duration_s: int = 3600
+    host_key_duration_s: int = 24*3600
+    host_keys_filename: str = 'keys.json'
+    user_key_duration_s: int = 24*3600
+    user_keys_filename: str = 'keys.json'
 
 
     @staticmethod
