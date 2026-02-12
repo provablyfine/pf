@@ -7,7 +7,6 @@ import json
 from .. import wa
 from .. import jwk
 
-from . import config
 from . import db
 from . import openapi
 from . import model
@@ -37,6 +36,22 @@ def initialize_endpoint(_: wa.Request) -> wa.Response:
         return wa.Response(
             status_code=204
         )
+
+    # host and user keys
+    now = int(time.time())
+    model.signing_key.create(
+        db.SigningKeyType.HOST,
+        jwk.KeyType.from_string(ctx.config.host_key_type),
+        valid_after=now - ctx.config.host_key_staging_period - 10,
+        validity_duration=ctx.config.host_key_rotation_period,
+    )
+    model.signing_key.create(
+        db.SigningKeyType.USER,
+        jwk.KeyType.from_string(ctx.config.user_key_type),
+        valid_after=now - ctx.config.user_key_staging_period - 10,
+        validity_duration=ctx.config.user_key_rotation_period,
+    )
+
     root_boundary_id = model.boundary.create(
         name='root',
         description='The Root boundary is not a boundary at all.',

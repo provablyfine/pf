@@ -9,6 +9,7 @@ import cryptography
 from .. import wa
 from .. import base64url
 
+from . import keys
 from . import config
 from . import dao_factory
 from . import db
@@ -23,6 +24,8 @@ def lifespan(config: config.Config, state: types.SimpleNamespace):
     state.config = config
     state.db_engine = engine
     state.kek = kek
+    state.user_keys = keys.Keys(db.SigningKeyType.USER, config.user_key_staging_period)
+    state.host_keys = keys.Keys(db.SigningKeyType.HOST, config.host_key_staging_period)
     yield
 
 

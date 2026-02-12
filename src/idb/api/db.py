@@ -8,6 +8,12 @@ class AuditLogLevel(enum.IntEnum):
     WARNING = 2
 
 
+@enum.unique
+class SigningKeyType(enum.IntEnum):
+    HOST = 1
+    USER = 2
+
+
 # Database table definitions.
 metadata = sqlalchemy.MetaData()
 
@@ -137,6 +143,18 @@ boundary = sqlalchemy.Table(
     sqlalchemy.Column("description", sqlalchemy.String, index=False, unique=False, nullable=False),
     sqlalchemy.Column("ceiling_list", sqlalchemy.JSON, nullable=False),
     sqlalchemy.Column("denied_list", sqlalchemy.JSON, nullable=False),
+    # We need autoincrement to make sure ids are not recycled EVER.
+    sqlite_autoincrement=True,
+)
+
+signing_key = sqlalchemy.Table(
+    "signing_key",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
+    sqlalchemy.Column("type", sqlalchemy.Integer, nullable=False),
+    sqlalchemy.Column("key", sqlalchemy.LargeBinary, nullable=False),
+    sqlalchemy.Column("valid_after", sqlalchemy.Integer, nullable=False),
+    sqlalchemy.Column("valid_before", sqlalchemy.Integer, nullable=False),
     # We need autoincrement to make sure ids are not recycled EVER.
     sqlite_autoincrement=True,
 )

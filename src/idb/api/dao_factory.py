@@ -1,5 +1,6 @@
 import collections
 import logging
+import types
 
 
 logger = logging.getLogger(__name__)
@@ -12,6 +13,10 @@ class Table:
         names = [col_name for col_name, col in table.columns.items()]
         self._tup = collections.namedtuple(table.name, names)
 
+    @property
+    def columns(self):
+        return types.SimpleNamespace(self._table.columns)
+
     def create(self, **kwargs):
         statement = self._table.insert().values(**kwargs)
         result = self._connection.execute(statement)
@@ -23,7 +28,9 @@ class Table:
         else:
             assert False
 
-    def _where(self, statement, **kwargs):
+    def _where(self, statement, *args, **kwargs):
+        for arg in args:
+            statement = statement.where(arg)
         for k, v in kwargs.items():
             column = self._table.columns[k]
             if isinstance(v, (list, tuple, set)):
@@ -32,17 +39,17 @@ class Table:
                 statement = statement.where(column==v)
         return statement
 
-    def read_one(self, **kwargs):
+    def read_one(self, *args, **kwargs):
         statement = self._table.select()
-        statement = self._where(statement, **kwargs)
+        statement = self._where(statement, *args, **kwargs)
         rows = self._connection.execute(statement)
         for row in rows:
             return self._tup(*row)
         return None
 
-    def read_all(self, **kwargs):
+    def read_all(self, *args, **kwargs):
         statement = self._table.select()
-        statement = self._where(statement, **kwargs)
+        statement = self._where(statement, *args, **kwargs)
         rows = self._connection.execute(statement)
         return [self._tup(*row) for row in rows]
 

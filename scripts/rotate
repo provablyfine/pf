@@ -1,18 +1,15 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # dependencies = [
-#   "openapi-core",
+#   "cryptography>=45.0.0",
 #   "sqlalchemy",
-#   "cryptography",
 #   "webob",
-#   "http-message-signatures",
-#   "pytest",
 #   "idb",
 # ]
 # [tool.uv.sources]
 # idb = { path = "../", editable = true }
 # ///
-import idb.api.server
+import idb.api.rotate
 
 if __name__ == '__main__':
-    idb.api.server.run()
+    idb.api.rotate.main()

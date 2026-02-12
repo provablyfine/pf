@@ -1,5 +1,6 @@
 idb-access-control.t
 idb-access-control-tag.t
+idb-access-control-identity.t
 idb-ssh-certificates.t
 idb-ssh-agent-keys.t
 *.t.err

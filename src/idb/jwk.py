@@ -34,6 +34,28 @@ class KeyType(enum.Enum):
     RSA_7680 = 9
     RSA_15360 = 10
 
+    @classmethod
+    def _mapping(klass):
+        return {
+            'ed25519': KeyType.ED25519,
+            'ecdsa-256': KeyType.ECDSA_NISTP256,
+            'ecdsa-384': KeyType.ECDSA_NISTP384,
+            'ecdsa-521': KeyType.ECDSA_NISTP521,
+            'rsa-3072': KeyType.RSA_3072,
+            'rsa-7680': KeyType.RSA_7680,
+            'rsa-15360': KeyType.RSA_15360,
+        }
+
+
+    @classmethod
+    def from_string(klass, key_type: str) -> KeyType:
+        return klass._mapping()[key_type]
+
+    def to_string(self):
+        return {v: k for k, v in self._mapping()}[self.value]
+
+
+
 def rfc7638_thumbprint(data):
     needed = {
         # RFC 7638 Section 3.2
