@@ -8,10 +8,10 @@ from ..context import ctx
 
 from . import audit_log
 
-def create(key_type: db.SigningKeyType, crypto_key_type: jwk.KeyType, valid_after: int, validity_duration: int):
+def create(key_type: db.SigningKeyType, crypto_key_type: jwk.KeyType, valid_after: int, valid_before: int):
     key = jwk.Private.generate(crypto_key_type)
     encrypted_key = ctx.kek.encrypt(json.dumps(key.to_dict()).encode('utf-8'))
-    signing_key_id = ctx.db.signing_key.create(type=key_type, key=encrypted_key, valid_after=valid_after, valid_before=valid_after+validity_duration)
+    signing_key_id = ctx.db.signing_key.create(type=key_type, key=encrypted_key, valid_after=valid_after, valid_before=valid_before)
     now = int(datetime.datetime.now().timestamp())
     audit_log.create(
         level=db.AuditLogLevel.INFO,
@@ -22,7 +22,7 @@ def create(key_type: db.SigningKeyType, crypto_key_type: jwk.KeyType, valid_afte
             'key_type': key_type.name,
             'crypto_key_type': crypto_key_type.name,
             'valid_after': valid_after,
-            'valid_before': valid_after+validity_duration,
+            'valid_before': valid_before,
             'signing_key_id': signing_key_id,
         }
     )

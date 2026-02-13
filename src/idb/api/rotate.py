@@ -34,13 +34,16 @@ def rotate(key_type: db.SigningKeyType, crypto_key_type: jwk.KeyType, rotation_p
     if len(current) == 0:
         logger.error(f'create current key {crypto_key_type.name} rotation={rotation_period} staging={staging_period}')
         # This case should really never happen if rotation has happened ok
-        model.signing_key.create(key_type, crypto_key_type, valid_after=now-staging_period-10, validity_duration=rotation_period)
-        current_end = now + rotation_period
+        current_start = now-staging_period-10
+        current_end = current_start + rotation_period
+        model.signing_key.create(key_type, crypto_key_type, valid_after=current_start, valid_before=current_end)
     else:
         current_end = current[0].valid_before
     if len(staged) == 0:
         logger.info(f'create staged key {crypto_key_type.name} rotation={rotation_period} staging={staging_period}')
-        model.signing_key.create(key_type, crypto_key_type, current_end-staging_period, validity_duration=rotation_period)
+        staged_start = current_end-staging_period
+        staged_end = staged_start + rotation_period
+        model.signing_key.create(key_type, crypto_key_type, staged_start, staged_end)
 
 
 def main():

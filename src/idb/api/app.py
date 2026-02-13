@@ -30,6 +30,29 @@ def directory_endpoint(request: wa.Request) -> wa.Response:
     })
 
 
+def create_keys(key_type: db.SigningKeyType, crypto_key_type: jwk.KeyType, rotation_period: int, staging_period: int):
+    now = int(time.time())
+
+    # Create a  "current" key
+    current_start = now - staging_period - 10
+    current_end = current_start + rotation_period
+    model.signing_key.create(
+        key_type,
+        crypto_key_type,
+        valid_after=current_start,
+        valid_before=current_end,
+    )
+    # Create a  "staged" key
+    staged_start = current_end - staging_period
+    staged_end = staged_start + rotation_period
+    model.signing_key.create(
+        key_type,
+        crypto_key_type,
+        valid_after=staged_start,
+        valid_before=staged_end,
+    )
+
+
 def initialize_endpoint(_: wa.Request) -> wa.Response:
     one = ctx.db.identity.read_one()
     if one is not None:
@@ -37,19 +60,17 @@ def initialize_endpoint(_: wa.Request) -> wa.Response:
             status_code=204
         )
 
-    # host and user keys
-    now = int(time.time())
-    model.signing_key.create(
+    create_keys(
         db.SigningKeyType.HOST,
         jwk.KeyType.from_string(ctx.config.host_key_type),
-        valid_after=now - ctx.config.host_key_staging_period - 10,
-        validity_duration=ctx.config.host_key_rotation_period,
+        ctx.config.host_key_rotation_period,
+        ctx.config.host_key_staging_period,
     )
-    model.signing_key.create(
+    create_keys(
         db.SigningKeyType.USER,
         jwk.KeyType.from_string(ctx.config.user_key_type),
-        valid_after=now - ctx.config.user_key_staging_period - 10,
-        validity_duration=ctx.config.user_key_rotation_period,
+        ctx.config.user_key_rotation_period,
+        ctx.config.user_key_staging_period,
     )
 
     root_boundary_id = model.boundary.create(
