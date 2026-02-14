@@ -147,6 +147,33 @@ class IdentityChecker:
     def invite(self, delivery: str) -> Checker:
         return Checker(self._object_checker, ActionChecker('invite', delivery=delivery))
 
+    def ssh_actions(self) -> list[str]:
+        return ['ssh-shell', 'ssh-forwarding', 'ssh-exec', 'ssh-sftp']
+
+    def ssh_shell(self, username: str, agent_forwarding: bool, x11_forwarding: bool) -> Checker:
+        def b(value):
+            return 'true' if b else 'false'
+        return Checker(
+            self._object_checker,
+            ActionChecker(
+                'ssh-shell',
+                username=username,
+                agent_forwarding=b(agent_forwarding),
+                x11_forwarding=b(x11_forwarding)
+            )
+        )
+
+    def from_ssh_shell(self, grant: model.permission.Grant) -> Checker:
+        return self._from_grant('ssh-shell', grant)
+
+    def _from_grant(self, expected_type: str, grant: model.permission.Grant) -> Checker:
+        if not self._object_checker.matches(grant):
+            return None
+        if expected_type != grant.action:
+            return None
+        kwargs = {field.name: field.value for field in grant.action_fields}
+        return Checker(self._object_checker, ActionChecker(grant.action, **kwargs))
+
 
 class Verifier:
     def __init__(self):
@@ -157,6 +184,9 @@ class Verifier:
         self._boundaries = model.boundary.read_all(id=[i.boundary_id for i in identity_boundaries])
         member_of = ctx.db.role_member.read_all(identity_id=identity.id)
         self._roles = model.role.read_all(id=list(set(member.role_id for member in member_of)))
+
+    def granted(self) -> list[model.permission.Grant]:
+        return [permission for role in self._roles for permission in role.permission_list]
 
     def is_allowed(self, request: Checker) -> bool:
         for boundary in self._boundaries:

@@ -399,7 +399,7 @@ components:
               value:
                 type: string
 
-    IdentitySshForwardAction:
+    IdentitySshForwardPortAction:
       type: object
       required: [action, action_fields]
       properties:
@@ -417,6 +417,27 @@ components:
               name:
                 type: string
                 enum: ['username', 'rport']
+              value:
+                type: string
+
+    IdentitySshForwardAction:
+      type: object
+      required: [action, action_fields]
+      properties:
+        action:
+          type: string
+          enum: ['ssh-forward']
+        action_fields:
+          type: array
+          maxItems: 2
+          items:
+            type: object
+            required: [name, value]
+            additionalProperties: false
+            properties:
+              name:
+                type: string
+                enum: ['username']
               value:
                 type: string
 
@@ -439,6 +460,7 @@ components:
             - $ref: '#/components/schemas/IdentitySshShellAction'
             - $ref: '#/components/schemas/IdentitySshSftpAction'
             - $ref: '#/components/schemas/IdentitySshExecAction'
+#            - $ref: '#/components/schemas/IdentitySshForwardPortAction'
             - $ref: '#/components/schemas/IdentitySshForwardAction'
 
     InvalidPermission:
@@ -740,10 +762,12 @@ components:
 
     SshCertificateRequest:
       type: object
-      required: [name, public_key]
+      required: [host, user, public_key]
       additionalProperties: false
       properties:
-        name:
+        host:
+          type: string
+        user:
           type: string
         public_key:
           $ref: '#/components/schemas/PublicJWK'

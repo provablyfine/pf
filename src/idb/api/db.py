@@ -153,8 +153,10 @@ signing_key = sqlalchemy.Table(
     sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
     sqlalchemy.Column("type", sqlalchemy.Integer, nullable=False),
     sqlalchemy.Column("key", sqlalchemy.LargeBinary, nullable=False),
+    sqlalchemy.Column("serial_number", sqlalchemy.Integer, nullable=False),
     sqlalchemy.Column("valid_after", sqlalchemy.Integer, nullable=False),
     sqlalchemy.Column("valid_before", sqlalchemy.Integer, nullable=False),
+    sqlalchemy.Index('idx_valid_before_valid_after', 'valid_before', 'valid_after'),
     # We need autoincrement to make sure ids are not recycled EVER.
     sqlite_autoincrement=True,
 )

@@ -18,10 +18,12 @@ class Config:
     host_key_staging_period: int = 12*3600
     host_key_rotation_period: int = 24*3600
     host_key_type: str = 'ed25519'
+    host_certificate_lifetime: int = 24*3600
 
     user_key_staging_period: int = 12*3600
     user_key_rotation_period: int = 24*3600
     user_key_type: str = 'ed25519'
+    user_certificate_lifetime: int = 60
 
 
     @staticmethod
