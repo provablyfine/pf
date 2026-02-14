@@ -15,7 +15,8 @@ def _auth_function(args):
     user_key = jwk.Private.generate_ed25519()
     cert_response = auth.post(f'{auth.directory.ssh}/user/certificate', json={
         'public_key': user_key.public().to_dict(),
-        'name': args.host,
+        'hostname': args.host,
+        'username': args.user
     })
     if cert_response.status_code != 200:
         raise exceptions.UI(cert_response.json()['title'])
@@ -27,6 +28,7 @@ def _auth_function(args):
     #if host_krl_response.status_code != 200:
     #    raise exceptions.UI(host_krl_response.json()['title'])
 
+    
     cert = ssh.cert.Cert.from_openssh(cert_response.content)
     try:
         ssh_agent = ssh.agent.Client()
@@ -50,7 +52,8 @@ def add_subparsers(parser):
 
 
     parser = subparsers.add_parser('auth')
-    parser.add_argument('--host', help='Name of host we want to connect to')
+    parser.add_argument('--host', help='Name of host we want to connect to', required=True)
+    parser.add_argument('--user', help='Name of user account we want to connect to', required=True)
     parser.add_argument('--known-hosts', help='Known hosts file to generate')
     parser.add_argument('--host-krl', help='KRL file to generate')
     parser.add_argument('--identity-file', help='Public key of the generated key')
