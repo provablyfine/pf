@@ -50,9 +50,17 @@ def _auth_function(args):
     #    f.write(host_krl_response.content)
 
 
+def _user_trusted_keys_function(args):
+    c = config.Config.load(args.config)
+    idb = client.Client(c)
+    response = idb.no_auth.get(f'{idb.directory.ssh}/user/trusted-keys')
+    if response.status_code != 200:
+        raise exceptions.UI(response.json()['title'])
+    print(response.text)
+
+
 def add_subparsers(parser):
     subparsers = parser.add_subparsers(required=True)
-
 
     parser = subparsers.add_parser('auth')
     parser.add_argument('--host', help='Name of host we want to connect to', required=True)
@@ -62,3 +70,6 @@ def add_subparsers(parser):
     parser.add_argument('--identity-file', help='Public key of the generated key')
     parser.add_argument('--certificate-file', help='Certificate for the generated key')
     parser.set_defaults(func=_auth_function)
+
+    parser = subparsers.add_parser('user-trusted-keys')
+    parser.set_defaults(func=_user_trusted_keys_function)

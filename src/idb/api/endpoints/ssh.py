@@ -140,3 +140,25 @@ def sign_user_certificate(request: wa.Request) -> wa.Response:
             'certificates': [base64.b64encode(c.to_openssh()).decode('utf-8') for c in certificates]
         }
     )
+
+
+def read_user_trusted_keys(request: wa.Request) -> wa.Response:
+    now = int(time.time())
+    signing_keys = model.signing_key.read_all(
+        ctx.db.signing_key.columns.valid_before > now,
+        type=db.SigningKeyType.USER,
+    )
+    trusted_keys = [signing_key.key.public().to_openssh() for signing_key in signing_keys]
+    try:
+        with open(ctx.config.user_extra_trusted_keys_filename, 'rb') as f:
+            trusted_keys.append(f.read())
+    except:
+        pass
+
+    return wa.Response(
+        status_code=200,
+        headers={
+            'Content-Type': 'text/plain',
+        },
+        body=b'\n'.join(trusted_keys),
+    )
