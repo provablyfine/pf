@@ -27,6 +27,15 @@ class Checker:
         return True
 
 
+def checker_from_grant(object_checker, grant: model.permission.Grant, expected_action: str) -> Checker:
+    if not object_checker.matches(grant):
+        return None
+    if grant.action not in ['*', expected_action]:
+        return None
+    kwargs = {field.name: field.value for field in grant.action_fields}
+    return Checker(object_checker, ActionChecker(expected_action, **kwargs))
+
+
 class ObjectChecker:
     def __init__(self, object, **fields):
         self._object = object
@@ -52,8 +61,13 @@ class ActionChecker:
         self._action = action
         self._requested = kwargs
 
-    def matches(self, grant: model.permission.Grant):
+    def matches_action(self, grant: model.permission.Grant):
         if grant.action not in ['*', self._action]:
+            return False
+        return True
+
+    def matches(self, grant: model.permission.Grant):
+        if not self.matches_action(grant):
             return False
         if not all(self._requested.get(g.name) == g.value for g in grant.action_fields):
             return False
@@ -164,15 +178,7 @@ class IdentityChecker:
         )
 
     def from_ssh_shell(self, grant: model.permission.Grant) -> Checker:
-        return self._from_grant('ssh-shell', grant)
-
-    def _from_grant(self, expected_type: str, grant: model.permission.Grant) -> Checker:
-        if not self._object_checker.matches(grant):
-            return None
-        if expected_type != grant.action:
-            return None
-        kwargs = {field.name: field.value for field in grant.action_fields}
-        return Checker(self._object_checker, ActionChecker(grant.action, **kwargs))
+        return checker_from_grant(self._object_checker, grant, 'ssh-shell')
 
 
 class Verifier:

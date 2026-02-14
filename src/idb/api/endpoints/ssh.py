@@ -19,7 +19,7 @@ def _read_current(type: db.SigningKeyType, staging_period: int):
     return model.signing_key.read_all(
         ctx.db.signing_key.columns.valid_after <= now-staging_period,
         ctx.db.signing_key.columns.valid_before > now,
-        key_type=type,
+        type=type,
     )
 
 
@@ -27,7 +27,7 @@ def _read_current(type: db.SigningKeyType, staging_period: int):
 def sign_user_certificate(request: wa.Request) -> wa.Response:
     data = json.loads(request.body)
     caller = ctx.db.identity.read_one(id=ctx.identity_id)
-    host = ctx.db.identity.read_one(name=data['host'])
+    host = model.identity.read_one(name=data['hostname'])
     if host is None:
         return wa.ProblemResponse(status_code=404, title='Unknown host')
 
@@ -46,19 +46,21 @@ def sign_user_certificate(request: wa.Request) -> wa.Response:
         #    ssh_exec_permissions.append(p)
         #    continue
         # XXX
+    print(ssh_shell_permissions)
 
-    public_key = jwk.Public.from_dict(data['key'])
+    public_key = jwk.Public.from_dict(data['public_key'])
     certificates = []
     signers = _read_current(db.SigningKeyType.USER, ctx.config.user_key_staging_period)
     signer = signers[0]
     serial_number = signer.serial_number
     now = int(time.time())
+
     for p in ssh_shell_permissions:
         cert = ssh.cert.Cert.create_user(
             public_key=public_key,
             serial_number=serial_number,
             identifier=f'{ctx.identity_id}:{caller.name}',
-            principals=[f'{data["user"]}@{data["host"]}'],
+            principals=[f'{data["username"]}@{data["hostname"]}'],
             valid_after=now-10,
             valid_before=now+ctx.config.user_certificate_lifetime,
             critical_options=ssh.cert.CriticalOptions(),
@@ -86,6 +88,6 @@ def sign_user_certificate(request: wa.Request) -> wa.Response:
     return wa.JSONResponse(
         status_code=200,
         json={
-            'certificates': [base64.b64encode(c.to_openssh()) for c in certificates]
+            'certificates': [base64.b64encode(c.to_openssh()).decode('utf-8') for c in certificates]
         }
     )

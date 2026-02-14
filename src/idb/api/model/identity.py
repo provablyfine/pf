@@ -25,8 +25,8 @@ def create(name: str, boundary_id_list: list[int], tag_id_list: list[int]) -> in
     return identity_id
 
 
-def read_one(id: int):
-    identities = read_all(id=id)
+def read_one(**kwargs):
+    identities = read_all(**kwargs)
     if len(identities) == 0:
         return None
     return identities[0]

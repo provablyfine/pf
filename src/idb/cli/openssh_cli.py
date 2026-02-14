@@ -1,3 +1,5 @@
+import base64
+
 from . import config
 from . import client
 from . import exceptions
@@ -29,13 +31,14 @@ def _auth_function(args):
     #    raise exceptions.UI(host_krl_response.json()['title'])
 
     
-    cert = ssh.cert.Cert.from_openssh(cert_response.content)
     try:
         ssh_agent = ssh.agent.Client()
     except:
         raise exceptions.UI("Unable to connect to user's SSH agent")
 
-    ssh_agent.add(user_key, cert=cert, comment=args.host, lifetime=60)
+    for certificate in cert_response.json()['certificates']:
+        cert = ssh.cert.Cert.from_openssh(base64.b64decode(certificate))
+        ssh_agent.add(user_key, cert=cert, comment=args.host, lifetime=60)
 
     #with open(args.identity_file, 'wb+') as f:
     #    f.write(user_key.public().to_openssh())

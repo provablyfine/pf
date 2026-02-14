@@ -22,6 +22,9 @@ class CriticalOptions:
     source_address: list[str] = None
     verify_required: bool = None
 
+    def to_dict(self):
+        return dataclasses.asdict(self)
+
 
 @dataclasses.dataclass(frozen=True)
 class Extensions:
@@ -32,6 +35,9 @@ class Extensions:
     permit_pty: bool = None
     permit_user_rc: bool = None
     permit_x11_forwarding: bool = None
+
+    def to_dict(self):
+        return dataclasses.asdict(self)
 
 
 class Cert:
@@ -139,7 +145,7 @@ class Cert:
             .type(cryptography.hazmat.primitives.serialization.SSHCertificateType.USER)
             .valid_before(valid_before)
             .valid_after(valid_after)
-            .key_id(identifier)
+            .key_id(identifier.encode('utf-8'))
             .valid_principals([p.encode('utf-8') for p in principals])
         )
         if critical_options.force_command is not None:

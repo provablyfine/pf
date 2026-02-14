@@ -760,14 +760,14 @@ components:
           items:
             $ref: '#/components/schemas/UpdateIdentityTagOperation'
 
-    SshCertificateRequest:
+    SshUserCertificateRequest:
       type: object
-      required: [host, user, public_key]
+      required: [hostname, username, public_key]
       additionalProperties: false
       properties:
-        host:
+        hostname:
           type: string
-        user:
+        username:
           type: string
         public_key:
           $ref: '#/components/schemas/PublicJWK'
@@ -885,12 +885,19 @@ components:
           schema:
             type: object
 
-    SshCertificateResponse:
+    SshUserCertificateResponse:
       description: OK
       content:
-        application/octet-stream:
+        application/json:
           schema:
-            format: binary
+            type: object
+            required: [certificates]
+            properties:
+              certificates:
+                type: array
+                items:
+                  type: string
+                  format: base64
 
 paths:
   /idb/directory:
@@ -1286,10 +1293,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/SshCertificateRequest'
+              $ref: '#/components/schemas/SshUserCertificateRequest'
       responses:
         "200":
-          $ref: "#/components/responses/SshCertificateResponse"
+          $ref: "#/components/responses/SshUserCertificateResponse"
         default:
           $ref: '#/components/responses/ErrorResponse'
 
