@@ -88,7 +88,7 @@ class Cert:
             source_address = self._cert.critical_options[b'source-address'].decode('utf-8').split(',')
         else:
             source_address = None
-        verify_required = self._cert.critical_options.get(b'verify-required', False)
+        verify_required = self._cert.critical_options.get(b'verify-required') == b''
         return CriticalOptions(
             force_command=force_command,
             source_address=source_address,
@@ -97,12 +97,12 @@ class Cert:
 
     @property
     def extensions(self) -> Extensions:
-        no_touch_required = self._cert.extensions.get(b'no-touch-required', False)
-        permit_agent_forwarding = self._cert.extensions.get(b'permit-agent-forwarding', False)
-        permit_port_forwarding = self._cert.extensions.get(b'permit-port-forwarding', False)
-        permit_pty = self._cert.extensions.get(b'permit-pty', False)
-        permit_user_rc = self._cert.extensions.get(b'permit-user-rc', False)
-        permit_x11_forwarding = self._cert.extensions.get(b'permit-X11-forwarding', False)
+        no_touch_required = self._cert.extensions.get(b'no-touch-required') == b''
+        permit_agent_forwarding = self._cert.extensions.get(b'permit-agent-forwarding') == b''
+        permit_port_forwarding = self._cert.extensions.get(b'permit-port-forwarding') == b''
+        permit_pty = self._cert.extensions.get(b'permit-pty') == b''
+        permit_user_rc = self._cert.extensions.get(b'permit-user-rc') == b''
+        permit_x11_forwarding = self._cert.extensions.get(b'permit-X11-forwarding') == b''
 
         return Extensions(
             no_touch_required=no_touch_required,

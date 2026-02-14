@@ -458,7 +458,7 @@ components:
             - $ref: '#/components/schemas/IdentityInviteAction'
             - $ref: '#/components/schemas/IdentityTagAction'
             - $ref: '#/components/schemas/IdentitySshShellAction'
-            - $ref: '#/components/schemas/IdentitySshSftpAction'
+#            - $ref: '#/components/schemas/IdentitySshSftpAction'
             - $ref: '#/components/schemas/IdentitySshExecAction'
 #            - $ref: '#/components/schemas/IdentitySshForwardPortAction'
             - $ref: '#/components/schemas/IdentitySshForwardAction'

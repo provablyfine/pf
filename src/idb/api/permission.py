@@ -27,13 +27,12 @@ class Checker:
         return True
 
 
-def checker_from_grant(object_checker, grant: model.permission.Grant, expected_action: str) -> Checker:
+def checker_from_grant(object_checker, grant: model.permission.Grant, expected_action: str, **expected_action_fields) -> Checker:
     if not object_checker.matches(grant):
         return None
     if grant.action not in ['*', expected_action]:
         return None
-    kwargs = {field.name: field.value for field in grant.action_fields}
-    return Checker(object_checker, ActionChecker(expected_action, **kwargs))
+    return Checker(object_checker, ActionChecker(expected_action, **expected_action_fields))
 
 
 class ObjectChecker:
@@ -61,13 +60,8 @@ class ActionChecker:
         self._action = action
         self._requested = kwargs
 
-    def matches_action(self, grant: model.permission.Grant):
-        if grant.action not in ['*', self._action]:
-            return False
-        return True
-
     def matches(self, grant: model.permission.Grant):
-        if not self.matches_action(grant):
+        if grant.action not in ['*', self._action]:
             return False
         if not all(self._requested.get(g.name) == g.value for g in grant.action_fields):
             return False
@@ -161,24 +155,14 @@ class IdentityChecker:
     def invite(self, delivery: str) -> Checker:
         return Checker(self._object_checker, ActionChecker('invite', delivery=delivery))
 
-    def ssh_actions(self) -> list[str]:
-        return ['ssh-shell', 'ssh-forwarding', 'ssh-exec', 'ssh-sftp']
+    def from_ssh_shell(self, grant: model.permission.Grant, username: str) -> Checker:
+        return checker_from_grant(self._object_checker, grant, 'ssh-shell', username=username)
 
-    def ssh_shell(self, username: str, agent_forwarding: bool, x11_forwarding: bool) -> Checker:
-        def b(value):
-            return 'true' if b else 'false'
-        return Checker(
-            self._object_checker,
-            ActionChecker(
-                'ssh-shell',
-                username=username,
-                agent_forwarding=b(agent_forwarding),
-                x11_forwarding=b(x11_forwarding)
-            )
-        )
+    def from_ssh_exec(self, grant: model.permission.Grant, username: str) -> Checker:
+        return checker_from_grant(self._object_checker, grant, 'ssh-exec', username=username)
 
-    def from_ssh_shell(self, grant: model.permission.Grant) -> Checker:
-        return checker_from_grant(self._object_checker, grant, 'ssh-shell')
+    def from_ssh_forward(self, grant: model.permission.Grant, username: str) -> Checker:
+        return checker_from_grant(self._object_checker, grant, 'ssh-forward', username=username)
 
 
 class Verifier:

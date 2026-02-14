@@ -181,6 +181,18 @@ class Grant:
     object_fields: tuple[Field]
     action_fields: tuple[Field]
 
+    def get_bool_action_field(self, name: str) -> bool:
+        for field in self.action_fields:
+            if field.name == name:
+                return field.value == 'true'
+        return None
+
+    def get_action_field(self, name: str) -> str:
+        for field in self.action_fields:
+            if field.name == name:
+                return field.value
+        return None
+
     @classmethod
     def create(cls, object: str, action: str=None, object_fields: list[Field]=None, action_fields: list[Field]=None):
         if action is None:
