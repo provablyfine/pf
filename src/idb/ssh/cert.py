@@ -131,7 +131,7 @@ class Cert:
             .type(cryptography.hazmat.primitives.serialization.SSHCertificateType.HOST)
             .valid_before(valid_before)
             .valid_after(valid_after)
-            .key_id(identifier)
+            .key_id(identifier.encode('utf-8'))
             .valid_principals([p.encode('utf-8') for p in principals])
         )
         cert = builder.sign(signer.to_crypto())
