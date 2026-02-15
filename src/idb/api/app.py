@@ -17,6 +17,9 @@ from . import endpoints
 from .context import ctx
 
 
+logger = logging.getLogger(__name__)
+
+
 def directory_endpoint(request: wa.Request) -> wa.Response:
     return wa.JSONResponse(status_code=200, json={
         'initialize': f'{request.app.config.base_url}/idb/initialize',
@@ -199,7 +202,7 @@ def create(conf):
     db.create_tables(conf.database_url)
     middlewares = [
         wa.debug_store.DebugStoreMiddleware(wa.debug_store.InMemoryDebugStore()),
-#        wa.backtrace.BacktraceMiddleware(),
+        wa.backtrace.BacktraceMiddleware(),
         openapi.create_middleware(conf.base_url),
         middleware.KekContext(),
         middleware.ConfigContext(),
