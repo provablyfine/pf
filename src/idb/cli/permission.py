@@ -28,9 +28,10 @@ def _parse_fields(fields):
         tmp = fields.split('&')
         for i in tmp:
             field_items = i.split('/')
-            if len(field_items) != 2:
+            if len(field_items) < 2:
                 raise exceptions.UI(f'Invalid permission: fields should follow the name/value format but got: "{field_items}"')
-            field_name, field_value = field_items
+            field_name = field_items[0]
+            field_value = '/'.join(field_items[1:])
             parsed.append({'name': field_name, 'value': field_value})
     return parsed
 

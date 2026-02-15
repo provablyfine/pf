@@ -72,7 +72,7 @@ def _sign_host_function(args):
     if args.identifier is not None:
         identifier = args.identifier
     else:
-        identifier = public_key.ssh_fingerprint().encode('ascii')
+        identifier = public_key.ssh_fingerprint()
     if args.valid_after is None:
         valid_after = 0
     else:
@@ -105,7 +105,7 @@ def _sign_user_function(args):
     if args.identifier is not None:
         identifier = args.identifier
     else:
-        identifier = public_key.ssh_fingerprint().encode('ascii')
+        identifier = public_key.ssh_fingerprint()
     if args.valid_after is None:
         valid_after = 0
     else:

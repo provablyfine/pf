@@ -237,6 +237,8 @@ class HttpClient:
                 logger.warn(f'{title} {detail} {instance}')
             if instance is not None:
                 debug = requests.get(instance)
+                if 'backtrace' in debug.json():
+                    raise exceptions.UI(debug.json()['backtrace'])
                 raise exceptions.UI(str(debug.json()))
         return response
 
