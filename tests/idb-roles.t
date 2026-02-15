@@ -36,7 +36,7 @@ Create a new role
   > identity:del-tag:tag/env=dev:*
   > identity:invite:tag/env=dev:delivery/email
   > identity:ssh-shell:tag/env=dev:username/root
-  > identity:ssh-sftp:tag/env=dev:username/app
-  > identity:ssh-forward-remote:tag/env=prod:rport/8080
-  > identity:ssh-forward-local:tag/env=prod:rport/8080
+  > identity:ssh-exec:tag/env=prod:username/root&command//usr/bin/sudo foo
+  > identity:ssh-forward:tag/env=prod:*
+  > identity:ssh-forward:tag/env=prod:*
   > EOF

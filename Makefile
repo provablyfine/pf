@@ -59,18 +59,7 @@ $(DOC_TARGETS): %.html: %.md Makefile ~/.pandoc/templates/template.html
 
 docs: $(DOC_TARGETS)
 
-tests: $(IDB_TEST_TARGETS)
-
-$(SSH_AGENT_TEST_TARGETS): tests/ssh-agent-%.test: tests/ssh-agent-%.t
-	@echo cram $<
-	@PATH=$$PATH:$(ROOT_DIR)/scripts ./tests/ssh-agent-test.sh $<
-
-$(IDB_TEST_TARGETS): tests/idb-%.test: tests/idb-%.t
-	@echo cram $<
-	@PATH=$$PATH:$(ROOT_DIR)/scripts ./tests/idb-test.sh $<
-
-$(SSH_TEST_TARGETS): tests/ssh-%.test: tests/ssh-%.t
-	@echo cram $<
-	@PATH=$$PATH:$(ROOT_DIR)/scripts cram $<
+tests:
+	pytest --tb=short
 
 .PHONY: $(TEST_TARGETS) tests
