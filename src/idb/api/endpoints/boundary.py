@@ -76,7 +76,7 @@ def delete_endpoint(request: wa.Request) -> wa.Response:
 
 @signature.verify_session
 def update_endpoint(request: wa.Request) -> wa.Response:
-    identity = model.identity.read_one(ctx.identity_id)
+    identity = model.identity.read_one(id=ctx.identity_id)
 
     boundary = model.boundary.read_one(id=request.path_params.boundary_id)
 
