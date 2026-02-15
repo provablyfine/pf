@@ -24,6 +24,7 @@ class Config:
     user_key_rotation_period: int = 24*3600
     user_key_type: str = 'ed25519'
     user_certificate_lifetime: int = 60
+    user_extra_trusted_keys_filename: str = 'user-trusted-keys.pub'
 
 
     @staticmethod
