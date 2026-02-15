@@ -146,7 +146,7 @@ class Application:
             response = e.response
         except BaseException:
             if self._debug:
-                print(traceback.format_exc())
+                logger.error(traceback.format_exc())
             response = ProblemResponse(status_code=500, title='Internal Server Error', detail='Unexpected error. Setup the backtrace middleware to get more details')
         status_str = http.client.responses[response.status_code]
         start_response(f'{response.status_code} {status_str}', list(response.headers.items()))
