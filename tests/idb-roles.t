@@ -1,5 +1,6 @@
 Initialize server and login
   $ bash $TESTDIR/fixture.sh
+  .* (re)
 
 List existing roles (there is one)
   $ idbctl admin role list

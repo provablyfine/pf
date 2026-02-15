@@ -1,5 +1,6 @@
 Initialize server and login
   $ bash $TESTDIR/fixture.sh
+  .* (re)
 
 List existing boundaries (there is one)
   $ idbctl admin boundary list

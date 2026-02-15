@@ -1,0 +1,38 @@
+Initialize server and login
+  $ bash $TESTDIR/fixture.sh
+  .* (re)
+  $ ROOT_ID=$(idbctl admin identity list -n root -q)
+  $ source $TESTDIR/idb-access-control-identity-fixture.sh
+
+Create temporary user for tests below
+  $ idbctl admin identity create -n user4 -b boundary -t $PERSON_ID
+  $ USER4_ID=$(idbctl admin identity list -n user4 -q)
+
+{% for permission in [
+  "identity:*:*:*",
+  "identity:*:name/user4:*",
+  "identity:*:tag/id=person:*",
+  "identity:*:boundary/boundary:*",
+  "identity:*:boundary/boundary&tag/id=person:*",
+  "identity:invite:*:*",
+  "identity:invite:name/user4:*",
+  "identity:invite:tag/id=person:*",
+  "identity:invite:boundary/boundary:*",
+  "identity:invite:boundary/boundary&tag/id=person:*",
+  "identity:invite:*:delivery/manual",
+  "identity:invite:name/user4:delivery/manual",
+  "identity:invite:tag/id=person:delivery/manual",
+  "identity:invite:boundary/boundary:delivery/manual",
+  "identity:invite:boundary/boundary&tag/id=person:delivery/manual",
+]
+%}
+Check that permission "{{permission}}" is actually enforcing access control
+  $ idbctl -c user1.json admin identity invite -i $USER4_ID --manual
+  Unable to invite identity. Not allowed to invite identity
+  [2]
+  $ idbctl admin role permission -i $ROLE_ID -a '{{permission}}'
+  $ idbctl -c user1.json admin identity invite -i $USER4_ID --manual
+  [A-Za-z0-9_-]+ (re)
+  $ idbctl admin role permission -i $ROLE_ID -d '{{permission}}'
+{% endfor %}
+

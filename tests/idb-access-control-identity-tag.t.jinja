@@ -1,0 +1,44 @@
+Initialize server and login
+  $ bash $TESTDIR/fixture.sh
+  .* (re)
+  $ ROOT_ID=$(idbctl admin identity list -n root -q)
+  $ source $TESTDIR/idb-access-control-identity-fixture.sh
+
+{% for permission in [
+  "identity:*:*:*",
+  "identity:*:name/user2:*",
+  "identity:add-tag:*:*",
+  "identity:add-tag:name/user2:*",
+  "identity:add-tag:*:tag/id=person",
+  "identity:add-tag:name/user2:tag/id=person",
+]
+%}
+Check that permission "{{permission}}" is actually enforcing access control
+  $ idbctl admin role permission -i $ROLE_ID -a '{{permission}}'
+  $ idbctl -c user1.json admin identity tag -i $USER2_ID -a $PERSON_ID
+  $ idbctl admin role permission -i $ROLE_ID -d '{{permission}}'
+  $ idbctl -c user1.json admin identity tag -i $USER2_ID -a $PERSON_ID
+  Unable to update identity. Not allowed to update tag.
+  [2]
+  $ idbctl admin identity tag -i $USER2_ID -d $PERSON_ID
+{% endfor %}
+
+{% for permission in [
+  "identity:*:*:*",
+  "identity:*:name/user2:*",
+  "identity:del-tag:*:*",
+  "identity:del-tag:name/user2:*",
+  "identity:del-tag:*:tag/id=person",
+  "identity:del-tag:name/user2:tag/id=person",
+]
+%}
+Check that permission "{{permission}}" is actually enforcing access control
+  $ idbctl admin identity tag -i $USER2_ID -a $PERSON_ID
+  $ idbctl -c user1.json admin identity tag -i $USER2_ID -d $PERSON_ID
+  Unable to update identity. Not allowed to update tag.
+  [2]
+  $ idbctl admin role permission -i $ROLE_ID -a '{{permission}}'
+  $ idbctl -c user1.json admin identity tag -i $USER2_ID -d $PERSON_ID
+  $ idbctl admin role permission -i $ROLE_ID -d '{{permission}}'
+{% endfor %}
+

@@ -1,5 +1,6 @@
 Initialize server and login
   $ bash $TESTDIR/fixture.sh
+  .* (re)
 
 List existing identities (there is one)
   $ idbctl admin identity list

@@ -1,5 +1,6 @@
 Initialize server and login
   $ bash $TESTDIR/fixture.sh
+  .* (re)
 
 Create tag
   $ idbctl admin tag create -n env -v dev

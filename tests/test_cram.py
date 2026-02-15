@@ -128,6 +128,12 @@ def api_port(request):
     "idb-permission.t",
     "idb-access-control-tag.t.jinja",
     "idb-access-control-identity.t.jinja",
+    "idb-access-control-identity-invite.t.jinja",
+    "idb-access-control-identity-create.t.jinja",
+    "idb-access-control-identity-delete.t.jinja",
+    "idb-access-control-identity-update.t.jinja",
+    "idb-access-control-identity-tag.t.jinja",
+    "idb-access-control-identity-read.t.jinja",
 ])
 def test_idb_cram(api_port, filename):
     run_cram(f'tests/{filename}', {'API_PORT': str(api_port)})

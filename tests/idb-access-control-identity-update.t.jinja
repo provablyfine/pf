@@ -1,0 +1,26 @@
+Initialize server and login
+  $ bash $TESTDIR/fixture.sh
+  .* (re)
+  $ ROOT_ID=$(idbctl admin identity list -n root -q)
+  $ source $TESTDIR/idb-access-control-identity-fixture.sh
+
+{% for permission in [
+  "identity:update:name/user2:field/name",
+  "identity:update:name/user2:*",
+  "identity:update:*:field/name",
+  "identity:update:*:*",
+  "identity:*:name/user2:*",
+  "identity:*:*:*",
+]
+%}
+Check that permission "{{permission}}" is actually enforcing access control
+  $ idbctl admin role permission -i $ROLE_ID -a {{permission}}
+  $ idbctl -c user1.json admin identity update -i $USER2_ID -n another
+  $ idbctl -c user1.json admin identity update -i $USER2_ID -n user2
+  $ idbctl admin role permission -i $ROLE_ID -d {{permission}}
+  $ idbctl -c user1.json admin identity update -i $USER2_ID -n another
+  Unable to update identity. Not allowed to update identity field.
+  [2]
+{% endfor %}
+
+

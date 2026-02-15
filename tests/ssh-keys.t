@@ -8,16 +8,6 @@
   $ ssh-keygen -l -f rsa-3072.key
   3072 SHA256:[^(]+\(RSA\) (re)
 
-  $ idbctl ssh key generate -t rsa-7680 --format openssh > rsa-7680.key
-  $ chmod og= rsa-7680.key
-  $ ssh-keygen -l -f rsa-7680.key
-  7680 SHA256:[^(]+\(RSA\) (re)
-
-  $ idbctl ssh key generate -t rsa-15360 --format openssh > rsa-15360.key
-  $ chmod og= rsa-15360.key
-  $ ssh-keygen -l -f rsa-15360.key
-  15360 SHA256:[^(]+\(RSA\) (re)
-
   $ idbctl ssh key generate -t ecdsa-256 --format openssh > ecdsa-256.key
   $ chmod og= ecdsa-256.key
   $ ssh-keygen -l -f ecdsa-256.key

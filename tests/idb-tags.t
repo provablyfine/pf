@@ -1,5 +1,6 @@
 Initialize server and login
   $ bash $TESTDIR/fixture.sh
+  .* (re)
 
 List existing tags (there are none)
   $ idbctl admin tag list

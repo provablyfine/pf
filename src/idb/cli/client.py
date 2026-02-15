@@ -29,36 +29,11 @@ class KeyResolver:
         return self._private_key
 
 
-class CaseInsensitiveDict(dict):
-    def __init__(self, *args, **kwargs):
-        self._signature_input = None
-        self._signature = None
-        super().__init__(*args, **kwargs)
-
-    def __contains__(self, key):
-        return super(CaseInsensitiveDict, self).__contains__(key.lower())
-    def __getitem__(self, key):
-        return super(CaseInsensitiveDict, self).__getitem__(key.lower())
-    def __setitem__(self, key, value):
-        if key.lower() == 'signature-input':
-            self._signature_input = value
-        elif key.lower() == 'signature':
-            self._signature = value
-        else:
-            assert False
-    @property
-    def signature_input(self):
-        return self._signature_input
-    @property
-    def signature(self):
-        return self._signature
-
-
 class RequestMessage:
     "Wrapper class to become compatible with http-message-signatures library"
     def __init__(self, request: requests.Request):
         self._request = request
-        self._headers = CaseInsensitiveDict({k.lower(): v for k, v in request.headers.items()})
+        self._headers = http_message_signatures.structures.CaseInsensitiveDict({k.lower(): v for k, v in request.headers.items()})
 
     @property
     def method(self):
@@ -90,7 +65,7 @@ class Signer:
             covered_component_ids=covered,
             nonce=nonce,
         )
-        return message.headers.signature_input, message.headers.signature
+        return message.headers['Signature-Input'], message.headers['Signature']
 
 
 def hmac_signer(prefix: str, key: str):
@@ -190,7 +165,6 @@ class RequestsAuth(requests.auth.AuthBase):
             signature_input, signature = signer.sign(request, covered)
             signatures_input.append(signature_input)
             signatures.append(signature)
-
         request.headers['Signature-Input'] = ', '.join(signatures_input)
         request.headers['Signature'] = ', '.join(signatures)
         return request

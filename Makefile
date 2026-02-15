@@ -60,6 +60,6 @@ $(DOC_TARGETS): %.html: %.md Makefile ~/.pandoc/templates/template.html
 docs: $(DOC_TARGETS)
 
 tests:
-	pytest --tb=short
+	uv run pytest --tb=short -n auto
 
 .PHONY: $(TEST_TARGETS) tests

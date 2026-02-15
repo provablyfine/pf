@@ -1,0 +1,22 @@
+Initialize server and login
+  $ bash $TESTDIR/fixture.sh
+  .* (re)
+  $ ROOT_ID=$(idbctl admin identity list -n root -q)
+  $ source $TESTDIR/idb-access-control-identity-fixture.sh
+
+{% for permission, expected in [
+  ("identity:*:*:*", (1,2,3)),
+  ("identity:read:*:*", (1,2,3)),
+  ("identity:read:name/user2:*", (3,)),
+  ("identity:*:name/user2:*", (3,)),
+]
+%}
+Check that permission "{{permission}}" is actually enforcing access control
+  $ idbctl admin role permission -i $ROLE_ID -a '{{permission}}'
+  $ idbctl -c user1.json admin identity list -q
+  {{ expected | join('\n  ') }}
+  $ idbctl admin role permission -i $ROLE_ID -d '{{permission}}'
+  $ idbctl -c user1.json admin identity list
+{% endfor %}
+
+

@@ -1,0 +1,52 @@
+Initialize server and login
+  $ bash $TESTDIR/fixture.sh
+  .* (re)
+  $ ROOT_ID=$(idbctl admin identity list -n root -q)
+  $ source $TESTDIR/idb-access-control-identity-fixture.sh
+
+{% for permission in [
+  "identity:*:*:*",
+  "identity:*:tag/id=person:*",
+  "identity:*:boundary/boundary:*",
+  "identity:*:boundary/boundary&tag/id=person:*",
+  "identity:delete:*:*",
+  "identity:delete:tag/id=person:*",
+  "identity:delete:boundary/boundary:*",
+  "identity:delete:boundary/boundary&tag/id=person:*",
+]
+%}
+Check that permission "{{permission}}" is actually enforcing access control
+  $ idbctl admin identity create -n user4 -b boundary -t $PERSON_ID
+  $ USER4_ID=$(idbctl admin identity list -n user4 -q)
+  $ idbctl -c user1.json admin identity delete -i $USER4_ID
+  Unable to delete identity. Not allowed to delete identity
+  [2]
+  $ idbctl admin role permission -i $ROLE_ID -a '{{permission}}'
+  $ idbctl -c user1.json admin identity delete -i $USER4_ID
+  $ idbctl admin role permission -i $ROLE_ID -d '{{permission}}'
+{% endfor %}
+
+{% for permission in [
+  "identity:*:name/user4:*",
+  "identity:delete:name/user4:*",
+]
+%}
+Check that permission "{{permission}}" is actually enforcing access control
+and becomes invalid after the identity is deleted
+  $ idbctl admin identity create -n user4 -b boundary -t $PERSON_ID
+  $ USER4_ID=$(idbctl admin identity list -n user4 -q)
+  $ idbctl -c user1.json admin identity delete -i $USER4_ID
+  Unable to delete identity. Not allowed to delete identity
+  [2]
+  $ idbctl admin role permission -i $ROLE_ID -a '{{permission}}'
+  $ idbctl -c user1.json admin identity delete -i $USER4_ID
+  $ idbctl admin role read -i $ROLE_ID
+  id           2
+  name         role
+  description
+  permission   invalid:invalid:*:*
+  member       user1
+  $ idbctl admin role permission -i $ROLE_ID -d invalid:invalid:*:*
+{% endfor %}
+
+
