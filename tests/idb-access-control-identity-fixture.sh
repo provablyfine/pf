@@ -15,6 +15,7 @@ ROLE_ID=$(idbctl admin role list -n role -q)
 idbctl admin identity create -n user1
 USER1_ID=$(idbctl admin identity list -n user1 -q)
 INVITATION=$(idbctl admin identity invite -i $USER1_ID --manual)
+echo $INVITATION
 
 # Create identity user2
 idbctl admin identity create -n user2

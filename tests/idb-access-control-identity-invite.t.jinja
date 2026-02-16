@@ -3,6 +3,7 @@ Initialize server and login
   .* (re)
   $ ROOT_ID=$(idbctl admin identity list -n root -q)
   $ source $TESTDIR/idb-access-control-identity-fixture.sh
+  .* (re)
 
 Create temporary user for tests below
   $ idbctl admin identity create -n user4 -b boundary -t $PERSON_ID
