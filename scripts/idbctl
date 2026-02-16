@@ -14,7 +14,6 @@
 # idb = { path = "../", editable = true }
 # ///
 import os
-import sys
 
 if __name__ == '__main__':
     cov = None
@@ -26,9 +25,8 @@ if __name__ == '__main__':
     import idb.cli.main_cli
     try:
         idb.cli.main_cli.main()
-    except:
+    finally:
         if cov:
             cov.stop()
             cov.save()
-        raise
     

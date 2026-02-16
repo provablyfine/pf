@@ -19,13 +19,13 @@ if __name__ == '__main__':
     cov = None
     if os.environ.get('COVERAGE_PROCESS_START'):
         import coverage
-        cov = coverage.process_startup()
+        cov = coverage.Coverage()
+        cov.start()
 
     import idb.api.server
     try:
         idb.api.server.run()
-    except:
+    finally:
         if cov:
             cov.stop()
             cov.save()
-        raise
