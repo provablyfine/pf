@@ -76,7 +76,9 @@ def api_port(request):
             'kek_filename': api_kek_file,
             #debug_sql: true
         }))
-    popen = subprocess.Popen(['scripts/idb', '-c', api_config, '--port-file', api_port_file], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=os.environ)
+    env = copy.copy(os.environ)
+    env['PYTHONUNBUFFERED'] = '1'
+    popen = subprocess.Popen(['scripts/idb', '-c', api_config, '--port-file', api_port_file], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env)
 
     idb_start_timeout = 5
     start = time.time()
