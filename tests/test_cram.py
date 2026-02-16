@@ -76,10 +76,11 @@ def api_port(request):
             'kek_filename': api_kek_file,
             #debug_sql: true
         }))
-    popen = subprocess.Popen(['scripts/idb', '-c', api_config, '--port-file', api_port_file], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    popen = subprocess.Popen(['scripts/idb', '-c', api_config, '--port-file', api_port_file], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=os.environ)
 
     idb_start_timeout = 5
     start = time.time()
+    api_port = None
     while time.time() - start < idb_start_timeout:
         try:
             with open(api_port_file) as f:
@@ -101,6 +102,8 @@ def api_port(request):
             time.sleep(0.1)
             continue
         break
+    if api_port is None:
+        raise Exception('Unable to start idb server')
 
     yield api_port
 
