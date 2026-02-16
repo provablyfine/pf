@@ -36,7 +36,8 @@ cov:
 	PYTHONUNBUFFERED=1 COVERAGE_FILE=$(shell pwd)/.coverage COVERAGE_PROCESS_START=$(shell pwd)/tests/.coveragerc COVERAGE_RCFILE=$(shell pwd)/tests/.coveragerc uv run pytest --tb=short -n auto
 
 cov-report:
-	coverage combine -a
-	coverage report -m
+	@coverage combine -a -q || true
+	coverage html -d cov
+	coverage report
 
 .PHONY: tests cov cov-report
