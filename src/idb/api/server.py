@@ -1,10 +1,15 @@
 from __future__ import annotations
 import argparse
 import urllib.parse
+import signal
 import wsgiref.simple_server
 
 from . import config
 from . import app
+
+
+class StopException(BaseException):
+    pass
 
 
 def run():
@@ -13,6 +18,11 @@ def run():
     parser.add_argument('-p', '--port', type=int, default=None)
     parser.add_argument('--port-file', default=None)
     args = parser.parse_args()
+
+    def handler(signo, frame):
+        raise StopException()
+    signal.signal(signal.SIGTERM, handler)
+
     server = wsgiref.simple_server.WSGIServer(
         ('127.0.0.1', 0 if args.port is None else args.port),
         wsgiref.simple_server.WSGIRequestHandler
@@ -26,4 +36,7 @@ def run():
     conf.base_url = urllib.parse.urlunparse(base_url)
     application = app.create(conf)
     server.set_app(application)
-    server.serve_forever()
+    try:
+        server.serve_forever()
+    except StopException:
+        pass
