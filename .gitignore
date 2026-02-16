@@ -5,3 +5,4 @@
 **/*.json
 **/*.key
 **/*.pub
+.coverage*
