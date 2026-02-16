@@ -28,6 +28,6 @@ idbctl admin role member -i $ROLE_ID -a user1
 DIRECTORY_URL=http://127.0.0.1:$API_PORT/idb/directory
 idbctl -c user1.json config --directory $DIRECTORY_URL
 ssh-keygen -t ed25519 -f user1 -N "" > /dev/null
-idbctl -c user1.json accept --invitation $INVITATION --key user1
+idbctl -c user1.json accept --invitation=$INVITATION --key user1
 ssh-keygen -t ed25519 -f user1-session -N "" > /dev/null
 idbctl -c user1.json login --session-key user1-session
