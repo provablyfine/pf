@@ -35,4 +35,8 @@ tests:
 cov:
 	COVERAGE_FILE=$(shell pwd)/.coverage COVERAGE_PROCESS_START=$(shell pwd)/tests/.coveragerc COVERAGE_RCFILE=$(shell pwd)/tests/.coveragerc uv run pytest --tb=short -n auto
 
-.PHONY: tests cov
+cov-report:
+	coverage combine
+	coverage report -m
+
+.PHONY: tests cov cov-report
