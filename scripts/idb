@@ -1,4 +1,4 @@
-#!/usr/bin/env -S uv run --script
+#!/usr/bin/env -S uv run -q --script
 # /// script
 # dependencies = [
 #   "openapi-core",
@@ -7,12 +7,25 @@
 #   "webob",
 #   "http-message-signatures",
 #   "pytest",
+#   "coverage",
 #   "idb",
 # ]
 # [tool.uv.sources]
 # idb = { path = "../", editable = true }
 # ///
-import idb.api.server
+import os
 
 if __name__ == '__main__':
-    idb.api.server.run()
+    cov = None
+    if os.environ.get('COVERAGE_PROCESS_START'):
+        import coverage
+        cov = coverage.process_startup()
+
+    import idb.api.server
+    try:
+        idb.api.server.run()
+    except:
+        if cov:
+            cov.stop()
+            cov.save()
+        raise

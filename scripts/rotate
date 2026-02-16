@@ -4,12 +4,25 @@
 #   "cryptography>=45.0.0",
 #   "sqlalchemy",
 #   "webob",
+#   "coverage",
 #   "idb",
 # ]
 # [tool.uv.sources]
 # idb = { path = "../", editable = true }
 # ///
-import idb.api.rotate
+import os
 
 if __name__ == '__main__':
-    idb.api.rotate.main()
+    cov = None
+    if os.environ.get('COVERAGE_PROCESS_START'):
+        import coverage
+        cov = coverage.process_startup()
+
+    import idb.api.rotate
+    try:
+        idb.api.rotate.main()
+    except:
+        if cov:
+            cov.stop()
+            cov.save()
+        raise

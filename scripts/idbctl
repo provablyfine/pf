@@ -1,4 +1,4 @@
-#!/usr/bin/env -S uv run --script
+#!/usr/bin/env -S uv run -q --script
 # /// script
 # dependencies = [
 #   "cryptography>=45.0.0",
@@ -7,12 +7,28 @@
 #   "tabulate",
 #   "pytest",
 #   "dateparser",
+#   "coverage",
 #   "idb",
 # ]
 # [tool.uv.sources]
 # idb = { path = "../", editable = true }
 # ///
-import idb.cli.main_cli
+import os
+import sys
 
 if __name__ == '__main__':
-    idb.cli.main_cli.main()
+    cov = None
+    if os.environ.get('COVERAGE_PROCESS_START'):
+        import coverage
+        cov = coverage.Coverage()
+        cov.start()
+
+    import idb.cli.main_cli
+    try:
+        idb.cli.main_cli.main()
+    except:
+        if cov:
+            cov.stop()
+            cov.save()
+        raise
+    
