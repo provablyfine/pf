@@ -14,10 +14,14 @@ dependencies = [
   "requests>=2.32.5",
 ]
 
+[project.scripts]
+idbctl = "idb.cli.__main__:main"
+
 [tool.pytest.ini_options]
 minversion = "6.0"
 addopts = "--tb=short"
 testpaths = [
+    "src/idb",
     "tests",
 ]
 
