@@ -31,7 +31,7 @@ def _run(args):
         with tempfile.NamedTemporaryFile(delete=False, delete_on_close=False, mode='w+') as f:
             f.write(popen.stdout)
             f.flush()
-            raise Error(f'Unable to run {" ".join(args)}. returncode={popen.returncode}, stdout={f.name}')
+            raise Error(f'Unable to run returncode={popen.returncode}, stdout={f.name}. args=\"{" ".join(args)}\"')
     return popen.stdout
 
 
@@ -52,6 +52,7 @@ def _parse_port_mapping(s):
 @dataclasses.dataclass(frozen=True)
 class SshD:
     host_port: int
+    user_ca_public_keys_filename: str
 
 
 @pytest.fixture
@@ -63,7 +64,7 @@ RUN apk add --no-cache openssh-server openssh-keygen python3 uv
 
 COPY pyproject.toml /tmp/idb/
 COPY src /tmp/idb/src/
-RUN --mount=type=cache,target=/root/.cache/uv uv pip install --system --break-system-packages /tmp/idb && \
+RUN --mount=type=cache,target=/root/.cache/uv uv pip install --quiet --link-mode=copy --system --break-system-packages /tmp/idb && \
     rm -rf /tmp/idb
 
 RUN ssh-keygen -A && \
@@ -104,27 +105,41 @@ PermitEmptyPasswords no
 KbdInteractiveAuthentication no
 
 Subsystem	sftp	/usr/libexec/openssh/sftp-server
-TrustedUserCAKeys /etc/sshd/user-ca.pub
+TrustedUserCAKeys /etc/ssh/user-ca.pub
 EOF
 
 EXPOSE 22
 
 CMD ["/usr/sbin/sshd", "-D", "-e"]
     """
-    with tempfile.NamedTemporaryFile(mode='w+') as container_file:
+    with tempfile.NamedTemporaryFile(mode='w+') as container_file, \
+            tempfile.NamedTemporaryFile(mode='w+') as user_ca_public_keys:
         container_file.write(containerfile)
         container_file.flush()
 
-        stdout = _run(['podman', 'build', '-q', '-f', container_file.name, tld()])
+        stdout = _run(['podman', 'build', '--quiet', '--file', container_file.name, tld()])
         image_id = stdout.strip('\n')
-        stdout = _run(['podman', 'run', '-d', '-q', '--publish-all', image_id])
+        if '\n' in image_id:
+            assert False, image_id
+        stdout = _run([
+            'podman',
+            'run',
+            '--detach', # run in background and return immediately
+            '--quiet',
+            '--publish-all',
+            '--volume',
+            f'{user_ca_public_keys.name}:/etc/ssh/user-ca.pub:ro',
+            image_id,
+        ])
         container_id = stdout.strip('\n')
         stdout = _run(['podman', 'port', container_id])
-        port = _parse_port_mapping(stdout) 
+        port = _parse_port_mapping(stdout)
 
         try:
-            yield SshD(port)
+            yield SshD(port, user_ca_public_keys.name)
         finally:
+            logs = _run(['podman', 'logs', container_id])
+            print(logs)
             _run(['podman', 'stop', container_id])
 
 

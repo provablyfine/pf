@@ -59,17 +59,24 @@ def _user_trusted_keys_function(args):
     print(response.text)
 
 
+def _authorized_principals(args):
+    pass
+
+
 def add_subparsers(parser):
     subparsers = parser.add_subparsers(required=True)
 
-    parser = subparsers.add_parser('auth')
-    parser.add_argument('--host', help='Name of host we want to connect to', required=True)
-    parser.add_argument('--user', help='Name of user account we want to connect to', required=True)
-    parser.add_argument('--known-hosts', help='Known hosts file to generate')
-    parser.add_argument('--host-krl', help='KRL file to generate')
-    parser.add_argument('--identity-file', help='Public key of the generated key')
-    parser.add_argument('--certificate-file', help='Certificate for the generated key')
-    parser.set_defaults(func=_auth_function)
+    auth_parser = subparsers.add_parser('auth')
+    auth_parser.add_argument('--host', help='Name of host we want to connect to', required=True)
+    auth_parser.add_argument('--user', help='Name of user account we want to connect to', required=True)
+    auth_parser.add_argument('--known-hosts', help='Known hosts file to generate')
+    auth_parser.add_argument('--host-krl', help='KRL file to generate')
+    auth_parser.add_argument('--identity-file', help='Public key of the generated key')
+    auth_parser.add_argument('--certificate-file', help='Certificate for the generated key')
+    auth_parser.set_defaults(func=_auth_function)
 
-    parser = subparsers.add_parser('user-trusted-keys')
-    parser.set_defaults(func=_user_trusted_keys_function)
+    user_trusted_keys_parser = subparsers.add_parser('user-trusted-keys')
+    user_trusted_keys_parser.set_defaults(func=_user_trusted_keys_function)
+
+    authorized_principals_parser = subparsers.add_parser('authorized-principals')
+    authorized_principals_parser.set_defaults(func=_authorized_principals)
