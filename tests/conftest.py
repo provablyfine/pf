@@ -56,7 +56,7 @@ class SshD:
 
 
 @pytest.fixture
-def sshd():
+def sshd(request):
     containerfile = """
 FROM alpine:3.23
 
@@ -138,8 +138,12 @@ CMD ["/usr/sbin/sshd", "-D", "-e"]
         try:
             yield SshD(port, user_ca_public_keys.name)
         finally:
-            logs = _run(['podman', 'logs', container_id])
-            print(logs)
+            if hasattr(request.node, 'rep_call'):
+                if request.node.rep_call.failed:
+                    logs = _run(['podman', 'logs', container_id])
+                    with tempfile.NamedTemporaryFile(mode='w+', delete=False, delete_on_close=False) as f:
+                        f.write(logs)
+                        print(f'SSH Server logs: {f.name}')
             _run(['podman', 'stop', container_id])
 
 
