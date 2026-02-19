@@ -48,8 +48,9 @@ User accepts invite and logs in
 
 User attempts to log into host
   $ cat <<EOF > ssh_config
-  > Match Exec "idbctl openssh auth --host %h --user %r --known-hosts ./user_ca_cert_known_hosts --host-krl ./host.krl --identity-file ./device.name.pub --certificate-file ./device.name.cert"
+  > Match Exec "idbctl openssh auth --host %h --user %r --known-hosts ./user_trusted_keys_known_hosts --host-krl ./host.krl --identity-file ./device.name.pub --certificate-file ./device.name.cert"
   >      Hostname 127.0.0.1
   >      Port $SSHD_PORT
   > EOF
   $ ssh -t -o StrictHostKeyChecking=no -F ./ssh_config root@host
+#  $ ssh -t -o UserKnownHostsFile=./user_trusted_keys_known_hosts -F ./ssh_config root@host

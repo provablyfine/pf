@@ -907,6 +907,14 @@ components:
             description: one public key per line, OpenSSH format
             type: string
 
+    SshHostTrustedKeysResponse:
+      description: OK
+      content:
+        text/plain:
+          schema:
+            description: one public key per line, OpenSSH format
+            type: string
+
 paths:
   /idb/directory:
     get:
@@ -1317,5 +1325,17 @@ paths:
       responses:
         "200":
           $ref: "#/components/responses/SshUserTrustedKeysResponse"
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /idb/ssh/host/trusted-keys:
+    get:
+      summary: Host trusted keys
+      description: >
+        Return the list of public keys that are trusted to sign
+        valid host SSH certificates
+      responses:
+        "200":
+          $ref: "#/components/responses/SshHostTrustedKeysResponse"
         default:
           $ref: '#/components/responses/ErrorResponse'
