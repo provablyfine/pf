@@ -167,7 +167,7 @@ CMD ["/bin/sh", "/run/start.sh"]
             if hasattr(request.node, 'rep_call'):
                 if request.node.rep_call.failed:
                     _dump_sshd_logs(container_id)
-            _run(['podman', 'stop', container_id])
+            _run(['podman', 'container', 'stop', '-t', '0', container_id])
 
 
 @dataclasses.dataclass(frozen=True)
