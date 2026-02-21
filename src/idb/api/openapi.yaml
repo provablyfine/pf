@@ -123,11 +123,27 @@ components:
         x:
           type: string
 
+    RSAPublicJWK:
+      description: RFC 7518
+      type: object
+      required: [kty, e, n]
+      additionalProperties: false
+      properties:
+        kty:
+          type: string
+          enum: [RSA]
+        e:
+          type: string
+        n:
+          type: string
+
+
     PublicJWK:
       description: >
         We currently support only two types because we do not need to support
-        more. Patches to suport alternatives are welcome :)
+        more. Patches to support alternatives are welcome :)
       oneOf:
+        - $ref: '#/components/schemas/RSAPublicJWK'
         - $ref: '#/components/schemas/ECDSAPublicJWK'
         - $ref: '#/components/schemas/ED25519PublicJWK'
 
@@ -772,6 +788,16 @@ components:
         public_key:
           $ref: '#/components/schemas/PublicJWK'
 
+    SshHostCertificateRequest:
+      type: object
+      required: [public_keys]
+      additionalProperties: false
+      properties:
+        public_keys:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicJWK'
+
   responses:
     ErrorResponse:
       description: Error
@@ -885,7 +911,7 @@ components:
           schema:
             type: object
 
-    SshUserCertificateResponse:
+    SshCertificateResponse:
       description: OK
       content:
         application/json:
@@ -899,15 +925,7 @@ components:
                   type: string
                   format: base64
 
-    SshUserTrustedKeysResponse:
-      description: OK
-      content:
-        text/plain:
-          schema:
-            description: one public key per line, OpenSSH format
-            type: string
-
-    SshHostTrustedKeysResponse:
+    SshTrustedKeysResponse:
       description: OK
       content:
         text/plain:
@@ -1312,7 +1330,24 @@ paths:
               $ref: '#/components/schemas/SshUserCertificateRequest'
       responses:
         "200":
-          $ref: "#/components/responses/SshUserCertificateResponse"
+          $ref: "#/components/responses/SshCertificateResponse"
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /idb/ssh/host/certificate:
+    post:
+      security: *SessionSignature
+      summary: Generate Certificates
+      description: >
+        Request the generation of a set of host SSH Certificates
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SshHostCertificateRequest'
+      responses:
+        "200":
+          $ref: "#/components/responses/SshCertificateResponse"
         default:
           $ref: '#/components/responses/ErrorResponse'
 
@@ -1324,7 +1359,7 @@ paths:
         valid user SSH certificates
       responses:
         "200":
-          $ref: "#/components/responses/SshUserTrustedKeysResponse"
+          $ref: "#/components/responses/SshTrustedKeysResponse"
         default:
           $ref: '#/components/responses/ErrorResponse'
 
@@ -1336,6 +1371,6 @@ paths:
         valid host SSH certificates
       responses:
         "200":
-          $ref: "#/components/responses/SshHostTrustedKeysResponse"
+          $ref: "#/components/responses/SshTrustedKeysResponse"
         default:
           $ref: '#/components/responses/ErrorResponse'

@@ -21,13 +21,14 @@ New host starts
   $ DIRECTORY_URL=http://127.0.0.1:$API_PORT/idb/directory
   $ idbctl -c host.json config --directory $DIRECTORY_URL
   $ ssh-keygen -t ed25519 -f host-account -N "" > /dev/null
-  $ idbctl -c host.json accept --invitation $INVITATION  --key host-account
+  $ idbctl -c host.json accept --invitation=$INVITATION  --key host-account
   $ ssh-keygen -t ed25519 -f host-session -N "" > /dev/null
   $ idbctl -c host.json login --session-key host-session
 
 New host SSH setup
-  $ idbctl openssh user-trusted-keys > $USER_CA_PUBLIC_KEYS_FILENAME
-# XXX: Should we notify sshd that it needs to reload the public keys ?
+  $ idbctl -c host.json openssh sign-host --public-key=$SSHD_KEYS_DIRECTORY/ssh_host_rsa_key.pub --public-key=$SSHD_KEYS_DIRECTORY/ssh_host_ecdsa_key.pub --public-key=$SSHD_KEYS_DIRECTORY/ssh_host_ed25519_key.pub
+  $ idbctl -c host.json openssh user-trusted-keys > $SSHD_KEYS_DIRECTORY/user-ca.pub
+  $ podman exec $SSHD_CONTAINER_ID pkill -HUP sshd
 
 Provision new user
   $ idbctl admin identity create -n user
@@ -42,15 +43,19 @@ User accepts invite and logs in
   $ DIRECTORY_URL=http://127.0.0.1:$API_PORT/idb/directory
   $ idbctl -c user.json config --directory $DIRECTORY_URL
   $ ssh-keygen -t ed25519 -f user-account -N "" > /dev/null
-  $ idbctl -c user.json accept --invitation $INVITATION --key user-account
+  $ idbctl -c user.json accept --invitation=$INVITATION --key user-account
   $ ssh-keygen -t ed25519 -f user-session -N "" > /dev/null
   $ idbctl -c user.json login --session-key user-session
 
 User attempts to log into host
+  $ IDBCTL=$(whereis -b idbctl |cut -d' ' -f2)
+  $ idbctl -c user.json openssh known-hosts > ./known_hosts
   $ cat <<EOF > ssh_config
-  > Match Exec "idbctl openssh auth --host %h --user %r --known-hosts ./user_trusted_keys_known_hosts --host-krl ./host.krl --identity-file ./device.name.pub --certificate-file ./device.name.cert"
+  > Match Exec "idbctl -c user.json openssh auth --host %h --user %r --known-hosts ./known_hosts --host-krl ./host.krl --identity-file ./device.name.pub --certificate-file ./device.name.cert"
+  >      KnownHostsCommand /usr/bin/cat ./known_hosts
   >      Hostname 127.0.0.1
+  >      HostKeyAlias host
   >      Port $SSHD_PORT
   > EOF
-  $ ssh -t -o StrictHostKeyChecking=no -F ./ssh_config root@host
-#  $ ssh -t -o UserKnownHostsFile=./user_trusted_keys_known_hosts -F ./ssh_config root@host
+  $ ssh -F ./ssh_config root@host "echo hello"
+  hello (no-eol)

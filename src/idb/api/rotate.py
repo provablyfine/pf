@@ -48,7 +48,7 @@ def rotate(key_type: db.SigningKeyType, crypto_key_type: jwk.KeyType, rotation_p
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', help='Configuration file', required=True)
+    parser.add_argument('-c', '--config', help='Configuration file', required=True)
     args = parser.parse_args()
 
     conf = config.Config.load(args.config)

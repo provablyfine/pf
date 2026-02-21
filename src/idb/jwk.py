@@ -191,15 +191,15 @@ class Public:
             case cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePublicKey():
                 # RFC 7518 Section 6.2
                 public_numbers = self._key.public_numbers()
-                x = base64url.encode(public_numbers.x)
-                y = base64url.encode(public_numbers.y)
+                x = base64url.encode_uint(public_numbers.x)
+                y = base64url.encode_uint(public_numbers.y)
                 secg_to_nist = {v.name: k for k, v in ec_nist_to_secg.items()}
-                return {'kty': 'EC', 'crv': secg_to_nist[public_numbers.curve], 'x': x, 'y': y}
+                return {'kty': 'EC', 'crv': secg_to_nist[public_numbers.curve.name], 'x': x, 'y': y}
             case cryptography.hazmat.primitives.asymmetric.rsa.RSAPublicKey():
                 # RFC 7518 Section 6.3.1
                 public_numbers = self._key.public_numbers()
-                e = base64url.encode(public_numbers.e)
-                n = base64url.encode(public_numbers.n)
+                e = base64url.encode_uint(public_numbers.e)
+                n = base64url.encode_uint(public_numbers.n)
                 return {'kty': 'RSA', 'e': e, 'n': n}
             case _:
                 assert False
@@ -215,17 +215,17 @@ class Public:
 
             case 'EC':
                 # RFC 7518 Section 6.2
-                x = base64url.decode(data['x'])
-                y = base64url.decode(data['y'])
+                x = base64url.decode_uint(data['x'])
+                y = base64url.decode_uint(data['y'])
                 curve = ec_nist_to_secg[data['crv']]
-                public_numbers = cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePublicNumbers(x, y, curve)
+                public_numbers = cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePublicNumbers(x, y, curve())
                 key = public_numbers.public_key()
                 return Public(key)
 
             case 'RSA':
                 # RFC 7518 Section 6.3.1
-                e = base64url.decode(data['e'])
-                n = base64url.decode(data['n'])
+                e = base64url.decode_uint(data['e'])
+                n = base64url.decode_uint(data['n'])
                 numbers = cryptography.hazmat.primitives.asymmetric.rsa.RSAPublicNumbers(e=e, n=n)
                 return Public(numbers.public_key())
 
@@ -334,7 +334,7 @@ class Private:
                 y = base64url.encode(public_numbers.y)
                 d = base64url.encode(private_numbers.private_value)
                 secg_to_nist = {v.name: k for k, v in ec_nist_to_secg.items()}
-                return {'kty': 'EC', 'crv': secg_to_nist[public_numbers.curve], 'x': x, 'y': y, 'd': d}
+                return {'kty': 'EC', 'crv': secg_to_nist[public_numbers.curve.name], 'x': x, 'y': y, 'd': d}
             case _:
                 assert False
 

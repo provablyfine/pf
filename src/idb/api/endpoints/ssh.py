@@ -24,6 +24,51 @@ def _read_current(type: db.SigningKeyType, staging_period: int):
 
 
 @signature.verify_session
+def sign_host_certificate(request: wa.Request) -> wa.Response:
+    data = json.loads(request.body)
+    caller = ctx.db.identity.read_one(id=ctx.identity_id)
+
+    signers = _read_current(db.SigningKeyType.HOST, ctx.config.host_key_staging_period)
+    signer = signers[0]
+    serial_number = signer.serial_number
+    now = int(time.time())
+
+    certificates = []
+    for key in data['public_keys']:
+        public_key = jwk.Public.from_dict(key)
+        cert = ssh.cert.Cert.create_host(
+            public_key=public_key,
+            serial_number=serial_number,
+            identifier=f'{ctx.identity_id}:{caller.name}',
+            principals=[caller.name],
+            valid_after=now-10,
+            valid_before=now+ctx.config.host_certificate_lifetime,
+            signer=signer.key,
+        )
+        serial_number += 1
+        certificates.append(cert)
+
+    for c in certificates:
+        model.audit_log.create(
+            'create-host-certificate',
+            signing_key_id=signer.id,
+            public_key=c.public_key.to_dict(),
+            identifier=c.identifier,
+            serial_number=c.serial_number,
+            principals=c.principals,
+            valid_after=c.valid_after,
+            valid_before=c.valid_before,
+        )
+
+    return wa.JSONResponse(
+        status_code=200,
+        json={
+            'certificates': [base64.b64encode(c.to_openssh()).decode('utf-8') for c in certificates]
+        }
+    )
+
+
+@signature.verify_session
 def sign_user_certificate(request: wa.Request) -> wa.Response:
     data = json.loads(request.body)
     caller = ctx.db.identity.read_one(id=ctx.identity_id)
@@ -65,7 +110,7 @@ def sign_user_certificate(request: wa.Request) -> wa.Response:
             public_key=public_key,
             serial_number=serial_number,
             identifier=f'{ctx.identity_id}:{caller.name}',
-            principals=[f'{data["username"]}@{data["hostname"]}'],
+            principals=[f'{data["username"]}@{host.id}'],
             valid_after=now-10,
             valid_before=now+ctx.config.user_certificate_lifetime,
             critical_options=ssh.cert.CriticalOptions(),
@@ -85,7 +130,7 @@ def sign_user_certificate(request: wa.Request) -> wa.Response:
             public_key=public_key,
             serial_number=serial_number,
             identifier=f'{ctx.identity_id}:{caller.name}',
-            principals=[f'{data["username"]}@{data["hostname"]}'],
+            principals=[f'{data["username"]}@{host.id}'],
             valid_after=now-10,
             valid_before=now+ctx.config.user_certificate_lifetime,
             critical_options=ssh.cert.CriticalOptions(
@@ -170,7 +215,7 @@ def read_host_trusted_keys(request: wa.Request) -> wa.Response:
         ctx.db.signing_key.columns.valid_before > now,
         type=db.SigningKeyType.HOST,
     )
-    trusted_keys = [signing_key.key.public().to_openssh() for signing_key in signing_keys]
+    trusted_keys = [b'@cert-authority * ' + signing_key.key.public().to_openssh() for signing_key in signing_keys]
 
     return wa.Response(
         status_code=200,

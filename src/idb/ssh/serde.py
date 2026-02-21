@@ -16,6 +16,16 @@ def serialize_cert(cert: cert.Cert) -> bytes:
     return base64.b64decode(items[1])
 
 
+def deserialize_cert(data: bytes) -> cert.Cert:
+    reader = buffer.Reader(data)
+    key_type = reader.read_string()
+    openssh = [
+        key_type,
+        base64.b64encode(data),
+    ]
+    return cert.Cert.from_openssh(b' '.join(openssh))
+
+
 def serialize_public(key: jwk.Public) -> bytes:
     data = key.to_openssh()
     items = data.split(b' ')

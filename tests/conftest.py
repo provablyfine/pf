@@ -1,3 +1,4 @@
+import os
 import os.path
 import logging
 import subprocess
@@ -52,8 +53,15 @@ def _parse_port_mapping(s):
 @dataclasses.dataclass(frozen=True)
 class SshD:
     host_port: int
-    user_ca_public_keys_filename: str
+    keys_directory: str
+    container_id: str
 
+
+def _dump_sshd_logs(container_id):
+    logs = _run(['podman', 'logs', container_id])
+    with tempfile.NamedTemporaryFile(mode='w+', delete=False, delete_on_close=False) as f:
+        f.write(logs)
+        print(f'SSH Server logs: {f.name}')
 
 @pytest.fixture
 def sshd(request):
@@ -67,8 +75,7 @@ COPY src /tmp/idb/src/
 RUN --mount=type=cache,target=/root/.cache/uv uv pip install --quiet --link-mode=copy --system --break-system-packages /tmp/idb && \
     rm -rf /tmp/idb
 
-RUN ssh-keygen -A && \
-    mkdir -p /run/sshd && \
+RUN mkdir -p /run/sshd && \
     adduser -D alice && \
     adduser -D bob && \
     adduser -D charlie
@@ -79,9 +86,12 @@ ListenAddress 0.0.0.0
 AddressFamily any
 ListenAddress ::
 
-#HostKey /etc/ssh/ssh_host_rsa_key
-#HostKey /etc/ssh/ssh_host_ecdsa_key
-#HostKey /etc/ssh/ssh_host_ed25519_key
+HostKey /etc/ssh/keys/ssh_host_rsa_key
+HostKey /etc/ssh/keys/ssh_host_ecdsa_key
+HostKey /etc/ssh/keys/ssh_host_ed25519_key
+HostCertificate /etc/ssh/keys/ssh_host_rsa_key.cert
+HostCertificate /etc/ssh/keys/ssh_host_ecdsa_key.cert
+HostCertificate /etc/ssh/keys/ssh_host_ed25519_key.cert
 
 RekeyLimit default none
 
@@ -94,7 +104,7 @@ StrictModes yes
 MaxAuthTries 10
 MaxSessions 10
 
-AuthorizedPrincipalsCommand /usr/bin/idbctl openssh authorized-principals --certificate=%K --username=%u
+AuthorizedPrincipalsCommand /usr/bin/idbctl openssh authorized-principals --host-certificate=/etc/ssh/keys/ssh_host_ed25519_key.cert --certificate=%k
 AuthorizedPrincipalsCommandUser nobody
 
 PubkeyAuthentication yes
@@ -105,17 +115,30 @@ PermitEmptyPasswords no
 KbdInteractiveAuthentication no
 
 Subsystem	sftp	/usr/libexec/openssh/sftp-server
-TrustedUserCAKeys /etc/ssh/user-ca.pub
+TrustedUserCAKeys /etc/ssh/keys/user-ca.pub
 EOF
 
 EXPOSE 22
 
-CMD ["/usr/sbin/sshd", "-D", "-e"]
+RUN cat <<EOF > /run/start.sh
+ssh-keygen -t ed25519 -f /etc/ssh/keys/ssh_host_ed25519_key -N "" > /dev/null
+ssh-keygen -t ecdsa -f /etc/ssh/keys/ssh_host_ecdsa_key -N "" > /dev/null
+ssh-keygen -t rsa -f /etc/ssh/keys/ssh_host_rsa_key -N "" > /dev/null
+/usr/sbin/sshd -D -e
+EOF
+
+CMD ["/bin/sh", "/run/start.sh"]
     """
     with tempfile.NamedTemporaryFile(mode='w+') as container_file, \
-            tempfile.NamedTemporaryFile(mode='w+') as user_ca_public_keys:
+            tempfile.TemporaryDirectory() as ssh_keys_directory:
+
         container_file.write(containerfile)
         container_file.flush()
+
+        # Make sure "nobody" can read this directory
+        fd = os.open(ssh_keys_directory, 0)
+        os.chmod(fd, 0o755)
+        os.close(fd)
 
         stdout = _run(['podman', 'build', '--quiet', '--file', container_file.name, tld()])
         image_id = stdout.strip('\n')
@@ -128,22 +151,22 @@ CMD ["/usr/sbin/sshd", "-D", "-e"]
             '--quiet',
             '--publish-all',
             '--volume',
-            f'{user_ca_public_keys.name}:/etc/ssh/user-ca.pub:ro',
+            f'{ssh_keys_directory}:/etc/ssh/keys:rw',
             image_id,
         ])
         container_id = stdout.strip('\n')
         stdout = _run(['podman', 'port', container_id])
-        port = _parse_port_mapping(stdout)
-
         try:
-            yield SshD(port, user_ca_public_keys.name)
+            port = _parse_port_mapping(stdout)
+        except:
+            _dump_sshd_logs(container_id)
+            raise
+        try:
+            yield SshD(host_port=port, keys_directory=ssh_keys_directory, container_id=container_id)
         finally:
             if hasattr(request.node, 'rep_call'):
                 if request.node.rep_call.failed:
-                    logs = _run(['podman', 'logs', container_id])
-                    with tempfile.NamedTemporaryFile(mode='w+', delete=False, delete_on_close=False) as f:
-                        f.write(logs)
-                        print(f'SSH Server logs: {f.name}')
+                    _dump_sshd_logs(container_id)
             _run(['podman', 'stop', container_id])
 
 
