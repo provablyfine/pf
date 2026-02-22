@@ -8,6 +8,7 @@
 #   "http-message-signatures",
 #   "pytest",
 #   "coverage",
+#   "gunicorn",
 #   "idb",
 # ]
 # [tool.uv.sources]
