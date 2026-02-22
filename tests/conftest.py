@@ -27,7 +27,7 @@ def tld():
 
 def _run(args):
     logger.info(f'RUN: {" ".join(args)}')
-    popen = subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    popen = subprocess.run(args, capture_output=True, text=True)
     if popen.returncode != 0:
         with tempfile.NamedTemporaryFile(delete=False, delete_on_close=False, mode='w+') as f:
             f.write(popen.stdout)
@@ -219,11 +219,12 @@ def api(request):
             'debug': True,
             'log_level': 'DEBUG',
             'kek_filename': api_kek_file,
-            #debug_sql: true
+            #'debug_sql': True,
         }))
     env = copy.copy(os.environ)
     env['PYTHONUNBUFFERED'] = '1'
-    popen = subprocess.Popen(['scripts/idb', '-c', api_config, '--port-file', api_port_file], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env)
+    api_log_file = open(api_log, 'w+')
+    popen = subprocess.Popen(['scripts/idb', '-c', api_config, '--port-file', api_port_file], stdout=api_log_file, stderr=subprocess.STDOUT, text=True, env=env)
 
     idb_start_timeout = 5
     start = time.time()
@@ -256,7 +257,8 @@ def api(request):
 
     # tear down
     popen.terminate()
-    stdout, stderr = popen.communicate()
+    popen.wait()
+    api_log_file.close()
     if hasattr(request.node, 'rep_call'):
         if request.node.rep_call.failed:
             print(f'API log: {api_log}')
@@ -264,8 +266,6 @@ def api(request):
             print(f'API config: {api_config}')
             print(f'API portfile: {api_port_file}')
             print(f'API kek: {api_kek_file}')
-            with open(api_log, 'w+') as f:
-                f.write(stdout)
             return
     tmp_dir.cleanup()
 
