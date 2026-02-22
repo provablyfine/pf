@@ -5,7 +5,6 @@ DOCS := \
  $(NULL)
 
 ROOT_DIR := $(patsubst %/,%,$(dir $(abspath $(firstword $(MAKEFILE_LIST)))))
-CPUS := $(shell nproc 2>/dev/null || echo 4)
 
 DOC_TARGETS=$(addprefix docs/,$(DOCS:.md=.html))
 
