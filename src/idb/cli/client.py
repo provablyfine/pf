@@ -197,7 +197,10 @@ class HttpClient:
         logger.info(f'tx {request.method} to {request.url}')
         logger.debug(f'tx headers: {request.headers}')
         logger.debug(f'tx body: {request.body}')
-        response = self._session.send(request, timeout=timeout)
+        try:
+            response = self._session.send(request, timeout=1)
+        except requests.exceptions.ConnectionError:
+            raise exceptions.UI('Unable to connect to server. #3')
         logger.info(f'rx status: {response.status_code}')
         logger.debug(f'rx headers: {response.headers}')
         logger.debug(f'rx body: {response.content}')
@@ -245,8 +248,14 @@ class Client:
     def directory(self):
         if self._directory is not None:
             return self._directory
-        response = requests.get(self._config.directory_url)
-        response.raise_for_status()
+        try:
+            response = requests.get(self._config.directory_url, timeout=0.5)
+        except requests.exceptions.ConnectionError:
+            raise exceptions.UI('Unable to connect to server. #1')
+        except requests.exceptions.ReadTimeout:
+            raise exceptions.UI('Unable to connect to server #2')
+        if response.status_code != 200:
+            raise exceptions.UI('Unable to read directory from server')
         self._directory = types.SimpleNamespace(response.json())
         return self._directory
 
