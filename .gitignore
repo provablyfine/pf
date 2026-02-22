@@ -5,4 +5,7 @@
 **/*.json
 **/*.key
 **/*.pub
+**/*.orig
+**/*.rej
+**/*.patch
 .coverage*
