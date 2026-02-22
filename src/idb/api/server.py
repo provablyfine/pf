@@ -2,7 +2,9 @@ import argparse
 import urllib.parse
 import datetime
 import socket
+
 import gunicorn.app.base
+
 from . import config
 from . import app
 
@@ -24,7 +26,7 @@ def run():
     parser.add_argument('-c', '--config', default='idb.yaml')
     parser.add_argument('-p', '--port', type=int, default=0)
     parser.add_argument('--port-file', default=None)
-    parser.add_argument('-t', '--timeout', type=int, default=3)
+    parser.add_argument('-t', '--timeout', type=int, default=1)
     args = parser.parse_args()
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -45,12 +47,13 @@ def run():
 
     options = {
         'bind': f'fd://{sock.fileno()}',
-        'workers': 4,
+        'workers': 1,
         'timeout': args.timeout,
+        'graceful_timeout': 1,
         # --- Logging Configuration ---
         'accesslog': '-',
         'errorlog': '-',
-        'access_log_format': '%(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s"',
+        'access_log_format': '%(t)s %(m)s %(U)s status=%(s)s bytes=%(b)s delay=%(M)sms',
         'loglevel': 'info',
     }
 
