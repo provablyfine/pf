@@ -201,6 +201,8 @@ class HttpClient:
             response = self._session.send(request, timeout=1)
         except requests.exceptions.ConnectionError:
             raise exceptions.UI('Unable to connect to server. #3')
+        except requests.exceptions.ReadTimeout:
+            raise exceptions.UI('Unable to connect to server. #4')
         logger.info(f'rx status: {response.status_code}')
         logger.debug(f'rx headers: {response.headers}')
         logger.debug(f'rx body: {response.content}')
