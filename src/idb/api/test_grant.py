@@ -309,6 +309,26 @@ def test_identity_add_tag():
     assert grants.identity(2, [], []).can_add_tag(2)
     assert not grants.identity(2, [], []).can_add_tag(3)
 
+    grants = single_grants({'type': 'identity', 'filter': {'id': 2, 'tag_id_list': [1,2], 'boundary_id_list': []}, 'permission': _identity_add_tag([1,2])})
+    assert not grants.identity(1, [], []).can_add_tag(1)
+    assert not grants.identity(2, [], []).can_add_tag(1)
+    assert not grants.identity(2, [2], []).can_add_tag(1)
+    assert not grants.identity(2, [1], []).can_add_tag(1)
+    assert grants.identity(2, [1,2], []).can_add_tag(1)
+
+def test_identity_add_tag_ceiling_and_denied():
+    grants = grant.Grants([boundary([
+        {'type': 'identity', 'filter': {'id': None, 'tag_id_list': None, 'boundary_id_list': None}, 'permission': _identity_add_tag([1,2])},
+        {'type': 'identity', 'filter': {'id': None, 'tag_id_list': None, 'boundary_id_list': None}, 'permission': _identity_add_tag([3])}
+    ], [
+        {'type': 'identity', 'filter': {'id': None, 'tag_id_list': None, 'boundary_id_list': None}, 'permission': _identity_add_tag([2])}
+    ])], [role([
+        {'type': 'identity', 'filter': {'id': None, 'tag_id_list': None, 'boundary_id_list': None}, 'permission': _identity_add_tag([0,1,2,3,4])}
+    ])])
+    assert grants.identity(1, [], []).can_add_tag(1)
+    assert not grants.identity(1, [], []).can_add_tag(2)
+    assert grants.identity(1, [], []).can_add_tag(3)
+    assert not grants.identity(1, [], []).can_add_tag(4)
 
 ######## SSH ########
 
