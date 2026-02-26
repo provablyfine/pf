@@ -9,7 +9,7 @@ def _deserialize(l: list[grant.Grant]):
     return [grant.Grant.from_dict(g) for g in l]
 
 
-def boundary(prefix, ceiling_list, denied_list):
+def boundary(ceiling_list, denied_list):
     return types.SimpleNamespace(ceiling_list=_deserialize(ceiling_list), denied_list=_deserialize(denied_list))
 
 
@@ -29,6 +29,14 @@ def _role_update(name: bool, description: bool):
     return {
         'name': name,
         'description': description,
+    }
+
+def _boundary_update(name: bool, description: bool, ceiling_list: bool, denied_list: bool):
+    return {
+        'name': name,
+        'description': description,
+        'ceiling_list': ceiling_list,
+        'denied_list': denied_list,
     }
 
 def _crud(create: bool, read: bool, update: dict[str,bool]|None, delete: bool):
@@ -161,6 +169,31 @@ def test_empty_boundary():
     assert not grants.boundary(1).can_delete()
     with pytest.raises(AssertionError):
         assert not grants.boundary(1).can_update('beurk')
+
+@pytest.mark.parametrize("update", [
+    _boundary_update(False, False, False, False),
+    _boundary_update(True, False, False, False),
+    _boundary_update(False, True, False, False),
+    _boundary_update(False, False, True, False),
+    _boundary_update(False, False, False, True),
+    _boundary_update(True, False, True, False),
+    _boundary_update(False, True, False, True),
+    _boundary_update(True, True, True, True),
+    None,
+])
+def test_filter_one_boundary(update):
+    # We only test the update field because the code is all the same for role 
+    grants = grant.Grants([], [role([
+        {'type': 'boundary', 'filter': {'id': 2}, 'permission': _crud(create=False, read=False, update=update, delete=False)}
+    ])])
+    assert not grants.boundary(None).can_create()
+    for boundary_id in [1, 2, 3]:
+        assert not grants.boundary(boundary_id).can_read()
+        assert not grants.boundary(boundary_id).can_delete()
+        assert grants.boundary(boundary_id).can_update('name') == (boundary_id == 2 and (update is None or update['name']))
+        assert grants.boundary(boundary_id).can_update('description') == (boundary_id == 2 and (update is None or update['description']))
+        assert grants.boundary(boundary_id).can_update('ceiling_list') == (boundary_id == 2 and (update is None or update['ceiling_list']))
+        assert grants.boundary(boundary_id).can_update('denied_list') == (boundary_id == 2 and (update is None or update['denied_list']))
 
 ######## IDENTITY ########
 
