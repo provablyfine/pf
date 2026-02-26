@@ -34,6 +34,7 @@ class CRUDPermission(CRDPermission):
     update: dict[str,bool]|None
 
     def can_update(self, field: str) -> bool:
+        assert self._check_update_field(field)
         if self.update is None:
             return True
         return self.update[field]
@@ -44,11 +45,13 @@ class TagPermission(CRDPermission):
 
 
 class RolePermission(CRUDPermission):
-    pass
+    def _check_update_field(self, field: str) -> bool:
+        return field in ['name', 'description']
 
 
 class BoundaryPermission(CRUDPermission):
-    pass
+    def _check_update_field(self, field: str) -> bool:
+        return field in ['name', 'description', 'ceiling_list', 'denied_list']
 
 
 @dataclasses.dataclass(frozen=True)
@@ -56,6 +59,9 @@ class IdentityPermission(CRUDPermission):
     add_tag: list[int]|None
     del_tag: list[int]|None
     invite: list[str]|None
+
+    def _check_update_field(self, field: str) -> bool:
+        return field in ['name']
 
     def can_add_tag(self, tag_id: int) -> bool:
         if self.add_tag is None:
