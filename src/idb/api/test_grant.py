@@ -194,6 +194,8 @@ def test_filter_one_boundary(update):
         assert grants.boundary(boundary_id).can_update('description') == (boundary_id == 2 and (update is None or update['description']))
         assert grants.boundary(boundary_id).can_update('ceiling_list') == (boundary_id == 2 and (update is None or update['ceiling_list']))
         assert grants.boundary(boundary_id).can_update('denied_list') == (boundary_id == 2 and (update is None or update['denied_list']))
+        with pytest.raises(AssertionError):
+            assert grants.boundary(boundary_id).can_update('beurk')
 
 ######## IDENTITY ########
 
