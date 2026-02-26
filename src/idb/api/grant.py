@@ -17,14 +17,11 @@ class BasePermission:
         return klass(**data)
 
 
+
 @dataclasses.dataclass(frozen=True)
-class CRDPermission(BasePermission):
-    create: bool
+class RDPermission(BasePermission):
     read: bool
     delete: bool
-
-    def can_create(self) -> bool:
-        return self.create
 
     def can_read(self) -> bool:
         return self.read
@@ -34,16 +31,18 @@ class CRDPermission(BasePermission):
 
 
 @dataclasses.dataclass(frozen=True)
+class CRDPermission(RDPermission):
+    create: bool
+
+    def can_create(self) -> bool:
+        return self.create
+
+
+@dataclasses.dataclass(frozen=True)
 class CRUDPermission(CRDPermission):
     update: dict[str,bool]|None
 
-    @abc.abstractmethod
-    def _check_update_field(self, field: str) -> bool:
-        """ This is only a sanity check """
-        pass
-
     def can_update(self, field: str) -> bool:
-        assert self._check_update_field(field), "You tried to update a field that does not exist"
         if self.update is None:
             return True
         return self.update[field]
@@ -62,15 +61,27 @@ class BoundaryPermission(CRUDPermission):
     def _check_update_field(self, field: str) -> bool:
         return field in ['name', 'description', 'ceiling_list', 'denied_list']
 
+@dataclasses.dataclass(frozen=True)
+class IdentityCreatePermission:
+    tag_id_list: list[int]|None
+    boundary_id_list: list[int]|None
 
 @dataclasses.dataclass(frozen=True)
-class IdentityPermission(CRUDPermission):
+class IdentityPermission(RDPermission):
+    create: IdentityCreatePermission
+    update: dict[str,bool]|None
     add_tag: list[int]|None
     del_tag: list[int]|None
     invite: list[str]|None
 
-    def _check_update_field(self, field: str) -> bool:
-        return field in ['name']
+    def can_create(self, tag_id_list, boundary_id_list) -> bool:
+        return self.create
+
+    def can_update(self, field: str) -> bool:
+        assert field == 'name', "You tried to update a field that does not exist"
+        if self.update is None:
+            return True
+        return self.update[field]
 
     def can_add_tag(self, tag_id: int) -> bool:
         if self.add_tag is None:
@@ -136,15 +147,15 @@ class BoundaryFilter(SingleIdFilter):
 @dataclasses.dataclass(frozen=True)
 class TripletFilter:
     id: int|None
-    tag_id: list[int]|None
-    boundary_id: list[int]|None
+    tag_id_list: list[int]|None
+    boundary_id_list: list[int]|None
 
     def is_match(self, identity_id: int, tag_id_list: list[int], boundary_id_list: list[int]):
         if self.id is not None and self.id != identity_id:
             return False
-        if self.tag_id is not None and not all(tag_id in tag_id_list for tag_id in self.tag_id):
+        if self.tag_id_list is not None and not all(tag_id in tag_id_list for tag_id in self.tag_id_list):
             return False
-        if self.boundary_id is not None and not all(boundary_id in boundary_id_list for boundary_id in self.boundary_id):
+        if self.boundary_id_list is not None and not all(boundary_id in boundary_id_list for boundary_id in self.boundary_id_list):
             return False
         return True
 
@@ -253,7 +264,15 @@ class BaseWrapper:
         return False
 
 
-class CRDWrapper(BaseWrapper):
+class RDWrapper(BaseWrapper):
+    def can_read(self) -> bool:
+        return self.can(lambda p: p.can_read())
+
+    def can_delete(self) -> bool:
+        return self.can(lambda p: p.can_delete())
+
+
+class CRDWrapper(RDWrapper):
     def can_create(self) -> bool:
         return self.can(lambda p: p.can_create())
 
@@ -265,11 +284,11 @@ class CRDWrapper(BaseWrapper):
 
 
 class CRUDWrapper(CRDWrapper):
-    def _is_update_field(self, field: str) -> bool:
-        raise NotImplementedError
-
+    @abc.abstractmethod
+    def _check_update_field(self, field: str) -> bool:
+        pass
     def can_update(self, field: str) -> bool:
-        assert self._is_update_field(field)
+        assert self._check_update_field(field), "You tried to update a field that does not exist"
         return self.can(lambda p: p.can_update(field))
 
 
@@ -278,18 +297,22 @@ class TagWrapper(CRDWrapper):
 
 
 class BoundaryWrapper(CRUDWrapper):
-    def _is_update_field(self, field):
-        return field in set(['name', 'description', 'ceiling_list', 'denied_list'])
+    def _check_update_field(self, field: str) -> bool:
+        return field in ['name', 'description', 'ceiling_list', 'denied_list']
 
 
 class RoleWrapper(CRUDWrapper):
-    def _is_update_field(self, field):
-        return field in set(['name', 'description', 'grant_list'])
+    def _check_update_field(self, field: str) -> bool:
+        return field in ['name', 'description', 'grant_list']
 
 
-class IdentityWrapper(CRUDWrapper):
-    def _is_update_field(self, field):
-        return field in set(['name'])
+class IdentityWrapper(RDWrapper):
+    def can_create(self, tag_id_list: list[int], boundary_id_list: list[int]) -> bool:
+        return self.can(lambda p: p.can_create(tag_id_list, boundary_id_list))
+
+    def can_update(self, field: str) -> bool:
+        assert field == 'name', 'You are not allowed to update any field but the name field.'
+        return self.can(lambda p: p.can_update(field))
 
     def can_add_tag(self, tag_id: int) -> bool:
         return self.can(lambda p: p.can_add_tag(tag_id))
@@ -326,7 +349,7 @@ class Grants:
             return isinstance(filter, RoleFilter) and filter.is_match(role_id)
         return RoleWrapper(self._boundaries, self._roles, cmp)
 
-    def identity(self, identity_id: int, tag_id_list: list[int], boundary_id_list: list[int]) -> IdentityWrapper:
+    def identity(self, identity_id: int|None=None, tag_id_list: list[int]|None=None, boundary_id_list: list[int]|None=None) -> IdentityWrapper:
         def cmp(filter: IdentityFilter) -> bool:
             return isinstance(filter, IdentityFilter) and filter.is_match(identity_id, tag_id_list, boundary_id_list)
         return IdentityWrapper(self._boundaries, self._roles, cmp)

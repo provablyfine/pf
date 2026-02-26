@@ -50,6 +50,23 @@ def _crud(create: bool, read: bool, update: dict[str,bool]|None, delete: bool):
         'delete': delete,
     }
 
+def _identity(create_tag_id_list: list[int]|None, create_boundary_id_list: list[int]|None, read: bool, update: dict[str,bool]|None, delete: bool, add_tag: list[int]|None, del_tag: list[int]|None, invite: list[str]|None):
+    return {
+        'create': {
+            'tag_id_list': create_tag_id_list,
+            'boundary_id_list': create_boundary_id_list,
+        },
+        'read': read,
+        'update': update,
+        'delete': delete,
+        'add_tag': add_tag,
+        'del_tag': del_tag,
+        'invite': invite,
+    }
+
+def _identity_add_tag(add_tag: list[int]|None):
+    return _identity(create_tag_id_list=[], create_boundary_id_list=[], read=False, update=None, delete=False, add_tag=add_tag, del_tag=[], invite=[])
+
 
 ######## TAG ########
 
@@ -275,12 +292,22 @@ def test_filter_one_boundary(update):
 def test_empty_identity():
     grants = grant.Grants([], [])
 
-    assert not grants.identity(None, None, None).can_create()
+    assert not grants.identity().can_create([], [])
     assert not grants.identity(1, [], []).can_read()
     assert not grants.identity(1, [], []).can_update('name')
     assert not grants.identity(1, [], []).can_delete()
     with pytest.raises(AssertionError):
         assert not grants.identity(1, [], []).can_update('beurk')
+
+def test_identity_add_tag():
+    grants = single_grants({'type': 'identity', 'filter': {'id': 2, 'tag_id_list': [], 'boundary_id_list': []}, 'permission': _identity_add_tag([1,2])})
+    assert not grants.identity().can_create([], [])
+    assert not grants.identity(1, [], []).can_add_tag(1)
+    assert not grants.identity(1, [], []).can_add_tag(2)
+    assert not grants.identity(1, [], []).can_add_tag(3)
+    assert grants.identity(2, [], []).can_add_tag(1)
+    assert grants.identity(2, [], []).can_add_tag(2)
+    assert not grants.identity(2, [], []).can_add_tag(3)
 
 
 ######## SSH ########
