@@ -1,6 +1,10 @@
 from __future__ import annotations
 import dataclasses
 import typing
+import abc
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -33,8 +37,13 @@ class CRDPermission(BasePermission):
 class CRUDPermission(CRDPermission):
     update: dict[str,bool]|None
 
+    @abc.abstractmethod
+    def _check_update_field(self, field: str) -> bool:
+        """ This is only a sanity check """
+        pass
+
     def can_update(self, field: str) -> bool:
-        assert self._check_update_field(field)
+        assert self._check_update_field(field), "You tried to update a field that does not exist"
         if self.update is None:
             return True
         return self.update[field]
@@ -208,35 +217,39 @@ class Grant:
 
 
 class BaseWrapper:
-    def __init__(self, grant_list, ceiling_list, denied_list):
-        self._grant_list = grant_list
-        self._ceiling_list = ceiling_list
-        self._denied_list = denied_list
+    def __init__(self, boundaries, roles, filter):
+        self._boundaries = boundaries
+        self._roles = roles
+        self._filter = filter
 
     def list_can(self, cmp) -> list[Grant]:
-        for ceiling in self._ceiling_list:
-            if not cmp(ceiling.permission):
+        for boundary in self._boundaries:
+            if any(self._filter(denied.filter) and cmp(denied.permission) for denied in boundary.denied_list):
+                logger.info(f'request denied by boundary id={boundary.id}')
                 return []
-        for denied in self._denied_list:
-            if cmp(denied.permission):
+            if not any(self._filter(ceiling.filter) and cmp(ceiling.permission) for ceiling in boundary.ceiling_list):
+                logger.info(f'request above ceiling of boundary id={boundary.id}')
                 return []
         allowed = []
-        for grant in self._grant_list:
-            if not cmp(grant.permission):
-                continue
-            allowed.append(grant)
+        for role in self._roles:
+            for grant in role.grant_list:
+                if self._filter(grant.filter) and cmp(grant.permission):
+                    allowed.append(grant)
         return allowed
 
     def can(self, cmp) -> bool:
-        for ceiling in self._ceiling_list:
-            if not cmp(ceiling.permission):
+        for boundary in self._boundaries:
+            if any(self._filter(denied.filter) and cmp(denied.permission) for denied in boundary.denied_list):
+                logger.info(f'request denied by boundary id={boundary.id}')
                 return False
-        for denied in self._denied_list:
-            if cmp(denied.permission):
+            if not any(self._filter(ceiling.filter) and cmp(ceiling.permission) for ceiling in boundary.ceiling_list):
+                logger.info(f'request above ceiling of boundary id={boundary.id}')
                 return False
-        for grant in self._grant_list:
-            if cmp(grant.permission):
-                return True
+        for role in self._roles:
+            for grant in role.grant_list:
+                if self._filter(grant.filter) and cmp(grant.permission):
+                    return True
+        logger.info('request not allowed by any role')
         return False
 
 
@@ -298,34 +311,27 @@ class Grants:
         self._boundaries = boundaries
         self._roles = roles
 
-    def _filter(self, cmp):
-        grant_list = [grant for role in self._roles for grant in role.grant_list if cmp(grant.filter)]
-        ceiling_list = [ceiling for boundary in self._boundaries for ceiling in boundary.ceiling_list if cmp(ceiling.filter)]
-        denied_list = [denied for boundary in self._boundaries for denied in boundary.denied_list if cmp(denied.filter)]
-        return grant_list, ceiling_list, denied_list
-
     def boundary(self, boundary_id: int) -> BoundaryWrapper:
         def cmp(filter: BoundaryFilter) -> bool:
             return isinstance(filter, BoundaryFilter) and filter.is_match(boundary_id)
-        return BoundaryWrapper(*self._filter(cmp))
+        return BoundaryWrapper(self._boundaries, self._roles, cmp)
 
     def tag(self, tag_id: int) -> TagWrapper:
         def cmp(filter: TagFilter) -> bool:
             return isinstance(filter, TagFilter) and filter.is_match(tag_id)
-        return TagWrapper(*self._filter(cmp))
+        return TagWrapper(self._boundaries, self._roles, cmp)
 
     def role(self, role_id: int) -> RoleWrapper:
         def cmp(filter: RoleFilter) -> bool:
             return isinstance(filter, RoleFilter) and filter.is_match(role_id)
-        return RoleWrapper(*self._filter(cmp))
+        return RoleWrapper(self._boundaries, self._roles, cmp)
 
     def identity(self, identity_id: int, tag_id_list: list[int], boundary_id_list: list[int]) -> IdentityWrapper:
         def cmp(filter: IdentityFilter) -> bool:
             return isinstance(filter, IdentityFilter) and filter.is_match(identity_id, tag_id_list, boundary_id_list)
-        return IdentityWrapper(*self._filter(cmp))
+        return IdentityWrapper(self._boundaries, self._roles, cmp)
 
     def ssh(self, identity_id: int, tag_id_list: list[int], boundary_id_list: list[int]) -> SSHWrapper:
         def cmp(filter: SSHFilter) -> bool:
             return isinstance(filter, SSHFilter) and filter.is_match(identity_id, tag_id_list, boundary_id_list)
-        return SSHWrapper(*self._filter(cmp))
-
+        return SSHWrapper(self._boundaries, self._roles, cmp)

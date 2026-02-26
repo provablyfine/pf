@@ -10,11 +10,14 @@ def _deserialize(l: list[grant.Grant]):
 
 
 def boundary(ceiling_list, denied_list):
-    return types.SimpleNamespace(ceiling_list=_deserialize(ceiling_list), denied_list=_deserialize(denied_list))
+    return types.SimpleNamespace(id=1, ceiling_list=_deserialize(ceiling_list), denied_list=_deserialize(denied_list))
 
 
 def role(grant_list):
-    return types.SimpleNamespace(grant_list=_deserialize(grant_list))
+    return types.SimpleNamespace(id=1, grant_list=_deserialize(grant_list))
+
+def single_grants(g) -> grant.Grants:
+    return grant.Grants([boundary([g], [])], [role([g])])
 
 
 def _crd(create: bool, read: bool, delete: bool):
@@ -61,6 +64,11 @@ def test_empty_tag():
     assert not grants.tag(1).can_read()
     assert not grants.tag(1).can_delete()
 
+    grants = grant.Grants([boundary([], [])], [role([])])
+    assert not grants.tag(None).can_create()
+    assert not grants.tag(1).can_read()
+    assert not grants.tag(1).can_delete()
+
 
 @pytest.mark.parametrize("create,read,delete", [
     (False, False, False),
@@ -69,9 +77,7 @@ def test_empty_tag():
     (False, False, True),
 ])
 def test_filter_all_tag(create, read, delete):
-    grants = grant.Grants([], [role([
-        {'type': 'tag', 'filter': {'id': None}, 'permission': _crd(create=create, read=read, delete=delete)}
-    ])])
+    grants = single_grants({'type': 'tag', 'filter': {'id': None}, 'permission': _crd(create=create, read=read, delete=delete)})
     assert grants.tag(None).can_create() == create
     assert grants.tag(1).can_read() == read
     assert grants.tag(1).can_delete() == delete
@@ -86,15 +92,88 @@ def test_filter_all_tag(create, read, delete):
     (False, True),
 ])
 def test_filter_one_tag(read, delete):
-    grants = grant.Grants([], [role([
-        {'type': 'tag', 'filter': {'id': 2}, 'permission': _crd(create=False, read=read, delete=delete)}
-    ])])
+    grants = single_grants({'type': 'tag', 'filter': {'id': 2}, 'permission': _crd(create=False, read=read, delete=delete)})
     assert not grants.tag(None).can_create()
     assert not grants.tag(1).can_read()
     assert not grants.tag(1).can_delete()
     assert grants.tag(2).can_read() == read
     assert grants.tag(2).can_delete() == delete
 
+
+def test_tag_with_ceiling():
+    # I am granted create, read, and delete but the ceiling only gives me create
+    grants = grant.Grants([boundary([
+        {'type': 'tag', 'filter': {'id': None}, 'permission': _crd(create=True, read=False, delete=False)}
+    ], [])], [role([
+        {'type': 'tag', 'filter': {'id': None}, 'permission': _crd(create=True, read=True, delete=True)}
+    ])])
+    assert grants.tag(None).can_create()
+    assert not grants.tag(1).can_read()
+    assert not grants.tag(1).can_delete()
+
+def test_tag_with_denied():
+    # I am granted create, read, and delete, within ceiling, but I am explicitely denied read
+    grants = grant.Grants([boundary([
+        {'type': 'tag', 'filter': {'id': None}, 'permission': _crd(create=True, read=True, delete=True)}
+    ],[
+        {'type': 'tag', 'filter': {'id': None}, 'permission': _crd(create=False, read=True, delete=False)}
+    ])], [role([
+        {'type': 'tag', 'filter': {'id': None}, 'permission': _crd(create=True, read=True, delete=True)}
+    ])])
+    assert grants.tag(None).can_create()
+    assert not grants.tag(1).can_read()
+    assert grants.tag(1).can_delete()
+
+def test_tag_with_ceiling_and_denied():
+    # I am granted create, read, and delete but the ceiling only gives me create and I am explicitely denied create
+    grants = grant.Grants([boundary([
+        {'type': 'tag', 'filter': {'id': None}, 'permission': _crd(create=True, read=False, delete=False)}
+    ],[
+        {'type': 'tag', 'filter': {'id': None}, 'permission': _crd(create=True, read=False, delete=False)}
+    ])], [role([
+        {'type': 'tag', 'filter': {'id': None}, 'permission': _crd(create=True, read=True, delete=True)}
+    ])])
+    assert not grants.tag(None).can_create()
+    assert not grants.tag(1).can_read()
+    assert not grants.tag(1).can_delete()
+
+def test_tag_with_larger_ceiling():
+    # I am granted create, the ceiling gives me create, read, and delete
+    grants = grant.Grants([boundary([
+        {'type': 'tag', 'filter': {'id': None}, 'permission': _crd(create=True, read=True, delete=True)}
+    ],[])], [role([
+        {'type': 'tag', 'filter': {'id': None}, 'permission': _crd(create=True, read=False, delete=False)}
+    ])])
+    assert grants.tag(None).can_create()
+    assert not grants.tag(1).can_read()
+    assert not grants.tag(1).can_delete()
+
+def test_tag_with_multiple_ceiling():
+    # I am granted create, and read, the ceiling gives me create, and read but as separate grants.
+    grants = grant.Grants([boundary([
+        {'type': 'tag', 'filter': {'id': None}, 'permission': _crd(create=True, read=False, delete=False)},
+        {'type': 'tag', 'filter': {'id': None}, 'permission': _crd(create=False, read=True, delete=False)}
+    ],[])], [role([
+        {'type': 'tag', 'filter': {'id': None}, 'permission': _crd(create=True, read=True, delete=False)}
+    ])])
+    assert grants.tag(None).can_create()
+    assert grants.tag(1).can_read()
+    assert not grants.tag(1).can_delete()
+
+def test_tag_with_ceiling_filter():
+    # I am granted create, read, and delete, via multiple boundary ceiling
+    grants = grant.Grants([boundary([
+        {'type': 'tag', 'filter': {'id': None}, 'permission': _crd(create=True, read=False, delete=False)},
+        {'type': 'tag', 'filter': {'id': 2}, 'permission': _crd(create=False, read=True, delete=True)},
+    ],[
+    ])], [role([
+        {'type': 'tag', 'filter': {'id': None}, 'permission': _crd(create=True, read=True, delete=True)}
+    ])])
+    assert grants.tag(None).can_create()
+    assert not grants.tag(1).can_read()
+    assert not grants.tag(1).can_delete()
+    assert grants.tag(2).can_read()
+    assert grants.tag(2).can_delete()
 
 ######## ROLE ########
 
@@ -123,9 +202,7 @@ def test_empty_role():
     (False, True, _role_update(True, False), True),
 ])
 def test_filter_all_role(create, read, update, delete):
-    grants = grant.Grants([], [role([
-        {'type': 'role', 'filter': {'id': None}, 'permission': _crud(create=create, read=read, update=update, delete=delete)}
-    ])])
+    grants = single_grants({'type': 'role', 'filter': {'id': None}, 'permission': _crud(create=create, read=read, update=update, delete=delete)})
     assert grants.role(None).can_create() == create
     for role_id in [1, 2, 3]:
         assert grants.role(role_id).can_read() == read
@@ -145,9 +222,7 @@ def test_filter_all_role(create, read, update, delete):
     (True, _role_update(True, False), True),
 ])
 def test_filter_one_role(read, update, delete):
-    grants = grant.Grants([], [role([
-        {'type': 'role', 'filter': {'id': 2}, 'permission': _crud(create=False, read=read, update=update, delete=delete)}
-    ])])
+    grants = single_grants({'type': 'role', 'filter': {'id': 2}, 'permission': _crud(create=False, read=read, update=update, delete=delete)})
     assert not grants.role(None).can_create()
     for role_id in [1, 2, 3]:
         assert grants.role(role_id).can_read() == (role_id == 2 and read)
@@ -183,9 +258,7 @@ def test_empty_boundary():
 ])
 def test_filter_one_boundary(update):
     # We only test the update field because the code is all the same for role 
-    grants = grant.Grants([], [role([
-        {'type': 'boundary', 'filter': {'id': 2}, 'permission': _crud(create=False, read=False, update=update, delete=False)}
-    ])])
+    grants = single_grants({'type': 'boundary', 'filter': {'id': 2}, 'permission': _crud(create=False, read=False, update=update, delete=False)})
     assert not grants.boundary(None).can_create()
     for boundary_id in [1, 2, 3]:
         assert not grants.boundary(boundary_id).can_read()
@@ -208,6 +281,7 @@ def test_empty_identity():
     assert not grants.identity(1, [], []).can_delete()
     with pytest.raises(AssertionError):
         assert not grants.identity(1, [], []).can_update('beurk')
+
 
 ######## SSH ########
 
