@@ -330,11 +330,11 @@ def test_identity_add_tag_ceiling_and_denied():
     assert grants.identity(1, [], []).can_add_tag(3)
     assert not grants.identity(1, [], []).can_add_tag(4)
 
+# XXX: test identity create
+
 ######## SSH ########
 
 def test_empty_ssh():
     grants = grant.Grants([], [])
 
     assert len(grants.ssh(None, None, None).list_can_username('hello')) == 0
-
-
