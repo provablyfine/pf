@@ -53,13 +53,11 @@ class TagPermission(CRDPermission):
 
 
 class RolePermission(CRUDPermission):
-    def _check_update_field(self, field: str) -> bool:
-        return field in ['name', 'description']
+    pass
 
 
 class BoundaryPermission(CRUDPermission):
-    def _check_update_field(self, field: str) -> bool:
-        return field in ['name', 'description', 'ceiling_list', 'denied_list']
+    pass 
 
 @dataclasses.dataclass(frozen=True)
 class IdentityCreatePermission:
