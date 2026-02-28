@@ -30,10 +30,11 @@ def run():
     args = parser.parse_args()
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.bind(('127.0.0.1', args.port))
-    
+
     host, port = sock.getsockname()
-    
+
     if args.port_file is not None:
         with open(args.port_file, 'w+') as f:
             f.write(str(port))
@@ -42,7 +43,7 @@ def run():
     base_url = urllib.parse.urlparse(conf.base_url)
     base_url = base_url._replace(netloc=f'{host}:{port}')
     conf.base_url = urllib.parse.urlunparse(base_url)
-    
+
     application = app.create(conf)
 
     options = {
@@ -58,10 +59,10 @@ def run():
     }
 
     print(f'Starting Gunicorn on {host}:{port} using FD {sock.fileno()}')
-    
+
     try:
         StandaloneApplication(application, options).run()
     except SystemExit:
         pass
-    
+
     print('Stopped', datetime.datetime.now())
