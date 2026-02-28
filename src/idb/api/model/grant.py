@@ -2,8 +2,17 @@ from __future__ import annotations
 import dataclasses
 import typing
 import abc
+import logging
 
 from ..context import ctx
+from ... import wa
+
+
+logger = logging.getLogger(__name__)
+
+
+class InvalidGrant(BaseException):
+    pass
 
 
 def methodcache(f):
@@ -21,7 +30,8 @@ def methodcache(f):
         if len(missing_items) > 0:
             got_items = f(self, missing_items)
             if len(got_items) != len(missing_items):
-                raise ValueError
+                logger.debug(f'Unable to find one of the items in the database: {missing_items}')
+                raise InvalidGrant()
             cache.update(got_items)
             setattr(self, attr_name, cache)
         return [cache[i] for i in items]
@@ -36,12 +46,14 @@ class ClientDeserializer:
         for tag in tag_list:
             equal = tag.find('=')
             if equal == -1:
-                raise ValueError
+                logger.debug(f'Unable to parse tag=value: {tag}')
+                raise InvalidGrant()
             name = tag[:equal]
             value = tag[equal+1:]
             t = ctx.db.tag.read_one(name=name, value=value)
             if t is None:
-                raise ValueError
+                logger.debug(f'Unable to find tag in database: {tag}')
+                raise InvalidGrant()
             retval[t.name] = t.id
         return retval
 
@@ -128,7 +140,7 @@ class RolePermission(CRUDPermission):
 
 
 class BoundaryPermission(CRUDPermission):
-    pass 
+    pass
 
 
 @dataclasses.dataclass(frozen=True)
@@ -212,7 +224,7 @@ class SSHPermission(BaseSerde):
     force_command_list: list[str]|None
     username_list: list[str]|None
     permit_pty: bool
-    permit_user_rc: bool 
+    permit_user_rc: bool
     permit_x11_forwarding: bool
     permit_agent_forwarding: bool
     permit_port_forwarding: bool
@@ -361,14 +373,37 @@ class Grant(BaseSerde):
                 assert False
 
     def to_client_dict(self, serializer: ClientSerializer) -> dict:
-        return {
-            'type': self._type(),
-            'filter': self.filter.to_client_dict(serializer),
-            'permission': self.filter.to_client_dict(serializer),
-        }
+        try:
+            return {
+                'type': self._type(),
+                'filter': self.filter.to_client_dict(serializer),
+                'permission': self.filter.to_client_dict(serializer),
+            }
+        except InvalidGrant:
+            # This could happen because we created a grant whose filter or permission
+            # references an object that has been deleted from the database. When this happens,
+            # we will never be able to match these objects for grants so, we are safe from a
+            # security perspective AND we return an invalid grant to the client to
+            # help the client understand that one of the grants has become invalid.
+            return {
+                'type': 'invalid',
+                'filter': None,
+                'permission': None
+            }
+
 
     @classmethod
     def from_client_dict(klass, data: dict, deserializer: ClientDeserializer) -> typing.Self:
+        try:
+            return klass._from_client_dict(data, deserializer)
+        except InvalidGrant:
+            # This could happen because the client has given us a reference to an object
+            # that does not exist. In this case, we generate an exception that will be
+            # propagated to the client
+            raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Grant data is invalid'))
+
+    @classmethod
+    def _from_client_dict(klass, data: dict, deserializer: ClientDeserializer) -> typing.Self:
         match data['type']:
             case 'ssh':
                 return Grant(
