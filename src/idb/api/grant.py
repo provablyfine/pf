@@ -21,7 +21,7 @@ class BaseWrapper:
             if any(self._filter(denied.filter) and cmp(denied.permission) for denied in boundary.denied_list):
                 logger.info(f'request denied by boundary id={boundary.id}')
                 return []
-            if not any(self._filter(ceiling.filter) and cmp(ceiling.permission) for ceiling in boundary.ceiling_list):
+            if boundary.ceiling_list is not None and not any(self._filter(ceiling.filter) and cmp(ceiling.permission) for ceiling in boundary.ceiling_list):
                 logger.info(f'request above ceiling of boundary id={boundary.id}')
                 return []
         allowed = []
@@ -36,7 +36,7 @@ class BaseWrapper:
             if any(self._filter(denied.filter) and cmp(denied.permission) for denied in boundary.denied_list):
                 logger.info(f'request denied by boundary id={boundary.id}')
                 return False
-            if not any(self._filter(ceiling.filter) and cmp(ceiling.permission) for ceiling in boundary.ceiling_list):
+            if boundary.ceiling_list is not None and not any(self._filter(ceiling.filter) and cmp(ceiling.permission) for ceiling in boundary.ceiling_list):
                 logger.info(f'request above ceiling of boundary id={boundary.id}')
                 return False
         for role in self._roles:

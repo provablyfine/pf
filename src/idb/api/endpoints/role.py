@@ -4,7 +4,7 @@ import sqlalchemy
 from ... import wa
 
 from .. import signature
-from .. import permission
+from .. import grant
 from .. import model
 from ..context import ctx
 
@@ -19,14 +19,14 @@ def list_endpoint(request: wa.Request) -> wa.Response:
     roles = model.role.read_all(**query)
 
     output = []
-    verifier = permission.Verifier()
+    grants = grant.Grants.create()
     for role in roles:
-        request = permission.RoleChecker(role.id).read()
-        if verifier.is_allowed(request):
-            output.append(role)
+        if not grants.role(role.id).can_read():
+            continue
+        output.append(role)
 
-    client_converter = model.permission.to_client()
-    roles = [model.role.serialize(b, client_converter) for b in output]
+    serializer = model.grant.ClientSerializer()
+    roles = [model.role.to_client_dict(b, serializer) for b in output]
     return wa.JSONResponse(
         status_code=200,
         json={'roles': roles},
@@ -35,9 +35,8 @@ def list_endpoint(request: wa.Request) -> wa.Response:
 
 @signature.verify_session
 def create_endpoint(request: wa.Request) -> wa.Response:
-    verifier = permission.Verifier()
-    permission_request = permission.RoleChecker(None).create()
-    if not verifier.is_allowed(permission_request):
+    grants = grant.Grants.create()
+    if not grants.role(None).can_create():
         return wa.ProblemResponse(status_code=403, title='Not allowed to create role')
 
     data = json.loads(request.body)
@@ -47,10 +46,11 @@ def create_endpoint(request: wa.Request) -> wa.Response:
         return wa.ProblemResponse(status_code=400, title='Role already exists. Name must be unique.', detail=data['name'])
 
     role = model.role.read_one(id=role_id)
-    client_converter = model.permission.to_client()
+
+    serializer = model.grant.ClientSerializer()
     return wa.JSONResponse(
         status_code=201,
-        json=model.role.serialize(role, client_converter),
+        json=model.role.to_client_dict(role, serializer),
     )
 
 
@@ -60,9 +60,8 @@ def delete_endpoint(request: wa.Request) -> wa.Response:
     if role is None:
         return wa.ProblemResponse(status_code=404, title='Role not found')
 
-    verifier = permission.Verifier()
-    request = permission.RoleChecker(role.id).delete()
-    if not verifier.is_allowed(request):
+    grants = grant.Grants.create()
+    if not grants.role(role.id).can_delete():
         return wa.ProblemResponse(status_code=403, title='Not allowed to delete role')
 
     member = ctx.db.role_member.read_one(role_id=role.id)
@@ -80,13 +79,12 @@ def update_endpoint(request: wa.Request) -> wa.Response:
     role = model.role.read_one(id=request.path_params.role_id)
 
     data = json.loads(request.body)
-    verifier = permission.Verifier()
+    grants = grant.Grants.create()
     for field_name, value in data.items():
-        permission_request = permission.RoleChecker(role.id).update(field_name)
-        if not verifier.is_allowed(permission_request):
+        if not grants.role(role.id).can_update(field_name):
             return wa.ProblemResponse(status_code=403, title='Not allowed to update role field', detail=field_name)
 
-    from_client = model.permission.from_client()
+    deserializer = model.grant.ClientDeserializer()
     role_update = {}
     if 'name' in data and data['name'] != role.name:
         role_update['name'] = data['name']
@@ -95,7 +93,7 @@ def update_endpoint(request: wa.Request) -> wa.Response:
     if 'permission_list' in data:
         if ctx.identity_id in role.member_id_list:
             return wa.ProblemResponse(status_code=403, title='Not allowed to update permissions on a role that applies to self')
-        role_update['permission_list'] = [model.permission.deserialize(p, from_client) for p in data['permission_list']]
+        role_update['permission_list'] = [model.grant.Grant.from_client_dict(p, deserializer) for p in data['permission_list']]
     if 'member_list' in data:
         members = ctx.db.identity.read_all(name=[m['name'] for m in data['member_list']])
         member_by_name = {m.name: m for m in members}
@@ -113,8 +111,9 @@ def update_endpoint(request: wa.Request) -> wa.Response:
     model.role.update(role.id, **role_update)
 
     role = model.role.read_one(id=request.path_params.role_id)
-    to_client = model.permission.to_client()
+
+    serializer = model.grant.ClientSerializer()
     return wa.JSONResponse(
         status_code=200,
-        json=model.role.serialize(role, to_client),
+        json=model.role.to_client_dict(role, serializer),
     )

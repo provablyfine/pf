@@ -3,7 +3,7 @@ import dataclasses
 from ..context import ctx
 
 from . import audit_log
-from . import permission
+from . import grant
 
 
 @dataclasses.dataclass
@@ -11,24 +11,20 @@ class Boundary:
     id: int
     name: str
     description: str
-    ceiling_list: list[permission.Grant]
-    denied_list: list[permission.Grant]
+    ceiling_list: list[grant.Grant]|None
+    denied_list: list[grant.Grant]
 
 
-def create(name: str, description: str, ceiling_list: list[permission.Grant]=None, denied_list: list[permission.Grant]=None) -> int:
-    if ceiling_list is None:
-        ceiling_list = []
-    if denied_list is None:
-        denied_list = []
-    ceiling_list = [g.to_dict() for g in ceiling_list]
-    denied_list = [g.to_dict() for g in denied_list]
+def create(name: str, description: str, ceiling_list: list[grant.Grant]|None, denied_list: list[grant.Grant]) -> int:
+    db_ceiling_list = None if ceiling_list is None else [g.to_db_dict() for g in ceiling_list]
+    db_denied_list = [g.to_db_dict() for g in denied_list]
     boundary_id = ctx.db.boundary.create(
         name=name,
         description=description,
-        ceiling_list=ceiling_list,
-        denied_list=denied_list,
+        ceiling_list=db_ceiling_list,
+        denied_list=db_denied_list,
     )
-    audit_log.create('boundary-create', id=boundary_id, name=name, description=description, ceiling_list=ceiling_list, denied_list=denied_list)
+    audit_log.create('boundary-create', id=boundary_id, name=name, description=description, ceiling_list=db_ceiling_list, denied_list=db_denied_list)
     return boundary_id
 
 
@@ -37,8 +33,8 @@ def _from_db(b):
         id=b.id,
         name=b.name,
         description=b.description,
-        ceiling_list=[permission.Grant.from_dict(p) for p in b.ceiling_list],
-        denied_list=[permission.Grant.from_dict(p) for p in b.denied_list],
+        ceiling_list=[grant.Grant.from_db_dict(p) for p in b.ceiling_list],
+        denied_list=[grant.Grant.from_db_dict(p) for p in b.denied_list],
     )
 
 
@@ -54,7 +50,7 @@ def read_one(**kwargs):
     return _from_db(boundary)
 
 
-def update(id: int, name: str=None, description: str=None, ceiling_list: list[permission.Grant]=None, denied_list: list[permission.Grant]=None):
+def update(id: int, name: str=None, description: str=None, ceiling_list: list[grant.Grant]|None=None, denied_list: list[grant.Grant]|None=None):
     update_fields = {}
     if name is not None:
         update_fields['name'] = name
@@ -71,31 +67,31 @@ def update(id: int, name: str=None, description: str=None, ceiling_list: list[pe
             description=description,
         )
     if ceiling_list is not None:
-        tmp = [g.to_dict() for g in ceiling_list]
-        update_fields['ceiling_list'] = tmp
+        db_ceiling_list = [g.to_db_dict() for g in ceiling_list]
+        update_fields['ceiling_list'] = db_ceiling_list
         audit_log.create(
             'boundary-update-ceiling-list',
             id=id,
-            denied_list=tmp,
+            ceiling_list=db_ceiling_list,
         )
     if denied_list is not None:
-        tmp = [g.to_dict() for g in denied_list]
-        update_fields['denied_list'] = tmp
+        db_denied_list = [g.to_db_dict() for g in denied_list]
+        update_fields['denied_list'] = db_denied_list
         audit_log.create(
             'boundary-update-denied-list',
             id=id,
-            denied_list=tmp,
+            denied_list=db_denied_list,
         )
     if len(update_fields) == 0:
         return
     ctx.db.boundary.update(**update_fields).where(id=id)
 
 
-def serialize(boundary, to_client: permission.Converter) -> dict:
+def to_client_dict(boundary, serializer: grant.ClientSerializer) -> dict:
     return {
         'id': boundary.id,
         'name': boundary.name,
         'description': boundary.description,
-        'ceiling_list': permission.serialize_list(boundary.ceiling_list, to_client),
-        'denied_list': permission.serialize_list(boundary.denied_list, to_client),
+        'ceiling_list': [g.to_client_dict(serializer) for g in boundary.ceiling_list],
+        'denied_list': [g.to_client_dict(serializer) for g in boundary.denied_list],
     }

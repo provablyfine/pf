@@ -209,13 +209,13 @@ class IdentityPermission(RDPermission):
 
 @dataclasses.dataclass(frozen=True)
 class SSHPermission(BaseSerde):
-    force_command_list: list[str]|None = None
-    username_list: list[str]|None = None
-    permit_pty: bool = False
-    permit_user_rc: bool = False
-    permit_x11_forwarding: bool = False
-    permit_agent_forwarding: bool = False
-    permit_port_forwarding: bool = False
+    force_command_list: list[str]|None
+    username_list: list[str]|None
+    permit_pty: bool
+    permit_user_rc: bool 
+    permit_x11_forwarding: bool
+    permit_agent_forwarding: bool
+    permit_port_forwarding: bool
 
     def to_client_dict(self, serializer: ClientSerializer) -> dict:
         return dataclasses.asdict(self)

@@ -10,7 +10,7 @@ from ... import ssh
 from .. import db
 from .. import model
 from .. import signature
-from .. import permission
+from .. import grant
 from ..context import ctx
 
 
@@ -76,25 +76,8 @@ def sign_user_certificate(request: wa.Request) -> wa.Response:
     if host is None:
         return wa.ProblemResponse(status_code=404, title='Unknown host')
 
-    identity_checker = permission.IdentityChecker(host.id, host.tag_id_list, host.boundary_id_list)
-
-    verifier = permission.Verifier()
-    ssh_shell_permissions = []
-    ssh_exec_permissions = []
-    ssh_forward_permissions = []
-    for p in verifier.granted():
-        checker = identity_checker.from_ssh_shell(p, username=data['username'])
-        if checker is not None and verifier.is_allowed(checker):
-            ssh_shell_permissions.append(p)
-            continue
-        checker = identity_checker.from_ssh_exec(p, username=data['username'])
-        if checker is not None and verifier.is_allowed(checker):
-            ssh_exec_permissions.append(p)
-            continue
-        checker = identity_checker.from_ssh_forward(p, username=data['username'])
-        if checker is not None and verifier.is_allowed(checker):
-            ssh_forward_permissions.append(p)
-            continue
+    grants = grant.Grants.create()
+    grants_allowed = grants.ssh(host.id, host.tag_id_list, host.boundary_id_list).list_can_username(data['username'])
 
     public_key = jwk.Public.from_dict(data['public_key'])
     certificates = []
@@ -103,66 +86,32 @@ def sign_user_certificate(request: wa.Request) -> wa.Response:
     serial_number = signer.serial_number
     now = int(time.time())
 
-    permit_port_forwarding = len(ssh_forward_permissions) > 0
-
-    for p in ssh_shell_permissions:
-        cert = ssh.cert.Cert.create_user(
-            public_key=public_key,
-            serial_number=serial_number,
-            identifier=f'{ctx.identity_id}:{caller.name}',
-            principals=[f'{data["username"]}@{host.id}'],
-            valid_after=now-10,
-            valid_before=now+ctx.config.user_certificate_lifetime,
-            critical_options=ssh.cert.CriticalOptions(),
-            extensions=ssh.cert.Extensions(
-                permit_port_forwarding=permit_port_forwarding,
-                permit_pty=True,
-                permit_x11_forwarding=p.get_bool_action_field('permit_x11_forwarding'),
-                permit_agent_forwarding=p.get_bool_action_field('permit_agent_forwarding'),
-            ),
-            signer=signer.key,
-        )
-        serial_number += 1
-        certificates.append(cert)
-
-    for p in ssh_exec_permissions:
-        cert = ssh.cert.Cert.create_user(
-            public_key=public_key,
-            serial_number=serial_number,
-            identifier=f'{ctx.identity_id}:{caller.name}',
-            principals=[f'{data["username"]}@{host.id}'],
-            valid_after=now-10,
-            valid_before=now+ctx.config.user_certificate_lifetime,
-            critical_options=ssh.cert.CriticalOptions(
-                force_command=p.get_action_field('command'),
-            ),
-            extensions=ssh.cert.Extensions(
-                permit_port_forwarding=permit_port_forwarding,
-                permit_pty=p.get_bool_action_field('permit_pty'),
-                permit_x11_forwarding=p.get_bool_action_field('permit_x11_forwarding'),
-                permit_agent_forwarding=p.get_bool_action_field('permit_agent_forwarding'),
-            ),
-            signer=signer.key,
-        )
-        serial_number += 1
-        certificates.append(cert)
-
-    if len(certificates) == 0 and permit_port_forwarding:
-        cert = ssh.cert.Cert.create_user(
-            public_key=public_key,
-            serial_number=serial_number,
-            identifier=f'{ctx.identity_id}:{caller.name}',
-            principals=[f'{data["username"]}@{data["hostname"]}'],
-            valid_after=now-10,
-            valid_before=now+ctx.config.user_certificate_lifetime,
-            critical_options=ssh.cert.CriticalOptions(),
-            extensions=ssh.cert.Extensions(
-                permit_port_forwarding=permit_port_forwarding,
-            ),
-            signer=signer.key,
-        )
-        serial_number += 1
-        certificates.append(cert)
+    for allowed in grants_allowed:
+        permission = allowed.permission
+        if len(permission.force_commands) == 0:
+            force_commands = [None]
+        else:
+            force_commands = permission.force_commands
+        for command in permission.force_commands:
+            cert = ssh.cert.Cert.create_user(
+                public_key=public_key,
+                serial_number=serial_number,
+                identifier=f'{ctx.identity_id}:{caller.name}',
+                principals=[f'{data["username"]}@{host.id}'],
+                valid_after=now-10,
+                valid_before=now+ctx.config.user_certificate_lifetime,
+                critical_options=ssh.cert.CriticalOptions(force_command=command),
+                extensions=ssh.cert.Extensions(
+                    permit_port_forwarding=permission.permit_port_forwarding,
+                    permit_pty=permission.permit_pty,
+                    permit_user_rc=permission.permit_user_rc,
+                    permit_x11_forwarding=permission.permit_x11_forwarding,
+                    permit_agent_forwarding=permission.permit_agent_forwarding,
+                ),
+                signer=signer.key,
+            )
+            serial_number += 1
+            certificates.append(cert)
 
     model.signing_key.update(signer.id, serial_number=serial_number)
 

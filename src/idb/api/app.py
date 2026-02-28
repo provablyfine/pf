@@ -79,7 +79,7 @@ def initialize_endpoint(_: wa.Request) -> wa.Response:
     root_boundary_id = model.boundary.create(
         name='root',
         description='The Root boundary is not a boundary at all.',
-        ceiling_list=[],
+        ceiling_list=None,
         denied_list=[],
     )
     root_id = model.identity.create(
@@ -87,11 +87,65 @@ def initialize_endpoint(_: wa.Request) -> wa.Response:
         boundary_id_list=[root_boundary_id],
         tag_id_list=[],
     )
+    identity_grant_all = model.grant.Grant(
+        filter=model.grant.IdentityFilter(id=None, tag_id_list=None, boundary_id_list=None),
+        permission=model.grant.IdentityPermission(
+            create=model.grant.IdentityCreatePermission(
+                allowed_tag_id_list=None,
+                required_boundary_id_list=None
+            ),
+            read=True,
+            update=None,
+            delete=True,
+            add_tag_id_list=None,
+            del_tag_id_list=None,
+            invite_list=None,
+        )
+    )
+    ssh_grant_all = model.grant.Grant(
+        filter=model.grant.SSHFilter(id=None, tag_id_list=None, boundary_id_list=None),
+        permission=model.grant.SSHPermission(
+            force_command_list=None,
+            username_list=None,
+            permit_pty=True,
+            permit_user_rc=True,
+            permit_x11_forwarding=True,
+            permit_agent_forwarding=True,
+            permit_port_forwarding=True,
+        )
+    )
+    tag_grant_all = model.grant.Grant(
+        filter=model.grant.TagFilter(id=None),
+        permission=model.grant.TagPermission(
+            create=True,
+            read=True,
+            delete=True,
+        ),
+    )
+    role_grant_all = model.grant.Grant(
+        filter=model.grant.RoleFilter(id=None),
+        permission=model.grant.BoundaryPermission(
+            create=True,
+            read=True,
+            update=None,
+            delete=True,
+        ),
+    )
+    boundary_grant_all = model.grant.Grant(
+        filter=model.grant.BoundaryFilter(id=None),
+        permission=model.grant.BoundaryPermission(
+            create=True,
+            read=True,
+            update=None,
+            delete=True,
+        ),
+    )
     all_grants = [
-        model.permission.identity_all,
-        model.permission.tag_all,
-        model.permission.role_all,
-        model.permission.boundary_all,
+        identity_grant_all,
+        ssh_grant_all,
+        tag_grant_all,
+        role_grant_all,
+        boundary_grant_all,
     ]
     root_role_id = model.role.create(
         name='root',

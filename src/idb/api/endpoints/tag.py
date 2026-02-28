@@ -4,7 +4,7 @@ import sqlalchemy
 from ... import wa
 
 from .. import signature
-from .. import permission
+from .. import grant
 from .. import model
 from ..context import ctx
 
@@ -20,12 +20,12 @@ def list_endpoint(request: wa.Request) -> wa.Response:
         query['value'] = request.query_params['value']
     tags = ctx.db.tag.read_all(**query)
 
-    verifier = permission.Verifier()
+    grants = grant.Grants.create()
     output = []
     for tag in tags:
-        request = permission.TagChecker(tag.id).read()
-        if verifier.is_allowed(request):
-            output.append(tag)
+        if not grants.tag(tag.id).can_read():
+            continue
+        output.append(tag)
 
     return wa.JSONResponse(
         status_code=200,
@@ -35,9 +35,8 @@ def list_endpoint(request: wa.Request) -> wa.Response:
 
 @signature.verify_session
 def create_endpoint(request: wa.Request) -> wa.Response:
-    verifier = permission.Verifier()
-    create_request = permission.TagChecker(None).create()
-    if not verifier.is_allowed(create_request):
+    grants = grant.Grants.create()
+    if not grants.tag(None).can_create():
         return wa.ProblemResponse(status_code=403, title='Not allowed to create tag')
 
     data = json.loads(request.body)
@@ -58,9 +57,8 @@ def delete_endpoint(request: wa.Request) -> wa.Response:
     if tag is None:
         return wa.ProblemResponse(status_code=404, title='Tag does not exist')
 
-    verifier = permission.Verifier()
-    delete_request = permission.TagChecker(tag.id).delete()
-    if not verifier.is_allowed(delete_request):
+    grants = grant.Grants.create()
+    if not grants.tag(tag.id).can_delete():
         return wa.ProblemResponse(status_code=403, title='Not allowed to delete tag')
 
     ctx.db.tag.delete(id=request.path_params.tag_id)

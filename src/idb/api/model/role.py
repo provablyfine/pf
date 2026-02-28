@@ -4,7 +4,7 @@ import dataclasses
 from ..context import ctx
 from . import utils
 from . import audit_log
-from . import permission
+from . import grant
 
 
 @dataclasses.dataclass(frozen=True)
@@ -12,11 +12,11 @@ class Role:
     id: int
     name: str
     description: str
-    permission_list: list[permission.Grant]
+    permission_list: list[grant.Grant]
     member_id_list: list[int]
 
 
-def create(name: str, description: str, permission_list: list[permission.Grant]) -> int:
+def create(name: str, description: str, permission_list: list[grant.Grant]) -> int:
     permissions = [p.to_dict() for p in permission_list]
     role_id = ctx.db.role.create(
         name=name,
@@ -32,7 +32,7 @@ def _from_db(role, member_id_list: list[int]) -> Role:
         id=role.id,
         name=role.name,
         description=role.description,
-        permission_list=[permission.Grant.from_dict(g) for g in role.permission_list],
+        permission_list=[grant.Grant.from_db_dict(g) for g in role.permission_list],
         member_id_list=member_id_list,
     )
 
@@ -51,7 +51,7 @@ def read_one(id):
     return roles[0]
 
 
-def update(id: int, name: str=None, description: str=None, permission_list: list[permission.Grant]=None, added_member_id_list: list[int]=None, deleted_member_id_list: list[int]=None):
+def update(id: int, name: str=None, description: str=None, permission_list: list[grant.Grant]=None, added_member_id_list: list[int]=None, deleted_member_id_list: list[int]=None):
     role_fields = {}
     if name is not None:
         role_fields['name'] = name
@@ -97,14 +97,14 @@ def update(id: int, name: str=None, description: str=None, permission_list: list
         )
 
 
-def serialize(role: Role, to_client: permission.Converter):
+def to_client_dict(role: Role, serializer: grant.ClientSerializer):
     members = ctx.db.identity.read_all(id=list(set(role.member_id_list)))
     serialized_members = [{'id': m.id, 'name': m.name} for m in members]
     serialized = {
         'id': role.id,
         'name': role.name,
         'description': role.description,
-        'permission_list': permission.serialize_list(role.permission_list, to_client),
+        'permission_list': role.permission_list.to_client_dict(serializer),
         'member_list': serialized_members,
     }
     return serialized

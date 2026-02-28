@@ -7,7 +7,7 @@ import sqlalchemy
 from ... import wa
 
 from .. import signature
-from .. import permission
+from .. import grant
 from .. import model
 from ..context import ctx
 
@@ -32,11 +32,11 @@ def list_endpoint(request: wa.Request) -> wa.Response:
     identities = model.identity.read_all(**query)
 
     output = []
-    verifier = permission.Verifier()
+    grants = grant.Grants.create()
     for identity in identities:
-        permission_request = permission.IdentityChecker(identity.id, identity.tag_id_list, identity.boundary_id_list).read()
-        if verifier.is_allowed(permission_request):
-            output.append(identity)
+        if not grants.identity(identity.id, identity.tag_id_list, identity.boundary_id_list).can_read():
+            continue
+        output.append(identity)
 
     identities_by_id = model.identity.serialize(output)
     return wa.JSONResponse(
@@ -111,9 +111,8 @@ def create_endpoint(request: wa.Request) -> wa.Response:
     additional_boundary_ids = _read_boundary_ids(data.get('boundaries', []))
     tag_ids = _read_tag_ids(data.get('tags', []))
 
-    verifier = permission.Verifier()
-    permission_request = permission.IdentityChecker(None, tag_id_list=tag_ids, boundary_id_list=additional_boundary_ids).create()
-    if not verifier.is_allowed(permission_request):
+    grants = grant.Grants.create()
+    if not grants.identity().can_create(tag_ids, additional_boundary_ids):
         return wa.ProblemResponse(status_code=403, title='Not allowed to create identity')
 
     identity = model.identity.read_one(id=ctx.identity_id)
@@ -148,9 +147,8 @@ def delete_endpoint(request: wa.Request) -> wa.Response:
     # XXX: Should we check that this identity cannot be deleted because
     # someone depends on it in some way ?
 
-    verifier = permission.Verifier()
-    permission_request = permission.IdentityChecker(identity.id, identity.tag_id_list, identity.boundary_id_list).delete()
-    if not verifier.is_allowed(permission_request):
+    grants = grant.Grants.create()
+    if not grants.identity(identity.id, identity.tag_id_list, identity.boundary_id_list).can_delete():
         return wa.ProblemResponse(status_code=403, title='Not allowed to delete identity')
 
     ctx.db.identity.delete(id=identity.id)
@@ -177,24 +175,24 @@ def _read_tag_id_list(tags):
     return tag_ids
 
 
-def _check_set_tags(verifier, permission_request, current_tag_id_list, new_tag_ids):
+def _check_set_tags(permission_request, current_tag_id_list, new_tag_ids):
     current_tag_ids = set(current_tag_id_list)
     added_tag_id_list = list(new_tag_ids.difference(current_tag_ids))
     deleted_tag_id_list = list(current_tag_ids.difference(new_tag_ids))
-    _check_add_tags(verifier, permission_request, added_tag_id_list)
-    _check_del_tags(verifier, permission_request, deleted_tag_id_list)
+    _check_add_tags(permission_request, added_tag_id_list)
+    _check_del_tags(permission_request, deleted_tag_id_list)
     return added_tag_id_list, deleted_tag_id_list
 
 
-def _check_add_tags(verifier, permission_request, tag_id_list):
+def _check_add_tags(permission_request, tag_id_list):
     for tag_id in tag_id_list:
-        if not verifier.is_allowed(permission_request.add_tag(tag_id)):
+        if not permission_request.can_add_tag(tag_id):
             raise _403_tag()
 
 
-def _check_del_tags(verifier, permission_request, tag_id_list):
+def _check_del_tags(permission_request, tag_id_list):
     for tag_id in tag_id_list:
-        if not verifier.is_allowed(permission_request.del_tag(tag_id)):
+        if not permission_request.can_del_tag(tag_id):
             raise _403_tag()
 
 
@@ -205,12 +203,12 @@ def update_endpoint(request: wa.Request) -> wa.Response:
 
     identity = model.identity.read_one(id=request.path_params.identity_id)
 
-    verifier = permission.Verifier()
     data = json.loads(request.body)
-    permission_request = permission.IdentityChecker(identity.id, identity.tag_id_list, identity.boundary_id_list)
+    grants = grant.Grants.create()
+    permission_request = grants.identity(identity.id, identity.tag_id_list, identity.boundary_id_list)
     update_params = {}
     if 'name' in data:
-        if not verifier.is_allowed(permission_request.update('name')):
+        if not permission_request.can_update('name'):
             return wa.ProblemResponse(status_code=403, title='Not allowed to update identity field', detail='name')
         update_params['name'] = data['name']
     if 'tags' in data:
@@ -228,14 +226,14 @@ def update_endpoint(request: wa.Request) -> wa.Response:
             match operation['type']:
                 case 'set':
                     new_tag_ids = set(_read_tag_id_list(operation['tags']))
-                    _, _ =_check_set_tags(verifier, permission_request, identity.tag_id_list, new_tag_ids)
+                    _, _ =_check_set_tags(permission_request, identity.tag_id_list, new_tag_ids)
                 case 'add':
                     add_tag_ids = _read_tag_id_list(operation['values'])
-                    _check_add_tags(verifier, permission_request, add_tag_ids)
+                    _check_add_tags(permission_request, add_tag_ids)
                     new_tag_ids = new_tag_ids.union(set(add_tag_ids))
                 case 'del':
                     del_tag_ids = _read_tag_id_list(operation['values'])
-                    _check_del_tags(verifier, permission_request, del_tag_ids)
+                    _check_del_tags(permission_request, del_tag_ids)
                     new_tag_ids = new_tag_ids.difference(set(del_tag_ids))
 
         # No, you are not hallucinating, we are checking permissions here
@@ -243,7 +241,7 @@ def update_endpoint(request: wa.Request) -> wa.Response:
         # weird corner cases. For example, if the user wants to delete a tag that
         # is not here and for which the user does not have permission to delete,
         # we need to check it above to catch it.
-        added_tag_id_list, deleted_tag_id_list = _check_set_tags(verifier, permission_request, identity.tag_id_list, new_tag_ids)
+        added_tag_id_list, deleted_tag_id_list = _check_set_tags(permission_request, identity.tag_id_list, new_tag_ids)
         update_params['added_tag_id_list'] = added_tag_id_list
         update_params['deleted_tag_id_list'] = deleted_tag_id_list
 
@@ -261,9 +259,8 @@ def invite_endpoint(request: wa.Request) -> wa.Response:
     identity = model.identity.read_one(id=request.path_params.identity_id)
     delivery = request.query_params['delivery']
 
-    verifier = permission.Verifier()
-    permission_request = permission.IdentityChecker(identity.id, identity.tag_id_list, identity.boundary_id_list)
-    if not verifier.is_allowed(permission_request.invite(delivery=delivery)):
+    grants = grant.Grants.create()
+    if not grants.identity(identity.id, identity.tag_id_list, identity.boundary_id_list).can_invite(delivery):
         return wa.ProblemResponse(status_code=403, title='Not allowed to invite identity', detail=delivery)
 
     identity_invitation_key_id = model.identity_invitation_key.create(
