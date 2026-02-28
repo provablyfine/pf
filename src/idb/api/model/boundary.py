@@ -33,7 +33,7 @@ def _from_db(b):
         id=b.id,
         name=b.name,
         description=b.description,
-        ceiling_list=[grant.Grant.from_db_dict(p) for p in b.ceiling_list],
+        ceiling_list=None if b.ceiling_list is None else [grant.Grant.from_db_dict(p) for p in b.ceiling_list],
         denied_list=[grant.Grant.from_db_dict(p) for p in b.denied_list],
     )
 
@@ -92,6 +92,6 @@ def to_client_dict(boundary, serializer: grant.ClientSerializer) -> dict:
         'id': boundary.id,
         'name': boundary.name,
         'description': boundary.description,
-        'ceiling_list': [g.to_client_dict(serializer) for g in boundary.ceiling_list],
+        'ceiling_list': None if boundary.ceiling_list is None else [g.to_client_dict(serializer) for g in boundary.ceiling_list],
         'denied_list': [g.to_client_dict(serializer) for g in boundary.denied_list],
     }

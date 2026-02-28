@@ -166,7 +166,7 @@ components:
       required: [instance]
       properties:
         instance:
-          type: string
+          type: [string, "null"]
 
     BoundaryGrant:
       type: object
@@ -266,13 +266,13 @@ components:
       required: [instance, tag_list, boundary_list]
       properties:
         instance:
-          type: string
+          type: [string, "null"]
         tag_list:
-          type: array
+          type: [array, "null"]
           items:
             type: string
         boundary_list:
-          type: array
+          type: [array, "null"]
           items:
             type: string
 
@@ -297,11 +297,11 @@ components:
               required: [allowed_tag_list, required_boundary_list]
               properties:
                 allowed_tag_list:
-                  type: array
+                  type: [array, "null"]
                   items:
                     type: string
                 required_boundary_list:
-                  type: array
+                  type: [array, "null"]
                   items:
                     item: string
             read:
@@ -316,11 +316,11 @@ components:
             delete:
               type: boolean
             add_tag_list:
-              type: array
+              type: [array, "null"]
               items:
                 type: string
             del_tag_list:
-              type: array
+              type: [array, "null"]
               items:
                 type: string
             invite_list:
@@ -394,7 +394,7 @@ components:
         description:
           type: string
         ceiling_list:
-          type: array
+          type: [array, "null"]
           items:
             $ref: '#/components/schemas/Grant'
         denied_list:
@@ -405,7 +405,7 @@ components:
     Role:
       description: A role
       type: object
-      required: [id, name, description, permission_list, member_list]
+      required: [id, name, description, grant_list, member_list]
       additionalProperties: false
       properties:
         id:
@@ -414,7 +414,7 @@ components:
           type: string
         description:
           type: string
-        permission_list:
+        grant_list:
           type: array
           items:
             $ref: '#/components/schemas/Grant'
@@ -568,7 +568,7 @@ components:
           type: string
         description:
           type: string
-        permission_list:
+        grant_list:
           type: array
           items:
             $ref: '#/components/schemas/Grant'

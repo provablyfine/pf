@@ -154,7 +154,7 @@ def initialize_endpoint(_: wa.Request) -> wa.Response:
             'It is created once at startup and should be deleted once a proper '
             'permission model is deployed.'
         ),
-        permission_list=all_grants
+        grant_list=all_grants
     )
     ctx.db.role_member.create(role_id=root_role_id, identity_id=root_id)
 

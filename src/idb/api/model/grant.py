@@ -377,7 +377,7 @@ class Grant(BaseSerde):
             return {
                 'type': self._type(),
                 'filter': self.filter.to_client_dict(serializer),
-                'permission': self.filter.to_client_dict(serializer),
+                'permission': self.permission.to_client_dict(serializer),
             }
         except InvalidGrant:
             # This could happen because we created a grant whose filter or permission
