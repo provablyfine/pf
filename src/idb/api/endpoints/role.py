@@ -41,7 +41,7 @@ def create_endpoint(request: wa.Request) -> wa.Response:
 
     data = json.loads(request.body)
     try:
-        role_id = model.role.create(name=data['name'], description=data.get('description'), permission_list=[])
+        role_id = model.role.create(name=data['name'], description=data.get('description'), grant_list=[])
     except sqlalchemy.exc.IntegrityError:
         return wa.ProblemResponse(status_code=400, title='Role already exists. Name must be unique.', detail=data['name'])
 
@@ -90,10 +90,10 @@ def update_endpoint(request: wa.Request) -> wa.Response:
         role_update['name'] = data['name']
     if 'description' in data and data['description'] != role.description:
         role_update['description'] = data['description']
-    if 'permission_list' in data:
+    if 'grant_list' in data:
         if ctx.identity_id in role.member_id_list:
-            return wa.ProblemResponse(status_code=403, title='Not allowed to update permissions on a role that applies to self')
-        role_update['permission_list'] = [model.grant.Grant.from_client_dict(p, deserializer) for p in data['permission_list']]
+            return wa.ProblemResponse(status_code=403, title='Not allowed to update grants on a role that applies to self')
+        role_update['grant_list'] = [model.grant.Grant.from_client_dict(p, deserializer) for p in data['grant_list']]
     if 'member_list' in data:
         members = ctx.db.identity.read_all(name=[m['name'] for m in data['member_list']])
         member_by_name = {m.name: m for m in members}

@@ -122,7 +122,7 @@ role = sqlalchemy.Table(
     sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
     sqlalchemy.Column("name", sqlalchemy.String, index=True, unique=True, nullable=False),
     sqlalchemy.Column("description", sqlalchemy.String, index=False, unique=False, nullable=False),
-    sqlalchemy.Column("permission_list", sqlalchemy.JSON, index=False, unique=False, nullable=False),
+    sqlalchemy.Column("grant_list", sqlalchemy.JSON, index=False, unique=False, nullable=False),
     # We need autoincrement to make sure ids are not recycled EVER.
     sqlite_autoincrement=True,
 )

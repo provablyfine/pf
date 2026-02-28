@@ -12,18 +12,18 @@ class Role:
     id: int
     name: str
     description: str
-    permission_list: list[grant.Grant]
+    grant_list: list[grant.Grant]
     member_id_list: list[int]
 
 
-def create(name: str, description: str, permission_list: list[grant.Grant]) -> int:
-    permissions = [p.to_dict() for p in permission_list]
+def create(name: str, description: str, grant_list: list[grant.Grant]) -> int:
+    grants = [p.to_db_dict() for p in grant_list]
     role_id = ctx.db.role.create(
         name=name,
         description=description,
-        permission_list=permissions,
+        grant_list=grants,
     )
-    audit_log.create('role-create', id=role_id, name=name, description=description, permissions=permissions)
+    audit_log.create('role-create', id=role_id, name=name, description=description, grant_list=grants)
     return role_id
 
 
@@ -32,7 +32,7 @@ def _from_db(role, member_id_list: list[int]) -> Role:
         id=role.id,
         name=role.name,
         description=role.description,
-        permission_list=[grant.Grant.from_db_dict(g) for g in role.permission_list],
+        grant_list=[grant.Grant.from_db_dict(g) for g in role.grant_list],
         member_id_list=member_id_list,
     )
 
@@ -51,7 +51,7 @@ def read_one(id):
     return roles[0]
 
 
-def update(id: int, name: str=None, description: str=None, permission_list: list[grant.Grant]=None, added_member_id_list: list[int]=None, deleted_member_id_list: list[int]=None):
+def update(id: int, name: str=None, description: str=None, grant_list: list[grant.Grant]=None, added_member_id_list: list[int]=None, deleted_member_id_list: list[int]=None):
     role_fields = {}
     if name is not None:
         role_fields['name'] = name
@@ -68,12 +68,12 @@ def update(id: int, name: str=None, description: str=None, permission_list: list
             description=description,
         )
 
-    if permission_list is not None:
-        role_fields['permission_list'] = [p.to_dict() for p in permission_list]
+    if grant_list is not None:
+        role_fields['grant_list'] = [p.to_db_dict() for p in grant_list]
         audit_log.create(
-            'role-update-permissions',
+            'role-update-grant-list',
             id=id,
-            permission_list=[p.to_dict() for p in permission_list],
+            permission_list=[p.to_db_dict() for p in grant_list],
 
         )
 
@@ -104,7 +104,7 @@ def to_client_dict(role: Role, serializer: grant.ClientSerializer):
         'id': role.id,
         'name': role.name,
         'description': role.description,
-        'permission_list': role.permission_list.to_client_dict(serializer),
+        'grant_list': [g.to_client_dict(serializer) for g in role.grant_list],
         'member_list': serialized_members,
     }
     return serialized
