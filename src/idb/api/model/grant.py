@@ -387,8 +387,6 @@ class Grant(BaseSerde):
             # help the client understand that one of the grants has become invalid.
             return {
                 'type': 'invalid',
-                'filter': None,
-                'permission': None
             }
 
 
