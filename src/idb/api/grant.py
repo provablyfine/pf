@@ -91,9 +91,11 @@ class RoleWrapper(CRUDWrapper):
 class IdentityWrapper(RDWrapper):
     def can_create(self, tag_id_list: list[int], boundary_id_list: list[int]) -> bool:
         def check(p) -> bool:
-            if p.create.tag_id_list is not None and not all(tag_id in p.create.tag_id_list for tag_id in tag_id_list):
+            if p.create.allowed_tag_id_list is not None and \
+                not all(tag_id in p.create.allowed_tag_id_list for tag_id in tag_id_list):
                 return False
-            if p.create.boundary_id_list is not None and all(boundary_id in p.create.boundary_id_list for boundary_id in boundary_id_list):
+            if p.create.required_boundary_id_list is not None and \
+                not all(boundary_id in boundary_id_list for boundary_id in p.create.required_boundary_id_list):
                 return False
             return True
         return self.can(check)

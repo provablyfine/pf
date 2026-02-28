@@ -54,8 +54,8 @@ def _crud(create: bool, read: bool, update: dict[str,bool]|None, delete: bool):
 def _identity(create_tag_id_list: list[int]|None, create_boundary_id_list: list[int]|None, read: bool, update: dict[str,bool]|None, delete: bool, add_tag_id_list: list[int]|None, del_tag_id_list: list[int]|None, invite_list: list[str]|None):
     return {
         'create': {
-            'tag_id_list': create_tag_id_list,
-            'boundary_id_list': create_boundary_id_list,
+            'allowed_tag_id_list': create_tag_id_list,
+            'required_boundary_id_list': create_boundary_id_list,
         },
         'read': read,
         'update': update,
@@ -67,6 +67,9 @@ def _identity(create_tag_id_list: list[int]|None, create_boundary_id_list: list[
 
 def _identity_add_tag(add_tag_id_list: list[int]|None):
     return _identity(create_tag_id_list=[], create_boundary_id_list=[], read=False, update=None, delete=False, add_tag_id_list=add_tag_id_list, del_tag_id_list=[], invite_list=[])
+
+def _identity_create(tag_id_list: list[int]|None, boundary_id_list: list[int]|None):
+    return _identity(create_tag_id_list=tag_id_list, create_boundary_id_list=boundary_id_list, read=False, update=None, delete=False, add_tag_id_list=[], del_tag_id_list=[], invite_list=[])
 
 
 ######## TAG ########
@@ -317,6 +320,7 @@ def test_identity_add_tag():
     assert not grants.identity(2, [1], []).can_add_tag(1)
     assert grants.identity(2, [1,2], []).can_add_tag(1)
 
+
 def test_identity_add_tag_ceiling_and_denied():
     grants = grant.Grants([boundary([
         {'type': 'identity', 'filter': {'id': None, 'tag_id_list': None, 'boundary_id_list': None}, 'permission': _identity_add_tag([1,2])},
@@ -331,7 +335,28 @@ def test_identity_add_tag_ceiling_and_denied():
     assert grants.identity(1, [], []).can_add_tag(3)
     assert not grants.identity(1, [], []).can_add_tag(4)
 
-# XXX: test identity create
+
+@pytest.mark.parametrize("tag_id_list,boundary_id_list,expected1,expected2", [
+    [None, None, True, True],
+    [None, [], True, True],
+    [[], None, False, False],
+    [[], [], False, False],
+    [[1], [1], True, False],
+    [[1], [], True, False],
+    [[], [1], False, False],
+    [[1], [2], False, False],
+    [[1,2], [1], True, True],
+    [[1,2], [1,2], False, True],
+    [[1,2], [], True, True],
+    [[1,2], [3,1,2], False, False],
+    [[2], [2], False, False],
+])
+def test_identity_create(tag_id_list, boundary_id_list, expected1, expected2):
+    grants = single_grants({'type': 'identity', 'filter': {'id': None, 'tag_id_list': None, 'boundary_id_list': None}, 'permission': _identity_create(tag_id_list, boundary_id_list)})
+
+    assert grants.identity().can_create([1], [1]) == expected1
+    assert grants.identity().can_create([1,2], [1,2]) == expected2
+
 
 ######## SSH ########
 

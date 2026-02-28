@@ -133,8 +133,34 @@ class BoundaryPermission(CRUDPermission):
 
 @dataclasses.dataclass(frozen=True)
 class IdentityCreatePermission:
-    tag_id_list: list[int]|None
-    boundary_id_list: list[int]|None
+    """When an identity is created, the system
+    checks that the caller is allowed to create the identity
+    with the following attributes
+
+    Attributes:
+      allowed_tag_id_list: The maximal list of tags that can be assigned to the
+                   newly-created identity at creation time. It is legal
+                   to create identities with LESS tags than allowed here.
+      required_boundary_tag_list: The minimal list of boundaries that must be
+                   assigned to the newly-created identity at creation time.
+                   It is legal to create identities with MORE boundaries
+                   than required here.
+    """
+    allowed_tag_id_list: list[int]|None
+    required_boundary_id_list: list[int]|None
+
+    def to_client_dict(self, serializer: ClientSerializer) -> dict:
+        return {
+            'allowed_tag_list': serializer.to_tag_list(self.allowed_tag_id_list),
+            'required_boundary_list': serializer.to_boundary_list(self.required_boundary_id_list),
+        }
+
+    @classmethod
+    def from_client_dict(klass, data: dict, deserializer: ClientDeserializer) -> typing.Self:
+        return klass(
+            allowed_tag_id_list=deserializer.from_tag_list(data['create']['allowed_tag_list']),
+            required_boundary_id_list=deserializer.from_boundary_list(data['create']['required_boundary_list']),
+        )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -145,12 +171,21 @@ class IdentityPermission(RDPermission):
     del_tag_id_list: list[int]|None
     invite_list: list[str]|None
 
+    @classmethod
+    def from_db_dict(klass, data: dict) -> typing.Self:
+        return IdentityPermission(
+            create=IdentityCreatePermission(**data['create']),
+            read=data['read'],
+            update=data['update'],
+            delete=data['delete'],
+            add_tag_id_list=data['add_tag_id_list'],
+            del_tag_id_list=data['del_tag_id_list'],
+            invite_list=data['invite_list'],
+        )
+
     def to_client_dict(self, serializer: ClientSerializer) -> dict:
         return {
-            'create': {
-                'tag_list': serializer.to_tag_list(self.create.tag_id_list),
-                'boundary_list': serializer.to_boundary_list(self.create.boundary_id_list),
-            },
+            'create': self.create.to_client_dict(serializer),
             'read': self.read,
             'update': self.update,
             'delete': self.delete,
@@ -162,10 +197,7 @@ class IdentityPermission(RDPermission):
     @classmethod
     def from_client_dict(klass, data: dict, deserializer: ClientDeserializer) -> typing.Self:
         return IdentityPermission(
-            create=IdentityCreatePermission(
-                tag_id_list=deserializer.from_tag_list(data['create']['tag_list']),
-                boundary_id_list=deserializer.from_boundary_list(data['create']['boundary_list']),
-            ),
+            create=IdentityCreatePermission.from_client_dict(data['create'], deserializer),
             read=data['read'],
             update=data['update'],
             delete=data['delete'],
