@@ -251,37 +251,37 @@ class TagFilter(SingleIdFilter):
     @abc.abstractmethod
     def to_client_dict(self, serializer: ClientSerializer) -> dict:
         return {
-            'tag': None if self.id is None else serializer.to_tag_list([self.id])[0]
+            'instance': None if self.id is None else serializer.to_tag_list([self.id])[0]
         }
 
     @classmethod
     @abc.abstractmethod
     def from_client_dict(klass, data, deserializer: ClientDeserializer) -> typing.Self:
-        return TagFilter(id=None if data['tag'] is None else deserializer.from_tag_list([data['tag']])[0])
+        return TagFilter(id=None if data['instance'] is None else deserializer.from_tag_list([data['instance']])[0])
 
 
 class RoleFilter(SingleIdFilter):
     def to_client_dict(self, serializer: ClientSerializer) -> dict:
         return {
-            'role': None if self.id is None else serializer.to_role_list([self.id])[0]
+            'instance': None if self.id is None else serializer.to_role_list([self.id])[0]
         }
 
     @classmethod
     def from_client_dict(klass, data, deserializer: ClientDeserializer) -> typing.Self:
-        return RoleFilter(id=None if data['role'] is None else deserializer.from_role_list([data['role']])[0])
+        return RoleFilter(id=None if data['instance'] is None else deserializer.from_role_list([data['instance']])[0])
 
 
 class BoundaryFilter(SingleIdFilter):
     @abc.abstractmethod
     def to_client_dict(self, serializer: ClientSerializer) -> dict:
         return {
-            'boundary': None if self.id is None else serializer.to_boundary_list([self.id])[0]
+            'instance': None if self.id is None else serializer.to_boundary_list([self.id])[0]
         }
 
     @classmethod
     @abc.abstractmethod
     def from_client_dict(klass, data, deserializer: ClientDeserializer) -> typing.Self:
-        return BoundaryFilter(id=None if data['boundary'] is None else deserializer.from_boundary_list([data['boundary']])[0])
+        return BoundaryFilter(id=None if data['instance'] is None else deserializer.from_boundary_list([data['instance']])[0])
 
 
 @dataclasses.dataclass(frozen=True)
@@ -292,7 +292,7 @@ class TripletFilter(BaseSerde):
 
     def to_client_dict(self, serializer: ClientSerializer) -> dict:
         return {
-            'identity': None if self.id is None else serializer.to_identity_name_list([self.id])[0],
+            'instance': None if self.id is None else serializer.to_identity_name_list([self.id])[0],
             'tag_list': serializer.to_tag_list(self.tag_id_list),
             'boundary_list': serializer.to_boundary_list(self.tag_id_list),
         }
