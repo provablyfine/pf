@@ -160,352 +160,226 @@ components:
           description: base64url encoded symmetric key bytes
           type: string
 
-    PermissionObjectFieldsWithName:
-      type: array
-      maxItems: 1
-      items:
-        type: object
-        required: [name, value]
-        additionalProperties: false
-        properties:
-          name:
-            type: string
-            enum: ['name']
-          value:
-            type: string
-
-    IdentityObjectFields:
-      type: array
-      items:
-        type: object
-        required: [name, value]
-        additionalProperties: false
-        properties:
-          name:
-            type: string
-            enum: ['name', 'tag', 'boundary']
-          value:
-            type: string
-
-
-    EmptyList:
-      type: array
-      maxItems: 0
-      items:
-        type: "null"
-
-    CRDAction:
+    SingleObjectFilter:
       type: object
-      required: [action, action_fields]
+      additionalProperties: false
+      required: [instance]
       properties:
-        action:
+        instance:
           type: string
-          enum: ['*', 'create', 'read', 'delete']
-        action_fields:
-          $ref: '#/components/schemas/EmptyList'
 
-    BoundaryUpdateAction:
+    BoundaryGrant:
       type: object
-      required: [action, action_fields]
+      additionalProperties: false
+      required: [type, filter, permission]
       properties:
-        action:
+        type:
           type: string
-          enum: ['update']
-        action_fields:
-          type: array
-          items:
-            type: object
-            required: [name, value]
-            additionalProperties: false
-            properties:
-              name:
-                type: string
-                enum: ['field']
-              value:
-                type: string
-                enum: ['name', 'description', 'denied_list', 'ceiling_list']
-
-    BoundaryPermission:
-      unevaluatedProperties: false
-      anyOf:
-        - type: object
-          required: [object, object_fields]
+          enum: ['boundary']
+        filter:
+          $ref: '#/components/schemas/SingleObjectFilter'
+        permission:
+          type: object
+          additionalProperties: false
+          required: [create, read, update, delete]
           properties:
-            object:
-              type: string
-              enum: ['boundary']
-            object_fields:
-              $ref: '#/components/schemas/PermissionObjectFieldsWithName'
-        - oneOf:
-            - $ref: '#/components/schemas/CRDAction'
-            - $ref: '#/components/schemas/BoundaryUpdateAction'
+            create:
+              type: boolean
+            read:
+              type: boolean
+            update:
+              type: [object, 'null']
+              additionalProperties: false
+              required: [name, description, ceiling_list, denied_list]
+              properties:
+                name:
+                  type: boolean
+                description:
+                  type: boolean
+                ceiling_list:
+                  type: boolean
+                denied_list:
+                  type: boolean
+            delete:
+              type: boolean
 
-    TagPermission:
-      unevaluatedProperties: false
-      anyOf:
-        - type: object
-          required: [object, object_fields]
+    TagGrant:
+      type: object
+      additionalProperties: false
+      required: [type, filter, permission]
+      properties:
+        type:
+          type: string
+          enum: ['tag']
+        filter:
+          $ref: '#/components/schemas/SingleObjectFilter'
+        permission:
+          type: object
+          additionalProperties: false
+          required: [create, read, delete]
           properties:
-            object:
-              type: string
-              enum: ['tag']
-            object_fields:
-              $ref: '#/components/schemas/PermissionObjectFieldsWithName'
-        - oneOf:
-            - $ref: '#/components/schemas/CRDAction'
+            create:
+              type: boolean
+            read:
+              type: boolean
+            delete:
+              type: boolean
 
-    RoleUpdateAction:
+    RoleGrant:
       type: object
-      required: [action, action_fields]
+      additionalProperties: false
+      required: [type, filter, permission]
       properties:
-        action:
+        type:
           type: string
-          enum: ['update']
-        action_fields:
-          type: array
-          items:
-            type: object
-            required: [name, value]
-            additionalProperties: false
-            properties:
-              name:
-                type: string
-                enum: ['field']
-              value:
-                type: string
-                enum: ['name', 'description', 'member_list', 'permission_list']
-
-    RolePermission:
-      unevaluatedProperties: false
-      anyOf:
-        - type: object
-          required: [object, object_fields]
+          enum: ['role']
+        filter:
+          $ref: '#/components/schemas/SingleObjectFilter'
+        permission:
+          type: object
+          additionalProperties: false
+          required: [create, read, update, delete]
           properties:
-            object:
-              type: string
-              enum: ['role']
-            object_fields:
-              $ref: '#/components/schemas/PermissionObjectFieldsWithName'
-        - oneOf:
-            - $ref: '#/components/schemas/CRDAction'
-            - $ref: '#/components/schemas/RoleUpdateAction'
+            create:
+              type: boolean
+            read:
+              type: boolean
+            update:
+              type: [object, 'null']
+              additionalProperties: false
+              required: [name, description, grant_list, member_list]
+              properties:
+                name:
+                  type: boolean
+                description:
+                  type: boolean
+                grant_list:
+                  type: boolean
+                member_list:
+                  type: boolean
+            delete:
+              type: boolean
 
-    IdentityInviteAction:
+    TripletFilter:
       type: object
-      required: [action, action_fields]
+      additionalProperties: false
+      required: [instance, tag_list, boundary_list]
       properties:
-        action:
+        instance:
           type: string
-          enum: ['invite']
-        action_fields:
+        tag_list:
           type: array
           items:
-            type: object
-            required: [name, value]
-            additionalProperties: false
-            properties:
-              name:
-                type: string
-                enum: ['delivery']
-              value:
-                type: string
-                enum: ['email', 'manual', 'sms', 'slack']
-
-    IdentityTagAction:
-      type: object
-      required: [action, action_fields]
-      properties:
-        action:
-          type: string
-          enum: ['add-tag', 'del-tag']
-        action_fields:
+            type: string
+        boundary_list:
           type: array
           items:
-            type: object
-            required: [name, value]
-            additionalProperties: false
-            properties:
-              name:
-                type: string
-                enum: ['tag']
-              value:
-                type: string
+            type: string
 
-    IdentityUpdateNameAction:
+    IdentityGrant:
       type: object
-      required: [action, action_fields]
+      additionalProperties: false
+      required: [type, filter, permission]
       properties:
-        action:
+        type:
           type: string
-          enum: ['update']
-        action_fields:
-          type: array
-          items:
-            type: object
-            required: [name, value]
-            additionalProperties: false
-            properties:
-              name:
-                type: string
-                enum: ['field']
-              value:
-                type: string
-                enum: ['name']
-
-    IdentitySshShellAction:
-      type: object
-      required: [action, action_fields]
-      properties:
-        action:
-          type: string
-          enum: ['ssh-shell']
-        action_fields:
-          type: array
-          maxItems: 1
-          items:
-            type: object
-            required: [name, value]
-            additionalProperties: false
-            properties:
-              name:
-                type: string
-                enum: ['username']
-              value:
-                type: string
-
-    IdentitySshSftpAction:
-      type: object
-      required: [action, action_fields]
-      properties:
-        action:
-          type: string
-          enum: ['ssh-sftp']
-        action_fields:
-          type: array
-          maxItems: 1
-          items:
-            type: object
-            required: [name, value]
-            additionalProperties: false
-            properties:
-              name:
-                type: string
-                enum: ['username']
-              value:
-                type: string
-
-    IdentitySshExecAction:
-      type: object
-      required: [action, action_fields]
-      properties:
-        action:
-          type: string
-          enum: ['ssh-exec']
-        action_fields:
-          type: array
-          maxItems: 2
-          items:
-            type: object
-            required: [name, value]
-            additionalProperties: false
-            properties:
-              name:
-                type: string
-                enum: ['username', 'command']
-              value:
-                type: string
-
-    IdentitySshForwardPortAction:
-      type: object
-      required: [action, action_fields]
-      properties:
-        action:
-          type: string
-          enum: ['ssh-forward-local', 'ssh-forward-remote']
-        action_fields:
-          type: array
-          maxItems: 2
-          items:
-            type: object
-            required: [name, value]
-            additionalProperties: false
-            properties:
-              name:
-                type: string
-                enum: ['username', 'rport']
-              value:
-                type: string
-
-    IdentitySshForwardAction:
-      type: object
-      required: [action, action_fields]
-      properties:
-        action:
-          type: string
-          enum: ['ssh-forward']
-        action_fields:
-          type: array
-          maxItems: 2
-          items:
-            type: object
-            required: [name, value]
-            additionalProperties: false
-            properties:
-              name:
-                type: string
-                enum: ['username']
-              value:
-                type: string
-
-    IdentityPermission:
-      unevaluatedProperties: false
-      anyOf:
-        - type: object
-          required: [object, object_fields]
+          enum: ['identity']
+        filter:
+          $ref: '#/components/schemas/TripletFilter'
+        permission:
+          type: object
+          additionalProperties: false
+          required: [create, read, update, delete, add_tag_list, del_tag_list, invite_list]
           properties:
-            object:
-              type: string
-              enum: ['identity']
-            object_fields:
-              $ref: '#/components/schemas/IdentityObjectFields'
-        - oneOf:
-            - $ref: '#/components/schemas/CRDAction'
-            - $ref: '#/components/schemas/IdentityUpdateNameAction'
-            - $ref: '#/components/schemas/IdentityInviteAction'
-            - $ref: '#/components/schemas/IdentityTagAction'
-            - $ref: '#/components/schemas/IdentitySshShellAction'
-#            - $ref: '#/components/schemas/IdentitySshSftpAction'
-            - $ref: '#/components/schemas/IdentitySshExecAction'
-#            - $ref: '#/components/schemas/IdentitySshForwardPortAction'
-            - $ref: '#/components/schemas/IdentitySshForwardAction'
+            create:
+              type: [object, "null"]
+              additionalProperties: false
+              required: [allowed_tag_list, required_boundary_list]
+              properties:
+                allowed_tag_list:
+                  type: array
+                  items:
+                    type: string
+                required_boundary_list:
+                  type: array
+                  items:
+                    item: string
+            read:
+              type: boolean
+            update:
+              type: [object, 'null']
+              additionalProperties: false
+              required: [name]
+              properties:
+                name:
+                  type: boolean
+            delete:
+              type: boolean
+            add_tag_list:
+              type: array
+              items:
+                type: string
+            del_tag_list:
+              type: array
+              items:
+                type: string
+            invite_list:
+              type: [array, "null"]
+              items:
+                type: string
+                enum: ['email', 'manual']
 
-    InvalidPermission:
+    SSHGrant:
       type: object
+      additionalProperties: false
+      required: [type, filter, permission]
       properties:
-        object:
+        type:
+          type: string
+          enum: ['ssh']
+        filter:
+          $ref: '#/components/schemas/TripletFilter'
+        permission:
+          type: object
+          additionalProperties: false
+          required: []
+          properties:
+            force_command_list:
+              type: [array, "null"]
+              items:
+                type: string
+            username_list:
+              type: [array, "null"]
+              items:
+                type: string
+            permit_pty:
+              type: boolean
+            permit_user_rc:
+              type: boolean
+            permit_x11_forwarding:
+              type: boolean
+            permit_agent_forwarding:
+              type: boolean
+            permit_port_forwarding:
+              type: boolean
+
+    InvalidGrant:
+      type: object
+      additionalProperties: false
+      required: type
+      properties:
+        type:
           type: string
           enum: ['invalid']
-        action:
-          type: string
-          enum: ['invalid']
-        object_fields:
-          type: array
-          maxItems: 0
-          items:
-            type: integer
-        action_fields:
-          type: array
-          maxItems: 0
-          items:
-            type: integer
 
-    Permission:
+    Grant:
       oneOf:
-        - $ref: '#/components/schemas/InvalidPermission'
-        - $ref: '#/components/schemas/BoundaryPermission'
-        - $ref: '#/components/schemas/TagPermission'
-        - $ref: '#/components/schemas/RolePermission'
-        - $ref: '#/components/schemas/IdentityPermission'
+        - $ref: '#/components/schemas/InvalidGrant'
+        - $ref: '#/components/schemas/BoundaryGrant'
+        - $ref: '#/components/schemas/TagGrant'
+        - $ref: '#/components/schemas/RoleGrant'
+        - $ref: '#/components/schemas/IdentityGrant'
+        - $ref: '#/components/schemas/SSHGrant'
 
     Boundary:
       description: A boundary
@@ -522,11 +396,11 @@ components:
         ceiling_list:
           type: array
           items:
-            $ref: '#/components/schemas/Permission'
+            $ref: '#/components/schemas/Grant'
         denied_list:
           type: array
           items:
-            $ref: '#/components/schemas/Permission'
+            $ref: '#/components/schemas/Grant'
 
     Role:
       description: A role
@@ -543,7 +417,7 @@ components:
         permission_list:
           type: array
           items:
-            $ref: '#/components/schemas/Permission'
+            $ref: '#/components/schemas/Grant'
         member_list:
           type: array
           items:
@@ -647,11 +521,11 @@ components:
         denied_list:
           type: array
           items:
-            $ref: '#/components/schemas/Permission'
+            $ref: '#/components/schemas/Grant'
         ceiling_list:
           type: array
           items:
-            $ref: '#/components/schemas/Permission'
+            $ref: '#/components/schemas/Grant'
 
     Tag:
       description: A tag
@@ -697,7 +571,7 @@ components:
         permission_list:
           type: array
           items:
-            $ref: '#/components/schemas/Permission'
+            $ref: '#/components/schemas/Grant'
         member_list:
           type: array
           items:
