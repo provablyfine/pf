@@ -6,223 +6,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-
-@dataclasses.dataclass(frozen=True)
-class BasePermission:
-    def to_dict(self) -> dict:
-        return dataclasses.asdict(self)
-
-    @classmethod
-    def from_dict(klass, data) -> typing.Self:
-        return klass(**data)
-
-
-
-@dataclasses.dataclass(frozen=True)
-class RDPermission(BasePermission):
-    read: bool
-    delete: bool
-
-    def can_read(self) -> bool:
-        return self.read
-
-    def can_delete(self) -> bool:
-        return self.delete
-
-
-@dataclasses.dataclass(frozen=True)
-class CRDPermission(RDPermission):
-    create: bool
-
-    def can_create(self) -> bool:
-        return self.create
-
-
-@dataclasses.dataclass(frozen=True)
-class CRUDPermission(CRDPermission):
-    update: dict[str,bool]|None
-
-    def can_update(self, field: str) -> bool:
-        if self.update is None:
-            return True
-        return self.update[field]
-
-
-class TagPermission(CRDPermission):
-    pass
-
-
-class RolePermission(CRUDPermission):
-    pass
-
-
-class BoundaryPermission(CRUDPermission):
-    pass 
-
-@dataclasses.dataclass(frozen=True)
-class IdentityCreatePermission:
-    tag_id_list: list[int]|None
-    boundary_id_list: list[int]|None
-
-@dataclasses.dataclass(frozen=True)
-class IdentityPermission(RDPermission):
-    create: IdentityCreatePermission
-    update: dict[str,bool]|None
-    add_tag: list[int]|None
-    del_tag: list[int]|None
-    invite: list[str]|None
-
-    def can_create(self, tag_id_list, boundary_id_list) -> bool:
-        return self.create
-
-    def can_update(self, field: str) -> bool:
-        assert field == 'name', "You tried to update a field that does not exist"
-        if self.update is None:
-            return True
-        return self.update[field]
-
-    def can_add_tag(self, tag_id: int) -> bool:
-        if self.add_tag is None:
-            return True
-        return tag_id in self.add_tag
-
-    def can_del_tag(self, tag_id: int) -> bool:
-        if self.del_tag is None:
-            return True
-        return tag_id in self.del_tag
-
-    def can_invite(self, delivery: str) -> bool:
-        if self.invite is None:
-            return True
-        return delivery in self.invite
-
-
-@dataclasses.dataclass(frozen=True)
-class SSHPermission(BasePermission):
-    force_commands: list[str]|None = None
-    usernames: list[str]|None = None
-    permit_pty: bool = False
-    permit_user_rc: bool = False
-    permit_x11_forwarding: bool = False
-    permit_agent_forwarding: bool = False
-    permit_port_forwarding: bool = False
-
-    def can_username(self, username: str):
-        if self.usernames is None:
-            return True
-        return username in self.usernames
-
-
-@dataclasses.dataclass(frozen=True)
-class SingleIdFilter:
-    id: int|None
-
-    def is_match(self, id: int):
-        if self.id is not None and self.id != id:
-            return False
-        return True
-
-    def to_dict(self) -> dict:
-        return dataclasses.asdict(self)
-
-    @classmethod
-    def from_dict(klass, data: dict) -> typing.Self:
-        return klass(**data)
-
-
-class TagFilter(SingleIdFilter):
-    pass
-
-
-class RoleFilter(SingleIdFilter):
-    pass
-
-
-class BoundaryFilter(SingleIdFilter):
-    pass
-
-
-@dataclasses.dataclass(frozen=True)
-class TripletFilter:
-    id: int|None
-    tag_id_list: list[int]|None
-    boundary_id_list: list[int]|None
-
-    def is_match(self, identity_id: int, tag_id_list: list[int], boundary_id_list: list[int]):
-        if self.id is not None and self.id != identity_id:
-            return False
-        if self.tag_id_list is not None and not all(tag_id in tag_id_list for tag_id in self.tag_id_list):
-            return False
-        if self.boundary_id_list is not None and not all(boundary_id in boundary_id_list for boundary_id in self.boundary_id_list):
-            return False
-        return True
-
-    def to_dict(self) -> dict:
-        return dataclasses.asdict(self)
-
-    @classmethod
-    def from_dict(klass, data: dict) -> typing.Self:
-        return klass(**data)
-
-class IdentityFilter(TripletFilter):
-    pass
-
-class SSHFilter(TripletFilter):
-    pass
-
-
-@dataclasses.dataclass(frozen=True)
-class Grant:
-    filter: SSHFilter|IdentityFilter|TagFilter|BoundaryFilter|RoleFilter
-    permission: SSHPermission|IdentityPermission|TagPermission|BoundaryPermission|RolePermission
-
-    def to_dict(self) -> dict:
-        data = dataclasses.asdict(self)
-        match self.filter:
-            case SSHFilter():
-                data['type'] = 'ssh'
-            case IdentityFilter():
-                data['type'] = 'identity'
-            case TagFilter():
-                data['type'] = 'tag'
-            case BoundaryFilter():
-                data['type'] = 'boundary'
-            case RoleFilter():
-                data['type'] = 'role'
-            case _:
-                assert False
-        return data
-
-    @classmethod
-    def from_dict(klass, data: dict) -> Grant:
-        match data['type']:
-            case 'ssh':
-                return Grant(
-                    filter=SSHFilter.from_dict(data['filter']),
-                    permission=SSHPermission.from_dict(data['permission'])
-                )
-            case 'identity':
-                return Grant(
-                    filter=IdentityFilter.from_dict(data['filter']),
-                    permission=IdentityPermission.from_dict(data['permission'])
-                )
-            case 'tag':
-                return Grant(
-                    filter=TagFilter.from_dict(data['filter']),
-                    permission=TagPermission.from_dict(data['permission'])
-                )
-            case 'boundary':
-                return Grant(
-                    filter=BoundaryFilter.from_dict(data['filter']),
-                    permission=BoundaryPermission.from_dict(data['permission'])
-                )
-            case 'role':
-                return Grant(
-                    filter=RoleFilter.from_dict(data['filter']),
-                    permission=RolePermission.from_dict(data['permission'])
-                )
-            case _:
-                assert False
+from . import model
+from .context import ctx
 
 
 class BaseWrapper:
@@ -231,7 +16,7 @@ class BaseWrapper:
         self._roles = roles
         self._filter = filter
 
-    def list_can(self, cmp) -> list[Grant]:
+    def list_can(self, cmp) -> list[model.Grant]:
         for boundary in self._boundaries:
             if any(self._filter(denied.filter) and cmp(denied.permission) for denied in boundary.denied_list):
                 logger.info(f'request denied by boundary id={boundary.id}')
@@ -264,30 +49,29 @@ class BaseWrapper:
 
 class RDWrapper(BaseWrapper):
     def can_read(self) -> bool:
-        return self.can(lambda p: p.can_read())
+        return self.can(lambda p: p.read)
 
     def can_delete(self) -> bool:
-        return self.can(lambda p: p.can_delete())
+        return self.can(lambda p: p.delete)
 
 
 class CRDWrapper(RDWrapper):
     def can_create(self) -> bool:
-        return self.can(lambda p: p.can_create())
-
-    def can_read(self) -> bool:
-        return self.can(lambda p: p.can_read())
-
-    def can_delete(self) -> bool:
-        return self.can(lambda p: p.can_delete())
+        return self.can(lambda p: p.create)
 
 
 class CRUDWrapper(CRDWrapper):
     @abc.abstractmethod
     def _check_update_field(self, field: str) -> bool:
         pass
+
     def can_update(self, field: str) -> bool:
         assert self._check_update_field(field), "You tried to update a field that does not exist"
-        return self.can(lambda p: p.can_update(field))
+        def check(p) -> bool:
+            if p.update is None:
+                return True
+            return p.update[field]
+        return self.can(check)
 
 
 class TagWrapper(CRDWrapper):
@@ -306,25 +90,47 @@ class RoleWrapper(CRUDWrapper):
 
 class IdentityWrapper(RDWrapper):
     def can_create(self, tag_id_list: list[int], boundary_id_list: list[int]) -> bool:
-        return self.can(lambda p: p.can_create(tag_id_list, boundary_id_list))
+        def check(p) -> bool:
+            if p.create.tag_id_list is not None and not all(tag_id in p.create.tag_id_list for tag_id in tag_id_list):
+                return False
+            if p.create.boundary_id_list is not None and all(boundary_id in p.create.boundary_id_list for boundary_id in boundary_id_list):
+                return False
+            return True
+        return self.can(check)
 
     def can_update(self, field: str) -> bool:
         assert field == 'name', 'You are not allowed to update any field but the name field.'
-        return self.can(lambda p: p.can_update(field))
+        def check(p) -> bool:
+            if p.update is None:
+                return True
+            return p.update[field]
+        return self.can(check)
 
     def can_add_tag(self, tag_id: int) -> bool:
-        return self.can(lambda p: p.can_add_tag(tag_id))
+        def check(p) -> bool:
+            if p.add_tag_id_list is None:
+                return True
+            return tag_id in p.add_tag_id_list
+        return self.can(check)
 
     def can_del_tag(self, tag_id: int) -> bool:
-        return self.can(lambda p: p.can_del_tag(tag_id))
+        def check(p) -> bool:
+            if p.del_tag_list is None:
+                return True
+            return tag_id in p.del_tag_id_list
+        return self.can(check)
 
     def can_invite(self, delivery: str) -> bool:
-        return self.can(lambda p: p.can_invite(delivery))
+        def check(p) -> bool:
+            if p.invite_list is None:
+                return True
+            return delivery in p.invite_list
+        return self.can(check)
 
 
 class SSHWrapper(BaseWrapper):
-    def list_can_username(self, username: str) -> list[Grant]:
-        return self.list_can(lambda p: p.can_username(username))
+    def list_can_username(self, username: str) -> list[model.Grant]:
+        return self.list_can(lambda p: username in p.username_list)
 
 
 class Grants:
@@ -332,27 +138,66 @@ class Grants:
         self._boundaries = boundaries
         self._roles = roles
 
+    @classmethod
+    def create(klass) -> typing.Self:
+        identity = ctx.db.identity.read_one(id=ctx.identity_id)
+        assert identity is not None
+        identity_boundaries = ctx.db.identity_boundary.read_all(identity_id=identity.id)
+        assert len(identity_boundaries) > 0
+        boundaries = model.boundary.read_all(id=[i.boundary_id for i in identity_boundaries])
+        member_of = ctx.db.role_member.read_all(identity_id=identity.id)
+        roles = model.role.read_all(id=list(set(member.role_id for member in member_of)))
+        return Grants(boundaries, roles)
+
     def boundary(self, boundary_id: int) -> BoundaryWrapper:
-        def cmp(filter: BoundaryFilter) -> bool:
-            return isinstance(filter, BoundaryFilter) and filter.is_match(boundary_id)
+        def cmp(filter: model.grant.BoundaryFilter) -> bool:
+            if not isinstance(filter, model.grant.BoundaryFilter):
+                return False
+            if filter.id is not None and filter.id != boundary_id:
+                return False
+            return True
         return BoundaryWrapper(self._boundaries, self._roles, cmp)
 
     def tag(self, tag_id: int) -> TagWrapper:
-        def cmp(filter: TagFilter) -> bool:
-            return isinstance(filter, TagFilter) and filter.is_match(tag_id)
+        def cmp(filter: model.grant.TagFilter) -> bool:
+            if not isinstance(filter, model.grant.TagFilter):
+                return False
+            if filter.id is not None and filter.id != tag_id:
+                return False
+            return True
         return TagWrapper(self._boundaries, self._roles, cmp)
 
     def role(self, role_id: int) -> RoleWrapper:
-        def cmp(filter: RoleFilter) -> bool:
-            return isinstance(filter, RoleFilter) and filter.is_match(role_id)
+        def cmp(filter: model.grant.RoleFilter) -> bool:
+            if not isinstance(filter, model.grant.RoleFilter):
+                return False
+            if filter.id is not None and filter.id != role_id:
+                return False
+            return True
         return RoleWrapper(self._boundaries, self._roles, cmp)
 
     def identity(self, identity_id: int|None=None, tag_id_list: list[int]|None=None, boundary_id_list: list[int]|None=None) -> IdentityWrapper:
-        def cmp(filter: IdentityFilter) -> bool:
-            return isinstance(filter, IdentityFilter) and filter.is_match(identity_id, tag_id_list, boundary_id_list)
+        def cmp(filter: model.grant.IdentityFilter) -> bool:
+            if not isinstance(filter, model.grant.IdentityFilter):
+                return False
+            if filter.id is not None and filter.id != identity_id:
+                return False
+            if filter.tag_id_list is not None and not all(tag_id in tag_id_list for tag_id in filter.tag_id_list):
+                return False
+            if filter.boundary_id_list is not None and not all(boundary_id in boundary_id_list for boundary_id in filter.boundary_id_list):
+                return False
+            return True
         return IdentityWrapper(self._boundaries, self._roles, cmp)
 
     def ssh(self, identity_id: int, tag_id_list: list[int], boundary_id_list: list[int]) -> SSHWrapper:
-        def cmp(filter: SSHFilter) -> bool:
-            return isinstance(filter, SSHFilter) and filter.is_match(identity_id, tag_id_list, boundary_id_list)
+        def cmp(filter: model.grant.SSHFilter) -> bool:
+            if not isinstance(filter, model.grant.SSHFilter):
+                return False
+            if filter.id is not None and filter.id != identity_id:
+                return False
+            if filter.tag_id_list is not None and not all(tag_id in tag_id_list for tag_id in filter.tag_id_list):
+                return False
+            if filter.boundary_id_list is not None and not all(boundary_id in boundary_id_list for boundary_id in filter.boundary_id_list):
+                return False
+            return True
         return SSHWrapper(self._boundaries, self._roles, cmp)

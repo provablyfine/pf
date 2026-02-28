@@ -3,17 +3,18 @@ import types
 import pytest
 
 from . import grant
+from . import model
 
 
-def _deserialize(l: list[grant.Grant]):
-    return [grant.Grant.from_dict(g) for g in l]
+def _deserialize(l: list[model.grant.Grant]):
+    return [model.grant.Grant.from_db_dict(g) for g in l]
 
 
-def boundary(ceiling_list, denied_list):
+def boundary(ceiling_list: list[model.grant.Grant], denied_list: list[model.grant.Grant]):
     return types.SimpleNamespace(id=1, ceiling_list=_deserialize(ceiling_list), denied_list=_deserialize(denied_list))
 
 
-def role(grant_list):
+def role(grant_list: list[model.grant.Grant]):
     return types.SimpleNamespace(id=1, grant_list=_deserialize(grant_list))
 
 def single_grants(g) -> grant.Grants:
@@ -50,7 +51,7 @@ def _crud(create: bool, read: bool, update: dict[str,bool]|None, delete: bool):
         'delete': delete,
     }
 
-def _identity(create_tag_id_list: list[int]|None, create_boundary_id_list: list[int]|None, read: bool, update: dict[str,bool]|None, delete: bool, add_tag: list[int]|None, del_tag: list[int]|None, invite: list[str]|None):
+def _identity(create_tag_id_list: list[int]|None, create_boundary_id_list: list[int]|None, read: bool, update: dict[str,bool]|None, delete: bool, add_tag_id_list: list[int]|None, del_tag_id_list: list[int]|None, invite_list: list[str]|None):
     return {
         'create': {
             'tag_id_list': create_tag_id_list,
@@ -59,13 +60,13 @@ def _identity(create_tag_id_list: list[int]|None, create_boundary_id_list: list[
         'read': read,
         'update': update,
         'delete': delete,
-        'add_tag': add_tag,
-        'del_tag': del_tag,
-        'invite': invite,
+        'add_tag_id_list': add_tag_id_list,
+        'del_tag_id_list': del_tag_id_list,
+        'invite_list': invite_list,
     }
 
-def _identity_add_tag(add_tag: list[int]|None):
-    return _identity(create_tag_id_list=[], create_boundary_id_list=[], read=False, update=None, delete=False, add_tag=add_tag, del_tag=[], invite=[])
+def _identity_add_tag(add_tag_id_list: list[int]|None):
+    return _identity(create_tag_id_list=[], create_boundary_id_list=[], read=False, update=None, delete=False, add_tag_id_list=add_tag_id_list, del_tag_id_list=[], invite_list=[])
 
 
 ######## TAG ########
