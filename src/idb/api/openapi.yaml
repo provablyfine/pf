@@ -270,9 +270,9 @@ components:
     TripletFilter:
       type: object
       additionalProperties: false
-      required: [instance, tag_list, boundary_list]
+      required: [name, tag_list, boundary_list]
       properties:
-        instance:
+        name:
           type: [string, "null"]
         tag_list:
           type: [array, "null"]
@@ -301,8 +301,10 @@ components:
             create:
               type: [object, "null"]
               additionalProperties: false
-              required: [allowed_tag_list, required_boundary_list]
+              required: [allowed, allowed_tag_list, required_boundary_list]
               properties:
+                allowed:
+                  type: boolean
                 allowed_tag_list:
                   type: [array, "null"]
                   items:

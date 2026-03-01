@@ -50,7 +50,7 @@ def _boundary_list_function(args):
         case 'json':
             output = json.dumps(boundaries, indent=2)
         case 'yaml':
-            output = yaml.safe_dump(boundaries, indent=2, sort_keys=False).rstrip('\n')
+            output = yaml_utils.dump(boundaries)
         case 'text':
             rows = []
             for boundary in boundaries:

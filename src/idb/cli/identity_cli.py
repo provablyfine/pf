@@ -5,7 +5,6 @@ import tabulate
 from . import config
 from . import client
 from . import exceptions
-from . import permission
 
 
 def _identities(auth, id:int=None, name:str=None, tag_id:int=None, tag_name:str=None, boundary_id:int=None, boundary_name:str=None):

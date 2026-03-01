@@ -4,7 +4,8 @@ import tabulate
 from . import config
 from . import client
 from . import exceptions
-from . import permission
+from . import grant
+from . import yaml_utils
 
 
 def _roles(auth, id=None, name=None):
@@ -45,6 +46,8 @@ def _role_list_function(args):
             output = '\n'.join(str(r['id']) for r in roles)
         case 'json':
             output = json.dumps(roles, indent=2)
+        case 'yaml':
+            output = yaml_utils.dump(roles)
         case 'text':
             rows = []
             for role in roles:
@@ -65,16 +68,8 @@ def _role_read_function(args):
     match args.format:
         case 'json':
             output = json.dumps(role, indent=2)
-        case 'text':
-            rows = []
-            rows.append(('id', role['id']))
-            rows.append(('name', role['name']))
-            rows.append(('description', role['description']))
-            for p in role['permission_list']:
-                rows.append(('permission', permission.dict_to_string(p)))
-            for member in role['member_list']:
-                rows.append(('member', member['name']))
-            output = tabulate.tabulate(rows, tablefmt='plain')
+        case 'yaml':
+            output = yaml_utils.dump(role)
     print(output)
 
 
@@ -113,15 +108,22 @@ def _role_update_function(args):
         raise exceptions.UI(f'Unable to update role. {response.json()["title"]}.')
 
 
-def _role_permission_function(args):
+def _role_grant_function(args, action, grant):
     c = config.Config.load(args.config)
     idb = client.Client(c)
     auth = idb.session_auth(c.session_key)
     role = _role(args, auth)
-    permission_list = permission.update_list(role['permission_list'], args.add, args.delete, args.set, args.stdin)
+
+    match action:
+        case 'add':
+            grant_list = role['grant_list'] + [grant]
+        case 'del':
+            grant_list = [g for g in role['grant_list'] if g != grant]
+        case 'set':
+            grant_list = grant
 
     response = auth.patch(f'{idb.directory.role}/{role["id"]}', json={
-        'permission_list': permission_list,
+        'grant_list': grant_list,
     })
     if response.status_code != 200:
         raise exceptions.UI(f'Unable to update role. {response.json()["title"]}.')
@@ -177,12 +179,12 @@ def add_subparser(parser):
     group = list_parser.add_argument_group(title='Formatting criteria')
     group.add_argument('-s', '--sort', choices=['id', 'name'], default='name', help='Sort criterion. Default: %(default)s')
     group.add_argument('-q', '--quiet', help='Equivalent to -f quiet', action='store_true')
-    group.add_argument('-f', '--format', choices=['json', 'text', 'quiet'], default='text', help='Output format')
+    group.add_argument('-f', '--format', choices=['json', 'yaml', 'text', 'quiet'], default='text', help='Output format')
     list_parser.set_defaults(func=_role_list_function)
 
     read_parser = subparsers.add_parser('read', help='Show details on a specific role')
     read_parser.add_argument('-i', '--id', type=int, help='Id of role.', required=True)
-    read_parser.add_argument('-f', '--format', choices=['json', 'text'], default='text', help='Output format')
+    read_parser.add_argument('-f', '--format', choices=['json', 'yaml'], default='yaml', help='Output format')
     read_parser.set_defaults(func=_role_read_function)
 
     create_parser = subparsers.add_parser('create', help='Create a new role')
@@ -200,14 +202,9 @@ def add_subparser(parser):
     update_parser.add_argument('-d', '--description', type=str, help='Description')
     update_parser.set_defaults(func=_role_update_function)
 
-    permissions_parser = subparsers.add_parser('permission', help='Update the list of permissions granted by role')
-    permissions_parser.add_argument('-i', '--id', type=int, help='Id of role.', required=True)
-    permissions_parser.add_argument('-a', '--add', type=str, help='Add permission to role', nargs='*', default=[])
-    permissions_parser.add_argument('-d', '--del', dest='delete', type=str, help='Delete permission from role', nargs='*', default=[])
-    group = permissions_parser.add_mutually_exclusive_group()
-    group.add_argument('-s', '--set', type=str, help='Set permission list', nargs='*', default=None)
-    group.add_argument('--stdin', action='store_true', help='Read list of permissions from stdin, one permission per line.')
-    permissions_parser.set_defaults(func=_role_permission_function)
+    grant_parser = subparsers.add_parser('grant', help='Update the list of grants granted by role')
+    grant_parser.add_argument('-i', '--id', type=int, help='Id of role.', required=True)
+    grant.add_parser(grant_parser, _role_grant_function)
 
     members_parser = subparsers.add_parser('member', help='Update the list of members assigned to this role')
     members_parser.add_argument('-i', '--id', type=int, help='Id of role.', required=True)
