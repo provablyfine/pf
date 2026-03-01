@@ -1,12 +1,14 @@
+import sys
 import json
+
 import yaml
 import tabulate
 
 from . import config
 from . import client
 from . import exceptions
-from . import permission
 from . import grant
+from . import yaml_utils
 
 
 def _boundaries(auth, id=None, name=None):
@@ -70,7 +72,7 @@ def _boundary_read_function(args):
         case 'json':
             output = json.dumps(boundary, indent=2)
         case 'yaml':
-            output = yaml.safe_dump(boundary, indent=2, sort_keys=False).rstrip('\n')
+            output = yaml_utils.dump(boundary)
     print(output)
 
 
@@ -110,26 +112,33 @@ def _boundary_update_function(args):
         raise exceptions.UI(f'Unable to update boundary. {response.json()["title"]}.')
 
 
-def _boundary_permission_function(args, name):
+def _boundary_grant_function(args, action, grant, field_name):
     c = config.Config.load(args.config)
     idb = client.Client(c)
     auth = idb.session_auth(c.session_key)
     boundary = _boundary(auth, args.id)
-    grant_list = grant.update_list(boundary[name], args.add, args.delete, args.set)
+
+    match action:
+        case 'add':
+            grant_list = boundary[field_name] + [grant]
+        case 'del':
+            grant_list = [g for g in boundary[field_name] if g != grant]
+        case 'set':
+            grant_list = grant
 
     response = auth.patch(f'{idb.directory.boundary}/{boundary["id"]}', json={
-        name: grant_list,
+        field_name: grant_list,
     })
     if response.status_code != 200:
         raise exceptions.UI(f'Unable to update boundary. {response.json()["title"]}.')
 
 
-def _boundary_denied_function(args):
-    _boundary_permission_function(args, 'denied_list')
+def _boundary_denied_function(args, action, grant):
+    _boundary_grant_function(args, action, grant, 'denied_list')
 
 
-def _boundary_ceiling_function(args):
-    _boundary_permission_function(args, 'ceiling_list')
+def _boundary_ceiling_function(args, action, grant):
+    _boundary_grant_function(args, action, grant, 'ceiling_list')
 
 
 def add_subparser(parser):
@@ -163,17 +172,11 @@ def add_subparser(parser):
 
     denied_parser = subparsers.add_parser('denied', help='Update the list of denied grants for boundary')
     denied_parser.add_argument('-i', '--id', type=int, help='Id of boundary.', required=True)
-    denied_parser.add_argument('-a', '--add', type=str, help='Add grant to denied list', nargs='*', default=[])
-    denied_parser.add_argument('-d', '--del', dest='delete', type=str, help='Delete grant from denied list', nargs='*', default=[])
-    denied_parser.add_argument('-s', '--set', type=str, help='Set denied list', default=None)
-    denied_parser.set_defaults(func=_boundary_denied_function)
+    grant.add_parser(denied_parser, _boundary_denied_function)
 
     ceiling_parser = subparsers.add_parser('ceiling', help='Update the list of celling permissions for boundary')
     ceiling_parser.add_argument('-i', '--id', type=int, help='Id of boundary.', required=True)
-    ceiling_parser.add_argument('-a', '--add', type=str, help='Add permission to ceiling list', nargs='*', default=[])
-    ceiling_parser.add_argument('-d', '--del', dest='delete', type=str, help='Delete permission from ceiling list', nargs='*', default=[])
-    ceiling_parser.add_argument('-s', '--set', type=str, help='Set ceiling list', default=None)
-    ceiling_parser.set_defaults(func=_boundary_ceiling_function)
+    grant.add_parser(ceiling_parser, _boundary_ceiling_function)
 
     delete_parser = subparsers.add_parser('delete', help='Delete an unused boundary')
     delete_parser.add_argument('-i', '--id', type=int, help='Id of boundary.', required=True)
