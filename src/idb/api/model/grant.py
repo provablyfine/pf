@@ -181,8 +181,8 @@ class IdentityCreatePermission:
     def from_client_dict(klass, data: dict, deserializer: ClientDeserializer) -> typing.Self:
         return klass(
             allowed=data['allowed'],
-            allowed_tag_id_list=deserializer.from_tag_list(data['create']['allowed_tag_list']),
-            required_boundary_id_list=deserializer.from_boundary_list(data['create']['required_boundary_list']),
+            allowed_tag_id_list=deserializer.from_tag_list(data['allowed_tag_list']),
+            required_boundary_id_list=deserializer.from_boundary_list(data['required_boundary_list']),
         )
 
 
