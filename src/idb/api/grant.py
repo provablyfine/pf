@@ -91,6 +91,8 @@ class RoleWrapper(CRUDWrapper):
 class IdentityWrapper(RDWrapper):
     def can_create(self, tag_id_list: list[int], boundary_id_list: list[int]) -> bool:
         def check(p) -> bool:
+            if not p.create.allowed:
+                return False
             if p.create.allowed_tag_id_list is not None and \
                 not all(tag_id in p.create.allowed_tag_id_list for tag_id in tag_id_list):
                 return False

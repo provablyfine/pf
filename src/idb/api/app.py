@@ -91,6 +91,7 @@ def initialize_endpoint(_: wa.Request) -> wa.Response:
         filter=model.grant.IdentityFilter(id=None, tag_id_list=None, boundary_id_list=None),
         permission=model.grant.IdentityPermission(
             create=model.grant.IdentityCreatePermission(
+                allowed=True,
                 allowed_tag_id_list=None,
                 required_boundary_id_list=None
             ),

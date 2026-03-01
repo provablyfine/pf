@@ -51,9 +51,10 @@ def _crud(create: bool, read: bool, update: dict[str,bool]|None, delete: bool):
         'delete': delete,
     }
 
-def _identity(create_tag_id_list: list[int]|None, create_boundary_id_list: list[int]|None, read: bool, update: dict[str,bool]|None, delete: bool, add_tag_id_list: list[int]|None, del_tag_id_list: list[int]|None, invite_list: list[str]|None):
+def _identity(create_allowed: bool, create_tag_id_list: list[int]|None, create_boundary_id_list: list[int]|None, read: bool, update: dict[str,bool]|None, delete: bool, add_tag_id_list: list[int]|None, del_tag_id_list: list[int]|None, invite_list: list[str]|None):
     return {
         'create': {
+            'allowed': create_allowed,
             'allowed_tag_id_list': create_tag_id_list,
             'required_boundary_id_list': create_boundary_id_list,
         },
@@ -66,10 +67,10 @@ def _identity(create_tag_id_list: list[int]|None, create_boundary_id_list: list[
     }
 
 def _identity_add_tag(add_tag_id_list: list[int]|None):
-    return _identity(create_tag_id_list=[], create_boundary_id_list=[], read=False, update=None, delete=False, add_tag_id_list=add_tag_id_list, del_tag_id_list=[], invite_list=[])
+    return _identity(create_allowed=False, create_tag_id_list=[], create_boundary_id_list=[], read=False, update=None, delete=False, add_tag_id_list=add_tag_id_list, del_tag_id_list=[], invite_list=[])
 
 def _identity_create(tag_id_list: list[int]|None, boundary_id_list: list[int]|None):
-    return _identity(create_tag_id_list=tag_id_list, create_boundary_id_list=boundary_id_list, read=False, update=None, delete=False, add_tag_id_list=[], del_tag_id_list=[], invite_list=[])
+    return _identity(create_allowed=True, create_tag_id_list=tag_id_list, create_boundary_id_list=boundary_id_list, read=False, update=None, delete=False, add_tag_id_list=[], del_tag_id_list=[], invite_list=[])
 
 
 ######## TAG ########

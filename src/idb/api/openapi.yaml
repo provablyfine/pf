@@ -160,14 +160,6 @@ components:
           description: base64url encoded symmetric key bytes
           type: string
 
-    SingleObjectFilter:
-      type: object
-      additionalProperties: false
-      required: [instance]
-      properties:
-        instance:
-          type: [string, "null"]
-
     BoundaryGrant:
       type: object
       additionalProperties: false
@@ -177,7 +169,12 @@ components:
           type: string
           enum: ['boundary']
         filter:
-          $ref: '#/components/schemas/SingleObjectFilter'
+          type: object
+          additionalProperties: false
+          required: [name]
+          properties:
+            name:
+              type: [string, "null"]
         permission:
           type: object
           additionalProperties: false
@@ -212,7 +209,12 @@ components:
           type: string
           enum: ['tag']
         filter:
-          $ref: '#/components/schemas/SingleObjectFilter'
+          type: object
+          additionalProperties: false
+          required: [name_value]
+          properties:
+            name_value:
+              type: [string, "null"]
         permission:
           type: object
           additionalProperties: false
@@ -234,7 +236,12 @@ components:
           type: string
           enum: ['role']
         filter:
-          $ref: '#/components/schemas/SingleObjectFilter'
+          type: object
+          additionalProperties: false
+          required: [name]
+          properties:
+            name:
+              type: [string, "null"]
         permission:
           type: object
           additionalProperties: false
@@ -342,7 +349,7 @@ components:
         permission:
           type: object
           additionalProperties: false
-          required: []
+          required: [force_command_list, username_list, permit_pty, permit_user_rc, permit_x11_forwarding, permit_agent_forwarding, permit_port_forwarding]
           properties:
             force_command_list:
               type: [array, "null"]

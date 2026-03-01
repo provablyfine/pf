@@ -25,7 +25,7 @@ def methodcache(f):
     def wrapper(self, items: list|None) -> list|None:
         if items is None:
             return None
-        cache = getattr(self, attr_name)
+        cache = getattr(self, attr_name, {})
         missing_items = [i for i in items if i not in cache]
         if len(missing_items) > 0:
             got_items = f(self, missing_items)
@@ -54,7 +54,7 @@ class ClientDeserializer:
             if t is None:
                 logger.debug(f'Unable to find tag in database: {tag}')
                 raise InvalidGrant()
-            retval[t.name] = t.id
+            retval[tag] = t.id
         return retval
 
     @methodcache
@@ -150,19 +150,29 @@ class IdentityCreatePermission:
     with the following attributes
 
     Attributes:
-      allowed_tag_id_list: The maximal list of tags that can be assigned to the
-                   newly-created identity at creation time. It is legal
-                   to create identities with LESS tags than allowed here.
-      required_boundary_tag_list: The minimal list of boundaries that must be
-                   assigned to the newly-created identity at creation time.
-                   It is legal to create identities with MORE boundaries
-                   than required here.
+      allowed:
+               Are we allowed to create identities ? This is useful
+               if you want to disallow identity creation.
+      allowed_tag_id_list:
+               The maximal list of tags that can be assigned to the
+               newly-created identity at creation time. It is legal
+               to create identities with LESS tags than allowed here.
+               If None, any tag can be used. If list is empty, no tag
+               can be used.
+      required_boundary_tag_list:
+               The minimal list of boundaries that must be
+               assigned to the newly-created identity at creation time.
+               It is legal to create identities with MORE boundaries
+               than required here. If None or empty, no boundaries
+               are required.
     """
+    allowed: bool
     allowed_tag_id_list: list[int]|None
     required_boundary_id_list: list[int]|None
 
     def to_client_dict(self, serializer: ClientSerializer) -> dict:
         return {
+            'allowed': self.allowed,
             'allowed_tag_list': serializer.to_tag_list(self.allowed_tag_id_list),
             'required_boundary_list': serializer.to_boundary_list(self.required_boundary_id_list),
         }
@@ -170,6 +180,7 @@ class IdentityCreatePermission:
     @classmethod
     def from_client_dict(klass, data: dict, deserializer: ClientDeserializer) -> typing.Self:
         return klass(
+            allowed=data['allowed'],
             allowed_tag_id_list=deserializer.from_tag_list(data['create']['allowed_tag_list']),
             required_boundary_id_list=deserializer.from_boundary_list(data['create']['required_boundary_list']),
         )
@@ -241,47 +252,42 @@ class SSHPermission(BaseSerde):
 class SingleIdFilter(BaseSerde):
     id: int|None
 
-    def is_match(self, id: int):
-        if self.id is not None and self.id != id:
-            return False
-        return True
-
 
 class TagFilter(SingleIdFilter):
     @abc.abstractmethod
     def to_client_dict(self, serializer: ClientSerializer) -> dict:
         return {
-            'instance': None if self.id is None else serializer.to_tag_list([self.id])[0]
+            'name_value': None if self.id is None else serializer.to_tag_list([self.id])[0]
         }
 
     @classmethod
     @abc.abstractmethod
     def from_client_dict(klass, data, deserializer: ClientDeserializer) -> typing.Self:
-        return TagFilter(id=None if data['instance'] is None else deserializer.from_tag_list([data['instance']])[0])
+        return TagFilter(id=None if data['name_value'] is None else deserializer.from_tag_list([data['name_value']])[0])
 
 
 class RoleFilter(SingleIdFilter):
     def to_client_dict(self, serializer: ClientSerializer) -> dict:
         return {
-            'instance': None if self.id is None else serializer.to_role_list([self.id])[0]
+            'name': None if self.id is None else serializer.to_role_list([self.id])[0]
         }
 
     @classmethod
     def from_client_dict(klass, data, deserializer: ClientDeserializer) -> typing.Self:
-        return RoleFilter(id=None if data['instance'] is None else deserializer.from_role_list([data['instance']])[0])
+        return RoleFilter(id=None if data['name'] is None else deserializer.from_role_list([data['name']])[0])
 
 
 class BoundaryFilter(SingleIdFilter):
     @abc.abstractmethod
     def to_client_dict(self, serializer: ClientSerializer) -> dict:
         return {
-            'instance': None if self.id is None else serializer.to_boundary_list([self.id])[0]
+            'name': None if self.id is None else serializer.to_boundary_list([self.id])[0]
         }
 
     @classmethod
     @abc.abstractmethod
     def from_client_dict(klass, data, deserializer: ClientDeserializer) -> typing.Self:
-        return BoundaryFilter(id=None if data['instance'] is None else deserializer.from_boundary_list([data['instance']])[0])
+        return BoundaryFilter(id=None if data['name'] is None else deserializer.from_boundary_list([data['name']])[0])
 
 
 @dataclasses.dataclass(frozen=True)
@@ -292,7 +298,7 @@ class TripletFilter(BaseSerde):
 
     def to_client_dict(self, serializer: ClientSerializer) -> dict:
         return {
-            'instance': None if self.id is None else serializer.to_identity_name_list([self.id])[0],
+            'name': None if self.id is None else serializer.to_identity_name_list([self.id])[0],
             'tag_list': serializer.to_tag_list(self.tag_id_list),
             'boundary_list': serializer.to_boundary_list(self.tag_id_list),
         }
@@ -300,7 +306,7 @@ class TripletFilter(BaseSerde):
     @classmethod
     def from_client_dict(klass, data, deserializer: ClientDeserializer) -> typing.Self:
         return klass(
-            id=None if data['identity'] is None else deserializer.from_identity_list([data['identity']])[0],
+            id=None if data['name'] is None else deserializer.from_identity_list([data['name']])[0],
             tag_id_list=deserializer.from_tag_list(data['tag_list']),
             boundary_id_list=deserializer.from_boundary_list(data['boundary_list']),
         )
