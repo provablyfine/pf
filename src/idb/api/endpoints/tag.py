@@ -6,10 +6,9 @@ from ... import schemas
 
 from .. import signature
 from .. import grant
-from .. import model
+from .. import converters
 from ..context import ctx
 
-from . import serde
 
 @signature.verify_session
 def list_endpoint(request: wa.Request) -> wa.Response:
@@ -31,7 +30,7 @@ def list_endpoint(request: wa.Request) -> wa.Response:
 
     return wa.JSONResponse(
         status_code=200,
-        json=serde.tag_list_response_serialize(output).model_dump(),
+        json=schemas.TagListResponse(tags=[converters.tag_to_schema(tag) for tag in tags]).model_dump(),
     )
 
 
@@ -41,7 +40,7 @@ def create_endpoint(request: wa.Request) -> wa.Response:
     if not grants.tag(None).can_create():
         return wa.ProblemResponse(status_code=403, title='Not allowed to create tag')
 
-    data = serde.tag_create_request_deserialize(request.body)
+    data = schemas.TagCreateRequest.model_validate_json(request.body)
     try:
         tag_id = ctx.db.tag.create(name=data.name, value=data.value)
     except sqlalchemy.exc.IntegrityError:
@@ -49,7 +48,7 @@ def create_endpoint(request: wa.Request) -> wa.Response:
     tag = ctx.db.tag.read_one(id=tag_id)
     return wa.JSONResponse(
         status_code=201,
-        json=serde.tag_create_response_serialize(tag).model_dump(),
+        json=converters.tag_to_schema(tag).model_dump(),
     )
 
 

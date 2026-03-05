@@ -1,51 +1,50 @@
 from __future__ import annotations
-from enum import Enum
-from typing import List, Optional, Union, Annotated, Literal, Any
-from pydantic import BaseModel, Field, ConfigDict
+import typing
+import pydantic
 
 # --- Base Configuration ---
-class APIBase(BaseModel):
-    model_config = ConfigDict(from_attributes=True, extra='forbid')
+class APIBase(pydantic.BaseModel):
+    model_config = pydantic.ConfigDict(from_attributes=True, extra='forbid')
 
 # --- Shared & JWK Schemas ---
 
 class ProblemDocument(APIBase):
     type: str = "about:blank"
-    detail: Optional[str] = None
-    title: Optional[str] = None
-    status: Optional[int] = None
+    detail: str|None = None
+    title: str|None = None
+    status: int|None = None
 
 class RSAPublicJWK(APIBase):
-    kty: Literal["RSA"]
+    kty: typing.Literal["RSA"]
     e: str
     n: str
 
 class ECDSAPublicJWK(APIBase):
-    crv: Literal["P-256"]
-    kty: Literal["EC"]
+    crv: typing.Literal["P-256"]
+    kty: typing.Literal["EC"]
     x: str
     y: str
 
 class ED25519PublicJWK(APIBase):
-    crv: Literal["Ed25519"]
-    kty: Literal["OKP"]
+    crv: typing.Literal["Ed25519"]
+    kty: typing.Literal["OKP"]
     x: str
 
-PublicJWK = Annotated[
-    Union[RSAPublicJWK, ECDSAPublicJWK, ED25519PublicJWK],
-    Field(discriminator="kty")
+PublicJWK = typing.Annotated[
+    RSAPublicJWK | ECDSAPublicJWK | ED25519PublicJWK,
+    pydantic.Field(discriminator="kty")
 ]
 
 class SymmetricJWK(APIBase):
-    kty: Literal["oct"]
+    kty: typing.Literal["oct"]
     k: str  # base64url encoded
 
 # --- Grant ---
 
 class TripletFilter(APIBase):
-    name: Optional[str] = None
-    tag_list: Optional[List[str]] = None
-    boundary_list: Optional[List[str]] = None
+    name: str|None = None
+    tag_list: list[str]|None = None
+    boundary_list: list[str]|None = None
 
 class CRDPermission(APIBase):
     create: bool
@@ -53,7 +52,7 @@ class CRDPermission(APIBase):
     delete: bool
 
 class BoundaryFilter(APIBase):
-    name: Optional[str]
+    name: str|None
 
 class BoundaryUpdatePermission(APIBase):
     name: bool
@@ -62,20 +61,23 @@ class BoundaryUpdatePermission(APIBase):
     denied_list: bool
 
 class BoundaryPermission(CRDPermission):
-    update: Optional[BoundaryUpdatePermission]
+    update: BoundaryUpdatePermission|None
 
 class BoundaryGrant(APIBase):
-    type: Literal["boundary"]
+    type: typing.Literal["boundary"]
     filter: BoundaryFilter
     permission: BoundaryPermission
 
 class TagFilter(APIBase):
-    name_value: Optional[str]
+    name_value: str|None
+
+class TagPermission(CRDPermission):
+    pass
 
 class TagGrant(APIBase):
-    type: Literal["tag"]
+    type: typing.Literal["tag"]
     filter: TagFilter
-    permission: CRDPermission
+    permission: TagPermission
 
 class RoleUpdatePermission(APIBase):
     name: bool
@@ -87,55 +89,61 @@ class RolePermission(CRDPermission):
     update: RoleUpdatePermission
 
 class RoleFilter(APIBase):
-    name: Optional[str]
+    name: str|None
 
 class RoleGrant(APIBase):
-    type: Literal["role"]
+    type: typing.Literal["role"]
     filter: RoleFilter
     permission: RolePermission
 
 class IdentityCreatePermission(APIBase):
     allowed: bool
-    allowed_tag_list: Optional[list[str]]
-    required_boundary_list: Optional[list[str]]
+    allowed_tag_list: list[str]|None
+    required_boundary_list: list[str]|None
 
 class IdentityUpdatePermission(APIBase):
     name: bool
 
 class IdentityPermission(APIBase):
-    create: Optional[IdentityCreatePermission]
+    create: IdentityCreatePermission|None
     read: bool
-    update: Optional[IdentityUpdatePermission]
+    update: IdentityUpdatePermission|None
     delete: bool
-    add_tag_list: Optional[list[str]]
-    del_tag_list: Optional[list[str]]
-    invite_list: Optional[list[str]]
+    add_tag_list: list[str]|None
+    del_tag_list: list[str]|None
+    invite_list: list[str]|None
+
+class IdentityFilter(TripletFilter):
+    pass
 
 class IdentityGrant(APIBase):
-    type: Literal["identity"]
-    filter: TripletFilter
+    type: typing.Literal["identity"]
+    filter: IdentityFilter
     permission: IdentityPermission
 
 class SSHPermission(APIBase):
-    force_command_list: Optional[list[str]]
-    username_list: Optional[list[str]]
+    force_command_list: list[str]|None
+    username_list: list[str]|None
     permit_pty: bool
     permit_user_rc: bool
     permit_x11_forwarding: bool
     permit_agent_forwarding: bool
     permit_port_forwarding: bool
 
+class SSHFilter(TripletFilter):
+    pass
+
 class SSHGrant(APIBase):
-    type: Literal["ssh"]
-    filter: TripletFilter
+    type: typing.Literal["ssh"]
+    filter: SSHFilter
     permission: SSHPermission
 
 class InvalidGrant(APIBase):
-    type: Literal["invalid"]
+    type: typing.Literal["invalid"]
 
-Grant = Annotated[
-    Union[BoundaryGrant, TagGrant, RoleGrant, IdentityGrant, SSHGrant, InvalidGrant],
-    Field(discriminator="type")
+Grant = typing.Annotated[
+    BoundaryGrant | TagGrant | RoleGrant | IdentityGrant | SSHGrant | InvalidGrant,
+    pydantic.Field(discriminator="type")
 ]
 
 # --- Entity Schemas (Read Models) ---
@@ -191,22 +199,52 @@ Grant = Annotated[
 #class InvitationRead(APIBase):
 #    key: SymmetricJWK
 
-# --- Request Schemas (Write Models) ---
+# --- Tag ---
 
-class Tag(BaseModel):
+class Tag(APIBase):
     id: int
     name: str
     value: str
 
-class TagListResponse(BaseModel):
+class TagListResponse(APIBase):
     tags: list[Tag]
 
-class TagCreateRequest(BaseModel):
+class TagCreateRequest(APIBase):
     name: str
     value: str
 
-class TagCreateResponse(Tag):
+class TagCreateResponse(APIBase):
     pass
+
+# --- Boundary ---
+
+
+class Boundary(APIBase):
+    id: int
+    name: str
+    description: str
+    ceiling_list: list[Grant] | None = None
+    denied_list: list[Grant]
+
+class BoundaryListResponse(APIBase):
+    boundaries: list[Boundary]
+
+
+class BoundaryCreateRequest(APIBase):
+    name: str
+    description: str = ''
+
+class BoundaryCreateResponse(APIBase):
+    boundary: Boundary
+
+class BoundaryUpdateRequest(APIBase):
+    name: str
+    description: str
+    ceiling_list: list[Grant] | None = None
+    denied_list: list[Grant]
+
+class BoundaryUpdateResponse(APIBase):
+    boundary: Boundary
 
 
 #class AcceptInvitationRequest(BaseModel):

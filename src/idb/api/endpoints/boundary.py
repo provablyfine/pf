@@ -2,11 +2,14 @@ import json
 import sqlalchemy
 
 from ... import wa
+from ... import schemas
 
 from .. import signature
+from .. import converters
 from .. import grant
 from .. import model
 from ..context import ctx
+
 
 
 @signature.verify_session
@@ -25,36 +28,35 @@ def list_endpoint(request: wa.Request) -> wa.Response:
             continue
         output.append(boundary)
 
-    serializer = model.grant.ClientSerializer()
-    boundaries = [model.boundary.to_client_dict(b, serializer) for b in output]
+    converter = converters.GrantConverter()
     return wa.JSONResponse(
         status_code=200,
-        json={'boundaries': boundaries},
+        json=schemas.BoundaryListResponse(boundaries=[converters.boundary_to_schema(converter, b) for b in output]).model_dump(),
     )
 
 
 @signature.verify_session
 def create_endpoint(request: wa.Request) -> wa.Response:
-    data = json.loads(request.body)
     grants = grant.Grants.create()
     if not grants.boundary(None).can_create():
         return wa.ProblemResponse(status_code=403, title='Not allowed to create boundary')
 
+    data = schemas.BoundaryCreateRequest.model_validate_json(request.body)
     try:
         boundary_id = model.boundary.create(
-            name=data['name'],
-            description=data.get('description'),
+            name=data.name,
+            description=data.description,
             ceiling_list=[],
             denied_list=[],
         )
     except sqlalchemy.exc.IntegrityError:
-        return wa.ProblemResponse(status_code=400, title='Boundary already exists. Name must be unique.', detail=data['name'])
+        return wa.ProblemResponse(status_code=400, title='Boundary already exists. Name must be unique.', detail=data.name)
 
     boundary = model.boundary.read_one(id=boundary_id)
-    serializer = model.grant.ClientSerializer()
+    converter = converters.GrantConverter()
     return wa.JSONResponse(
         status_code=201,
-        json=model.boundary.to_client_dict(boundary, serializer),
+        json=schemas.BoundaryCreateResponse(boundary=converters.boundary_to_schema(converter, boundary)).model_dump(),
     )
 
 
@@ -83,32 +85,31 @@ def update_endpoint(request: wa.Request) -> wa.Response:
 
     boundary = model.boundary.read_one(id=request.path_params.boundary_id)
 
-    data = json.loads(request.body)
+    data = schemas.BoundaryUpdateRequest.model_validate_json(request.body)
 
     grants = grant.Grants.create()
-    for name, value in data.items():
-        if not grants.boundary(boundary.id).can_update(name):
-            return wa.ProblemResponse(status_code=403, title='Not allowed to update boundary field', detail=name)
+    for field in data.model_fields_set:
+        if not grants.boundary(boundary.id).can_update(field):
+            return wa.ProblemResponse(status_code=403, title='Not allowed to update boundary field', detail=field)
 
     update_query = {}
-    deserializer = model.grant.ClientDeserializer()
-    if 'name' in data:
+    converter = converters.GrantConverter()
+    if 'name' in data.model_fields_set:
         update_query['name'] = data['name']
-    if 'description' in data:
+    if 'description' in data.model_fields_set:
         update_query['description'] = data['description']
-    if 'denied_list' in data:
+    if 'denied_list' in data.model_fields_set:
         if request.path_params.boundary_id in identity.boundary_id_list:
             return wa.ProblemResponse(status_code=403, title='Not allowed to update denied list on boundary that applies to self')
-        update_query['denied_list'] = [model.grant.Grant.from_client_dict(p, deserializer) for p in data['denied_list']]
-    if 'ceiling_list' in data:
+        update_query['denied_list'] = [converters.grant_from_schema(converter, g) for g in data.denied_list]
+    if 'ceiling_list' in data.model_fields_set:
         if request.path_params.boundary_id in identity.boundary_id_list:
             return wa.ProblemResponse(status_code=403, title='Not allowed to update ceiling list on boundary that applies to self')
-        update_query['ceiling_list'] = [model.grant.Grant.from_client_dict(p, deserializer) for p in data['ceiling_list']]
+        update_query['ceiling_list'] = [converters.grant_from_schema(converter, g) for g in data.ceiling_list]
     model.boundary.update(id=request.path_params.boundary_id, **update_query)
 
     boundary = model.boundary.read_one(id=request.path_params.boundary_id)
-    serializer = model.grant.ClientSerializer()
     return wa.JSONResponse(
         status_code=200,
-        json=model.boundary.to_client_dict(boundary, serializer),
+        json=schemas.BoundaryUpdateResponse(boundary=converters.boundary_to_schema(converter, boundary)).model_dump(),
     )
