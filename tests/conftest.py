@@ -57,11 +57,6 @@ class SshD:
     container_id: str
 
 
-def _dump_sshd_logs(container_id):
-    logs = _run(['podman', 'logs', container_id])
-    with tempfile.NamedTemporaryFile(mode='w+', delete=False, delete_on_close=False) as f:
-        f.write(logs)
-        print(f'SSH Server logs: {f.name}')
 
 @pytest.fixture
 def sshd(request):
@@ -159,14 +154,14 @@ CMD ["/bin/sh", "/run/start.sh"]
         try:
             port = _parse_port_mapping(stdout)
         except:
-            _dump_sshd_logs(container_id)
+            print(f'SSH Server container: {container_id}')
             raise
         try:
             yield SshD(host_port=port, keys_directory=ssh_keys_directory, container_id=container_id)
         finally:
             if hasattr(request.node, 'rep_call'):
                 if request.node.rep_call.failed:
-                    _dump_sshd_logs(container_id)
+                    print(f'SSH Server container: {container_id}')
             _run(['podman', 'container', 'stop', '-t', '0', container_id])
 
 
