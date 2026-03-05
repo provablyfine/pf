@@ -9,8 +9,7 @@
 #   "dateparser",
 #   "coverage",
 #   "idb",
-#   "jsonschema",
-#   "referencing",
+#   "pydantic",
 # ]
 # [tool.uv.sources]
 # idb = { path = "../", editable = true }
