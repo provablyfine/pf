@@ -2,6 +2,7 @@ import json
 import sqlalchemy
 
 from ... import wa
+from ... import schemas
 
 from .. import signature
 from .. import grant
@@ -39,9 +40,9 @@ def create_endpoint(request: wa.Request) -> wa.Response:
     if not grants.tag(None).can_create():
         return wa.ProblemResponse(status_code=403, title='Not allowed to create tag')
 
-    data = json.loads(request.body)
+    data = schemas.TagCreate.model_validate_json(request.body)
     try:
-        tag_id = ctx.db.tag.create(name=data['name'], value=data['value'])
+        tag_id = ctx.db.tag.create(name=data.name, value=data.value)
     except sqlalchemy.exc.IntegrityError:
         return wa.ProblemResponse(status_code=400, title='Tag already exists')
     tag = ctx.db.tag.read_one(id=tag_id)

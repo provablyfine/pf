@@ -40,7 +40,7 @@ class SymmetricJWK(APIBase):
     kty: Literal["oct"]
     k: str  # base64url encoded
 
-# --- Grant System (Discriminators) ---
+# --- Grant ---
 
 class TripletFilter(APIBase):
     name: Optional[str] = None
@@ -140,117 +140,117 @@ Grant = Annotated[
 
 # --- Entity Schemas (Read Models) ---
 
-class Directory(APIBase):
-    initialize: str
-    accept_invitation: str
-    login: str
-    boundary: str
-    tag: str
-    role: str
-    identity: str
-    ssh: str
-
-class TagRead(APIBase):
-    id: int
-    name: str
-    value: str
-
-class BoundaryRead(APIBase):
-    id: int
-    name: str
-    description: str
-    ceiling_list: Optional[List[Grant]] = None
-    denied_list: List[Grant]
-
-class RoleMember(APIBase):
-    id: int
-    name: str
-
-class RoleRead(APIBase):
-    id: int
-    name: str
-    description: str
-    grant_list: List[Grant]
-    member_list: List[RoleMember]
-
-class IdentityTagRead(APIBase):
-    id: int
-    name: str
-    value: str
-
-class IdentityBoundaryRead(APIBase):
-    id: int
-    name: str
-
-class IdentityRead(APIBase):
-    id: int
-    name: str
-    tags: List[IdentityTagRead]
-    boundaries: List[IdentityBoundaryRead]
-
-class InvitationRead(APIBase):
-    key: SymmetricJWK
+#class Directory(APIBase):
+#    initialize: str
+#    accept_invitation: str
+#    login: str
+#    boundary: str
+#    tag: str
+#    role: str
+#    identity: str
+#    ssh: str
+#
+#class TagRead(APIBase):
+#    id: int
+#    name: str
+#    value: str
+#
+#class BoundaryRead(APIBase):
+#    id: int
+#    name: str
+#    description: str
+#    ceiling_list: Optional[List[Grant]] = None
+#    denied_list: List[Grant]
+#
+#class RoleMember(APIBase):
+#    id: int
+#    name: str
+#
+#class RoleRead(APIBase):
+#    id: int
+#    name: str
+#    description: str
+#    grant_list: List[Grant]
+#    member_list: List[RoleMember]
+#
+#class IdentityTagRead(APIBase):
+#    id: int
+#    name: str
+#    value: str
+#
+#class IdentityBoundaryRead(APIBase):
+#    id: int
+#    name: str
+#
+#class IdentityRead(APIBase):
+#    id: int
+#    name: str
+#    tags: List[IdentityTagRead]
+#    boundaries: List[IdentityBoundaryRead]
+#
+#class InvitationRead(APIBase):
+#    key: SymmetricJWK
 
 # --- Request Schemas (Write Models) ---
 
-class AcceptInvitationRequest(BaseModel):
-    account_public_key: PublicJWK
-    nonce: str
-
-class LoginRequest(BaseModel):
-    session_public_key: PublicJWK
-    nonce: str
-
-class CreateBoundaryRequest(BaseModel):
-    name: str
-    description: Optional[str] = None
-
-class UpdateBoundaryRequest(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    denied_list: Optional[List[Grant]] = None
-    ceiling_list: Optional[List[Grant]] = None
-
-class CreateTagRequest(BaseModel):
+class TagCreate(BaseModel):
     name: str
     value: str
 
-class CreateRoleRequest(BaseModel):
-    name: str
-    description: Optional[str] = None
-
-class UpdateRoleRequest(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    grant_list: Optional[List[Grant]] = None
-    member_list: Optional[List[RoleMember]] = None
-
-class IdentityTagId(BaseModel):
-    id: int
-
-class IdentityTagNameValue(BaseModel):
-    name: str
-    value: str
-
-IdentityTagInput = Union[IdentityTagId, IdentityTagNameValue]
-
-class CreateIdentityRequest(BaseModel):
-    name: str
-    boundaries: List[IdentityBoundaryRead] # Using this as it matches {id, name}
-    tags: Optional[List[IdentityTagInput]] = None
-
-class UpdateIdentityTagOperation(BaseModel):
-    type: Literal["set", "add", "del"]
-    values: List[IdentityTagInput]
-
-class UpdateIdentityRequest(BaseModel):
-    name: Optional[str] = None
-    tags: Optional[List[UpdateIdentityTagOperation]] = None
-
-class SshUserCertificateRequest(BaseModel):
-    hostname: str
-    username: str
-    public_key: PublicJWK
-
-class SshHostCertificateRequest(BaseModel):
-    public_keys: List[PublicJWK]
+#class AcceptInvitationRequest(BaseModel):
+#    account_public_key: PublicJWK
+#    nonce: str
+#
+#class LoginRequest(BaseModel):
+#    session_public_key: PublicJWK
+#    nonce: str
+#
+#class CreateBoundaryRequest(BaseModel):
+#    name: str
+#    description: Optional[str] = None
+#
+#class UpdateBoundaryRequest(BaseModel):
+#    name: Optional[str] = None
+#    description: Optional[str] = None
+#    denied_list: Optional[List[Grant]] = None
+#    ceiling_list: Optional[List[Grant]] = None
+#
+#class CreateRoleRequest(BaseModel):
+#    name: str
+#    description: Optional[str] = None
+#
+#class UpdateRoleRequest(BaseModel):
+#    name: Optional[str] = None
+#    description: Optional[str] = None
+#    grant_list: Optional[List[Grant]] = None
+#    member_list: Optional[List[RoleMember]] = None
+#
+#class IdentityTagId(BaseModel):
+#    id: int
+#
+#class IdentityTagNameValue(BaseModel):
+#    name: str
+#    value: str
+#
+#IdentityTagInput = Union[IdentityTagId, IdentityTagNameValue]
+#
+#class CreateIdentityRequest(BaseModel):
+#    name: str
+#    boundaries: List[IdentityBoundaryRead] # Using this as it matches {id, name}
+#    tags: Optional[List[IdentityTagInput]] = None
+#
+#class UpdateIdentityTagOperation(BaseModel):
+#    type: Literal["set", "add", "del"]
+#    values: List[IdentityTagInput]
+#
+#class UpdateIdentityRequest(BaseModel):
+#    name: Optional[str] = None
+#    tags: Optional[List[UpdateIdentityTagOperation]] = None
+#
+#class SshUserCertificateRequest(BaseModel):
+#    hostname: str
+#    username: str
+#    public_key: PublicJWK
+#
+#class SshHostCertificateRequest(BaseModel):
+#    public_keys: List[PublicJWK]
