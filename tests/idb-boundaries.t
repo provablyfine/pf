@@ -15,16 +15,18 @@ JSON output
       "id": 1,
       "name": "root",
       "description": "The Root boundary is not a boundary at all.",
-      "ceiling_list": [],
+      "ceiling_list": null,
       "denied_list": []
     }
   ]
 
 Display details about the boundary
   $ idbctl admin boundary read -i 1
-  id           1
-  name         root
-  description  The Root boundary is not a boundary at all.
+  id: 1
+  name: root
+  description: The Root boundary is not a boundary at all.
+  ceiling_list: null
+  denied_list: []
 
 Search for the root boundary explicitely
   $ idbctl admin boundary list -n root -q
@@ -38,10 +40,12 @@ Try to delete it (we cannot)
 Update name and description
   $ idbctl admin boundary update -i 1 -d hello -n hello
   $ idbctl admin boundary read -i 1
-  id           1
-  name         hello
-  description  hello
-  $ idbctl admin boundary denied -i 1 -a identity:*:*:*
+  id: 1
+  name: hello
+  description: hello
+  ceiling_list: null
+  denied_list: []
+  $ idbctl admin boundary denied -i 1 add identity --create-allowed -rd --update name 
   Unable to update boundary. Not allowed to update denied list on boundary that applies to self.
   [2]
   $ idbctl admin boundary ceiling -i 1 -a identity:*:*:*
