@@ -9,6 +9,7 @@
 #   "pytest",
 #   "coverage",
 #   "gunicorn",
+#   "pydantic",
 #   "idb",
 # ]
 # [tool.uv.sources]
