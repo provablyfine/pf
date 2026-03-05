@@ -193,9 +193,21 @@ Grant = Annotated[
 
 # --- Request Schemas (Write Models) ---
 
-class TagCreate(BaseModel):
+class Tag(BaseModel):
+    id: int
     name: str
     value: str
+
+class TagListResponse(BaseModel):
+    tags: list[Tag]
+
+class TagCreateRequest(BaseModel):
+    name: str
+    value: str
+
+class TagCreateResponse(Tag):
+    pass
+
 
 #class AcceptInvitationRequest(BaseModel):
 #    account_public_key: PublicJWK
