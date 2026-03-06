@@ -5,10 +5,12 @@ import logging
 import sqlalchemy
 
 from ... import wa
+from ... import schemas
 
 from .. import signature
 from .. import grant
 from .. import model
+from .. import converters
 from ..context import ctx
 
 
@@ -38,10 +40,10 @@ def list_endpoint(request: wa.Request) -> wa.Response:
             continue
         output.append(identity)
 
-    identities_by_id = model.identity.serialize(output)
+    identities = converters.identity_list_to_schema(output)
     return wa.JSONResponse(
         status_code=200,
-        json={'identities': [i for i in identities_by_id.values()]},
+        json=schemas.IdentityListResponse(identities=identities).model_dump(),
     )
 
 
@@ -50,66 +52,42 @@ def read_self_endpoint(request: wa.Request) -> wa.Response:
     identity = model.identity.read_one(id=ctx.identity_id)
     assert identity is not None
 
-    identities_by_id = model.identity.serialize([identity])
     return wa.JSONResponse(
         status_code=200,
-        json=identities_by_id[ctx.identity_id],
+        json=converters.identity_to_schema(identity).model_dump(),
     )
 
 
-def _read_boundary_ids(boundaries) -> list[int]:
-    boundary_id_list = []
-    for boundary in boundaries:
-        if 'id' in boundary:
-            db_boundary = ctx.db.boundary.read_one(id=boundary['id'])
-            if db_boundary is None:
-                logger.info(f'No boundary found for id={boundary["id"]}')
-                raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Request contains invalid fields'))
-            boundary_id_list.append(boundary['id'])
-        else:
-            if not 'name' in boundary:
-                raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Boundary is missing a name', detail=str(boundary)))
-            db_boundary = ctx.db.boundary.read_one(name=boundary['name'])
-            if db_boundary is None:
-                logger.info(f'No boundary found for name={boundary["name"]}')
-                raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Request contains invalid fields'))
-            boundary_id_list.append(db_boundary.id)
-    if len(set(boundary_id_list)) != len(boundary_id_list):
-        logger.info('Some boundaries are specified twice')
+def _read_boundary_ids(boundary_id_list: list[int], boundary_name_list: list[str]) -> list[int]:
+    # The input schema validator makes sure that the client provides only one non-empty list:
+    # either boundary_id_list or boundary_name_list is empty.
+    boundaries = ctx.db.boundary.read_all(name=boundary_name_list)
+    if len(boundaries) != len(boundary_name_list):
+        logger.info(f'No boundary found for one of={boundary_name_list}')
         raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Request contains invalid fields'))
-    return boundary_id_list
+    return [b.id for b in boundaries] + boundary_id_list
 
 
-def _read_tag_ids(tags) -> list[int]:
-    tag_id_list = []
-    for tag in tags:
-        if 'id' in tag:
-            db_tag = ctx.db.tag.read_one(id=tag['id'])
-            if db_tag is None:
-                logger.info(f'No tag found for id={tag["id"]}')
-                raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Request contains invalid fields'))
-            tag_id_list.append(tag['id'])
-        else:
-            if 'name' not in tag or 'value' not in tag:
-                logger.info(f'Tag structure invalid: missing name or value')
-                raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Tag is missing a name or value', detail=str(tag)))
-            db_tag = ctx.db.tag.read_one(name=tag['name'], value=tag['value'])
-            if db_tag is None:
-                logger.info(f'No tag found for {tag["name"]}={tag["value"]}')
-                raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Request contains invalid fields'))
-            tag_id_list.append(db_tag.id)
-    if len(set(tag_id_list)) != len(tag_id_list):
-        logger.info('Some tags are specified twice')
+def _read_tag_ids(tag_id_list: list[int], tag_name_value_list: list[schemas.IdentityTagCreateRequest]) -> list[int]:
+    id_list = []
+    for tag in tag_name_value_list:
+        db_tag = ctx.db.tag.read_one(name=tag.name, value=tag.value)
+        if db_tag is None:
+            logger.info(f'No tag found for {tag["name"]}={tag["value"]}')
+            raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Request contains invalid fields'))
+        id_list.append(db_tag.id)
+    if len(id_list) != len(tag_name_value_list):
+        logger.info(f'No tag found for one of={tag_name_value_list}')
         raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Request contains invalid fields'))
-    return tag_id_list
+    return id_list + tag_id_list
 
 
 
 @signature.verify_session
 def create_endpoint(request: wa.Request) -> wa.Response:
-    data = json.loads(request.body)
-    additional_boundary_ids = _read_boundary_ids(data.get('boundaries', []))
-    tag_ids = _read_tag_ids(data.get('tags', []))
+    data = schemas.IdentityCreateRequest.model_validate_json(request.body)
+    additional_boundary_ids = _read_boundary_ids(data.boundary_id_list, data.boundary_name_list)
+    tag_ids = _read_tag_ids(data.tag_id_list, data.tag_name_value_list)
 
     grants = grant.Grants.create()
     if not grants.identity().can_create(tag_ids, additional_boundary_ids):
@@ -126,14 +104,14 @@ def create_endpoint(request: wa.Request) -> wa.Response:
         logger.info('Some boundaries are specified twice, once in the parent boundary and once in the user-requested boundaries')
         return wa.ProblemResponse(status_code=400, title='Request contains invalid fields')
     try:
-        identity_id = model.identity.create(name=data['name'], boundary_id_list=identity_boundary_ids, tag_id_list=tag_ids)
+        identity_id = model.identity.create(name=data.name, boundary_id_list=identity_boundary_ids, tag_id_list=tag_ids)
     except sqlalchemy.exc.IntegrityError:
-        return wa.ProblemResponse(status_code=400, title='Identity already exists. Name must be unique.', detail=data['name'])
+        return wa.ProblemResponse(status_code=400, title='Identity already exists. Name must be unique.', detail=data.name)
 
     identity = model.identity.read_one(id=identity_id)
     return wa.JSONResponse(
         status_code=201,
-        json=model.identity.serialize_one(identity),
+        json=converters.identity_to_schema(identity).model_dump(),
     )
 
 
@@ -161,19 +139,6 @@ def _403_tag() -> wa.HTTPException:
     # We purposedly do not return detailed information to the client
     # to make sure we do not leak information that the client should not know
     return wa.HTTPException(wa.ProblemResponse(status_code=403, title='Not allowed to update tag'))
-
-def _read_tag_id_list(tags):
-    tag_ids = []
-    for tag in tags:
-        if 'id' in tag:
-            tag_ids.append(tag['id'])
-        else:
-            db_tag = ctx.db.tag.read_one(name=tag['name'], value=tag['value'])
-            if db_tag is None:
-                raise _403_tag()
-            tag_ids.append(db_tag.id)
-    return tag_ids
-
 
 def _check_set_tags(permission_request, current_tag_id_list, new_tag_ids):
     current_tag_ids = set(current_tag_id_list)
@@ -203,15 +168,15 @@ def update_endpoint(request: wa.Request) -> wa.Response:
 
     identity = model.identity.read_one(id=request.path_params.identity_id)
 
-    data = json.loads(request.body)
+    data = schemas.IdentityUpdateRequest.model_validate_json(request.body)
     grants = grant.Grants.create()
     permission_request = grants.identity(identity.id, identity.tag_id_list, identity.boundary_id_list)
     update_params = {}
-    if 'name' in data:
+    if 'name' in data.model_fields_set:
         if not permission_request.can_update('name'):
             return wa.ProblemResponse(status_code=403, title='Not allowed to update identity field', detail='name')
-        update_params['name'] = data['name']
-    if 'tags' in data:
+        update_params['name'] = data.name
+    if 'tags' in data.model_fields_set:
         # 1. We need to have native add and del operations because we have an identity:add-tag
         #    permission. If we did not have add and del operations, the client would need to be
         #    able to read the identity before it is able to add tag so, implicitely using the
@@ -222,17 +187,17 @@ def update_endpoint(request: wa.Request) -> wa.Response:
         #    stuff because this is really a one-off. If we decide to have more operations with
         #    fine-grained set/add/delete, we should reconsider more generally the use of json-patch+json
         new_tag_ids = set(identity.tag_id_list)
-        for operation in data['tags']:
-            match operation['type']:
+        for operation in data.tags:
+            match operation.type:
                 case 'set':
-                    new_tag_ids = set(_read_tag_id_list(operation['tags']))
+                    new_tag_ids = set(_read_tag_ids(operation.tag_id_list, operation.tag_name_value_list))
                     _, _ =_check_set_tags(permission_request, identity.tag_id_list, new_tag_ids)
                 case 'add':
-                    add_tag_ids = _read_tag_id_list(operation['values'])
+                    add_tag_ids = _read_tag_ids(operation.tag_id_list, operation.tag_name_value_list)
                     _check_add_tags(permission_request, add_tag_ids)
                     new_tag_ids = new_tag_ids.union(set(add_tag_ids))
                 case 'del':
-                    del_tag_ids = _read_tag_id_list(operation['values'])
+                    del_tag_ids = _read_tag_ids(operation.tag_id_list, operation.tag_name_value_list)
                     _check_del_tags(permission_request, del_tag_ids)
                     new_tag_ids = new_tag_ids.difference(set(del_tag_ids))
 
@@ -250,28 +215,29 @@ def update_endpoint(request: wa.Request) -> wa.Response:
 
     return wa.JSONResponse(
         status_code=200,
-        json=model.identity.serialize_one(identity),
+        json=converters.identity_to_schema(identity).model_dump(),
     )
 
 
 @signature.verify_session
 def invite_endpoint(request: wa.Request) -> wa.Response:
     identity = model.identity.read_one(id=request.path_params.identity_id)
-    delivery = request.query_params['delivery']
+    data = schemas.IdentityInviteRequest.model_validate_json(request.body)
 
     grants = grant.Grants.create()
-    if not grants.identity(identity.id, identity.tag_id_list, identity.boundary_id_list).can_invite(delivery):
-        return wa.ProblemResponse(status_code=403, title='Not allowed to invite identity', detail=delivery)
+    if not grants.identity(identity.id, identity.tag_id_list, identity.boundary_id_list).can_invite(data.delivery):
+        return wa.ProblemResponse(status_code=403, title='Not allowed to invite identity', detail=data.delivery)
 
     identity_invitation_key_id = model.identity_invitation_key.create(
         identity_id=identity.id,
         # XXX Should be a security policy parameter
         expiration_delay_s=600
     )
+    identity_invitation = model.identity_invitation_key.read(identity_invitation_key_id)
 
-    if delivery == 'manual':
+    if data.delivery == 'manual':
         return wa.JSONResponse(
-            json=model.identity_invitation_key.format(identity_invitation_key_id),
+            json=schemas.IdentityInviteManualResponse(key=converters.symmetric_to_schema(identity_invitation.key)).model_dump(),
             status_code=200
         )
     return wa.Response(

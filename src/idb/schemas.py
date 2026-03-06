@@ -64,7 +64,7 @@ class BoundaryPermission(CRDPermission):
     update: BoundaryUpdatePermission|None
 
 class BoundaryGrant(APIBase):
-    type: typing.Literal["boundary"]
+    type: typing.Literal["boundary"] = "boundary"
     filter: BoundaryFilter
     permission: BoundaryPermission
 
@@ -75,7 +75,7 @@ class TagPermission(CRDPermission):
     pass
 
 class TagGrant(APIBase):
-    type: typing.Literal["tag"]
+    type: typing.Literal["tag"] = "tag"
     filter: TagFilter
     permission: TagPermission
 
@@ -86,13 +86,13 @@ class RoleUpdatePermission(APIBase):
     member_list: bool
 
 class RolePermission(CRDPermission):
-    update: RoleUpdatePermission
+    update: RoleUpdatePermission|None
 
 class RoleFilter(APIBase):
     name: str|None
 
 class RoleGrant(APIBase):
-    type: typing.Literal["role"]
+    type: typing.Literal["role"] = "role"
     filter: RoleFilter
     permission: RolePermission
 
@@ -117,7 +117,7 @@ class IdentityFilter(TripletFilter):
     pass
 
 class IdentityGrant(APIBase):
-    type: typing.Literal["identity"]
+    type: typing.Literal["identity"] = "identity"
     filter: IdentityFilter
     permission: IdentityPermission
 
@@ -134,70 +134,17 @@ class SSHFilter(TripletFilter):
     pass
 
 class SSHGrant(APIBase):
-    type: typing.Literal["ssh"]
+    type: typing.Literal["ssh"] = "ssh"
     filter: SSHFilter
     permission: SSHPermission
 
 class InvalidGrant(APIBase):
-    type: typing.Literal["invalid"]
+    type: typing.Literal["invalid"] = "invalid"
 
 Grant = typing.Annotated[
     BoundaryGrant | TagGrant | RoleGrant | IdentityGrant | SSHGrant | InvalidGrant,
     pydantic.Field(discriminator="type")
 ]
-
-# --- Entity Schemas (Read Models) ---
-
-#class Directory(APIBase):
-#    initialize: str
-#    accept_invitation: str
-#    login: str
-#    boundary: str
-#    tag: str
-#    role: str
-#    identity: str
-#    ssh: str
-#
-#class TagRead(APIBase):
-#    id: int
-#    name: str
-#    value: str
-#
-#class BoundaryRead(APIBase):
-#    id: int
-#    name: str
-#    description: str
-#    ceiling_list: Optional[List[Grant]] = None
-#    denied_list: List[Grant]
-#
-#class RoleMember(APIBase):
-#    id: int
-#    name: str
-#
-#class RoleRead(APIBase):
-#    id: int
-#    name: str
-#    description: str
-#    grant_list: List[Grant]
-#    member_list: List[RoleMember]
-#
-#class IdentityTagRead(APIBase):
-#    id: int
-#    name: str
-#    value: str
-#
-#class IdentityBoundaryRead(APIBase):
-#    id: int
-#    name: str
-#
-#class IdentityRead(APIBase):
-#    id: int
-#    name: str
-#    tags: List[IdentityTagRead]
-#    boundaries: List[IdentityBoundaryRead]
-#
-#class InvitationRead(APIBase):
-#    key: SymmetricJWK
 
 # --- Tag ---
 
@@ -238,69 +185,165 @@ class BoundaryCreateResponse(APIBase):
     boundary: Boundary
 
 class BoundaryUpdateRequest(APIBase):
-    name: str
-    description: str
+    name: str = None
+    description: str = None
     ceiling_list: list[Grant] | None = None
-    denied_list: list[Grant]
+    denied_list: list[Grant] = None
 
 class BoundaryUpdateResponse(APIBase):
     boundary: Boundary
 
+# --- Role ---
 
-#class AcceptInvitationRequest(BaseModel):
-#    account_public_key: PublicJWK
-#    nonce: str
-#
-#class LoginRequest(BaseModel):
-#    session_public_key: PublicJWK
-#    nonce: str
-#
-#class CreateBoundaryRequest(BaseModel):
-#    name: str
-#    description: Optional[str] = None
-#
-#class UpdateBoundaryRequest(BaseModel):
-#    name: Optional[str] = None
-#    description: Optional[str] = None
-#    denied_list: Optional[List[Grant]] = None
-#    ceiling_list: Optional[List[Grant]] = None
-#
-#class CreateRoleRequest(BaseModel):
-#    name: str
-#    description: Optional[str] = None
-#
-#class UpdateRoleRequest(BaseModel):
-#    name: Optional[str] = None
-#    description: Optional[str] = None
-#    grant_list: Optional[List[Grant]] = None
-#    member_list: Optional[List[RoleMember]] = None
-#
-#class IdentityTagId(BaseModel):
-#    id: int
-#
-#class IdentityTagNameValue(BaseModel):
-#    name: str
-#    value: str
-#
-#IdentityTagInput = Union[IdentityTagId, IdentityTagNameValue]
-#
-#class CreateIdentityRequest(BaseModel):
-#    name: str
-#    boundaries: List[IdentityBoundaryRead] # Using this as it matches {id, name}
-#    tags: Optional[List[IdentityTagInput]] = None
-#
-#class UpdateIdentityTagOperation(BaseModel):
-#    type: Literal["set", "add", "del"]
-#    values: List[IdentityTagInput]
-#
-#class UpdateIdentityRequest(BaseModel):
-#    name: Optional[str] = None
-#    tags: Optional[List[UpdateIdentityTagOperation]] = None
-#
-#class SshUserCertificateRequest(BaseModel):
-#    hostname: str
-#    username: str
-#    public_key: PublicJWK
-#
-#class SshHostCertificateRequest(BaseModel):
-#    public_keys: List[PublicJWK]
+class RoleMember(APIBase):
+    id: int
+    name: str
+
+class Role(APIBase):
+    id: int
+    name: str
+    description: str
+    grant_list: list[Grant]
+    member_list: list[RoleMember]
+
+
+class RoleListResponse(APIBase):
+    roles: list[Role]
+
+
+class RoleCreateRequest(APIBase):
+    name: str
+    description: str = ''
+
+class RoleUpdateRequest(APIBase):
+    name: str = None
+    description: str = None
+    grant_list: list[Grant] = None
+    member_list: list[RoleMember] = None
+
+# --- Identity ---
+
+class IdentityBoundary(APIBase):
+    id: int
+    name: str
+
+class IdentityTagNameValue(APIBase):
+    name: str
+    value: str
+
+class Identity(APIBase):
+    id: int
+    name: str
+    tags: list[Tag]
+    boundaries: list[IdentityBoundary]
+
+class IdentityListResponse(APIBase):
+    identities: list[Identity]
+
+
+class IdentityBoundaryCreate(APIBase):
+    id: int = None
+    name: str = None
+
+class IdentityCreateRequest(APIBase):
+    name: str
+    tag_id_list: list[int] = []
+    tag_name_value_list: list[IdentityTagNameValue] = []
+    boundary_id_list: list[int] = []
+    boundary_name_list: list[str] = []
+
+    @pydantic.model_validator(mode='after')
+    def validate_tags_and_boundaries(self):
+        if len(self.tag_name_value_list) > 0 and len(self.tag_id_list) > 0:
+            raise ValueError("Cannot specify both 'tag_id_list' and 'tag_name_value_list'")
+        if len(self.boundary_name_list) > 0 and len(self.boundary_id_list) > 0:
+            raise ValueError("Cannot specify both 'boundary_id_list' and 'boundary_name_value_list'")
+        return self
+
+class IdentityCreateResponse(Identity):
+    pass
+
+
+class IdentityTagListOperation(APIBase):
+    tag_id_list: list[int] = []
+    tag_name_value_list: list[IdentityTagNameValue] = []
+    
+    @pydantic.model_validator(mode='after')
+    def validate_tags_and_boundaries(self):
+        if len(self.tag_name_value_list) > 0 and len(self.tag_id_list) > 0:
+            raise ValueError("Cannot specify both 'tag_id_list' and 'tag_name_value_list'")
+        return self
+
+class IdentityTagAddOperation(IdentityTagListOperation):
+    type: typing.Literal["add"] = "add"
+
+class IdentityTagDelOperation(IdentityTagListOperation):
+    type: typing.Literal["del"] = "del"
+
+class IdentityTagSetOperation(IdentityTagListOperation):
+    type: typing.Literal["set"] = "set"
+
+IdentityTagOperation = typing.Annotated[
+    IdentityTagAddOperation | IdentityTagDelOperation | IdentityTagSetOperation,
+    pydantic.Field(discriminator="type")
+]
+
+class IdentityUpdateRequest(APIBase):
+    name: str = None
+    tags: list[IdentityTagOperation] = []
+
+class IdentityInviteRequest(APIBase):
+    delivery: typing.Literal["manual", "email"]
+
+class IdentityInviteManualResponse(APIBase):
+    key: SymmetricJWK
+
+
+# --- SSH ---
+
+
+class SSHHostCertificateRequest(APIBase):
+    public_keys: list[PublicJWK]
+
+
+class SSHCertificateResponse(APIBase):
+    certificates: list[str]
+
+
+class SSHHostCertificateResponse(SSHCertificateResponse):
+    pass
+
+
+class SSHUserCertificateRequest(APIBase):
+    hostname: str
+    username: str
+    public_key: PublicJWK
+
+
+class SSHUserCertificateResponse(SSHCertificateResponse):
+    pass
+
+
+# --- Initialization/login ---
+
+class DirectoryReadResponse(APIBase):
+    initialize: str
+    accept_invitation: str
+    login: str
+    boundary: str
+    tag: str
+    role: str
+    identity: str
+    ssh: str
+
+
+class InitializeResponse(APIBase):
+    key: SymmetricJWK
+
+
+class AcceptInvitationRequest(APIBase):
+    account_public_key: PublicJWK
+
+
+class LoginRequest(APIBase):
+    session_public_key: PublicJWK

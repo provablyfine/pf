@@ -1,16 +1,16 @@
 import time
 import base64
 
-import json
-
 from ... import wa
 from ... import jwk
 from ... import ssh
+from ... import schemas
 
 from .. import db
 from .. import model
 from .. import signature
 from .. import grant
+from .. import converters
 from ..context import ctx
 
 
@@ -25,7 +25,7 @@ def _read_current(type: db.SigningKeyType, staging_period: int):
 
 @signature.verify_session
 def sign_host_certificate(request: wa.Request) -> wa.Response:
-    data = json.loads(request.body)
+    data = schemas.SSHHostCertificateRequest.model_validate_json(request.body)
     caller = ctx.db.identity.read_one(id=ctx.identity_id)
 
     signers = _read_current(db.SigningKeyType.HOST, ctx.config.host_key_staging_period)
@@ -34,8 +34,8 @@ def sign_host_certificate(request: wa.Request) -> wa.Response:
     now = int(time.time())
 
     certificates = []
-    for key in data['public_keys']:
-        public_key = jwk.Public.from_dict(key)
+    for key in data.public_keys:
+        public_key = converters.public_from_schema(key)
         cert = ssh.cert.Cert.create_host(
             public_key=public_key,
             serial_number=serial_number,
@@ -62,24 +62,22 @@ def sign_host_certificate(request: wa.Request) -> wa.Response:
 
     return wa.JSONResponse(
         status_code=200,
-        json={
-            'certificates': [base64.b64encode(c.to_openssh()).decode('utf-8') for c in certificates]
-        }
+        json=schemas.SSHHostCertificateResponse(certificates=[converters.cert_to_schema(c) for c in certificates]).model_dump(),
     )
 
 
 @signature.verify_session
 def sign_user_certificate(request: wa.Request) -> wa.Response:
-    data = json.loads(request.body)
+    data = schemas.SSHUserCertificateRequest.model_validate_json(request.body)
     caller = ctx.db.identity.read_one(id=ctx.identity_id)
-    host = model.identity.read_one(name=data['hostname'])
+    host = model.identity.read_one(name=data.hostname)
     if host is None:
         return wa.ProblemResponse(status_code=404, title='Unknown host')
 
     grants = grant.Grants.create()
-    grants_allowed = grants.ssh(host.id, host.tag_id_list, host.boundary_id_list).list_can_username(data['username'])
+    grants_allowed = grants.ssh(host.id, host.tag_id_list, host.boundary_id_list).list_can_username(data.username)
 
-    public_key = jwk.Public.from_dict(data['public_key'])
+    public_key = converters.public_from_schema(data.public_key)
     certificates = []
     signers = _read_current(db.SigningKeyType.USER, ctx.config.user_key_staging_period)
     signer = signers[0]
@@ -97,7 +95,7 @@ def sign_user_certificate(request: wa.Request) -> wa.Response:
                 public_key=public_key,
                 serial_number=serial_number,
                 identifier=f'{ctx.identity_id}:{caller.name}',
-                principals=[f'{data["username"]}@{host.id}'],
+                principals=[f'{data.username}@{host.id}'],
                 valid_after=now-10,
                 valid_before=now+ctx.config.user_certificate_lifetime,
                 critical_options=ssh.cert.CriticalOptions(force_command=command),
@@ -130,9 +128,7 @@ def sign_user_certificate(request: wa.Request) -> wa.Response:
 
     return wa.JSONResponse(
         status_code=200,
-        json={
-            'certificates': [base64.b64encode(c.to_openssh()).decode('utf-8') for c in certificates]
-        }
+        json=schemas.SSHUserCertificateResponse(certificates=[converters.cert_to_schema(c) for c in certificates]).model_dump(),
     )
 
 

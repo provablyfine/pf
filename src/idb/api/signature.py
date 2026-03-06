@@ -160,9 +160,8 @@ def verify_invitation(f):
         now = int(time.time())
         if invitation.expires_at <= now:
             return wa.ProblemResponse(status_code=403, title='Invitation is expired')
-        key = jwk.Symmetric.from_bytes(invitation.key)
-        assert key.thumbprint() == key_id
-        verify(request, key_id=f'invitation:{key_id}', key=key)
+        assert invitation.key.thumbprint() == key_id
+        verify(request, key_id=f'invitation:{key_id}', key=invitation.key)
         request.state.invitation = invitation
         with ctx.set_identity_id(invitation.identity_id):
             return f(request, *args, **kwargs)

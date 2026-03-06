@@ -95,9 +95,9 @@ def update_endpoint(request: wa.Request) -> wa.Response:
     update_query = {}
     converter = converters.GrantConverter()
     if 'name' in data.model_fields_set:
-        update_query['name'] = data['name']
+        update_query['name'] = data.name
     if 'description' in data.model_fields_set:
-        update_query['description'] = data['description']
+        update_query['description'] = data.description
     if 'denied_list' in data.model_fields_set:
         if request.path_params.boundary_id in identity.boundary_id_list:
             return wa.ProblemResponse(status_code=403, title='Not allowed to update denied list on boundary that applies to self')

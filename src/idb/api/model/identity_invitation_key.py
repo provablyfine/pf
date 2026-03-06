@@ -1,9 +1,23 @@
 import time
+import dataclasses
 
 from ... import jwk
 from ..context import ctx
 
 from . import audit_log
+
+@dataclasses.dataclass
+class IdentityInvitationKey:
+    id: str
+    key: jwk.Symmetric
+    identity_id: int
+    created_at: int
+    expires_at: int
+    is_revoked: bool
+    is_accepted: bool
+    revoked_at: int|None = None
+    accepted_at: int|None = None
+    accepted_public_key_id: str|None = None
 
 
 def create(identity_id: int, expiration_delay_s: int) -> str:
@@ -41,7 +55,9 @@ def accept(id: str, public_key_id):
     audit_log.create('identity-invitation-accepted', id=invitation.id, identity_id=invitation.identity_id)
 
 
-def revoke(invitation: str):
+def revoke(id: str):
+    # XXX: code entirely bogus here.
+    invitation = read(id)
     now = int(time.time())
     assert not invitation.is_accepted
     assert not invitation.is_revoked
@@ -50,17 +66,20 @@ def revoke(invitation: str):
     audit_log.create('identity-invitation-revoked', id=invitation.id, identity_id=invitation.identity_id)
 
 
-def read(id: str):
+def read(id: str) -> IdentityInvitationKey|None:
     invitation = ctx.db.identity_invitation_key.read_one(id=id)
     if invitation is None:
         return None
-    key =  ctx.kek.decrypt(invitation.key)
-    return invitation._replace(key=key)
-
-
-def format(id: str):
-    invitation = read(id)
-    key = jwk.Symmetric.from_bytes(invitation.key)
-    return {
-        'key': key.to_dict()
-    }
+    key =  jwk.Symmetric.from_bytes(ctx.kek.decrypt(invitation.key))
+    return IdentityInvitationKey(
+        id=invitation.id,
+        key=key,
+        identity_id=invitation.identity_id,
+        created_at=invitation.created_at,
+        expires_at=invitation.expires_at,
+        is_revoked=invitation.is_revoked,
+        is_accepted=invitation.is_accepted,
+        revoked_at=invitation.revoked_at,
+        accepted_at=invitation.accepted_at,
+        accepted_public_key_id=invitation.accepted_public_key_id,
+    )

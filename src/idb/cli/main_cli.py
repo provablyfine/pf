@@ -38,11 +38,9 @@ def _config_function(args):
 def _accept_function(args):
     c = config.Config.load(args.config)
     idb = client.Client(c)
-    nonce = secrets.token_hex(16)
     auth = idb.invitation_auth(account=args.key, invitation=args.invitation)
-    response = auth.post(url=c.directory['accept-invitation'], json={
-        'account_public_key': auth.public_key,
-        'nonce': nonce,
+    response = auth.post(url=c.directory['accept_invitation'], json={
+        'account_public_key': auth.public_key
     })
     if response.status_code != 204:
         raise exceptions.UI(f'Unable to accept invitation successfully: {response.text}')
@@ -71,11 +69,9 @@ def _login_function(args):
             raise exceptions.UI('Unable to parse data either as PEM or SSH format')
         c.session_key = args.session_key
 
-    nonce = secrets.token_hex(16)
     auth = idb.login_auth(account=c.account_key, session=c.session_key)
     response = auth.post(url=c.directory['login'], json={
-        'session_public_key': session_key.public().to_dict(),
-        'nonce': nonce
+        'session_public_key': session_key.public().to_dict()
     })
     if response.status_code != 204:
         raise exceptions.UI(f'Unable to login successfully: {response.text}')

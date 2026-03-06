@@ -16,8 +16,8 @@ class Boundary:
 
 
 def create(name: str, description: str, ceiling_list: list[grant.Grant]|None, denied_list: list[grant.Grant]) -> int:
-    db_ceiling_list = None if ceiling_list is None else [g.to_db_dict() for g in ceiling_list]
-    db_denied_list = [g.to_db_dict() for g in denied_list]
+    db_ceiling_list = None if ceiling_list is None else [grant.serialize(g) for g in ceiling_list]
+    db_denied_list = [grant.serialize(g) for g in denied_list]
     boundary_id = ctx.db.boundary.create(
         name=name,
         description=description,
@@ -33,8 +33,8 @@ def _from_db(b):
         id=b.id,
         name=b.name,
         description=b.description,
-        ceiling_list=None if b.ceiling_list is None else [grant.Grant.from_db_dict(p) for p in b.ceiling_list],
-        denied_list=[grant.Grant.from_db_dict(p) for p in b.denied_list],
+        ceiling_list=None if b.ceiling_list is None else [grant.deserialize(g) for g in b.ceiling_list],
+        denied_list=[grant.deserialize(g) for g in b.denied_list],
     )
 
 
@@ -85,13 +85,3 @@ def update(id: int, name: str=None, description: str=None, ceiling_list: list[gr
     if len(update_fields) == 0:
         return
     ctx.db.boundary.update(**update_fields).where(id=id)
-
-
-def to_client_dict(boundary, serializer: grant.ClientSerializer) -> dict:
-    return {
-        'id': boundary.id,
-        'name': boundary.name,
-        'description': boundary.description,
-        'ceiling_list': None if boundary.ceiling_list is None else [g.to_client_dict(serializer) for g in boundary.ceiling_list],
-        'denied_list': [g.to_client_dict(serializer) for g in boundary.denied_list],
-    }

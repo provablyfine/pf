@@ -1,8 +1,12 @@
 import logging
+import base64
 
 from .. import schemas
-from .context import ctx
+from .. import jwk
+from .. import ssh
+
 from . import model
+from .context import ctx
 
 
 logger = logging.getLogger(__name__)
@@ -78,24 +82,20 @@ class GrantConverter:
         return {i.id: i.name for i in ctx.db.identity.read_all(id=identity_id_list)}
 
 
-def tag_to_schema(tag) -> schemas.Tag:
-    return schemas.Tag(id=tag.id, name=tag.name, value=tag.value)
-
-
 def grant_to_schema(converter: GrantConverter, grant: model.grant.Grant) -> schemas.Grant:
     match grant.type:
         case 'invalid':
             g = schemas.InvalidGrant()
         case 'tag':
-            filter = schemas.TagFilter(None if grant.filter.id is None else converter.to_tag_list([grant.filter.id])[0])
-            permission = schemas.TagPermission(create=grant.create, read=grant.read, delete=grant.delete)
+            filter = schemas.TagFilter(name_value=None if grant.filter.id is None else converter.to_tag_list([grant.filter.id])[0])
+            permission = schemas.TagPermission(create=grant.permission.create, read=grant.permission.read, delete=grant.permission.delete)
             g = schemas.TagGrant(filter=filter, permission=permission)
         case 'boundary':
-            filter = schemas.BoundaryFilter(None if grant.filter.id is None else converter.to_boundary_list([grant.filter.id])[0])
+            filter = schemas.BoundaryFilter(name=None if grant.filter.id is None else converter.to_boundary_list([grant.filter.id])[0])
             permission = schemas.BoundaryPermission(
                 create=grant.permission.create,
                 read=grant.permission.read,
-                update=schemas.BoundaryUpdatePermission(
+                update=None if grant.permission.update is None else schemas.BoundaryUpdatePermission(
                     name=grant.permission.update.name,
                     description=grant.permission.update.description,
                     ceiling_list=grant.permission.update.ceiling_list,
@@ -105,11 +105,11 @@ def grant_to_schema(converter: GrantConverter, grant: model.grant.Grant) -> sche
             )
             g = schemas.BoundaryGrant(filter=filter, permission=permission)
         case 'role':
-            filter = schemas.RoleFilter(None if grant.filter.id is None else converter.to_role_list([grant.filter.id])[0])
+            filter = schemas.RoleFilter(name=None if grant.filter.id is None else converter.to_role_list([grant.filter.id])[0])
             permission = schemas.RolePermission(
                 create=grant.permission.create,
                 read=grant.permission.read,
-                update=schemas.RoleUpdatePermission(
+                update=None if grant.permission.update is None else schemas.RoleUpdatePermission(
                     name=grant.permission.update.name,
                     description=grant.permission.update.description,
                     grant_list=grant.permission.update.grant_list,
@@ -121,26 +121,30 @@ def grant_to_schema(converter: GrantConverter, grant: model.grant.Grant) -> sche
         case 'identity':
             filter = schemas.IdentityFilter(
                 name=None if grant.filter.id is None else converter.to_identity_list([grant.filter.id])[0],
-                tag_list=None if grant.filter.tag_list is None else converter.to_tag_list(grant.filter.tag_list),
-                boundary_list=None if grant.filter.boundary_list is None else converter.to_boundary_list(grant.filter.boundary_list),
+                tag_list=None if grant.filter.tag_id_list is None else converter.to_tag_list(grant.filter.tag_id_list),
+                boundary_list=None if grant.filter.boundary_id_list is None else converter.to_boundary_list(grant.filter.boundary_id_list),
             )
             permission = schemas.IdentityPermission(
-                create=grant.permission.create,
+                create=None if grant.permission.create is None else schemas.IdentityCreatePermission(
+                    allowed=grant.permission.create.allowed,
+                    allowed_tag_list=None if grant.permission.create.allowed_tag_id_list is None else converter.to_tag_list(grant.permission.create.allowed_tag_id_list),
+                    required_boundary_list=None if grant.permission.create.required_boundary_id_list is None else converter.to_boundary_list(grant.permission.create.required_boundary_id_list)
+                ),
                 read=grant.permission.read,
-                update=schemas.IdentityUpdatePermission(
+                update=None if grant.permission.update is None else schemas.IdentityUpdatePermission(
                     name=grant.permission.update.name,
                 ),
                 delete=grant.permission.delete,
-                add_tag_list=None if grant.permission.add_tag_list is None else converter.to_tag_list(grant.permission.add_tag_list),
-                del_tag_list=None if grant.permission.del_tag_list is None else converter.to_tag_list(grant.permission.del_tag_list),
+                add_tag_list=None if grant.permission.add_tag_id_list is None else converter.to_tag_list(grant.permission.add_tag_id_list),
+                del_tag_list=None if grant.permission.del_tag_id_list is None else converter.to_tag_list(grant.permission.del_tag_id_list),
                 invite_list=grant.permission.invite_list,
             )
             g = schemas.IdentityGrant(filter=filter, permission=permission)
         case 'ssh':
             filter = schemas.SSHFilter(
                 name=None if grant.filter.id is None else converter.to_identity_list([grant.filter.id])[0],
-                tag_list=None if grant.filter.tag_list is None else converter.to_tag_list(grant.filter.tag_list),
-                boundary_list=None if grant.filter.boundary_list is None else converter.to_boundary_list(grant.filter.boundary_list),
+                tag_list=None if grant.filter.tag_id_list is None else converter.to_tag_list(grant.filter.tag_id_list),
+                boundary_list=None if grant.filter.boundary_id_list is None else converter.to_boundary_list(grant.filter.boundary_id_list),
             )
             permission = schemas.SSHPermission(
                     force_command_list=grant.permission.force_command_list,
@@ -161,15 +165,15 @@ def grant_from_schema(converter: GrantConverter, grant: schemas.Grant) -> model.
         case 'invalid':
             g = model.grant.InvalidGrant()
         case 'tag':
-            filter = model.grant.TagFilter(None if grant.filter.name_value is None else converter.from_tag_list([grant.filter.name_value])[0])
+            filter = model.grant.TagFilter(id=None if grant.filter.name_value is None else converter.from_tag_list([grant.filter.name_value])[0])
             permission = model.grant.TagPermission(create=grant.create, read=grant.read, delete=grant.delete)
             g = model.grant.TagGrant(filter=filter, permission=permission)
         case 'boundary':
-            filter = model.grant.BoundaryFilter(None if grant.filter.name is None else converter.from_boundary_list([grant.filter.name])[0])
+            filter = model.grant.BoundaryFilter(id=None if grant.filter.name is None else converter.from_boundary_list([grant.filter.name])[0])
             permission = model.grant.BoundaryPermission(
                 create=grant.permission.create,
                 read=grant.permission.read,
-                update=model.grant.BoundaryUpdatePermission(
+                update=None if grant.permission.update is None else model.grant.BoundaryUpdatePermission(
                     name=grant.permission.update.name,
                     description=grant.permission.update.description,
                     ceiling_list=grant.permission.update.ceiling_list,
@@ -179,11 +183,11 @@ def grant_from_schema(converter: GrantConverter, grant: schemas.Grant) -> model.
             )
             g = model.grant.BoundaryGrant(filter=filter, permission=permission)
         case 'role':
-            filter = model.grant.RoleFilter(None if grant.filter.name is None else converter.from_role_list([grant.filter.name])[0])
+            filter = model.grant.RoleFilter(id=None if grant.filter.name is None else converter.from_role_list([grant.filter.name])[0])
             permission = model.grant.RolePermission(
                 create=grant.permission.create,
                 read=grant.permission.read,
-                update=model.grant.RoleUpdatePermission(
+                update=None if grant.permission.update is None else model.grant.RoleUpdatePermission(
                     name=grant.permission.update.name,
                     description=grant.permission.update.description,
                     grant_list=grant.permission.update.grant_list,
@@ -195,26 +199,30 @@ def grant_from_schema(converter: GrantConverter, grant: schemas.Grant) -> model.
         case 'identity':
             filter = model.grant.IdentityFilter(
                 id=None if grant.filter.name is None else converter.from_identity_list([grant.filter.name])[0],
-                tag_list=None if grant.filter.tag_list is None else converter.from_tag_list(grant.filter.tag_list),
-                boundary_list=None if grant.filter.boundary_list is None else converter.from_boundary_list(grant.filter.boundary_list),
+                tag_id_list=None if grant.filter.tag_list is None else converter.from_tag_list(grant.filter.tag_list),
+                boundary_id_list=None if grant.filter.boundary_list is None else converter.from_boundary_list(grant.filter.boundary_list),
             )
             permission = model.grant.IdentityPermission(
-                create=grant.permission.create,
+                create=None if grant.permission.create is None else model.grant.IdentityCreatePermission(
+                    allowed=grant.permission.create.allowed,
+                    allowed_tag_id_list=None if grant.permission.create.allowed_tag_list is None else converter.from_tag_list(grant.permission.create.allowed_tag_list),
+                    required_boundary_id_list=None if grant.permission.create.required_boundary_list is None else converter.from_boundary_list(grant.permission.create.required_boundary_list),
+                ),
                 read=grant.permission.read,
-                update=model.grant.IdentityUpdatePermission(
+                update=None if grant.permission.update is None else model.grant.IdentityUpdatePermission(
                     name=grant.permission.update.name,
                 ),
                 delete=grant.permission.delete,
-                add_tag_list=None if grant.permission.add_tag_list is None else converter.from_tag_list(grant.permission.add_tag_list),
-                del_tag_list=None if grant.permission.del_tag_list is None else converter.from_tag_list(grant.permission.del_tag_list),
+                add_tag_id_list=None if grant.permission.add_tag_list is None else converter.from_tag_list(grant.permission.add_tag_list),
+                del_tag_id_list=None if grant.permission.del_tag_list is None else converter.from_tag_list(grant.permission.del_tag_list),
                 invite_list=grant.permission.invite_list,
             )
             g = schemas.IdentityGrant(filter=filter, permission=permission)
         case 'ssh':
             filter = model.grant.SSHFilter(
                 id=None if grant.filter.name is None else converter.from_identity_list([grant.filter.name])[0],
-                tag_list=None if grant.filter.tag_list is None else converter.to_tag_list(grant.filter.tag_list),
-                boundary_list=None if grant.filter.boundary_list is None else converter.to_boundary_list(grant.filter.boundary_list),
+                tag_id_list=None if grant.filter.tag_list is None else converter.to_tag_list(grant.filter.tag_list),
+                boundary_id_list=None if grant.filter.boundary_list is None else converter.to_boundary_list(grant.filter.boundary_list),
             )
             permission = model.grant.SSHPermission(
                     force_command_list=grant.permission.force_command_list,
@@ -230,11 +238,66 @@ def grant_from_schema(converter: GrantConverter, grant: schemas.Grant) -> model.
             assert False
     return g
 
+
+def symmetric_to_schema(key: jwk.Symmetric) -> schemas.SymmetricJWK:
+    return schemas.SymmetricJWK(**key.to_dict())
+
+
+def public_from_schema(key: schemas.PublicJWK) -> jwk.Public:
+    return jwk.Public.from_dict(key.model_dump())
+
+
+def public_to_schema(key: jwk.Public) -> schemas.PublicJWK:
+    return schemas.PublicJWK(**key.to_dict())
+
+
+def cert_to_schema(c: ssh.cert.Cert) -> str:
+    return base64.b64encode(c.to_openssh()).decode('utf-8')
+
+
+def tag_to_schema(tag) -> schemas.Tag:
+    return schemas.Tag(id=tag.id, name=tag.name, value=tag.value)
+
+
 def boundary_to_schema(converter: GrantConverter, boundary: model.boundary.Boundary) -> schemas.Boundary:
     return schemas.Boundary(
         id=boundary.id,
         name=boundary.name,
         description=boundary.description,
-        ceiling_list=[grant_to_schema(converter, g) for g in boundary.ceiling_list],
+        ceiling_list=None if boundary.ceiling_list is None else [grant_to_schema(converter, g) for g in boundary.ceiling_list],
         denied_list=[grant_to_schema(converter, g) for g in boundary.denied_list],
     )
+
+def role_to_schema(converter: GrantConverter, role: model.role.Role) -> schemas.Role:
+    members = ctx.db.identity.read_all(id=list(set(role.member_id_list)))
+    role_members = [schemas.RoleMember(id=m.id, name=m.name) for m in members]
+    return schemas.Role(
+        id=role.id,
+        name=role.name,
+        description=role.description,
+        grant_list=[grant_to_schema(converter, g) for g in role.grant_list],
+        member_list=role_members,
+    )
+
+
+def identity_list_to_schema(identities: list[model.identity.Identity]) -> list[schemas.Identity]:
+    # read the data we need to format fully the output.
+    tags = ctx.db.tag.read_all(id=list(set(tag_id for i in identities for tag_id in i.tag_id_list)))
+    boundaries = ctx.db.boundary.read_all(id=list(set(boundary_id for i in identities for boundary_id in i.boundary_id_list)))
+    tag_by_id = {t.id: tag_to_schema(t) for t in tags}
+    boundary_by_id = {b.id: schemas.IdentityBoundary(id=b.id, name=b.name) for b in boundaries}
+
+
+    def _one(i: model.identity.Identity) -> schemas.Identity:
+        return schemas.Identity(
+            id=i.id,
+            name=i.name,
+            tags=[tag_by_id[tag_id] for tag_id in i.tag_id_list],
+            boundaries=[boundary_by_id[boundary_id] for boundary_id in i.boundary_id_list],
+        )
+
+    return [_one(i) for i in identities]
+
+
+def identity_to_schema(identity: model.identity.Identity) -> schemas.Identity:
+    return identity_list_to_schema([identity])[0]

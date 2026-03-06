@@ -17,7 +17,7 @@ class Role:
 
 
 def create(name: str, description: str, grant_list: list[grant.Grant]) -> int:
-    grants = [p.to_db_dict() for p in grant_list]
+    grants = [grant.serialize(g) for g in grant_list]
     role_id = ctx.db.role.create(
         name=name,
         description=description,
@@ -32,7 +32,7 @@ def _from_db(role, member_id_list: list[int]) -> Role:
         id=role.id,
         name=role.name,
         description=role.description,
-        grant_list=[grant.Grant.from_db_dict(g) for g in role.grant_list],
+        grant_list=[grant.deserialize(g) for g in role.grant_list],
         member_id_list=member_id_list,
     )
 
@@ -69,11 +69,11 @@ def update(id: int, name: str=None, description: str=None, grant_list: list[gran
         )
 
     if grant_list is not None:
-        role_fields['grant_list'] = [p.to_db_dict() for p in grant_list]
+        role_fields['grant_list'] = [grant.serialize(g) for g in grant_list]
         audit_log.create(
             'role-update-grant-list',
             id=id,
-            permission_list=[p.to_db_dict() for p in grant_list],
+            permission_list=[grant.serialize(g) for g in grant_list],
 
         )
 
@@ -95,16 +95,3 @@ def update(id: int, name: str=None, description: str=None, grant_list: list[gran
             id=id,
             deleted_member_id_list=deleted_member_id_list,
         )
-
-
-def to_client_dict(role: Role, serializer: grant.ClientSerializer):
-    members = ctx.db.identity.read_all(id=list(set(role.member_id_list)))
-    serialized_members = [{'id': m.id, 'name': m.name} for m in members]
-    serialized = {
-        'id': role.id,
-        'name': role.name,
-        'description': role.description,
-        'grant_list': [g.to_client_dict(serializer) for g in role.grant_list],
-        'member_list': serialized_members,
-    }
-    return serialized

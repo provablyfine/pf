@@ -2,10 +2,12 @@ import json
 import sqlalchemy
 
 from ... import wa
+from ... import schemas
 
 from .. import signature
 from .. import grant
 from .. import model
+from .. import converters
 from ..context import ctx
 
 
@@ -25,11 +27,11 @@ def list_endpoint(request: wa.Request) -> wa.Response:
             continue
         output.append(role)
 
-    serializer = model.grant.ClientSerializer()
-    roles = [model.role.to_client_dict(b, serializer) for b in output]
+    converter = converters.GrantConverter()
+    roles = [converters.role_to_schema(converter, r) for r in output]
     return wa.JSONResponse(
         status_code=200,
-        json={'roles': roles},
+        json=schemas.RoleListResponse(roles=roles).model_dump(),
     )
 
 
@@ -39,18 +41,18 @@ def create_endpoint(request: wa.Request) -> wa.Response:
     if not grants.role(None).can_create():
         return wa.ProblemResponse(status_code=403, title='Not allowed to create role')
 
-    data = json.loads(request.body)
+    data = schemas.RoleCreateRequest.model_validate_json(request.body)
     try:
-        role_id = model.role.create(name=data['name'], description=data.get('description'), grant_list=[])
+        role_id = model.role.create(name=data.name, description=data.description, grant_list=[])
     except sqlalchemy.exc.IntegrityError:
-        return wa.ProblemResponse(status_code=400, title='Role already exists. Name must be unique.', detail=data['name'])
+        return wa.ProblemResponse(status_code=400, title='Role already exists. Name must be unique.', detail=data.name)
 
     role = model.role.read_one(id=role_id)
 
-    serializer = model.grant.ClientSerializer()
+    converter = converters.GrantConverter()
     return wa.JSONResponse(
         status_code=201,
-        json=model.role.to_client_dict(role, serializer),
+        json=converters.role_to_schema(converter, role).model_dump(),
     )
 
 
@@ -78,29 +80,29 @@ def delete_endpoint(request: wa.Request) -> wa.Response:
 def update_endpoint(request: wa.Request) -> wa.Response:
     role = model.role.read_one(id=request.path_params.role_id)
 
-    data = json.loads(request.body)
+    data = schemas.RoleUpdateRequest.model_validate_json(request.body)
     grants = grant.Grants.create()
-    for field_name, value in data.items():
+    for field_name in data.model_fields_set:
         if not grants.role(role.id).can_update(field_name):
             return wa.ProblemResponse(status_code=403, title='Not allowed to update role field', detail=field_name)
 
-    deserializer = model.grant.ClientDeserializer()
+    converter = converters.GrantConverter()
     role_update = {}
-    if 'name' in data and data['name'] != role.name:
-        role_update['name'] = data['name']
-    if 'description' in data and data['description'] != role.description:
-        role_update['description'] = data['description']
-    if 'grant_list' in data:
+    if 'name' in data.model_fields_set and data.name != role.name:
+        role_update['name'] = data.name
+    if 'description' in data.model_fields_set and data.description != role.description:
+        role_update['description'] = data.description
+    if 'grant_list' in data.model_fields_set:
         if ctx.identity_id in role.member_id_list:
             return wa.ProblemResponse(status_code=403, title='Not allowed to update grants on a role that applies to self')
-        role_update['grant_list'] = [model.grant.Grant.from_client_dict(p, deserializer) for p in data['grant_list']]
-    if 'member_list' in data:
-        members = ctx.db.identity.read_all(name=[m['name'] for m in data['member_list']])
+        role_update['grant_list'] = [converters.grant_from_schema(converter, g) for g in data.grant_list]
+    if 'member_list' in data.model_fields_set:
+        members = ctx.db.identity.read_all(name=[m['name'] for m in data.member_list])
         member_by_name = {m.name: m for m in members}
-        unresolved_members = [m['name'] for m in data['member_list'] if m['name'] not in member_by_name]
+        unresolved_members = [m['name'] for m in data.member_list if m['name'] not in member_by_name]
         if len(unresolved_members) > 0:
             return wa.ProblemResponse(status_code=400, title='Unable to resolve members', detail=', '.join(unresolved_members))
-        new_member_id_list = set(member_by_name[m['name']].id for m in data['member_list'])
+        new_member_id_list = set(member_by_name[m['name']].id for m in data.member_list)
         current_member_id_list = set(role.member_id_list)
         deleted_member_id_list = current_member_id_list.difference(new_member_id_list)
         added_member_id_list = new_member_id_list.difference(current_member_id_list)
@@ -112,8 +114,7 @@ def update_endpoint(request: wa.Request) -> wa.Response:
 
     role = model.role.read_one(id=request.path_params.role_id)
 
-    serializer = model.grant.ClientSerializer()
     return wa.JSONResponse(
         status_code=200,
-        json=model.role.to_client_dict(role, serializer),
+        json=converters.role_to_schema(converter, role).model_dump(),
     )

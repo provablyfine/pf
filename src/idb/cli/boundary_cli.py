@@ -19,7 +19,7 @@ def _boundaries(auth, id=None, name=None):
         params['name'] = name
     response = auth.get(auth.directory.boundary, params=params)
     if response.status_code != 200:
-        raise exceptions.UI(f'Unable to find boundary {",".join("=".join(kv) for kv in params.items())}')
+        raise exceptions.UI(f'Unable to find boundary. {response.json()["title"]}')
     boundaries = response.json()['boundaries']
     return boundaries
 

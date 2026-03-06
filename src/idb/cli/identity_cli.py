@@ -108,16 +108,28 @@ def _identity_delete_function(args):
         raise exceptions.UI(f'Unable to delete identity. {response.json()["title"]}')
 
 
+def _parse_tag(s):
+    equal = s.find('=')
+    if equal == -1:
+        raise exceptions.UI(f'Tag is invalid. Expected format: name=value. Got: {s}')
+    name = s[:equal]
+    value = s[equal+1:]
+    return {'name': name, 'value': value}
+
 def _identity_create_function(args):
     c = config.Config.load(args.config)
     idb = client.Client(c)
     auth = idb.session_auth(c.session_key)
-    boundaries = [_boundary(s) for s in args.boundary]
-    tags = [_tag(t) for t in args.tag]
+    boundary_id_list = [int(b) for b in args.boundary if b.isdigit()]
+    boundary_name_list = [b for b in args.boundary if not b.isdigit()]
+    tag_id_list = [int(t) for t in args.tag if t.isdigit()]
+    tag_name_value_list = [_parse_tag(t) for t in args.tag if not t.isdigit()]
     response = auth.post(idb.directory.identity, json={
         'name': args.name,
-        'boundaries': boundaries,
-        'tags': tags,
+        'boundary_id_list': boundary_id_list,
+        'boundary_name_list': boundary_name_list,
+        'tag_id_list': tag_id_list,
+        'tag_name_value_list': tag_name_value_list,
     })
     if response.status_code != 201:
         raise exceptions.UI(f'Unable to create identity. {response.json()["title"]}')
@@ -127,7 +139,7 @@ def _identity_invite_function(args):
     c = config.Config.load(args.config)
     idb = client.Client(c)
     auth = idb.session_auth(c.session_key)
-    response = auth.post(f'{idb.directory.identity}/{args.id}/invite', params={'delivery': args.delivery})
+    response = auth.post(f'{idb.directory.identity}/{args.id}/invite', json={'delivery': args.delivery})
     if response.status_code == 204:
         return
     elif response.status_code == 200:
@@ -148,6 +160,7 @@ def _identity_update_function(args):
     if response.status_code != 200:
         raise exceptions.UI(f'Unable to update identity. {response.json()["title"]}.')
 
+
 class TagAction(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         # Get the current list or initialize a new one
@@ -159,13 +172,24 @@ class TagAction(argparse.Action):
         setattr(namespace, self.dest, items)
 
 
+def _format_tag_op(op, values):
+    tag_id_list = [int(t) for t in values if t.isdigit()]
+    tag_name_value_list = [_parse_tag(t) for t in values if not t.isdigit()]
+    output = []
+    if len(tag_id_list) > 0:
+        output.append({'type': op, 'tag_id_list': tag_id_list})
+    if len(tag_name_value_list) > 0:
+        output.append({'type': op, 'tag_name_value_list': tag_name_value_list})
+    return output
+
+
 def _identity_tag_function(args):
 
     c = config.Config.load(args.config)
     idb = client.Client(c)
     auth = idb.session_auth(c.session_key)
 
-    ops = [{'type': op, 'values': [_tag(value) for value in values]} for op, values in args.ops]
+    ops = [op for op_type, values in args.ops for op in _format_tag_op(op_type, values)]
 
     response = auth.patch(f'{idb.directory.identity}/{args.id}', json={
         'tags': ops,

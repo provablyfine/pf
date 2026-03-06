@@ -11,8 +11,8 @@ class DBBase(pydantic.BaseModel):
 
 class TripletFilter(DBBase):
     id: int|None = None
-    tag_list: list[int]|None = None
-    boundary_list: list[int]|None = None
+    tag_id_list: list[int]|None = None
+    boundary_id_list: list[int]|None = None
 
 class CRDPermission(DBBase):
     create: bool
@@ -32,18 +32,18 @@ class BoundaryPermission(CRDPermission):
     update: BoundaryUpdatePermission | None
 
 class BoundaryGrant(DBBase):
-    type: typing.Literal["boundary"]
+    type: typing.Literal["boundary"] = "boundary"
     filter: BoundaryFilter
     permission: BoundaryPermission
 
 class TagFilter(DBBase):
-    name_value: str | None
+    id: int | None
 
 class TagPermission(CRDPermission):
     pass
 
 class TagGrant(DBBase):
-    type: typing.Literal["tag"]
+    type: typing.Literal["tag"] = "tag"
     filter: TagFilter
     permission: TagPermission
 
@@ -54,13 +54,13 @@ class RoleUpdatePermission(DBBase):
     member_list: bool
 
 class RolePermission(CRDPermission):
-    update: RoleUpdatePermission
+    update: RoleUpdatePermission|None
 
 class RoleFilter(DBBase):
-    name: str | None
+    id: str | None
 
 class RoleGrant(DBBase):
-    type: typing.Literal["role"]
+    type: typing.Literal["role"] = "role"
     filter: RoleFilter
     permission: RolePermission
 
@@ -76,7 +76,7 @@ class IdentityCreatePermission(DBBase):
                to create identities with LESS tags than allowed here.
                If None, any tag can be used. If list is empty, no tag
                can be used.
-      required_boundary_tag_list:
+      required_boundary_tag_id_list:
                The minimal list of boundaries that must be
                assigned to the newly-created identity at creation time.
                It is legal to create identities with MORE boundaries
@@ -84,8 +84,8 @@ class IdentityCreatePermission(DBBase):
                are required.
     """
     allowed: bool
-    allowed_tag_list: list[int] | None
-    required_boundary_list: list[int] | None
+    allowed_tag_id_list: list[int] | None
+    required_boundary_id_list: list[int] | None
 
 class IdentityUpdatePermission(DBBase):
     name: bool
@@ -95,15 +95,15 @@ class IdentityPermission(DBBase):
     read: bool
     update: IdentityUpdatePermission | None
     delete: bool
-    add_tag_list: list[str] | None
-    del_tag_list: list[str] | None
+    add_tag_id_list: list[str] | None
+    del_tag_id_list: list[str] | None
     invite_list: list[str] | None
 
 class IdentityFilter(TripletFilter):
     pass
 
 class IdentityGrant(DBBase):
-    type: typing.Literal["identity"]
+    type: typing.Literal["identity"] = "identity"
     filter: IdentityFilter
     permission: IdentityPermission
 
@@ -120,12 +120,12 @@ class SSHFilter(TripletFilter):
     pass
 
 class SSHGrant(DBBase):
-    type: typing.Literal["ssh"]
+    type: typing.Literal["ssh"] = "ssh"
     filter: SSHFilter
     permission: SSHPermission
 
 class InvalidGrant(DBBase):
-    type: typing.Literal["invalid"]
+    type: typing.Literal["invalid"] = "invalid"
 
 Grant = typing.Annotated[
     BoundaryGrant | TagGrant | RoleGrant | IdentityGrant | SSHGrant | InvalidGrant,

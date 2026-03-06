@@ -6,14 +6,15 @@ import json
 
 from .. import wa
 from .. import jwk
+from .. import schemas
 
 from . import db
-from . import openapi
 from . import model
 from . import signature
 from . import middleware
 from . import crypto_policy
 from . import endpoints
+from . import converters
 from .context import ctx
 
 
@@ -21,16 +22,16 @@ logger = logging.getLogger(__name__)
 
 
 def directory_endpoint(request: wa.Request) -> wa.Response:
-    return wa.JSONResponse(status_code=200, json={
-        'initialize': f'{request.app.config.base_url}/idb/initialize',
-        'accept-invitation': f'{request.app.config.base_url}/idb/accept-invitation',
-        'login': f'{request.app.config.base_url}/idb/login',
-        'boundary': f'{request.app.config.base_url}/idb/boundary',
-        'tag': f'{request.app.config.base_url}/idb/tag',
-        'role': f'{request.app.config.base_url}/idb/role',
-        'identity': f'{request.app.config.base_url}/idb/identity',
-        'ssh': f'{request.app.config.base_url}/idb/ssh',
-    })
+    return wa.JSONResponse(status_code=200, json=schemas.DirectoryReadResponse(
+        initialize=f'{request.app.config.base_url}/idb/initialize',
+        accept_invitation=f'{request.app.config.base_url}/idb/accept-invitation',
+        login=f'{request.app.config.base_url}/idb/login',
+        boundary=f'{request.app.config.base_url}/idb/boundary',
+        tag=f'{request.app.config.base_url}/idb/tag',
+        role=f'{request.app.config.base_url}/idb/role',
+        identity=f'{request.app.config.base_url}/idb/identity',
+        ssh=f'{request.app.config.base_url}/idb/ssh',
+    ).model_dump())
 
 
 def create_keys(key_type: db.SigningKeyType, crypto_key_type: jwk.KeyType, rotation_period: int, staging_period: int):
@@ -87,7 +88,7 @@ def initialize_endpoint(_: wa.Request) -> wa.Response:
         boundary_id_list=[root_boundary_id],
         tag_id_list=[],
     )
-    identity_grant_all = model.grant.Grant(
+    identity_grant_all = model.grant.IdentityGrant(
         filter=model.grant.IdentityFilter(id=None, tag_id_list=None, boundary_id_list=None),
         permission=model.grant.IdentityPermission(
             create=model.grant.IdentityCreatePermission(
@@ -103,7 +104,7 @@ def initialize_endpoint(_: wa.Request) -> wa.Response:
             invite_list=None,
         )
     )
-    ssh_grant_all = model.grant.Grant(
+    ssh_grant_all = model.grant.SSHGrant(
         filter=model.grant.SSHFilter(id=None, tag_id_list=None, boundary_id_list=None),
         permission=model.grant.SSHPermission(
             force_command_list=None,
@@ -115,7 +116,7 @@ def initialize_endpoint(_: wa.Request) -> wa.Response:
             permit_port_forwarding=True,
         )
     )
-    tag_grant_all = model.grant.Grant(
+    tag_grant_all = model.grant.TagGrant(
         filter=model.grant.TagFilter(id=None),
         permission=model.grant.TagPermission(
             create=True,
@@ -123,16 +124,16 @@ def initialize_endpoint(_: wa.Request) -> wa.Response:
             delete=True,
         ),
     )
-    role_grant_all = model.grant.Grant(
+    role_grant_all = model.grant.RoleGrant(
         filter=model.grant.RoleFilter(id=None),
-        permission=model.grant.BoundaryPermission(
+        permission=model.grant.RolePermission(
             create=True,
             read=True,
             update=None,
             delete=True,
         ),
     )
-    boundary_grant_all = model.grant.Grant(
+    boundary_grant_all = model.grant.BoundaryGrant(
         filter=model.grant.BoundaryFilter(id=None),
         permission=model.grant.BoundaryPermission(
             create=True,
@@ -163,17 +164,18 @@ def initialize_endpoint(_: wa.Request) -> wa.Response:
         identity_id=root_id,
         expiration_delay_s=600
     )
+    identity_invitation = model.identity_invitation_key.read(identity_invitation_key_id)
 
     return wa.JSONResponse(
-        json=model.identity_invitation_key.format(identity_invitation_key_id),
+        json=schemas.InitializeResponse(key=converters.symmetric_to_schema(identity_invitation.key)).model_dump(),
         status_code=200
     )
 
 
 @signature.verify_invitation
 def accept_invitation_endpoint(request: wa.Request) -> wa.Response:
-    data = json.loads(request.body)
-    account_key = jwk.Public.from_dict(data['account_public_key'])
+    data = schemas.AcceptInvitationRequest.model_validate_json(request.body)
+    account_key = converters.public_from_schema(data.account_public_key)
     crypto_policy.enforce_key_is_allowed(account_key)
 
     model.denylist.enforce_not_denied(account_key.thumbprint())
@@ -216,8 +218,8 @@ def accept_invitation_endpoint(request: wa.Request) -> wa.Response:
 
 @signature.verify_account
 def login_endpoint(request: wa.Request) -> wa.Response:
-    data = json.loads(request.body)
-    session_key = jwk.Public.from_dict(data['session_public_key'])
+    data = schemas.LoginRequest.model_validate_json(request.body)
+    session_key = converters.public_from_schema(data.session_public_key)
     crypto_policy.enforce_key_is_allowed(session_key)
 
     model.denylist.enforce_not_denied(session_key.thumbprint())
@@ -258,7 +260,7 @@ def create(conf):
     middlewares = [
         wa.debug_store.DebugStoreMiddleware(wa.debug_store.InMemoryDebugStore()),
         wa.backtrace.BacktraceMiddleware(),
-        openapi.create_middleware(conf.base_url),
+        wa.validation.Middleware(),
         middleware.KekContext(),
         middleware.ConfigContext(),
         middleware.DbContext(),

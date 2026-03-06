@@ -106,27 +106,3 @@ def update(id: int, name: str=None, added_tag_id_list: list[int]=None, deleted_t
             id=id,
             deleted_tag_id_list=deleted_tag_id_list,
         )
-
-
-def serialize(identities: list[Identity]) -> dict:
-    # read the data we need to format fully the output.
-    tags = ctx.db.tag.read_all(id=list(set(tag_id for i in identities for tag_id in i.tag_id_list)))
-    boundaries = ctx.db.boundary.read_all(id=list(set(boundary_id for i in identities for boundary_id in i.boundary_id_list)))
-    tag_by_id = {t.id: {'id': t.id, 'name': t.name, 'value': t.value} for t in tags}
-    boundary_by_id = {b.id: {'id': b.id, 'name': b.name} for b in boundaries}
-
-    def serialize_identity(i):
-        return {
-            'id': i.id,
-            'name': i.name,
-            'tags': [tag_by_id[tag_id] for tag_id in i.tag_id_list],
-            'boundaries': [boundary_by_id[boundary_id] for boundary_id in i.boundary_id_list],
-        }
-
-    # format the output in one go.
-    return {i.id: serialize_identity(i) for i in identities}
-
-
-def serialize_one(identity: Identity) -> dict:
-    by = serialize([identity])
-    return by[identity.id]
