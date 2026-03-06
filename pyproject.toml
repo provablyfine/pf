@@ -31,6 +31,14 @@ dev = [
     "coverage>=7.13.4",
     "gunicorn>=25.1.0",
     "jinja2>=3.1.6",
+    "pyright>=1.1.408",
     "pytest>=9.0.2",
     "pytest-xdist>=3.8.0",
 ]
+[tool.pyright]
+include = ["src/idb"]
+exclude = [
+"**/node_modules",
+"**/__pycache__",
+]
+typeCheckingMode = "standard"
