@@ -23,6 +23,7 @@ def create(name: str, description: str, grant_list: list[grant.Grant]) -> int:
         description=description,
         grant_list=grants,
     )
+    assert role_id is not None
     audit_log.create('role-create', id=role_id, name=name, description=description, grant_list=grants)
     return role_id
 
@@ -37,21 +38,29 @@ def _from_db(role, member_id_list: list[int]) -> Role:
     )
 
 
-def read_all(**kwargs):
+def read_all(**kwargs) -> list[Role]:
     roles = ctx.db.role.read_all(**kwargs)
     members = ctx.db.role_member.read_all(role_id=list(set(r.id for r in roles)))
     member_id_list_by_role_id = {key: [r.identity_id for r in group] for key, group in utils.group_by(members, key=lambda m: m.role_id)}
     return [_from_db(r, member_id_list_by_role_id.get(r.id, [])) for r in roles]
 
 
-def read_one(id):
+def read_one(id) -> Role|None:
     roles = read_all(id=id)
     if len(roles) == 0:
         return None
     return roles[0]
 
 
-def update(id: int, name: str=None, description: str=None, grant_list: list[grant.Grant]=None, added_member_id_list: list[int]=None, deleted_member_id_list: list[int]=None):
+def update(
+    id: int,
+    name: str|None=None,
+    description: str|None=None,
+    grant_list: list[grant.Grant]|None=None,
+    added_member_id_list: list[int]|None=None,
+    deleted_member_id_list: list[int]|None=None
+):
+
     role_fields = {}
     if name is not None:
         role_fields['name'] = name

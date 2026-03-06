@@ -1,5 +1,5 @@
 import json
-import sqlalchemy
+import sqlalchemy.exc
 
 from ... import wa
 from ... import schemas
@@ -48,6 +48,7 @@ def create_endpoint(request: wa.Request) -> wa.Response:
         return wa.ProblemResponse(status_code=400, title='Role already exists. Name must be unique.', detail=data.name)
 
     role = model.role.read_one(id=role_id)
+    assert role is not None # we just created it
 
     converter = converters.GrantConverter()
     return wa.JSONResponse(
@@ -79,6 +80,8 @@ def delete_endpoint(request: wa.Request) -> wa.Response:
 @signature.verify_session
 def update_endpoint(request: wa.Request) -> wa.Response:
     role = model.role.read_one(id=request.path_params.role_id)
+    if role is None:
+        return wa.ProblemResponse(status_code=404, title='Role not found')
 
     data = schemas.RoleUpdateRequest.model_validate_json(request.body)
     grants = grant.Grants.create()
@@ -97,12 +100,12 @@ def update_endpoint(request: wa.Request) -> wa.Response:
             return wa.ProblemResponse(status_code=403, title='Not allowed to update grants on a role that applies to self')
         role_update['grant_list'] = [converters.grant_from_schema(converter, g) for g in data.grant_list]
     if 'member_list' in data.model_fields_set:
-        members = ctx.db.identity.read_all(name=[m['name'] for m in data.member_list])
+        members = ctx.db.identity.read_all(name=[m.name for m in data.member_list])
         member_by_name = {m.name: m for m in members}
-        unresolved_members = [m['name'] for m in data.member_list if m['name'] not in member_by_name]
+        unresolved_members = [m.name for m in data.member_list if m.name not in member_by_name]
         if len(unresolved_members) > 0:
             return wa.ProblemResponse(status_code=400, title='Unable to resolve members', detail=', '.join(unresolved_members))
-        new_member_id_list = set(member_by_name[m['name']].id for m in data.member_list)
+        new_member_id_list = set(member_by_name[m.name].id for m in data.member_list)
         current_member_id_list = set(role.member_id_list)
         deleted_member_id_list = current_member_id_list.difference(new_member_id_list)
         added_member_id_list = new_member_id_list.difference(current_member_id_list)
@@ -113,6 +116,7 @@ def update_endpoint(request: wa.Request) -> wa.Response:
     model.role.update(role.id, **role_update)
 
     role = model.role.read_one(id=request.path_params.role_id)
+    assert role is not None # We just updated it
 
     return wa.JSONResponse(
         status_code=200,
