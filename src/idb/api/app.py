@@ -165,6 +165,7 @@ def initialize_endpoint(_: wa.Request) -> wa.Response:
         expiration_delay_s=600
     )
     identity_invitation = model.identity_invitation_key.read(identity_invitation_key_id)
+    assert identity_invitation is not None, "key has just need created so it cannot possibly be None"
 
     return wa.JSONResponse(
         json=schemas.InitializeResponse(key=converters.symmetric_to_schema(identity_invitation.key)).model_dump(),
@@ -255,6 +256,8 @@ def create(conf):
             level = logging.WARN
         case 'ERROR':
             level = logging.ERROR
+        case _:
+            assert False
     logging.basicConfig(stream=sys.stdout, level=level)
     db.create_tables(conf.database_url)
     middlewares = [
