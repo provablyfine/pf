@@ -28,7 +28,7 @@ class Config:
 
 
     @staticmethod
-    def load(filename: str=None) -> Config:
+    def load(filename: str|None=None) -> Config:
         if filename is None:
             data = {}
         else:

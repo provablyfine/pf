@@ -7,10 +7,10 @@ import cryptography.fernet
 from . import dao_factory
 from . import config as config_module
 
-_kek_var : contextvars.ContextVar[cryptography.fernet.Fernet] = contextvars.ContextVar("kek", default=None)
-_config_var : contextvars.ContextVar[config_module.Config] = contextvars.ContextVar("config", default=None)
-_db_var: contextvars.ContextVar[typing.Any] = contextvars.ContextVar("db", default=None)
-_identity_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("identity_id", default=None)
+_kek_var : contextvars.ContextVar[cryptography.fernet.Fernet|None] = contextvars.ContextVar("kek", default=None)
+_config_var : contextvars.ContextVar[config_module.Config|None] = contextvars.ContextVar("config", default=None)
+_db_var: contextvars.ContextVar[typing.Any|None] = contextvars.ContextVar("db", default=None)
+_identity_id_var: contextvars.ContextVar[int|None] = contextvars.ContextVar("identity_id", default=None)
 
 
 class RequestContext:
@@ -18,40 +18,46 @@ class RequestContext:
    
     @property
     def config(self) -> config_module.Config:
-        return _config_var.get()
+        c = _config_var.get()
+        assert c is not None
+        return c
 
     @property
     def kek(self) -> cryptography.fernet.Fernet:
-        return _kek_var.get()
+        key = _kek_var.get()
+        assert key is not None
+        return key
 
     @property
     def db(self) -> dao_factory.Dao:
-        return _db_var.get()
+        dao = _db_var.get()
+        assert dao is not None
+        return dao
 
     @property
-    def identity_id(self) -> int:
+    def identity_id(self) -> int|None:
         return _identity_id_var.get()
 
     @contextlib.contextmanager
-    def set_kek(self, kek: cryptography.fernet.Fernet) -> contextvars.Token:
+    def set_kek(self, kek: cryptography.fernet.Fernet):
         token = _kek_var.set(kek)
         yield
         _kek_var.reset(token)
 
     @contextlib.contextmanager
-    def set_config(self, config: config_module.Config) -> contextvars.Token:
+    def set_config(self, config: config_module.Config):
         token = _config_var.set(config)
         yield
         _config_var.reset(token)
 
     @contextlib.contextmanager
-    def set_db(self, db: dao_factory.Dao) -> contextvars.Token:
+    def set_db(self, db: dao_factory.Dao):
         token = _db_var.set(db)
         yield
         _db_var.reset(token)
 
     @contextlib.contextmanager
-    def set_identity_id(self, identity_id: int) -> contextvars.Token:
+    def set_identity_id(self, identity_id: int):
         token = _identity_id_var.set(identity_id)
         yield
         _identity_id_var.reset(token)
