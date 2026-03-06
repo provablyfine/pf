@@ -6,15 +6,15 @@ from . import grant
 from . import model
 
 
-def _deserialize(l: list[model.grant.Grant]):
-    return [model.grant.Grant.from_db_dict(g) for g in l]
+def _deserialize(l: list[dict]) -> list[model.grant.Grant]:
+    return [model.grant.deserialize(g) for g in l]
 
 
-def boundary(ceiling_list: list[model.grant.Grant], denied_list: list[model.grant.Grant]):
+def boundary(ceiling_list: list[dict], denied_list: list[dict]):
     return types.SimpleNamespace(id=1, ceiling_list=_deserialize(ceiling_list), denied_list=_deserialize(denied_list))
 
 
-def role(grant_list: list[model.grant.Grant]):
+def role(grant_list: list[dict]):
     return types.SimpleNamespace(id=1, grant_list=_deserialize(grant_list))
 
 def single_grants(g) -> grant.Grants:
@@ -33,6 +33,8 @@ def _role_update(name: bool, description: bool):
     return {
         'name': name,
         'description': description,
+        'grant_list': False,
+        'member_list': False,
     }
 
 def _boundary_update(name: bool, description: bool, ceiling_list: bool, denied_list: bool):
@@ -323,13 +325,15 @@ def test_identity_add_tag():
 
 
 def test_identity_add_tag_ceiling_and_denied():
+    def _all_filter():
+        return {'id': None, 'tag_id_list': None, 'boundary_id_list': None}
     grants = grant.Grants([boundary([
-        {'type': 'identity', 'filter': {'id': None, 'tag_id_list': None, 'boundary_id_list': None}, 'permission': _identity_add_tag([1,2])},
-        {'type': 'identity', 'filter': {'id': None, 'tag_id_list': None, 'boundary_id_list': None}, 'permission': _identity_add_tag([3])}
+        {'type': 'identity', 'filter': _all_filter(), 'permission': _identity_add_tag([1,2])},
+        {'type': 'identity', 'filter': _all_filter(), 'permission': _identity_add_tag([3])}
     ], [
-        {'type': 'identity', 'filter': {'id': None, 'tag_id_list': None, 'boundary_id_list': None}, 'permission': _identity_add_tag([2])}
+        {'type': 'identity', 'filter': _all_filter(), 'permission': _identity_add_tag([2])}
     ])], [role([
-        {'type': 'identity', 'filter': {'id': None, 'tag_id_list': None, 'boundary_id_list': None}, 'permission': _identity_add_tag([0,1,2,3,4])}
+        {'type': 'identity', 'filter': _all_filter(), 'permission': _identity_add_tag([0,1,2,3,4])}
     ])])
     assert grants.identity(1, [], []).can_add_tag(1)
     assert not grants.identity(1, [], []).can_add_tag(2)

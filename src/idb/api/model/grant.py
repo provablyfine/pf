@@ -57,7 +57,7 @@ class RolePermission(CRDPermission):
     update: RoleUpdatePermission|None
 
 class RoleFilter(DBBase):
-    id: str | None
+    id: int | None
 
 class RoleGrant(DBBase):
     type: typing.Literal["role"] = "role"
@@ -95,8 +95,8 @@ class IdentityPermission(DBBase):
     read: bool
     update: IdentityUpdatePermission | None
     delete: bool
-    add_tag_id_list: list[str] | None
-    del_tag_id_list: list[str] | None
+    add_tag_id_list: list[int] | None
+    del_tag_id_list: list[int] | None
     invite_list: list[str] | None
 
 class IdentityFilter(TripletFilter):

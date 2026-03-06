@@ -70,7 +70,7 @@ class CRUDWrapper(CRDWrapper):
         def check(p) -> bool:
             if p.update is None:
                 return True
-            return p.update[field]
+            return getattr(p.update, field)
         return self.can(check)
 
 
