@@ -10,13 +10,14 @@ from . import utils
 class Identity:
     id: int
     name: str
-    tag_id_list: tuple[int]
-    boundary_id_list: tuple[int]
+    tag_id_list: list[int]
+    boundary_id_list: list[int]
 
 
 def create(name: str, boundary_id_list: list[int], tag_id_list: list[int]) -> int:
     now = int(time.time())
     identity_id = ctx.db.identity.create(name=name, created_at=now)
+    assert identity_id is not None
     for boundary_id in boundary_id_list:
         ctx.db.identity_boundary.create(identity_id=identity_id, boundary_id=boundary_id)
     for tag_id in tag_id_list:
@@ -78,7 +79,7 @@ def read_all(**kwargs):
     return output
 
 
-def update(id: int, name: str=None, added_tag_id_list: list[int]=None, deleted_tag_id_list: list[int]=None):
+def update(id: int, name: str|None=None, added_tag_id_list: list[int]|None=None, deleted_tag_id_list: list[int]|None=None):
     update_fields = {}
     if name is not None:
         audit_log.create(

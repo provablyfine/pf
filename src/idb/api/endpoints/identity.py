@@ -2,7 +2,7 @@ from __future__ import annotations
 import json
 import logging
 
-import sqlalchemy
+import sqlalchemy.exc
 
 from ... import wa
 from ... import schemas
@@ -68,12 +68,12 @@ def _read_boundary_ids(boundary_id_list: list[int], boundary_name_list: list[str
     return [b.id for b in boundaries] + boundary_id_list
 
 
-def _read_tag_ids(tag_id_list: list[int], tag_name_value_list: list[schemas.IdentityTagCreateRequest]) -> list[int]:
+def _read_tag_ids(tag_id_list: list[int], tag_name_value_list: list[schemas.IdentityTagNameValue]) -> list[int]:
     id_list = []
     for tag in tag_name_value_list:
         db_tag = ctx.db.tag.read_one(name=tag.name, value=tag.value)
         if db_tag is None:
-            logger.info(f'No tag found for {tag["name"]}={tag["value"]}')
+            logger.info(f'No tag found for {tag.name}={tag.value}')
             raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Request contains invalid fields'))
         id_list.append(db_tag.id)
     if len(id_list) != len(tag_name_value_list):
@@ -94,6 +94,7 @@ def create_endpoint(request: wa.Request) -> wa.Response:
         return wa.ProblemResponse(status_code=403, title='Not allowed to create identity')
 
     identity = model.identity.read_one(id=ctx.identity_id)
+    assert identity is not None
     # The line of code below is CRITICAL to our security model.
     # It ensures that identities cannot escape the boundaries that apply to them
     # by creating a new identity with a smaller boundary. The boundaries
@@ -109,6 +110,7 @@ def create_endpoint(request: wa.Request) -> wa.Response:
         return wa.ProblemResponse(status_code=400, title='Identity already exists. Name must be unique.', detail=data.name)
 
     identity = model.identity.read_one(id=identity_id)
+    assert identity is not None
     return wa.JSONResponse(
         status_code=201,
         json=converters.identity_to_schema(identity).model_dump(),
@@ -167,6 +169,8 @@ def update_endpoint(request: wa.Request) -> wa.Response:
         return wa.ProblemResponse(status_code=403, title='Not allowed to update self')
 
     identity = model.identity.read_one(id=request.path_params.identity_id)
+    if identity is None:
+        return wa.ProblemResponse(status_code=404, title='Unable to find identity', detail=str(request.path_params.identity_id))
 
     data = schemas.IdentityUpdateRequest.model_validate_json(request.body)
     grants = grant.Grants.create()
@@ -212,6 +216,7 @@ def update_endpoint(request: wa.Request) -> wa.Response:
 
     model.identity.update(id=request.path_params.identity_id, **update_params)
     identity = model.identity.read_one(id=request.path_params.identity_id)
+    assert identity is not None
 
     return wa.JSONResponse(
         status_code=200,
@@ -222,6 +227,9 @@ def update_endpoint(request: wa.Request) -> wa.Response:
 @signature.verify_session
 def invite_endpoint(request: wa.Request) -> wa.Response:
     identity = model.identity.read_one(id=request.path_params.identity_id)
+    if identity is None:
+        return wa.ProblemResponse(status_code=404, title='Unable to find identity', detail=str(request.path_params.identity_id))
+
     data = schemas.IdentityInviteRequest.model_validate_json(request.body)
 
     grants = grant.Grants.create()
@@ -234,6 +242,7 @@ def invite_endpoint(request: wa.Request) -> wa.Response:
         expiration_delay_s=600
     )
     identity_invitation = model.identity_invitation_key.read(identity_invitation_key_id)
+    assert identity_invitation is not None # We just created it
 
     if data.delivery == 'manual':
         return wa.JSONResponse(

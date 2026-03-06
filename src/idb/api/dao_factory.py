@@ -17,7 +17,7 @@ class Table:
     def columns(self):
         return types.SimpleNamespace(self._table.columns)
 
-    def create(self, **kwargs):
+    def create(self, **kwargs) -> int|None:
         statement = self._table.insert().values(**kwargs)
         result = self._connection.execute(statement)
         primary_key = result.inserted_primary_key
