@@ -4,11 +4,10 @@ import typing
 import abc
 import logging
 
-logger = logging.getLogger(__name__)
-
 from . import model
 from .context import ctx
 
+logger = logging.getLogger(__name__)
 
 class BaseWrapper:
     def __init__(self, boundaries, roles, filter):
@@ -16,7 +15,7 @@ class BaseWrapper:
         self._roles = roles
         self._filter = filter
 
-    def list_can(self, cmp) -> list[model.Grant]:
+    def list_can(self, cmp) -> list[model.grant.Grant]:
         for boundary in self._boundaries:
             if any(self._filter(denied.filter) and cmp(denied.permission) for denied in boundary.denied_list):
                 logger.info(f'request denied by boundary id={boundary.id}')
@@ -133,7 +132,7 @@ class IdentityWrapper(RDWrapper):
 
 
 class SSHWrapper(BaseWrapper):
-    def list_can_username(self, username: str) -> list[model.Grant]:
+    def list_can_username(self, username: str) -> list[model.grant.Grant]:
         return self.list_can(lambda p: username in p.username_list)
 
 
@@ -143,7 +142,7 @@ class Grants:
         self._roles = roles
 
     @classmethod
-    def create(klass) -> typing.Self:
+    def create(cls) -> Grants:
         identity = ctx.db.identity.read_one(id=ctx.identity_id)
         assert identity is not None
         identity_boundaries = ctx.db.identity_boundary.read_all(identity_id=identity.id)
@@ -153,7 +152,7 @@ class Grants:
         roles = model.role.read_all(id=list(set(member.role_id for member in member_of)))
         return Grants(boundaries, roles)
 
-    def boundary(self, boundary_id: int) -> BoundaryWrapper:
+    def boundary(self, boundary_id: int|None) -> BoundaryWrapper:
         def cmp(filter: model.grant.BoundaryFilter) -> bool:
             if not isinstance(filter, model.grant.BoundaryFilter):
                 return False
@@ -162,7 +161,7 @@ class Grants:
             return True
         return BoundaryWrapper(self._boundaries, self._roles, cmp)
 
-    def tag(self, tag_id: int) -> TagWrapper:
+    def tag(self, tag_id: int|None) -> TagWrapper:
         def cmp(filter: model.grant.TagFilter) -> bool:
             if not isinstance(filter, model.grant.TagFilter):
                 return False
@@ -171,7 +170,7 @@ class Grants:
             return True
         return TagWrapper(self._boundaries, self._roles, cmp)
 
-    def role(self, role_id: int) -> RoleWrapper:
+    def role(self, role_id: int|None) -> RoleWrapper:
         def cmp(filter: model.grant.RoleFilter) -> bool:
             if not isinstance(filter, model.grant.RoleFilter):
                 return False
@@ -186,10 +185,16 @@ class Grants:
                 return False
             if filter.id is not None and filter.id != identity_id:
                 return False
-            if filter.tag_id_list is not None and not all(tag_id in tag_id_list for tag_id in filter.tag_id_list):
-                return False
-            if filter.boundary_id_list is not None and not all(boundary_id in boundary_id_list for boundary_id in filter.boundary_id_list):
-                return False
+            if filter.tag_id_list is not None:
+                if tag_id_list is None:
+                    return False
+                if not all(tag_id in tag_id_list for tag_id in filter.tag_id_list):
+                    return False
+            if filter.boundary_id_list is not None:
+                if boundary_id_list is None:
+                    return False
+                if not all(boundary_id in boundary_id_list for boundary_id in filter.boundary_id_list):
+                    return False
             return True
         return IdentityWrapper(self._boundaries, self._roles, cmp)
 

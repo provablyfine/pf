@@ -1,5 +1,5 @@
 import json
-import sqlalchemy
+import sqlalchemy.exc
 
 from ... import wa
 from ... import schemas
@@ -53,6 +53,7 @@ def create_endpoint(request: wa.Request) -> wa.Response:
         return wa.ProblemResponse(status_code=400, title='Boundary already exists. Name must be unique.', detail=data.name)
 
     boundary = model.boundary.read_one(id=boundary_id)
+    assert boundary is not None, "Boundary has just need created"
     converter = converters.GrantConverter()
     return wa.JSONResponse(
         status_code=201,
@@ -82,8 +83,11 @@ def delete_endpoint(request: wa.Request) -> wa.Response:
 @signature.verify_session
 def update_endpoint(request: wa.Request) -> wa.Response:
     identity = model.identity.read_one(id=ctx.identity_id)
+    assert identity is not None
 
     boundary = model.boundary.read_one(id=request.path_params.boundary_id)
+    if boundary is None:
+        return wa.ProblemResponse(status_code=404, title='Boundary does not exist', detail=request.path_params.boundary_id)
 
     data = schemas.BoundaryUpdateRequest.model_validate_json(request.body)
 
@@ -105,10 +109,11 @@ def update_endpoint(request: wa.Request) -> wa.Response:
     if 'ceiling_list' in data.model_fields_set:
         if request.path_params.boundary_id in identity.boundary_id_list:
             return wa.ProblemResponse(status_code=403, title='Not allowed to update ceiling list on boundary that applies to self')
-        update_query['ceiling_list'] = [converters.grant_from_schema(converter, g) for g in data.ceiling_list]
+        update_query['ceiling_list'] = None if data.ceiling_list is None else [converters.grant_from_schema(converter, g) for g in data.ceiling_list]
     model.boundary.update(id=request.path_params.boundary_id, **update_query)
 
     boundary = model.boundary.read_one(id=request.path_params.boundary_id)
+    assert boundary is not None # "We re-read what we read before"
     return wa.JSONResponse(
         status_code=200,
         json=schemas.BoundaryUpdateResponse(boundary=converters.boundary_to_schema(converter, boundary)).model_dump(),
