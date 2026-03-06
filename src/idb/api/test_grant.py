@@ -368,4 +368,4 @@ def test_identity_create(tag_id_list, boundary_id_list, expected1, expected2):
 def test_empty_ssh():
     grants = grant.Grants([], [])
 
-    assert len(grants.ssh(None, None, None).list_can_username('hello')) == 0
+    assert len(grants.ssh(1, [], []).list_can_username('hello')) == 0
