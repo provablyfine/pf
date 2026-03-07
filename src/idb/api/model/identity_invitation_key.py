@@ -55,17 +55,6 @@ def accept(id: str, public_key_id):
     audit_log.create('identity-invitation-accepted', id=invitation.id, identity_id=invitation.identity_id)
 
 
-def revoke(id: str):
-    # XXX: code entirely bogus here.
-    invitation = read(id)
-    now = int(time.time())
-    assert not invitation.is_accepted
-    assert not invitation.is_revoked
-    assert invitation.expires_at > now
-    ctx.db.identity_invitation_key.update(is_revoked=True, revoked_at=now).where(id=invitation.id)
-    audit_log.create('identity-invitation-revoked', id=invitation.id, identity_id=invitation.identity_id)
-
-
 def read(id: str) -> IdentityInvitationKey|None:
     invitation = ctx.db.identity_invitation_key.read_one(id=id)
     if invitation is None:

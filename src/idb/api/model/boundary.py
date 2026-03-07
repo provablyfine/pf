@@ -24,6 +24,7 @@ def create(name: str, description: str, ceiling_list: list[grant.Grant]|None, de
         ceiling_list=db_ceiling_list,
         denied_list=db_denied_list,
     )
+    assert boundary_id is not None # we just created it
     audit_log.create('boundary-create', id=boundary_id, name=name, description=description, ceiling_list=db_ceiling_list, denied_list=db_denied_list)
     return boundary_id
 
@@ -50,7 +51,11 @@ def read_one(**kwargs):
     return _from_db(boundary)
 
 
-def update(id: int, name: str=None, description: str=None, ceiling_list: list[grant.Grant]|None=None, denied_list: list[grant.Grant]|None=None):
+def update(id: int,
+           name: str|None=None,
+           description: str|None=None,
+           ceiling_list: list[grant.Grant]|None=None,
+           denied_list: list[grant.Grant]|None=None):
     update_fields = {}
     if name is not None:
         update_fields['name'] = name
@@ -67,7 +72,7 @@ def update(id: int, name: str=None, description: str=None, ceiling_list: list[gr
             description=description,
         )
     if ceiling_list is not None:
-        db_ceiling_list = [g.to_db_dict() for g in ceiling_list]
+        db_ceiling_list = [grant.serialize(g) for g in ceiling_list]
         update_fields['ceiling_list'] = db_ceiling_list
         audit_log.create(
             'boundary-update-ceiling-list',
@@ -75,7 +80,7 @@ def update(id: int, name: str=None, description: str=None, ceiling_list: list[gr
             ceiling_list=db_ceiling_list,
         )
     if denied_list is not None:
-        db_denied_list = [g.to_db_dict() for g in denied_list]
+        db_denied_list = [grant.serialize(g) for g in denied_list]
         update_fields['denied_list'] = db_denied_list
         audit_log.create(
             'boundary-update-denied-list',
