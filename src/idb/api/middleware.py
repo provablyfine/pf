@@ -4,7 +4,7 @@ import collections.abc
 
 
 import sqlalchemy
-import cryptography
+import cryptography.fernet
 
 from .. import wa
 from .. import base64url
