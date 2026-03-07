@@ -185,10 +185,17 @@ class BoundaryCreateResponse(APIBase):
     boundary: Boundary
 
 class BoundaryUpdateRequest(APIBase):
-    name: str = None
-    description: str = None
+    name: str | None = None
+    description: str | None = None
     ceiling_list: list[Grant] | None = None
-    denied_list: list[Grant] = None
+    denied_list: list[Grant] | None = None
+
+    @pydantic.model_validator(mode='after')
+    def reject_explicit_nulls(self):
+        for field in ['name', 'description', 'denied_list']:
+            if field in self.model_fields_set and getattr(self, field) is None:
+                raise ValueError(f"{field} cannot be explicitly null")
+        return self
 
 class BoundaryUpdateResponse(APIBase):
     boundary: Boundary
@@ -216,10 +223,17 @@ class RoleCreateRequest(APIBase):
     description: str = ''
 
 class RoleUpdateRequest(APIBase):
-    name: str = None
-    description: str = None
-    grant_list: list[Grant] = None
-    member_list: list[RoleMember] = None
+    name: str | None = None
+    description: str | None = None
+    grant_list: list[Grant] | None = None
+    member_list: list[RoleMember] | None = None
+
+    @pydantic.model_validator(mode='after')
+    def reject_explicit_nulls(self):
+        for field in self.model_fields_set:
+            if getattr(self, field) is None:
+                raise ValueError(f"{field} cannot be explicitly null")
+        return self
 
 # --- Identity ---
 
@@ -239,11 +253,6 @@ class Identity(APIBase):
 
 class IdentityListResponse(APIBase):
     identities: list[Identity]
-
-
-class IdentityBoundaryCreate(APIBase):
-    id: int = None
-    name: str = None
 
 class IdentityCreateRequest(APIBase):
     name: str
@@ -289,8 +298,15 @@ IdentityTagOperation = typing.Annotated[
 ]
 
 class IdentityUpdateRequest(APIBase):
-    name: str = None
-    tags: list[IdentityTagOperation] = []
+    name: str | None = None
+    tags: list[IdentityTagOperation] | None = None
+
+    @pydantic.model_validator(mode='after')
+    def validate_tags_and_boundaries(self):
+        for field in self.model_fields_set:
+            if getattr(self, field) is None:
+                raise ValueError(f"{field} cannot be explicitly null")
+        return self
 
 class IdentityInviteRequest(APIBase):
     delivery: typing.Literal["manual", "email"]

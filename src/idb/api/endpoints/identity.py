@@ -181,6 +181,7 @@ def update_endpoint(request: wa.Request) -> wa.Response:
             return wa.ProblemResponse(status_code=403, title='Not allowed to update identity field', detail='name')
         update_params['name'] = data.name
     if 'tags' in data.model_fields_set:
+        assert data.tags is not None # Guaranteed by "after" pydantic validation
         # 1. We need to have native add and del operations because we have an identity:add-tag
         #    permission. If we did not have add and del operations, the client would need to be
         #    able to read the identity before it is able to add tag so, implicitely using the
