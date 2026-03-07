@@ -1,5 +1,5 @@
 import json
-import sqlalchemy
+import sqlalchemy.exc
 
 from ... import wa
 from ... import schemas
