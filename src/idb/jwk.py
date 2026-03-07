@@ -236,7 +236,7 @@ class Public:
         return self._key
 
     @classmethod
-    def from_crypto(klass, key) -> Private:
+    def from_crypto(klass, key) -> Public:
         return Public(key)
 
     def to_pem(self) -> bytes:
@@ -257,7 +257,7 @@ class Public:
         )
 
     @classmethod
-    def from_openssh(klass, data: bytes) -> Private:
+    def from_openssh(klass, data: bytes) -> Public:
         key = cryptography.hazmat.primitives.serialization.load_ssh_public_key(data)
         return Public(key)
 
