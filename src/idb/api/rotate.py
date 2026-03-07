@@ -24,7 +24,7 @@ def rotate(key_type: db.SigningKeyType, crypto_key_type: jwk.KeyType, rotation_p
     if one is None:
         return
     logger.info(f'rotate {key_type.name}')
-    now = datetime.datetime.now().timestamp()
+    now = int(datetime.datetime.now().timestamp())
     keys = model.signing_key.read_all(
         ctx.db.signing_key.columns.valid_after >= now - rotation_period,
         type=key_type,
@@ -62,6 +62,8 @@ def main():
             level = logging.WARN
         case 'ERROR':
             level = logging.ERROR
+        case _:
+            assert False
     logging.basicConfig(stream=sys.stdout, level=level)
 
     with open(conf.kek_filename, 'rb') as f:

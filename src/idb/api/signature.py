@@ -12,6 +12,12 @@ from . import model
 from .context import ctx
 
 import http_message_signatures
+import http_message_signatures.http_sfv
+
+# Because we import stuff from http_message_signatures
+# that is not explicitely exported.
+# No good idea to fix this short of re-implementing our own
+# pyright: reportPrivateImportUsage=false
 
 
 class CaseInsensitiveDict(dict):
@@ -48,7 +54,7 @@ class RequestMessage:
         return CaseInsensitiveDict(self._headers)
 
 
-class KeyResolver:
+class KeyResolver(http_message_signatures.HTTPSignatureKeyResolver):
     def __init__(self, private_key, public_key):
         self._private_key = private_key
         self._public_key = public_key
@@ -116,7 +122,7 @@ def verify(request: wa.Request, key_id: str, key):
         case jwk.KeyType.ED25519:
             algorithm = http_message_signatures.algorithms.ED25519
             resolver = KeyResolver(private_key=None, public_key=key.to_crypto())
-        case jwk.KeyType.EC:
+        case jwk.KeyType.ECDSA_NISTP256:
             algorithm = http_message_signatures.algorithms.ECDSA_P256_SHA256
             resolver = KeyResolver(private_key=None, public_key=key.to_crypto())
         case _:
