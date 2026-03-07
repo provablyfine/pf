@@ -103,13 +103,15 @@ def update_endpoint(request: wa.Request) -> wa.Response:
     if 'description' in data.model_fields_set:
         update_query['description'] = data.description
     if 'denied_list' in data.model_fields_set:
+        assert data.denied_list is not None # pydantic validation guarantees this
         if request.path_params.boundary_id in identity.boundary_id_list:
             return wa.ProblemResponse(status_code=403, title='Not allowed to update denied list on boundary that applies to self')
         update_query['denied_list'] = [converters.grant_from_schema(converter, g) for g in data.denied_list]
     if 'ceiling_list' in data.model_fields_set:
         if request.path_params.boundary_id in identity.boundary_id_list:
             return wa.ProblemResponse(status_code=403, title='Not allowed to update ceiling list on boundary that applies to self')
-        update_query['ceiling_list'] = None if data.ceiling_list is None else [converters.grant_from_schema(converter, g) for g in data.ceiling_list]
+        if data.ceiling_list is not None:
+            update_query['ceiling_list'] = [converters.grant_from_schema(converter, g) for g in data.ceiling_list]
     model.boundary.update(id=request.path_params.boundary_id, **update_query)
 
     boundary = model.boundary.read_one(id=request.path_params.boundary_id)
