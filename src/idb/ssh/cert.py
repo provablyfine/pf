@@ -4,6 +4,7 @@ import enum
 import time
 
 import cryptography.exceptions
+import cryptography.hazmat.primitives.serialization
 
 from . import exceptions
 from .. import jwk
@@ -18,9 +19,9 @@ class Role(enum.IntEnum):
 @dataclasses.dataclass(frozen=True)
 class CriticalOptions:
     # https://www.ietf.org/archive/id/draft-miller-ssh-cert-01.html#name-critical-options
-    force_command: str = None
-    source_address: list[str] = None
-    verify_required: bool = None
+    force_command: str|None = None
+    source_address: list[str]|None = None
+    verify_required: bool|None = None
 
     def to_dict(self):
         return dataclasses.asdict(self)
@@ -29,12 +30,12 @@ class CriticalOptions:
 @dataclasses.dataclass(frozen=True)
 class Extensions:
     # https://www.ietf.org/archive/id/draft-miller-ssh-cert-01.html#name-certificate-extensions
-    no_touch_required: bool = None
-    permit_agent_forwarding: bool = None
-    permit_port_forwarding: bool = None
-    permit_pty: bool = None
-    permit_user_rc: bool = None
-    permit_x11_forwarding: bool = None
+    no_touch_required: bool|None = None
+    permit_agent_forwarding: bool|None = None
+    permit_port_forwarding: bool|None = None
+    permit_pty: bool|None = None
+    permit_user_rc: bool|None = None
+    permit_x11_forwarding: bool|None = None
 
     def to_dict(self):
         return dataclasses.asdict(self)
@@ -60,6 +61,8 @@ class Cert:
                 role = Role.HOST
             case cryptography.hazmat.primitives.serialization.SSHCertificateType.USER:
                 role = Role.USER
+            case _:
+                assert False
         return role
 
     @property
@@ -124,7 +127,7 @@ class Cert:
         return True
 
     @classmethod
-    def create_host(klass, public_key: jwk.Public, serial_number: int, identifier: str, principals: list[str], valid_after: int, valid_before: int, signer: jwk.Private) -> Cert:
+    def create_host(cls, public_key: jwk.Public, serial_number: int, identifier: str, principals: list[str], valid_after: int, valid_before: int, signer: jwk.Private) -> Cert:
         builder = (
             cryptography.hazmat.primitives.serialization.SSHCertificateBuilder()
             .public_key(public_key.to_crypto())
@@ -138,7 +141,7 @@ class Cert:
         return Cert(cert)
 
     @classmethod
-    def create_user(klass, public_key: jwk.Public, serial_number: int, identifier: str, principals: list[str], valid_after: int, valid_before: int, critical_options: CriticalOptions, extensions: Extensions, signer: jwk.Private) -> Cert:
+    def create_user(cls, public_key: jwk.Public, serial_number: int, identifier: str, principals: list[str], valid_after: int, valid_before: int, critical_options: CriticalOptions, extensions: Extensions, signer: jwk.Private) -> Cert:
         builder = (
             cryptography.hazmat.primitives.serialization.SSHCertificateBuilder()
             .public_key(public_key.to_crypto())
@@ -173,13 +176,15 @@ class Cert:
         return self._cert.public_bytes()
 
     @classmethod
-    def from_openssh(klass, data: bytes) -> Cert:
+    def from_openssh(cls, data: bytes) -> Cert:
         try:
             cert = cryptography.hazmat.primitives.serialization.load_ssh_public_identity(data)
         except ValueError:
             raise exceptions.Error('Failed to load certificate. Most likely invalid.')
         except cryptography.exceptions.UnsupportedAlgorithm:
             raise exceptions.Error('Failed to load certificate. Unsupported algorithm.')
+        if not isinstance(cert,  cryptography.hazmat.primitives.serialization.SSHCertificate):
+            raise exceptions.Error('Failed to load certificate. This is a public key.')
         if len(cert.nonce) < 16:
             raise exceptions.Error('Nonce must be bigger than 16 bytes')
         return Cert(cert)

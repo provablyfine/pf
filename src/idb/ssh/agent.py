@@ -2,7 +2,7 @@ from __future__ import annotations
 import collections
 import os
 import socket
-import enum
+import getpass
 
 
 from . import exceptions
@@ -30,9 +30,9 @@ class Client:
     Identity = collections.namedtuple('Identity', ['public_key', 'comment', 'raw'])
 
     def __init__(self):
-        path = os.getenv('SSH_AUTH_SOCK')
+        path = os.environ['SSH_AUTH_SOCK']
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        sock.connect(path)
+        sock.connect(path.encode('ascii'))
         self._sock = sock
 
     def _send_request(self, type, data):
@@ -88,14 +88,21 @@ class Client:
         signature = response.read_string()
         return signature
 
-    def add(self, private_key: jwk.Private, cert: cert.Cert=None, comment: str=None, lifetime: int=None, require_confirmation: bool=False):
+    def add(self,
+            private_key: jwk.Private,
+            cert: cert.Cert|None=None,
+            comment: str|None=None,
+            lifetime: int|None=None,
+            require_confirmation: bool=False):
         if cert is None:
             key = serde.serialize_private(private_key)
         else:
             key = serde.serialize_private_certificate(private_key, cert)
+        if comment is None:
+            comment = f'{getpass.getuser()}@{socket.gethostname()}'
         self._add(key, comment, lifetime, require_confirmation)
 
-    def _add(self, key: bytes, comment: str, lifetime: int=None, require_confirmation: bool=False):
+    def _add(self, key: bytes, comment: str, lifetime: int|None=None, require_confirmation: bool=False):
         request = buffer.Writer()
         request.write_bytes(key)
         request.write_string(comment.encode('utf-8'))

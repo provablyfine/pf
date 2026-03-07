@@ -1,5 +1,6 @@
 import base64
 
+import cryptography.hazmat.primitives.asymmetric.rsa
 import cryptography.hazmat.primitives.asymmetric.ed25519
 import cryptography.hazmat.primitives.asymmetric.ec
 import cryptography.hazmat.primitives.serialization
@@ -74,6 +75,8 @@ def serialize_private_certificate(key: jwk.Private, cert: cert.Cert) -> bytes:
                     curve = b'nistp384'
                 case cryptography.hazmat.primitives.asymmetric.ec.SECP521R1():
                     curve = b'nistp521'
+                case _:
+                    assert False
             writer.write_string(b'ecdsa-sha2-' + curve + b'-cert-v01@openssh.com')
             writer.write_string(serialize_cert(cert))
             d = k.private_numbers().private_value
@@ -125,6 +128,8 @@ def serialize_private(key: jwk.Private) -> bytes:
                     curve = b'nistp384'
                 case cryptography.hazmat.primitives.asymmetric.ec.SECP521R1():
                     curve = b'nistp521'
+                case _:
+                    assert False
             writer.write_string(b'ecdsa-sha2-' + curve)
             writer.write_string(curve)
             q = k.public_key().public_bytes(
