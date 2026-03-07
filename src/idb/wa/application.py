@@ -7,6 +7,7 @@ import urllib.parse
 import logging
 
 import webob
+import webob.multidict
 
 from .request import Request, App
 from .response import Response, ProblemResponse
@@ -29,7 +30,7 @@ class Route:
         self._handler = handler
         self._methods = methods
 
-    def match(self, method: str, segments: list[str]) -> Match:
+    def match(self, method: str, segments: list[str]) -> Match|None:
         if len(segments) != len(self._segments):
             return None
         if method not in self._methods:
@@ -127,12 +128,13 @@ class Application:
             app=App(config=self._config, state=self._state),
             method=webob_request.method,
             url=urllib.parse.urlparse(webob_request.url),
-            headers=webob_request.headers,
+            headers=webob.multidict.MultiDict(webob_request.headers.items()),
             query_params=webob_request.GET,
-            form=webob_request.POST,
+            # XXX: We do not use forms and we are going to migrate away from this code
+            form=webob.multidict.MultiDict(),
             state=types.SimpleNamespace(),
             body=webob_request.body,
-            cookies=webob.cookies
+            cookies=dict(webob_request.cookies),
         )
         iterator = iter(self._middlewares + [self._router])
         first = next(iterator, None)

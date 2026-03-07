@@ -1,4 +1,4 @@
-import collections
+import collections.abc
 
 import pydantic
 
@@ -12,6 +12,7 @@ class Middleware(middleware.Middleware):
         try:
             next_response = next_middleware(request, iterator)
         except pydantic.ValidationError as e:
-            for error in e.errors():
-                return response.ProblemResponse(status_code=400, title='Request invalid.', detail=f'{error["msg"]}: {".".join(map(str, error["loc"]))}')
+            assert len(e.errors()) > 0
+            error = e.errors()[0]
+            return response.ProblemResponse(status_code=400, title='Request invalid.', detail=f'{error["msg"]}: {".".join(map(str, error["loc"]))}')
         return next_response

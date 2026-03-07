@@ -2,7 +2,7 @@ import types
 import dataclasses
 import urllib.parse
 
-import webob
+import webob.multidict
 
 
 @dataclasses.dataclass(frozen=True)
