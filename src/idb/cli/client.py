@@ -213,6 +213,15 @@ class HttpClient:
         logger.info(f'rx status: {response.status_code}')
         logger.debug(f'rx headers: {response.headers}')
         logger.debug(f'rx body: {response.content}')
+        if response.status_code == 400:
+            problem = response.json()
+            title = problem.get('title')
+            detail = problem.get('detail')
+            if detail is not None:
+                raise exceptions.UI(f'{title} {detail}')
+            else:
+                raise exceptions.UI(f'{title}')
+            
         if 'Content-Type' in response.headers and response.headers['Content-Type'] == 'application/json':
             problem = response.json()
             instance = problem.get('instance')
