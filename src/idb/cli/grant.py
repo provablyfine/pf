@@ -137,6 +137,8 @@ def add_parser(parser, f):
         if args.delete:
             f(args, 'del', grant)
         if args.set:
+            if not isinstance(grant, list):
+                grant = [grant]
             f(args, 'set', grant)
 
     group = parser.add_mutually_exclusive_group(required=True)
