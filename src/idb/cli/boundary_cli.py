@@ -126,7 +126,7 @@ def _boundary_grant_function(args, action, grant, field_name):
 
     match action:
         case 'add':
-            grant_list = boundary[field_name] + [grant]
+            grant_list = [grant] if boundary[field_name] is None else boundary[field_name] + [grant]
         case 'del':
             grant_list = [g for g in boundary[field_name] if g != grant]
         case 'set':
