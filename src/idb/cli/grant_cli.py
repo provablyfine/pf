@@ -104,7 +104,7 @@ def _identity_function(args):
             'delete': args.delete,
             'add_tag_list': _tag_list(args.add_tag),
             'del_tag_list': _tag_list(args.del_tag),
-            'invite': args.invite,
+            'invite_list': args.invite,
         }
     }
     _output(args, identity)
