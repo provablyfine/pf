@@ -148,11 +148,15 @@ class GrantConverter:
         return identity_list[0]
 
 
-
 def grant_to_schema(converter: GrantConverter, grant: model.grant.Grant) -> schemas.Grant:
+    try:
+        return _grant_to_schema(converter, grant)
+    except ValueError:
+        return schemas.InvalidGrant()
+
+
+def _grant_to_schema(converter: GrantConverter, grant: model.grant.Grant) -> schemas.Grant:
     match grant.type:
-        case 'invalid':
-            g = schemas.InvalidGrant()
         case 'tag':
             filter = schemas.TagFilter(name_value=converter.to_tag(grant.filter.id))
             permission = schemas.TagPermission(create=grant.permission.create, read=grant.permission.read, delete=grant.permission.delete)
@@ -230,7 +234,8 @@ def grant_to_schema(converter: GrantConverter, grant: model.grant.Grant) -> sche
 def grant_from_schema(converter: GrantConverter, grant: schemas.Grant) -> model.grant.Grant:
     match grant.type:
         case 'invalid':
-            g = model.grant.InvalidGrant()
+            logger.error('Invalid grants cannot be converted back to grants')
+            raise ValueError
         case 'tag':
             filter = model.grant.TagFilter(id=converter.from_tag(grant.filter.name_value))
             permission = model.grant.TagPermission(create=grant.permission.create, read=grant.permission.read, delete=grant.permission.delete)

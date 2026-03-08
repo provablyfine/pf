@@ -27,6 +27,7 @@ def _read_current(type: db.SigningKeyType, staging_period: int):
 def sign_host_certificate(request: wa.Request) -> wa.Response:
     data = schemas.SSHHostCertificateRequest.model_validate_json(request.body)
     caller = ctx.db.identity.read_one(id=ctx.identity_id)
+    assert caller is not None # because we are authenticated
 
     signers = _read_current(db.SigningKeyType.HOST, ctx.config.host_key_staging_period)
     signer = signers[0]
@@ -70,6 +71,7 @@ def sign_host_certificate(request: wa.Request) -> wa.Response:
 def sign_user_certificate(request: wa.Request) -> wa.Response:
     data = schemas.SSHUserCertificateRequest.model_validate_json(request.body)
     caller = ctx.db.identity.read_one(id=ctx.identity_id)
+    assert caller is not None # because we are authenticated
     host = model.identity.read_one(name=data.hostname)
     if host is None:
         return wa.ProblemResponse(status_code=404, title='Unknown host')
@@ -86,11 +88,11 @@ def sign_user_certificate(request: wa.Request) -> wa.Response:
 
     for allowed in grants_allowed:
         permission = allowed.permission
-        if len(permission.force_commands) == 0:
+        if permission.force_command_list is None or len(permission.force_command_list) == 0:
             force_commands = [None]
         else:
-            force_commands = permission.force_commands
-        for command in permission.force_commands:
+            force_commands = permission.force_command_list
+        for command in force_commands:
             cert = ssh.cert.Cert.create_user(
                 public_key=public_key,
                 serial_number=serial_number,

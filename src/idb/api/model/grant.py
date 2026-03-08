@@ -9,7 +9,10 @@ logger = logging.getLogger(__name__)
 class DBBase(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(extra='forbid')
 
-class TripletFilter(DBBase):
+class Filter(DBBase):
+    pass
+
+class TripletFilter(Filter):
     id: int|None = None
     tag_id_list: list[int]|None = None
     boundary_id_list: list[int]|None = None
@@ -19,7 +22,7 @@ class CRDPermission(DBBase):
     read: bool
     delete: bool
 
-class BoundaryFilter(DBBase):
+class BoundaryFilter(Filter):
     id: int|None
 
 class BoundaryUpdatePermission(DBBase):
@@ -36,7 +39,7 @@ class BoundaryGrant(DBBase):
     filter: BoundaryFilter
     permission: BoundaryPermission
 
-class TagFilter(DBBase):
+class TagFilter(Filter):
     id: int | None
 
 class TagPermission(CRDPermission):
@@ -56,7 +59,7 @@ class RoleUpdatePermission(DBBase):
 class RolePermission(CRDPermission):
     update: RoleUpdatePermission|None
 
-class RoleFilter(DBBase):
+class RoleFilter(Filter):
     id: int | None
 
 class RoleGrant(DBBase):
@@ -124,11 +127,8 @@ class SSHGrant(DBBase):
     filter: SSHFilter
     permission: SSHPermission
 
-class InvalidGrant(DBBase):
-    type: typing.Literal["invalid"] = "invalid"
-
 Grant = typing.Annotated[
-    BoundaryGrant | TagGrant | RoleGrant | IdentityGrant | SSHGrant | InvalidGrant,
+    BoundaryGrant | TagGrant | RoleGrant | IdentityGrant | SSHGrant,
     pydantic.Field(discriminator="type")
 ]
 
