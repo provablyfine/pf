@@ -26,7 +26,7 @@ def add_parser(parser, f):
             g = pydantic.TypeAdapter(schemas.Grant).validate_python(grant)
         except pydantic.ValidationError as e:
             for error in e.errors():
-                raise exceptions.UI(f"Grant is invalid. {error['msg']}. {'.'.join(error['loc'])}")
+                raise exceptions.UI(f"Grant is invalid. {error['msg']}. {'.'.join(map(str, error['loc']))}")
     def _do(args):
         grant = _read_grant_stdin()
         if args.add:
