@@ -46,7 +46,7 @@ def create_endpoint(request: wa.Request) -> wa.Response:
         boundary_id = model.boundary.create(
             name=data.name,
             description=data.description,
-            ceiling_list=[],
+            ceiling_list=None,
             denied_list=[],
         )
     except sqlalchemy.exc.IntegrityError:

@@ -51,35 +51,40 @@ def read_one(**kwargs):
     return _from_db(boundary)
 
 
+class Unset:
+    pass
+
+_UNSET = Unset()
+
 def update(id: int,
-           name: str|None=None,
-           description: str|None=None,
-           ceiling_list: list[grant.Grant]|None=None,
-           denied_list: list[grant.Grant]|None=None):
+           name: str|Unset=_UNSET,
+           description: str|Unset=_UNSET,
+           ceiling_list: list[grant.Grant]|None|Unset=_UNSET,
+           denied_list: list[grant.Grant]|Unset=_UNSET):
     update_fields = {}
-    if name is not None:
+    if not isinstance(name, Unset):
         update_fields['name'] = name
         audit_log.create(
             'boundary-update-name',
             id=id,
             name=name,
         )
-    if description is not None:
+    if not isinstance(description, Unset):
         update_fields['description'] = description
         audit_log.create(
             'boundary-update-description',
             id=id,
             description=description,
         )
-    if ceiling_list is not None:
-        db_ceiling_list = [grant.serialize(g) for g in ceiling_list]
+    if not isinstance(ceiling_list, Unset):
+        db_ceiling_list = None if ceiling_list is None else [grant.serialize(g) for g in ceiling_list]
         update_fields['ceiling_list'] = db_ceiling_list
         audit_log.create(
             'boundary-update-ceiling-list',
             id=id,
             ceiling_list=db_ceiling_list,
         )
-    if denied_list is not None:
+    if not isinstance(denied_list, Unset):
         db_denied_list = [grant.serialize(g) for g in denied_list]
         update_fields['denied_list'] = db_denied_list
         audit_log.create(
