@@ -4,10 +4,10 @@ import typing
 
 import pydantic
 
-from .. import schemas
 from .. import jwk
 from .. import ssh
 
+from . import schemas
 from . import model
 from .context import ctx
 

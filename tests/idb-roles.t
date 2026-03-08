@@ -53,24 +53,24 @@ List existing roles (there is one)
       filter:
         name_value: null
       permission:
+        create: true
         read: true
         delete: true
-        create: true
     - type: role
       filter:
         name: null
       permission:
+        create: true
         read: true
         delete: true
-        create: true
         update: null
     - type: boundary
       filter:
         name: null
       permission:
+        create: true
         read: true
         delete: true
-        create: true
         update: null
   member_list:
     - id: 1
@@ -84,7 +84,7 @@ Create tags to be able to define tag-related permissions in role
 Create a new role
   $ idbctl admin role create -n developer
   $ ROLE_ID=$(idbctl admin role list -n developer -q)
-  $ idbctl admin role grant -i $ROLE_ID set <<EOF
+  $ idbctl admin role grant -i $ROLE_ID --set <<EOF
   > - type: identity
   >   filter:
   >     name: null

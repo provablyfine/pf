@@ -4,8 +4,8 @@ import base64
 from ... import wa
 from ... import jwk
 from ... import ssh
-from ... import schemas
 
+from .. import schemas
 from .. import db
 from .. import model
 from .. import signature

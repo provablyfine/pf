@@ -6,8 +6,8 @@ import json
 
 from .. import wa
 from .. import jwk
-from .. import schemas
 
+from . import schemas
 from . import db
 from . import model
 from . import signature

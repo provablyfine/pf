@@ -45,7 +45,23 @@ Update name and description
   description: hello
   ceiling_list: null
   denied_list: []
-  $ idbctl admin boundary denied -i 1 add identity --create-allowed -rd --update name 
+  $ cat <<EOF >identity-crud.yaml
+  > type: identity
+  > filter:
+  >   name: null
+  >   tag_name_value_list: null
+  >   boundary_name_list: null
+  > permission:
+  >   create:
+  >     allowed: true
+  >     allowed_tag_name_value_list: null
+  >     required_boundary_name_list: null
+  >   read: true
+  >   update:
+  >     name: true
+  >   delete: true
+  > EOF
+  $ cat ./identity-crud.yaml | idbctl admin boundary denied -i 1 --add
   Unable to update boundary. Not allowed to update denied list on boundary that applies to self.
   [2]
   $ idbctl admin boundary ceiling -i 1 -a identity:*:*:*

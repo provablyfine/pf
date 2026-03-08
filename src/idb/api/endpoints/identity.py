@@ -5,8 +5,8 @@ import logging
 import sqlalchemy.exc
 
 from ... import wa
-from ... import schemas
 
+from .. import schemas
 from .. import signature
 from .. import grant
 from .. import model
