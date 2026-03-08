@@ -42,6 +42,8 @@ def _boundary_list_function(args):
             sort_function = lambda b: b['id']
         case 'name':
             sort_function = lambda b: (b['name'], b['id'])
+        case _:
+            assert False
     if args.quiet:
         args.format = 'quiet'
     match args.format:
@@ -59,6 +61,8 @@ def _boundary_list_function(args):
                 output = ''
             else:
                 output = tabulate.tabulate(rows, headers=['id', 'name', 'description'], maxcolwidths=80)
+        case _:
+            assert False
     if output:
         print(output)
 
@@ -73,6 +77,8 @@ def _boundary_read_function(args):
             output = json.dumps(boundary, indent=2)
         case 'yaml':
             output = yaml_utils.dump(boundary)
+        case _:
+            assert False
     print(output)
 
 
@@ -125,6 +131,8 @@ def _boundary_grant_function(args, action, grant, field_name):
             grant_list = [g for g in boundary[field_name] if g != grant]
         case 'set':
             grant_list = grant
+        case _:
+            assert False
 
     response = auth.patch(f'{idb.directory.boundary}/{boundary["id"]}', json={
         field_name: grant_list,

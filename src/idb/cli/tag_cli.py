@@ -33,6 +33,8 @@ def tag_list_function(args):
             sort_function = lambda t: (t['name'], t['value'], t['id'])
         case 'value':
             sort_function = lambda t: (t['value'], t['name'], t['id'])
+        case _:
+            assert False
     tags = sorted(tags, key=sort_function)
     if args.quiet:
         args.format = 'quiet'

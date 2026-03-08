@@ -7,7 +7,7 @@ from . import client
 from . import exceptions
 
 
-def _identities(auth, id:int=None, name:str=None, tag_id:int=None, tag_name:str=None, boundary_id:int=None, boundary_name:str=None):
+def _identities(auth, id:int|None=None, name:str|None=None, tag_id:int|None=None, tag_name:str|None=None, boundary_id:int|None=None, boundary_name:str|None=None):
     params = {}
     if id is not None:
         params['id'] = id
@@ -75,6 +75,8 @@ def _identity_list_function(args):
                 output = ''
             else:
                 output = tabulate.tabulate(rows, headers=['id', 'name', 'ntags', 'nboundaries'], maxcolwidths=80)
+        case _:
+            assert False
     if output:
         print(output)
 
@@ -96,6 +98,8 @@ def _identity_read_function(args):
             for b in identity['boundaries']:
                 rows.append(('boundary', b['name']))
             output = tabulate.tabulate(rows, tablefmt='plain')
+        case _:
+            assert False
     print(output)
 
 

@@ -14,11 +14,16 @@ from .. import ssh
 from .. import base64url
 from .. import jwk
 
+# Because we import stuff from http_message_signatures
+# that is not explicitely exported.
+# No good idea to fix this short of re-implementing our own
+# pyright: reportPrivateImportUsage=false
+# pyright: reportAttributeAccessIssue=false
 
 logger = logging.getLogger(__name__)
 
 
-class KeyResolver:
+class KeyResolver(http_message_signatures.HTTPSignatureKeyResolver):
     def __init__(self, private_key):
         self._private_key = private_key
 
@@ -69,12 +74,12 @@ class Signer:
 
 
 def hmac_signer(prefix: str, key: str):
-    key = jwk.Symmetric.from_bytes(base64url.decode(key))
+    signing_key = jwk.Symmetric.from_bytes(base64url.decode(key))
     signer = http_message_signatures.HTTPMessageSigner(
         signature_algorithm=http_message_signatures.algorithms.HMAC_SHA256,
-        key_resolver=KeyResolver(key.to_bytes())
+        key_resolver=KeyResolver(signing_key.to_bytes())
     )
-    return Signer(prefix, key, signer)
+    return Signer(prefix, signing_key, signer)
 
 
 def create_algorithm_class(agent: ssh.agent.Client, key: jwk.Public):
@@ -108,7 +113,7 @@ def create_algorithm_class(agent: ssh.agent.Client, key: jwk.Public):
 
 
 @ssh_utils.exception
-def private_key_signer(prefix: str, filename: str):
+def private_key_signer(prefix: str, filename: str|None):
     if filename is None:
         raise exceptions.UI('Did you forget to login ?')
     elif os.path.exists(filename):
@@ -130,15 +135,17 @@ def private_key_signer(prefix: str, filename: str):
     else:
         ssh_agent = ssh.agent.Client()
         algorithm = None
+        public_key = None
         for id in ssh_agent.list_identities():
             if id.comment == filename or id.public_key.match_ssh_fingerprint(filename):
                 if id.public_key.type != jwk.KeyType.ED25519:
-                    raise exceptions.UI(f'Unsupported: {key.type}')
+                    raise exceptions.UI(f'Unsupported: {id.public_key.type}')
                 algorithm = create_algorithm_class(ssh_agent, id.public_key)
                 public_key = id.public_key
                 break
         if algorithm is None:
             raise exceptions.UI(f'Unable to find key matching {filename}')
+        assert public_key is not None
         http_message_signatures._algorithms.signature_algorithms[algorithm.algorithm_id] = algorithm
         resolver = KeyResolver(None)
         signer = http_message_signatures.HTTPMessageSigner(
@@ -265,17 +272,17 @@ class Client:
     def no_auth(self) -> HttpClient:
         return HttpClient(self, auth=None, public_key=None)
 
-    def invitation_auth(self, account: str, invitation: str) -> HttpClient:
+    def invitation_auth(self, account: str|None, invitation: str) -> HttpClient:
         account_signer, account_public_key = private_key_signer('account', account)
         signers = [hmac_signer('invitation', invitation), account_signer]
         return HttpClient(self, auth=RequestsAuth(signers), public_key=account_public_key)
 
-    def login_auth(self, account: str, session: str) -> HttpClient:
+    def login_auth(self, account: str|None, session: str|None) -> HttpClient:
         account_signer, account_public_key = private_key_signer('account', account)
         session_signer, session_public_key = private_key_signer('session', session)
         signers = [account_signer, session_signer]
         return HttpClient(self, auth=RequestsAuth(signers), public_key=session_public_key)
 
-    def session_auth(self, session: str) -> HttpClient:
+    def session_auth(self, session: str|None) -> HttpClient:
         signer, public_key = private_key_signer('session', session)
         return HttpClient(self, auth=RequestsAuth([signer]), public_key=public_key)

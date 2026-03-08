@@ -39,6 +39,8 @@ def _role_list_function(args):
             sort_function = lambda i: i['id']
         case 'name':
             sort_function = lambda i: (i['name'], i['id'])
+        case _:
+            assert False
     if args.quiet:
         args.format = 'quiet'
     match args.format:
@@ -56,6 +58,8 @@ def _role_list_function(args):
                 output = ''
             else:
                 output = tabulate.tabulate(rows, headers=['id', 'name', 'description'], maxcolwidths=80)
+        case _:
+            assert False
     if output:
         print(output)
 
@@ -70,6 +74,8 @@ def _role_read_function(args):
             output = json.dumps(role, indent=2)
         case 'yaml':
             output = yaml_utils.dump(role)
+        case _:
+            assert False
     print(output)
 
 
@@ -121,6 +127,8 @@ def _role_grant_function(args, action, grant):
             grant_list = [g for g in role['grant_list'] if g != grant]
         case 'set':
             grant_list = grant
+        case _:
+            assert False
 
     response = auth.patch(f'{idb.directory.role}/{role["id"]}', json={
         'grant_list': grant_list,

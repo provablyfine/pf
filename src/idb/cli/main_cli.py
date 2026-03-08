@@ -124,6 +124,10 @@ def main():
                 level = logging.INFO
             case 1:
                 level = logging.WARN
+            case _:
+                assert args.debug > 3
+                level = logging.DEBUG
+
         logging.basicConfig(stream=sys.stdout, level=level)
 
 

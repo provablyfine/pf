@@ -5,6 +5,15 @@ import dateparser
 
 from .. import ssh
 from . import ssh_utils
+from . import exceptions
+
+
+def _parse_timestamp(s: str):
+    dt = dateparser.parse(s)
+    if dt is None:
+        raise exceptions.UI(f'Unable to parse "{s}"')
+    return int(dt.timestamp())
+
 
 @ssh_utils.exception
 def _read_function(args):
@@ -76,11 +85,11 @@ def _sign_host_function(args):
     if args.valid_after is None:
         valid_after = 0
     else:
-        valid_after = int(dateparser.parser(args.valid_after).timestamp())
+        valid_after = _parse_timestamp(args.valid_after)
     if args.valid_before is None:
         valid_before = 0xffffffffffffffff
     else:
-        valid_before = int(dateparser.parser(args.valid_before).timestamp())
+        valid_before = _parse_timestamp(args.valid_before)
 
     cert = ssh.cert.Cert.create_host(
         public_key=public_key,
@@ -109,11 +118,11 @@ def _sign_user_function(args):
     if args.valid_after is None:
         valid_after = 0
     else:
-        valid_after = int(dateparser.parser(args.valid_after).timestamp())
+        valid_after = _parse_timestamp(args.valid_after)
     if args.valid_before is None:
         valid_before = 0xffffffffffffffff
     else:
-        valid_before = int(dateparser.parser(args.valid_before).timestamp())
+        valid_before = _parse_timestamp(args.valid_before)
 
     critical_options = ssh.cert.CriticalOptions(
         force_command=args.force_command,

@@ -39,22 +39,20 @@ def _generate_function(args):
     match args.type:
         case 'ed25519':
             key_type = jwk.KeyType.ED25519
-        case 'ecdsa':
-            key_type = jwk.KeyType.ECDSA
         case 'ecdsa-256':
             key_type = jwk.KeyType.ECDSA_NISTP256
         case 'ecdsa-384':
             key_type = jwk.KeyType.ECDSA_NISTP384
         case 'ecdsa-521':
             key_type = jwk.KeyType.ECDSA_NISTP521
-        case 'rsa':
-            key_type = jwk.KeyType.RSA
         case 'rsa-3072':
             key_type = jwk.KeyType.RSA_3072
         case 'rsa-7680':
             key_type = jwk.KeyType.RSA_7680
         case 'rsa-15360':
             key_type = jwk.KeyType.RSA_15360
+        case _:
+            assert False
     key = jwk.Private.generate(key_type)
     output = _format(key, args.format)
     sys.stdout.write(output.decode('utf-8'))
