@@ -6,6 +6,7 @@ import pydantic
 
 from .. import jwk
 from .. import ssh
+from .. import wa
 
 from . import schemas
 from . import model
@@ -225,7 +226,15 @@ def _grant_to_schema(converter: GrantConverter, grant: model.grant.Grant) -> sch
             assert False
     return g
 
+
 def grant_from_schema(converter: GrantConverter, grant: schemas.Grant) -> model.grant.Grant:
+    try:
+        return _grant_from_schema(converter, grant)
+    except ValueError:
+        raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Grant specification is invalid'))
+
+
+def _grant_from_schema(converter: GrantConverter, grant: schemas.Grant) -> model.grant.Grant:
     match grant.type:
         case 'invalid':
             logger.error('Invalid grants cannot be converted back to grants')
