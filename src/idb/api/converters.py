@@ -48,24 +48,18 @@ class GrantConverter:
     """ This class serves a single purpose: hold the cache of name <-> id mappings """
     @return_none_if_none
     @cache_list
-    def from_tag_list(self, tag_list: list[str]) -> dict[str,int]:
+    def from_tag_list(self, tag_list: list[schemas.TagNameValue]) -> dict[schemas.TagNameValue,int]:
         retval = {}
         for tag in tag_list:
-            equal = tag.find('=')
-            if equal == -1:
-                logger.debug(f'Unable to parse tag=value: {tag}')
-                raise ValueError
-            name = tag[:equal]
-            value = tag[equal+1:]
-            t = ctx.db.tag.read_one(name=name, value=value)
+            t = ctx.db.tag.read_one(name=tag.name, value=tag.value)
             if t is None:
-                logger.debug(f'Unable to find tag in database: {tag}')
+                logger.debug(f'Unable to find tag in database: {tag.name}={tag.value}')
                 raise ValueError
             retval[tag] = t.id
         return retval
 
     @return_none_if_none
-    def from_tag(self, tag: str) -> int:
+    def from_tag(self, tag: schemas.TagNameValue) -> int:
         tag_list = self.from_tag_list([tag])
         assert tag_list is not None and len(tag_list) == 1
         return tag_list[0]
@@ -105,11 +99,11 @@ class GrantConverter:
 
     @return_none_if_none
     @cache_list
-    def to_tag_list(self, tag_id_list: list[int]) -> dict[int,str]:
-        return {t.id: f'{t.name}={t.value}' for t in ctx.db.tag.read_all(id=tag_id_list)}
+    def to_tag_list(self, tag_id_list: list[int]) -> dict[int,schemas.TagNameValue]:
+        return {t.id: schemas.TagNameValue(name=t.name, value=t.value) for t in ctx.db.tag.read_all(id=tag_id_list)}
 
     @return_none_if_none
-    def to_tag(self, tag_id: int) -> str:
+    def to_tag(self, tag_id: int) -> schemas.TagNameValue:
         tag_list = self.to_tag_list([tag_id])
         assert tag_list is not None and len(tag_list) == 1
         return tag_list[0]

@@ -43,7 +43,7 @@ class SymmetricJWK(APIBase):
 
 class TripletFilter(APIBase):
     name: str|None = None
-    tag_list: list[str]|None = None
+    tag_list: list[TagNameValue]|None = None
     boundary_list: list[str]|None = None
 
 class CRDPermission(APIBase):
@@ -68,8 +68,13 @@ class BoundaryGrant(APIBase):
     filter: BoundaryFilter
     permission: BoundaryPermission
 
+class TagNameValue(APIBase):
+    model_config = pydantic.ConfigDict(frozen=True)
+    name: str
+    value: str
+
 class TagFilter(APIBase):
-    name_value: str|None
+    name_value: TagNameValue|None
 
 class TagPermission(CRDPermission):
     pass
@@ -98,7 +103,7 @@ class RoleGrant(APIBase):
 
 class IdentityCreatePermission(APIBase):
     allowed: bool
-    allowed_tag_list: list[str]|None
+    allowed_tag_list: list[TagNameValue]|None
     required_boundary_list: list[str]|None
 
 class IdentityUpdatePermission(APIBase):
@@ -109,8 +114,8 @@ class IdentityPermission(APIBase):
     read: bool
     update: IdentityUpdatePermission|None
     delete: bool
-    add_tag_list: list[str]|None
-    del_tag_list: list[str]|None
+    add_tag_list: list[TagNameValue]|None
+    del_tag_list: list[TagNameValue]|None
     invite_list: list[str]|None
 
 class IdentityFilter(TripletFilter):
