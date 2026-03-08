@@ -9,8 +9,8 @@ class Config:
     directory_url: str
     root_key_id: str
     ignore_ssh_agent: bool
-    account_key: str = None
-    session_key: str = None
+    account_key: str|None = None
+    session_key: str|None = None
 
     @staticmethod
     def load(filename: str):
@@ -23,10 +23,4 @@ class Config:
 
     def save(self, filename: str):
         with open(filename, 'w+') as f:
-            json.dump(dict(
-                directory_url=self.directory_url,
-                root_key_id=self.root_key_id,
-                ignore_ssh_agent=self.ignore_ssh_agent,
-                account_key=self.account_key,
-                session_key=self.session_key,
-            ), f)
+            json.dump(dataclasses.asdict(self), f)
