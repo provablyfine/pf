@@ -53,10 +53,10 @@ def _role_function(args):
             'create': args.create,
             'read': args.read,
             'update': {
-                'name': 'name' in args.update,
-                'description': 'description' in args.update,
-                'grant_list': 'grant_list' in args.update,
-                'member_list': 'member_list' in args.update,
+                'name': any('name' in l for l in args.update),
+                'description': any('description' in l for l in  args.update),
+                'grant_list': any('grant_list' in l for l in args.update),
+                'member_list': any('member_list' in l for l in args.update),
             },
             'delete': args.delete,
         },
@@ -72,10 +72,10 @@ def _boundary_function(args):
             'create': args.create,
             'read': args.read,
             'update': {
-                'name': 'name' in args.update,
-                'description': 'description' in args.update,
-                'denied_list': 'denied_list' in args.update,
-                'ceiling_list': 'ceiling_list' in args.update,
+                'name': any('name' in l for l in args.update),
+                'description': any('description' in l for l in args.update),
+                'denied_list': any('denied_list' in l for l in args.update),
+                'ceiling_list': any('ceiling_list' in l for l in args.update),
             },
             'delete': args.delete,
         },
@@ -99,7 +99,7 @@ def _identity_function(args):
             },
             'read': args.read,
             'update': {
-                'name': 'name' in args.update,
+                'name': any('name' in l for l in args.update),
             },
             'delete': args.delete,
             'add_tag_list': _tag_list(args.add_tag),
@@ -152,7 +152,7 @@ def add_subparser(parser):
     group = role_parser.add_argument_group('permission')
     group.add_argument('-c', '--create', action='store_true')
     group.add_argument('-r', '--read', action='store_true')
-    group.add_argument('-u', '--update', action='append', default=[], choices=['name', 'description', 'member_list', 'grant_list'])
+    group.add_argument('-u', '--update', action='append', nargs='*', default=[], choices=['name', 'description', 'member_list', 'grant_list'])
     group.add_argument('-d', '--delete', action='store_true')
     role_parser.set_defaults(func=_role_function)
 
@@ -163,7 +163,7 @@ def add_subparser(parser):
     group = boundary_parser.add_argument_group('permission')
     group.add_argument('-c', '--create', action='store_true')
     group.add_argument('-r', '--read', action='store_true')
-    group.add_argument('-u', '--update', nargs='*', default=[], choices=['name', 'description', 'denied_list', 'ceiling_list'])
+    group.add_argument('-u', '--update', action='append', nargs='*', default=[], choices=['name', 'description', 'denied_list', 'ceiling_list'])
     group.add_argument('-d', '--delete', action='store_true')
     boundary_parser.set_defaults(func=_boundary_function)
 
@@ -178,7 +178,7 @@ def add_subparser(parser):
     group.add_argument('--create-allowed-tag', default=None, nargs='*')
     group.add_argument('--create-required-boundary', default=None, nargs='*')
     group.add_argument('-r', '--read', action='store_true')
-    group.add_argument('-u', '--update', action='append', default=[], choices=['name'])
+    group.add_argument('-u', '--update', action='append', nargs='*', default=[], choices=['name'])
     group.add_argument('-d', '--delete', action='store_true')
     group.add_argument('--add-tag', default=[], nargs='*')
     group.add_argument('--del-tag', default=[], nargs='*')
