@@ -5,6 +5,7 @@ from . import boundary_cli
 from . import tag_cli
 from . import role_cli
 from . import identity_cli
+from . import grant_cli
 
 
 def _initialize_function(args):
@@ -36,3 +37,6 @@ def add_subparsers(parser):
 
     identity_parser = subparsers.add_parser('identity', help='View and edit identities')
     identity_cli.add_subparser(identity_parser)
+
+    grant_parser = subparsers.add_parser('grant', help='Generate grants')
+    grant_cli.add_subparser(grant_parser)
