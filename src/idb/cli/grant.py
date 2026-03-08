@@ -6,7 +6,6 @@ import json
 import yaml
 import pydantic
 
-from .. import schemas
 from . import exceptions
 
 
@@ -21,23 +20,13 @@ def add_parser(parser, f):
             except:
                 raise exceptions.UI('Unable to read grant from stdin');
         return grant
-    def _check_grant(grant):
-        try:
-            g = pydantic.TypeAdapter(schemas.Grant).validate_python(grant)
-        except pydantic.ValidationError as e:
-            for error in e.errors():
-                raise exceptions.UI(f"Grant is invalid. {error['msg']}. {'.'.join(map(str, error['loc']))}")
     def _do(args):
         grant = _read_grant_stdin()
         if args.add:
-            _check_grant(grant)
             f(args, 'add', grant)
         if args.delete:
-            _check_grant(grant)
             f(args, 'del', grant)
         if args.set:
-            for g in grant:
-                _check_grant(g)
             f(args, 'set', grant)
 
     group = parser.add_mutually_exclusive_group(required=True)
