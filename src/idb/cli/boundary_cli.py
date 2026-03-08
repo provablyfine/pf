@@ -87,14 +87,14 @@ def _boundary_read_function(args):
             else:
                 for g in boundary['ceiling_list']:
                     type, filter, permission = grant.to_text(g)
-                    rows.append(['ceiling', type])
-                    rows.append(['', filter])
-                    rows.append(['', permission])
+                    rows.append(['ceiling', f'type:       {type}'])
+                    rows.append(['',        f'filter:     {filter}'])
+                    rows.append(['',        f'permission: {permission}'])
             for g in boundary['denied_list']:
                 type, filter, permission = grant.to_text(g)
-                rows.append(['denied', type])
-                rows.append(['', filter])
-                rows.append(['', permission])
+                rows.append(['denied',  f'type:       {type}'])
+                rows.append(['',        f'filter:     {filter}'])
+                rows.append(['',        f'permission: {permission}'])
             output = tabulate.tabulate(rows, tablefmt='plain')
         case _:
             assert False

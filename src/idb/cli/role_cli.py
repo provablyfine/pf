@@ -84,9 +84,9 @@ def _role_read_function(args):
                 rows.append(['member', m['name']])
             for g in role['grant_list']:
                 type, filter, permission = grant.to_text(g)
-                rows.append(['grant', type])
-                rows.append(['', filter])
-                rows.append(['', permission])
+                rows.append(['grant', f'type:       {type}'])
+                rows.append(['',      f'filter:     {filter}'])
+                rows.append(['',      f'permission: {permission}'])
             output = tabulate.tabulate(rows, tablefmt='plain')
         case _:
             assert False
