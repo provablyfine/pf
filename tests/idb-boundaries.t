@@ -22,11 +22,10 @@ JSON output
 
 Display details about the boundary
   $ idbctl admin boundary read -i 1
-  id: 1
-  name: root
-  description: The Root boundary is not a boundary at all.
-  ceiling_list: null
-  denied_list: []
+  id           1
+  name         root
+  description  The Root boundary is not a boundary at all.
+  ceiling      *
 
 Search for the root boundary explicitely
   $ idbctl admin boundary list -n root -q
@@ -40,11 +39,10 @@ Try to delete it (we cannot)
 Update name and description
   $ idbctl admin boundary update -i 1 -d hello -n hello
   $ idbctl admin boundary read -i 1
-  id: 1
-  name: hello
-  description: hello
-  ceiling_list: null
-  denied_list: []
+  id           1
+  name         hello
+  description  hello
+  ceiling      *
   $ cat <<EOF >identity-crud.yaml
   > type: identity
   > filter:
@@ -86,32 +84,56 @@ Check that boundary has been created
   id           2
   name         non-admin
   description  Most users are not admins and they should get a boundary that derives from this
-  denied       role:create:*:*
-  denied       role:update:*:field/permission_list
-  denied       tag:*:*:*
-  denied       boundary:*:*:*
+  ceiling      *
+  denied       type:       role
+               filter:     *
+               permission: create
+  denied       type:       role
+               filter:     *
+               permission: update.grant_list
+  denied       type:       tag
+               filter:     *
+               permission: create read delete
+  denied       type:       boundary
+               filter:     *
+               permission: create read update.denied_list delete
 
 We can remove and add permissions from the boundary denied list
-  $ idbctl admin boundary denied -i $BOUNDARY_ID -d role:create:*:*
+  $ idbctl admin boundary read -i $BOUNDARY_ID -f json | jq '.denied_list[0]' | idbctl admin boundary denied -i $BOUNDARY_ID --del 
   $ idbctl admin boundary read -i 2
   id           2
   name         non-admin
   description  Most users are not admins and they should get a boundary that derives from this
-  denied       role:update:*:field/permission_list
-  denied       tag:*:*:*
-  denied       boundary:*:*:*
-  $ idbctl admin boundary denied -i $BOUNDARY_ID -a role:create:*:*
+  ceiling      *
+  denied       type:       role
+               filter:     *
+               permission: update.grant_list
+  denied       type:       tag
+               filter:     *
+               permission: create read delete
+  denied       type:       boundary
+               filter:     *
+               permission: create read update.denied_list delete
+  $ idbctl admin grant role --create | idbctl admin boundary denied -i $BOUNDARY_ID --add
   $ idbctl admin boundary read -i 2
   id           2
   name         non-admin
   description  Most users are not admins and they should get a boundary that derives from this
-  denied       role:update:*:field/permission_list
-  denied       tag:*:*:*
-  denied       boundary:*:*:*
-  denied       role:create:*:*
-  $ idbctl admin boundary denied -i $BOUNDARY_ID -d role:read:*:*
-  Cannot remove permission. It is not in the list. role:read:*:*
-  [2]
+  ceiling      *
+  denied       type:       role
+               filter:     *
+               permission: update.grant_list
+  denied       type:       tag
+               filter:     *
+               permission: create read delete
+  denied       type:       boundary
+               filter:     *
+               permission: create read update.denied_list delete
+  denied       type:       role
+               filter:     *
+               permission: create
+
+  $ idbctl admin grant role --read | idbctl admin boundary denied -i $BOUNDARY_ID --del
 
 We can also edit the boundary ceiling list
-  $ idbctl admin boundary ceiling -i $BOUNDARY_ID -s role:update:*:*
+  $ idbctl admin grant role --update | idbctl admin boundary ceiling -i $BOUNDARY_ID --set

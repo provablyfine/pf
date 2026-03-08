@@ -14,67 +14,25 @@ List existing roles (there is one)
   [2]
   $ idbctl admin role update -i 1 -n hello
   $ idbctl admin role read -i 1
-  id: 1
-  name: hello
-  description: The "root" role identifies a user that is able to do anything. It is
-    created once at startup and should be deleted once a proper permission model is
-    deployed.
-  grant_list:
-    - type: identity
-      filter:
-        name: null
-        tag_list: null
-        boundary_list: null
-      permission:
-        create:
-          allowed: true
-          allowed_tag_list: null
-          required_boundary_list: null
-        read: true
-        update: null
-        delete: true
-        add_tag_list: null
-        del_tag_list: null
-        invite_list: null
-    - type: ssh
-      filter:
-        name: null
-        tag_list: null
-        boundary_list: null
-      permission:
-        force_command_list: null
-        username_list: null
-        permit_pty: true
-        permit_user_rc: true
-        permit_x11_forwarding: true
-        permit_agent_forwarding: true
-        permit_port_forwarding: true
-    - type: tag
-      filter:
-        name_value: null
-      permission:
-        create: true
-        read: true
-        delete: true
-    - type: role
-      filter:
-        name: null
-      permission:
-        create: true
-        read: true
-        delete: true
-        update: null
-    - type: boundary
-      filter:
-        name: null
-      permission:
-        create: true
-        read: true
-        delete: true
-        update: null
-  member_list:
-    - id: 1
-      name: root
+  id           1
+  name         hello
+  description  The "root" role identifies a user that is able to do anything. It is created once at startup and should be deleted once a proper permission model is deployed.
+  member       root
+  grant        type:       identity
+               filter:     name:* tag_list:* boundary_list:*
+               permission: create read update.name delete add_tag_list:* del_tag_list:* invite_list:*
+  grant        type:       ssh
+               filter:     name:* tag_list:* boundary_list:*
+               permission: username:* force_command:* permit_pty permit_user_rc permit_x11_forwarding permit_agent_forwarding permit_port_forwarding
+  grant        type:       tag
+               filter:     *
+               permission: create read delete
+  grant        type:       role
+               filter:     *
+               permission: create read update.name update.description update.grant_list update.member_list delete
+  grant        type:       boundary
+               filter:     *
+               permission: create read update.name update.description update.denied_list update.ceiling_list delete
 
 Create tags to be able to define tag-related permissions in role
   $ idbctl admin tag create -n env -v dev
