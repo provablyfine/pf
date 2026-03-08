@@ -34,7 +34,7 @@ Search for the root boundary explicitely
 
 Try to delete it (we cannot)
   $ idbctl admin boundary delete -i $(idbctl admin boundary list -n root -q)
-  Unable to delete boundary. Boundary is still in use
+  Boundary is still in use
   [2]
 
 Update name and description
@@ -49,22 +49,25 @@ Update name and description
   > type: identity
   > filter:
   >   name: null
-  >   tag_name_value_list: null
-  >   boundary_name_list: null
+  >   tag_list: null
+  >   boundary_list: null
   > permission:
   >   create:
   >     allowed: true
-  >     allowed_tag_name_value_list: null
-  >     required_boundary_name_list: null
+  >     allowed_tag_list: null
+  >     required_boundary_list: null
   >   read: true
   >   update:
   >     name: true
   >   delete: true
+  >   add_tag_list: null
+  >   del_tag_list: null
+  >   invite_list: null
   > EOF
   $ cat ./identity-crud.yaml | idbctl admin boundary denied -i 1 --add
   Unable to update boundary. Not allowed to update denied list on boundary that applies to self.
   [2]
-  $ idbctl admin boundary ceiling -i 1 -a identity:*:*:*
+  $ cat ./identity-crud.yaml | idbctl admin boundary ceiling -i 1 -a
   Unable to update boundary. Not allowed to update ceiling list on boundary that applies to self.
   [2]
 
@@ -73,10 +76,13 @@ Create a new boundary
 
 Make sure important permissions are denied from these users
   $ BOUNDARY_ID=$(idbctl admin boundary list -n non-admin -q)
-  $ idbctl admin boundary denied -i $BOUNDARY_ID -s role:create:*:* role:update:*:field/permission_list tag:*:*:* boundary:*:*:*
+  $ idbctl admin grant role --create |idbctl admin boundary denied -i $BOUNDARY_ID --add
+  $ idbctl admin grant role --update grant_list | idbctl admin boundary denied -i $BOUNDARY_ID --add
+  $ idbctl admin grant tag -crd | idbctl admin boundary denied -i $BOUNDARY_ID --add
+  $ idbctl admin grant boundary -crd --update denied_list | idbctl admin boundary denied -i $BOUNDARY_ID --add 
 
 Check that boundary has been created
-  $ idbctl admin boundary read -i 2
+  $ idbctl admin boundary read -i $BOUNDARY_ID
   id           2
   name         non-admin
   description  Most users are not admins and they should get a boundary that derives from this

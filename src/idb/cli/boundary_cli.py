@@ -77,6 +77,25 @@ def _boundary_read_function(args):
             output = json.dumps(boundary, indent=2)
         case 'yaml':
             output = yaml_utils.dump(boundary)
+        case 'text':
+            rows = []
+            rows.append(['id', boundary['id']])
+            rows.append(['name', boundary['name']])
+            rows.append(['description', boundary['description']])
+            if boundary['ceiling_list'] is None:
+                rows.append(['ceiling', '*'])
+            else:
+                for g in boundary['ceiling_list']:
+                    type, filter, permission = grant.to_text(g)
+                    rows.append(['ceiling', type])
+                    rows.append(['', filter])
+                    rows.append(['', permission])
+            for g in boundary['denied_list']:
+                type, filter, permission = grant.to_text(g)
+                rows.append(['denied', type])
+                rows.append(['', filter])
+                rows.append(['', permission])
+            output = tabulate.tabulate(rows, tablefmt='plain')
         case _:
             assert False
     print(output)
@@ -164,7 +183,7 @@ def add_subparser(parser):
 
     read_parser = subparsers.add_parser('read', help='Show details on a specific boundary')
     read_parser.add_argument('-i', '--id', type=int, help='Id of boundary.', required=True)
-    read_parser.add_argument('-f', '--format', choices=['json', 'yaml'], default='yaml', help='Output format')
+    read_parser.add_argument('-f', '--format', choices=['json', 'yaml', 'text'], default='text', help='Output format')
     read_parser.set_defaults(func=_boundary_read_function)
 
     create_parser = subparsers.add_parser('create', help='Create a new boundary')

@@ -113,6 +113,8 @@ def to_text(grant):
             return _identity_grant_to_text(grant)
         case 'ssh':
             return _ssh_grant_to_text(grant)
+        case _:
+            assert False
 
 
 def add_parser(parser, f):
