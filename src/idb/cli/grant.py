@@ -21,7 +21,9 @@ def _bool(p: dict, name: str) -> list:
         return []
     return [name]
 
-def _update(p: dict) -> list:
+def _update(p: dict, default_fields: list[str]) -> list:
+    if p['update'] is None:
+        return [f'update.{i}' for i in default_fields]
     output = []
     for k, v in p['update'].items():
         if not v:
@@ -57,7 +59,7 @@ def _role_filter_name(name):
     return f'name:{name}'
 
 def _role_permission(p):
-    output = [] + _bool(p, 'create') + _bool(p, 'read') + _update(p) + _bool(p, 'delete')
+    output = [] + _bool(p, 'create') + _bool(p, 'read') + _update(p, ['name', 'description', 'grant_list', 'member_list']) + _bool(p, 'delete')
     return  ' '.join(output)
 
 def _role_grant_to_text(grant):
@@ -68,7 +70,7 @@ def _boundary_filter_name(name):
     return f'name:{name}'
 
 def _boundary_permission(p):
-    output = [] + _bool(p, 'create') + _bool(p, 'read') + _update(p) + _bool(p, 'delete')
+    output = [] + _bool(p, 'create') + _bool(p, 'read') + _update(p, ['name', 'description', 'denied_list', 'ceiling_list']) + _bool(p, 'delete')
     return  ' '.join(output)
 
 def _boundary_grant_to_text(grant):
@@ -82,7 +84,7 @@ def _triplet_filter(filter):
     return ' '.join(output)
 
 def _identity_permission(p):
-    output = [] + _bool(p, 'create') + _bool(p, 'read') + _update(p) + _bool(p, 'delete')
+    output = [] + _bool(p, 'create') + _bool(p, 'read') + _update(p, ['name']) + _bool(p, 'delete')
     output += [f"add_tag_list:{_tag_list(p['add_tag_list'])}"]
     output += [f"del_tag_list:{_tag_list(p['del_tag_list'])}"]
     output += [f"invite_list:{_str_list(p['invite_list'])}"]
