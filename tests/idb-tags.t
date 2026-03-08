@@ -17,7 +17,7 @@ List existing tags (there is one now)
 
 Create an existing tag
   $ idbctl admin tag create -n env -v prod
-  Unable to create tag. Tag already exists
+  Tag already exists
   [2]
 
 Create more tags

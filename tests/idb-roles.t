@@ -10,7 +10,7 @@ List existing roles (there is one)
                 once at startup and should be deleted once a proper permission model is
                 deployed.
   $ idbctl admin role delete -i 1
-  Unable to delete role. Role is still in use
+  Role is still in use
   [2]
   $ idbctl admin role update -i 1 -n hello
   $ idbctl admin role read -i 1
@@ -88,23 +88,31 @@ Create a new role
   > - type: identity
   >   filter:
   >     name: null
-  >     tag_list: ["env=dev"]
+  >     tag_list:
+  >       - name: env
+  >         value: dev
   >     boundary_list: null
   >   permission:
   >     create:
   >       allowed: true
-  >       allowed_tag_list: ["env=dev"]
+  >       allowed_tag_list:
+  >         - name: env
+  >           value: dev
   >       required_boundary_list: null
   >     read: true
   >     update: null
   >     delete: true
-  >     add_tag_list: ["env=dev"]
-  >     del_tag_list: ["env=dev"]
+  >     add_tag_list: [{name: "env", value: "dev"}]
+  >     del_tag_list:
+  >       - name: env
+  >         value: dev
   >     invite_list: ["email"]
   > - type: ssh
   >   filter:
   >     name: null
-  >     tag_list: ["env=dev"]
+  >     tag_list:
+  >       - name: env
+  >         value: dev
   >     boundary_list: null
   >   permission:
   >     username_list: ["root"]
