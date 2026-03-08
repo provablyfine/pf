@@ -4,7 +4,6 @@ import traceback
 import os
 import os.path
 import logging
-import secrets
 
 import requests
 import requests.auth
@@ -30,7 +29,6 @@ def _config_function(args):
         directory_url=args.directory,
         root_key_id=args.root_key_id,
         ignore_ssh_agent=args.ignore_ssh_agent,
-        directory=response.json()
     )
     c.save(args.config)
 
@@ -39,7 +37,7 @@ def _accept_function(args):
     c = config.Config.load(args.config)
     idb = client.Client(c)
     auth = idb.invitation_auth(account=args.key, invitation=args.invitation)
-    response = auth.post(url=c.directory['accept_invitation'], json={
+    response = auth.post(url=auth.directory.accept_invitation, json={
         'account_public_key': auth.public_key
     })
     if response.status_code != 204:
@@ -70,7 +68,7 @@ def _login_function(args):
         c.session_key = args.session_key
 
     auth = idb.login_auth(account=c.account_key, session=c.session_key)
-    response = auth.post(url=c.directory['login'], json={
+    response = auth.post(url=auth.directory.login, json={
         'session_public_key': session_key.public().to_dict()
     })
     if response.status_code != 204:
