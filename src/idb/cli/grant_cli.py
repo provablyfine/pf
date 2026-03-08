@@ -121,11 +121,11 @@ def _ssh_function(args):
         'permission': {
             'force_command_list': args.force_command,
             'username_list': args.username,
-            'permit-pty': args.permit_pty,
-            'permit-user-rc': args.permit_user_rc,
-            'permit-x11-forwarding': args.permit_x11_forwarding,
-            'permit-agent-forwarding': args.permit_agent_forwarding,
-            'permit-port-forwarding': args.permit_port_forwarding,
+            'permit_pty': args.permit_pty,
+            'permit_user_rc': args.permit_user_rc,
+            'permit_x11_forwarding': args.permit_x11_forwarding,
+            'permit_agent_forwarding': args.permit_agent_forwarding,
+            'permit_port_forwarding': args.permit_port_forwarding,
         }
     }
     _output(args, ssh)

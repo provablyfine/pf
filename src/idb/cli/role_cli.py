@@ -6,6 +6,7 @@ from . import client
 from . import exceptions
 from . import grant
 from . import yaml_utils
+from . import grant
 
 
 def _roles(auth, id=None, name=None):
@@ -74,6 +75,19 @@ def _role_read_function(args):
             output = json.dumps(role, indent=2)
         case 'yaml':
             output = yaml_utils.dump(role)
+        case 'text':
+            rows = []
+            rows.append(['id', role['id']])
+            rows.append(['name', role['name']])
+            rows.append(['description', role['description']])
+            for m in role['member_list']:
+                rows.append(['member', m['name']])
+            for g in role['grant_list']:
+                type, filter, permission = grant.to_text(g)
+                rows.append(['grant', type])
+                rows.append(['', filter])
+                rows.append(['', permission])
+            output = tabulate.tabulate(rows, tablefmt='plain')
         case _:
             assert False
     print(output)
@@ -192,7 +206,7 @@ def add_subparser(parser):
 
     read_parser = subparsers.add_parser('read', help='Show details on a specific role')
     read_parser.add_argument('-i', '--id', type=int, help='Id of role.', required=True)
-    read_parser.add_argument('-f', '--format', choices=['json', 'yaml'], default='yaml', help='Output format')
+    read_parser.add_argument('-f', '--format', choices=['json', 'yaml', 'text'], default='text', help='Output format')
     read_parser.set_defaults(func=_role_read_function)
 
     create_parser = subparsers.add_parser('create', help='Create a new role')
