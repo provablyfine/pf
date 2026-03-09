@@ -8,7 +8,7 @@ List existing identities (there is one)
   ----  ------  -------  -------------
      1  root          0              1
   $ idbctl admin identity delete -i 1
-  Unable to delete identity. You cannot delete yourself
+  You cannot delete yourself
   [2]
   $ idbctl admin identity update -i 1 -n hello
   Unable to update identity. Not allowed to update self.
