@@ -158,7 +158,7 @@ class IdentityChecker:
 
     def can_del_tag(self, tag_id: int) -> bool:
         def check(p) -> bool:
-            if p.del_tag_list is None:
+            if p.del_tag_id_list is None:
                 return True
             return tag_id in p.del_tag_id_list
         return self._checker.can(check)
