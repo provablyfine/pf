@@ -92,7 +92,7 @@ class RoleChecker:
     def can_read(self) -> bool:
         return self._checker.can(lambda p: p.read)
     def can_update(self, field: str) -> bool:
-        assert field in ['name', 'description', 'grant_list'], "You tried to update a field that does not exist"
+        assert field in ['name', 'description', 'member_list', 'grant_list'], "You tried to update a field that does not exist"
         def check(p) -> bool:
             if p.update is None:
                 return True
