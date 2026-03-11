@@ -13,33 +13,30 @@ Find root id
   $ IDENTITY_ID=$(idbctl admin identity list -n root -q)
 
 Add invalid permissions to role
-  $ idbctl admin role permission -i $ROLE_ID -a identity:create:haha/hoy:*
-  Unable to update role. Request validation error.
+  $ idbctl admin grant identity --create-allowed --name unknown | idbctl admin role grant -i $ROLE_ID --add
+  Grant specification is invalid
   [2]
-  $ idbctl admin role permission -i $ROLE_ID -a identity:create:name/unknown:*
-  Unable to update role. Permission field invalid. Identity cannot be found.
+  $ idbctl admin grant identity --create-allowed --name unknown --tag hoy=bar| idbctl admin role grant -i $ROLE_ID --add
+  Grant specification is invalid
   [2]
-  $ idbctl admin role permission -i $ROLE_ID -a identity:create:tag/hoy:*
-  Unable to update role. Permission field invalid. Expected: name=value.
-  [2]
-  $ idbctl admin role permission -i $ROLE_ID -a identity:create:tag/hoy=bar:*
-  Unable to update role. Permission field invalid. Tag cannot be found.
-  [2]
-  $ idbctl admin role permission -i $ROLE_ID -a identity:create:tag/env=prod:*
-  Unable to update role. Permission field invalid. Tag cannot be found.
-  [2]
-  $ idbctl admin role permission -i $ROLE_ID -a identity:create:boundary/unknown:*
-  Unable to update role. Permission field invalid. Boundary cannot be found.
+  $ idbctl admin grant identity --create-allowed --name unknown --boundary unknown | idbctl admin role grant -i $ROLE_ID --add
+  Grant specification is invalid
   [2]
 
 Add a real permission to role
-  $ idbctl admin role permission -i $ROLE_ID -a identity:create:name/root:*
-  $ idbctl admin role permission -i $ROLE_ID -a identity:create:boundary/root:*
-  $ idbctl admin role permission -i $ROLE_ID -a identity:create:tag/env=dev:*
+  $ idbctl admin grant identity --create-allowed --name root | idbctl admin role grant -i $ROLE_ID --add
+  $ idbctl admin grant identity --create-allowed --boundary root | idbctl admin role grant -i $ROLE_ID --add
+  $ idbctl admin grant identity --create-allowed --tag env=dev | idbctl admin role grant -i $ROLE_ID --add
   $ idbctl admin role read -i $ROLE_ID
   id           2
   name         test
   description
-  permission   identity:create:name/root:*
-  permission   identity:create:boundary/root:*
-  permission   identity:create:tag/env=dev:*
+  grant        type:       identity
+               filter:     name:root
+               permission: create
+  grant        type:       identity
+               filter:     boundary_list:root
+               permission: create
+  grant        type:       identity
+               filter:     tag_list:env=dev
+               permission: create

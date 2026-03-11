@@ -19,20 +19,20 @@ List existing roles (there is one)
   description  The "root" role identifies a user that is able to do anything. It is created once at startup and should be deleted once a proper permission model is deployed.
   member       root
   grant        type:       identity
-               filter:     name:* tag_list:* boundary_list:*
-               permission: create read update.name delete add_tag_list:* del_tag_list:* invite_list:*
+               filter:     *
+               permission: create read update.* delete add_tag_list:* del_tag_list:* invite_list:*
   grant        type:       ssh
-               filter:     name:* tag_list:* boundary_list:*
-               permission: username:* force_command:* permit_pty permit_user_rc permit_x11_forwarding permit_agent_forwarding permit_port_forwarding
+               filter:     *
+               permission: username_list:* force_command_list:* permit_pty permit_user_rc permit_x11_forwarding permit_agent_forwarding permit_port_forwarding
   grant        type:       tag
                filter:     *
                permission: create read delete
   grant        type:       role
                filter:     *
-               permission: create read update.name update.description update.grant_list update.member_list delete
+               permission: create read update.* delete
   grant        type:       boundary
                filter:     *
-               permission: create read update.name update.description update.denied_list update.ceiling_list delete
+               permission: create read update.* delete
 
 Create tags to be able to define tag-related permissions in role
   $ idbctl admin tag create -n env -v dev
