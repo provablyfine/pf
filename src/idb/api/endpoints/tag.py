@@ -30,7 +30,7 @@ def list_endpoint(request: wa.Request) -> wa.Response:
 
     return wa.JSONResponse(
         status_code=200,
-        json=schemas.TagListResponse(tags=[converters.tag_to_schema(tag) for tag in tags]).model_dump(),
+        json=schemas.TagListResponse(tags=[converters.tag_to_schema(tag) for tag in output]).model_dump(),
     )
 
 

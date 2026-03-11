@@ -96,12 +96,12 @@ def update_endpoint(request: wa.Request) -> wa.Response:
     if 'description' in data.model_fields_set and data.description != role.description:
         role_update['description'] = data.description
     if 'grant_list' in data.model_fields_set:
-        assert data.grant_list # pydantic validation guarantees this
+        assert data.grant_list is not None # pydantic validation guarantees this
         if ctx.identity_id in role.member_id_list:
             return wa.ProblemResponse(status_code=403, title='Not allowed to update grants on a role that applies to self')
         role_update['grant_list'] = [converters.grant_from_schema(converter, g) for g in data.grant_list]
     if 'member_list' in data.model_fields_set:
-        assert data.member_list # pydantic validation guarantees this
+        assert data.member_list is not None # pydantic validation guarantees this
         members = ctx.db.identity.read_all(name=[m.name for m in data.member_list])
         member_by_name = {m.name: m for m in members}
         unresolved_members = [m.name for m in data.member_list if m.name not in member_by_name]
