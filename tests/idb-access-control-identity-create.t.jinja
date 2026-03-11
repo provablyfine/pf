@@ -6,24 +6,20 @@ Initialize server and login
   .* (re)
 
 
-{% for permission in [
-  "identity:*:*:*",
-  "identity:*:tag/id=person:*",
-  "identity:*:boundary/boundary:*",
-  "identity:*:boundary/boundary&tag/id=person:*",
-  "identity:create:*:*",
-  "identity:create:tag/id=person:*",
-  "identity:create:boundary/boundary:*",
-  "identity:create:boundary/boundary&tag/id=person:*",
+{% for grant in [
+  "--create-allowed",
+  "--create-allowed --create-allowed-tag id=person",
+  "--create-allowed --create-required-boundary boundary",
+  "--create-allowed --create-required-boundary boundary --create-allowed-tag id=person",
 ]
 %}
-Check that permission "{{permission}}" is actually enforcing access control
+Check that grant "{{grant}}" is actually enforcing access control
   $ idbctl -c user1.json admin identity create -n user4 -b boundary -t $PERSON_ID
   Unable to create identity. Not allowed to create identity
   [2]
-  $ idbctl admin role permission -i $ROLE_ID -a '{{permission}}'
+  $ idbctl admin grant identity {{grant}} | idbctl admin role grant -i $ROLE_ID --add
   $ idbctl -c user1.json admin identity create -n user4 -b boundary -t id=person
-  $ idbctl admin role permission -i $ROLE_ID -d '{{permission}}'
+  $ idbctl admin role read -i $ROLE_ID -f json | jq '.grant_list[-1]' | idbctl admin role grant -i $ROLE_ID --del
   $ USER4_ID=$(idbctl admin identity list -n user4 -q)
   $ idbctl admin identity delete -i $USER4_ID
 {% endfor %}
