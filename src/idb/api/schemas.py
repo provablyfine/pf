@@ -227,11 +227,14 @@ class RoleCreateRequest(APIBase):
     name: str
     description: str = ''
 
+class RoleMemberUpdateRequest(APIBase):
+    name: str
+
 class RoleUpdateRequest(APIBase):
     name: str | None = None
     description: str | None = None
     grant_list: list[Grant] | None = None
-    member_list: list[RoleMember] | None = None
+    member_list: list[RoleMemberUpdateRequest] | None = None
 
     @pydantic.model_validator(mode='after')
     def reject_explicit_nulls(self):
