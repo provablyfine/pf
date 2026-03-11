@@ -5,49 +5,46 @@ Initialize server and login
   $ source $TESTDIR/idb-access-control-identity-fixture.sh
   .* (re)
 
-{% for permission in [
-  "identity:*:*:*",
-  "identity:*:tag/id=person:*",
-  "identity:*:boundary/boundary:*",
-  "identity:*:boundary/boundary&tag/id=person:*",
-  "identity:delete:*:*",
-  "identity:delete:tag/id=person:*",
-  "identity:delete:boundary/boundary:*",
-  "identity:delete:boundary/boundary&tag/id=person:*",
+{% for grant in [
+  "--delete",
+  "--delete --tag id=person",
+  "--delete --boundary boundary",
+  "--delete --tag id=person --boundary boundary",
 ]
 %}
-Check that permission "{{permission}}" is actually enforcing access control
+Check that grant "{{grant}}" is actually enforcing access control
   $ idbctl admin identity create -n user4 -b boundary -t $PERSON_ID
   $ USER4_ID=$(idbctl admin identity list -n user4 -q)
   $ idbctl -c user1.json admin identity delete -i $USER4_ID
   Unable to delete identity. Not allowed to delete identity
   [2]
-  $ idbctl admin role permission -i $ROLE_ID -a '{{permission}}'
+  $ idbctl admin grant identity {{grant}} | idbctl admin role grant -i $ROLE_ID --add
   $ idbctl -c user1.json admin identity delete -i $USER4_ID
-  $ idbctl admin role permission -i $ROLE_ID -d '{{permission}}'
+  $ idbctl admin role read -i $ROLE_ID -f json | jq '.grant_list[-1]' | idbctl admin role grant -i $ROLE_ID --del
 {% endfor %}
 
-{% for permission in [
-  "identity:*:name/user4:*",
-  "identity:delete:name/user4:*",
+{% for grant in [
+  "--delete --name user4",
 ]
 %}
-Check that permission "{{permission}}" is actually enforcing access control
+Check that grant "{{grant}}" is actually enforcing access control
 and becomes invalid after the identity is deleted
   $ idbctl admin identity create -n user4 -b boundary -t $PERSON_ID
   $ USER4_ID=$(idbctl admin identity list -n user4 -q)
   $ idbctl -c user1.json admin identity delete -i $USER4_ID
   Unable to delete identity. Not allowed to delete identity
   [2]
-  $ idbctl admin role permission -i $ROLE_ID -a '{{permission}}'
+  $ idbctl admin grant identity {{grant}} | idbctl admin role grant -i $ROLE_ID --add
   $ idbctl -c user1.json admin identity delete -i $USER4_ID
   $ idbctl admin role read -i $ROLE_ID
   id           2
   name         role
   description
-  permission   invalid:invalid:*:*
   member       user1
-  $ idbctl admin role permission -i $ROLE_ID -d invalid:invalid:*:*
+  grant        type:       invalid
+               filter:     !
+               permission: !
+  $ idbctl admin role read -i $ROLE_ID -f json | jq '.grant_list[-1]' | idbctl admin role grant -i $ROLE_ID --del
 {% endfor %}
 
 
