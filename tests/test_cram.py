@@ -10,7 +10,7 @@ from . import utils
     "idb-identity.t",
     "idb-permission.t",
     "idb-access-control-tag.t.jinja",
-    "idb-access-control-identity.t.jinja",
+    "idb-access-control-identity.t",
     "idb-access-control-identity-invite.t.jinja",
     "idb-access-control-identity-create.t.jinja",
     "idb-access-control-identity-delete.t.jinja",
