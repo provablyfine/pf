@@ -7,8 +7,8 @@ Create admin objects
   $ DEVICE_TAG_ID=$(idbctl admin tag list -n id -v device -q)
   $ idbctl admin role create -n role
   $ ROLE_ID=$(idbctl admin role list -n role -q)
-  $ idbctl admin role permission -i $ROLE_ID -a identity:ssh-shell:tag/id=device:username/root
-  $ idbctl admin role permission -i $ROLE_ID -a identity:ssh-shell:tag/id=device:username/alice
+  $ idbctl admin grant ssh --tag id=device --username root | idbctl admin role grant -i $ROLE_ID --add
+  $ idbctl admin grant ssh --tag id=device --username device | idbctl admin role grant -i $ROLE_ID --add
 
 Provision new host
   $ idbctl admin identity create -n host -t $DEVICE_TAG_ID
