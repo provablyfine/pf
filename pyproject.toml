@@ -36,7 +36,7 @@ dev = [
     "pytest-xdist>=3.8.0",
 ]
 [tool.pyright]
-include = ["src/idb"]
+include = ["src/idb", "tests"]
 exclude = [
 "**/node_modules",
 "**/__pycache__",
