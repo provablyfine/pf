@@ -5,17 +5,15 @@ Initialize server and login
   $ source $TESTDIR/idb-access-control-identity-fixture.sh
   .* (re)
 
-{% for permission, expected in [
-  ("identity:*:*:*", (1,2,3)),
-  ("identity:read:*:*", (1,2,3)),
-  ("identity:read:name/user2:*", (3,)),
-  ("identity:*:name/user2:*", (3,)),
+{% for grant, expected in [
+  ("--read", (1,2,3)),
+  ("--read --name user2", (3,)),
 ]
 %}
-Check that permission "{{permission}}" is actually enforcing access control
-  $ idbctl admin role permission -i $ROLE_ID -a '{{permission}}'
+Check that grant "{{grant}}" is actually enforcing access control
+  $ idbctl admin grant identity {{grant}} | idbctl admin role grant -i $ROLE_ID --add
   $ idbctl -c user1.json admin identity list -q
   {{ expected | join('\n  ') }}
-  $ idbctl admin role permission -i $ROLE_ID -d '{{permission}}'
+  $ idbctl admin role read -i $ROLE_ID -f json | jq '.grant_list[-1]' | idbctl admin role grant -i $ROLE_ID --del
   $ idbctl -c user1.json admin identity list
 {% endfor %}
