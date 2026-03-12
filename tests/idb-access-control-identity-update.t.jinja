@@ -5,20 +5,18 @@ Initialize server and login
   $ source $TESTDIR/idb-access-control-identity-fixture.sh
   .* (re)
 
-{% for permission in [
-  "identity:update:name/user2:field/name",
-  "identity:update:name/user2:*",
-  "identity:update:*:field/name",
-  "identity:update:*:*",
-  "identity:*:name/user2:*",
-  "identity:*:*:*",
+{% for grant in [
+  "--update name --name user2",
+  "--update-all --name user2",
+  "--update name",
+  "--update-all",
 ]
 %}
-Check that permission "{{permission}}" is actually enforcing access control
-  $ idbctl admin role permission -i $ROLE_ID -a {{permission}}
+Check that grant "{{grant}}" is actually enforcing access control
+  $ idbctl admin grant identity {{grant}} | idbctl admin role grant -i $ROLE_ID --add
   $ idbctl -c user1.json admin identity update -i $USER2_ID -n another
   $ idbctl -c user1.json admin identity update -i $USER2_ID -n user2
-  $ idbctl admin role permission -i $ROLE_ID -d {{permission}}
+  $ idbctl admin role read -i $ROLE_ID -f json | jq '.grant_list[-1]' | idbctl admin role grant -i $ROLE_ID --del
   $ idbctl -c user1.json admin identity update -i $USER2_ID -n another
   Unable to update identity. Not allowed to update identity field.
   [2]
