@@ -32,6 +32,12 @@ def _tag_list(tags):
     return [_tag(t) for t in tags]
 
 
+def _all_or(is_all, default):
+    if is_all:
+        return None
+    return default
+
+
 def _tag_function(args):
     tag = {
         'type': 'tag',
@@ -52,7 +58,7 @@ def _role_function(args):
         'permission': {
             'create': args.create,
             'read': args.read,
-            'update': _update_all(args, {
+            'update': _all_or(args.update_all, {
                 'name': any('name' in l for l in args.update),
                 'description': any('description' in l for l in  args.update),
                 'grant_list': any('grant_list' in l for l in args.update),
@@ -71,7 +77,7 @@ def _boundary_function(args):
         'permission': {
             'create': args.create,
             'read': args.read,
-            'update': _update_all(args, {
+            'update': _all_or(args.update_all, {
                 'name': any('name' in l for l in args.update),
                 'description': any('description' in l for l in args.update),
                 'denied_list': any('denied_list' in l for l in args.update),
@@ -81,12 +87,6 @@ def _boundary_function(args):
         },
     }
     _output(args, boundary)
-
-
-def _update_all(args, default):
-    if args.update_all:
-        return None
-    return default
 
 
 def _identity_function(args):
@@ -104,12 +104,12 @@ def _identity_function(args):
                 'required_boundary_list': args.create_required_boundary,
             },
             'read': args.read,
-            'update': _update_all(args, {
+            'update': _all_or(args.update_all, {
                 'name': any('name' in l for l in args.update),
             }),
             'delete': args.delete,
-            'add_tag_list': _tag_list(args.add_tag),
-            'del_tag_list': _tag_list(args.del_tag),
+            'add_tag_list': _all_or(args.add_tag_all, [_tag(t) for t in args.add_tag]),
+            'del_tag_list': _all_or(args.del_tag_all, [_tag(t) for t in args.del_tag]),
             'invite_list': args.invite,
         }
     }
@@ -190,7 +190,9 @@ def add_subparser(parser):
     group.add_argument('-u', '--update', action='append', nargs='*', default=[], choices=['name'])
     group.add_argument('-d', '--delete', action='store_true')
     group.add_argument('--add-tag', default=[], nargs='*')
+    group.add_argument('--add-tag-all', action='store_true')
     group.add_argument('--del-tag', default=[], nargs='*')
+    group.add_argument('--del-tag-all', action='store_true')
     group.add_argument('--invite', default=[], nargs='*', choices=['email', 'manual'])
     identity_parser.set_defaults(func=_identity_function)
 
