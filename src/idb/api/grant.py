@@ -193,7 +193,11 @@ class SSHChecker:
         return retval
 
     def list_can_username(self, username: str) -> list[model.grant.SSHGrant]:
-        grants = self._checker.list_can(lambda p: username in p.username_list)
+        def check(p) -> bool:
+            if p.username_list is None:
+                return True
+            return username in p.username_list
+        grants = self._checker.list_can(check)
         return self._to_list(grants)
 
 

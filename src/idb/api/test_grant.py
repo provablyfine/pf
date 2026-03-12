@@ -75,6 +75,17 @@ def _identity_create(tag_id_list: list[int]|None, boundary_id_list: list[int]|No
     return _identity(create_allowed=True, create_tag_id_list=tag_id_list, create_boundary_id_list=boundary_id_list, read=False, update=None, delete=False, add_tag_id_list=[], del_tag_id_list=[], invite_list=[])
 
 
+def _ssh_username(usernames: list[str]|None):
+    return {
+        'force_command_list': [],
+        'username_list': usernames,
+        'permit_pty': False,
+        'permit_user_rc': False,
+        'permit_x11_forwarding': False,
+        'permit_agent_forwarding': False,
+        'permit_port_forwarding': False,
+    }
+
 ######## TAG ########
 
 def test_empty_tag():
@@ -369,3 +380,19 @@ def test_empty_ssh():
     grants = grant.Grants([], [])
 
     assert len(grants.ssh(1, [], []).list_can_username('hello')) == 0
+
+
+def test_one_ssh():
+    grants = single_grants({'type': 'ssh', 'filter': {'id': None, 'tag_id_list': None, 'boundary_id_list': None}, 'permission': _ssh_username(['alice', 'bob'])})
+
+    assert len(grants.ssh(1, [], []).list_can_username('hello')) == 0
+    assert len(grants.ssh(1, [], []).list_can_username('alice')) > 0
+    assert len(grants.ssh(1, [], []).list_can_username('bob')) > 0
+
+    grants = single_grants({'type': 'ssh', 'filter': {'id': None, 'tag_id_list': None, 'boundary_id_list': None}, 'permission': _ssh_username(None)})
+    assert len(grants.ssh(1, [], []).list_can_username('hello')) > 0
+    assert len(grants.ssh(1, [], []).list_can_username('any')) > 0
+
+    grants = single_grants({'type': 'ssh', 'filter': {'id': None, 'tag_id_list': None, 'boundary_id_list': None}, 'permission': _ssh_username([])})
+    assert len(grants.ssh(1, [], []).list_can_username('hello')) == 0
+    assert len(grants.ssh(1, [], []).list_can_username('any')) == 0
