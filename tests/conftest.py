@@ -75,6 +75,11 @@ RUN mkdir -p /run/sshd && \
     adduser -D bob && \
     adduser -D charlie
 
+# unlock accounts
+RUN passwd -u alice && \
+    passwd -u bob && \
+    passwd -u charlie
+
 RUN cat <<EOF >/etc/ssh/sshd_config
 Port 22
 ListenAddress 0.0.0.0
@@ -99,7 +104,7 @@ StrictModes yes
 MaxAuthTries 10
 MaxSessions 10
 
-AuthorizedPrincipalsCommand /usr/bin/idbctl openssh authorized-principals --host-certificate=/etc/ssh/keys/ssh_host_ed25519_key.cert --certificate=%k
+AuthorizedPrincipalsCommand /usr/bin/idbctl openssh authorized-principals --host-certificate=/etc/ssh/keys/ssh_host_ed25519_key.cert --username=%u --certificate=%k
 AuthorizedPrincipalsCommandUser nobody
 
 PubkeyAuthentication yes

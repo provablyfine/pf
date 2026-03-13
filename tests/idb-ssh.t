@@ -8,7 +8,7 @@ Create admin objects
   $ idbctl admin role create -n role
   $ ROLE_ID=$(idbctl admin role list -n role -q)
   $ idbctl admin grant ssh --tag id=device --username root | idbctl admin role grant -i $ROLE_ID --add
-  $ idbctl admin grant ssh --tag id=device --username device | idbctl admin role grant -i $ROLE_ID --add
+  $ idbctl admin grant ssh --tag id=device --username alice | idbctl admin role grant -i $ROLE_ID --add
 
 Provision new host
   $ idbctl admin identity create -n host -t $DEVICE_TAG_ID
@@ -57,5 +57,10 @@ User attempts to log into host
   >      HostKeyAlias host
   >      Port $SSHD_PORT
   > EOF
-  $ ssh -F ./ssh_config root@host "echo hello"
-  hello (no-eol)
+  $ ssh -n -F ./ssh_config root@host "whoami"
+  root
+  $ ssh -n -F ./ssh_config bob@host "whoami"
+  bob@127.0.0.1: Permission denied (publickey).\r (esc)
+  [255]
+  $ ssh -n -F ./ssh_config alice@host "whoami"
+  alice
