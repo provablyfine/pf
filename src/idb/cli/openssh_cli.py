@@ -134,7 +134,11 @@ def _authorized_principals(args):
         items = principal.split('@')
         if len(items) != 2:
             raise exceptions.UI(f'Invalid user principal={principal}')
-        _, host_id = items
+        username, host_id = items
+        if username != args.username:
+            # the certificate grants access to a username that is not the user that is currently
+            # requested by the SSH connection
+            continue
         if host_id != host_identifier:
             raise exceptions.UI(f'Invalid user host id={host_id} expected={host_identifier}')
         accepted.append(principal)
@@ -165,5 +169,6 @@ def add_subparsers(parser):
 
     authorized_principals_parser = subparsers.add_parser('authorized-principals')
     authorized_principals_parser.add_argument('--host-certificate', help='One of the signed host certificates', default='/etc/sshd/ssh_host_ed25519_key.cert')
+    authorized_principals_parser.add_argument('--username', required=True)
     authorized_principals_parser.add_argument('--certificate', help='base64 user certificate to parse', required=True)
     authorized_principals_parser.set_defaults(func=_authorized_principals)
