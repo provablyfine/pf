@@ -1,8 +1,8 @@
 import time
 import base64
+import logging
 
 from ... import wa
-from ... import jwk
 from ... import ssh
 
 from .. import schemas
@@ -12,6 +12,9 @@ from .. import signature
 from .. import grant
 from .. import converters
 from ..context import ctx
+
+
+logger = logging.getLogger(__name__)
 
 
 def _read_current(type: db.SigningKeyType, staging_period: int):
@@ -113,6 +116,7 @@ def sign_user_certificate(request: wa.Request) -> wa.Response:
             serial_number += 1
             certificates.append(cert)
 
+    logger.info(f'Generated certificates={len(certificates)} for username={data.username}')
     model.signing_key.update(signer.id, serial_number=serial_number)
 
     for c in certificates:
