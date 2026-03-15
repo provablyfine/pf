@@ -9,7 +9,7 @@ major security issues.
 
 # Documentation
 
-All our [user documentation](https://doc.proveblyfine.net) lives outside of this repository.
+All our [user documentation](https://doc.provablyfine.net) lives outside of this repository.
 User documentation is often written before we implement the corresponding features
 as a way to keep us on track towards building a tool that is usable.
 
