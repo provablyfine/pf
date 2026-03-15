@@ -1,7 +1,7 @@
 Initialize server and login
   $ bash $TESTDIR/fixture.sh
   .* (re)
-  $ ROOT_ID=$(pf admin identity list -n root -q)
+  $ ROOT_ID=$(pfa identity list -n root -q)
   $ source $TESTDIR/access-control-identity-fixture.sh
   .* (re)
 
@@ -13,13 +13,13 @@ Initialize server and login
 ]
 %}
 Check that grant "{{grant}}" is actually enforcing access control
-  $ pf admin grant identity {{grant}} | pf admin role grant -i $ROLE_ID --add
-  $ pf -c user1.json admin identity tag -i $USER2_ID -a $PERSON_ID
-  $ pf admin role read -i $ROLE_ID -f json | jq '.grant_list[-1]' | pf admin role grant -i $ROLE_ID --del
-  $ pf -c user1.json admin identity tag -i $USER2_ID -a $PERSON_ID
+  $ pfa grant identity {{grant}} | pfa role grant -i $ROLE_ID --add
+  $ pfa -c user1.json identity tag -i $USER2_ID -a $PERSON_ID
+  $ pfa role read -i $ROLE_ID -f json | jq '.grant_list[-1]' | pfa role grant -i $ROLE_ID --del
+  $ pfa -c user1.json identity tag -i $USER2_ID -a $PERSON_ID
   Unable to update identity. Not allowed to update tag.
   [2]
-  $ pf admin identity tag -i $USER2_ID -d $PERSON_ID
+  $ pfa identity tag -i $USER2_ID -d $PERSON_ID
 {% endfor %}
 
 {% for grant in [
@@ -30,12 +30,12 @@ Check that grant "{{grant}}" is actually enforcing access control
 ]
 %}
 Check that grant "{{grant}}" is actually enforcing access control
-  $ pf admin identity tag -i $USER2_ID -a $PERSON_ID
-  $ pf -c user1.json admin identity tag -i $USER2_ID -d $PERSON_ID
+  $ pfa identity tag -i $USER2_ID -a $PERSON_ID
+  $ pfa -c user1.json identity tag -i $USER2_ID -d $PERSON_ID
   Unable to update identity. Not allowed to update tag.
   [2]
-  $ pf admin grant identity {{grant}} | pf admin role grant -i $ROLE_ID --add
-  $ pf -c user1.json admin identity tag -i $USER2_ID -d $PERSON_ID
-  $ pf admin role read -i $ROLE_ID -f json | jq '.grant_list[-1]' | pf admin role grant -i $ROLE_ID --del
+  $ pfa grant identity {{grant}} | pfa role grant -i $ROLE_ID --add
+  $ pfa -c user1.json identity tag -i $USER2_ID -d $PERSON_ID
+  $ pfa role read -i $ROLE_ID -f json | jq '.grant_list[-1]' | pfa role grant -i $ROLE_ID --del
 {% endfor %}
 

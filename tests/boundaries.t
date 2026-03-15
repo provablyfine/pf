@@ -3,13 +3,13 @@ Initialize server and login
   .* (re)
 
 List existing boundaries (there is one)
-  $ pf admin boundary list
+  $ pfa boundary list
     id  name    description
   ----  ------  -------------------------------------------
      1  root    The Root boundary is not a boundary at all.
 
 JSON output
-  $ pf admin boundary list -f json
+  $ pfa boundary list -f json
   [
     {
       "id": 1,
@@ -21,24 +21,24 @@ JSON output
   ]
 
 Display details about the boundary
-  $ pf admin boundary read -i 1
+  $ pfa boundary read -i 1
   id           1
   name         root
   description  The Root boundary is not a boundary at all.
   ceiling      *
 
 Search for the root boundary explicitely
-  $ pf admin boundary list -n root -q
+  $ pfa boundary list -n root -q
   1
 
 Try to delete it (we cannot)
-  $ pf admin boundary delete -i $(pf admin boundary list -n root -q)
+  $ pfa boundary delete -i $(pfa boundary list -n root -q)
   Boundary is still in use
   [2]
 
 Update name and description
-  $ pf admin boundary update -i 1 -d hello -n hello
-  $ pf admin boundary read -i 1
+  $ pfa boundary update -i 1 -d hello -n hello
+  $ pfa boundary read -i 1
   id           1
   name         hello
   description  hello
@@ -62,25 +62,25 @@ Update name and description
   >   del_tag_list: null
   >   invite_list: null
   > EOF
-  $ cat ./identity-crud.yaml | pf admin boundary denied -i 1 --add
+  $ cat ./identity-crud.yaml | pfa boundary denied -i 1 --add
   Unable to update boundary. Not allowed to update denied list on boundary that applies to self.
   [2]
-  $ cat ./identity-crud.yaml | pf admin boundary ceiling -i 1 -a
+  $ cat ./identity-crud.yaml | pfa boundary ceiling -i 1 -a
   Unable to update boundary. Not allowed to update ceiling list on boundary that applies to self.
   [2]
 
 Create a new boundary
-  $ pf admin boundary create -n non-admin -d "Most users are not admins and they should get a boundary that derives from this"
+  $ pfa boundary create -n non-admin -d "Most users are not admins and they should get a boundary that derives from this"
 
 Make sure important permissions are denied from these users
-  $ BOUNDARY_ID=$(pf admin boundary list -n non-admin -q)
-  $ pf admin grant role --create |pf admin boundary denied -i $BOUNDARY_ID --add
-  $ pf admin grant role --update grant_list | pf admin boundary denied -i $BOUNDARY_ID --add
-  $ pf admin grant tag -crd | pf admin boundary denied -i $BOUNDARY_ID --add
-  $ pf admin grant boundary -crd --update denied_list | pf admin boundary denied -i $BOUNDARY_ID --add 
+  $ BOUNDARY_ID=$(pfa boundary list -n non-admin -q)
+  $ pfa grant role --create |pfa boundary denied -i $BOUNDARY_ID --add
+  $ pfa grant role --update grant_list | pfa boundary denied -i $BOUNDARY_ID --add
+  $ pfa grant tag -crd | pfa boundary denied -i $BOUNDARY_ID --add
+  $ pfa grant boundary -crd --update denied_list | pfa boundary denied -i $BOUNDARY_ID --add 
 
 Check that boundary has been created
-  $ pf admin boundary read -i $BOUNDARY_ID
+  $ pfa boundary read -i $BOUNDARY_ID
   id           2
   name         non-admin
   description  Most users are not admins and they should get a boundary that derives from this
@@ -99,8 +99,8 @@ Check that boundary has been created
                permission: create read update.denied_list delete
 
 We can remove and add permissions from the boundary denied list
-  $ pf admin boundary read -i $BOUNDARY_ID -f json | jq '.denied_list[0]' | pf admin boundary denied -i $BOUNDARY_ID --del 
-  $ pf admin boundary read -i 2
+  $ pfa boundary read -i $BOUNDARY_ID -f json | jq '.denied_list[0]' | pfa boundary denied -i $BOUNDARY_ID --del 
+  $ pfa boundary read -i 2
   id           2
   name         non-admin
   description  Most users are not admins and they should get a boundary that derives from this
@@ -114,8 +114,8 @@ We can remove and add permissions from the boundary denied list
   denied       type:       boundary
                filter:     *
                permission: create read update.denied_list delete
-  $ pf admin grant role --create | pf admin boundary denied -i $BOUNDARY_ID --add
-  $ pf admin boundary read -i 2
+  $ pfa grant role --create | pfa boundary denied -i $BOUNDARY_ID --add
+  $ pfa boundary read -i 2
   id           2
   name         non-admin
   description  Most users are not admins and they should get a boundary that derives from this
@@ -133,7 +133,7 @@ We can remove and add permissions from the boundary denied list
                filter:     *
                permission: create
 
-  $ pf admin grant role --read | pf admin boundary denied -i $BOUNDARY_ID --del
+  $ pfa grant role --read | pfa boundary denied -i $BOUNDARY_ID --del
 
 We can also edit the boundary ceiling list
-  $ pf admin grant role --update | pf admin boundary ceiling -i $BOUNDARY_ID --set
+  $ pfa grant role --update | pfa boundary ceiling -i $BOUNDARY_ID --set

@@ -16,7 +16,8 @@ dependencies = [
 ]
 
 [project.scripts]
-pf = "pf.cli.__main__:main"
+pf = "pf.cli.main_cli:pf"
+pfa = "pf.cli.main_cli:pfa"
 
 [dependency-groups]
 dev = [

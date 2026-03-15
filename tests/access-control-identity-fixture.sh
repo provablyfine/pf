@@ -1,28 +1,28 @@
 # Create Boundary
-pf admin boundary create -n boundary
+pfa boundary create -n boundary
 
 # Create tag
-pf admin tag create -n id -v person
-pf admin tag create -n id -v device
-PERSON_ID=$(pf admin tag list -n id -v person -q)
-DEVICE_ID=$(pf admin tag list -n id -v device -q)
+pfa tag create -n id -v person
+pfa tag create -n id -v device
+PERSON_ID=$(pfa tag list -n id -v person -q)
+DEVICE_ID=$(pfa tag list -n id -v device -q)
 
 # Create role
-pf admin role create -n role
-ROLE_ID=$(pf admin role list -n role -q)
+pfa role create -n role
+ROLE_ID=$(pfa role list -n role -q)
 
 # Create identity user1
-pf admin identity create -n user1
-USER1_ID=$(pf admin identity list -n user1 -q)
-INVITATION=$(pf admin identity invite -i $USER1_ID --manual)
+pfa identity create -n user1
+USER1_ID=$(pfa identity list -n user1 -q)
+INVITATION=$(pfa identity invite -i $USER1_ID --manual)
 echo $INVITATION
 
 # Create identity user2
-pf admin identity create -n user2
-USER2_ID=$(pf admin identity list -n user2 -q)
+pfa identity create -n user2
+USER2_ID=$(pfa identity list -n user2 -q)
 
 # Add identity to role
-pf admin role member -i $ROLE_ID -a user1
+pfa role member -i $ROLE_ID -a user1
 
 # New user accepts invitation and logs in
 DIRECTORY_URL=http://127.0.0.1:$API_PORT/pf/directory

@@ -3,17 +3,17 @@ Initialize server and login
   .* (re)
 
 Create admin objects
-  $ pf admin tag create -n id -v device
-  $ DEVICE_TAG_ID=$(pf admin tag list -n id -v device -q)
-  $ pf admin role create -n role
-  $ ROLE_ID=$(pf admin role list -n role -q)
-  $ pf admin grant ssh --tag id=device --username root | pf admin role grant -i $ROLE_ID --add
-  $ pf admin grant ssh --tag id=device --username alice | pf admin role grant -i $ROLE_ID --add
+  $ pfa tag create -n id -v device
+  $ DEVICE_TAG_ID=$(pfa tag list -n id -v device -q)
+  $ pfa role create -n role
+  $ ROLE_ID=$(pfa role list -n role -q)
+  $ pfa grant ssh --tag id=device --username root | pfa role grant -i $ROLE_ID --add
+  $ pfa grant ssh --tag id=device --username alice | pfa role grant -i $ROLE_ID --add
 
 Provision new host
-  $ pf admin identity create -n host -t $DEVICE_TAG_ID
-  $ HOST_ID=$(pf admin identity list -n host -q)
-  $ INVITATION=$(pf admin identity invite --manual -i $HOST_ID)
+  $ pfa identity create -n host -t $DEVICE_TAG_ID
+  $ HOST_ID=$(pfa identity list -n host -q)
+  $ INVITATION=$(pfa identity invite --manual -i $HOST_ID)
   $ echo $INVITATION
   .* (re)
 
@@ -31,11 +31,11 @@ New host SSH setup
   $ podman exec $SSHD_CONTAINER_ID pkill -HUP sshd
 
 Provision new user
-  $ pf admin identity create -n user
-  $ USER_ID=$(pf admin identity list -n user -q)
-  $ pf admin role member -i $ROLE_ID -a user
+  $ pfa identity create -n user
+  $ USER_ID=$(pfa identity list -n user -q)
+  $ pfa role member -i $ROLE_ID -a user
 # XXX: test $USER_ID above
-  $ INVITATION=$(pf admin identity invite --manual -i $USER_ID)
+  $ INVITATION=$(pfa identity invite --manual -i $USER_ID)
   $ echo $INVITATION
   .* (re)
 

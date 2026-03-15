@@ -15,7 +15,6 @@ from . import client
 from . import exceptions
 from . import ssh_utils
 from . import admin_cli
-from . import ssh_cli
 from . import openssh_cli
 
 
@@ -74,44 +73,7 @@ def _login_function(args):
     c.save(args.config)
 
 
-def _ping_function(args):
-    pass
-
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-d', '--debug', help='Increase debugging level', action='count', default=0)
-    parser.add_argument('-c', '--config', help='configuration file', default=os.path.abspath(os.path.join(os.getcwd(), 'config.json')))
-    subparsers = parser.add_subparsers(required=True)
-
-    config_parser = subparsers.add_parser('config', help='Create a configuration file')
-    config_parser.add_argument('--directory', default=os.getenv('PF_DIRECTORY_URL', 'https://pf.provablyfine.net/pf/directory'), help='Directory to connect to')
-    config_parser.set_defaults(func=_config_function)
-
-    register_parser = subparsers.add_parser('accept', help='Accept an invitation')
-    register_parser.add_argument('--key', help='Private key to register', required=True)
-    register_parser.add_argument('--invitation', help='Invitation you were given', required=True)
-    register_parser.set_defaults(func=_accept_function)
-
-    login_parser = subparsers.add_parser('login', help='Login')
-    login_parser.add_argument('--session-key', default=None, help="Session key to associate with account. If none is provided, a new one is generated, stored in the user' SSH agent and its hash is saved in the configuration file")
-    login_parser.set_defaults(func=_login_function)
-
-    ping_parser = subparsers.add_parser('ping', help='Ping IDB')
-    ping_parser.add_argument('--session-key', help='key to use to sign requests to the remote', default='session.key')
-    ping_parser.set_defaults(func=_ping_function)
-
-    admin_parser = subparsers.add_parser('admin', help='Admin-related functions')
-    admin_cli.add_subparsers(admin_parser)
-
-    openssh_parser = subparsers.add_parser('openssh', help='OpenSSH integration')
-    openssh_cli.add_subparsers(openssh_parser)
-
-    ssh_parser = subparsers.add_parser('ssh', help='SSH-related functions')
-    ssh_cli.add_subparsers(ssh_parser)
-
-    args = parser.parse_args()
-
+def _do_main(args):
     if args.debug > 0:
         match args.debug:
             case 3:
@@ -138,3 +100,41 @@ def main():
         exitcode = 1
 
     sys.exit(exitcode)
+
+
+def pfa():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-d', '--debug', help='Increase debugging level', action='count', default=0)
+    parser.add_argument('-c', '--config', help='configuration file', default=os.path.abspath(os.path.join(os.getcwd(), 'config.json')))
+    admin_cli.add_subparsers(parser)
+
+    args = parser.parse_args()
+
+    _do_main(args)
+
+
+def pf():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-d', '--debug', help='Increase debugging level', action='count', default=0)
+    parser.add_argument('-c', '--config', help='configuration file', default=os.path.abspath(os.path.join(os.getcwd(), 'config.json')))
+    subparsers = parser.add_subparsers(required=True)
+
+    config_parser = subparsers.add_parser('config', help='Create a configuration file')
+    config_parser.add_argument('--directory', default=os.getenv('PF_DIRECTORY_URL', 'https://pf.provablyfine.net/pf/directory'), help='Directory to connect to')
+    config_parser.set_defaults(func=_config_function)
+
+    register_parser = subparsers.add_parser('accept', help='Accept an invitation')
+    register_parser.add_argument('--key', help='Private key to register', required=True)
+    register_parser.add_argument('--invitation', help='Invitation you were given', required=True)
+    register_parser.set_defaults(func=_accept_function)
+
+    login_parser = subparsers.add_parser('login', help='Login')
+    login_parser.add_argument('--session-key', default=None, help="Session key to associate with account. If none is provided, a new one is generated, stored in the user' SSH agent and its hash is saved in the configuration file")
+    login_parser.set_defaults(func=_login_function)
+
+    openssh_parser = subparsers.add_parser('openssh', help='OpenSSH integration')
+    openssh_cli.add_subparsers(openssh_parser)
+
+    args = parser.parse_args()
+
+    _do_main(args)

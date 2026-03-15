@@ -1,6 +1,6 @@
 DIRECTORY_URL=http://127.0.0.1:$API_PORT/pf/directory
 pf config --directory $DIRECTORY_URL
-INVITATION=$(pf admin initialize)
+INVITATION=$(pfa initialize)
 echo $INVITATION
 ssh-keygen -t ed25519 -f account -N "" > /dev/null
 pf accept --invitation=$INVITATION --key account

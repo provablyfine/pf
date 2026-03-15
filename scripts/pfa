@@ -25,9 +25,10 @@ if __name__ == '__main__':
 
     import pf.cli.main_cli
     try:
-        pf.cli.main_cli.pf()
+        pf.cli.main_cli.pfa()
     finally:
         if cov:
             cov.stop()
             cov.save()
     
+
