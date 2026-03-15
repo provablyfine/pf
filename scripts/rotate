@@ -5,10 +5,10 @@
 #   "sqlalchemy",
 #   "webob",
 #   "coverage",
-#   "idb",
+#   "pf",
 # ]
 # [tool.uv.sources]
-# idb = { path = "../", editable = true }
+# pf = { path = "../", editable = true }
 # ///
 import os
 
@@ -18,9 +18,9 @@ if __name__ == '__main__':
         import coverage
         cov = coverage.process_startup()
 
-    import idb.api.rotate
+    import pf.api.rotate
     try:
-        idb.api.rotate.main()
+        pf.api.rotate.main()
     except:
         if cov:
             cov.stop()
