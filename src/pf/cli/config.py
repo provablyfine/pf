@@ -7,8 +7,6 @@ from . import exceptions
 @dataclasses.dataclass
 class Config:
     directory_url: str
-    root_key_id: str
-    ignore_ssh_agent: bool
     account_key: str|None = None
     session_key: str|None = None
 
