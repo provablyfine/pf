@@ -1,6 +1,7 @@
 import contextlib
 import types
 import collections.abc
+import os
 
 
 import sqlalchemy
@@ -18,7 +19,8 @@ from .context import ctx
 @contextlib.contextmanager
 def lifespan(config: config.Config, state: types.SimpleNamespace):
     engine = sqlalchemy.create_engine(config.database_url, echo=config.debug_sql)
-    with open(config.kek_filename, 'rb') as f:
+    kek_filename = config.kek_filename.format(PF_API_KEK_FILENAME=os.getenv('PF_API_KEK_FILENAME'))
+    with open(kek_filename, 'rb') as f:
         kek = base64url.encode(f.read()) + '======'
     state.config = config
     state.db_engine = engine
