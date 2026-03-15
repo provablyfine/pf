@@ -32,8 +32,8 @@ def _role(args, auth):
 
 def _role_list_function(args):
     c = config.Config.load(args.config)
-    idb = client.Client(c)
-    auth = idb.session_auth(c.session_key)
+    api = client.Client(c)
+    auth = api.session_auth(c.session_key)
     roles = _roles(auth, id=args.id, name=args.name)
     match args.sort:
         case 'id':
@@ -67,8 +67,8 @@ def _role_list_function(args):
 
 def _role_read_function(args):
     c = config.Config.load(args.config)
-    idb = client.Client(c)
-    auth = idb.session_auth(c.session_key)
+    api = client.Client(c)
+    auth = api.session_auth(c.session_key)
     role = _role(args, auth)
     match args.format:
         case 'json':
@@ -95,18 +95,18 @@ def _role_read_function(args):
 
 def _role_delete_function(args):
     c = config.Config.load(args.config)
-    idb = client.Client(c)
-    auth = idb.session_auth(c.session_key)
-    response = auth.delete(f'{idb.directory.role}/{args.id}')
+    api = client.Client(c)
+    auth = api.session_auth(c.session_key)
+    response = auth.delete(f'{api.directory.role}/{args.id}')
     if response.status_code != 204:
         raise exceptions.UI(f'Unable to delete role. {response.json()["title"]}')
 
 
 def _role_create_function(args):
     c = config.Config.load(args.config)
-    idb = client.Client(c)
-    auth = idb.session_auth(c.session_key)
-    response = auth.post(idb.directory.role, json={
+    api = client.Client(c)
+    auth = api.session_auth(c.session_key)
+    response = auth.post(api.directory.role, json={
         'name': args.name,
         'description': '' if args.description is None else args.description
     })
@@ -116,22 +116,22 @@ def _role_create_function(args):
 
 def _role_update_function(args):
     c = config.Config.load(args.config)
-    idb = client.Client(c)
-    auth = idb.session_auth(c.session_key)
+    api = client.Client(c)
+    auth = api.session_auth(c.session_key)
     query = {}
     if args.name is not None:
         query['name'] = args.name
     if args.description is not None:
         query['description'] = args.description
-    response = auth.patch(f'{idb.directory.role}/{args.id}', json=query)
+    response = auth.patch(f'{api.directory.role}/{args.id}', json=query)
     if response.status_code != 200:
         raise exceptions.UI(f'Unable to update role. {response.json()["title"]}.')
 
 
 def _role_grant_function(args, action, grant):
     c = config.Config.load(args.config)
-    idb = client.Client(c)
-    auth = idb.session_auth(c.session_key)
+    api = client.Client(c)
+    auth = api.session_auth(c.session_key)
     role = _role(args, auth)
 
     match action:
@@ -144,7 +144,7 @@ def _role_grant_function(args, action, grant):
         case _:
             assert False
 
-    response = auth.patch(f'{idb.directory.role}/{role["id"]}', json={
+    response = auth.patch(f'{api.directory.role}/{role["id"]}', json={
         'grant_list': grant_list,
     })
     if response.status_code != 200:
@@ -167,8 +167,8 @@ def _role_member_function(args):
         return False
 
     c = config.Config.load(args.config)
-    idb = client.Client(c)
-    auth = idb.session_auth(c.session_key)
+    api = client.Client(c)
+    auth = api.session_auth(c.session_key)
     role = _role(args, auth)
     member_list = role['member_list']
 
@@ -184,7 +184,7 @@ def _role_member_function(args):
     if args.set is not None:
         member_list = [to_dict(m) for m in args.set]
 
-    response = auth.patch(f'{idb.directory.role}/{role["id"]}', json={
+    response = auth.patch(f'{api.directory.role}/{role["id"]}', json={
         'member_list': member_list,
     })
     if response.status_code != 200:

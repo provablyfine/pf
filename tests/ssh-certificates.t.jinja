@@ -19,7 +19,7 @@ Read it back
           Extensions: (none)
 
 Read it back with our own code
-  $ idbctl ssh cert read ./account-cert.pub
+  $ pf ssh cert read ./account-cert.pub
   ----------------------  --------------------------------------------------
   validity_period         ok
   key_fingerprint         SHA256:.* (re)
@@ -32,10 +32,10 @@ Read it back with our own code
   ----------------------  --------------------------------------------------
 
 Generate our own similar certificate
-  $ idbctl ssh cert sign-host --principal hello --key account.pub --with account > account-cert.pub
+  $ pf ssh cert sign-host --principal hello --key account.pub --with account > account-cert.pub
 
 Check we can read it ourselves
-  $ idbctl ssh cert read ./account-cert.pub
+  $ pf ssh cert read ./account-cert.pub
   ----------------------  --------------------------------------------------
   validity_period         ok
   key_fingerprint         SHA256:.* (re)
@@ -64,7 +64,7 @@ Check OpenSSH can read it
 
 
 Check verify-required
-  $ idbctl ssh cert sign-user --principal hello --key account.pub --with account --verify-required > account-cert.pub
+  $ pf ssh cert sign-user --principal hello --key account.pub --with account --verify-required > account-cert.pub
   $ ssh-keygen -L -f ./account-cert.pub
   ./account-cert.pub:
           Type: ssh-ed25519-cert-v01@openssh.com user certificate
@@ -80,7 +80,7 @@ Check verify-required
           Extensions: (none)
 
 Check force-command
-  $ idbctl ssh cert sign-user --principal hello --key account.pub --with account --force-command "/usr/bin/bash -c 'echo \"hello\"'" > account-cert.pub
+  $ pf ssh cert sign-user --principal hello --key account.pub --with account --force-command "/usr/bin/bash -c 'echo \"hello\"'" > account-cert.pub
   $ ssh-keygen -L -f ./account-cert.pub
   ./account-cert.pub:
           Type: ssh-ed25519-cert-v01@openssh.com user certificate
@@ -96,7 +96,7 @@ Check force-command
           Extensions: (none)
 
 Check source-address
-  $ idbctl ssh cert sign-user --principal hello --key account.pub --with account --source-address 127.0.0.1/32 --source-address 12.0.45.10/8 --source-address 127.0.*.1 > account-cert.pub
+  $ pf ssh cert sign-user --principal hello --key account.pub --with account --source-address 127.0.0.1/32 --source-address 12.0.45.10/8 --source-address 127.0.*.1 > account-cert.pub
   $ ssh-keygen -L -f ./account-cert.pub
   ./account-cert.pub:
           Type: ssh-ed25519-cert-v01@openssh.com user certificate
@@ -121,7 +121,7 @@ Check source-address
     "permit-X11-forwarding",
 ] %}
 Generate user certificate with extension {{extension}}
-  $ idbctl ssh cert sign-user --principal hello --key account.pub --with account --{{extension|lower}} > account-cert.pub
+  $ pf ssh cert sign-user --principal hello --key account.pub --with account --{{extension|lower}} > account-cert.pub
 
   $ ssh-keygen -L -f ./account-cert.pub
   ./account-cert.pub:

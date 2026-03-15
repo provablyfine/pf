@@ -10,8 +10,8 @@ from . import grant_cli
 
 def _initialize_function(args):
     c = config.Config.load(args.config)
-    idb = client.Client(c)
-    response = idb.no_auth.post(idb.directory.initialize)
+    api = client.Client(c)
+    response = api.no_auth.post(api.directory.initialize)
     if response.status_code == 204:
         raise exceptions.UI('Unable to initialize app: it is already initialized.')
     if response.status_code != 200:

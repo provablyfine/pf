@@ -34,8 +34,8 @@ def _boundary(auth, id):
 
 def _boundary_list_function(args):
     c = config.Config.load(args.config)
-    idb = client.Client(c)
-    auth = idb.session_auth(c.session_key)
+    api = client.Client(c)
+    auth = api.session_auth(c.session_key)
     boundaries = _boundaries(auth, id=args.id, name=args.name)
     match args.sort:
         case 'id':
@@ -69,8 +69,8 @@ def _boundary_list_function(args):
 
 def _boundary_read_function(args):
     c = config.Config.load(args.config)
-    idb = client.Client(c)
-    auth = idb.session_auth(c.session_key)
+    api = client.Client(c)
+    auth = api.session_auth(c.session_key)
     boundary = _boundary(auth, args.id)
     match args.format:
         case 'json':
@@ -103,18 +103,18 @@ def _boundary_read_function(args):
 
 def _boundary_delete_function(args):
     c = config.Config.load(args.config)
-    idb = client.Client(c)
-    auth = idb.session_auth(c.session_key)
-    response = auth.delete(f'{idb.directory.boundary}/{args.id}')
+    api = client.Client(c)
+    auth = api.session_auth(c.session_key)
+    response = auth.delete(f'{api.directory.boundary}/{args.id}')
     if response.status_code != 204:
         raise exceptions.UI(f'Unable to delete boundary. {response.json()["title"]}')
 
 
 def _boundary_create_function(args):
     c = config.Config.load(args.config)
-    idb = client.Client(c)
-    auth = idb.session_auth(c.session_key)
-    response = auth.post(idb.directory.boundary, json={
+    api = client.Client(c)
+    auth = api.session_auth(c.session_key)
+    response = auth.post(api.directory.boundary, json={
         'name': args.name,
         'description': '' if args.description is None else args.description
     })
@@ -125,22 +125,22 @@ def _boundary_create_function(args):
 
 def _boundary_update_function(args):
     c = config.Config.load(args.config)
-    idb = client.Client(c)
-    auth = idb.session_auth(c.session_key)
+    api = client.Client(c)
+    auth = api.session_auth(c.session_key)
     query = {}
     if args.name is not None:
         query['name'] = args.name
     if args.description is not None:
         query['description'] = args.description
-    response = auth.patch(f'{idb.directory.boundary}/{args.id}', json=query)
+    response = auth.patch(f'{api.directory.boundary}/{args.id}', json=query)
     if response.status_code != 200:
         raise exceptions.UI(f'Unable to update boundary. {response.json()["title"]}.')
 
 
 def _boundary_grant_function(args, action, grant, field_name):
     c = config.Config.load(args.config)
-    idb = client.Client(c)
-    auth = idb.session_auth(c.session_key)
+    api = client.Client(c)
+    auth = api.session_auth(c.session_key)
     boundary = _boundary(auth, args.id)
 
     match action:
@@ -153,7 +153,7 @@ def _boundary_grant_function(args, action, grant, field_name):
         case _:
             assert False
 
-    response = auth.patch(f'{idb.directory.boundary}/{boundary["id"]}', json={
+    response = auth.patch(f'{api.directory.boundary}/{boundary["id"]}', json={
         field_name: grant_list,
     })
     if response.status_code != 200:

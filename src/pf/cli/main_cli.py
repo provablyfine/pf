@@ -35,8 +35,8 @@ def _config_function(args):
 
 def _accept_function(args):
     c = config.Config.load(args.config)
-    idb = client.Client(c)
-    auth = idb.invitation_auth(account=args.key, invitation=args.invitation)
+    api = client.Client(c)
+    auth = api.invitation_auth(account=args.key, invitation=args.invitation)
     response = auth.post(url=auth.directory.accept_invitation, json={
         'account_public_key': auth.public_key
     })
@@ -49,14 +49,14 @@ def _accept_function(args):
 @ssh_utils.exception
 def _login_function(args):
     c = config.Config.load(args.config)
-    idb = client.Client(c)
+    api = client.Client(c)
     if args.session_key is None:
         try:
             ssh_agent = ssh.agent.Client()
         except:
             raise exceptions.UI("Unable to connect to user's SSH agent")
         session_key = jwk.Private.generate_ed25519()
-        ssh_agent.add(session_key, comment='idb-session', lifetime=1800)
+        ssh_agent.add(session_key, comment='pf-session', lifetime=1800)
         c.session_key = session_key.public().ssh_fingerprint()
     else:
         with open(args.session_key, 'rb') as f:
@@ -67,7 +67,7 @@ def _login_function(args):
             raise exceptions.UI('Unable to parse data either as PEM or SSH format')
         c.session_key = args.session_key
 
-    auth = idb.login_auth(account=c.account_key, session=c.session_key)
+    auth = api.login_auth(account=c.account_key, session=c.session_key)
     response = auth.post(url=auth.directory.login, json={
         'session_public_key': session_key.public().to_dict()
     })
@@ -87,7 +87,7 @@ def main():
     subparsers = parser.add_subparsers(required=True)
 
     config_parser = subparsers.add_parser('config', help='Create a configuration file')
-    config_parser.add_argument('--directory', default='http://127.0.0.1:8000/idb/directory', help='Directory to connect to')
+    config_parser.add_argument('--directory', default=os.getenv('PF_DIRECTORY_URL', 'https://pf.provablyfine.net/pf/directory'), help='Directory to connect to')
     config_parser.add_argument('--root-key-id', help='Key id of the public key of the root certificate.', default=None)
     config_parser.add_argument('--ignore-ssh-agent', action='store_true', help='Read and write keys from/to disk, regardless of whether or not there is an SSH agent')
     config_parser.set_defaults(func=_config_function)

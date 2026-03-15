@@ -20,17 +20,16 @@ from .context import ctx
 
 logger = logging.getLogger(__name__)
 
-
 def directory_endpoint(request: wa.Request) -> wa.Response:
     return wa.JSONResponse(status_code=200, json=schemas.DirectoryReadResponse(
-        initialize=f'{request.app.config.base_url}/idb/initialize',
-        accept_invitation=f'{request.app.config.base_url}/idb/accept-invitation',
-        login=f'{request.app.config.base_url}/idb/login',
-        boundary=f'{request.app.config.base_url}/idb/boundary',
-        tag=f'{request.app.config.base_url}/idb/tag',
-        role=f'{request.app.config.base_url}/idb/role',
-        identity=f'{request.app.config.base_url}/idb/identity',
-        ssh=f'{request.app.config.base_url}/idb/ssh',
+        initialize=f'{request.app.config.base_url}/pf/initialize',
+        accept_invitation=f'{request.app.config.base_url}/pf/accept-invitation',
+        login=f'{request.app.config.base_url}/pf/login',
+        boundary=f'{request.app.config.base_url}/pf/boundary',
+        tag=f'{request.app.config.base_url}/pf/tag',
+        role=f'{request.app.config.base_url}/pf/role',
+        identity=f'{request.app.config.base_url}/pf/identity',
+        ssh=f'{request.app.config.base_url}/pf/ssh',
     ).model_dump())
 
 
@@ -269,32 +268,32 @@ def create(conf):
         middleware.DbContext(),
     ]
     app = wa.Application(config=conf, middlewares=middlewares, lifespan=middleware.lifespan, debug=conf.debug)
-    app.add('/idb/directory', directory_endpoint, methods=['GET'])
-    app.add('/idb/initialize', initialize_endpoint, methods=['POST'])
-    app.add('/idb/accept-invitation', accept_invitation_endpoint, methods=['POST'])
-    app.add('/idb/login', login_endpoint, methods=['POST'])
-    app.add('/idb/boundary', endpoints.boundary.create_endpoint, methods=['POST'])
-    app.add('/idb/boundary', endpoints.boundary.list_endpoint, methods=['GET'])
-    app.add('/idb/boundary/<int:boundary_id>', endpoints.boundary.update_endpoint, methods=['PATCH'])
-    app.add('/idb/boundary/<int:boundary_id>', endpoints.boundary.delete_endpoint, methods=['DELETE'])
-    app.add('/idb/tag', endpoints.tag.create_endpoint, methods=['POST'])
-    app.add('/idb/tag', endpoints.tag.list_endpoint, methods=['GET'])
-    app.add('/idb/tag/<int:tag_id>', endpoints.tag.delete_endpoint, methods=['DELETE'])
-    app.add('/idb/role', endpoints.role.create_endpoint, methods=['POST'])
-    app.add('/idb/role', endpoints.role.list_endpoint, methods=['GET'])
-    app.add('/idb/role/<int:role_id>', endpoints.role.update_endpoint, methods=['PATCH'])
-    app.add('/idb/role/<int:role_id>', endpoints.role.delete_endpoint, methods=['DELETE'])
-    app.add('/idb/identity', endpoints.identity.create_endpoint, methods=['POST'])
-    app.add('/idb/identity', endpoints.identity.list_endpoint, methods=['GET'])
-    app.add('/idb/identity/self', endpoints.identity.read_self_endpoint, methods=['GET'])
-    app.add('/idb/identity/<int:identity_id>', endpoints.identity.update_endpoint, methods=['PATCH'])
-    app.add('/idb/identity/<int:identity_id>', endpoints.identity.delete_endpoint, methods=['DELETE'])
-    app.add('/idb/identity/<int:identity_id>/invite', endpoints.identity.invite_endpoint, methods=['POST'])
-    app.add('/idb/ssh/host/certificate', endpoints.ssh.sign_host_certificate, methods=['POST'])
-    app.add('/idb/ssh/host/trusted-keys', endpoints.ssh.read_host_trusted_keys, methods=['GET'])
-    #app.add('/idb/ssh/host/krl', endpoints.ssh.read_host_krl, methods=['GET'])
-    app.add('/idb/ssh/user/certificate', endpoints.ssh.sign_user_certificate, methods=['POST'])
-    app.add('/idb/ssh/user/trusted-keys', endpoints.ssh.read_user_trusted_keys, methods=['GET'])
-    #app.add('/idb/ssh/user/krl', endpoints.ssh.read_user_krl, methods=['GET'])
-    #app.add('/idb/ssh/user/allowed', endpoints.ssh.read_user_allowed, methods=['GET'])
+    app.add('/pf/directory', directory_endpoint, methods=['GET'])
+    app.add('/pf/initialize', initialize_endpoint, methods=['POST'])
+    app.add('/pf/accept-invitation', accept_invitation_endpoint, methods=['POST'])
+    app.add('/pf/login', login_endpoint, methods=['POST'])
+    app.add('/pf/boundary', endpoints.boundary.create_endpoint, methods=['POST'])
+    app.add('/pf/boundary', endpoints.boundary.list_endpoint, methods=['GET'])
+    app.add('/pf/boundary/<int:boundary_id>', endpoints.boundary.update_endpoint, methods=['PATCH'])
+    app.add('/pf/boundary/<int:boundary_id>', endpoints.boundary.delete_endpoint, methods=['DELETE'])
+    app.add('/pf/tag', endpoints.tag.create_endpoint, methods=['POST'])
+    app.add('/pf/tag', endpoints.tag.list_endpoint, methods=['GET'])
+    app.add('/pf/tag/<int:tag_id>', endpoints.tag.delete_endpoint, methods=['DELETE'])
+    app.add('/pf/role', endpoints.role.create_endpoint, methods=['POST'])
+    app.add('/pf/role', endpoints.role.list_endpoint, methods=['GET'])
+    app.add('/pf/role/<int:role_id>', endpoints.role.update_endpoint, methods=['PATCH'])
+    app.add('/pf/role/<int:role_id>', endpoints.role.delete_endpoint, methods=['DELETE'])
+    app.add('/pf/identity', endpoints.identity.create_endpoint, methods=['POST'])
+    app.add('/pf/identity', endpoints.identity.list_endpoint, methods=['GET'])
+    app.add('/pf/identity/self', endpoints.identity.read_self_endpoint, methods=['GET'])
+    app.add('/pf/identity/<int:identity_id>', endpoints.identity.update_endpoint, methods=['PATCH'])
+    app.add('/pf/identity/<int:identity_id>', endpoints.identity.delete_endpoint, methods=['DELETE'])
+    app.add('/pf/identity/<int:identity_id>/invite', endpoints.identity.invite_endpoint, methods=['POST'])
+    app.add('/pf/ssh/host/certificate', endpoints.ssh.sign_host_certificate, methods=['POST'])
+    app.add('/pf/ssh/host/trusted-keys', endpoints.ssh.read_host_trusted_keys, methods=['GET'])
+    #app.add('/pf/ssh/host/krl', endpoints.ssh.read_host_krl, methods=['GET'])
+    app.add('/pf/ssh/user/certificate', endpoints.ssh.sign_user_certificate, methods=['POST'])
+    app.add('/pf/ssh/user/trusted-keys', endpoints.ssh.read_user_trusted_keys, methods=['GET'])
+    #app.add('/pf/ssh/user/krl', endpoints.ssh.read_user_krl, methods=['GET'])
+    #app.add('/pf/ssh/user/allowed', endpoints.ssh.read_user_allowed, methods=['GET'])
     return app

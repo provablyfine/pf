@@ -8,7 +8,7 @@ Generate self-signed certificate ecdsa-256
   Signed host key account-cert.pub: id "hello" serial 0 valid forever\r (esc)
 
 Read it back with our own code ecdsa-256
-  $ idbctl ssh cert read ./account-cert.pub
+  $ pf ssh cert read ./account-cert.pub
   ----------------------  --------------------------------------------------
   validity_period         ok
   key_fingerprint         SHA256:.* (re)
@@ -21,10 +21,10 @@ Read it back with our own code ecdsa-256
   ----------------------  --------------------------------------------------
 
 Generate our own similar certificate ecdsa-256
-  $ idbctl ssh cert sign-host --principal hello --key account.pub --with account > account-cert.pub
+  $ pf ssh cert sign-host --principal hello --key account.pub --with account > account-cert.pub
 
 Check we can read it ourselves ecdsa-256
-  $ idbctl ssh cert read ./account-cert.pub
+  $ pf ssh cert read ./account-cert.pub
   ----------------------  --------------------------------------------------
   validity_period         ok
   key_fingerprint         SHA256:.* (re)
@@ -61,7 +61,7 @@ Generate self-signed certificate ecdsa-384
   Signed host key account-cert.pub: id "hello" serial 0 valid forever\r (esc)
 
 Read it back with our own code ecdsa-384
-  $ idbctl ssh cert read ./account-cert.pub
+  $ pf ssh cert read ./account-cert.pub
   ----------------------  --------------------------------------------------
   validity_period         ok
   key_fingerprint         SHA256:.* (re)
@@ -74,10 +74,10 @@ Read it back with our own code ecdsa-384
   ----------------------  --------------------------------------------------
 
 Generate our own similar certificate ecdsa-384
-  $ idbctl ssh cert sign-host --principal hello --key account.pub --with account > account-cert.pub
+  $ pf ssh cert sign-host --principal hello --key account.pub --with account > account-cert.pub
 
 Check we can read it ourselves ecdsa-384
-  $ idbctl ssh cert read ./account-cert.pub
+  $ pf ssh cert read ./account-cert.pub
   ----------------------  --------------------------------------------------
   validity_period         ok
   key_fingerprint         SHA256:.* (re)
@@ -114,7 +114,7 @@ Generate self-signed certificate ecdsa-521
   Signed host key account-cert.pub: id "hello" serial 0 valid forever\r (esc)
 
 Read it back with our own code ecdsa-521
-  $ idbctl ssh cert read ./account-cert.pub
+  $ pf ssh cert read ./account-cert.pub
   ----------------------  --------------------------------------------------
   validity_period         ok
   key_fingerprint         SHA256:.* (re)
@@ -127,10 +127,10 @@ Read it back with our own code ecdsa-521
   ----------------------  --------------------------------------------------
 
 Generate our own similar certificate ecdsa-521
-  $ idbctl ssh cert sign-host --principal hello --key account.pub --with account > account-cert.pub
+  $ pf ssh cert sign-host --principal hello --key account.pub --with account > account-cert.pub
 
 Check we can read it ourselves ecdsa-521
-  $ idbctl ssh cert read ./account-cert.pub
+  $ pf ssh cert read ./account-cert.pub
   ----------------------  --------------------------------------------------
   validity_period         ok
   key_fingerprint         SHA256:.* (re)

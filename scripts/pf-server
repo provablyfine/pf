@@ -10,10 +10,10 @@
 #   "coverage",
 #   "gunicorn",
 #   "pydantic",
-#   "idb",
+#   "pf",
 # ]
 # [tool.uv.sources]
-# idb = { path = "../", editable = true }
+# pf = { path = "../", editable = true }
 # ///
 import os
 
@@ -24,9 +24,9 @@ if __name__ == '__main__':
         cov = coverage.Coverage()
         cov.start()
 
-    import idb.api.server
+    import pf.api.server
     try:
-        idb.api.server.run()
+        pf.api.server.run()
     finally:
         if cov:
             cov.stop()

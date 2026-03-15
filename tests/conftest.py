@@ -65,10 +65,10 @@ FROM alpine:3.23
 
 RUN apk add --no-cache openssh-server openssh-keygen python3 uv
 
-COPY pyproject.toml /tmp/idb/
-COPY src /tmp/idb/src/
-RUN --mount=type=cache,target=/root/.cache/uv uv pip install --quiet --link-mode=copy --system --break-system-packages /tmp/idb && \
-    rm -rf /tmp/idb
+COPY pyproject.toml /tmp/pf/
+COPY src /tmp/pf/src/
+RUN --mount=type=cache,target=/root/.cache/uv uv pip install --quiet --link-mode=copy --system --break-system-packages /tmp/pf && \
+    rm -rf /tmp/pf
 
 RUN mkdir -p /run/sshd && \
     adduser -D alice && \
@@ -104,7 +104,7 @@ StrictModes yes
 MaxAuthTries 10
 MaxSessions 10
 
-AuthorizedPrincipalsCommand /usr/bin/idbctl openssh authorized-principals --host-certificate=/etc/ssh/keys/ssh_host_ed25519_key.cert --username=%u --certificate=%k
+AuthorizedPrincipalsCommand /usr/bin/pf openssh authorized-principals --host-certificate=/etc/ssh/keys/ssh_host_ed25519_key.cert --username=%u --certificate=%k
 AuthorizedPrincipalsCommandUser nobody
 
 PubkeyAuthentication yes
@@ -224,12 +224,12 @@ def api(request):
     env = copy.copy(os.environ)
     env['PYTHONUNBUFFERED'] = '1'
     api_log_file = open(api_log, 'w+')
-    popen = subprocess.Popen(['scripts/idb', '-c', api_config, '--port-file', api_port_file], stdout=api_log_file, stderr=subprocess.STDOUT, text=True, env=env)
+    popen = subprocess.Popen(['scripts/pf-server', '-c', api_config, '--port-file', api_port_file], stdout=api_log_file, stderr=subprocess.STDOUT, text=True, env=env)
 
-    idb_start_timeout = 5
+    pf_start_timeout = 5
     start = time.time()
     api_port = None
-    while time.time() - start < idb_start_timeout:
+    while time.time() - start < pf_start_timeout:
         try:
             with open(api_port_file) as f:
                 data = f.read()
@@ -242,7 +242,7 @@ def api(request):
             time.sleep(0.1)
             continue
         try:
-            response = requests.get(f'http://127.0.0.1:{api_port}/idb/directory')
+            response = requests.get(f'http://127.0.0.1:{api_port}/pf/directory')
         except requests.exceptions.ConnectionError:
             time.sleep(0.1)
             continue
@@ -251,7 +251,7 @@ def api(request):
             continue
         break
     if api_port is None:
-        raise Exception('Unable to start idb server')
+        raise Exception('Unable to start pf server')
 
     yield Api(api_port)
 

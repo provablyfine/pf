@@ -1,0 +1,26 @@
+Initialize server and login
+  $ bash $TESTDIR/fixture.sh
+  .* (re)
+  $ ROOT_ID=$(pf admin identity list -n root -q)
+  $ source $TESTDIR/access-control-identity-fixture.sh
+  .* (re)
+
+
+{% for grant in [
+  "--create-allowed",
+  "--create-allowed --create-allowed-tag id=person",
+  "--create-allowed --create-required-boundary boundary",
+  "--create-allowed --create-required-boundary boundary --create-allowed-tag id=person",
+]
+%}
+Check that grant "{{grant}}" is actually enforcing access control
+  $ pf -c user1.json admin identity create -n user4 -b boundary -t $PERSON_ID
+  Unable to create identity. Not allowed to create identity
+  [2]
+  $ pf admin grant identity {{grant}} | pf admin role grant -i $ROLE_ID --add
+  $ pf -c user1.json admin identity create -n user4 -b boundary -t id=person
+  $ pf admin role read -i $ROLE_ID -f json | jq '.grant_list[-1]' | pf admin role grant -i $ROLE_ID --del
+  $ USER4_ID=$(pf admin identity list -n user4 -q)
+  $ pf admin identity delete -i $USER4_ID
+{% endfor %}
+

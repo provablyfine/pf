@@ -23,8 +23,8 @@ def _tags(args, auth):
 
 def tag_list_function(args):
     c = config.Config.load(args.config)
-    idb = client.Client(c)
-    auth = idb.session_auth(c.session_key)
+    api = client.Client(c)
+    auth = api.session_auth(c.session_key)
     tags = _tags(args, auth)
     match args.sort:
         case 'id':
@@ -59,9 +59,9 @@ def tag_list_function(args):
 
 def _tag_create_function(args):
     c = config.Config.load(args.config)
-    idb = client.Client(c)
-    auth = idb.session_auth(c.session_key)
-    response = auth.post(idb.directory.tag, json={
+    api = client.Client(c)
+    auth = api.session_auth(c.session_key)
+    response = auth.post(api.directory.tag, json={
         'name': args.name,
         'value': args.value,
     })
@@ -73,9 +73,9 @@ def _tag_delete_function(args):
     if args.id is None and args.name is None and args.value is None:
         raise exceptions.UI('You must specify a filtering criterion')
     c = config.Config.load(args.config)
-    idb = client.Client(c)
-    auth = idb.session_auth(c.session_key)
-    response = auth.delete(f'{idb.directory.tag}/{args.id}')
+    api = client.Client(c)
+    auth = api.session_auth(c.session_key)
+    response = auth.delete(f'{api.directory.tag}/{args.id}')
     if response.status_code != 204:
         raise exceptions.UI(f'Unable to delete tag. {response.json()["title"]}')
 

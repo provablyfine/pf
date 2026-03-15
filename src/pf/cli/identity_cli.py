@@ -57,8 +57,8 @@ def _boundary(s: str):
 
 def _identity_list_function(args):
     c = config.Config.load(args.config)
-    idb = client.Client(c)
-    auth = idb.session_auth(c.session_key)
+    api = client.Client(c)
+    auth = api.session_auth(c.session_key)
     identities = _identities(auth, id=args.id, name=args.name, tag_id=args.tag_id, tag_name=args.tag_name, boundary_id=args.boundary_id, boundary_name=args.boundary_name)
     if args.quiet:
         args.format = 'quiet'
@@ -83,8 +83,8 @@ def _identity_list_function(args):
 
 def _identity_read_function(args):
     c = config.Config.load(args.config)
-    idb = client.Client(c)
-    auth = idb.session_auth(c.session_key)
+    api = client.Client(c)
+    auth = api.session_auth(c.session_key)
     identity = _identity(args, auth)
     match args.format:
         case 'json':
@@ -105,9 +105,9 @@ def _identity_read_function(args):
 
 def _identity_delete_function(args):
     c = config.Config.load(args.config)
-    idb = client.Client(c)
-    auth = idb.session_auth(c.session_key)
-    response = auth.delete(f'{idb.directory.identity}/{args.id}')
+    api = client.Client(c)
+    auth = api.session_auth(c.session_key)
+    response = auth.delete(f'{api.directory.identity}/{args.id}')
     if response.status_code != 204:
         raise exceptions.UI(f'Unable to delete identity. {response.json()["title"]}')
 
@@ -122,13 +122,13 @@ def _parse_tag(s):
 
 def _identity_create_function(args):
     c = config.Config.load(args.config)
-    idb = client.Client(c)
-    auth = idb.session_auth(c.session_key)
+    api = client.Client(c)
+    auth = api.session_auth(c.session_key)
     boundary_id_list = [int(b) for b in args.boundary if b.isdigit()]
     boundary_name_list = [b for b in args.boundary if not b.isdigit()]
     tag_id_list = [int(t) for t in args.tag if t.isdigit()]
     tag_name_value_list = [_parse_tag(t) for t in args.tag if not t.isdigit()]
-    response = auth.post(idb.directory.identity, json={
+    response = auth.post(api.directory.identity, json={
         'name': args.name,
         'boundary_id_list': boundary_id_list,
         'boundary_name_list': boundary_name_list,
@@ -141,9 +141,9 @@ def _identity_create_function(args):
 
 def _identity_invite_function(args):
     c = config.Config.load(args.config)
-    idb = client.Client(c)
-    auth = idb.session_auth(c.session_key)
-    response = auth.post(f'{idb.directory.identity}/{args.id}/invite', json={'delivery': args.delivery})
+    api = client.Client(c)
+    auth = api.session_auth(c.session_key)
+    response = auth.post(f'{api.directory.identity}/{args.id}/invite', json={'delivery': args.delivery})
     if response.status_code == 204:
         return
     elif response.status_code == 200:
@@ -155,12 +155,12 @@ def _identity_invite_function(args):
 
 def _identity_update_function(args):
     c = config.Config.load(args.config)
-    idb = client.Client(c)
-    auth = idb.session_auth(c.session_key)
+    api = client.Client(c)
+    auth = api.session_auth(c.session_key)
     query = {}
     if args.name is not None:
         query['name'] = args.name
-    response = auth.patch(f'{idb.directory.identity}/{args.id}', json=query)
+    response = auth.patch(f'{api.directory.identity}/{args.id}', json=query)
     if response.status_code != 200:
         raise exceptions.UI(f'Unable to update identity. {response.json()["title"]}.')
 
@@ -190,12 +190,12 @@ def _format_tag_op(op, values):
 def _identity_tag_function(args):
 
     c = config.Config.load(args.config)
-    idb = client.Client(c)
-    auth = idb.session_auth(c.session_key)
+    api = client.Client(c)
+    auth = api.session_auth(c.session_key)
 
     ops = [op for op_type, values in args.ops for op in _format_tag_op(op_type, values)]
 
-    response = auth.patch(f'{idb.directory.identity}/{args.id}', json={
+    response = auth.patch(f'{api.directory.identity}/{args.id}', json={
         'tags': ops,
     })
     if response.status_code != 200:

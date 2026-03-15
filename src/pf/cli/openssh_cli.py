@@ -32,8 +32,8 @@ def _refresh_known_hosts(auth, known_hosts):
 @ssh_utils.exception
 def _auth_function(args):
     c = config.Config.load(args.config)
-    idb = client.Client(c)
-    auth = idb.session_auth(c.session_key)
+    api = client.Client(c)
+    auth = api.session_auth(c.session_key)
 
     user_key = jwk.Private.generate_ed25519()
     cert_response = auth.post(f'{auth.directory.ssh}/user/certificate', json={
@@ -69,8 +69,8 @@ def _auth_function(args):
 
 def _known_hosts_function(args):
     c = config.Config.load(args.config)
-    idb = client.Client(c)
-    auth = idb.session_auth(c.session_key)
+    api = client.Client(c)
+    auth = api.session_auth(c.session_key)
     
     host_trusted_keys_response = auth.get(f'{auth.directory.ssh}/host/trusted-keys')
     if host_trusted_keys_response.status_code != 200:
@@ -82,8 +82,8 @@ def _known_hosts_function(args):
 
 def _user_trusted_keys_function(args):
     c = config.Config.load(args.config)
-    idb = client.Client(c)
-    response = idb.no_auth.get(f'{idb.directory.ssh}/user/trusted-keys')
+    api = client.Client(c)
+    response = api.no_auth.get(f'{api.directory.ssh}/user/trusted-keys')
     if response.status_code != 200:
         raise exceptions.UI(response.json()['title'])
     print(response.text)
@@ -91,8 +91,8 @@ def _user_trusted_keys_function(args):
 
 def _sign_host_function(args):
     c = config.Config.load(args.config)
-    idb = client.Client(c)
-    auth = idb.session_auth(c.session_key)
+    api = client.Client(c)
+    auth = api.session_auth(c.session_key)
 
     public_keys = []
     filename_from_fingerprint = {}

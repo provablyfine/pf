@@ -7,18 +7,18 @@
 ] %}
 
 Create key
-  $ idbctl ssh key generate --type {{type}} > {{type}}
-  $ idbctl ssh key public {{type}} > {{type}}.pub
+  $ pf ssh key generate --type {{type}} > {{type}}
+  $ pf ssh key public {{type}} > {{type}}.pub
 
 Create user certificate
-  $ idbctl ssh cert sign-user -p hello --key {{type}}.pub --with {{type}} > {{type}}-cert.pub
+  $ pf ssh cert sign-user -p hello --key {{type}}.pub --with {{type}} > {{type}}-cert.pub
 
 Load user certificate in agent
-  $ idbctl ssh agent add --key ./{{type}} --certificate ./{{type}}-cert.pub
-  $ FINGERPRINT=$(idbctl ssh agent ls -q)
+  $ pf ssh agent add --key ./{{type}} --certificate ./{{type}}-cert.pub
+  $ FINGERPRINT=$(pf ssh agent ls -q)
 
 Check certificate has been loaded
-  $ idbctl ssh agent ls
+  $ pf ssh agent ls
   fingerprint\s+key type\s+comment (re)
   -+ + -+ + -+ (re)
   SHA256:[^ ]+ +[^ ]+ (re)
@@ -29,9 +29,9 @@ Check we can sign with the key associated with this certificate
   1+0 records in
   1+0 records out
   16 bytes copied, .* (re)
-  $ idbctl ssh agent sign --fingerprint $FINGERPRINT --data ./data > signature.bin
+  $ pf ssh agent sign --fingerprint $FINGERPRINT --data ./data > signature.bin
 
 Delete the certificate from the agent
-  $ idbctl ssh agent del $FINGERPRINT
+  $ pf ssh agent del $FINGERPRINT
 
 {% endfor %}

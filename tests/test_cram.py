@@ -4,21 +4,21 @@ from . import utils
 
 
 @pytest.mark.parametrize("filename", [
-    "idb-tags.t",
-    "idb-boundaries.t",
-    "idb-roles.t",
-    "idb-identity.t",
-    "idb-permission.t",
-    "idb-access-control-tag.t.jinja",
-    "idb-access-control-identity.t",
-    "idb-access-control-identity-invite.t.jinja",
-    "idb-access-control-identity-create.t.jinja",
-    "idb-access-control-identity-delete.t.jinja",
-    "idb-access-control-identity-update.t.jinja",
-    "idb-access-control-identity-tag.t.jinja",
-    "idb-access-control-identity-read.t.jinja",
+    "tags.t",
+    "boundaries.t",
+    "roles.t",
+    "identity.t",
+    "permission.t",
+    "access-control-tag.t.jinja",
+    "access-control-identity.t",
+    "access-control-identity-invite.t.jinja",
+    "access-control-identity-create.t.jinja",
+    "access-control-identity-delete.t.jinja",
+    "access-control-identity-update.t.jinja",
+    "access-control-identity-tag.t.jinja",
+    "access-control-identity-read.t.jinja",
 ])
-def test_idb_cram(api, filename):
+def test_pf_cram(api, filename):
     utils.run_cram(f'tests/{filename}', {'API_PORT': str(api.port)})
 
 

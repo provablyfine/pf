@@ -8,11 +8,11 @@
 #   "pytest",
 #   "dateparser",
 #   "coverage",
-#   "idb",
+#   "pf",
 #   "pydantic",
 # ]
 # [tool.uv.sources]
-# idb = { path = "../", editable = true }
+# pf = { path = "../", editable = true }
 # ///
 import os
 
@@ -23,9 +23,9 @@ if __name__ == '__main__':
         cov = coverage.Coverage()
         cov.start()
 
-    import idb.cli.main_cli
+    import pf.cli.main_cli
     try:
-        idb.cli.main_cli.main()
+        pf.cli.main_cli.main()
     finally:
         if cov:
             cov.stop()

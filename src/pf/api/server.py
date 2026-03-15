@@ -23,7 +23,7 @@ class StandaloneApplication(gunicorn.app.base.BaseApplication):
 
 def run():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-c', '--config', default='idb.yaml')
+    parser.add_argument('-c', '--config', default='pf-server.yaml')
     parser.add_argument('-p', '--port', type=int, default=0)
     parser.add_argument('--port-file', default=None)
     parser.add_argument('-t', '--timeout', type=int, default=1)

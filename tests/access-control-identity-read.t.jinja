@@ -1,0 +1,19 @@
+Initialize server and login
+  $ bash $TESTDIR/fixture.sh
+  .* (re)
+  $ ROOT_ID=$(pf admin identity list -n root -q)
+  $ source $TESTDIR/access-control-identity-fixture.sh
+  .* (re)
+
+{% for grant, expected in [
+  ("--read", (1,2,3)),
+  ("--read --name user2", (3,)),
+]
+%}
+Check that grant "{{grant}}" is actually enforcing access control
+  $ pf admin grant identity {{grant}} | pf admin role grant -i $ROLE_ID --add
+  $ pf -c user1.json admin identity list -q
+  {{ expected | join('\n  ') }}
+  $ pf admin role read -i $ROLE_ID -f json | jq '.grant_list[-1]' | pf admin role grant -i $ROLE_ID --del
+  $ pf -c user1.json admin identity list
+{% endfor %}

@@ -1,0 +1,25 @@
+Initialize server and login
+  $ bash $TESTDIR/fixture.sh
+  .* (re)
+  $ ROOT_ID=$(pf admin identity list -n root -q)
+  $ source $TESTDIR/access-control-identity-fixture.sh
+  .* (re)
+
+{% for grant in [
+  "--update name --name user2",
+  "--update-all --name user2",
+  "--update name",
+  "--update-all",
+]
+%}
+Check that grant "{{grant}}" is actually enforcing access control
+  $ pf admin grant identity {{grant}} | pf admin role grant -i $ROLE_ID --add
+  $ pf -c user1.json admin identity update -i $USER2_ID -n another
+  $ pf -c user1.json admin identity update -i $USER2_ID -n user2
+  $ pf admin role read -i $ROLE_ID -f json | jq '.grant_list[-1]' | pf admin role grant -i $ROLE_ID --del
+  $ pf -c user1.json admin identity update -i $USER2_ID -n another
+  Unable to update identity. Not allowed to update identity field.
+  [2]
+{% endfor %}
+
+

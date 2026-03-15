@@ -11,7 +11,7 @@ class Config:
     debug_sql: bool = False
     log_level: str = 'ERROR'
     base_url: str = 'http://127.0.0.1:8000'
-    database_url: str = 'sqlite:///idb.db'
+    database_url: str = 'sqlite:///pf.db'
     kek_filename: str = 'kek.key'
     session_duration_s: int = 3600
 
