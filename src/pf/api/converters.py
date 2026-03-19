@@ -149,7 +149,11 @@ def _grant_to_schema(converter: GrantConverter, grant: model.grant.Grant) -> sch
     match grant.type:
         case 'tag':
             filter = schemas.TagFilter(name_value=converter.to_tag(grant.filter.id))
-            permission = schemas.TagPermission(create=grant.permission.create, read=grant.permission.read, delete=grant.permission.delete)
+            permission = schemas.TagPermission(
+                create=grant.permission.create,
+                read=grant.permission.read,
+                delete=grant.permission.delete,
+            )
             g = schemas.TagGrant(filter=filter, permission=permission)
         case 'boundary':
             filter = schemas.BoundaryFilter(name=converter.to_boundary(grant.filter.id))
@@ -236,7 +240,11 @@ def _grant_from_schema(converter: GrantConverter, grant: schemas.Grant) -> model
             raise ValueError
         case 'tag':
             filter = model.grant.TagFilter(id=converter.from_tag(grant.filter.name_value))
-            permission = model.grant.TagPermission(create=grant.permission.create, read=grant.permission.read, delete=grant.permission.delete)
+            permission = model.grant.TagPermission(
+                create=grant.permission.create,
+                read=grant.permission.read,
+                delete=grant.permission.delete,
+            )
             g = model.grant.TagGrant(filter=filter, permission=permission)
         case 'boundary':
             filter = model.grant.BoundaryFilter(id=converter.from_boundary(grant.filter.name))
@@ -334,7 +342,9 @@ def boundary_to_schema(converter: GrantConverter, boundary: model.boundary.Bound
         id=boundary.id,
         name=boundary.name,
         description=boundary.description,
-        ceiling_list=None if boundary.ceiling_list is None else [grant_to_schema(converter, g) for g in boundary.ceiling_list],
+        ceiling_list=None if boundary.ceiling_list is None else [
+        grant_to_schema(converter, g) for g in boundary.ceiling_list
+    ],
         denied_list=[grant_to_schema(converter, g) for g in boundary.denied_list],
     )
 
@@ -353,7 +363,9 @@ def role_to_schema(converter: GrantConverter, role: model.role.Role) -> schemas.
 def identity_list_to_schema(identities: list[model.identity.Identity]) -> list[schemas.Identity]:
     # read the data we need to format fully the output.
     tags = ctx.db.tag.read_all(id=list(set(tag_id for i in identities for tag_id in i.tag_id_list)))
-    boundaries = ctx.db.boundary.read_all(id=list(set(boundary_id for i in identities for boundary_id in i.boundary_id_list)))
+    boundaries = ctx.db.boundary.read_all(
+        id=list(set(boundary_id for i in identities for boundary_id in i.boundary_id_list))
+    )
     tag_by_id = {t.id: tag_to_schema(t) for t in tags}
     boundary_by_id = {b.id: schemas.IdentityBoundary(id=b.id, name=b.name) for b in boundaries}
 
