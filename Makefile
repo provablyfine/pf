@@ -41,4 +41,7 @@ cov-report:
 check-imports:
 	scripts/check_imports
 
-.PHONY: tests cov cov-report check-imports
+format:
+	uv run ruff format
+
+.PHONY: tests cov cov-report check-imports format
