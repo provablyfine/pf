@@ -13,6 +13,13 @@ All our [user documentation](https://doc.provablyfine.net) lives outside of this
 User documentation is often written before we implement the corresponding features
 as a way to keep us on track towards building a tool that is usable.
 
+# Development environment
+
+Install pre-commit hooks locally:
+```console
+$ uv run --with pre-commit pre-commit install
+```
+
 # Tests
 
 We use python type hints extensively so, the first order of business is to
