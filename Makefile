@@ -38,4 +38,7 @@ cov-report:
 	coverage html -d cov
 	coverage report
 
-.PHONY: tests cov cov-report
+check-imports:
+	scripts/check_imports.py
+
+.PHONY: tests cov cov-report check-imports

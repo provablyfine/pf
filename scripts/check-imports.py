@@ -1,0 +1,29 @@
+#!/usr/bin/python
+import ast
+import pathlib
+
+
+def check_file(path: pathlib.Path) -> list[str]:
+    errors = []
+    with open(path) as f:
+        tree = ast.parse(f.read(), filename=str(path))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.level == 0:
+            if node.module == '__future__':
+                continue
+            errors.append(
+                f"{path}:{node.lineno} — use `import {node.module}` instead of `from {node.module} import ...`"
+            )
+    return errors
+
+
+if __name__ == "__main__":
+    errors = []
+    for path in pathlib.Path(".").rglob("*.py"):
+        if 'venv' in str(path):
+            continue
+        errors.extend(check_file(path))
+
+    if errors:
+        print("\n".join(errors))
+        raise SystemExit(1)
