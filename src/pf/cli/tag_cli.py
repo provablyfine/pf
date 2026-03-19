@@ -20,21 +20,29 @@ def _tags(args, auth):
     return tags
 
 
+def _sort_by_id(t):
+    return t['id']
+
+
+def _sort_by_name(t):
+    return (t['name'], t['value'], t['id'])
+
+
+def _sort_by_value(t):
+    return (t['value'], t['name'], t['id'])
+
+
 def tag_list_function(args):
     c = config.Config.load(args.config)
     api = client.Client(c)
     auth = api.session_auth(c.session_key)
     tags = _tags(args, auth)
-    match args.sort:
-        case 'id':
-            sort_function = lambda t: t['id']
-        case 'name':
-            sort_function = lambda t: (t['name'], t['value'], t['id'])
-        case 'value':
-            sort_function = lambda t: (t['value'], t['name'], t['id'])
-        case _:
-            assert False
-    tags = sorted(tags, key=sort_function)
+    sort_functions = {
+        'id': _sort_by_id,
+        'name': _sort_by_name,
+        'value': _sort_by_value,
+    }
+    tags = sorted(tags, key=sort_functions[args.sort])
     if args.quiet:
         args.format = 'quiet'
     match args.format:

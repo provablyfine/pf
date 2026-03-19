@@ -26,18 +26,24 @@ def _role(args, auth):
     return roles[0]
 
 
+def _sort_by_id(t):
+    return t['id']
+
+
+def _sort_by_name(t):
+    return (t['name'], t['value'], t['id'])
+
+
 def _role_list_function(args):
     c = config.Config.load(args.config)
     api = client.Client(c)
     auth = api.session_auth(c.session_key)
     roles = _roles(auth, id=args.id, name=args.name)
-    match args.sort:
-        case 'id':
-            sort_function = lambda i: i['id']
-        case 'name':
-            sort_function = lambda i: (i['name'], i['id'])
-        case _:
-            assert False
+    sort_functions = {
+        'id': _sort_by_id,
+        'name': _sort_by_name,
+    }
+    roles = sorted(roles, key=sort_functions[args.sort])
     if args.quiet:
         args.format = 'quiet'
     match args.format:
