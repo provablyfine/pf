@@ -1,0 +1,10 @@
+- repo: local
+  hooks:
+    - id: check-from-imports
+      name: Ban from-imports for everything except relative imports
+      entry: scripts/check_imports
+      language: python
+      types: [python]
+    - id: ruff
+      args: [--fix]
+    - id: ruff-format
