@@ -9,6 +9,6 @@ repos:
     hooks:
       - id: check-from-imports
         name: Ban from-imports for everything except relative imports
-        entry: scripts/check_imports
+        entry: scripts/check-imports
         language: python
         types: [python]

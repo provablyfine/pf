@@ -129,9 +129,9 @@ def pf():
     login_parser.add_argument(
         "--session-key",
         default=None,
-        help="Session key to associate with account. "\
-        "If none is provided, a new one is generated, "\
-        "stored in the user' SSH agent and its hash is "\
+        help="Session key to associate with account. "
+        "If none is provided, a new one is generated, "
+        "stored in the user' SSH agent and its hash is "
         "saved in the configuration file",
     )
     login_parser.set_defaults(func=_login_function)

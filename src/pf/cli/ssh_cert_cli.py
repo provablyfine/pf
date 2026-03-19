@@ -216,8 +216,8 @@ def add_subparsers(parser):
     group.add_argument(
         "--source-address",
         action="append",
-        help="Allow list of source addresses from which the certificate is valid. "\
-            "CIDR range or wildcard addresses are accepted.",
+        help="Allow list of source addresses from which the certificate is valid. "
+        "CIDR range or wildcard addresses are accepted.",
     )
     group.add_argument("--verify-required", action="store_true")
     group = sign_user_parser.add_argument_group(title="Extensions")
