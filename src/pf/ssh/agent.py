@@ -80,8 +80,8 @@ class Client:
         if message.type == Client.SSH_AGENT_FAILURE:
             raise exceptions.Error(f'Unable to obtain signature from agent: {message.contents}')
         response = buffer.Reader(message.contents)
-        length = response.read_uint32()
-        key_type = response.read_string()
+        _length = response.read_uint32()
+        _key_type = response.read_string()
         signature = response.read_string()
         return signature
 
