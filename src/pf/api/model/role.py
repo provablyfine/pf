@@ -23,7 +23,7 @@ def create(name: str, description: str, grant_list: list[grant.Grant]) -> int:
         grant_list=grants,
     )
     assert role_id is not None
-    audit_log.create('role-create', id=role_id, name=name, description=description, grant_list=grants)
+    audit_log.create("role-create", id=role_id, name=name, description=description, grant_list=grants)
     return role_id
 
 
@@ -40,11 +40,13 @@ def _from_db(role, member_id_list: list[int]) -> Role:
 def read_all(**kwargs) -> list[Role]:
     roles = ctx.db.role.read_all(**kwargs)
     members = ctx.db.role_member.read_all(role_id=list(set(r.id for r in roles)))
-    member_id_list_by_role_id = {key: [r.identity_id for r in group] for key, group in utils.group_by(members, key=lambda m: m.role_id)}
+    member_id_list_by_role_id = {
+        key: [r.identity_id for r in group] for key, group in utils.group_by(members, key=lambda m: m.role_id)
+    }
     return [_from_db(r, member_id_list_by_role_id.get(r.id, [])) for r in roles]
 
 
-def read_one(id) -> Role|None:
+def read_one(id) -> Role | None:
     roles = read_all(id=id)
     if len(roles) == 0:
         return None
@@ -53,36 +55,35 @@ def read_one(id) -> Role|None:
 
 def update(
     id: int,
-    name: str|None=None,
-    description: str|None=None,
-    grant_list: list[grant.Grant]|None=None,
-    added_member_id_list: list[int]|None=None,
-    deleted_member_id_list: list[int]|None=None
+    name: str | None = None,
+    description: str | None = None,
+    grant_list: list[grant.Grant] | None = None,
+    added_member_id_list: list[int] | None = None,
+    deleted_member_id_list: list[int] | None = None,
 ):
 
     role_fields = {}
     if name is not None:
-        role_fields['name'] = name
+        role_fields["name"] = name
         audit_log.create(
-            'role-update-name',
+            "role-update-name",
             id=id,
             name=name,
         )
     if description is not None:
-        role_fields['description'] = description
+        role_fields["description"] = description
         audit_log.create(
-            'role-update-description',
+            "role-update-description",
             id=id,
             description=description,
         )
 
     if grant_list is not None:
-        role_fields['grant_list'] = [grant.serialize(g) for g in grant_list]
+        role_fields["grant_list"] = [grant.serialize(g) for g in grant_list]
         audit_log.create(
-            'role-update-grant-list',
+            "role-update-grant-list",
             id=id,
             permission_list=[grant.serialize(g) for g in grant_list],
-
         )
 
     if len(role_fields) > 0:
@@ -92,14 +93,14 @@ def update(
         for member_id in added_member_id_list:
             ctx.db.role_member.create(role_id=id, identity_id=member_id)
         audit_log.create(
-            'role-add-members',
+            "role-add-members",
             id=id,
             added_member_id_list=added_member_id_list,
         )
     if deleted_member_id_list is not None and len(deleted_member_id_list) > 0:
         ctx.db.role_member.delete(role_id=id, identity_id=deleted_member_id_list)
         audit_log.create(
-            'role-delete-members',
+            "role-delete-members",
             id=id,
             deleted_member_id_list=deleted_member_id_list,
         )

@@ -83,7 +83,7 @@ tag = sqlalchemy.Table(
     sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
     sqlalchemy.Column("name", sqlalchemy.String, index=True, unique=False, nullable=False),
     sqlalchemy.Column("value", sqlalchemy.String, index=True, unique=False, nullable=False),
-    sqlalchemy.UniqueConstraint('name', 'value', name='uix_name_value'),
+    sqlalchemy.UniqueConstraint("name", "value", name="uix_name_value"),
     # We need autoincrement to make sure ids are not recycled EVER.
     sqlite_autoincrement=True,
 )
@@ -100,21 +100,21 @@ identity = sqlalchemy.Table(
 )
 
 identity_boundary = sqlalchemy.Table(
-    'identity_boundary',
+    "identity_boundary",
     metadata,
     sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
     sqlalchemy.Column("identity_id", sqlalchemy.Integer, index=True, unique=False, nullable=False),
     sqlalchemy.Column("boundary_id", sqlalchemy.Integer, index=True, unique=False, nullable=False),
-    sqlalchemy.UniqueConstraint('identity_id', 'boundary_id', name='uix_identity_id_boundary_id'),
+    sqlalchemy.UniqueConstraint("identity_id", "boundary_id", name="uix_identity_id_boundary_id"),
 )
 
 identity_tag = sqlalchemy.Table(
-    'identity_tag',
+    "identity_tag",
     metadata,
     sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
     sqlalchemy.Column("identity_id", sqlalchemy.Integer, index=True, unique=False, nullable=False),
     sqlalchemy.Column("tag_id", sqlalchemy.Integer, index=True, unique=False, nullable=False),
-    sqlalchemy.UniqueConstraint('identity_id', 'tag_id', name='uix_identity_id_tag_id'),
+    sqlalchemy.UniqueConstraint("identity_id", "tag_id", name="uix_identity_id_tag_id"),
 )
 
 role = sqlalchemy.Table(
@@ -157,7 +157,7 @@ signing_key = sqlalchemy.Table(
     sqlalchemy.Column("serial_number", sqlalchemy.Integer, nullable=False),
     sqlalchemy.Column("valid_after", sqlalchemy.Integer, nullable=False),
     sqlalchemy.Column("valid_before", sqlalchemy.Integer, nullable=False),
-    sqlalchemy.Index('idx_valid_before_valid_after', 'valid_before', 'valid_after'),
+    sqlalchemy.Index("idx_valid_before_valid_after", "valid_before", "valid_after"),
     # We need autoincrement to make sure ids are not recycled EVER.
     sqlite_autoincrement=True,
 )
@@ -178,6 +178,7 @@ audit_log = sqlalchemy.Table(
     sqlalchemy.Column("by_identity_id", sqlalchemy.String, index=True, unique=False, nullable=True),
     sqlalchemy.Column("details", sqlalchemy.JSON, nullable=False),
 )
+
 
 def create_tables(url):
     engine = sqlalchemy.create_engine(url)

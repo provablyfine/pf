@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 def _read_current(type: db.SigningKeyType, staging_period: int):
     now = int(time.time())
     return model.signing_key.read_all(
-        ctx.db.signing_key.columns.valid_after <= now-staging_period,
+        ctx.db.signing_key.columns.valid_after <= now - staging_period,
         ctx.db.signing_key.columns.valid_before > now,
         type=type,
     )
@@ -21,7 +21,7 @@ def _read_current(type: db.SigningKeyType, staging_period: int):
 def sign_host_certificate(request: wa.Request) -> wa.Response:
     data = schemas.SSHHostCertificateRequest.model_validate_json(request.body)
     caller = ctx.db.identity.read_one(id=ctx.identity_id)
-    assert caller is not None # because we are authenticated
+    assert caller is not None  # because we are authenticated
 
     signers = _read_current(db.SigningKeyType.HOST, ctx.config.host_key_staging_period)
     signer = signers[0]
@@ -34,10 +34,10 @@ def sign_host_certificate(request: wa.Request) -> wa.Response:
         cert = ssh.cert.Cert.create_host(
             public_key=public_key,
             serial_number=serial_number,
-            identifier=f'{ctx.identity_id}:{caller.name}',
+            identifier=f"{ctx.identity_id}:{caller.name}",
             principals=[caller.name],
-            valid_after=now-10,
-            valid_before=now+ctx.config.host_certificate_lifetime,
+            valid_after=now - 10,
+            valid_before=now + ctx.config.host_certificate_lifetime,
             signer=signer.key,
         )
         serial_number += 1
@@ -45,7 +45,7 @@ def sign_host_certificate(request: wa.Request) -> wa.Response:
 
     for c in certificates:
         model.audit_log.create(
-            'create-host-certificate',
+            "create-host-certificate",
             signing_key_id=signer.id,
             public_key=c.public_key.to_dict(),
             identifier=c.identifier,
@@ -57,7 +57,9 @@ def sign_host_certificate(request: wa.Request) -> wa.Response:
 
     return wa.JSONResponse(
         status_code=200,
-        json=schemas.SSHHostCertificateResponse(certificates=[converters.cert_to_schema(c) for c in certificates]).model_dump(),
+        json=schemas.SSHHostCertificateResponse(
+            certificates=[converters.cert_to_schema(c) for c in certificates]
+        ).model_dump(),
     )
 
 
@@ -65,10 +67,10 @@ def sign_host_certificate(request: wa.Request) -> wa.Response:
 def sign_user_certificate(request: wa.Request) -> wa.Response:
     data = schemas.SSHUserCertificateRequest.model_validate_json(request.body)
     caller = ctx.db.identity.read_one(id=ctx.identity_id)
-    assert caller is not None # because we are authenticated
+    assert caller is not None  # because we are authenticated
     host = model.identity.read_one(name=data.hostname)
     if host is None:
-        return wa.ProblemResponse(status_code=404, title='Unknown host')
+        return wa.ProblemResponse(status_code=404, title="Unknown host")
 
     grants = grant.Grants.create()
     grants_allowed = grants.ssh(host.id, host.tag_id_list, host.boundary_id_list).list_can_username(data.username)
@@ -90,10 +92,10 @@ def sign_user_certificate(request: wa.Request) -> wa.Response:
             cert = ssh.cert.Cert.create_user(
                 public_key=public_key,
                 serial_number=serial_number,
-                identifier=f'{ctx.identity_id}:{caller.name}',
-                principals=[f'{data.username}@{host.id}'],
-                valid_after=now-10,
-                valid_before=now+ctx.config.user_certificate_lifetime,
+                identifier=f"{ctx.identity_id}:{caller.name}",
+                principals=[f"{data.username}@{host.id}"],
+                valid_after=now - 10,
+                valid_before=now + ctx.config.user_certificate_lifetime,
                 critical_options=ssh.cert.CriticalOptions(force_command=command),
                 extensions=ssh.cert.Extensions(
                     permit_port_forwarding=permission.permit_port_forwarding,
@@ -107,12 +109,12 @@ def sign_user_certificate(request: wa.Request) -> wa.Response:
             serial_number += 1
             certificates.append(cert)
 
-    logger.info(f'Generated certificates={len(certificates)} for username={data.username}')
+    logger.info(f"Generated certificates={len(certificates)} for username={data.username}")
     model.signing_key.update(signer.id, serial_number=serial_number)
 
     for c in certificates:
         model.audit_log.create(
-            'create-user-certificate',
+            "create-user-certificate",
             signing_key_id=signer.id,
             public_key=public_key.to_dict(),
             serial_number=c.serial_number,
@@ -125,7 +127,9 @@ def sign_user_certificate(request: wa.Request) -> wa.Response:
 
     return wa.JSONResponse(
         status_code=200,
-        json=schemas.SSHUserCertificateResponse(certificates=[converters.cert_to_schema(c) for c in certificates]).model_dump(),
+        json=schemas.SSHUserCertificateResponse(
+            certificates=[converters.cert_to_schema(c) for c in certificates]
+        ).model_dump(),
     )
 
 
@@ -137,7 +141,7 @@ def read_user_trusted_keys(request: wa.Request) -> wa.Response:
     )
     trusted_keys = [signing_key.key.public().to_openssh() for signing_key in signing_keys]
     try:
-        with open(ctx.config.user_extra_trusted_keys_filename, 'rb') as f:
+        with open(ctx.config.user_extra_trusted_keys_filename, "rb") as f:
             trusted_keys.append(f.read())
     except Exception:
         pass
@@ -145,9 +149,9 @@ def read_user_trusted_keys(request: wa.Request) -> wa.Response:
     return wa.Response(
         status_code=200,
         headers={
-            'Content-Type': 'text/plain',
+            "Content-Type": "text/plain",
         },
-        body=b'\n'.join(trusted_keys),
+        body=b"\n".join(trusted_keys),
     )
 
 
@@ -157,12 +161,12 @@ def read_host_trusted_keys(request: wa.Request) -> wa.Response:
         ctx.db.signing_key.columns.valid_before > now,
         type=db.SigningKeyType.HOST,
     )
-    trusted_keys = [b'@cert-authority * ' + signing_key.key.public().to_openssh() for signing_key in signing_keys]
+    trusted_keys = [b"@cert-authority * " + signing_key.key.public().to_openssh() for signing_key in signing_keys]
 
     return wa.Response(
         status_code=200,
         headers={
-            'Content-Type': 'text/plain',
+            "Content-Type": "text/plain",
         },
-        body=b'\n'.join(trusted_keys),
+        body=b"\n".join(trusted_keys),
     )

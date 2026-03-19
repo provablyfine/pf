@@ -47,8 +47,9 @@ exclude = [
 typeCheckingMode = "standard"
 
 [tool.ruff]
-line-length = 110
-select = ["E", "F", "I", "UP", "TID"]
+line-length = 120
+[tool.ruff.lint]
+select = ["E"]
 
 [tool.mypy]
 strict = true

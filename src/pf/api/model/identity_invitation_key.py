@@ -15,9 +15,9 @@ class IdentityInvitationKey:
     expires_at: int
     is_revoked: bool
     is_accepted: bool
-    revoked_at: int|None = None
-    accepted_at: int|None = None
-    accepted_public_key_id: str|None = None
+    revoked_at: int | None = None
+    accepted_at: int | None = None
+    accepted_public_key_id: str | None = None
 
 
 def create(identity_id: int, expiration_delay_s: int) -> str:
@@ -32,11 +32,11 @@ def create(identity_id: int, expiration_delay_s: int) -> str:
         created_at=now,
         revoked_at=None,
         accepted_at=None,
-        expires_at=now+expiration_delay_s,
+        expires_at=now + expiration_delay_s,
         is_revoked=False,
         is_accepted=False,
     )
-    audit_log.create('identity-invitation-create', id=id, identity_id=identity_id, expires_at=expires_at)
+    audit_log.create("identity-invitation-create", id=id, identity_id=identity_id, expires_at=expires_at)
     return id
 
 
@@ -52,14 +52,14 @@ def accept(id: str, public_key_id):
         accepted_at=now,
         accepted_public_key_id=public_key_id,
     ).where(id=invitation.id)
-    audit_log.create('identity-invitation-accepted', id=invitation.id, identity_id=invitation.identity_id)
+    audit_log.create("identity-invitation-accepted", id=invitation.id, identity_id=invitation.identity_id)
 
 
-def read(id: str) -> IdentityInvitationKey|None:
+def read(id: str) -> IdentityInvitationKey | None:
     invitation = ctx.db.identity_invitation_key.read_one(id=id)
     if invitation is None:
         return None
-    key =  jwk.Symmetric.from_bytes(ctx.kek.decrypt(invitation.key))
+    key = jwk.Symmetric.from_bytes(ctx.kek.decrypt(invitation.key))
     return IdentityInvitationKey(
         id=invitation.id,
         key=key,

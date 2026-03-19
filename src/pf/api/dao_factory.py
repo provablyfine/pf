@@ -16,7 +16,7 @@ class Table:
     def columns(self):
         return types.SimpleNamespace(self._table.columns)
 
-    def create(self, **kwargs) -> int|None:
+    def create(self, **kwargs) -> int | None:
         statement = self._table.insert().values(**kwargs)
         result = self._connection.execute(statement)
         primary_key = result.inserted_primary_key
@@ -35,7 +35,7 @@ class Table:
             if isinstance(v, (list, tuple, set)):
                 statement = statement.where(column.in_(v))
             else:
-                statement = statement.where(column==v)
+                statement = statement.where(column == v)
         return statement
 
     def read_one(self, *args, **kwargs):
@@ -61,6 +61,7 @@ class Table:
             def where(self, **kwargs):
                 statement = self._outer._where(self._statement, **kwargs)
                 self._outer._connection.execute(statement)
+
         statement = self._table.update().values(**kwargs)
         return Update(self, statement)
 

@@ -11,7 +11,7 @@ from . import buffer, cert
 
 def serialize_cert(cert: cert.Cert) -> bytes:
     data = cert.to_openssh()
-    items = data.split(b' ')
+    items = data.split(b" ")
     assert len(items) >= 2
     return base64.b64decode(items[1])
 
@@ -23,12 +23,12 @@ def deserialize_cert(data: bytes) -> cert.Cert:
         key_type,
         base64.b64encode(data),
     ]
-    return cert.Cert.from_openssh(b' '.join(openssh))
+    return cert.Cert.from_openssh(b" ".join(openssh))
 
 
 def serialize_public(key: jwk.Public) -> bytes:
     data = key.to_openssh()
-    items = data.split(b' ')
+    items = data.split(b" ")
     assert len(items) == 2
     return base64.b64decode(items[1])
 
@@ -40,9 +40,9 @@ def deserialize_public(data: bytes) -> jwk.Public:
     openssh = [
         key_type,
         base64.b64encode(data),
-        b'username@host',
+        b"username@host",
     ]
-    return jwk.Public.from_openssh(b' '.join(openssh))
+    return jwk.Public.from_openssh(b" ".join(openssh))
 
 
 def serialize_private_certificate(key: jwk.Private, cert: cert.Cert) -> bytes:
@@ -50,7 +50,7 @@ def serialize_private_certificate(key: jwk.Private, cert: cert.Cert) -> bytes:
     writer = buffer.Writer()
     match k:
         case cryptography.hazmat.primitives.asymmetric.ed25519.Ed25519PrivateKey():
-            writer.write_string(b'ssh-ed25519-cert-v01@openssh.com')
+            writer.write_string(b"ssh-ed25519-cert-v01@openssh.com")
             writer.write_string(serialize_cert(cert))
             public_key = k.public_key().public_bytes_raw()
             private_key = k.private_bytes_raw()
@@ -58,7 +58,7 @@ def serialize_private_certificate(key: jwk.Private, cert: cert.Cert) -> bytes:
             writer.write_string(private_key + public_key)
             return writer.to_bytes()
         case cryptography.hazmat.primitives.asymmetric.rsa.RSAPrivateKey():
-            writer.write_string(b'ssh-rsa-cert-v01@openssh.com')
+            writer.write_string(b"ssh-rsa-cert-v01@openssh.com")
             writer.write_string(serialize_cert(cert))
             private_numbers = k.private_numbers()
             writer.write_mpint(private_numbers.d)
@@ -69,14 +69,14 @@ def serialize_private_certificate(key: jwk.Private, cert: cert.Cert) -> bytes:
         case cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePrivateKey():
             match k.curve:
                 case cryptography.hazmat.primitives.asymmetric.ec.SECP256R1():
-                    curve = b'nistp256'
+                    curve = b"nistp256"
                 case cryptography.hazmat.primitives.asymmetric.ec.SECP384R1():
-                    curve = b'nistp384'
+                    curve = b"nistp384"
                 case cryptography.hazmat.primitives.asymmetric.ec.SECP521R1():
-                    curve = b'nistp521'
+                    curve = b"nistp521"
                 case _:
                     assert False
-            writer.write_string(b'ecdsa-sha2-' + curve + b'-cert-v01@openssh.com')
+            writer.write_string(b"ecdsa-sha2-" + curve + b"-cert-v01@openssh.com")
             writer.write_string(serialize_cert(cert))
             d = k.private_numbers().private_value
             writer.write_mpint(d)
@@ -100,7 +100,7 @@ def serialize_private(key: jwk.Private) -> bytes:
     match k:
         case cryptography.hazmat.primitives.asymmetric.ed25519.Ed25519PrivateKey():
             # https://datatracker.ietf.org/doc/html/draft-miller-ssh-agent#name-eddsa-keys
-            writer.write_string(b'ssh-ed25519')
+            writer.write_string(b"ssh-ed25519")
             public_key = k.public_key().public_bytes_raw()
             private_key = k.private_bytes_raw()
             writer.write_string(public_key)
@@ -108,7 +108,7 @@ def serialize_private(key: jwk.Private) -> bytes:
             return writer.to_bytes()
         case cryptography.hazmat.primitives.asymmetric.rsa.RSAPrivateKey():
             # https://datatracker.ietf.org/doc/html/draft-miller-ssh-agent#name-rsa-keys
-            writer.write_string(b'ssh-rsa')
+            writer.write_string(b"ssh-rsa")
             private_numbers = k.private_numbers()
             public_numbers = private_numbers.public_numbers
             writer.write_mpint(public_numbers.n)
@@ -122,17 +122,17 @@ def serialize_private(key: jwk.Private) -> bytes:
             # https://datatracker.ietf.org/doc/html/draft-miller-ssh-agent#name-ecdsa-keys
             match k.curve:
                 case cryptography.hazmat.primitives.asymmetric.ec.SECP256R1():
-                    curve = b'nistp256'
+                    curve = b"nistp256"
                 case cryptography.hazmat.primitives.asymmetric.ec.SECP384R1():
-                    curve = b'nistp384'
+                    curve = b"nistp384"
                 case cryptography.hazmat.primitives.asymmetric.ec.SECP521R1():
-                    curve = b'nistp521'
+                    curve = b"nistp521"
                 case _:
                     assert False
-            writer.write_string(b'ecdsa-sha2-' + curve)
+            writer.write_string(b"ecdsa-sha2-" + curve)
             writer.write_string(curve)
             q = k.public_key().public_bytes(
-                encoding= cryptography.hazmat.primitives.serialization.Encoding.X962,
+                encoding=cryptography.hazmat.primitives.serialization.Encoding.X962,
                 format=cryptography.hazmat.primitives.serialization.PublicFormat.UncompressedPoint,
             )
             d = k.private_numbers().private_value

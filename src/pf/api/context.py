@@ -7,15 +7,15 @@ import cryptography.fernet
 from . import config as config_module
 from . import dao_factory
 
-_kek_var : contextvars.ContextVar[cryptography.fernet.Fernet|None] = contextvars.ContextVar("kek", default=None)
-_config_var : contextvars.ContextVar[config_module.Config|None] = contextvars.ContextVar("config", default=None)
-_db_var: contextvars.ContextVar[typing.Any|None] = contextvars.ContextVar("db", default=None)
-_identity_id_var: contextvars.ContextVar[int|None] = contextvars.ContextVar("identity_id", default=None)
+_kek_var: contextvars.ContextVar[cryptography.fernet.Fernet | None] = contextvars.ContextVar("kek", default=None)
+_config_var: contextvars.ContextVar[config_module.Config | None] = contextvars.ContextVar("config", default=None)
+_db_var: contextvars.ContextVar[typing.Any | None] = contextvars.ContextVar("db", default=None)
+_identity_id_var: contextvars.ContextVar[int | None] = contextvars.ContextVar("identity_id", default=None)
 
 
 class RequestContext:
     """A proxy that makes contextvars feel like regular attributes."""
-   
+
     @property
     def config(self) -> config_module.Config:
         c = _config_var.get()
@@ -35,7 +35,7 @@ class RequestContext:
         return dao
 
     @property
-    def identity_id(self) -> int|None:
+    def identity_id(self) -> int | None:
         return _identity_id_var.get()
 
     @contextlib.contextmanager

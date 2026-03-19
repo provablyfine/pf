@@ -16,12 +16,7 @@ class Backtrace:
         self._at = int(time.time())
 
     def format(self):
-        return {
-            'method': self._method,
-            'path': self._path,
-            'at': self._at,
-            'backtrace': self._backtrace
-        }
+        return {"method": self._method, "path": self._path, "at": self._at, "backtrace": self._backtrace}
 
 
 class BacktraceMiddleware(Middleware):
@@ -32,7 +27,9 @@ class BacktraceMiddleware(Middleware):
         except HTTPException:
             raise
         except BaseException:
-            debug_path = request.state.debug_store.add(Backtrace(request.method, request.url.path, traceback.format_exc()).format())
+            debug_path = request.state.debug_store.add(
+                Backtrace(request.method, request.url.path, traceback.format_exc()).format()
+            )
             debug_url = request.app.config.base_url + debug_path
-            response = ProblemResponse(status_code=500, title='Internal Server Error', instance=debug_url)
+            response = ProblemResponse(status_code=500, title="Internal Server Error", instance=debug_url)
         return response

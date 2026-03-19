@@ -7,24 +7,30 @@ import pydantic
 
 logger = logging.getLogger(__name__)
 
+
 class DBBase(pydantic.BaseModel):
-    model_config = pydantic.ConfigDict(extra='forbid')
+    model_config = pydantic.ConfigDict(extra="forbid")
+
 
 class Filter(DBBase):
     pass
 
+
 class TripletFilter(Filter):
-    id: int|None = None
-    tag_id_list: list[int]|None = None
-    boundary_id_list: list[int]|None = None
+    id: int | None = None
+    tag_id_list: list[int] | None = None
+    boundary_id_list: list[int] | None = None
+
 
 class CRDPermission(DBBase):
     create: bool
     read: bool
     delete: bool
 
+
 class BoundaryFilter(Filter):
-    id: int|None
+    id: int | None
+
 
 class BoundaryUpdatePermission(DBBase):
     name: bool
@@ -32,24 +38,30 @@ class BoundaryUpdatePermission(DBBase):
     ceiling_list: bool
     denied_list: bool
 
+
 class BoundaryPermission(CRDPermission):
     update: BoundaryUpdatePermission | None
+
 
 class BoundaryGrant(DBBase):
     type: typing.Literal["boundary"] = "boundary"
     filter: BoundaryFilter
     permission: BoundaryPermission
 
+
 class TagFilter(Filter):
     id: int | None
 
+
 class TagPermission(CRDPermission):
     pass
+
 
 class TagGrant(DBBase):
     type: typing.Literal["tag"] = "tag"
     filter: TagFilter
     permission: TagPermission
+
 
 class RoleUpdatePermission(DBBase):
     name: bool
@@ -57,16 +69,20 @@ class RoleUpdatePermission(DBBase):
     grant_list: bool
     member_list: bool
 
+
 class RolePermission(CRDPermission):
-    update: RoleUpdatePermission|None
+    update: RoleUpdatePermission | None
+
 
 class RoleFilter(Filter):
     id: int | None
+
 
 class RoleGrant(DBBase):
     type: typing.Literal["role"] = "role"
     filter: RoleFilter
     permission: RolePermission
+
 
 class IdentityCreatePermission(DBBase):
     """
@@ -87,12 +103,15 @@ class IdentityCreatePermission(DBBase):
                than required here. If None or empty, no boundaries
                are required.
     """
+
     allowed: bool
     allowed_tag_id_list: list[int] | None
     required_boundary_id_list: list[int] | None
 
+
 class IdentityUpdatePermission(DBBase):
     name: bool
+
 
 class IdentityPermission(DBBase):
     create: IdentityCreatePermission | None
@@ -103,13 +122,16 @@ class IdentityPermission(DBBase):
     del_tag_id_list: list[int] | None
     invite_list: list[str] | None
 
+
 class IdentityFilter(TripletFilter):
     pass
+
 
 class IdentityGrant(DBBase):
     type: typing.Literal["identity"] = "identity"
     filter: IdentityFilter
     permission: IdentityPermission
+
 
 class SSHPermission(DBBase):
     force_command_list: list[str] | None
@@ -120,21 +142,25 @@ class SSHPermission(DBBase):
     permit_agent_forwarding: bool
     permit_port_forwarding: bool
 
+
 class SSHFilter(TripletFilter):
     pass
+
 
 class SSHGrant(DBBase):
     type: typing.Literal["ssh"] = "ssh"
     filter: SSHFilter
     permission: SSHPermission
 
+
 Grant = typing.Annotated[
-    BoundaryGrant | TagGrant | RoleGrant | IdentityGrant | SSHGrant,
-    pydantic.Field(discriminator="type")
+    BoundaryGrant | TagGrant | RoleGrant | IdentityGrant | SSHGrant, pydantic.Field(discriminator="type")
 ]
+
 
 def deserialize(data: dict) -> Grant:
     return pydantic.TypeAdapter(Grant).validate_python(data)
+
 
 def serialize(grant: Grant) -> dict:
     return grant.model_dump()

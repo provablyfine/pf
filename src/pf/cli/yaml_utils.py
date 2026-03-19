@@ -14,5 +14,5 @@ def dump(data):
         default_flow_style=False,
         indent=2,
         sort_keys=False,
-    ).rstrip('\n')
+    ).rstrip("\n")
     return output

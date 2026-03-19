@@ -22,39 +22,40 @@ class Error(BaseException):
 
 
 def tld():
-    return os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
 
 def _run(args):
-    logger.info(f'RUN: {" ".join(args)}')
+    logger.info(f"RUN: {' '.join(args)}")
     popen = subprocess.run(args, capture_output=True, text=True)
     if popen.returncode != 0:
-        with tempfile.NamedTemporaryFile(delete=False, delete_on_close=False, mode='w+') as f:
+        with tempfile.NamedTemporaryFile(delete=False, delete_on_close=False, mode="w+") as f:
             f.write(popen.stdout)
             f.flush()
-            raise Error(f'Unable to run returncode={popen.returncode}, stdout={f.name}. args=\"{" ".join(args)}\"')
+            raise Error(f'Unable to run returncode={popen.returncode}, stdout={f.name}. args="{" ".join(args)}"')
     return popen.stdout
 
 
 def _parse_port_mapping(s):
-    items = s.split('->')
+    items = s.split("->")
     if len(items) != 2:
-        raise Error(f'Invalid port mapping: {s}')
+        raise Error(f"Invalid port mapping: {s}")
     container, host = items
-    items = host.split(':')
+    items = host.split(":")
     if len(items) != 2:
-        raise Error(f'Invalid host address: {host}')
+        raise Error(f"Invalid host address: {host}")
     hostname, port = items
     port = port.strip()
     if not port.isdigit():
-        raise Error(f'Invalid port number: {port}')
+        raise Error(f"Invalid port number: {port}")
     return int(port)
+
 
 @dataclasses.dataclass(frozen=True)
 class SshD:
     host_port: int
     keys_directory: str
     container_id: str
-
 
 
 @pytest.fixture
@@ -128,9 +129,7 @@ EOF
 
 CMD ["/bin/sh", "/run/start.sh"]
     """
-    with tempfile.NamedTemporaryFile(mode='w+') as container_file, \
-            tempfile.TemporaryDirectory() as ssh_keys_directory:
-
+    with tempfile.NamedTemporaryFile(mode="w+") as container_file, tempfile.TemporaryDirectory() as ssh_keys_directory:
         container_file.write(containerfile)
         container_file.flush()
 
@@ -139,34 +138,36 @@ CMD ["/bin/sh", "/run/start.sh"]
         os.chmod(fd, 0o755)
         os.close(fd)
 
-        stdout = _run(['podman', 'build', '--quiet', '--file', container_file.name, tld()])
-        image_id = stdout.strip('\n')
-        if '\n' in image_id:
+        stdout = _run(["podman", "build", "--quiet", "--file", container_file.name, tld()])
+        image_id = stdout.strip("\n")
+        if "\n" in image_id:
             assert False, image_id
-        stdout = _run([
-            'podman',
-            'run',
-            '--detach', # run in background and return immediately
-            '--quiet',
-            '--publish-all',
-            '--volume',
-            f'{ssh_keys_directory}:/etc/ssh/keys:rw',
-            image_id,
-        ])
-        container_id = stdout.strip('\n')
-        stdout = _run(['podman', 'port', container_id])
+        stdout = _run(
+            [
+                "podman",
+                "run",
+                "--detach",  # run in background and return immediately
+                "--quiet",
+                "--publish-all",
+                "--volume",
+                f"{ssh_keys_directory}:/etc/ssh/keys:rw",
+                image_id,
+            ]
+        )
+        container_id = stdout.strip("\n")
+        stdout = _run(["podman", "port", container_id])
         try:
             port = _parse_port_mapping(stdout)
         except Exception:
-            print(f'SSH Server container: {container_id}')
+            print(f"SSH Server container: {container_id}")
             raise
         try:
             yield SshD(host_port=port, keys_directory=ssh_keys_directory, container_id=container_id)
         finally:
-            if hasattr(request.node, 'rep_call'):
+            if hasattr(request.node, "rep_call"):
                 if request.node.rep_call.failed:
-                    print(f'SSH Server container: {container_id}')
-            _run(['podman', 'container', 'stop', '-t', '0', container_id])
+                    print(f"SSH Server container: {container_id}")
+            _run(["podman", "container", "stop", "-t", "0", container_id])
 
 
 @dataclasses.dataclass(frozen=True)
@@ -176,22 +177,22 @@ class SshAgent:
 
 @pytest.fixture
 def ssh_agent(request):
-    completed = subprocess.run(['ssh-agent', '-s'], capture_output=True)
+    completed = subprocess.run(["ssh-agent", "-s"], capture_output=True)
     assert completed.returncode == 0
     pid = None
     socket = None
-    for line in completed.stdout.split(b'\n'):
-        line = line.decode('ascii')
-        m = re.search('SSH_AUTH_SOCK=([^;]+)', line)
+    for line in completed.stdout.split(b"\n"):
+        line = line.decode("ascii")
+        m = re.search("SSH_AUTH_SOCK=([^;]+)", line)
         if m is not None:
             socket = m.group(1)
             continue
-        m = re.search('Agent pid ([0-9]+);', line)
+        m = re.search("Agent pid ([0-9]+);", line)
         if m is not None:
             pid = int(m.group(1))
             continue
     assert pid is not None and socket is not None
-    
+
     yield SshAgent(socket)
 
     os.kill(pid, signal.SIGTERM)
@@ -205,25 +206,35 @@ class Api:
 @pytest.fixture
 def api(request):
     tmp_dir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True, delete=False)
-    api_db = os.path.join(tmp_dir.name, 'api.db')
-    api_kek_file = os.path.join(tmp_dir.name, 'kek_file.key')
-    api_config = os.path.join(tmp_dir.name, 'config.json')
-    api_port_file = os.path.join(tmp_dir.name, 'api.port')
-    api_log = os.path.join(tmp_dir.name, 'api.log')
-    with open(api_kek_file, 'wb+') as f:
+    api_db = os.path.join(tmp_dir.name, "api.db")
+    api_kek_file = os.path.join(tmp_dir.name, "kek_file.key")
+    api_config = os.path.join(tmp_dir.name, "config.json")
+    api_port_file = os.path.join(tmp_dir.name, "api.port")
+    api_log = os.path.join(tmp_dir.name, "api.log")
+    with open(api_kek_file, "wb+") as f:
         f.write(random.randbytes(32))
-    with open(api_config, 'w+') as f:
-        f.write(json.dumps({
-            'database_url': f'sqlite:///{api_db}',
-            'debug': True,
-            'log_level': 'DEBUG',
-            'kek_filename': api_kek_file,
-            #'debug_sql': True,
-        }))
+    with open(api_config, "w+") as f:
+        f.write(
+            json.dumps(
+                {
+                    "database_url": f"sqlite:///{api_db}",
+                    "debug": True,
+                    "log_level": "DEBUG",
+                    "kek_filename": api_kek_file,
+                    #'debug_sql': True,
+                }
+            )
+        )
     env = copy.copy(os.environ)
-    env['PYTHONUNBUFFERED'] = '1'
-    api_log_file = open(api_log, 'w+')
-    popen = subprocess.Popen(['scripts/pf-server', '-c', api_config, '--port-file', api_port_file], stdout=api_log_file, stderr=subprocess.STDOUT, text=True, env=env)
+    env["PYTHONUNBUFFERED"] = "1"
+    api_log_file = open(api_log, "w+")
+    popen = subprocess.Popen(
+        ["scripts/pf-server", "-c", api_config, "--port-file", api_port_file],
+        stdout=api_log_file,
+        stderr=subprocess.STDOUT,
+        text=True,
+        env=env,
+    )
 
     pf_start_timeout = 5
     start = time.time()
@@ -241,7 +252,7 @@ def api(request):
             time.sleep(0.1)
             continue
         try:
-            response = requests.get(f'http://127.0.0.1:{api_port}/pf/directory')
+            response = requests.get(f"http://127.0.0.1:{api_port}/pf/directory")
         except requests.exceptions.ConnectionError:
             time.sleep(0.1)
             continue
@@ -250,7 +261,7 @@ def api(request):
             continue
         break
     if api_port is None:
-        raise Exception('Unable to start pf server')
+        raise Exception("Unable to start pf server")
 
     yield Api(api_port)
 
@@ -258,13 +269,13 @@ def api(request):
     popen.terminate()
     popen.wait()
     api_log_file.close()
-    if hasattr(request.node, 'rep_call'):
+    if hasattr(request.node, "rep_call"):
         if request.node.rep_call.failed:
-            print(f'API log: {api_log}')
-            print(f'API db: {api_db}')
-            print(f'API config: {api_config}')
-            print(f'API portfile: {api_port_file}')
-            print(f'API kek: {api_kek_file}')
+            print(f"API log: {api_log}")
+            print(f"API db: {api_db}")
+            print(f"API config: {api_config}")
+            print(f"API portfile: {api_port_file}")
+            print(f"API kek: {api_kek_file}")
             return
     tmp_dir.cleanup()
 

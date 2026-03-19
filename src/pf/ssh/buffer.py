@@ -19,19 +19,19 @@ class Reader:
 
     def read_bytes(self, n: int) -> bytes:
         if self._current + n > len(self._buffer):
-            raise exceptions.Error('Unable to parse ssh data buffer')
-        value = self._buffer[self._current:self._current+n]
+            raise exceptions.Error("Unable to parse ssh data buffer")
+        value = self._buffer[self._current : self._current + n]
         self._current += n
         return value
 
     def read_uint32(self) -> int:
         buffer = self.read_bytes(4)
-        value = int.from_bytes(buffer, byteorder='big')
+        value = int.from_bytes(buffer, byteorder="big")
         return value
 
     def read_uint64(self) -> int:
         buffer = self.read_bytes(8)
-        value = int.from_bytes(buffer, byteorder='big')
+        value = int.from_bytes(buffer, byteorder="big")
         return value
 
     def read_string(self) -> bytes:
@@ -54,10 +54,10 @@ class Writer:
         self._bytes.extend(b.to_bytes(1))
 
     def write_uint32(self, value: int):
-        self._bytes.extend(value.to_bytes(4, byteorder='big'))
+        self._bytes.extend(value.to_bytes(4, byteorder="big"))
 
     def write_uint64(self, value: int):
-        self._bytes.extend(value.to_bytes(8, byteorder='big'))
+        self._bytes.extend(value.to_bytes(8, byteorder="big"))
 
     def write_bytes(self, buffer):
         if isinstance(buffer, Writer):
@@ -77,16 +77,16 @@ class Writer:
     def write_mpint(self, n: int):
         # RFC 4251 Section 5
         if n == 0:
-            self.write_string(b'')
+            self.write_string(b"")
         elif n > 0:
-            nbytes = (n.bit_length()+7)// 8
-            buffer = n.to_bytes(nbytes, byteorder='big')
+            nbytes = (n.bit_length() + 7) // 8
+            buffer = n.to_bytes(nbytes, byteorder="big")
             if buffer[0] & 0x80:
-                buffer = b'\x00' + buffer
+                buffer = b"\x00" + buffer
             self.write_string(buffer)
         elif n < 0:
-            nbytes = (n.bit_length()+7+1) // 8
-            self.write_string(n.to_bytes(nbytes, byteorder='big', signed=True))
+            nbytes = (n.bit_length() + 7 + 1) // 8
+            self.write_string(n.to_bytes(nbytes, byteorder="big", signed=True))
         else:
             assert False
 

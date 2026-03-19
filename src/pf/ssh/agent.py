@@ -8,7 +8,7 @@ import socket
 from .. import jwk
 from . import buffer, cert, exceptions, serde
 
-Method = collections.namedtuple('Method', ['encrypt', 'decrypt'])
+Method = collections.namedtuple("Method", ["encrypt", "decrypt"])
 
 
 class Client:
@@ -23,18 +23,18 @@ class Client:
     SSH_AGENT_CONSTRAIN_LIFETIME = 1
     SSH_AGENT_CONSTRAIN_CONFIRM = 2
     SSH_AGENT_FAILURE = 5
-    Message = collections.namedtuple('Message', ['type', 'contents'])
-    Identity = collections.namedtuple('Identity', ['public_key', 'comment', 'raw'])
+    Message = collections.namedtuple("Message", ["type", "contents"])
+    Identity = collections.namedtuple("Identity", ["public_key", "comment", "raw"])
 
     def __init__(self):
-        path = os.environ['SSH_AUTH_SOCK']
+        path = os.environ["SSH_AUTH_SOCK"]
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        sock.connect(path.encode('ascii'))
+        sock.connect(path.encode("ascii"))
         self._sock = sock
 
     def _send_request(self, type, data):
         request = buffer.Writer()
-        request.write_uint32(len(data)+1)
+        request.write_uint32(len(data) + 1)
         request.write_byte(type)
         request.write_bytes(data)
         written = self._sock.send(request.to_bytes())
@@ -46,19 +46,19 @@ class Client:
         while remaining > 0:
             partial = self._sock.recv(remaining)
             if len(partial) == 0:
-                raise Exception('fuck')
+                raise Exception("fuck")
             remaining -= len(partial)
             data.append(partial)
-        return b''.join(data)
+        return b"".join(data)
 
     def _recv_message(self):
         length = self._recv_bytes(4)
-        length = int.from_bytes(length, byteorder='big')
+        length = int.from_bytes(length, byteorder="big")
         payload = self._recv_bytes(length)
         return Client.Message(type=payload[0], contents=payload[1:])
 
     def list_identities(self):
-        self._send_request(Client.SSH_AGENTC_REQUEST_IDENTITIES, b'')
+        self._send_request(Client.SSH_AGENTC_REQUEST_IDENTITIES, b"")
         rx = self._recv_message()
         assert rx.type == Client.SSH_AGENT_IDENTITIES_ANSWER
         assert len(rx.contents) >= 4
@@ -78,31 +78,33 @@ class Client:
         self._send_request(Client.SSH_AGENTC_SIGN_REQUEST, request)
         message = self._recv_message()
         if message.type == Client.SSH_AGENT_FAILURE:
-            raise exceptions.Error(f'Unable to obtain signature from agent: {message.contents}')
+            raise exceptions.Error(f"Unable to obtain signature from agent: {message.contents}")
         response = buffer.Reader(message.contents)
         _length = response.read_uint32()
         _key_type = response.read_string()
         signature = response.read_string()
         return signature
 
-    def add(self,
-            private_key: jwk.Private,
-            cert: cert.Cert|None=None,
-            comment: str|None=None,
-            lifetime: int|None=None,
-            require_confirmation: bool=False):
+    def add(
+        self,
+        private_key: jwk.Private,
+        cert: cert.Cert | None = None,
+        comment: str | None = None,
+        lifetime: int | None = None,
+        require_confirmation: bool = False,
+    ):
         if cert is None:
             key = serde.serialize_private(private_key)
         else:
             key = serde.serialize_private_certificate(private_key, cert)
         if comment is None:
-            comment = f'{getpass.getuser()}@{socket.gethostname()}'
+            comment = f"{getpass.getuser()}@{socket.gethostname()}"
         self._add(key, comment, lifetime, require_confirmation)
 
-    def _add(self, key: bytes, comment: str, lifetime: int|None=None, require_confirmation: bool=False):
+    def _add(self, key: bytes, comment: str, lifetime: int | None = None, require_confirmation: bool = False):
         request = buffer.Writer()
         request.write_bytes(key)
-        request.write_string(comment.encode('utf-8'))
+        request.write_string(comment.encode("utf-8"))
         request_id = Client.SSH_AGENTC_ADD_IDENTITY
         if lifetime is not None:
             request_id = Client.SSH_AGENTC_ADD_ID_CONSTRAINED
@@ -114,13 +116,13 @@ class Client:
         self._send_request(request_id, request)
         message = self._recv_message()
         if message.type == Client.SSH_AGENT_FAILURE:
-            raise exceptions.Error(f'Unable to add key to agent: {message.contents}')
+            raise exceptions.Error(f"Unable to add key to agent: {message.contents}")
 
     def remove_all(self):
-        self._send_request(Client.SSH_AGENTC_REMOVE_ALL_IDENTITIES, b'')
+        self._send_request(Client.SSH_AGENTC_REMOVE_ALL_IDENTITIES, b"")
         message = self._recv_message()
         if message.type == Client.SSH_AGENT_FAILURE:
-            raise exceptions.Error(f'Unable to remove keys from agent: {message.contents}')
+            raise exceptions.Error(f"Unable to remove keys from agent: {message.contents}")
 
     def remove(self, identity: Client.Identity):
         request = buffer.Writer()
@@ -128,4 +130,4 @@ class Client:
         self._send_request(Client.SSH_AGENTC_REMOVE_IDENTITY, request)
         message = self._recv_message()
         if message.type == Client.SSH_AGENT_FAILURE:
-            raise exceptions.Error(f'Unable to remove key from agent: {message.contents}')
+            raise exceptions.Error(f"Unable to remove key from agent: {message.contents}")

@@ -25,11 +25,11 @@ class Match:
 
 class Route:
     def __init__(self, path, handler, methods):
-        self._segments = path.split('/')
+        self._segments = path.split("/")
         self._handler = handler
         self._methods = methods
 
-    def match(self, method: str, segments: list[str]) -> Match|None:
+    def match(self, method: str, segments: list[str]) -> Match | None:
         if len(segments) != len(self._segments):
             return None
         if method not in self._methods:
@@ -37,25 +37,25 @@ class Route:
         params = {}
         for expected, got in zip(self._segments, segments):
             if expected != got:
-                if not expected.startswith('<'):
+                if not expected.startswith("<"):
                     return None
-                if not expected.endswith('>'):
+                if not expected.endswith(">"):
                     return None
-                colon = expected.find(':')
+                colon = expected.find(":")
                 if colon == -1:
                     return None
                 type_str = expected[1:colon]
-                name_str = expected[colon+1:-1]
+                name_str = expected[colon + 1 : -1]
                 match type_str:
-                    case 'int':
+                    case "int":
                         try:
                             value = int(got)
                         except ValueError:
                             return None
-                    case 'str':
+                    case "str":
                         value = got
                     case _:
-                        logger.error(f'Unexpected path parameter type: {type_str}')
+                        logger.error(f"Unexpected path parameter type: {type_str}")
                         return None
                 params[name_str] = value
         return Match(handler=self._handler, params=params)
@@ -75,7 +75,7 @@ class RoutingMiddleware(Middleware):
         self._routes.append(Route(path=path, handler=handler, methods=methods))
 
     def _find_route(self, method, path):
-        segments = path.split('/')
+        segments = path.split("/")
         for route in self._routes:
             match = route.match(method, segments)
             if match is None:
@@ -86,10 +86,10 @@ class RoutingMiddleware(Middleware):
     def __call__(self, request: Request, iterator: collections.abc.Iterator[Middleware]) -> Response:
         next_middleware = next(iterator, None)
         if next_middleware is not None:
-            return ProblemResponse(status_code=500, title='Routing middleware should be last')
+            return ProblemResponse(status_code=500, title="Routing middleware should be last")
         match = self._find_route(request.method, request.url.path)
         if match is None:
-            return ProblemResponse(status_code=404, title='No handler found for request')
+            return ProblemResponse(status_code=404, title="No handler found for request")
         request.path_params.set(match.params)
         response = match.handler(request)
         return response
@@ -137,18 +137,26 @@ class Application:
         )
         iterator = iter(self._middlewares + [self._router])
         first = next(iterator, None)
-        assert first is not None, 'The list has at least ONE element'
+        assert first is not None, "The list has at least ONE element"
 
         try:
             response = first(request, iterator)
             if response is None:
-                response = ProblemResponse(status_code=500, title='InternalServerError', detail=f'Server endpoint did not return a response path: {request.url.path} method: {request.method}')
+                response = ProblemResponse(
+                    status_code=500,
+                    title="InternalServerError",
+                    detail=f"Server endpoint did not return a response path: {request.url.path} method: {request.method}",
+                )
         except HTTPException as e:
             response = e.response
         except BaseException:
             if self._debug:
                 logger.error(traceback.format_exc())
-            response = ProblemResponse(status_code=500, title='Internal Server Error', detail='Unexpected error. Setup the backtrace middleware to get more details')
+            response = ProblemResponse(
+                status_code=500,
+                title="Internal Server Error",
+                detail="Unexpected error. Setup the backtrace middleware to get more details",
+            )
         status_str = http.client.responses[response.status_code]
-        start_response(f'{response.status_code} {status_str}', list(response.headers.items()))
+        start_response(f"{response.status_code} {status_str}", list(response.headers.items()))
         yield response.body
