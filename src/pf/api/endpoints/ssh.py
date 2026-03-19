@@ -139,7 +139,7 @@ def read_user_trusted_keys(request: wa.Request) -> wa.Response:
     try:
         with open(ctx.config.user_extra_trusted_keys_filename, 'rb') as f:
             trusted_keys.append(f.read())
-    except:
+    except Exception:
         pass
 
     return wa.Response(

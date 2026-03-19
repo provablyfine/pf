@@ -5,8 +5,8 @@ import pytest
 from . import grant, model
 
 
-def _deserialize(l: list[dict]) -> list[model.grant.Grant]:
-    return [model.grant.deserialize(g) for g in l]
+def _deserialize(items: list[dict]) -> list[model.grant.Grant]:
+    return [model.grant.deserialize(g) for g in items]
 
 
 def boundary(ceiling_list: list[dict], denied_list: list[dict]):

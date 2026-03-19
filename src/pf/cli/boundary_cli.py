@@ -26,18 +26,24 @@ def _boundary(auth, id):
     return boundaries[0]
 
 
+def _sort_by_id(boundary):
+    return boundary['id']
+
+
+def _sort_by_name(boundary):
+    return (boundary['name'], boundary['id'])
+
+
 def _boundary_list_function(args):
     c = config.Config.load(args.config)
     api = client.Client(c)
     auth = api.session_auth(c.session_key)
     boundaries = _boundaries(auth, id=args.id, name=args.name)
-    match args.sort:
-        case 'id':
-            sort_function = lambda b: b['id']
-        case 'name':
-            sort_function = lambda b: (b['name'], b['id'])
-        case _:
-            assert False
+    sort_functions = {
+        'id': _sort_by_id,
+        'name': _sort_by_name,
+    }
+    boundaries = sorted(boundaries, key=sort_functions[args.sort])
     if args.quiet:
         args.format = 'quiet'
     match args.format:

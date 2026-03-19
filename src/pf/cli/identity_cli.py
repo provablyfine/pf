@@ -168,7 +168,8 @@ class TagAction(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         # Get the current list or initialize a new one
         items = getattr(namespace, self.dest, [])
-        if items is None: items = []
+        if items is None:
+                items = []
 
         items.append((self.const, values))
 

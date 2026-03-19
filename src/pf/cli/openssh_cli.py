@@ -41,7 +41,7 @@ def _auth_function(args):
 
     try:
         ssh_agent = ssh.agent.Client()
-    except:
+    except Exception:
         raise exceptions.UI("Unable to connect to user's SSH agent")
 
     for certificate in cert_response.json()['certificates']:

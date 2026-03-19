@@ -14,11 +14,11 @@ def _convert_function(args):
                 output = key.to_openssh()
             case 'pem':
                 output = jwk.Public(key.to_crypto()).to_pem()
-    except:
+    except Exception:
         pass
     try:
         key = ssh_utils.load_private_key(data)
-    except:
+    except Exception:
         raise exceptions.UI('Unable to load and convert key as either a public or a private key')
     else:
         output = _format(key, args.to)

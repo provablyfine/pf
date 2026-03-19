@@ -31,7 +31,7 @@ def _sort_by_id(t):
 
 
 def _sort_by_name(t):
-    return (t['name'], t['value'], t['id'])
+    return (t['name'], t['id'])
 
 
 def _role_list_function(args):

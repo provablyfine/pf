@@ -43,7 +43,7 @@ def _login_function(args):
     if args.session_key is None:
         try:
             ssh_agent = ssh.agent.Client()
-        except:
+        except Exception:
             raise exceptions.UI("Unable to connect to user's SSH agent")
         session_key = jwk.Private.generate_ed25519()
         ssh_agent.add(session_key, comment='pf-session', lifetime=1800)
@@ -88,7 +88,7 @@ def _do_main(args):
     except exceptions.UI as e:
         sys.stderr.write(f'{str(e)}\n')
         exitcode = 2
-    except:
+    except Exception:
         traceback.print_exc()
         exitcode = 1
 

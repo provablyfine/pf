@@ -131,10 +131,10 @@ def add_parser(parser, f):
         data = sys.stdin.read()
         try:
             grant = json.loads(data)
-        except:
+        except Exception:
             try:
                 grant = yaml.safe_load(data)
-            except:
+            except Exception:
                 raise exceptions.UI('Unable to read grant from stdin')
         return grant
     def _do(args):

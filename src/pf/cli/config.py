@@ -16,7 +16,7 @@ class Config:
             with open(filename) as f:
                 data = json.load(f)
                 return Config(**data)
-        except:
+        except Exception:
             raise exceptions.UI(f'Unable to load {filename}')
 
     def save(self, filename: str):
