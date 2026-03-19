@@ -1,11 +1,8 @@
 import json
+
 import tabulate
 
-from . import config
-from . import client
-from . import exceptions
-from . import grant
-from . import yaml_utils
+from . import client, config, exceptions, grant, yaml_utils
 
 
 def _roles(auth, id=None, name=None):

@@ -1,19 +1,18 @@
-import types
 import collections.abc
 import dataclasses
-import traceback
 import http.client
-import urllib.parse
 import logging
+import traceback
+import types
+import urllib.parse
 
 import webob
 import webob.multidict
 
-from .request import Request, App
-from .response import Response, ProblemResponse
 from .exceptions import HTTPException
 from .middleware import Middleware
-
+from .request import App, Request
+from .response import ProblemResponse, Response
 
 logger = logging.getLogger(__name__)
 

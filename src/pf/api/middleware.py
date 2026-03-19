@@ -1,18 +1,13 @@
-import contextlib
-import types
 import collections.abc
+import contextlib
 import os
+import types
 
-
-import sqlalchemy
 import cryptography.fernet
+import sqlalchemy
 
-from .. import wa
-from .. import base64url
-
-from . import config
-from . import dao_factory
-from . import db
+from .. import base64url, wa
+from . import config, dao_factory, db
 from .context import ctx
 
 

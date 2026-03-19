@@ -2,8 +2,7 @@ import dataclasses
 import time
 
 from ..context import ctx
-from . import audit_log
-from . import utils
+from . import audit_log, utils
 
 
 @dataclasses.dataclass(frozen=True)

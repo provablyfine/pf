@@ -1,15 +1,12 @@
 from __future__ import annotations
+
 import collections
+import getpass
 import os
 import socket
-import getpass
 
-
-from . import exceptions
-from . import buffer
-from . import cert
-from . import serde
 from .. import jwk
+from . import buffer, cert, exceptions, serde
 
 Method = collections.namedtuple('Method', ['encrypt', 'decrypt'])
 

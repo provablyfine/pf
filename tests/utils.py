@@ -1,8 +1,8 @@
-import tempfile
+import copy
 import os
 import os.path
-import copy
 import subprocess
+import tempfile
 
 import jinja2
 
@@ -16,7 +16,7 @@ def run_cram(filename, env):
         directory = os.path.dirname(filename)
         # We are careful to create the generated file in the directory that contains the jinja file
         # to make it possible for cram to define a valid TESTDIR variable.
-        with tempfile.NamedTemporaryFile(dir=directory, suffix='.t', mode='w+') as tmp, open(filename, 'r') as f:
+        with tempfile.NamedTemporaryFile(dir=directory, suffix='.t', mode='w+') as tmp, open(filename) as f:
             data = f.read()
             template = jinja2.Template(data)
             rendered = template.render()

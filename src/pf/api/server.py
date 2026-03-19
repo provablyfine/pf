@@ -1,12 +1,12 @@
 import argparse
-import urllib.parse
 import datetime
 import socket
+import urllib.parse
 
 import gunicorn.app.base
 
-from . import config
-from . import app
+from . import app, config
+
 
 class StandaloneApplication(gunicorn.app.base.BaseApplication):
     def __init__(self, app, options=None):

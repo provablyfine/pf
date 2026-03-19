@@ -1,10 +1,9 @@
 import argparse
 import json
+
 import tabulate
 
-from . import config
-from . import client
-from . import exceptions
+from . import client, config, exceptions
 
 
 def _identities(auth, id:int|None=None, name:str|None=None, tag_id:int|None=None, tag_name:str|None=None, boundary_id:int|None=None, boundary_name:str|None=None):

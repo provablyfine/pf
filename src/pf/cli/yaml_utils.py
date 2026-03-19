@@ -4,7 +4,7 @@ import yaml
 class IndentDumper(yaml.Dumper):
     def increase_indent(self, flow=False, indentless=False):
         # This forces the list dash to be indented
-        return super(IndentDumper, self).increase_indent(flow, False)
+        return super().increase_indent(flow, False)
 
 
 def dump(data):

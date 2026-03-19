@@ -1,11 +1,11 @@
+import collections.abc
 import time
 import traceback
-import collections.abc
 
-from .request import Request
-from .response import Response, ProblemResponse
-from .middleware import Middleware
 from .exceptions import HTTPException
+from .middleware import Middleware
+from .request import Request
+from .response import ProblemResponse, Response
 
 
 class Backtrace:

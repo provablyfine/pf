@@ -2,10 +2,8 @@ import sys
 
 import tabulate
 
-from . import ssh_utils
-from . import exceptions
-from .. import ssh
-from .. import jwk
+from .. import jwk, ssh
+from . import exceptions, ssh_utils
 
 
 @ssh_utils.exception

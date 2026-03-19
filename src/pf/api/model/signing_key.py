@@ -1,12 +1,11 @@
 import datetime
-
 import json
 
 from ... import jwk
 from .. import db
 from ..context import ctx
-
 from . import audit_log
+
 
 def create(key_type: db.SigningKeyType, crypto_key_type: jwk.KeyType, valid_after: int, valid_before: int):
     key = jwk.Private.generate(crypto_key_type)

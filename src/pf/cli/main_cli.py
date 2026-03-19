@@ -1,22 +1,15 @@
 import argparse
-import sys
-import traceback
+import logging
 import os
 import os.path
-import logging
+import sys
+import traceback
 
 import requests
 import requests.auth
 
-from .. import jwk
-from .. import ssh
-from . import config
-from . import client
-from . import exceptions
-from . import ssh_utils
-from . import admin_cli
-from . import openssh_cli
-
+from .. import jwk, ssh
+from . import admin_cli, client, config, exceptions, openssh_cli, ssh_utils
 
 logger = logging.getLogger(__name__)
 

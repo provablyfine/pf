@@ -1,11 +1,4 @@
-from . import config
-from . import exceptions
-from . import client
-from . import boundary_cli
-from . import tag_cli
-from . import role_cli
-from . import identity_cli
-from . import grant_cli
+from . import boundary_cli, client, config, exceptions, grant_cli, identity_cli, role_cli, tag_cli
 
 
 def _initialize_function(args):

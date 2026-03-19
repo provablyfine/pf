@@ -1,5 +1,1 @@
-from . import boundary
-from . import tag
-from . import role
-from . import identity
-from . import ssh
+from . import boundary, identity, role, ssh, tag

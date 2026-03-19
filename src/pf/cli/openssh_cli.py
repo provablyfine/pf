@@ -2,13 +2,8 @@ import base64
 import os
 import time
 
-from . import config
-from . import client
-from . import exceptions
-from . import ssh_utils
-from .. import jwk
-from .. import ssh
-
+from .. import jwk, ssh
+from . import client, config, exceptions, ssh_utils
 
 
 def _refresh_known_hosts(auth, known_hosts):

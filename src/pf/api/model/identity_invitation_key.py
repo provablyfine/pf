@@ -1,10 +1,10 @@
-import time
 import dataclasses
+import time
 
 from ... import jwk
 from ..context import ctx
-
 from . import audit_log
+
 
 @dataclasses.dataclass
 class IdentityInvitationKey:

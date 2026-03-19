@@ -1,8 +1,7 @@
 
 import json
 
-from . import yaml_utils
-from . import exceptions
+from . import exceptions, yaml_utils
 
 
 def _output(args, data):

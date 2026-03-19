@@ -1,9 +1,9 @@
-import random
 import collections.abc
+import random
 
 from .middleware import Middleware
 from .request import Request
-from .response import Response, ProblemResponse, JSONResponse
+from .response import JSONResponse, ProblemResponse, Response
 
 
 class InMemoryDebugStore:

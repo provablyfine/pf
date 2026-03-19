@@ -1,17 +1,19 @@
 from __future__ import annotations
-import json
-import hashlib
-import enum
-import secrets
-import base64
 
-import cryptography.hazmat.primitives.hashes
+import base64
+import enum
+import hashlib
+import json
+import secrets
+
+import cryptography.hazmat.primitives.asymmetric.ec
 import cryptography.hazmat.primitives.asymmetric.ed25519
 import cryptography.hazmat.primitives.asymmetric.rsa
-import cryptography.hazmat.primitives.asymmetric.ec
+import cryptography.hazmat.primitives.hashes
 import cryptography.hazmat.primitives.serialization
 
 from . import base64url
+
 
 @enum.unique
 class SshFingerprintFormat(enum.Enum):

@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import dataclasses
 import enum
 import time
@@ -6,8 +7,8 @@ import time
 import cryptography.exceptions
 import cryptography.hazmat.primitives.serialization
 
-from . import exceptions
 from .. import jwk
+from . import exceptions
 
 
 @enum.unique

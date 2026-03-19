@@ -1,11 +1,7 @@
 import sqlalchemy.exc
 
 from ... import wa
-
-from .. import schemas
-from .. import signature
-from .. import grant
-from .. import converters
+from .. import converters, grant, schemas, signature
 from ..context import ctx
 
 

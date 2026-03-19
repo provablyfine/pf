@@ -1,8 +1,7 @@
 import sys
 
-from . import ssh_utils
-from . import exceptions
 from .. import jwk
+from . import exceptions, ssh_utils
 
 
 def _convert_function(args):

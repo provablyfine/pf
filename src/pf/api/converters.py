@@ -1,17 +1,12 @@
-import logging
 import base64
+import logging
 import typing
 
 import pydantic
 
-from .. import jwk
-from .. import ssh
-from .. import wa
-
-from . import schemas
-from . import model
+from .. import jwk, ssh, wa
+from . import model, schemas
 from .context import ctx
-
 
 logger = logging.getLogger(__name__)
 

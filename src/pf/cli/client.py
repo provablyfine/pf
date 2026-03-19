@@ -1,17 +1,14 @@
-import types
-import os.path
-import logging
 import hashlib
+import logging
+import os.path
 import secrets
+import types
 
-import requests
 import http_message_signatures
+import requests
 
-from . import exceptions
-from . import ssh_utils
-from .. import ssh
-from .. import base64url
-from .. import jwk
+from .. import base64url, jwk, ssh
+from . import exceptions, ssh_utils
 
 # Because we import stuff from http_message_signatures
 # that is not explicitely exported.

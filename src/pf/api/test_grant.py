@@ -2,8 +2,7 @@ import types
 
 import pytest
 
-from . import grant
-from . import model
+from . import grant, model
 
 
 def _deserialize(l: list[dict]) -> list[model.grant.Grant]:

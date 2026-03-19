@@ -1,21 +1,10 @@
-import time
 import logging
 import sys
+import time
 
-
-from .. import wa
-from .. import jwk
-
-from . import schemas
-from . import db
-from . import model
-from . import signature
-from . import middleware
-from . import crypto_policy
-from . import endpoints
-from . import converters
+from .. import jwk, wa
+from . import converters, crypto_policy, db, endpoints, middleware, model, schemas, signature
 from .context import ctx
-
 
 logger = logging.getLogger(__name__)
 

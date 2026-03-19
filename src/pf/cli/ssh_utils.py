@@ -1,5 +1,4 @@
-from .. import ssh
-from .. import jwk
+from .. import jwk, ssh
 from . import exceptions
 
 

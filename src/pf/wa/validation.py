@@ -2,9 +2,8 @@ import collections.abc
 
 import pydantic
 
-from . import middleware
-from . import request
-from . import response
+from . import middleware, request, response
+
 
 class Middleware(middleware.Middleware):
     def __call__(self, request: request.Request, iterator: collections.abc.Iterator[middleware.Middleware]) -> response.Response:

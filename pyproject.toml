@@ -45,3 +45,10 @@ exclude = [
 "**/__pycache__",
 ]
 typeCheckingMode = "standard"
+
+[tool.ruff]
+line-length = 110
+select = ["E", "F", "I", "UP", "TID"]
+
+[tool.mypy]
+strict = true

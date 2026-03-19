@@ -1,9 +1,7 @@
 import dataclasses
 
 from ..context import ctx
-
-from . import audit_log
-from . import grant
+from . import audit_log, grant
 
 
 @dataclasses.dataclass

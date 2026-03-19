@@ -1,18 +1,15 @@
-import urllib.parse
-import hashlib
 import datetime
 import functools
+import hashlib
 import time
-
-from .. import wa
-from .. import jwk
-
-from . import crypto_policy
-from . import model
-from .context import ctx
+import urllib.parse
 
 import http_message_signatures
 import http_message_signatures.http_sfv
+
+from .. import jwk, wa
+from . import crypto_policy, model
+from .context import ctx
 
 # Because we import stuff from http_message_signatures
 # that is not explicitely exported.
@@ -22,9 +19,9 @@ import http_message_signatures.http_sfv
 
 class CaseInsensitiveDict(dict):
     def __contains__(self, key):
-        return super(CaseInsensitiveDict, self).__contains__(key.lower())
+        return super().__contains__(key.lower())
     def __getitem__(self, key):
-        return super(CaseInsensitiveDict, self).__getitem__(key.lower())
+        return super().__getitem__(key.lower())
 
 
 class RequestMessage:

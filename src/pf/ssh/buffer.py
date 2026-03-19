@@ -1,5 +1,6 @@
 from . import exceptions
 
+
 class Reader:
     def __init__(self, buffer):
         self._buffer = buffer

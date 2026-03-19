@@ -1,20 +1,14 @@
-import sys
 import argparse
 import datetime
 import logging
+import sys
 
 import cryptography.fernet
 import sqlalchemy
 
-from .. import jwk
-from .. import base64url
-
-from . import dao_factory
-from . import db
-from . import config
-from . import model
+from .. import base64url, jwk
+from . import config, dao_factory, db, model
 from .context import ctx
-
 
 logger = logging.getLogger(__name__)
 

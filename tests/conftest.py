@@ -1,19 +1,18 @@
+import copy
+import dataclasses
+import json
+import logging
 import os
 import os.path
-import logging
+import random
+import re
+import signal
 import subprocess
 import tempfile
-import dataclasses
-import re
-import random
-import copy
 import time
-import signal
 
-import json
 import pytest
 import requests
-
 
 logger = logging.getLogger(__name__)
 

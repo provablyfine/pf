@@ -2,6 +2,7 @@ import enum
 
 import sqlalchemy
 
+
 @enum.unique
 class AuditLogLevel(enum.IntEnum):
     INFO = 1

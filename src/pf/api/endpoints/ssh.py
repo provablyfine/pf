@@ -1,17 +1,9 @@
-import time
 import logging
+import time
 
-from ... import wa
-from ... import ssh
-
-from .. import schemas
-from .. import db
-from .. import model
-from .. import signature
-from .. import grant
-from .. import converters
+from ... import ssh, wa
+from .. import converters, db, grant, model, schemas, signature
 from ..context import ctx
-
 
 logger = logging.getLogger(__name__)
 

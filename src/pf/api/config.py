@@ -1,8 +1,10 @@
 from __future__ import annotations
+
 import dataclasses
 import json
-import yaml
 import os.path
+
+import yaml
 
 
 @dataclasses.dataclass

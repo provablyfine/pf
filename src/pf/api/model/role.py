@@ -1,10 +1,9 @@
 from __future__ import annotations
+
 import dataclasses
 
 from ..context import ctx
-from . import utils
-from . import audit_log
-from . import grant
+from . import audit_log, grant, utils
 
 
 @dataclasses.dataclass(frozen=True)
