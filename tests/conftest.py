@@ -67,7 +67,8 @@ RUN apk add --no-cache openssh-server openssh-keygen python3 uv
 
 COPY pyproject.toml /tmp/pf/
 COPY src /tmp/pf/src/
-RUN --mount=type=cache,target=/root/.cache/uv uv pip install --quiet --link-mode=copy --system --break-system-packages /tmp/pf && \
+RUN --mount=type=cache,target=/root/.cache/uv uv pip install \
+    --quiet --link-mode=copy --system --break-system-packages /tmp/pf && \
     rm -rf /tmp/pf
 
 RUN mkdir -p /run/sshd && \
@@ -104,7 +105,9 @@ StrictModes yes
 MaxAuthTries 10
 MaxSessions 10
 
-AuthorizedPrincipalsCommand /usr/bin/pf openssh authorized-principals --host-certificate=/etc/ssh/keys/ssh_host_ed25519_key.cert --username=%u --certificate=%k
+AuthorizedPrincipalsCommand /usr/bin/pf openssh authorized-principals \
+        --host-certificate=/etc/ssh/keys/ssh_host_ed25519_key.cert \
+        --username=%u --certificate=%k
 AuthorizedPrincipalsCommandUser nobody
 
 PubkeyAuthentication yes

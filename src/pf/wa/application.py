@@ -145,7 +145,8 @@ class Application:
                 response = ProblemResponse(
                     status_code=500,
                     title="InternalServerError",
-                    detail=f"Server endpoint did not return a response path: {request.url.path} method: {request.method}",
+                    detail=f"Server endpoint did not return a response path: "\
+                            "{request.url.path} method: {request.method}",
                 )
         except HTTPException as e:
             response = e.response
