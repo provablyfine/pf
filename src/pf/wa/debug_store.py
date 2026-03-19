@@ -1,7 +1,5 @@
-import traceback
 import random
 import collections.abc
-import time
 
 from .middleware import Middleware
 from .request import Request
@@ -44,7 +42,7 @@ class DebugStoreMiddleware(Middleware):
             if slash == -1:
                 data = self._store.get(remaining)
                 if data is None:
-                    return ProblemResponse(status_code=404, title=f'Debug data could not be found', detail=f'Missing {remaining}')
+                    return ProblemResponse(status_code=404, title='Debug data could not be found', detail=f'Missing {remaining}')
                 return JSONResponse(status_code=200, json=data)
 
         request.state.debug_store = self._store

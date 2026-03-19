@@ -2,7 +2,6 @@ import time
 import logging
 import sys
 
-import json
 
 from .. import wa
 from .. import jwk

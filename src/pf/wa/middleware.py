@@ -2,7 +2,7 @@ from __future__ import annotations
 import collections.abc
 
 from .request import Request
-from .response import Response, ProblemResponse
+from .response import Response
 
 
 class Middleware:

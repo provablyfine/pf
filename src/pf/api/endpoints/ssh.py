@@ -1,5 +1,4 @@
 import time
-import base64
 import logging
 
 from ... import wa

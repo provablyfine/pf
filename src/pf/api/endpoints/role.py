@@ -1,4 +1,3 @@
-import json
 import sqlalchemy.exc
 
 from ... import wa

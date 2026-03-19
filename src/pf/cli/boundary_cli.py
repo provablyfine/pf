@@ -1,7 +1,5 @@
-import sys
 import json
 
-import yaml
 import tabulate
 
 from . import config

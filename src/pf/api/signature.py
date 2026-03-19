@@ -135,7 +135,7 @@ def verify(request: wa.Request, key_id: str, key):
 
     try:
         verified = verifier.verify(message, max_age=datetime.timedelta(hours=5))#minutes=5))
-    except http_message_signatures.InvalidSignature as e:
+    except http_message_signatures.InvalidSignature:
         raise wa.HTTPException(wa.ProblemResponse(status_code=400, title='Invalid signature', detail=f'{key_id}'))
     covered = set(c.strip('"') for c in verified[0].covered_components.keys())
     expected = set(["@authority", "@method", "@target-uri", "@signature-params", "content-digest"])

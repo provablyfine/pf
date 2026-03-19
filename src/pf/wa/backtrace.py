@@ -29,9 +29,9 @@ class BacktraceMiddleware(Middleware):
         next_middleware = next(iterator)
         try:
             response = next_middleware(request, iterator)
-        except HTTPException as e:
+        except HTTPException:
             raise
-        except BaseException as e:
+        except BaseException:
             debug_path = request.state.debug_store.add(Backtrace(request.method, request.url.path, traceback.format_exc()).format())
             debug_url = request.app.config.base_url + debug_path
             response = ProblemResponse(status_code=500, title='Internal Server Error', instance=debug_url)

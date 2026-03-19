@@ -2,7 +2,6 @@ import types
 import os.path
 import logging
 import hashlib
-import urllib.parse
 import secrets
 
 import requests

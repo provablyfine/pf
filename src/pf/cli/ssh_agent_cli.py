@@ -4,7 +4,6 @@ import tabulate
 
 from . import ssh_utils
 from . import exceptions
-from . import ssh_utils
 from .. import ssh
 from .. import jwk
 

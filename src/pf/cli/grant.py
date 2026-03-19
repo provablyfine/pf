@@ -1,10 +1,7 @@
-import os.path
-import os
 import sys
 import json
 
 import yaml
-import pydantic
 
 from . import exceptions
 
@@ -138,7 +135,7 @@ def add_parser(parser, f):
             try:
                 grant = yaml.safe_load(data)
             except:
-                raise exceptions.UI('Unable to read grant from stdin');
+                raise exceptions.UI('Unable to read grant from stdin')
         return grant
     def _do(args):
         grant = _read_grant_stdin()
