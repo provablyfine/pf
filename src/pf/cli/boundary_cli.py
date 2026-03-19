@@ -84,6 +84,8 @@ def _boundary_read_function(args):
             rows.append(['description', boundary['description']])
             if boundary['ceiling_list'] is None:
                 rows.append(['ceiling', '*'])
+            elif len(boundary['ceiling_list']) == 0:
+                rows.append(['ceiling', '[]'])
             else:
                 for g in boundary['ceiling_list']:
                     type, filter, permission = grant.to_text(g)
