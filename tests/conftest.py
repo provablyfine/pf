@@ -157,7 +157,7 @@ CMD ["/bin/sh", "/run/start.sh"]
         stdout = _run(['podman', 'port', container_id])
         try:
             port = _parse_port_mapping(stdout)
-        except:
+        except Exception:
             print(f'SSH Server container: {container_id}')
             raise
         try:
@@ -237,7 +237,7 @@ def api(request):
             continue
         try:
             api_port = int(data)
-        except:
+        except Exception:
             time.sleep(0.1)
             continue
         try:
