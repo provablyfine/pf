@@ -173,7 +173,7 @@ class Public:
                     self.to_crypto(),
                     cryptography.hazmat.primitives.hashes.MD5(),
                 )
-                fingerprint = ":".join("%02x" % i for i in h)
+                fingerprint = ":".join(f"{i:02x}" for i in h)
                 return f"MD5:{fingerprint}"
 
     def to_dict(self) -> dict:

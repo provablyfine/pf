@@ -15,7 +15,7 @@ T = typing.TypeVar("T")
 R = typing.TypeVar("R")
 
 
-def return_none_if_none(func: typing.Callable[[Self, T], R]) -> typing.Callable[[Self, T | None], R | None]:
+def return_none_if_none[Self, T, R](func: typing.Callable[[Self, T], R]) -> typing.Callable[[Self, T | None], R | None]:
     """Decorator that returns None if the single argument is None."""
 
     def wrapper(self: Self, arg: T | None) -> R | None:
@@ -26,7 +26,7 @@ def return_none_if_none(func: typing.Callable[[Self, T], R]) -> typing.Callable[
     return wrapper
 
 
-def cache_list(f: typing.Callable[[Self, list[T]], dict[T, R]]) -> typing.Callable[[Self, list[T]], list[R]]:
+def cache_list[Self, T, R](f: typing.Callable[[Self, list[T]], dict[T, R]]) -> typing.Callable[[Self, list[T]], list[R]]:
     """This decorator implements a per-object-instance cache of items."""
     attr_name = f"_cache_{f.__name__}"
 
