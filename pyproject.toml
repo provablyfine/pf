@@ -49,7 +49,7 @@ typeCheckingMode = "standard"
 [tool.ruff]
 line-length = 120
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP"]
+select = ["E", "F", "I", "UP", "RUF"]
 
 [tool.mypy]
 strict = true

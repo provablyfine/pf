@@ -196,7 +196,6 @@ class HttpClient:
         return self._public_key
 
     def request(self, method, url, data=None, json=None, headers=None, timeout=None, params=None) -> requests.Response:
-
         request = requests.Request(
             method=method, url=url, data=data, json=json, headers=headers, auth=self._auth, params=params
         )
@@ -288,7 +287,7 @@ class Client:
         return HttpClient(self, auth=RequestsAuth(signers), public_key=account_public_key)
 
     def login_auth(self, account: str | None, session: str | None) -> HttpClient:
-        account_signer, account_public_key = private_key_signer("account", account)
+        account_signer, _account_public_key = private_key_signer("account", account)
         session_signer, session_public_key = private_key_signer("session", session)
         signers = [account_signer, session_signer]
         return HttpClient(self, auth=RequestsAuth(signers), public_key=session_public_key)

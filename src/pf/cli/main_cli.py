@@ -82,7 +82,7 @@ def _do_main(args):
         args.func(args)
         exitcode = 0
     except exceptions.UI as e:
-        sys.stderr.write(f"{str(e)}\n")
+        sys.stderr.write(f"{e!s}\n")
         exitcode = 2
     except Exception:
         traceback.print_exc()

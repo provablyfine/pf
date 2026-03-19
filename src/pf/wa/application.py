@@ -135,7 +135,7 @@ class Application:
             body=webob_request.body,
             cookies=dict(webob_request.cookies),
         )
-        iterator = iter(self._middlewares + [self._router])
+        iterator = iter([*self._middlewares, self._router])
         first = next(iterator, None)
         assert first is not None, "The list has at least ONE element"
 

@@ -40,11 +40,11 @@ def _parse_port_mapping(s):
     items = s.split("->")
     if len(items) != 2:
         raise Error(f"Invalid port mapping: {s}")
-    container, host = items
+    _container, host = items
     items = host.split(":")
     if len(items) != 2:
         raise Error(f"Invalid host address: {host}")
-    hostname, port = items
+    _hostname, port = items
     port = port.strip()
     if not port.isdigit():
         raise Error(f"Invalid port number: {port}")
