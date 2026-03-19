@@ -120,7 +120,7 @@ def pf():
     subparsers = parser.add_subparsers(required=True)
 
     config_parser = subparsers.add_parser('config', help='Create a configuration file')
-    config_parser.add_argument('--directory', default=os.getenv('PF_DIRECTORY_URL', 'https://pf.provablyfine.net/pf/directory'), help='Directory to connect to')
+    config_parser.add_argument('--directory', default=os.getenv('PF_DIRECTORY_URL', 'https://pf.provablyfine.net/pf/directory'), help='Directory to connect to. Default: %(default)s')
     config_parser.set_defaults(func=_config_function)
 
     register_parser = subparsers.add_parser('accept', help='Accept an invitation')
