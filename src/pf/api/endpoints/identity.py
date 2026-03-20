@@ -2,15 +2,19 @@ from __future__ import annotations
 
 import logging
 
+import fastapi
 import fastapi.responses
 import sqlalchemy.exc
 
-from .. import converters, grant, model, responses, schemas
+from .. import converters, grant, model, responses, schemas, signature
 from ..context import ctx
 
 logger = logging.getLogger(__name__)
 
+router = fastapi.APIRouter(prefix="/pf/identity", dependencies=[fastapi.Depends(signature.verify_session)])
 
+
+@router.get("")
 def list_endpoint(
     id: int | None = None,
     name: str | None = None,
@@ -48,6 +52,7 @@ def list_endpoint(
     )
 
 
+@router.get("/self")
 def read_self_endpoint() -> fastapi.responses.Response:
     identity = model.identity.read_one(id=ctx.identity_id)
     assert identity is not None
@@ -88,6 +93,7 @@ def _read_tag_ids(tag_id_list: list[int], tag_name_value_list: list[schemas.Iden
     return id_list + tag_id_list
 
 
+@router.post("")
 def create_endpoint(data: schemas.IdentityCreateRequest) -> fastapi.responses.Response:
     additional_boundary_ids = _read_boundary_ids(data.boundary_id_list, data.boundary_name_list)
     tag_ids = _read_tag_ids(data.tag_id_list, data.tag_name_value_list)
@@ -124,6 +130,7 @@ def create_endpoint(data: schemas.IdentityCreateRequest) -> fastapi.responses.Re
     )
 
 
+@router.delete("/{identity_id:int}")
 def delete_endpoint(identity_id: int) -> fastapi.responses.Response:
     identity = model.identity.read_one(id=identity_id)
     if identity is None:
@@ -171,6 +178,7 @@ def _check_del_tags(permission_request, tag_id_list):
             raise _403_tag()
 
 
+@router.patch("/{identity_id:int}")
 def update_endpoint(identity_id: int, data: schemas.IdentityUpdateRequest) -> fastapi.responses.Response:
     if identity_id == ctx.identity_id:
         return responses.problem_response(status_code=403, title="Not allowed to update self")
@@ -233,6 +241,7 @@ def update_endpoint(identity_id: int, data: schemas.IdentityUpdateRequest) -> fa
     )
 
 
+@router.post("/{identity_id:int}/invite")
 def invite_endpoint(identity_id: int, data: schemas.IdentityInviteRequest) -> fastapi.responses.Response:
     identity = model.identity.read_one(id=identity_id)
     if identity is None:

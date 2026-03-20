@@ -1,10 +1,14 @@
+import fastapi
 import fastapi.responses
 import sqlalchemy.exc
 
-from .. import converters, grant, model, responses, schemas
+from .. import converters, grant, model, responses, schemas, signature
 from ..context import ctx
 
+router = fastapi.APIRouter(prefix="/pf/boundary", dependencies=[fastapi.Depends(signature.verify_session)])
 
+
+@router.get("")
 def list_endpoint(id: int | None = None, name: str | None = None) -> fastapi.responses.Response:
     query = {}
     if id is not None:
@@ -29,6 +33,7 @@ def list_endpoint(id: int | None = None, name: str | None = None) -> fastapi.res
     )
 
 
+@router.post("")
 def create_endpoint(data: schemas.BoundaryCreateRequest) -> fastapi.responses.Response:
     grants = grant.Grants.create()
     if not grants.boundary(None).can_create():
@@ -59,6 +64,7 @@ def create_endpoint(data: schemas.BoundaryCreateRequest) -> fastapi.responses.Re
     )
 
 
+@router.delete("/{boundary_id:int}")
 def delete_endpoint(boundary_id: int) -> fastapi.responses.Response:
     boundary = model.boundary.read_one(id=boundary_id)
     if boundary is None:
@@ -75,6 +81,7 @@ def delete_endpoint(boundary_id: int) -> fastapi.responses.Response:
     return fastapi.responses.Response(status_code=204)
 
 
+@router.patch("/{boundary_id:int}")
 def update_endpoint(boundary_id: int, data: schemas.BoundaryUpdateRequest) -> fastapi.responses.Response:
     identity = model.identity.read_one(id=ctx.identity_id)
     assert identity is not None

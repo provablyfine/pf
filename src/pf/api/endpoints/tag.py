@@ -1,10 +1,14 @@
+import fastapi
 import fastapi.responses
 import sqlalchemy.exc
 
-from .. import converters, grant, responses, schemas
+from .. import converters, grant, responses, schemas, signature
 from ..context import ctx
 
+router = fastapi.APIRouter(prefix="/pf/tag", dependencies=[fastapi.Depends(signature.verify_session)])
 
+
+@router.get("")
 def list_endpoint(
     id: int | None = None, name: str | None = None, value: str | None = None
 ) -> fastapi.responses.Response:
@@ -30,6 +34,7 @@ def list_endpoint(
     )
 
 
+@router.post("")
 def create_endpoint(data: schemas.TagCreateRequest) -> fastapi.responses.Response:
     grants = grant.Grants.create()
     if not grants.tag(None).can_create():
@@ -46,6 +51,7 @@ def create_endpoint(data: schemas.TagCreateRequest) -> fastapi.responses.Respons
     )
 
 
+@router.delete("/{tag_id:int}")
 def delete_endpoint(tag_id: int) -> fastapi.responses.Response:
     tag = ctx.db.tag.read_one(id=tag_id)
     if tag is None:

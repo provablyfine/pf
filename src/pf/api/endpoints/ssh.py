@@ -1,13 +1,16 @@
 import logging
 import time
 
+import fastapi
 import fastapi.responses
 
 from ... import ssh
-from .. import converters, db, grant, model, responses, schemas
+from .. import converters, db, grant, model, responses, schemas, signature
 from ..context import ctx
 
 logger = logging.getLogger(__name__)
+
+router = fastapi.APIRouter(prefix="/pf/ssh")
 
 
 def _read_current(type: db.SigningKeyType, staging_period: int):
@@ -19,6 +22,7 @@ def _read_current(type: db.SigningKeyType, staging_period: int):
     )
 
 
+@router.post("/host/certificate", dependencies=[fastapi.Depends(signature.verify_session)])
 def sign_host_certificate(data: schemas.SSHHostCertificateRequest) -> fastapi.responses.Response:
     caller = ctx.db.identity.read_one(id=ctx.identity_id)
     assert caller is not None  # because we are authenticated
@@ -63,6 +67,7 @@ def sign_host_certificate(data: schemas.SSHHostCertificateRequest) -> fastapi.re
     )
 
 
+@router.post("/user/certificate", dependencies=[fastapi.Depends(signature.verify_session)])
 def sign_user_certificate(data: schemas.SSHUserCertificateRequest) -> fastapi.responses.Response:
     caller = ctx.db.identity.read_one(id=ctx.identity_id)
     assert caller is not None  # because we are authenticated
@@ -131,6 +136,7 @@ def sign_user_certificate(data: schemas.SSHUserCertificateRequest) -> fastapi.re
     )
 
 
+@router.get("/user/trusted-keys")
 def read_user_trusted_keys() -> fastapi.responses.Response:
     now = int(time.time())
     signing_keys = model.signing_key.read_all(
@@ -151,6 +157,7 @@ def read_user_trusted_keys() -> fastapi.responses.Response:
     )
 
 
+@router.get("/host/trusted-keys")
 def read_host_trusted_keys() -> fastapi.responses.Response:
     now = int(time.time())
     signing_keys = model.signing_key.read_all(
