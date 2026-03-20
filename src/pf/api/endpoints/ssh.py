@@ -1,8 +1,11 @@
 import logging
 import time
 
-from ... import ssh, wa
-from .. import converters, db, grant, model, schemas, signature
+import fastapi.requests
+import fastapi.responses
+
+from ... import ssh
+from .. import converters, db, grant, model, responses, schemas, signature
 from ..context import ctx
 
 logger = logging.getLogger(__name__)
@@ -18,8 +21,8 @@ def _read_current(type: db.SigningKeyType, staging_period: int):
 
 
 @signature.verify_session
-def sign_host_certificate(request: wa.Request) -> wa.Response:
-    data = schemas.SSHHostCertificateRequest.model_validate_json(request.body)
+def sign_host_certificate(request: fastapi.requests.Request) -> fastapi.responses.Response:
+    data = schemas.SSHHostCertificateRequest.model_validate_json(request.state.body)
     caller = ctx.db.identity.read_one(id=ctx.identity_id)
     assert caller is not None  # because we are authenticated
 
@@ -55,22 +58,22 @@ def sign_host_certificate(request: wa.Request) -> wa.Response:
             valid_before=c.valid_before,
         )
 
-    return wa.JSONResponse(
+    return fastapi.responses.JSONResponse(
         status_code=200,
-        json=schemas.SSHHostCertificateResponse(
+        content=schemas.SSHHostCertificateResponse(
             certificates=[converters.cert_to_schema(c) for c in certificates]
         ).model_dump(),
     )
 
 
 @signature.verify_session
-def sign_user_certificate(request: wa.Request) -> wa.Response:
-    data = schemas.SSHUserCertificateRequest.model_validate_json(request.body)
+def sign_user_certificate(request: fastapi.requests.Request) -> fastapi.responses.Response:
+    data = schemas.SSHUserCertificateRequest.model_validate_json(request.state.body)
     caller = ctx.db.identity.read_one(id=ctx.identity_id)
     assert caller is not None  # because we are authenticated
     host = model.identity.read_one(name=data.hostname)
     if host is None:
-        return wa.ProblemResponse(status_code=404, title="Unknown host")
+        return responses.problem_response(status_code=404, title="Unknown host")
 
     grants = grant.Grants.create()
     grants_allowed = grants.ssh(host.id, host.tag_id_list, host.boundary_id_list).list_can_username(data.username)
@@ -125,15 +128,15 @@ def sign_user_certificate(request: wa.Request) -> wa.Response:
             critical_options=c.critical_options.to_dict(),
         )
 
-    return wa.JSONResponse(
+    return fastapi.responses.JSONResponse(
         status_code=200,
-        json=schemas.SSHUserCertificateResponse(
+        content=schemas.SSHUserCertificateResponse(
             certificates=[converters.cert_to_schema(c) for c in certificates]
         ).model_dump(),
     )
 
 
-def read_user_trusted_keys(request: wa.Request) -> wa.Response:
+def read_user_trusted_keys(request: fastapi.requests.Request) -> fastapi.responses.Response:
     now = int(time.time())
     signing_keys = model.signing_key.read_all(
         ctx.db.signing_key.columns.valid_before > now,
@@ -146,16 +149,14 @@ def read_user_trusted_keys(request: wa.Request) -> wa.Response:
     except Exception:
         pass
 
-    return wa.Response(
+    return fastapi.responses.Response(
+        content=b"\n".join(trusted_keys),
         status_code=200,
-        headers={
-            "Content-Type": "text/plain",
-        },
-        body=b"\n".join(trusted_keys),
+        media_type="text/plain",
     )
 
 
-def read_host_trusted_keys(request: wa.Request) -> wa.Response:
+def read_host_trusted_keys(request: fastapi.requests.Request) -> fastapi.responses.Response:
     now = int(time.time())
     signing_keys = model.signing_key.read_all(
         ctx.db.signing_key.columns.valid_before > now,
@@ -163,10 +164,8 @@ def read_host_trusted_keys(request: wa.Request) -> wa.Response:
     )
     trusted_keys = [b"@cert-authority * " + signing_key.key.public().to_openssh() for signing_key in signing_keys]
 
-    return wa.Response(
+    return fastapi.responses.Response(
+        content=b"\n".join(trusted_keys),
         status_code=200,
-        headers={
-            "Content-Type": "text/plain",
-        },
-        body=b"\n".join(trusted_keys),
+        media_type="text/plain",
     )

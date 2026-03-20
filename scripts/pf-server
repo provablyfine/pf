@@ -4,11 +4,11 @@
 #   "openapi-core",
 #   "sqlalchemy",
 #   "cryptography",
-#   "webob",
+#   "fastapi",
+#   "uvicorn",
 #   "http-message-signatures",
 #   "pytest",
 #   "coverage",
-#   "gunicorn",
 #   "pydantic",
 #   "pf",
 # ]

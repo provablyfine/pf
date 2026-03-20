@@ -4,8 +4,8 @@ import typing
 
 import pydantic
 
-from .. import jwk, ssh, wa
-from . import model, schemas
+from .. import jwk, ssh
+from . import model, responses, schemas
 from .context import ctx
 
 logger = logging.getLogger(__name__)
@@ -248,7 +248,9 @@ def grant_from_schema(converter: GrantConverter, grant: schemas.Grant) -> model.
     try:
         return _grant_from_schema(converter, grant)
     except ValueError:
-        raise wa.HTTPException(wa.ProblemResponse(status_code=400, title="Grant specification is invalid"))
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=400, title="Grant specification is invalid")
+        )
 
 
 def _grant_from_schema(converter: GrantConverter, grant: schemas.Grant) -> model.grant.Grant:

@@ -1,6 +1,6 @@
 import time
 
-from ... import wa
+from .. import responses
 from ..context import ctx
 from . import audit_log
 
@@ -18,4 +18,4 @@ def enforce_not_denied(key_id):
         audit_log.create_warning(type="denylist-check-failed", public_key_id=key_id)
         # Purposedly return an error that is not very clear
         # because the client is probably malevolent
-        raise wa.HTTPException(wa.ProblemResponse(status_code=403, title="Unable to use key"))
+        raise responses.ProblemHTTPException(responses.problem_response(status_code=403, title="Unable to use key"))

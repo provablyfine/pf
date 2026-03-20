@@ -1,47 +1,44 @@
 import collections.abc
-import contextlib
-import os
-import types
 
 import cryptography.fernet
-import sqlalchemy
+import starlette.middleware.base
+import starlette.requests
+import starlette.responses
 
-from .. import base64url, wa
-from . import config, dao_factory, db
+from . import dao_factory, db
 from .context import ctx
 
 
-@contextlib.contextmanager
-def lifespan(config: config.Config, state: types.SimpleNamespace):
-    engine = sqlalchemy.create_engine(config.database_url, echo=config.debug_sql)
-    kek_filename = config.kek_filename.format(PF_API_KEK_FILENAME=os.getenv("PF_API_KEK_FILENAME"))
-    with open(kek_filename, "rb") as f:
-        kek = base64url.encode(f.read()) + "======"
-    state.config = config
-    state.db_engine = engine
-    state.kek = kek
-    yield
+class BodyReaderMiddleware(starlette.middleware.base.BaseHTTPMiddleware):
+    async def dispatch(
+        self, request: starlette.requests.Request, call_next: collections.abc.Callable
+    ) -> starlette.responses.Response:
+        request.state.body = await request.body()
+        return await call_next(request)
 
 
-class ConfigContext:
-    def __call__(self, request: wa.Request, iterator: collections.abc.Iterator[wa.Middleware]) -> wa.Response:
-        next_iterator = next(iterator)
-        with ctx.set_config(request.app.state.config):
-            return next_iterator(request, iterator)
-
-
-class DbContext:
-    def __call__(self, request: wa.Request, iterator: collections.abc.Iterator[wa.Middleware]) -> wa.Response:
-        next_iterator = next(iterator)
-        with request.app.state.db_engine.begin() as connection:
-            dao = dao_factory.create(connection, db.metadata)
-            with ctx.set_db(dao):
-                return next_iterator(request, iterator)
-
-
-class KekContext:
-    def __call__(self, request: wa.Request, iterator: collections.abc.Iterator[wa.Middleware]) -> wa.Response:
-        next_iterator = next(iterator)
+class KekContextMiddleware(starlette.middleware.base.BaseHTTPMiddleware):
+    async def dispatch(
+        self, request: starlette.requests.Request, call_next: collections.abc.Callable
+    ) -> starlette.responses.Response:
         kek = cryptography.fernet.Fernet(request.app.state.kek)
         with ctx.set_kek(kek):
-            return next_iterator(request, iterator)
+            return await call_next(request)
+
+
+class ConfigContextMiddleware(starlette.middleware.base.BaseHTTPMiddleware):
+    async def dispatch(
+        self, request: starlette.requests.Request, call_next: collections.abc.Callable
+    ) -> starlette.responses.Response:
+        with ctx.set_config(request.app.state.config):
+            return await call_next(request)
+
+
+class DbContextMiddleware(starlette.middleware.base.BaseHTTPMiddleware):
+    async def dispatch(
+        self, request: starlette.requests.Request, call_next: collections.abc.Callable
+    ) -> starlette.responses.Response:
+        with request.app.state.db_engine.begin() as conn:
+            dao = dao_factory.create(conn, db.metadata)
+            with ctx.set_db(dao):
+                return await call_next(request)

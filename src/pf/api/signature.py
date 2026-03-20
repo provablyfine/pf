@@ -2,13 +2,13 @@ import datetime
 import functools
 import hashlib
 import time
-import urllib.parse
 
+import fastapi.requests
 import http_message_signatures
 import http_message_signatures.http_sfv
 
-from .. import jwk, wa
-from . import crypto_policy, model
+from .. import jwk
+from . import crypto_policy, model, responses
 from .context import ctx
 
 # Because we import stuff from http_message_signatures
@@ -28,7 +28,7 @@ class CaseInsensitiveDict(dict):
 class RequestMessage:
     "Wrapper class to become compatible with http-message-signatures library"
 
-    def __init__(self, request: wa.Request, label: str, signature: str, signature_input: str):
+    def __init__(self, request: fastapi.requests.Request, label: str, signature: str, signature_input: str):
         self._request = request
 
         def _wrap(k, v):
@@ -48,7 +48,7 @@ class RequestMessage:
 
     @property
     def url(self):
-        return urllib.parse.urlunparse(self._request.url)
+        return str(self._request.url)
 
     @property
     def headers(self):
@@ -72,14 +72,16 @@ def _parse_signature_input(signature_input):
     try:
         d.parse(signature_input.encode())
     except Exception as e:
-        raise wa.HTTPException(
-            wa.ProblemResponse(status_code=400, title="Invalid Signature-Input header", detail=str(e))
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=400, title="Invalid Signature-Input header", detail=str(e))
         )
     keyid_by_label = {}
     for label, v in d.items():
         if "keyid" not in v.params:
-            raise wa.HTTPException(
-                wa.ProblemResponse(status_code=400, title="Invalid Signature-Input", detail=f"Missing keyid in {label}")
+            raise responses.ProblemHTTPException(
+                responses.problem_response(
+                    status_code=400, title="Invalid Signature-Input", detail=f"Missing keyid in {label}"
+                )
             )
         keyid_by_label[label] = (v.params["keyid"], d[label])
     return keyid_by_label
@@ -90,39 +92,45 @@ def _parse_signature(signature):
     try:
         d.parse(signature.encode())
     except Exception as e:
-        raise wa.HTTPException(wa.ProblemResponse(status_code=400, title="Invalid Signature header", detail=str(e)))
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=400, title="Invalid Signature header", detail=str(e))
+        )
     signature_by_label = {}
     for label, v in d.items():
         signature_by_label[label] = v
     return signature_by_label
 
 
-def verify(request: wa.Request, key_id: str, key):
+def verify(request: fastapi.requests.Request, key_id: str, key):
     content_digest = str(
-        http_message_signatures.http_sfv.Dictionary({"sha-256": hashlib.sha256(request.body).digest()})
+        http_message_signatures.http_sfv.Dictionary({"sha-256": hashlib.sha256(request.state.body).digest()})
     )
     if request.headers["Content-Digest"] != content_digest:
-        raise wa.HTTPException(
-            wa.ProblemResponse(status_code=400, title="Content hash does not match Content-Digest header")
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=400, title="Content hash does not match Content-Digest header")
         )
 
     if "Signature" not in request.headers:
-        raise wa.HTTPException(wa.ProblemResponse(status_code=400, title="Missing Signature header"))
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=400, title="Missing Signature header")
+        )
     if "Signature-Input" not in request.headers:
-        raise wa.HTTPException(wa.ProblemResponse(status_code=400, title="Missing Signature-Input header"))
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=400, title="Missing Signature-Input header")
+        )
 
     keyid_by_label = _parse_signature_input(request.headers["Signature-Input"])
     signature_by_label = _parse_signature(request.headers["Signature"])
 
     label_by_keyid = {keyid: (label, signature_input) for label, (keyid, signature_input) in keyid_by_label.items()}
     if key_id not in label_by_keyid:
-        raise wa.HTTPException(
-            wa.ProblemResponse(status_code=400, title="Unable to find keyid in Signature-Input", detail=key_id)
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=400, title="Unable to find keyid in Signature-Input", detail=key_id)
         )
     label, signature_input = label_by_keyid[key_id]
     if label not in signature_by_label:
-        raise wa.HTTPException(
-            wa.ProblemResponse(status_code=400, title="Unable to find label in Signature", detail=label)
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=400, title="Unable to find label in Signature", detail=label)
         )
     signature = signature_by_label[label]
     message = RequestMessage(request, label, signature, signature_input)
@@ -138,7 +146,9 @@ def verify(request: wa.Request, key_id: str, key):
             algorithm = http_message_signatures.algorithms.ECDSA_P256_SHA256
             resolver = KeyResolver(private_key=None, public_key=key.to_crypto())
         case _:
-            raise wa.HTTPException(wa.ProblemResponse(status_code=400, title="Unsupported key type", detail=key_id))
+            raise responses.ProblemHTTPException(
+                responses.problem_response(status_code=400, title="Unsupported key type", detail=key_id)
+            )
 
     verifier = http_message_signatures.HTTPMessageVerifier(
         signature_algorithm=algorithm,
@@ -148,12 +158,14 @@ def verify(request: wa.Request, key_id: str, key):
     try:
         verified = verifier.verify(message, max_age=datetime.timedelta(hours=5))  # minutes=5))
     except http_message_signatures.InvalidSignature:
-        raise wa.HTTPException(wa.ProblemResponse(status_code=400, title="Invalid signature", detail=f"{key_id}"))
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=400, title="Invalid signature", detail=f"{key_id}")
+        )
     covered = set(c.strip('"') for c in verified[0].covered_components.keys())
     expected = set(["@authority", "@method", "@target-uri", "@signature-params", "content-digest"])
     if covered != expected:
-        raise wa.HTTPException(
-            wa.ProblemResponse(
+        raise responses.ProblemHTTPException(
+            responses.problem_response(
                 status_code=400,
                 title="Signature does not cover the expected fields",
                 detail=f"Got: {covered}. Expected: {expected}",
@@ -161,15 +173,19 @@ def verify(request: wa.Request, key_id: str, key):
         )
 
 
-def _get_keyid(request: wa.Request, prefix: str) -> str:
+def _get_keyid(request: fastapi.requests.Request, prefix: str) -> str:
     if "Signature-Input" not in request.headers:
-        raise wa.HTTPException(wa.ProblemResponse(status_code=403, title="Missing Signature-Input header"))
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=403, title="Missing Signature-Input header")
+        )
     keyid_by_label = _parse_signature_input(request.headers["Signature-Input"])
     for label, (keyid, signature_input) in keyid_by_label.items():
         if not keyid.startswith(f"{prefix}:"):
             continue
         return keyid[len(f"{prefix}:") :]
-    raise wa.HTTPException(wa.ProblemResponse(status_code=403, title="Missing signature for prefix", detail=prefix))
+    raise responses.ProblemHTTPException(
+        responses.problem_response(status_code=403, title="Missing signature for prefix", detail=prefix)
+    )
 
 
 def verify_invitation(f):
@@ -178,12 +194,12 @@ def verify_invitation(f):
         key_id = _get_keyid(request, "invitation")
         invitation = model.identity_invitation_key.read(key_id)
         if invitation is None:
-            return wa.ProblemResponse(status_code=403, title="Invitation does not exist")
+            return responses.problem_response(status_code=403, title="Invitation does not exist")
         if invitation.is_revoked:
-            return wa.ProblemResponse(status_code=403, title="Invitation is revoked")
+            return responses.problem_response(status_code=403, title="Invitation is revoked")
         now = int(time.time())
         if invitation.expires_at <= now:
-            return wa.ProblemResponse(status_code=403, title="Invitation is expired")
+            return responses.problem_response(status_code=403, title="Invitation is expired")
         assert invitation.key.thumbprint() == key_id
         verify(request, key_id=f"invitation:{key_id}", key=invitation.key)
         request.state.invitation = invitation
@@ -199,9 +215,9 @@ def verify_account(f):
         key_id = _get_keyid(request, "account")
         account_key = ctx.db.identity_account_key.read_one(id=key_id)
         if account_key is None:
-            return wa.ProblemResponse(status_code=403, title="Account does not exist")
+            return responses.problem_response(status_code=403, title="Account does not exist")
         if account_key.is_revoked:
-            return wa.ProblemResponse(status_code=403, title="Account key is revoked")
+            return responses.problem_response(status_code=403, title="Account key is revoked")
         key = jwk.Public.from_dict(account_key.public_key)
         crypto_policy.enforce_key_is_allowed(key)
         assert key.thumbprint() == key_id
@@ -220,12 +236,12 @@ def verify_session(f):
         key_id = _get_keyid(request, "session")
         session_key = ctx.db.identity_session_key.read_one(id=key_id)
         if session_key is None:
-            return wa.ProblemResponse(status_code=403, title="Session does not exist")
+            return responses.problem_response(status_code=403, title="Session does not exist")
         if session_key.is_revoked:
-            return wa.ProblemResponse(status_code=403, title="Session key is revoked")
+            return responses.problem_response(status_code=403, title="Session key is revoked")
         now = int(time.time())
         if session_key.expires_at <= now:
-            return wa.ProblemResponse(status_code=403, title="Session key is expired")
+            return responses.problem_response(status_code=403, title="Session key is expired")
         key = jwk.Public.from_dict(session_key.public_key)
         crypto_policy.enforce_key_is_allowed(key)
         assert key.thumbprint() == key_id

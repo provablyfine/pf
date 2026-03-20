@@ -8,7 +8,8 @@ dependencies = [
   "sqlalchemy",
   "databases",
   "http-message-signatures>=2.0.1",
-  "webob>=1.8.9",
+  "fastapi>=0.115",
+  "uvicorn>=0.34",
   "dateparser>=1.3.0",
   "tabulate>=0.9.0",
   "requests>=2.32.5",
@@ -22,7 +23,6 @@ pfa = "pf.cli.main_cli:pfa"
 [dependency-groups]
 dev = [
     "coverage>=7.13.4",
-    "gunicorn>=25.1.0",
     "jinja2>=3.1.6",
     "pyright>=1.1.408",
     "pytest>=9.0.2",

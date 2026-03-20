@@ -1,31 +1,75 @@
+import contextlib
 import logging
+import os
+import random
 import sys
 import time
+import traceback
 
-from .. import jwk, wa
-from . import converters, crypto_policy, db, endpoints, middleware, model, schemas, signature
+import fastapi
+import fastapi.requests
+import fastapi.responses
+import pydantic
+import sqlalchemy
+
+from .. import base64url, jwk
+from . import converters, crypto_policy, db, endpoints, middleware, model, responses, schemas, signature
 from .context import ctx
 
 logger = logging.getLogger(__name__)
 
 
-def directory_endpoint(request: wa.Request) -> wa.Response:
-    return wa.JSONResponse(
+class _InMemoryDebugStore:
+    def __init__(self, prefix: str = "/debug/", max_size: int = 10000):
+        self._prefix = prefix
+        self._max_size = max_size
+        self._store: dict[str, object] = {}
+        self._id_rng = random.Random()
+
+    @property
+    def prefix(self) -> str:
+        return self._prefix
+
+    def add(self, data: object) -> str:
+        if len(self._store) > self._max_size:
+            first = next(iter(self._store))
+            self._store.pop(first)
+        id = self._id_rng.randbytes(4).hex()
+        self._store[id] = data
+        return self._prefix + id
+
+    def get(self, id: str) -> object | None:
+        return self._store.get(id)
+
+
+class _Backtrace:
+    def __init__(self, method: str, path: str, backtrace: str):
+        self._method = method
+        self._path = path
+        self._backtrace = backtrace
+        self._at = int(time.time())
+
+    def format(self) -> dict[str, object]:
+        return {"method": self._method, "path": self._path, "at": self._at, "backtrace": self._backtrace}
+
+
+def directory_endpoint(request: fastapi.requests.Request) -> fastapi.responses.Response:
+    return fastapi.responses.JSONResponse(
         status_code=200,
-        json=schemas.DirectoryReadResponse(
-            initialize=f"{request.app.config.base_url}/pf/initialize",
-            accept_invitation=f"{request.app.config.base_url}/pf/accept-invitation",
-            login=f"{request.app.config.base_url}/pf/login",
-            boundary=f"{request.app.config.base_url}/pf/boundary",
-            tag=f"{request.app.config.base_url}/pf/tag",
-            role=f"{request.app.config.base_url}/pf/role",
-            identity=f"{request.app.config.base_url}/pf/identity",
-            ssh=f"{request.app.config.base_url}/pf/ssh",
+        content=schemas.DirectoryReadResponse(
+            initialize=f"{request.app.state.config.base_url}/pf/initialize",
+            accept_invitation=f"{request.app.state.config.base_url}/pf/accept-invitation",
+            login=f"{request.app.state.config.base_url}/pf/login",
+            boundary=f"{request.app.state.config.base_url}/pf/boundary",
+            tag=f"{request.app.state.config.base_url}/pf/tag",
+            role=f"{request.app.state.config.base_url}/pf/role",
+            identity=f"{request.app.state.config.base_url}/pf/identity",
+            ssh=f"{request.app.state.config.base_url}/pf/ssh",
         ).model_dump(),
     )
 
 
-def create_keys(key_type: db.SigningKeyType, crypto_key_type: jwk.KeyType, rotation_period: int, staging_period: int):
+def _create_keys(key_type: db.SigningKeyType, crypto_key_type: jwk.KeyType, rotation_period: int, staging_period: int):
     now = int(time.time())
 
     # Create a  "current" key
@@ -48,18 +92,18 @@ def create_keys(key_type: db.SigningKeyType, crypto_key_type: jwk.KeyType, rotat
     )
 
 
-def initialize_endpoint(_: wa.Request) -> wa.Response:
+def initialize_endpoint(_: fastapi.requests.Request) -> fastapi.responses.Response:
     one = ctx.db.identity.read_one()
     if one is not None:
-        return wa.Response(status_code=204)
+        return fastapi.responses.Response(status_code=204)
 
-    create_keys(
+    _create_keys(
         db.SigningKeyType.HOST,
         jwk.KeyType.from_string(ctx.config.host_key_type),
         ctx.config.host_key_rotation_period,
         ctx.config.host_key_staging_period,
     )
-    create_keys(
+    _create_keys(
         db.SigningKeyType.USER,
         jwk.KeyType.from_string(ctx.config.user_key_type),
         ctx.config.user_key_rotation_period,
@@ -151,15 +195,15 @@ def initialize_endpoint(_: wa.Request) -> wa.Response:
     identity_invitation = model.identity_invitation_key.read(identity_invitation_key_id)
     assert identity_invitation is not None, "key has just need created so it cannot possibly be None"
 
-    return wa.JSONResponse(
-        json=schemas.InitializeResponse(key=converters.symmetric_to_schema(identity_invitation.key)).model_dump(),
+    return fastapi.responses.JSONResponse(
+        content=schemas.InitializeResponse(key=converters.symmetric_to_schema(identity_invitation.key)).model_dump(),
         status_code=200,
     )
 
 
 @signature.verify_invitation
-def accept_invitation_endpoint(request: wa.Request) -> wa.Response:
-    data = schemas.AcceptInvitationRequest.model_validate_json(request.body)
+def accept_invitation_endpoint(request: fastapi.requests.Request) -> fastapi.responses.Response:
+    data = schemas.AcceptInvitationRequest.model_validate_json(request.state.body)
     account_key = converters.public_from_schema(data.account_public_key)
     crypto_policy.enforce_key_is_allowed(account_key)
 
@@ -173,13 +217,13 @@ def accept_invitation_endpoint(request: wa.Request) -> wa.Response:
         if request.state.invitation.accepted_public_key_id == account_key.thumbprint():
             # The same key already accepted this invitation. This is probably some
             # kind of client-side or proxy retry
-            return wa.Response(status_code=204)
+            return fastapi.responses.Response(status_code=204)
         else:
             model.denylist.create(
                 key_id=account_key.thumbprint(),
                 identity_invitation_id=request.state.invitation.id,
             )
-            return wa.ProblemResponse(status_code=403, title="Invitation was already accepted")
+            return responses.problem_response(status_code=403, title="Invitation was already accepted")
 
     # all verification passed. Bind the public account key with the identity
     # that was configured in the invitation.
@@ -196,12 +240,12 @@ def accept_invitation_endpoint(request: wa.Request) -> wa.Response:
         is_revoked=False,
         revoked_at=None,
     )
-    return wa.Response(status_code=204)
+    return fastapi.responses.Response(status_code=204)
 
 
 @signature.verify_account
-def login_endpoint(request: wa.Request) -> wa.Response:
-    data = schemas.LoginRequest.model_validate_json(request.body)
+def login_endpoint(request: fastapi.requests.Request) -> fastapi.responses.Response:
+    data = schemas.LoginRequest.model_validate_json(request.state.body)
     session_key = converters.public_from_schema(data.session_public_key)
     crypto_policy.enforce_key_is_allowed(session_key)
 
@@ -223,10 +267,10 @@ def login_endpoint(request: wa.Request) -> wa.Response:
         expires_at=now + ctx.config.session_duration_s,
     )
 
-    return wa.Response(status_code=204)
+    return fastapi.responses.Response(status_code=204)
 
 
-def create(conf):
+def create(conf) -> fastapi.FastAPI:
     match conf.log_level:
         case "DEBUG":
             level = logging.DEBUG
@@ -239,42 +283,90 @@ def create(conf):
         case _:
             assert False
     logging.basicConfig(stream=sys.stdout, level=level)
-    db.create_tables(conf.database_url)
-    middlewares = [
-        wa.debug_store.DebugStoreMiddleware(wa.debug_store.InMemoryDebugStore()),
-        wa.backtrace.BacktraceMiddleware(),
-        wa.validation.Middleware(),
-        middleware.KekContext(),
-        middleware.ConfigContext(),
-        middleware.DbContext(),
-    ]
-    app = wa.Application(config=conf, middlewares=middlewares, lifespan=middleware.lifespan, debug=conf.debug)
-    app.add("/pf/directory", directory_endpoint, methods=["GET"])
-    app.add("/pf/initialize", initialize_endpoint, methods=["POST"])
-    app.add("/pf/accept-invitation", accept_invitation_endpoint, methods=["POST"])
-    app.add("/pf/login", login_endpoint, methods=["POST"])
-    app.add("/pf/boundary", endpoints.boundary.create_endpoint, methods=["POST"])
-    app.add("/pf/boundary", endpoints.boundary.list_endpoint, methods=["GET"])
-    app.add("/pf/boundary/<int:boundary_id>", endpoints.boundary.update_endpoint, methods=["PATCH"])
-    app.add("/pf/boundary/<int:boundary_id>", endpoints.boundary.delete_endpoint, methods=["DELETE"])
-    app.add("/pf/tag", endpoints.tag.create_endpoint, methods=["POST"])
-    app.add("/pf/tag", endpoints.tag.list_endpoint, methods=["GET"])
-    app.add("/pf/tag/<int:tag_id>", endpoints.tag.delete_endpoint, methods=["DELETE"])
-    app.add("/pf/role", endpoints.role.create_endpoint, methods=["POST"])
-    app.add("/pf/role", endpoints.role.list_endpoint, methods=["GET"])
-    app.add("/pf/role/<int:role_id>", endpoints.role.update_endpoint, methods=["PATCH"])
-    app.add("/pf/role/<int:role_id>", endpoints.role.delete_endpoint, methods=["DELETE"])
-    app.add("/pf/identity", endpoints.identity.create_endpoint, methods=["POST"])
-    app.add("/pf/identity", endpoints.identity.list_endpoint, methods=["GET"])
-    app.add("/pf/identity/self", endpoints.identity.read_self_endpoint, methods=["GET"])
-    app.add("/pf/identity/<int:identity_id>", endpoints.identity.update_endpoint, methods=["PATCH"])
-    app.add("/pf/identity/<int:identity_id>", endpoints.identity.delete_endpoint, methods=["DELETE"])
-    app.add("/pf/identity/<int:identity_id>/invite", endpoints.identity.invite_endpoint, methods=["POST"])
-    app.add("/pf/ssh/host/certificate", endpoints.ssh.sign_host_certificate, methods=["POST"])
-    app.add("/pf/ssh/host/trusted-keys", endpoints.ssh.read_host_trusted_keys, methods=["GET"])
-    # app.add('/pf/ssh/host/krl', endpoints.ssh.read_host_krl, methods=['GET'])
-    app.add("/pf/ssh/user/certificate", endpoints.ssh.sign_user_certificate, methods=["POST"])
-    app.add("/pf/ssh/user/trusted-keys", endpoints.ssh.read_user_trusted_keys, methods=["GET"])
-    # app.add('/pf/ssh/user/krl', endpoints.ssh.read_user_krl, methods=['GET'])
-    # app.add('/pf/ssh/user/allowed', endpoints.ssh.read_user_allowed, methods=['GET'])
-    return app
+
+    @contextlib.asynccontextmanager
+    async def lifespan(app: fastapi.FastAPI):
+        db.create_tables(conf.database_url)
+        engine = sqlalchemy.create_engine(conf.database_url, echo=conf.debug_sql)
+        kek_filename = conf.kek_filename.format(PF_API_KEK_FILENAME=os.getenv("PF_API_KEK_FILENAME"))
+        with open(kek_filename, "rb") as f:
+            kek = base64url.encode(f.read()) + "======"
+        app.state.config = conf
+        app.state.db_engine = engine
+        app.state.kek = kek
+        app.state.debug_store = _InMemoryDebugStore()
+        yield
+
+    fastapi_app = fastapi.FastAPI(lifespan=lifespan)
+
+    @fastapi_app.exception_handler(responses.ProblemHTTPException)
+    async def problem_exception_handler(
+        request: fastapi.requests.Request, exc: responses.ProblemHTTPException
+    ) -> fastapi.responses.Response:
+        return exc.response
+
+    @fastapi_app.exception_handler(pydantic.ValidationError)
+    async def validation_error_handler(
+        request: fastapi.requests.Request, exc: pydantic.ValidationError
+    ) -> fastapi.responses.Response:
+        assert len(exc.errors()) > 0
+        error = exc.errors()[0]
+        return responses.problem_response(
+            status_code=400,
+            title="Request invalid.",
+            detail=f"{error['msg']}: {'.'.join(map(str, error['loc']))}",
+        )
+
+    @fastapi_app.exception_handler(Exception)
+    async def generic_exception_handler(
+        request: fastapi.requests.Request, exc: Exception
+    ) -> fastapi.responses.Response:
+        tb = traceback.format_exc()
+        debug_path = request.app.state.debug_store.add(_Backtrace(request.method, request.url.path, tb).format())
+        debug_url = request.app.state.config.base_url + debug_path
+        return responses.problem_response(status_code=500, title="Internal Server Error", instance=debug_url)
+
+    # Middleware added in reverse order: last added = outermost
+    fastapi_app.add_middleware(middleware.DbContextMiddleware)
+    fastapi_app.add_middleware(middleware.ConfigContextMiddleware)
+    fastapi_app.add_middleware(middleware.KekContextMiddleware)
+    fastapi_app.add_middleware(middleware.BodyReaderMiddleware)
+
+    @fastapi_app.get("/debug/{debug_id}")
+    def debug_endpoint(debug_id: str, request: fastapi.requests.Request) -> fastapi.responses.Response:
+        data = request.app.state.debug_store.get(debug_id)
+        if data is None:
+            return responses.problem_response(
+                status_code=404, title="Debug data could not be found", detail=f"Missing {debug_id}"
+            )
+        return fastapi.responses.JSONResponse(status_code=200, content=data)
+
+    fastapi_app.add_api_route("/pf/directory", directory_endpoint, methods=["GET"])
+    fastapi_app.add_api_route("/pf/initialize", initialize_endpoint, methods=["POST"])
+    fastapi_app.add_api_route("/pf/accept-invitation", accept_invitation_endpoint, methods=["POST"])
+    fastapi_app.add_api_route("/pf/login", login_endpoint, methods=["POST"])
+    fastapi_app.add_api_route("/pf/boundary", endpoints.boundary.create_endpoint, methods=["POST"])
+    fastapi_app.add_api_route("/pf/boundary", endpoints.boundary.list_endpoint, methods=["GET"])
+    fastapi_app.add_api_route("/pf/boundary/{boundary_id:int}", endpoints.boundary.update_endpoint, methods=["PATCH"])
+    fastapi_app.add_api_route("/pf/boundary/{boundary_id:int}", endpoints.boundary.delete_endpoint, methods=["DELETE"])
+    fastapi_app.add_api_route("/pf/tag", endpoints.tag.create_endpoint, methods=["POST"])
+    fastapi_app.add_api_route("/pf/tag", endpoints.tag.list_endpoint, methods=["GET"])
+    fastapi_app.add_api_route("/pf/tag/{tag_id:int}", endpoints.tag.delete_endpoint, methods=["DELETE"])
+    fastapi_app.add_api_route("/pf/role", endpoints.role.create_endpoint, methods=["POST"])
+    fastapi_app.add_api_route("/pf/role", endpoints.role.list_endpoint, methods=["GET"])
+    fastapi_app.add_api_route("/pf/role/{role_id:int}", endpoints.role.update_endpoint, methods=["PATCH"])
+    fastapi_app.add_api_route("/pf/role/{role_id:int}", endpoints.role.delete_endpoint, methods=["DELETE"])
+    fastapi_app.add_api_route("/pf/identity", endpoints.identity.create_endpoint, methods=["POST"])
+    fastapi_app.add_api_route("/pf/identity", endpoints.identity.list_endpoint, methods=["GET"])
+    fastapi_app.add_api_route("/pf/identity/self", endpoints.identity.read_self_endpoint, methods=["GET"])
+    fastapi_app.add_api_route("/pf/identity/{identity_id:int}", endpoints.identity.update_endpoint, methods=["PATCH"])
+    fastapi_app.add_api_route("/pf/identity/{identity_id:int}", endpoints.identity.delete_endpoint, methods=["DELETE"])
+    fastapi_app.add_api_route(
+        "/pf/identity/{identity_id:int}/invite", endpoints.identity.invite_endpoint, methods=["POST"]
+    )
+    fastapi_app.add_api_route("/pf/ssh/host/certificate", endpoints.ssh.sign_host_certificate, methods=["POST"])
+    fastapi_app.add_api_route("/pf/ssh/host/trusted-keys", endpoints.ssh.read_host_trusted_keys, methods=["GET"])
+    fastapi_app.add_api_route("/pf/ssh/user/certificate", endpoints.ssh.sign_user_certificate, methods=["POST"])
+    fastapi_app.add_api_route("/pf/ssh/user/trusted-keys", endpoints.ssh.read_user_trusted_keys, methods=["GET"])
+
+    return fastapi_app

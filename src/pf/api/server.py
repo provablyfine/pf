@@ -3,24 +3,9 @@ import datetime
 import socket
 import urllib.parse
 
-import gunicorn.app.base
+import uvicorn
 
 from . import app, config
-
-
-class StandaloneApplication(gunicorn.app.base.BaseApplication):
-    def __init__(self, app, options=None):
-        self.options = options or {}
-        self.application = app
-        super().__init__()
-
-    def load_config(self):
-        for key, value in self.options.items():
-            if key in self.cfg.settings and value is not None:
-                self.cfg.set(key.lower(), value)
-
-    def load(self):
-        return self.application
 
 
 def run():
@@ -28,7 +13,6 @@ def run():
     parser.add_argument("-c", "--config", default="pf-server.yaml")
     parser.add_argument("-p", "--port", type=int, default=0)
     parser.add_argument("--port-file", default=None)
-    parser.add_argument("-t", "--timeout", type=int, default=1)
     args = parser.parse_args()
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -48,22 +32,10 @@ def run():
 
     application = app.create(conf)
 
-    options = {
-        "bind": f"fd://{sock.fileno()}",
-        "workers": 1,
-        "timeout": args.timeout,
-        "graceful_timeout": 1,
-        # --- Logging Configuration ---
-        "accesslog": "-",
-        "errorlog": "-",
-        "access_log_format": "%(t)s %(m)s %(U)s status=%(s)s bytes=%(b)s delay=%(M)sms",
-        "loglevel": "info",
-    }
-
-    print(f"Starting Gunicorn on {host}:{port} using FD {sock.fileno()}")
+    print(f"Starting Uvicorn on {host}:{port} using FD {sock.fileno()}")
 
     try:
-        StandaloneApplication(application, options).run()
+        uvicorn.run(application, fd=sock.fileno(), log_level="info")
     except SystemExit:
         pass
 
