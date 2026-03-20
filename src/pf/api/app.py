@@ -11,6 +11,7 @@ import fastapi.requests
 import fastapi.responses
 import pydantic
 import sqlalchemy
+import yaml
 
 from .. import base64url
 from . import db, endpoints, middleware, responses
@@ -79,7 +80,7 @@ def create(conf) -> fastapi.FastAPI:
         app.state.debug_store = _InMemoryDebugStore()
         yield
 
-    fastapi_app = fastapi.FastAPI(lifespan=lifespan)
+    fastapi_app = fastapi.FastAPI(lifespan=lifespan, docs_url="/docs", redoc_url="/redoc")
 
     @fastapi_app.exception_handler(responses.ProblemHTTPException)
     async def problem_exception_handler(
@@ -113,6 +114,13 @@ def create(conf) -> fastapi.FastAPI:
     fastapi_app.add_middleware(middleware.ConfigContextMiddleware)
     fastapi_app.add_middleware(middleware.KekContextMiddleware)
     fastapi_app.add_middleware(middleware.BodyReaderMiddleware)
+
+    @fastapi_app.get("/openapi.yaml", include_in_schema=False)
+    def openapi_yaml() -> fastapi.responses.Response:
+        return fastapi.responses.Response(
+            content=yaml.dump(fastapi_app.openapi(), allow_unicode=True, sort_keys=False),
+            media_type="application/yaml",
+        )
 
     @fastapi_app.get("/debug/{debug_id}")
     def debug_endpoint(debug_id: str, request: fastapi.requests.Request) -> fastapi.responses.Response:
