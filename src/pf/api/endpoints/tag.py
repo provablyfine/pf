@@ -1,20 +1,20 @@
-import fastapi.requests
 import fastapi.responses
 import sqlalchemy.exc
 
-from .. import converters, grant, responses, schemas, signature
+from .. import converters, grant, responses, schemas
 from ..context import ctx
 
 
-@signature.verify_session
-def list_endpoint(request: fastapi.requests.Request) -> fastapi.responses.Response:
+def list_endpoint(
+    id: int | None = None, name: str | None = None, value: str | None = None
+) -> fastapi.responses.Response:
     query = {}
-    if "id" in request.query_params:
-        query["id"] = int(request.query_params["id"])
-    if "name" in request.query_params:
-        query["name"] = request.query_params["name"]
-    if "value" in request.query_params:
-        query["value"] = request.query_params["value"]
+    if id is not None:
+        query["id"] = id
+    if name is not None:
+        query["name"] = name
+    if value is not None:
+        query["value"] = value
     tags = ctx.db.tag.read_all(**query)
 
     grants = grant.Grants.create()
@@ -30,13 +30,11 @@ def list_endpoint(request: fastapi.requests.Request) -> fastapi.responses.Respon
     )
 
 
-@signature.verify_session
-def create_endpoint(request: fastapi.requests.Request) -> fastapi.responses.Response:
+def create_endpoint(data: schemas.TagCreateRequest) -> fastapi.responses.Response:
     grants = grant.Grants.create()
     if not grants.tag(None).can_create():
         return responses.problem_response(status_code=403, title="Not allowed to create tag")
 
-    data = schemas.TagCreateRequest.model_validate_json(request.state.body)
     try:
         tag_id = ctx.db.tag.create(name=data.name, value=data.value)
     except sqlalchemy.exc.IntegrityError:
@@ -48,9 +46,8 @@ def create_endpoint(request: fastapi.requests.Request) -> fastapi.responses.Resp
     )
 
 
-@signature.verify_session
-def delete_endpoint(request: fastapi.requests.Request) -> fastapi.responses.Response:
-    tag = ctx.db.tag.read_one(id=request.path_params["tag_id"])
+def delete_endpoint(tag_id: int) -> fastapi.responses.Response:
+    tag = ctx.db.tag.read_one(id=tag_id)
     if tag is None:
         return responses.problem_response(status_code=404, title="Tag does not exist")
 
@@ -58,6 +55,6 @@ def delete_endpoint(request: fastapi.requests.Request) -> fastapi.responses.Resp
     if not grants.tag(tag.id).can_delete():
         return responses.problem_response(status_code=403, title="Not allowed to delete tag")
 
-    ctx.db.tag.delete(id=request.path_params["tag_id"])
+    ctx.db.tag.delete(id=tag_id)
 
     return fastapi.responses.Response(status_code=204)

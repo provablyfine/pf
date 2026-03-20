@@ -1,7 +1,7 @@
 import datetime
-import functools
 import hashlib
 import time
+import typing
 
 import fastapi.requests
 import http_message_signatures
@@ -188,67 +188,65 @@ def _get_keyid(request: fastapi.requests.Request, prefix: str) -> str:
     )
 
 
-def verify_invitation(f):
-    @functools.wraps(f)
-    def wrapper(request, *args, **kwargs):
-        key_id = _get_keyid(request, "invitation")
-        invitation = model.identity_invitation_key.read(key_id)
-        if invitation is None:
-            return responses.problem_response(status_code=403, title="Invitation does not exist")
-        if invitation.is_revoked:
-            return responses.problem_response(status_code=403, title="Invitation is revoked")
-        now = int(time.time())
-        if invitation.expires_at <= now:
-            return responses.problem_response(status_code=403, title="Invitation is expired")
-        assert invitation.key.thumbprint() == key_id
-        verify(request, key_id=f"invitation:{key_id}", key=invitation.key)
-        request.state.invitation = invitation
+async def verify_invitation(request: fastapi.requests.Request) -> typing.AsyncGenerator[None, None]:
+    key_id = _get_keyid(request, "invitation")
+    invitation = model.identity_invitation_key.read(key_id)
+    if invitation is None:
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=403, title="Invitation does not exist")
+        )
+    if invitation.is_revoked:
+        raise responses.ProblemHTTPException(responses.problem_response(status_code=403, title="Invitation is revoked"))
+    now = int(time.time())
+    if invitation.expires_at <= now:
+        raise responses.ProblemHTTPException(responses.problem_response(status_code=403, title="Invitation is expired"))
+    assert invitation.key.thumbprint() == key_id
+    verify(request, key_id=f"invitation:{key_id}", key=invitation.key)
+    with ctx.set_invitation(invitation):
         with ctx.set_identity_id(invitation.identity_id):
-            return f(request, *args, **kwargs)
-
-    return wrapper
+            yield
 
 
-def verify_account(f):
-    @functools.wraps(f)
-    def wrapper(request, *args, **kwargs):
-        key_id = _get_keyid(request, "account")
-        account_key = ctx.db.identity_account_key.read_one(id=key_id)
-        if account_key is None:
-            return responses.problem_response(status_code=403, title="Account does not exist")
-        if account_key.is_revoked:
-            return responses.problem_response(status_code=403, title="Account key is revoked")
-        key = jwk.Public.from_dict(account_key.public_key)
-        crypto_policy.enforce_key_is_allowed(key)
-        assert key.thumbprint() == key_id
-        model.denylist.enforce_not_denied(key.thumbprint())
-        verify(request, key_id=f"account:{key_id}", key=key)
-        request.state.account_key = account_key
-        with ctx.set_identity_id(account_key.identity_id):
-            return f(request, *args, **kwargs)
+async def verify_account(request: fastapi.requests.Request) -> typing.AsyncGenerator[None, None]:
+    key_id = _get_keyid(request, "account")
+    account_key = ctx.db.identity_account_key.read_one(id=key_id)
+    if account_key is None:
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=403, title="Account does not exist")
+        )
+    if account_key.is_revoked:
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=403, title="Account key is revoked")
+        )
+    key = jwk.Public.from_dict(account_key.public_key)
+    crypto_policy.enforce_key_is_allowed(key)
+    assert key.thumbprint() == key_id
+    model.denylist.enforce_not_denied(key.thumbprint())
+    verify(request, key_id=f"account:{key_id}", key=key)
+    with ctx.set_identity_id(account_key.identity_id):
+        yield
 
-    return wrapper
 
-
-def verify_session(f):
-    @functools.wraps(f)
-    def wrapper(request, *args, **kwargs):
-        key_id = _get_keyid(request, "session")
-        session_key = ctx.db.identity_session_key.read_one(id=key_id)
-        if session_key is None:
-            return responses.problem_response(status_code=403, title="Session does not exist")
-        if session_key.is_revoked:
-            return responses.problem_response(status_code=403, title="Session key is revoked")
-        now = int(time.time())
-        if session_key.expires_at <= now:
-            return responses.problem_response(status_code=403, title="Session key is expired")
-        key = jwk.Public.from_dict(session_key.public_key)
-        crypto_policy.enforce_key_is_allowed(key)
-        assert key.thumbprint() == key_id
-        model.denylist.enforce_not_denied(key.thumbprint())
-        verify(request, key_id=f"session:{key_id}", key=key)
-        request.state.session_key = session_key
-        with ctx.set_identity_id(session_key.identity_id):
-            return f(request, *args, **kwargs)
-
-    return wrapper
+async def verify_session(request: fastapi.requests.Request) -> typing.AsyncGenerator[None, None]:
+    key_id = _get_keyid(request, "session")
+    session_key = ctx.db.identity_session_key.read_one(id=key_id)
+    if session_key is None:
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=403, title="Session does not exist")
+        )
+    if session_key.is_revoked:
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=403, title="Session key is revoked")
+        )
+    now = int(time.time())
+    if session_key.expires_at <= now:
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=403, title="Session key is expired")
+        )
+    key = jwk.Public.from_dict(session_key.public_key)
+    crypto_policy.enforce_key_is_allowed(key)
+    assert key.thumbprint() == key_id
+    model.denylist.enforce_not_denied(key.thumbprint())
+    verify(request, key_id=f"session:{key_id}", key=key)
+    with ctx.set_identity_id(session_key.identity_id):
+        yield

@@ -53,18 +53,18 @@ class _Backtrace:
         return {"method": self._method, "path": self._path, "at": self._at, "backtrace": self._backtrace}
 
 
-def directory_endpoint(request: fastapi.requests.Request) -> fastapi.responses.Response:
+def directory_endpoint() -> fastapi.responses.Response:
     return fastapi.responses.JSONResponse(
         status_code=200,
         content=schemas.DirectoryReadResponse(
-            initialize=f"{request.app.state.config.base_url}/pf/initialize",
-            accept_invitation=f"{request.app.state.config.base_url}/pf/accept-invitation",
-            login=f"{request.app.state.config.base_url}/pf/login",
-            boundary=f"{request.app.state.config.base_url}/pf/boundary",
-            tag=f"{request.app.state.config.base_url}/pf/tag",
-            role=f"{request.app.state.config.base_url}/pf/role",
-            identity=f"{request.app.state.config.base_url}/pf/identity",
-            ssh=f"{request.app.state.config.base_url}/pf/ssh",
+            initialize=f"{ctx.config.base_url}/pf/initialize",
+            accept_invitation=f"{ctx.config.base_url}/pf/accept-invitation",
+            login=f"{ctx.config.base_url}/pf/login",
+            boundary=f"{ctx.config.base_url}/pf/boundary",
+            tag=f"{ctx.config.base_url}/pf/tag",
+            role=f"{ctx.config.base_url}/pf/role",
+            identity=f"{ctx.config.base_url}/pf/identity",
+            ssh=f"{ctx.config.base_url}/pf/ssh",
         ).model_dump(),
     )
 
@@ -92,7 +92,7 @@ def _create_keys(key_type: db.SigningKeyType, crypto_key_type: jwk.KeyType, rota
     )
 
 
-def initialize_endpoint(_: fastapi.requests.Request) -> fastapi.responses.Response:
+def initialize_endpoint() -> fastapi.responses.Response:
     one = ctx.db.identity.read_one()
     if one is not None:
         return fastapi.responses.Response(status_code=204)
@@ -201,9 +201,9 @@ def initialize_endpoint(_: fastapi.requests.Request) -> fastapi.responses.Respon
     )
 
 
-@signature.verify_invitation
-def accept_invitation_endpoint(request: fastapi.requests.Request) -> fastapi.responses.Response:
-    data = schemas.AcceptInvitationRequest.model_validate_json(request.state.body)
+def accept_invitation_endpoint(
+    request: fastapi.requests.Request, data: schemas.AcceptInvitationRequest
+) -> fastapi.responses.Response:
     account_key = converters.public_from_schema(data.account_public_key)
     crypto_policy.enforce_key_is_allowed(account_key)
 
@@ -213,22 +213,22 @@ def accept_invitation_endpoint(request: fastapi.requests.Request) -> fastapi.res
     signature.verify(request, f"account:{account_key.thumbprint()}", account_key)
 
     # if invitation has been accepted already, we do some checking to detect malevolent clients
-    if request.state.invitation.is_accepted:
-        if request.state.invitation.accepted_public_key_id == account_key.thumbprint():
+    if ctx.invitation.is_accepted:
+        if ctx.invitation.accepted_public_key_id == account_key.thumbprint():
             # The same key already accepted this invitation. This is probably some
             # kind of client-side or proxy retry
             return fastapi.responses.Response(status_code=204)
         else:
             model.denylist.create(
                 key_id=account_key.thumbprint(),
-                identity_invitation_id=request.state.invitation.id,
+                identity_invitation_id=ctx.invitation.id,
             )
             return responses.problem_response(status_code=403, title="Invitation was already accepted")
 
     # all verification passed. Bind the public account key with the identity
     # that was configured in the invitation.
     model.identity_invitation_key.accept(
-        id=request.state.invitation.id,
+        id=ctx.invitation.id,
         public_key_id=account_key.thumbprint(),
     )
     now = int(time.time())
@@ -243,9 +243,7 @@ def accept_invitation_endpoint(request: fastapi.requests.Request) -> fastapi.res
     return fastapi.responses.Response(status_code=204)
 
 
-@signature.verify_account
-def login_endpoint(request: fastapi.requests.Request) -> fastapi.responses.Response:
-    data = schemas.LoginRequest.model_validate_json(request.state.body)
+def login_endpoint(request: fastapi.requests.Request, data: schemas.LoginRequest) -> fastapi.responses.Response:
     session_key = converters.public_from_schema(data.session_public_key)
     crypto_policy.enforce_key_is_allowed(session_key)
 
@@ -343,30 +341,133 @@ def create(conf) -> fastapi.FastAPI:
 
     fastapi_app.add_api_route("/pf/directory", directory_endpoint, methods=["GET"])
     fastapi_app.add_api_route("/pf/initialize", initialize_endpoint, methods=["POST"])
-    fastapi_app.add_api_route("/pf/accept-invitation", accept_invitation_endpoint, methods=["POST"])
-    fastapi_app.add_api_route("/pf/login", login_endpoint, methods=["POST"])
-    fastapi_app.add_api_route("/pf/boundary", endpoints.boundary.create_endpoint, methods=["POST"])
-    fastapi_app.add_api_route("/pf/boundary", endpoints.boundary.list_endpoint, methods=["GET"])
-    fastapi_app.add_api_route("/pf/boundary/{boundary_id:int}", endpoints.boundary.update_endpoint, methods=["PATCH"])
-    fastapi_app.add_api_route("/pf/boundary/{boundary_id:int}", endpoints.boundary.delete_endpoint, methods=["DELETE"])
-    fastapi_app.add_api_route("/pf/tag", endpoints.tag.create_endpoint, methods=["POST"])
-    fastapi_app.add_api_route("/pf/tag", endpoints.tag.list_endpoint, methods=["GET"])
-    fastapi_app.add_api_route("/pf/tag/{tag_id:int}", endpoints.tag.delete_endpoint, methods=["DELETE"])
-    fastapi_app.add_api_route("/pf/role", endpoints.role.create_endpoint, methods=["POST"])
-    fastapi_app.add_api_route("/pf/role", endpoints.role.list_endpoint, methods=["GET"])
-    fastapi_app.add_api_route("/pf/role/{role_id:int}", endpoints.role.update_endpoint, methods=["PATCH"])
-    fastapi_app.add_api_route("/pf/role/{role_id:int}", endpoints.role.delete_endpoint, methods=["DELETE"])
-    fastapi_app.add_api_route("/pf/identity", endpoints.identity.create_endpoint, methods=["POST"])
-    fastapi_app.add_api_route("/pf/identity", endpoints.identity.list_endpoint, methods=["GET"])
-    fastapi_app.add_api_route("/pf/identity/self", endpoints.identity.read_self_endpoint, methods=["GET"])
-    fastapi_app.add_api_route("/pf/identity/{identity_id:int}", endpoints.identity.update_endpoint, methods=["PATCH"])
-    fastapi_app.add_api_route("/pf/identity/{identity_id:int}", endpoints.identity.delete_endpoint, methods=["DELETE"])
     fastapi_app.add_api_route(
-        "/pf/identity/{identity_id:int}/invite", endpoints.identity.invite_endpoint, methods=["POST"]
+        "/pf/accept-invitation",
+        accept_invitation_endpoint,
+        methods=["POST"],
+        dependencies=[fastapi.Depends(signature.verify_invitation)],
     )
-    fastapi_app.add_api_route("/pf/ssh/host/certificate", endpoints.ssh.sign_host_certificate, methods=["POST"])
+    fastapi_app.add_api_route(
+        "/pf/login",
+        login_endpoint,
+        methods=["POST"],
+        dependencies=[fastapi.Depends(signature.verify_account)],
+    )
+    fastapi_app.add_api_route(
+        "/pf/boundary",
+        endpoints.boundary.create_endpoint,
+        methods=["POST"],
+        dependencies=[fastapi.Depends(signature.verify_session)],
+    )
+    fastapi_app.add_api_route(
+        "/pf/boundary",
+        endpoints.boundary.list_endpoint,
+        methods=["GET"],
+        dependencies=[fastapi.Depends(signature.verify_session)],
+    )
+    fastapi_app.add_api_route(
+        "/pf/boundary/{boundary_id:int}",
+        endpoints.boundary.update_endpoint,
+        methods=["PATCH"],
+        dependencies=[fastapi.Depends(signature.verify_session)],
+    )
+    fastapi_app.add_api_route(
+        "/pf/boundary/{boundary_id:int}",
+        endpoints.boundary.delete_endpoint,
+        methods=["DELETE"],
+        dependencies=[fastapi.Depends(signature.verify_session)],
+    )
+    fastapi_app.add_api_route(
+        "/pf/tag",
+        endpoints.tag.create_endpoint,
+        methods=["POST"],
+        dependencies=[fastapi.Depends(signature.verify_session)],
+    )
+    fastapi_app.add_api_route(
+        "/pf/tag",
+        endpoints.tag.list_endpoint,
+        methods=["GET"],
+        dependencies=[fastapi.Depends(signature.verify_session)],
+    )
+    fastapi_app.add_api_route(
+        "/pf/tag/{tag_id:int}",
+        endpoints.tag.delete_endpoint,
+        methods=["DELETE"],
+        dependencies=[fastapi.Depends(signature.verify_session)],
+    )
+    fastapi_app.add_api_route(
+        "/pf/role",
+        endpoints.role.create_endpoint,
+        methods=["POST"],
+        dependencies=[fastapi.Depends(signature.verify_session)],
+    )
+    fastapi_app.add_api_route(
+        "/pf/role",
+        endpoints.role.list_endpoint,
+        methods=["GET"],
+        dependencies=[fastapi.Depends(signature.verify_session)],
+    )
+    fastapi_app.add_api_route(
+        "/pf/role/{role_id:int}",
+        endpoints.role.update_endpoint,
+        methods=["PATCH"],
+        dependencies=[fastapi.Depends(signature.verify_session)],
+    )
+    fastapi_app.add_api_route(
+        "/pf/role/{role_id:int}",
+        endpoints.role.delete_endpoint,
+        methods=["DELETE"],
+        dependencies=[fastapi.Depends(signature.verify_session)],
+    )
+    fastapi_app.add_api_route(
+        "/pf/identity",
+        endpoints.identity.create_endpoint,
+        methods=["POST"],
+        dependencies=[fastapi.Depends(signature.verify_session)],
+    )
+    fastapi_app.add_api_route(
+        "/pf/identity",
+        endpoints.identity.list_endpoint,
+        methods=["GET"],
+        dependencies=[fastapi.Depends(signature.verify_session)],
+    )
+    fastapi_app.add_api_route(
+        "/pf/identity/self",
+        endpoints.identity.read_self_endpoint,
+        methods=["GET"],
+        dependencies=[fastapi.Depends(signature.verify_session)],
+    )
+    fastapi_app.add_api_route(
+        "/pf/identity/{identity_id:int}",
+        endpoints.identity.update_endpoint,
+        methods=["PATCH"],
+        dependencies=[fastapi.Depends(signature.verify_session)],
+    )
+    fastapi_app.add_api_route(
+        "/pf/identity/{identity_id:int}",
+        endpoints.identity.delete_endpoint,
+        methods=["DELETE"],
+        dependencies=[fastapi.Depends(signature.verify_session)],
+    )
+    fastapi_app.add_api_route(
+        "/pf/identity/{identity_id:int}/invite",
+        endpoints.identity.invite_endpoint,
+        methods=["POST"],
+        dependencies=[fastapi.Depends(signature.verify_session)],
+    )
+    fastapi_app.add_api_route(
+        "/pf/ssh/host/certificate",
+        endpoints.ssh.sign_host_certificate,
+        methods=["POST"],
+        dependencies=[fastapi.Depends(signature.verify_session)],
+    )
     fastapi_app.add_api_route("/pf/ssh/host/trusted-keys", endpoints.ssh.read_host_trusted_keys, methods=["GET"])
-    fastapi_app.add_api_route("/pf/ssh/user/certificate", endpoints.ssh.sign_user_certificate, methods=["POST"])
+    fastapi_app.add_api_route(
+        "/pf/ssh/user/certificate",
+        endpoints.ssh.sign_user_certificate,
+        methods=["POST"],
+        dependencies=[fastapi.Depends(signature.verify_session)],
+    )
     fastapi_app.add_api_route("/pf/ssh/user/trusted-keys", endpoints.ssh.read_user_trusted_keys, methods=["GET"])
 
     return fastapi_app

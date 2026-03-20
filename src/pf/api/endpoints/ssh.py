@@ -1,11 +1,10 @@
 import logging
 import time
 
-import fastapi.requests
 import fastapi.responses
 
 from ... import ssh
-from .. import converters, db, grant, model, responses, schemas, signature
+from .. import converters, db, grant, model, responses, schemas
 from ..context import ctx
 
 logger = logging.getLogger(__name__)
@@ -20,9 +19,7 @@ def _read_current(type: db.SigningKeyType, staging_period: int):
     )
 
 
-@signature.verify_session
-def sign_host_certificate(request: fastapi.requests.Request) -> fastapi.responses.Response:
-    data = schemas.SSHHostCertificateRequest.model_validate_json(request.state.body)
+def sign_host_certificate(data: schemas.SSHHostCertificateRequest) -> fastapi.responses.Response:
     caller = ctx.db.identity.read_one(id=ctx.identity_id)
     assert caller is not None  # because we are authenticated
 
@@ -66,9 +63,7 @@ def sign_host_certificate(request: fastapi.requests.Request) -> fastapi.response
     )
 
 
-@signature.verify_session
-def sign_user_certificate(request: fastapi.requests.Request) -> fastapi.responses.Response:
-    data = schemas.SSHUserCertificateRequest.model_validate_json(request.state.body)
+def sign_user_certificate(data: schemas.SSHUserCertificateRequest) -> fastapi.responses.Response:
     caller = ctx.db.identity.read_one(id=ctx.identity_id)
     assert caller is not None  # because we are authenticated
     host = model.identity.read_one(name=data.hostname)
@@ -136,7 +131,7 @@ def sign_user_certificate(request: fastapi.requests.Request) -> fastapi.response
     )
 
 
-def read_user_trusted_keys(request: fastapi.requests.Request) -> fastapi.responses.Response:
+def read_user_trusted_keys() -> fastapi.responses.Response:
     now = int(time.time())
     signing_keys = model.signing_key.read_all(
         ctx.db.signing_key.columns.valid_before > now,
@@ -156,7 +151,7 @@ def read_user_trusted_keys(request: fastapi.requests.Request) -> fastapi.respons
     )
 
 
-def read_host_trusted_keys(request: fastapi.requests.Request) -> fastapi.responses.Response:
+def read_host_trusted_keys() -> fastapi.responses.Response:
     now = int(time.time())
     signing_keys = model.signing_key.read_all(
         ctx.db.signing_key.columns.valid_before > now,

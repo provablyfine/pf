@@ -1,18 +1,16 @@
-import fastapi.requests
 import fastapi.responses
 import sqlalchemy.exc
 
-from .. import converters, grant, model, responses, schemas, signature
+from .. import converters, grant, model, responses, schemas
 from ..context import ctx
 
 
-@signature.verify_session
-def list_endpoint(request: fastapi.requests.Request) -> fastapi.responses.Response:
+def list_endpoint(id: int | None = None, name: str | None = None) -> fastapi.responses.Response:
     query = {}
-    if "id" in request.query_params:
-        query["id"] = int(request.query_params["id"])
-    if "name" in request.query_params:
-        query["name"] = request.query_params["name"]
+    if id is not None:
+        query["id"] = id
+    if name is not None:
+        query["name"] = name
     boundaries = model.boundary.read_all(**query)
 
     grants = grant.Grants.create()
@@ -31,13 +29,11 @@ def list_endpoint(request: fastapi.requests.Request) -> fastapi.responses.Respon
     )
 
 
-@signature.verify_session
-def create_endpoint(request: fastapi.requests.Request) -> fastapi.responses.Response:
+def create_endpoint(data: schemas.BoundaryCreateRequest) -> fastapi.responses.Response:
     grants = grant.Grants.create()
     if not grants.boundary(None).can_create():
         return responses.problem_response(status_code=403, title="Not allowed to create boundary")
 
-    data = schemas.BoundaryCreateRequest.model_validate_json(request.state.body)
     try:
         boundary_id = model.boundary.create(
             name=data.name,
@@ -63,9 +59,8 @@ def create_endpoint(request: fastapi.requests.Request) -> fastapi.responses.Resp
     )
 
 
-@signature.verify_session
-def delete_endpoint(request: fastapi.requests.Request) -> fastapi.responses.Response:
-    boundary = model.boundary.read_one(id=request.path_params["boundary_id"])
+def delete_endpoint(boundary_id: int) -> fastapi.responses.Response:
+    boundary = model.boundary.read_one(id=boundary_id)
     if boundary is None:
         return responses.problem_response(status_code=404, title="Boundary not found")
     identity = ctx.db.identity_boundary.read_one(boundary_id=boundary.id)
@@ -80,18 +75,13 @@ def delete_endpoint(request: fastapi.requests.Request) -> fastapi.responses.Resp
     return fastapi.responses.Response(status_code=204)
 
 
-@signature.verify_session
-def update_endpoint(request: fastapi.requests.Request) -> fastapi.responses.Response:
+def update_endpoint(boundary_id: int, data: schemas.BoundaryUpdateRequest) -> fastapi.responses.Response:
     identity = model.identity.read_one(id=ctx.identity_id)
     assert identity is not None
 
-    boundary = model.boundary.read_one(id=request.path_params["boundary_id"])
+    boundary = model.boundary.read_one(id=boundary_id)
     if boundary is None:
-        return responses.problem_response(
-            status_code=404, title="Boundary does not exist", detail=request.path_params["boundary_id"]
-        )
-
-    data = schemas.BoundaryUpdateRequest.model_validate_json(request.state.body)
+        return responses.problem_response(status_code=404, title="Boundary does not exist", detail=str(boundary_id))
 
     grants = grant.Grants.create()
     for field in data.model_fields_set:
@@ -108,13 +98,13 @@ def update_endpoint(request: fastapi.requests.Request) -> fastapi.responses.Resp
         update_query["description"] = data.description
     if "denied_list" in data.model_fields_set:
         assert data.denied_list is not None  # pydantic validation guarantees this
-        if request.path_params["boundary_id"] in identity.boundary_id_list:
+        if boundary_id in identity.boundary_id_list:
             return responses.problem_response(
                 status_code=403, title="Not allowed to update denied list on boundary that applies to self"
             )
         update_query["denied_list"] = [converters.grant_from_schema(converter, g) for g in data.denied_list]
     if "ceiling_list" in data.model_fields_set:
-        if request.path_params["boundary_id"] in identity.boundary_id_list:
+        if boundary_id in identity.boundary_id_list:
             return responses.problem_response(
                 status_code=403, title="Not allowed to update ceiling list on boundary that applies to self"
             )
@@ -127,9 +117,9 @@ def update_endpoint(request: fastapi.requests.Request) -> fastapi.responses.Resp
             if data.ceiling_list is None
             else [converters.grant_from_schema(converter, g) for g in data.ceiling_list]
         )
-    model.boundary.update(id=request.path_params["boundary_id"], **update_query)
+    model.boundary.update(id=boundary_id, **update_query)
 
-    boundary = model.boundary.read_one(id=request.path_params["boundary_id"])
+    boundary = model.boundary.read_one(id=boundary_id)
     assert boundary is not None  # "We re-read what we read before"
     return fastapi.responses.JSONResponse(
         status_code=200,

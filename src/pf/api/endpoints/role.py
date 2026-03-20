@@ -1,18 +1,16 @@
-import fastapi.requests
 import fastapi.responses
 import sqlalchemy.exc
 
-from .. import converters, grant, model, responses, schemas, signature
+from .. import converters, grant, model, responses, schemas
 from ..context import ctx
 
 
-@signature.verify_session
-def list_endpoint(request: fastapi.requests.Request) -> fastapi.responses.Response:
+def list_endpoint(name: str | None = None, id: int | None = None) -> fastapi.responses.Response:
     query = {}
-    if "name" in request.query_params:
-        query["name"] = request.query_params["name"]
-    if "id" in request.query_params:
-        query["id"] = int(request.query_params["id"])
+    if name is not None:
+        query["name"] = name
+    if id is not None:
+        query["id"] = id
     roles = model.role.read_all(**query)
 
     output = []
@@ -30,13 +28,11 @@ def list_endpoint(request: fastapi.requests.Request) -> fastapi.responses.Respon
     )
 
 
-@signature.verify_session
-def create_endpoint(request: fastapi.requests.Request) -> fastapi.responses.Response:
+def create_endpoint(data: schemas.RoleCreateRequest) -> fastapi.responses.Response:
     grants = grant.Grants.create()
     if not grants.role(None).can_create():
         return responses.problem_response(status_code=403, title="Not allowed to create role")
 
-    data = schemas.RoleCreateRequest.model_validate_json(request.state.body)
     try:
         role_id = model.role.create(name=data.name, description=data.description, grant_list=[])
     except sqlalchemy.exc.IntegrityError:
@@ -54,9 +50,8 @@ def create_endpoint(request: fastapi.requests.Request) -> fastapi.responses.Resp
     )
 
 
-@signature.verify_session
-def delete_endpoint(request: fastapi.requests.Request) -> fastapi.responses.Response:
-    role = model.role.read_one(id=request.path_params["role_id"])
+def delete_endpoint(role_id: int) -> fastapi.responses.Response:
+    role = model.role.read_one(id=role_id)
     if role is None:
         return responses.problem_response(status_code=404, title="Role not found")
 
@@ -72,13 +67,11 @@ def delete_endpoint(request: fastapi.requests.Request) -> fastapi.responses.Resp
     return fastapi.responses.Response(status_code=204)
 
 
-@signature.verify_session
-def update_endpoint(request: fastapi.requests.Request) -> fastapi.responses.Response:
-    role = model.role.read_one(id=request.path_params["role_id"])
+def update_endpoint(role_id: int, data: schemas.RoleUpdateRequest) -> fastapi.responses.Response:
+    role = model.role.read_one(id=role_id)
     if role is None:
         return responses.problem_response(status_code=404, title="Role not found")
 
-    data = schemas.RoleUpdateRequest.model_validate_json(request.state.body)
     grants = grant.Grants.create()
     for field_name in data.model_fields_set:
         if not grants.role(role.id).can_update(field_name):
@@ -118,7 +111,7 @@ def update_endpoint(request: fastapi.requests.Request) -> fastapi.responses.Resp
         role_update["deleted_member_id_list"] = list(deleted_member_id_list)
     model.role.update(role.id, **role_update)
 
-    role = model.role.read_one(id=request.path_params["role_id"])
+    role = model.role.read_one(id=role_id)
     assert role is not None  # We just updated it
 
     return fastapi.responses.JSONResponse(
