@@ -33,8 +33,8 @@ def _create_keys(key_type: db.SigningKeyType, crypto_key_type: jwk.KeyType, rota
     )
 
 
-@router.post("/pf/initialize")
-def initialize_endpoint() -> fastapi.responses.Response:
+@router.post("/pf/initialize", status_code=200, response_model=schemas.InitializeResponse)
+def initialize_endpoint() -> schemas.InitializeResponse | fastapi.responses.Response:
     one = ctx.db.identity.read_one()
     if one is not None:
         return fastapi.responses.Response(status_code=204)
@@ -137,7 +137,4 @@ def initialize_endpoint() -> fastapi.responses.Response:
     identity_invitation = model.identity_invitation_key.read(identity_invitation_key_id)
     assert identity_invitation is not None, "key has just need created so it cannot possibly be None"
 
-    return fastapi.responses.JSONResponse(
-        content=schemas.InitializeResponse(key=converters.symmetric_to_schema(identity_invitation.key)).model_dump(),
-        status_code=200,
-    )
+    return schemas.InitializeResponse(key=converters.symmetric_to_schema(identity_invitation.key))

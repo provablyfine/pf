@@ -22,8 +22,8 @@ def _read_current(type: db.SigningKeyType, staging_period: int):
     )
 
 
-@router.post("/host/certificate", dependencies=[fastapi.Depends(signature.verify_session)])
-def sign_host_certificate(data: schemas.SSHHostCertificateRequest) -> fastapi.responses.Response:
+@router.post("/host/certificate", status_code=200, dependencies=[fastapi.Depends(signature.verify_session)])
+def sign_host_certificate(data: schemas.SSHHostCertificateRequest) -> schemas.SSHHostCertificateResponse:
     caller = ctx.db.identity.read_one(id=ctx.identity_id)
     assert caller is not None  # because we are authenticated
 
@@ -59,21 +59,16 @@ def sign_host_certificate(data: schemas.SSHHostCertificateRequest) -> fastapi.re
             valid_before=c.valid_before,
         )
 
-    return fastapi.responses.JSONResponse(
-        status_code=200,
-        content=schemas.SSHHostCertificateResponse(
-            certificates=[converters.cert_to_schema(c) for c in certificates]
-        ).model_dump(),
-    )
+    return schemas.SSHHostCertificateResponse(certificates=[converters.cert_to_schema(c) for c in certificates])
 
 
-@router.post("/user/certificate", dependencies=[fastapi.Depends(signature.verify_session)])
-def sign_user_certificate(data: schemas.SSHUserCertificateRequest) -> fastapi.responses.Response:
+@router.post("/user/certificate", status_code=200, dependencies=[fastapi.Depends(signature.verify_session)])
+def sign_user_certificate(data: schemas.SSHUserCertificateRequest) -> schemas.SSHUserCertificateResponse:
     caller = ctx.db.identity.read_one(id=ctx.identity_id)
     assert caller is not None  # because we are authenticated
     host = model.identity.read_one(name=data.hostname)
     if host is None:
-        return responses.problem_response(status_code=404, title="Unknown host")
+        raise responses.ProblemHTTPException(responses.problem_response(status_code=404, title="Unknown host"))
 
     grants = grant.Grants.create()
     grants_allowed = grants.ssh(host.id, host.tag_id_list, host.boundary_id_list).list_can_username(data.username)
@@ -128,15 +123,10 @@ def sign_user_certificate(data: schemas.SSHUserCertificateRequest) -> fastapi.re
             critical_options=c.critical_options.to_dict(),
         )
 
-    return fastapi.responses.JSONResponse(
-        status_code=200,
-        content=schemas.SSHUserCertificateResponse(
-            certificates=[converters.cert_to_schema(c) for c in certificates]
-        ).model_dump(),
-    )
+    return schemas.SSHUserCertificateResponse(certificates=[converters.cert_to_schema(c) for c in certificates])
 
 
-@router.get("/user/trusted-keys")
+@router.get("/user/trusted-keys", status_code=200)
 def read_user_trusted_keys() -> fastapi.responses.Response:
     now = int(time.time())
     signing_keys = model.signing_key.read_all(
@@ -157,7 +147,7 @@ def read_user_trusted_keys() -> fastapi.responses.Response:
     )
 
 
-@router.get("/host/trusted-keys")
+@router.get("/host/trusted-keys", status_code=200)
 def read_host_trusted_keys() -> fastapi.responses.Response:
     now = int(time.time())
     signing_keys = model.signing_key.read_all(

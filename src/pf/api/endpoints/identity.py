@@ -13,8 +13,10 @@ logger = logging.getLogger(__name__)
 
 router = fastapi.APIRouter(prefix="/pf/identity", dependencies=[fastapi.Depends(signature.verify_session)])
 
+_204 = fastapi.responses.Response(status_code=204)
 
-@router.get("")
+
+@router.get("", status_code=200)
 def list_endpoint(
     id: int | None = None,
     name: str | None = None,
@@ -22,7 +24,7 @@ def list_endpoint(
     tag_name: str | None = None,
     boundary_id: int | None = None,
     boundary_name: str | None = None,
-) -> fastapi.responses.Response:
+) -> schemas.IdentityListResponse:
     query = {}
     if id is not None:
         query["id"] = id
@@ -45,22 +47,15 @@ def list_endpoint(
             continue
         output.append(identity)
 
-    identities = converters.identity_list_to_schema(output)
-    return fastapi.responses.JSONResponse(
-        status_code=200,
-        content=schemas.IdentityListResponse(identities=identities).model_dump(),
-    )
+    return schemas.IdentityListResponse(identities=converters.identity_list_to_schema(output))
 
 
-@router.get("/self")
-def read_self_endpoint() -> fastapi.responses.Response:
+@router.get("/self", status_code=200)
+def read_self_endpoint() -> schemas.Identity:
     identity = model.identity.read_one(id=ctx.identity_id)
     assert identity is not None
 
-    return fastapi.responses.JSONResponse(
-        status_code=200,
-        content=converters.identity_to_schema(identity).model_dump(),
-    )
+    return converters.identity_to_schema(identity)
 
 
 def _read_boundary_ids(boundary_id_list: list[int], boundary_name_list: list[str]) -> list[int]:
@@ -93,14 +88,16 @@ def _read_tag_ids(tag_id_list: list[int], tag_name_value_list: list[schemas.Iden
     return id_list + tag_id_list
 
 
-@router.post("")
-def create_endpoint(data: schemas.IdentityCreateRequest) -> fastapi.responses.Response:
+@router.post("", status_code=201)
+def create_endpoint(data: schemas.IdentityCreateRequest) -> schemas.Identity:
     additional_boundary_ids = _read_boundary_ids(data.boundary_id_list, data.boundary_name_list)
     tag_ids = _read_tag_ids(data.tag_id_list, data.tag_name_value_list)
 
     grants = grant.Grants.create()
     if not grants.identity().can_create(tag_ids, additional_boundary_ids):
-        return responses.problem_response(status_code=403, title="Not allowed to create identity")
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=403, title="Not allowed to create identity")
+        )
 
     identity = model.identity.read_one(id=ctx.identity_id)
     assert identity is not None
@@ -114,39 +111,44 @@ def create_endpoint(data: schemas.IdentityCreateRequest) -> fastapi.responses.Re
         logger.info(
             "Some boundaries are specified twice, once in the parent boundary and once in the user-requested boundaries"
         )
-        return responses.problem_response(status_code=400, title="Request contains invalid fields")
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=400, title="Request contains invalid fields")
+        )
     try:
         identity_id = model.identity.create(name=data.name, boundary_id_list=identity_boundary_ids, tag_id_list=tag_ids)
     except sqlalchemy.exc.IntegrityError:
-        return responses.problem_response(
-            status_code=400, title="Identity already exists. Name must be unique.", detail=data.name
+        raise responses.ProblemHTTPException(
+            responses.problem_response(
+                status_code=400, title="Identity already exists. Name must be unique.", detail=data.name
+            )
         )
 
     identity = model.identity.read_one(id=identity_id)
     assert identity is not None
-    return fastapi.responses.JSONResponse(
-        status_code=201,
-        content=converters.identity_to_schema(identity).model_dump(),
-    )
+    return converters.identity_to_schema(identity)
 
 
-@router.delete("/{identity_id:int}")
+@router.delete("/{identity_id:int}", status_code=204)
 def delete_endpoint(identity_id: int) -> fastapi.responses.Response:
     identity = model.identity.read_one(id=identity_id)
     if identity is None:
-        return responses.problem_response(status_code=404, title="Boundary not found")
+        raise responses.ProblemHTTPException(responses.problem_response(status_code=404, title="Boundary not found"))
     if ctx.identity_id == identity_id:
-        return responses.problem_response(status_code=400, title="You cannot delete yourself")
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=400, title="You cannot delete yourself")
+        )
     # XXX: Should we check that this identity cannot be deleted because
     # someone depends on it in some way ?
 
     grants = grant.Grants.create()
     if not grants.identity(identity.id, identity.tag_id_list, identity.boundary_id_list).can_delete():
-        return responses.problem_response(status_code=403, title="Not allowed to delete identity")
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=403, title="Not allowed to delete identity")
+        )
 
     ctx.db.identity.delete(id=identity.id)
     # XXX: delete all rows in other tables that reference this
-    return fastapi.responses.Response(status_code=204)
+    return _204
 
 
 def _403_tag() -> responses.ProblemHTTPException:
@@ -178,22 +180,26 @@ def _check_del_tags(permission_request, tag_id_list):
             raise _403_tag()
 
 
-@router.patch("/{identity_id:int}")
-def update_endpoint(identity_id: int, data: schemas.IdentityUpdateRequest) -> fastapi.responses.Response:
+@router.patch("/{identity_id:int}", status_code=200)
+def update_endpoint(identity_id: int, data: schemas.IdentityUpdateRequest) -> schemas.Identity:
     if identity_id == ctx.identity_id:
-        return responses.problem_response(status_code=403, title="Not allowed to update self")
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=403, title="Not allowed to update self")
+        )
 
     identity = model.identity.read_one(id=identity_id)
     if identity is None:
-        return responses.problem_response(status_code=404, title="Unable to find identity", detail=str(identity_id))
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=404, title="Unable to find identity", detail=str(identity_id))
+        )
 
     grants = grant.Grants.create()
     permission_request = grants.identity(identity.id, identity.tag_id_list, identity.boundary_id_list)
     update_params = {}
     if "name" in data.model_fields_set:
         if not permission_request.can_update("name"):
-            return responses.problem_response(
-                status_code=403, title="Not allowed to update identity field", detail="name"
+            raise responses.ProblemHTTPException(
+                responses.problem_response(status_code=403, title="Not allowed to update identity field", detail="name")
             )
         update_params["name"] = data.name
     if "tags" in data.model_fields_set:
@@ -235,21 +241,24 @@ def update_endpoint(identity_id: int, data: schemas.IdentityUpdateRequest) -> fa
     identity = model.identity.read_one(id=identity_id)
     assert identity is not None
 
-    return fastapi.responses.JSONResponse(
-        status_code=200,
-        content=converters.identity_to_schema(identity).model_dump(),
-    )
+    return converters.identity_to_schema(identity)
 
 
-@router.post("/{identity_id:int}/invite")
-def invite_endpoint(identity_id: int, data: schemas.IdentityInviteRequest) -> fastapi.responses.Response:
+@router.post("/{identity_id:int}/invite", status_code=200, response_model=schemas.IdentityInviteManualResponse)
+def invite_endpoint(
+    identity_id: int, data: schemas.IdentityInviteRequest
+) -> schemas.IdentityInviteManualResponse | fastapi.responses.Response:
     identity = model.identity.read_one(id=identity_id)
     if identity is None:
-        return responses.problem_response(status_code=404, title="Unable to find identity", detail=str(identity_id))
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=404, title="Unable to find identity", detail=str(identity_id))
+        )
 
     grants = grant.Grants.create()
     if not grants.identity(identity.id, identity.tag_id_list, identity.boundary_id_list).can_invite(data.delivery):
-        return responses.problem_response(status_code=403, title="Not allowed to invite identity", detail=data.delivery)
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=403, title="Not allowed to invite identity", detail=data.delivery)
+        )
 
     identity_invitation_key_id = model.identity_invitation_key.create(
         identity_id=identity.id,
@@ -260,12 +269,5 @@ def invite_endpoint(identity_id: int, data: schemas.IdentityInviteRequest) -> fa
     assert identity_invitation is not None  # We just created it
 
     if data.delivery == "manual":
-        return fastapi.responses.JSONResponse(
-            content=schemas.IdentityInviteManualResponse(
-                key=converters.symmetric_to_schema(identity_invitation.key)
-            ).model_dump(),
-            status_code=200,
-        )
-    return fastapi.responses.Response(
-        status_code=204,
-    )
+        return schemas.IdentityInviteManualResponse(key=converters.symmetric_to_schema(identity_invitation.key))
+    return fastapi.responses.Response(status_code=204)

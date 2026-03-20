@@ -9,8 +9,10 @@ from ..context import ctx
 
 router = fastapi.APIRouter()
 
+_204 = fastapi.responses.Response(status_code=204)
 
-@router.post("/pf/accept-invitation", dependencies=[fastapi.Depends(signature.verify_invitation)])
+
+@router.post("/pf/accept-invitation", status_code=204, dependencies=[fastapi.Depends(signature.verify_invitation)])
 def accept_invitation_endpoint(
     request: fastapi.requests.Request, data: schemas.AcceptInvitationRequest
 ) -> fastapi.responses.Response:
@@ -27,7 +29,7 @@ def accept_invitation_endpoint(
         if ctx.invitation.accepted_public_key_id == account_key.thumbprint():
             # The same key already accepted this invitation. This is probably some
             # kind of client-side or proxy retry
-            return fastapi.responses.Response(status_code=204)
+            return _204
         else:
             model.denylist.create(
                 key_id=account_key.thumbprint(),
@@ -50,10 +52,10 @@ def accept_invitation_endpoint(
         is_revoked=False,
         revoked_at=None,
     )
-    return fastapi.responses.Response(status_code=204)
+    return _204
 
 
-@router.post("/pf/login", dependencies=[fastapi.Depends(signature.verify_account)])
+@router.post("/pf/login", status_code=204, dependencies=[fastapi.Depends(signature.verify_account)])
 def login_endpoint(request: fastapi.requests.Request, data: schemas.LoginRequest) -> fastapi.responses.Response:
     session_key = converters.public_from_schema(data.session_public_key)
     crypto_policy.enforce_key_is_allowed(session_key)
@@ -75,5 +77,4 @@ def login_endpoint(request: fastapi.requests.Request, data: schemas.LoginRequest
         revoked_at=None,
         expires_at=now + ctx.config.session_duration_s,
     )
-
-    return fastapi.responses.Response(status_code=204)
+    return _204
