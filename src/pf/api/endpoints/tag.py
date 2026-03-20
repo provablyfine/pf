@@ -10,7 +10,7 @@ router = fastapi.APIRouter(prefix="/pf/tag", dependencies=[fastapi.Depends(signa
 _204 = fastapi.responses.Response(status_code=204)
 
 
-@router.get("", status_code=200)
+@router.get("", status_code=200, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
 def list_endpoint(id: int | None = None, name: str | None = None, value: str | None = None) -> schemas.TagListResponse:
     query = {}
     if id is not None:
@@ -31,7 +31,7 @@ def list_endpoint(id: int | None = None, name: str | None = None, value: str | N
     return schemas.TagListResponse(tags=[converters.tag_to_schema(tag) for tag in output])
 
 
-@router.post("", status_code=201)
+@router.post("", status_code=201, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
 def create_endpoint(data: schemas.TagCreateRequest) -> schemas.Tag:
     grants = grant.Grants.create()
     if not grants.tag(None).can_create():
@@ -47,7 +47,9 @@ def create_endpoint(data: schemas.TagCreateRequest) -> schemas.Tag:
     return converters.tag_to_schema(tag)
 
 
-@router.delete("/{tag_id:int}", status_code=204)
+@router.delete(
+    "/{tag_id:int}", status_code=204, responses={400: responses.PROBLEM, 403: responses.PROBLEM, 404: responses.PROBLEM}
+)
 def delete_endpoint(tag_id: int) -> fastapi.responses.Response:
     tag = ctx.db.tag.read_one(id=tag_id)
     if tag is None:

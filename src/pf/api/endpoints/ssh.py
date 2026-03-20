@@ -22,7 +22,12 @@ def _read_current(type: db.SigningKeyType, staging_period: int):
     )
 
 
-@router.post("/host/certificate", status_code=200, dependencies=[fastapi.Depends(signature.verify_session)])
+@router.post(
+    "/host/certificate",
+    status_code=200,
+    dependencies=[fastapi.Depends(signature.verify_session)],
+    responses={400: responses.PROBLEM, 403: responses.PROBLEM},
+)
 def sign_host_certificate(data: schemas.SSHHostCertificateRequest) -> schemas.SSHHostCertificateResponse:
     caller = ctx.db.identity.read_one(id=ctx.identity_id)
     assert caller is not None  # because we are authenticated
@@ -62,7 +67,12 @@ def sign_host_certificate(data: schemas.SSHHostCertificateRequest) -> schemas.SS
     return schemas.SSHHostCertificateResponse(certificates=[converters.cert_to_schema(c) for c in certificates])
 
 
-@router.post("/user/certificate", status_code=200, dependencies=[fastapi.Depends(signature.verify_session)])
+@router.post(
+    "/user/certificate",
+    status_code=200,
+    dependencies=[fastapi.Depends(signature.verify_session)],
+    responses={400: responses.PROBLEM, 403: responses.PROBLEM, 404: responses.PROBLEM},
+)
 def sign_user_certificate(data: schemas.SSHUserCertificateRequest) -> schemas.SSHUserCertificateResponse:
     caller = ctx.db.identity.read_one(id=ctx.identity_id)
     assert caller is not None  # because we are authenticated

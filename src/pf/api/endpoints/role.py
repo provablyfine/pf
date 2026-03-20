@@ -10,7 +10,7 @@ router = fastapi.APIRouter(prefix="/pf/role", dependencies=[fastapi.Depends(sign
 _204 = fastapi.responses.Response(status_code=204)
 
 
-@router.get("", status_code=200)
+@router.get("", status_code=200, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
 def list_endpoint(name: str | None = None, id: int | None = None) -> schemas.RoleListResponse:
     query = {}
     if name is not None:
@@ -30,7 +30,7 @@ def list_endpoint(name: str | None = None, id: int | None = None) -> schemas.Rol
     return schemas.RoleListResponse(roles=[converters.role_to_schema(converter, r) for r in output])
 
 
-@router.post("", status_code=201)
+@router.post("", status_code=201, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
 def create_endpoint(data: schemas.RoleCreateRequest) -> schemas.Role:
     grants = grant.Grants.create()
     if not grants.role(None).can_create():
@@ -54,7 +54,11 @@ def create_endpoint(data: schemas.RoleCreateRequest) -> schemas.Role:
     return converters.role_to_schema(converter, role)
 
 
-@router.delete("/{role_id:int}", status_code=204)
+@router.delete(
+    "/{role_id:int}",
+    status_code=204,
+    responses={400: responses.PROBLEM, 403: responses.PROBLEM, 404: responses.PROBLEM},
+)
 def delete_endpoint(role_id: int) -> fastapi.responses.Response:
     role = model.role.read_one(id=role_id)
     if role is None:
@@ -74,7 +78,11 @@ def delete_endpoint(role_id: int) -> fastapi.responses.Response:
     return _204
 
 
-@router.patch("/{role_id:int}", status_code=200)
+@router.patch(
+    "/{role_id:int}",
+    status_code=200,
+    responses={400: responses.PROBLEM, 403: responses.PROBLEM, 404: responses.PROBLEM},
+)
 def update_endpoint(role_id: int, data: schemas.RoleUpdateRequest) -> schemas.Role:
     role = model.role.read_one(id=role_id)
     if role is None:

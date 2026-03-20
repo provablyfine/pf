@@ -16,7 +16,7 @@ router = fastapi.APIRouter(prefix="/pf/identity", dependencies=[fastapi.Depends(
 _204 = fastapi.responses.Response(status_code=204)
 
 
-@router.get("", status_code=200)
+@router.get("", status_code=200, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
 def list_endpoint(
     id: int | None = None,
     name: str | None = None,
@@ -50,7 +50,7 @@ def list_endpoint(
     return schemas.IdentityListResponse(identities=converters.identity_list_to_schema(output))
 
 
-@router.get("/self", status_code=200)
+@router.get("/self", status_code=200, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
 def read_self_endpoint() -> schemas.Identity:
     identity = model.identity.read_one(id=ctx.identity_id)
     assert identity is not None
@@ -88,7 +88,7 @@ def _read_tag_ids(tag_id_list: list[int], tag_name_value_list: list[schemas.Iden
     return id_list + tag_id_list
 
 
-@router.post("", status_code=201)
+@router.post("", status_code=201, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
 def create_endpoint(data: schemas.IdentityCreateRequest) -> schemas.Identity:
     additional_boundary_ids = _read_boundary_ids(data.boundary_id_list, data.boundary_name_list)
     tag_ids = _read_tag_ids(data.tag_id_list, data.tag_name_value_list)
@@ -128,7 +128,11 @@ def create_endpoint(data: schemas.IdentityCreateRequest) -> schemas.Identity:
     return converters.identity_to_schema(identity)
 
 
-@router.delete("/{identity_id:int}", status_code=204)
+@router.delete(
+    "/{identity_id:int}",
+    status_code=204,
+    responses={400: responses.PROBLEM, 403: responses.PROBLEM, 404: responses.PROBLEM},
+)
 def delete_endpoint(identity_id: int) -> fastapi.responses.Response:
     identity = model.identity.read_one(id=identity_id)
     if identity is None:
@@ -180,7 +184,11 @@ def _check_del_tags(permission_request, tag_id_list):
             raise _403_tag()
 
 
-@router.patch("/{identity_id:int}", status_code=200)
+@router.patch(
+    "/{identity_id:int}",
+    status_code=200,
+    responses={400: responses.PROBLEM, 403: responses.PROBLEM, 404: responses.PROBLEM},
+)
 def update_endpoint(identity_id: int, data: schemas.IdentityUpdateRequest) -> schemas.Identity:
     if identity_id == ctx.identity_id:
         raise responses.ProblemHTTPException(
@@ -244,7 +252,17 @@ def update_endpoint(identity_id: int, data: schemas.IdentityUpdateRequest) -> sc
     return converters.identity_to_schema(identity)
 
 
-@router.post("/{identity_id:int}/invite", status_code=200, response_model=schemas.IdentityInviteManualResponse)
+@router.post(
+    "/{identity_id:int}/invite",
+    status_code=200,
+    response_model=schemas.IdentityInviteManualResponse,
+    responses={
+        204: {"description": "Non-manual delivery"},
+        400: responses.PROBLEM,
+        403: responses.PROBLEM,
+        404: responses.PROBLEM,
+    },
+)
 def invite_endpoint(
     identity_id: int, data: schemas.IdentityInviteRequest
 ) -> schemas.IdentityInviteManualResponse | fastapi.responses.Response:

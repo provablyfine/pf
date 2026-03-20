@@ -1,5 +1,10 @@
 import fastapi.responses
 
+from . import schemas
+
+# Reusable OpenAPI response entry for RFC 7807 problem responses.
+PROBLEM: dict[str, object] = {"model": schemas.ProblemDocument}
+
 
 class ProblemHTTPException(Exception):
     """Raised from deep in the call stack to abort a request with an error response."""

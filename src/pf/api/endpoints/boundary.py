@@ -10,7 +10,7 @@ router = fastapi.APIRouter(prefix="/pf/boundary", dependencies=[fastapi.Depends(
 _204 = fastapi.responses.Response(status_code=204)
 
 
-@router.get("", status_code=200)
+@router.get("", status_code=200, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
 def list_endpoint(id: int | None = None, name: str | None = None) -> schemas.BoundaryListResponse:
     query = {}
     if id is not None:
@@ -30,7 +30,7 @@ def list_endpoint(id: int | None = None, name: str | None = None) -> schemas.Bou
     return schemas.BoundaryListResponse(boundaries=[converters.boundary_to_schema(converter, b) for b in output])
 
 
-@router.post("", status_code=201)
+@router.post("", status_code=201, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
 def create_endpoint(data: schemas.BoundaryCreateRequest) -> schemas.BoundaryCreateResponse:
     grants = grant.Grants.create()
     if not grants.boundary(None).can_create():
@@ -60,7 +60,11 @@ def create_endpoint(data: schemas.BoundaryCreateRequest) -> schemas.BoundaryCrea
     return schemas.BoundaryCreateResponse(boundary=converters.boundary_to_schema(converter, boundary))
 
 
-@router.delete("/{boundary_id:int}", status_code=204)
+@router.delete(
+    "/{boundary_id:int}",
+    status_code=204,
+    responses={400: responses.PROBLEM, 403: responses.PROBLEM, 404: responses.PROBLEM},
+)
 def delete_endpoint(boundary_id: int) -> fastapi.responses.Response:
     boundary = model.boundary.read_one(id=boundary_id)
     if boundary is None:
@@ -81,7 +85,11 @@ def delete_endpoint(boundary_id: int) -> fastapi.responses.Response:
     return _204
 
 
-@router.patch("/{boundary_id:int}", status_code=200)
+@router.patch(
+    "/{boundary_id:int}",
+    status_code=200,
+    responses={400: responses.PROBLEM, 403: responses.PROBLEM, 404: responses.PROBLEM},
+)
 def update_endpoint(boundary_id: int, data: schemas.BoundaryUpdateRequest) -> schemas.BoundaryUpdateResponse:
     identity = model.identity.read_one(id=ctx.identity_id)
     assert identity is not None

@@ -33,7 +33,12 @@ def _create_keys(key_type: db.SigningKeyType, crypto_key_type: jwk.KeyType, rota
     )
 
 
-@router.post("/pf/initialize", status_code=200, response_model=schemas.InitializeResponse)
+@router.post(
+    "/pf/initialize",
+    status_code=200,
+    response_model=schemas.InitializeResponse,
+    responses={204: {"description": "Already initialized"}},
+)
 def initialize_endpoint() -> schemas.InitializeResponse | fastapi.responses.Response:
     one = ctx.db.identity.read_one()
     if one is not None:
