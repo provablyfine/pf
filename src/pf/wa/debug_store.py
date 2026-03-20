@@ -1,9 +1,7 @@
 import collections.abc
 import random
 
-from .middleware import Middleware
-from .request import Request
-from .response import JSONResponse, ProblemResponse, Response
+from . import middleware, request, response
 
 
 class InMemoryDebugStore:
@@ -31,23 +29,24 @@ class InMemoryDebugStore:
         return self._store.get(id)
 
 
-class DebugStoreMiddleware(Middleware):
+class DebugStoreMiddleware(middleware.Middleware):
     def __init__(self, store, prefix=None):
         self._store = store
 
-    def __call__(self, request: Request, iterator: collections.abc.Iterator[Middleware]) -> Response:
-        if request.url.path.startswith(self._store.prefix):
-            remaining = request.url.path[len(self._store.prefix) :]
+    def __call__(
+        self, req: request.Request, iterator: collections.abc.Iterator[middleware.Middleware]
+    ) -> response.Response:
+        if req.url.path.startswith(self._store.prefix):
+            remaining = req.url.path[len(self._store.prefix) :]
             slash = remaining.find("/")
             if slash == -1:
                 data = self._store.get(remaining)
                 if data is None:
-                    return ProblemResponse(
+                    return response.ProblemResponse(
                         status_code=404, title="Debug data could not be found", detail=f"Missing {remaining}"
                     )
-                return JSONResponse(status_code=200, json=data)
+                return response.JSONResponse(status_code=200, json=data)
 
-        request.state.debug_store = self._store
+        req.state.debug_store = self._store
         next_middleware = next(iterator)
-        response = next_middleware(request, iterator)
-        return response
+        return next_middleware(req, iterator)

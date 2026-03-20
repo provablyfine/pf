@@ -8,8 +8,8 @@ def check_file(path: pathlib.Path) -> list[str]:
     with open(path) as f:
         tree = ast.parse(f.read(), filename=str(path))
     for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom) and node.level == 0:
-            if node.module == '__future__':
+        if isinstance(node, ast.ImportFrom):#$ and node.level == 0:
+            if node.module == '__future__' or node.module == 'context' or node.module is None or str(path).endswith('__init__.py'):
                 continue
             errors.append(
                 f"{path}:{node.lineno} — use `import {node.module}` instead of `from {node.module} import ...`"

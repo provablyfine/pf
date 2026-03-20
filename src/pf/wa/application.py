@@ -9,17 +9,14 @@ import urllib.parse
 import webob
 import webob.multidict
 
-from .exceptions import HTTPException
-from .middleware import Middleware
-from .request import App, Request
-from .response import ProblemResponse, Response
+from . import exceptions, middleware, request, response
 
 logger = logging.getLogger(__name__)
 
 
 @dataclasses.dataclass(frozen=True)
 class Match:
-    handler: collections.abc.Callable[[Request], Response]
+    handler: collections.abc.Callable[[request.Request], response.Response]
     params: collections.abc.Mapping
 
 
@@ -61,7 +58,7 @@ class Route:
         return Match(handler=self._handler, params=params)
 
 
-class RoutingMiddleware(Middleware):
+class RoutingMiddleware(middleware.Middleware):
     """
     An internal middleware used by the main application to hold
     the endpoint handler that will be processed at the bottom
@@ -83,16 +80,17 @@ class RoutingMiddleware(Middleware):
             return match
         return None
 
-    def __call__(self, request: Request, iterator: collections.abc.Iterator[Middleware]) -> Response:
+    def __call__(
+        self, req: request.Request, iterator: collections.abc.Iterator[middleware.Middleware]
+    ) -> response.Response:
         next_middleware = next(iterator, None)
         if next_middleware is not None:
-            return ProblemResponse(status_code=500, title="Routing middleware should be last")
-        match = self._find_route(request.method, request.url.path)
+            return response.ProblemResponse(status_code=500, title="Routing middleware should be last")
+        match = self._find_route(req.method, req.url.path)
         if match is None:
-            return ProblemResponse(status_code=404, title="No handler found for request")
-        request.path_params.set(match.params)
-        response = match.handler(request)
-        return response
+            return response.ProblemResponse(status_code=404, title="No handler found for request")
+        req.path_params.set(match.params)
+        return match.handler(req)
 
 
 class Application:
@@ -123,8 +121,8 @@ class Application:
 
     def __call__(self, environ, start_response):
         webob_request = webob.Request(environ)
-        request = Request(
-            app=App(config=self._config, state=self._state),
+        req = request.Request(
+            app=request.App(config=self._config, state=self._state),
             method=webob_request.method,
             url=urllib.parse.urlparse(webob_request.url),
             headers=webob.multidict.MultiDict(webob_request.headers.items()),
@@ -140,24 +138,23 @@ class Application:
         assert first is not None, "The list has at least ONE element"
 
         try:
-            response = first(request, iterator)
-            if response is None:
-                response = ProblemResponse(
+            resp = first(req, iterator)
+            if resp is None:
+                resp = response.ProblemResponse(
                     status_code=500,
                     title="InternalServerError",
-                    detail="Server endpoint did not return a response path: "
-                    f"{request.url.path} method: {request.method}",
+                    detail=f"Server endpoint did not return a response path: {req.url.path} method: {req.method}",
                 )
-        except HTTPException as e:
-            response = e.response
+        except exceptions.HTTPException as e:
+            resp = e.response
         except BaseException:
             if self._debug:
                 logger.error(traceback.format_exc())
-            response = ProblemResponse(
+            resp = response.ProblemResponse(
                 status_code=500,
                 title="Internal Server Error",
                 detail="Unexpected error. Setup the backtrace middleware to get more details",
             )
-        status_str = http.client.responses[response.status_code]
-        start_response(f"{response.status_code} {status_str}", list(response.headers.items()))
-        yield response.body
+        status_str = http.client.responses[resp.status_code]
+        start_response(f"{resp.status_code} {status_str}", list(resp.headers.items()))
+        yield resp.body

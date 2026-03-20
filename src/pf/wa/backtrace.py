@@ -2,10 +2,7 @@ import collections.abc
 import time
 import traceback
 
-from .exceptions import HTTPException
-from .middleware import Middleware
-from .request import Request
-from .response import ProblemResponse, Response
+from . import exceptions, middleware, request, response
 
 
 class Backtrace:
@@ -19,17 +16,17 @@ class Backtrace:
         return {"method": self._method, "path": self._path, "at": self._at, "backtrace": self._backtrace}
 
 
-class BacktraceMiddleware(Middleware):
-    def __call__(self, request: Request, iterator: collections.abc.Iterator[Middleware]) -> Response:
+class BacktraceMiddleware(middleware.Middleware):
+    def __call__(
+        self, req: request.Request, iterator: collections.abc.Iterator[middleware.Middleware]
+    ) -> response.Response:
         next_middleware = next(iterator)
         try:
-            response = next_middleware(request, iterator)
-        except HTTPException:
+            resp = next_middleware(req, iterator)
+        except exceptions.HTTPException:
             raise
         except BaseException:
-            debug_path = request.state.debug_store.add(
-                Backtrace(request.method, request.url.path, traceback.format_exc()).format()
-            )
-            debug_url = request.app.config.base_url + debug_path
-            response = ProblemResponse(status_code=500, title="Internal Server Error", instance=debug_url)
-        return response
+            debug_path = req.state.debug_store.add(Backtrace(req.method, req.url.path, traceback.format_exc()).format())
+            debug_url = req.app.config.base_url + debug_path
+            resp = response.ProblemResponse(status_code=500, title="Internal Server Error", instance=debug_url)
+        return resp
