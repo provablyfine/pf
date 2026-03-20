@@ -1,7 +1,7 @@
 Initialize server and login
   $ bash $TESTDIR/fixture.sh
   .* (re)
-  $ ROOT_ID=$(pfa identity list -n root -q)
+  $ ROOT_ID=$(pfa -c config.json identity list -n root -q)
   $ source $TESTDIR/access-control-identity-fixture.sh
   .* (re)
 
@@ -13,10 +13,10 @@ Initialize server and login
 ]
 %}
 Check that grant "{{grant}}" is actually enforcing access control
-  $ pfa grant identity {{grant}} | pfa role grant -i $ROLE_ID --add
+  $ pfa -c config.json grant identity {{grant}} | pfa -c config.json role grant -i $ROLE_ID --add
   $ pfa -c user1.json identity update -i $USER2_ID -n another
   $ pfa -c user1.json identity update -i $USER2_ID -n user2
-  $ pfa role read -i $ROLE_ID -f json | jq '.grant_list[-1]' | pfa role grant -i $ROLE_ID --del
+  $ pfa -c config.json role read -i $ROLE_ID -f json | jq '.grant_list[-1]' | pfa -c config.json role grant -i $ROLE_ID --del
   $ pfa -c user1.json identity update -i $USER2_ID -n another
   Unable to update identity. Not allowed to update identity field.
   [2]

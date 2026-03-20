@@ -1,7 +1,7 @@
 Initialize server and login
   $ bash $TESTDIR/fixture.sh
   .* (re)
-  $ ROOT_ID=$(pfa identity list -n root -q)
+  $ ROOT_ID=$(pfa -c config.json identity list -n root -q)
   $ source $TESTDIR/access-control-identity-fixture.sh
   .* (re)
 

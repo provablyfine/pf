@@ -1,7 +1,7 @@
 Initialize server and login
   $ bash $TESTDIR/fixture.sh
   .* (re)
-  $ ROOT_ID=$(pfa identity list -n root -q)
+  $ ROOT_ID=$(pfa -c config.json identity list -n root -q)
   $ source $TESTDIR/access-control-identity-fixture.sh
   .* (re)
 
@@ -17,10 +17,10 @@ Check that grant "{{grant}}" is actually enforcing access control
   $ pfa -c user1.json identity create -n user4 -b boundary -t $PERSON_ID
   Unable to create identity. Not allowed to create identity
   [2]
-  $ pfa grant identity {{grant}} | pfa role grant -i $ROLE_ID --add
+  $ pfa -c config.json grant identity {{grant}} | pfa -c config.json role grant -i $ROLE_ID --add
   $ pfa -c user1.json identity create -n user4 -b boundary -t id=person
-  $ pfa role read -i $ROLE_ID -f json | jq '.grant_list[-1]' | pfa role grant -i $ROLE_ID --del
-  $ USER4_ID=$(pfa identity list -n user4 -q)
-  $ pfa identity delete -i $USER4_ID
+  $ pfa -c config.json role read -i $ROLE_ID -f json | jq '.grant_list[-1]' | pfa -c config.json role grant -i $ROLE_ID --del
+  $ USER4_ID=$(pfa -c config.json identity list -n user4 -q)
+  $ pfa -c config.json identity delete -i $USER4_ID
 {% endfor %}
 

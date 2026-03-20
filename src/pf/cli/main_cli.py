@@ -13,6 +13,8 @@ from . import admin_cli, client, config, exceptions, openssh_cli, ssh_utils
 
 logger = logging.getLogger(__name__)
 
+_DEFAULT_CONFIG = os.path.join(os.path.expanduser("~"), ".config", "pf", "config.json")
+
 
 def _config_function(args):
     response = requests.get(args.directory)
@@ -95,9 +97,7 @@ def _do_main(args):
 def pfa():
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--debug", help="Increase debugging level", action="count", default=0)
-    parser.add_argument(
-        "-c", "--config", help="configuration file", default=os.path.abspath(os.path.join(os.getcwd(), "config.json"))
-    )
+    parser.add_argument("-c", "--config", help="configuration file", default=_DEFAULT_CONFIG)
     admin_cli.add_subparsers(parser)
 
     args = parser.parse_args()
@@ -108,9 +108,7 @@ def pfa():
 def pf():
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--debug", help="Increase debugging level", action="count", default=0)
-    parser.add_argument(
-        "-c", "--config", help="configuration file", default=os.path.abspath(os.path.join(os.getcwd(), "config.json"))
-    )
+    parser.add_argument("-c", "--config", help="configuration file", default=_DEFAULT_CONFIG)
     subparsers = parser.add_subparsers(required=True)
 
     config_parser = subparsers.add_parser("config", help="Create a configuration file")

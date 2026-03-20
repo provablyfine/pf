@@ -1,13 +1,13 @@
 Initialize server and login
   $ bash $TESTDIR/fixture.sh
   .* (re)
-  $ ROOT_ID=$(pfa identity list -n root -q)
+  $ ROOT_ID=$(pfa -c config.json identity list -n root -q)
   $ source $TESTDIR/access-control-identity-fixture.sh
   .* (re)
 
 Create temporary user for tests below
-  $ pfa identity create -n user4 -b boundary -t $PERSON_ID
-  $ USER4_ID=$(pfa identity list -n user4 -q)
+  $ pfa -c config.json identity create -n user4 -b boundary -t $PERSON_ID
+  $ USER4_ID=$(pfa -c config.json identity list -n user4 -q)
 
 {% for grant in [
   "--invite manual",
@@ -21,9 +21,9 @@ Check that permission "{{permission}}" is actually enforcing access control
   $ pfa -c user1.json identity invite -i $USER4_ID --manual
   Unable to invite identity. Not allowed to invite identity
   [2]
-  $ pfa grant identity {{grant}} | pfa role grant -i $ROLE_ID --add
+  $ pfa -c config.json grant identity {{grant}} | pfa -c config.json role grant -i $ROLE_ID --add
   $ pfa -c user1.json identity invite -i $USER4_ID --manual
   [A-Za-z0-9_-]+ (re)
-  $ pfa role read -i $ROLE_ID -f json | jq '.grant_list[-1]' | pfa role grant -i $ROLE_ID --del
+  $ pfa -c config.json role read -i $ROLE_ID -f json | jq '.grant_list[-1]' | pfa -c config.json role grant -i $ROLE_ID --del
 {% endfor %}
 

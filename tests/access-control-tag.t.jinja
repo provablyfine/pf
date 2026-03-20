@@ -1,19 +1,19 @@
 Initialize server and login
   $ bash $TESTDIR/fixture.sh
   .* (re)
-  $ ROOT_ID=$(pfa identity list -n root -q)
+  $ ROOT_ID=$(pfa -c config.json identity list -n root -q)
 
 Create role
-  $ pfa role create -n role
-  $ ROLE_ID=$(pfa role list -n role -q)
+  $ pfa -c config.json role create -n role
+  $ ROLE_ID=$(pfa -c config.json role list -n role -q)
 
 Create identity user1
-  $ pfa identity create -n user1
-  $ USER1_ID=$(pfa identity list -n user1 -q)
-  $ INVITATION=$(pfa identity invite -i $USER1_ID --manual)
+  $ pfa -c config.json identity create -n user1
+  $ USER1_ID=$(pfa -c config.json identity list -n user1 -q)
+  $ INVITATION=$(pfa -c config.json identity invite -i $USER1_ID --manual)
 
 Add identity to role
-  $ pfa role member -i $ROLE_ID -a user1
+  $ pfa -c config.json role member -i $ROLE_ID -a user1
 
 New user accepts invitation and logs in
   $ DIRECTORY_URL=http://127.0.0.1:$API_PORT/pf/directory
@@ -24,7 +24,7 @@ New user accepts invitation and logs in
   $ pf -c user1.json login --session-key user1-session
 
 Create a tag for testing
-  $ pfa tag create -n env -v dev
+  $ pfa -c config.json tag create -n env -v dev
 
 {% for grant in [
   "--read",
@@ -33,10 +33,10 @@ Create a tag for testing
 %}
 Check that permission "{{grant}}" is actually enforcing access control
   $ pfa -c user1.json tag list -q
-  $ pfa grant tag {{grant}} | pfa role grant -i $ROLE_ID --add
+  $ pfa -c config.json grant tag {{grant}} | pfa -c config.json role grant -i $ROLE_ID --add
   $ pfa -c user1.json tag list -q
   1
-  $ pfa role read -i $ROLE_ID -f json | jq '.grant_list[-1]' | pfa role grant -i $ROLE_ID --del
+  $ pfa -c config.json role read -i $ROLE_ID -f json | jq '.grant_list[-1]' | pfa -c config.json role grant -i $ROLE_ID --del
 {% endfor %}
 
 {% for grant in [
@@ -47,11 +47,11 @@ Check that permission "{{grant}}" is actually enforcing access control
   $ pfa -c user1.json tag create -n env -v prod
   Unable to create tag. Not allowed to create tag
   [2]
-  $ pfa grant tag {{grant}} | pfa role grant -i $ROLE_ID --add
+  $ pfa -c config.json grant tag {{grant}} | pfa -c config.json role grant -i $ROLE_ID --add
   $ pfa -c user1.json tag create -n env -v prod
-  $ pfa role read -i $ROLE_ID -f json | jq '.grant_list[-1]' | pfa role grant -i $ROLE_ID --del
-  $ TAG_ID=$(pfa tag list -n env -v prod -q)
-  $ pfa tag delete -i $TAG_ID
+  $ pfa -c config.json role read -i $ROLE_ID -f json | jq '.grant_list[-1]' | pfa -c config.json role grant -i $ROLE_ID --del
+  $ TAG_ID=$(pfa -c config.json tag list -n env -v prod -q)
+  $ pfa -c config.json tag delete -i $TAG_ID
 {% endfor %}
 
 {% for grant in [
@@ -59,14 +59,14 @@ Check that permission "{{grant}}" is actually enforcing access control
 ]
 %}
 Check that permission "{{grant}}" is actually enforcing access control
-  $ pfa tag create -n env -v prod
-  $ TAG_ID=$(pfa tag list -n env -v prod -q)
+  $ pfa -c config.json tag create -n env -v prod
+  $ TAG_ID=$(pfa -c config.json tag list -n env -v prod -q)
   $ pfa -c user1.json tag delete -i $TAG_ID
   Unable to delete tag. Not allowed to delete tag
   [2]
-  $ pfa grant tag {{grant}} | pfa role grant -i $ROLE_ID --add
+  $ pfa -c config.json grant tag {{grant}} | pfa -c config.json role grant -i $ROLE_ID --add
   $ pfa -c user1.json tag delete -i $TAG_ID
-  $ pfa role read -i $ROLE_ID -f json | jq '.grant_list[-1]' | pfa role grant -i $ROLE_ID --del
+  $ pfa -c config.json role read -i $ROLE_ID -f json | jq '.grant_list[-1]' | pfa -c config.json role grant -i $ROLE_ID --del
 {% endfor %}
 
 {% for grant in [
@@ -74,14 +74,14 @@ Check that permission "{{grant}}" is actually enforcing access control
 ]
 %}
 Check that permission "{{grant}}" is actually enforcing access control
-  $ pfa tag create -n env -v prod
-  $ TAG_ID=$(pfa tag list -n env -v prod -q)
+  $ pfa -c config.json tag create -n env -v prod
+  $ TAG_ID=$(pfa -c config.json tag list -n env -v prod -q)
   $ pfa -c user1.json tag delete -i $TAG_ID
   Unable to delete tag. Not allowed to delete tag
   [2]
-  $ pfa grant tag {{grant}} | pfa role grant -i $ROLE_ID --add
+  $ pfa -c config.json grant tag {{grant}} | pfa -c config.json role grant -i $ROLE_ID --add
   $ pfa -c user1.json tag delete -i $TAG_ID
-  $ pfa role read -i $ROLE_ID
+  $ pfa -c config.json role read -i $ROLE_ID
   id           2
   name         role
   description
@@ -89,5 +89,5 @@ Check that permission "{{grant}}" is actually enforcing access control
   grant        type:       invalid
                filter:     !
                permission: !
-  $ pfa role read -i $ROLE_ID -f json | jq '.grant_list[-1]' | pfa role grant -i $ROLE_ID --del
+  $ pfa -c config.json role read -i $ROLE_ID -f json | jq '.grant_list[-1]' | pfa -c config.json role grant -i $ROLE_ID --del
 {% endfor %}

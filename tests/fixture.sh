@@ -1,8 +1,8 @@
 DIRECTORY_URL=http://127.0.0.1:$API_PORT/pf/directory
-pf config --directory $DIRECTORY_URL
-INVITATION=$(pfa initialize)
+pf -c config.json config --directory $DIRECTORY_URL
+INVITATION=$(pfa -c config.json initialize)
 echo $INVITATION
 ssh-keygen -t ed25519 -f account -N "" > /dev/null
-pf accept --invitation=$INVITATION --key account
+pf -c config.json accept --invitation=$INVITATION --key account
 ssh-keygen -t ed25519 -f session -N "" > /dev/null
-pf login --session-key session
+pf -c config.json login --session-key session

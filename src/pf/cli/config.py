@@ -1,5 +1,6 @@
 import dataclasses
 import json
+import os
 
 from . import exceptions
 
@@ -21,5 +22,6 @@ class Config:
             raise exceptions.UI(f"Unable to load {filename}")
 
     def save(self, filename: str):
+        os.makedirs(os.path.dirname(os.path.abspath(filename)), exist_ok=True)
         with open(filename, "w+") as f:
             json.dump(dataclasses.asdict(self), f)

@@ -3,17 +3,17 @@ Initialize server and login
   .* (re)
 
 List existing roles (there is one)
-  $ pfa role list
+  $ pfa -c config.json role list
     id  name    description
   ----  ------  ----------------------------------------------------------------------------
      1  root    The "root" role identifies a user that is able to do anything. It is created
                 once at startup and should be deleted once a proper permission model is
                 deployed.
-  $ pfa role delete -i 1
+  $ pfa -c config.json role delete -i 1
   Role is still in use
   [2]
-  $ pfa role update -i 1 -n hello
-  $ pfa role read -i 1
+  $ pfa -c config.json role update -i 1 -n hello
+  $ pfa -c config.json role read -i 1
   id           1
   name         hello
   description  The "root" role identifies a user that is able to do anything. It is created once at startup and should be deleted once a proper permission model is deployed.
@@ -35,14 +35,14 @@ List existing roles (there is one)
                permission: create read update.* delete
 
 Create tags to be able to define tag-related permissions in role
-  $ pfa tag create -n env -v dev
-  $ pfa tag create -n env -v preprod
-  $ pfa tag create -n env -v prod
+  $ pfa -c config.json tag create -n env -v dev
+  $ pfa -c config.json tag create -n env -v preprod
+  $ pfa -c config.json tag create -n env -v prod
 
 Create a new role
-  $ pfa role create -n developer
-  $ ROLE_ID=$(pfa role list -n developer -q)
-  $ pfa role grant -i $ROLE_ID --set <<EOF
+  $ pfa -c config.json role create -n developer
+  $ ROLE_ID=$(pfa -c config.json role list -n developer -q)
+  $ pfa -c config.json role grant -i $ROLE_ID --set <<EOF
   > - type: identity
   >   filter:
   >     name: null
