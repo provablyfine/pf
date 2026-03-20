@@ -21,6 +21,31 @@ from . import db, endpoints, middleware, responses
 logger = logging.getLogger(__name__)
 
 
+def _format_endpoint_traceback(exc: Exception) -> str:
+    """Format only the innermost user-code frames of an exception's traceback.
+
+    Walks from the innermost frame outward, collecting contiguous frames whose
+    filename is not inside a site-packages directory, then stops at the first
+    site-packages frame.  This strips Starlette/anyio/FastAPI infrastructure
+    frames that accumulate while the exception bubbles up to the exception
+    handler, leaving only the frames that originate in application code.
+    """
+    frames = list(traceback.walk_tb(exc.__traceback__))
+    end = len(frames)
+    start = end
+    for i in range(end - 1, -1, -1):
+        if "site-packages" not in frames[i][0].f_code.co_filename:
+            start = i
+        else:
+            break
+    user_frames = frames[start:end] if start < end else frames
+    extracted = traceback.StackSummary.extract(user_frames, lookup_lines=True)
+    lines: list[str] = ["Traceback (most recent call last):\n"]
+    lines.extend(extracted.format())
+    lines.extend(traceback.format_exception_only(type(exc), exc))
+    return "".join(lines).rstrip("\n")
+
+
 class _InMemoryDebugStore:
     def __init__(self, prefix: str = "/debug/", max_size: int = 10000):
         self._prefix = prefix
@@ -118,7 +143,7 @@ def create(conf) -> fastapi.FastAPI:
     async def generic_exception_handler(
         request: fastapi.requests.Request, exc: Exception
     ) -> fastapi.responses.Response:
-        tb = traceback.format_exc()
+        tb = _format_endpoint_traceback(exc)
         debug_path = request.app.state.debug_store.add(_Backtrace(request.method, request.url.path, tb).format())
         debug_url = request.app.state.config.base_url + debug_path
         return responses.problem_response(status_code=500, title="Internal Server Error", instance=debug_url)
@@ -150,6 +175,10 @@ def create(conf) -> fastapi.FastAPI:
             content=yaml.dump(_openapi_schema(), allow_unicode=True, sort_keys=False),
             media_type="application/yaml",
         )
+
+    @fastapi_app.get("/debug/trigger-error", include_in_schema=False)
+    def trigger_error_endpoint() -> fastapi.responses.Response:
+        raise RuntimeError("Triggered for testing")
 
     @fastapi_app.get("/debug/{debug_id}")
     def debug_endpoint(debug_id: str, request: fastapi.requests.Request) -> fastapi.responses.Response:
