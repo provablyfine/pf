@@ -7,6 +7,8 @@ import time
 import traceback
 
 import fastapi
+import fastapi.exceptions
+import fastapi.openapi.utils
 import fastapi.requests
 import fastapi.responses
 import pydantic
@@ -100,6 +102,18 @@ def create(conf) -> fastapi.FastAPI:
             detail=f"{error['msg']}: {'.'.join(map(str, error['loc']))}",
         )
 
+    @fastapi_app.exception_handler(fastapi.exceptions.RequestValidationError)
+    async def request_validation_error_handler(
+        request: fastapi.requests.Request, exc: fastapi.exceptions.RequestValidationError
+    ) -> fastapi.responses.Response:
+        assert len(exc.errors()) > 0
+        error = exc.errors()[0]
+        return responses.problem_response(
+            status_code=400,
+            title="Request invalid.",
+            detail=f"{error['msg']}: {'.'.join(map(str, error['loc']))}",
+        )
+
     @fastapi_app.exception_handler(Exception)
     async def generic_exception_handler(
         request: fastapi.requests.Request, exc: Exception
@@ -115,10 +129,25 @@ def create(conf) -> fastapi.FastAPI:
     fastapi_app.add_middleware(middleware.KekContextMiddleware)
     fastapi_app.add_middleware(middleware.BodyReaderMiddleware)
 
+    def _openapi_schema() -> dict:
+        if fastapi_app.openapi_schema:
+            return fastapi_app.openapi_schema
+        schema = fastapi.openapi.utils.get_openapi(
+            title=fastapi_app.title, version=fastapi_app.version, routes=fastapi_app.routes
+        )
+        for path_item in schema.get("paths", {}).values():
+            for operation in path_item.values():
+                if isinstance(operation, dict):
+                    operation.get("responses", {}).pop("422", None)
+        fastapi_app.openapi_schema = schema
+        return schema
+
+    fastapi_app.openapi = _openapi_schema  # type: ignore[method-assign]
+
     @fastapi_app.get("/openapi.yaml", include_in_schema=False)
     def openapi_yaml() -> fastapi.responses.Response:
         return fastapi.responses.Response(
-            content=yaml.dump(fastapi_app.openapi(), allow_unicode=True, sort_keys=False),
+            content=yaml.dump(_openapi_schema(), allow_unicode=True, sort_keys=False),
             media_type="application/yaml",
         )
 

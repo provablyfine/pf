@@ -19,6 +19,7 @@ from . import utils
         "access-control-identity-update.t.jinja",
         "access-control-identity-tag.t.jinja",
         "access-control-identity-read.t.jinja",
+        "validation-error.t",
     ],
 )
 def test_pf_cram(api, filename):
