@@ -266,6 +266,9 @@ class Client:
     def directory(self):
         if self._directory is not None:
             return self._directory
+        if self._config.directory is not None:
+            self._directory = types.SimpleNamespace(self._config.directory)
+            return self._directory
         try:
             response = requests.get(self._config.directory_url, timeout=0.5)
         except requests.exceptions.ConnectionError:

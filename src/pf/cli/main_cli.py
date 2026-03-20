@@ -20,6 +20,7 @@ def _config_function(args):
         raise exceptions.UI(f"Unable to read directory: {response.text}")
     c = config.Config(
         directory_url=args.directory,
+        directory=response.json(),
     )
     c.save(args.config)
 

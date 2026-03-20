@@ -9,6 +9,7 @@ class Config:
     directory_url: str
     account_key: str | None = None
     session_key: str | None = None
+    directory: dict | None = None
 
     @staticmethod
     def load(filename: str):
