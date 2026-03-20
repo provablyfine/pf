@@ -38,12 +38,13 @@ cov-report:
 	coverage html -d cov
 	coverage report
 
-check: check-imports format tests
+check: tests check-imports format
 
 check-imports:
 	./scripts/check-imports
 
 format:
 	uv run ruff format
+	uv run ruff check
 
 .PHONY: tests cov cov-report check-imports format check
