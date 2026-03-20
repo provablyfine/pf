@@ -128,6 +128,10 @@ def verify(request: fastapi.requests.Request, key_id: str, key):
             responses.problem_response(status_code=400, title="Unable to find keyid in Signature-Input", detail=key_id)
         )
     label, signature_input = label_by_keyid[key_id]
+    if "nonce" not in signature_input.params:
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=400, title="Missing nonce in Signature-Input", detail=key_id)
+        )
     if label not in signature_by_label:
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=400, title="Unable to find label in Signature", detail=label)
