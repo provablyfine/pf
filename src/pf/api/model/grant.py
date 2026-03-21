@@ -153,8 +153,31 @@ class SSHGrant(DBBase):
     permission: SSHPermission
 
 
+class TenantUpdatePermission(DBBase):
+    display_name: bool
+    is_enabled: bool
+
+
+class TenantPermission(DBBase):
+    create: bool
+    read: bool
+    delete: bool
+    update: TenantUpdatePermission | None
+
+
+class TenantFilter(Filter):
+    id: int | None
+
+
+class TenantGrant(DBBase):
+    type: typing.Literal["tenant"] = "tenant"
+    filter: TenantFilter
+    permission: TenantPermission
+
+
 Grant = typing.Annotated[
-    BoundaryGrant | TagGrant | RoleGrant | IdentityGrant | SSHGrant, pydantic.Field(discriminator="type")
+    BoundaryGrant | TagGrant | RoleGrant | IdentityGrant | SSHGrant | TenantGrant,
+    pydantic.Field(discriminator="type"),
 ]
 
 

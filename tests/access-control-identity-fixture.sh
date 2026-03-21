@@ -25,7 +25,7 @@ USER2_ID=$(pfa -c config.json identity list -n user2 -q)
 pfa -c config.json role member -i $ROLE_ID -a user1
 
 # New user accepts invitation and logs in
-DIRECTORY_URL=http://127.0.0.1:$API_PORT/pf/directory
+DIRECTORY_URL=http://127.0.0.1:$API_PORT/pf/t/root/directory
 pf -c user1.json config --directory $DIRECTORY_URL
 ssh-keygen -t ed25519 -f user1 -N "" > /dev/null
 pf -c user1.json accept --invitation=$INVITATION --key user1

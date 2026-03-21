@@ -239,6 +239,20 @@ def _grant_to_schema(converter: GrantConverter, grant: model.grant.Grant) -> sch
                 permit_port_forwarding=grant.permission.permit_port_forwarding,
             )
             g = schemas.SSHGrant(filter=filter, permission=permission)
+        case "tenant":
+            filter = schemas.TenantFilter(id=grant.filter.id)
+            permission = schemas.TenantPermission(
+                create=grant.permission.create,
+                read=grant.permission.read,
+                delete=grant.permission.delete,
+                update=None
+                if grant.permission.update is None
+                else schemas.TenantUpdatePermission(
+                    display_name=grant.permission.update.display_name,
+                    is_enabled=grant.permission.update.is_enabled,
+                ),
+            )
+            g = schemas.TenantGrant(filter=filter, permission=permission)
         case _:
             assert False
     return g
@@ -342,6 +356,20 @@ def _grant_from_schema(converter: GrantConverter, grant: schemas.Grant) -> model
                 permit_port_forwarding=grant.permission.permit_port_forwarding,
             )
             g = model.grant.SSHGrant(filter=filter, permission=permission)
+        case "tenant":
+            filter = model.grant.TenantFilter(id=grant.filter.id)
+            permission = model.grant.TenantPermission(
+                create=grant.permission.create,
+                read=grant.permission.read,
+                delete=grant.permission.delete,
+                update=None
+                if grant.permission.update is None
+                else model.grant.TenantUpdatePermission(
+                    display_name=grant.permission.update.display_name,
+                    is_enabled=grant.permission.update.is_enabled,
+                ),
+            )
+            g = model.grant.TenantGrant(filter=filter, permission=permission)
         case _:
             assert False
     return g

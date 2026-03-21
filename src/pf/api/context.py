@@ -12,6 +12,7 @@ _config_var: contextvars.ContextVar[config_module.Config | None] = contextvars.C
 _db_var: contextvars.ContextVar[typing.Any | None] = contextvars.ContextVar("db", default=None)
 _identity_id_var: contextvars.ContextVar[int | None] = contextvars.ContextVar("identity_id", default=None)
 _invitation_var: contextvars.ContextVar = contextvars.ContextVar("invitation", default=None)
+_tenant_id_var: contextvars.ContextVar[int | None] = contextvars.ContextVar("tenant_id", default=None)
 
 
 class RequestContext:
@@ -41,27 +42,39 @@ class RequestContext:
 
     @contextlib.contextmanager
     def set_kek(self, kek: cryptography.fernet.Fernet):
-        token = _kek_var.set(kek)
-        yield
-        _kek_var.reset(token)
+        assert _kek_var.get() is None
+        _kek_var.set(kek)
+        try:
+            yield
+        finally:
+            _kek_var.set(None)
 
     @contextlib.contextmanager
     def set_config(self, config: config_module.Config):
-        token = _config_var.set(config)
-        yield
-        _config_var.reset(token)
+        assert _config_var.get() is None
+        _config_var.set(config)
+        try:
+            yield
+        finally:
+            _config_var.set(None)
 
     @contextlib.contextmanager
     def set_db(self, db: dao_factory.Dao):
-        token = _db_var.set(db)
-        yield
-        _db_var.reset(token)
+        assert _db_var.get() is None
+        _db_var.set(db)
+        try:
+            yield
+        finally:
+            _db_var.set(None)
 
     @contextlib.contextmanager
     def set_identity_id(self, identity_id: int):
-        token = _identity_id_var.set(identity_id)
-        yield
-        _identity_id_var.reset(token)
+        assert _identity_id_var.get() is None
+        _identity_id_var.set(identity_id)
+        try:
+            yield
+        finally:
+            _identity_id_var.set(None)
 
     @property
     def invitation(self):
@@ -71,9 +84,27 @@ class RequestContext:
 
     @contextlib.contextmanager
     def set_invitation(self, invitation):
-        token = _invitation_var.set(invitation)
-        yield
-        _invitation_var.reset(token)
+        assert _invitation_var.get() is None
+        _invitation_var.set(invitation)
+        try:
+            yield
+        finally:
+            _invitation_var.set(None)
+
+    @property
+    def tenant_id(self) -> int:
+        v = _tenant_id_var.get()
+        assert v is not None
+        return v
+
+    @contextlib.contextmanager
+    def set_tenant_id(self, tenant_id: int):
+        assert _tenant_id_var.get() is None
+        _tenant_id_var.set(tenant_id)
+        try:
+            yield
+        finally:
+            _tenant_id_var.set(None)
 
 
 ctx = RequestContext()

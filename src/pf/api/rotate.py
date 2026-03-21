@@ -7,7 +7,7 @@ import cryptography.fernet
 import sqlalchemy
 
 from .. import base64url, jwk
-from . import config, dao_factory, db, model
+from . import config, dao_factory, db, model, tenant_db
 from .context import ctx
 
 logger = logging.getLogger(__name__)
@@ -64,19 +64,27 @@ def main():
         kek_string = base64url.encode(f.read()) + "======"
         kek = cryptography.fernet.Fernet(kek_string)
 
-    engine = sqlalchemy.create_engine(conf.database_url)
-    with engine.begin() as connection:
-        dao = dao_factory.create(connection, db.metadata)
-        with ctx.set_db(dao), ctx.set_kek(kek):
-            rotate(
-                db.SigningKeyType.HOST,
-                jwk.KeyType.from_string(conf.host_key_type),
-                conf.host_key_rotation_period,
-                conf.host_key_staging_period,
-            )
-            rotate(
-                db.SigningKeyType.USER,
-                jwk.KeyType.from_string(conf.user_key_type),
-                conf.user_key_rotation_period,
-                conf.user_key_staging_period,
-            )
+    def _rotate_one(database_url: str):
+        engine = sqlalchemy.create_engine(database_url)
+        with engine.begin() as connection:
+            dao = dao_factory.create(connection, db.metadata)
+            with ctx.set_db(dao), ctx.set_kek(kek):
+                rotate(
+                    db.SigningKeyType.HOST,
+                    jwk.KeyType.from_string(conf.host_key_type),
+                    conf.host_key_rotation_period,
+                    conf.host_key_staging_period,
+                )
+                rotate(
+                    db.SigningKeyType.USER,
+                    jwk.KeyType.from_string(conf.user_key_type),
+                    conf.user_key_rotation_period,
+                    conf.user_key_staging_period,
+                )
+
+    registry_engine = sqlalchemy.create_engine(conf.tenant_registry_url)
+    with registry_engine.connect() as registry_conn:
+        registry_dao = dao_factory.create(registry_conn, tenant_db.tenant_metadata)
+        for tenant_row in registry_dao.tenant.read_all():
+            if tenant_row.is_enabled and tenant_row.is_initialized:
+                _rotate_one(tenant_row.database_url)

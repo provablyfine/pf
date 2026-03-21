@@ -10,7 +10,7 @@ from ..context import ctx
 
 logger = logging.getLogger(__name__)
 
-router = fastapi.APIRouter(prefix="/pf/ssh")
+router = fastapi.APIRouter(prefix="/ssh")
 
 
 def _read_current(type: db.SigningKeyType, staging_period: int):

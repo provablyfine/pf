@@ -1,4 +1,4 @@
-DIRECTORY_URL=http://127.0.0.1:$API_PORT/pf/directory
+DIRECTORY_URL=http://127.0.0.1:$API_PORT/pf/t/root/directory
 pf -c config.json config --directory $DIRECTORY_URL
 INVITATION=$(pfa -c config.json initialize)
 echo $INVITATION

@@ -1,4 +1,4 @@
-from . import boundary_cli, client, config, exceptions, grant_cli, identity_cli, role_cli, tag_cli
+from . import boundary_cli, client, config, exceptions, grant_cli, identity_cli, role_cli, tag_cli, tenant_cli
 
 
 def _initialize_function(args):
@@ -33,3 +33,6 @@ def add_subparsers(parser):
 
     grant_parser = subparsers.add_parser("grant", help="Generate grants")
     grant_cli.add_subparser(grant_parser)
+
+    tenant_parser = subparsers.add_parser("tenant", help="View and manage tenants")
+    tenant_cli.add_subparser(tenant_parser)

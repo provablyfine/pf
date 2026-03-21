@@ -13,7 +13,7 @@ _204 = fastapi.responses.Response(status_code=204)
 
 
 @router.post(
-    "/pf/accept-invitation",
+    "/accept-invitation",
     status_code=204,
     dependencies=[fastapi.Depends(signature.verify_invitation)],
     responses={400: responses.PROBLEM, 403: responses.PROBLEM},
@@ -61,7 +61,7 @@ def accept_invitation_endpoint(
 
 
 @router.post(
-    "/pf/login",
+    "/login",
     status_code=204,
     dependencies=[fastapi.Depends(signature.verify_account)],
     responses={400: responses.PROBLEM, 403: responses.PROBLEM},

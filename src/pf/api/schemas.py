@@ -174,12 +174,35 @@ class SSHGrant(APIBase):
     permission: SSHPermission
 
 
+class TenantUpdatePermission(APIBase):
+    display_name: bool
+    is_enabled: bool
+
+
+class TenantPermission(APIBase):
+    create: bool
+    read: bool
+    delete: bool
+    update: TenantUpdatePermission | None
+
+
+class TenantFilter(APIBase):
+    id: int | None
+
+
+class TenantGrant(APIBase):
+    type: typing.Literal["tenant"] = "tenant"
+    filter: TenantFilter
+    permission: TenantPermission
+
+
 class InvalidGrant(APIBase):
     type: typing.Literal["invalid"] = "invalid"
 
 
 Grant = typing.Annotated[
-    BoundaryGrant | TagGrant | RoleGrant | IdentityGrant | SSHGrant | InvalidGrant, pydantic.Field(discriminator="type")
+    BoundaryGrant | TagGrant | RoleGrant | IdentityGrant | SSHGrant | TenantGrant | InvalidGrant,
+    pydantic.Field(discriminator="type"),
 ]
 
 # --- Tag ---
@@ -418,6 +441,32 @@ class DirectoryReadResponse(APIBase):
     role: str
     identity: str
     ssh: str
+    tenant: str
+
+
+class TenantCreateRequest(APIBase):
+    name: str
+    display_name: str
+
+
+class TenantUpdateRequest(APIBase):
+    display_name: str | None = None
+    is_enabled: bool | None = None
+
+
+class TenantReadResponse(APIBase):
+    id: int
+    name: str
+    display_name: str
+    owner_id: int | None
+    is_enabled: bool
+    is_initialized: bool
+    is_deleted: bool
+    created_at: int
+
+
+class TenantListResponse(APIBase):
+    tenants: list[TenantReadResponse]
 
 
 class InitializeResponse(APIBase):

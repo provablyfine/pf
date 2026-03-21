@@ -139,6 +139,20 @@ def _ssh_grant_to_text(grant):
     return "ssh", _triplet_filter(grant["filter"]), _ssh_permission(grant["permission"])
 
 
+@_none
+def _tenant_filter_id(id):
+    return f"id:{id}"
+
+
+def _tenant_permission(p):
+    output = _bool(p, "create") + _bool(p, "read") + _update(p) + _bool(p, "delete")
+    return " ".join(output)
+
+
+def _tenant_grant_to_text(grant):
+    return "tenant", _tenant_filter_id(grant["filter"]["id"]), _tenant_permission(grant["permission"])
+
+
 def to_text(grant):
     match grant["type"]:
         case "tag":
@@ -151,6 +165,8 @@ def to_text(grant):
             return _identity_grant_to_text(grant)
         case "ssh":
             return _ssh_grant_to_text(grant)
+        case "tenant":
+            return _tenant_grant_to_text(grant)
         case "invalid":
             return "invalid", "!", "!"
         case _:

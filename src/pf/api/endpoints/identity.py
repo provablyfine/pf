@@ -11,7 +11,7 @@ from ..context import ctx
 
 logger = logging.getLogger(__name__)
 
-router = fastapi.APIRouter(prefix="/pf/identity", dependencies=[fastapi.Depends(signature.verify_session)])
+router = fastapi.APIRouter(prefix="/identity", dependencies=[fastapi.Depends(signature.verify_session)])
 
 _204 = fastapi.responses.Response(status_code=204)
 

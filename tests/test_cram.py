@@ -21,6 +21,7 @@ from . import utils
         "access-control-identity-read.t.jinja",
         "validation-error.t",
         "generic-exception-handler.t",
+        "tenant.t",
     ],
 )
 def test_pf_cram(api, filename):

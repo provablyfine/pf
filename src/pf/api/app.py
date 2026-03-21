@@ -16,7 +16,7 @@ import sqlalchemy
 import yaml
 
 from .. import base64url
-from . import db, endpoints, middleware, responses
+from . import dao_factory, db, dependencies, endpoints, middleware, responses, tenant_db
 
 logger = logging.getLogger(__name__)
 
@@ -94,17 +94,41 @@ def create(conf) -> fastapi.FastAPI:
             assert False
     logging.basicConfig(stream=sys.stdout, level=level)
 
+    def _bootstrap_root_tenant(registry_engine: sqlalchemy.Engine):
+        root_db_url = f"sqlite:///{os.path.join(conf.tenants_dir, 'root.db')}"
+        db.create_tables(root_db_url)
+        now = int(time.time())
+        with registry_engine.begin() as registry_conn:
+            registry_dao = dao_factory.create(registry_conn, tenant_db.tenant_metadata)
+            registry_dao.tenant.create(
+                name="root",
+                display_name="root",
+                owner_id=None,
+                database_url=root_db_url,
+                is_enabled=True,
+                is_initialized=False,
+                created_at=now,
+            )
+
     @contextlib.asynccontextmanager
     async def lifespan(app: fastapi.FastAPI):
-        db.create_tables(conf.database_url)
-        engine = sqlalchemy.create_engine(conf.database_url, echo=conf.debug_sql)
+        os.makedirs(conf.tenants_dir, exist_ok=True)
+        tenant_db.create_tables(conf.tenant_registry_url)
+        registry_engine = sqlalchemy.create_engine(conf.tenant_registry_url, echo=conf.debug_sql)
         kek_filename = conf.kek_filename.format(PF_API_KEK_FILENAME=os.getenv("PF_API_KEK_FILENAME"))
         with open(kek_filename, "rb") as f:
             kek = base64url.encode(f.read()) + "======"
         app.state.config = conf
-        app.state.db_engine = engine
+        app.state.tenant_registry_engine = registry_engine
+        app.state.tenant_engines = {}
         app.state.kek = kek
         app.state.debug_store = _InMemoryDebugStore()
+
+        with registry_engine.connect() as registry_conn:
+            registry_dao = dao_factory.create(registry_conn, tenant_db.tenant_metadata)
+            if registry_dao.tenant.read_one() is None:
+                _bootstrap_root_tenant(registry_engine)
+
         yield
 
     fastapi_app = fastapi.FastAPI(lifespan=lifespan, docs_url="/docs", redoc_url="/redoc")
@@ -149,7 +173,6 @@ def create(conf) -> fastapi.FastAPI:
         return responses.problem_response(status_code=500, title="Internal Server Error", instance=debug_url)
 
     # Middleware added in reverse order: last added = outermost
-    fastapi_app.add_middleware(middleware.DbContextMiddleware)
     fastapi_app.add_middleware(middleware.ConfigContextMiddleware)
     fastapi_app.add_middleware(middleware.KekContextMiddleware)
     fastapi_app.add_middleware(middleware.BodyReaderMiddleware)
@@ -189,13 +212,17 @@ def create(conf) -> fastapi.FastAPI:
             )
         return fastapi.responses.JSONResponse(status_code=200, content=data)
 
-    fastapi_app.include_router(endpoints.directory.router)
-    fastapi_app.include_router(endpoints.initialize.router)
-    fastapi_app.include_router(endpoints.auth.router)
-    fastapi_app.include_router(endpoints.boundary.router)
-    fastapi_app.include_router(endpoints.identity.router)
-    fastapi_app.include_router(endpoints.role.router)
-    fastapi_app.include_router(endpoints.tag.router)
-    fastapi_app.include_router(endpoints.ssh.router)
+    _tenant_dep = fastapi.Depends(dependencies.tenant_context)
+    _tenant_prefix = "/pf/t/{tenant_name}"
+
+    fastapi_app.include_router(endpoints.directory.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
+    fastapi_app.include_router(endpoints.initialize.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
+    fastapi_app.include_router(endpoints.auth.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
+    fastapi_app.include_router(endpoints.boundary.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
+    fastapi_app.include_router(endpoints.identity.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
+    fastapi_app.include_router(endpoints.role.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
+    fastapi_app.include_router(endpoints.tag.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
+    fastapi_app.include_router(endpoints.ssh.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
+    fastapi_app.include_router(endpoints.tenant.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
 
     return fastapi_app

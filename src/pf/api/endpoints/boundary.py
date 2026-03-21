@@ -5,7 +5,7 @@ import sqlalchemy.exc
 from .. import converters, grant, model, responses, schemas, signature
 from ..context import ctx
 
-router = fastapi.APIRouter(prefix="/pf/boundary", dependencies=[fastapi.Depends(signature.verify_session)])
+router = fastapi.APIRouter(prefix="/boundary", dependencies=[fastapi.Depends(signature.verify_session)])
 
 _204 = fastapi.responses.Response(status_code=204)
 

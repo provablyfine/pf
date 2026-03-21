@@ -212,6 +212,37 @@ class IdentityChecker:
         return self._checker.can(check)
 
 
+class TenantChecker:
+    def __init__(self, boundaries: list[model.boundary.Boundary], roles: list[model.role.Role], tenant_id: int | None):
+        def cmp(filter: model.grant.Filter) -> bool:
+            if not isinstance(filter, model.grant.TenantFilter):
+                return False
+            if filter.id is not None and filter.id != tenant_id:
+                return False
+            return True
+
+        self._checker = Checker(boundaries, roles, cmp)
+
+    def can_create(self) -> bool:
+        return self._checker.can(lambda p: p.create)
+
+    def can_read(self) -> bool:
+        return self._checker.can(lambda p: p.read)
+
+    def can_update(self, field: str) -> bool:
+        assert field in ["display_name", "is_enabled"]
+
+        def check(p) -> bool:
+            if p.update is None:
+                return True
+            return getattr(p.update, field)
+
+        return self._checker.can(check)
+
+    def can_delete(self) -> bool:
+        return self._checker.can(lambda p: p.delete)
+
+
 class SSHChecker:
     def __init__(
         self,
@@ -288,3 +319,6 @@ class Grants:
 
     def ssh(self, identity_id: int, tag_id_list: list[int], boundary_id_list: list[int]) -> SSHChecker:
         return SSHChecker(self._boundaries, self._roles, identity_id, tag_id_list, boundary_id_list)
+
+    def tenant(self, tenant_id: int | None) -> TenantChecker:
+        return TenantChecker(self._boundaries, self._roles, tenant_id)

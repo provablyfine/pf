@@ -209,7 +209,6 @@ class Api:
 @pytest.fixture
 def api(request):
     tmp_dir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True, delete=False)
-    api_db = os.path.join(tmp_dir.name, "api.db")
     api_kek_file = os.path.join(tmp_dir.name, "kek_file.key")
     api_config = os.path.join(tmp_dir.name, "config.json")
     api_port_file = os.path.join(tmp_dir.name, "api.port")
@@ -220,7 +219,8 @@ def api(request):
         f.write(
             json.dumps(
                 {
-                    "database_url": f"sqlite:///{api_db}",
+                    "tenant_registry_url": f"sqlite:///{os.path.join(tmp_dir.name, 'tenants.db')}",
+                    "tenants_dir": tmp_dir.name,
                     "debug": True,
                     "log_level": "DEBUG",
                     "kek_filename": api_kek_file,
@@ -255,7 +255,7 @@ def api(request):
             time.sleep(0.1)
             continue
         try:
-            response = requests.get(f"http://127.0.0.1:{api_port}/pf/directory")
+            response = requests.get(f"http://127.0.0.1:{api_port}/pf/t/root/directory")
         except requests.exceptions.ConnectionError:
             time.sleep(0.1)
             continue
@@ -275,7 +275,6 @@ def api(request):
     if hasattr(request.node, "rep_call"):
         if request.node.rep_call.failed:
             print(f"API log: {api_log}")
-            print(f"API db: {api_db}")
             print(f"API config: {api_config}")
             print(f"API portfile: {api_port_file}")
             print(f"API kek: {api_kek_file}")
