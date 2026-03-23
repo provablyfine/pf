@@ -1,0 +1,30 @@
+#!/usr/bin/env -S uv run -q --script
+# /// script
+# dependencies = [
+#   "cryptography>=45.0.0",
+#   "requests",
+#   "http-message-signatures",
+#   "textual>=0.86",
+#   "pf",
+#   "pydantic",
+# ]
+# [tool.uv.sources]
+# pf = { path = "../", editable = true }
+# ///
+import os
+
+if __name__ == '__main__':
+    cov = None
+    if os.environ.get('COVERAGE_PROCESS_START'):
+        import coverage
+        cov = coverage.Coverage()
+        cov.start()
+    os.environ['TEXTUAL'] = 'devtools'
+
+    import pf.tui.app
+    try:
+        pf.tui.app.pfat()
+    finally:
+        if cov:
+            cov.stop()
+            cov.save()
