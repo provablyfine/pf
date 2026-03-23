@@ -2,7 +2,7 @@ import json
 
 import tabulate
 
-from . import client, config, exceptions
+from .. import client
 
 
 def _tenants(auth, id: int | None = None):
@@ -11,7 +11,7 @@ def _tenants(auth, id: int | None = None):
         params["id"] = id
     response = auth.get(auth.directory.tenant, params=params)
     if response.status_code != 200:
-        raise exceptions.UI(f"Unable to list tenants: {response.text}")
+        raise client.exceptions.UI(f"Unable to list tenants: {response.text}")
     return response.json()["tenants"]
 
 
@@ -22,7 +22,7 @@ _SORT_KEYS = {
 
 
 def _list_function(args):
-    c = config.Config.load(args.config)
+    c = client.Config.load(args.config)
     api = client.Client(c)
     auth = api.session_auth(c.session_key)
     tenants = sorted(_tenants(auth), key=_SORT_KEYS[args.sort])
@@ -42,31 +42,31 @@ def _list_function(args):
 
 
 def _get_function(args):
-    c = config.Config.load(args.config)
+    c = client.Config.load(args.config)
     api = client.Client(c)
     auth = api.session_auth(c.session_key)
     response = auth.get(f"{auth.directory.tenant}/{args.id}")
     if response.status_code == 404:
-        raise exceptions.UI(f"Tenant {args.id} not found")
+        raise client.exceptions.UI(f"Tenant {args.id} not found")
     if response.status_code != 200:
-        raise exceptions.UI(f"Unable to get tenant: {response.text}")
+        raise client.exceptions.UI(f"Unable to get tenant: {response.text}")
     t = response.json()
     print(tabulate.tabulate([t], headers="keys"))
 
 
 def _create_function(args):
-    c = config.Config.load(args.config)
+    c = client.Config.load(args.config)
     api = client.Client(c)
     auth = api.session_auth(c.session_key)
     response = auth.post(auth.directory.tenant, json={"name": args.name, "display_name": args.display_name})
     if response.status_code != 200:
-        raise exceptions.UI(f"Unable to create tenant: {response.text}")
+        raise client.exceptions.UI(f"Unable to create tenant: {response.text}")
     t = response.json()
     print(tabulate.tabulate([t], headers="keys"))
 
 
 def _update_function(args):
-    c = config.Config.load(args.config)
+    c = client.Config.load(args.config)
     api = client.Client(c)
     auth = api.session_auth(c.session_key)
     data = {}
@@ -77,23 +77,23 @@ def _update_function(args):
     elif args.disable:
         data["is_enabled"] = False
     if not data:
-        raise exceptions.UI("Nothing to update")
+        raise client.exceptions.UI("Nothing to update")
     response = auth.patch(f"{auth.directory.tenant}/{args.id}", json=data)
     if response.status_code == 404:
-        raise exceptions.UI(f"Tenant {args.id} not found")
+        raise client.exceptions.UI(f"Tenant {args.id} not found")
     if response.status_code != 204:
-        raise exceptions.UI(f"Unable to update tenant: {response.text}")
+        raise client.exceptions.UI(f"Unable to update tenant: {response.text}")
 
 
 def _delete_function(args):
-    c = config.Config.load(args.config)
+    c = client.Config.load(args.config)
     api = client.Client(c)
     auth = api.session_auth(c.session_key)
     response = auth.delete(f"{auth.directory.tenant}/{args.id}")
     if response.status_code == 404:
-        raise exceptions.UI(f"Tenant {args.id} not found")
+        raise client.exceptions.UI(f"Tenant {args.id} not found")
     if response.status_code != 204:
-        raise exceptions.UI(f"Unable to delete tenant: {response.text}")
+        raise client.exceptions.UI(f"Unable to delete tenant: {response.text}")
 
 
 def add_subparser(parser):

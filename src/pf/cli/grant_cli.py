@@ -1,6 +1,7 @@
 import json
 
-from . import exceptions, yaml_utils
+from .. import client
+from . import yaml_utils
 
 
 def _output(args, data):
@@ -17,7 +18,7 @@ def _output(args, data):
 def _tag(t):
     equal = t.find("=")
     if equal == -1:
-        raise exceptions.UI(f"Tag is invalid. Expected name=value. Got: {t}")
+        raise client.exceptions.UI(f"Tag is invalid. Expected name=value. Got: {t}")
     name = t[:equal]
     value = t[equal + 1 :]
     return {"name": name, "value": value}

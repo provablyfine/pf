@@ -2,7 +2,8 @@ import json
 
 import tabulate
 
-from . import client, config, exceptions, grant, yaml_utils
+from .. import client
+from . import grant, yaml_utils
 
 
 def _boundaries(auth, id=None, name=None):
@@ -13,7 +14,7 @@ def _boundaries(auth, id=None, name=None):
         params["name"] = name
     response = auth.get(auth.directory.boundary, params=params)
     if response.status_code != 200:
-        raise exceptions.UI(f"Unable to find boundary. {response.json()['title']}")
+        raise client.exceptions.UI(f"Unable to find boundary. {response.json()['title']}")
     boundaries = response.json()["boundaries"]
     return boundaries
 
@@ -21,7 +22,7 @@ def _boundaries(auth, id=None, name=None):
 def _boundary(auth, id):
     boundaries = _boundaries(auth, id=id)
     if len(boundaries) == 0:
-        raise exceptions.UI("No boundary found")
+        raise client.exceptions.UI("No boundary found")
     assert len(boundaries) == 1
     return boundaries[0]
 
@@ -35,7 +36,7 @@ def _sort_by_name(boundary):
 
 
 def _boundary_list_function(args):
-    c = config.Config.load(args.config)
+    c = client.Config.load(args.config)
     api = client.Client(c)
     auth = api.session_auth(c.session_key)
     boundaries = _boundaries(auth, id=args.id, name=args.name)
@@ -68,7 +69,7 @@ def _boundary_list_function(args):
 
 
 def _boundary_read_function(args):
-    c = config.Config.load(args.config)
+    c = client.Config.load(args.config)
     api = client.Client(c)
     auth = api.session_auth(c.session_key)
     boundary = _boundary(auth, args.id)
@@ -104,16 +105,16 @@ def _boundary_read_function(args):
 
 
 def _boundary_delete_function(args):
-    c = config.Config.load(args.config)
+    c = client.Config.load(args.config)
     api = client.Client(c)
     auth = api.session_auth(c.session_key)
     response = auth.delete(f"{api.directory.boundary}/{args.id}")
     if response.status_code != 204:
-        raise exceptions.UI(f"Unable to delete boundary. {response.json()['title']}")
+        raise client.exceptions.UI(f"Unable to delete boundary. {response.json()['title']}")
 
 
 def _boundary_create_function(args):
-    c = config.Config.load(args.config)
+    c = client.Config.load(args.config)
     api = client.Client(c)
     auth = api.session_auth(c.session_key)
     response = auth.post(
@@ -121,11 +122,11 @@ def _boundary_create_function(args):
         json={"name": args.name, "description": "" if args.description is None else args.description},
     )
     if response.status_code != 201:
-        raise exceptions.UI(f"Unable to create boundary. {response.json()['title']}")
+        raise client.exceptions.UI(f"Unable to create boundary. {response.json()['title']}")
 
 
 def _boundary_update_function(args):
-    c = config.Config.load(args.config)
+    c = client.Config.load(args.config)
     api = client.Client(c)
     auth = api.session_auth(c.session_key)
     query = {}
@@ -135,11 +136,11 @@ def _boundary_update_function(args):
         query["description"] = args.description
     response = auth.patch(f"{api.directory.boundary}/{args.id}", json=query)
     if response.status_code != 200:
-        raise exceptions.UI(f"Unable to update boundary. {response.json()['title']}.")
+        raise client.exceptions.UI(f"Unable to update boundary. {response.json()['title']}.")
 
 
 def _boundary_grant_function(args, action, grant, field_name):
-    c = config.Config.load(args.config)
+    c = client.Config.load(args.config)
     api = client.Client(c)
     auth = api.session_auth(c.session_key)
     boundary = _boundary(auth, args.id)
@@ -161,7 +162,7 @@ def _boundary_grant_function(args, action, grant, field_name):
         },
     )
     if response.status_code != 200:
-        raise exceptions.UI(f"Unable to update boundary. {response.json()['title']}.")
+        raise client.exceptions.UI(f"Unable to update boundary. {response.json()['title']}.")
 
 
 def _boundary_denied_function(args, action, grant):

@@ -3,7 +3,7 @@ import sys
 
 import yaml
 
-from . import exceptions
+from .. import client
 
 
 def _none(f):
@@ -182,7 +182,7 @@ def add_parser(parser, f):
             try:
                 grant = yaml.safe_load(data)
             except Exception:
-                raise exceptions.UI("Unable to read grant from stdin")
+                raise client.exceptions.UI("Unable to read grant from stdin")
         return grant
 
     def _do(args):

@@ -2,7 +2,7 @@ import json
 
 import tabulate
 
-from . import client, config, exceptions
+from .. import client
 
 
 def _tags(args, auth):
@@ -15,7 +15,7 @@ def _tags(args, auth):
         params["value"] = args.value
     response = auth.get(auth.directory.tag, params=params)
     if response.status_code != 200:
-        raise exceptions.UI(f"Unable to find tags {','.join('='.join(kv) for kv in params.items())}")
+        raise client.exceptions.UI(f"Unable to find tags {','.join('='.join(kv) for kv in params.items())}")
     tags = response.json()["tags"]
     return tags
 
@@ -33,7 +33,7 @@ def _sort_by_value(t):
 
 
 def tag_list_function(args):
-    c = config.Config.load(args.config)
+    c = client.Config.load(args.config)
     api = client.Client(c)
     auth = api.session_auth(c.session_key)
     tags = _tags(args, auth)
@@ -65,7 +65,7 @@ def tag_list_function(args):
 
 
 def _tag_create_function(args):
-    c = config.Config.load(args.config)
+    c = client.Config.load(args.config)
     api = client.Client(c)
     auth = api.session_auth(c.session_key)
     response = auth.post(
@@ -76,18 +76,18 @@ def _tag_create_function(args):
         },
     )
     if response.status_code != 201:
-        raise exceptions.UI(f"Unable to create tag. {response.json()['title']}")
+        raise client.exceptions.UI(f"Unable to create tag. {response.json()['title']}")
 
 
 def _tag_delete_function(args):
     if args.id is None and args.name is None and args.value is None:
-        raise exceptions.UI("You must specify a filtering criterion")
-    c = config.Config.load(args.config)
+        raise client.exceptions.UI("You must specify a filtering criterion")
+    c = client.Config.load(args.config)
     api = client.Client(c)
     auth = api.session_auth(c.session_key)
     response = auth.delete(f"{api.directory.tag}/{args.id}")
     if response.status_code != 204:
-        raise exceptions.UI(f"Unable to delete tag. {response.json()['title']}")
+        raise client.exceptions.UI(f"Unable to delete tag. {response.json()['title']}")
 
 
 def add_subparser(parser):

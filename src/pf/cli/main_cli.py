@@ -8,8 +8,8 @@ import traceback
 import requests
 import requests.auth
 
-from .. import jwk, ssh
-from . import admin_cli, client, config, exceptions, openssh_cli, ssh_utils
+from .. import jwk, ssh, client
+from . import admin_cli, openssh_cli
 
 logger = logging.getLogger(__name__)
 
@@ -19,8 +19,8 @@ _DEFAULT_CONFIG = os.path.join(os.path.expanduser("~"), ".config", "pf", "config
 def _config_function(args):
     response = requests.get(args.directory)
     if response.status_code != 200:
-        raise exceptions.UI(f"Unable to read directory: {response.text}")
-    c = config.Config(
+        raise client.exceptions.UI(f"Unable to read directory: {response.text}")
+    c = client.Config(
         directory_url=args.directory,
         directory=response.json(),
     )
@@ -28,25 +28,25 @@ def _config_function(args):
 
 
 def _accept_function(args):
-    c = config.Config.load(args.config)
+    c = client.Config.load(args.config)
     api = client.Client(c)
     auth = api.invitation_auth(account=args.key, invitation=args.invitation)
     response = auth.post(url=auth.directory.accept_invitation, json={"account_public_key": auth.public_key})
     if response.status_code != 204:
-        raise exceptions.UI(f"Unable to accept invitation successfully: {response.text}")
+        raise client.exceptions.UI(f"Unable to accept invitation successfully: {response.text}")
     c.account_key = args.key
     c.save(args.config)
 
 
-@ssh_utils.exception
+@client.ssh_utils.exception
 def _login_function(args):
-    c = config.Config.load(args.config)
+    c = client.Config.load(args.config)
     api = client.Client(c)
     if args.session_key is None:
         try:
             ssh_agent = ssh.agent.Client()
         except Exception:
-            raise exceptions.UI("Unable to connect to user's SSH agent")
+            raise client.exceptions.UI("Unable to connect to user's SSH agent")
         session_key = jwk.Private.generate_ed25519()
         ssh_agent.add(session_key, comment="pf-session", lifetime=1800)
         c.session_key = session_key.public().ssh_fingerprint()
@@ -56,13 +56,13 @@ def _login_function(args):
         try:
             session_key = ssh_utils.load_private_key(data)
         except ValueError:
-            raise exceptions.UI("Unable to parse data either as PEM or SSH format")
+            raise client.exceptions.UI("Unable to parse data either as PEM or SSH format")
         c.session_key = args.session_key
 
     auth = api.login_auth(account=c.account_key, session=c.session_key)
     response = auth.post(url=auth.directory.login, json={"session_public_key": session_key.public().to_dict()})
     if response.status_code != 204:
-        raise exceptions.UI(f"Unable to login successfully: {response.text}")
+        raise client.exceptions.UI(f"Unable to login successfully: {response.text}")
     c.save(args.config)
 
 
@@ -84,7 +84,7 @@ def _do_main(args):
     try:
         args.func(args)
         exitcode = 0
-    except exceptions.UI as e:
+    except client.exceptions.UI as e:
         sys.stderr.write(f"{e!s}\n")
         exitcode = 2
     except Exception:

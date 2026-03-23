@@ -3,7 +3,7 @@ import json
 
 import tabulate
 
-from . import client, config, exceptions
+from .. import client
 
 
 def _identities(
@@ -30,7 +30,7 @@ def _identities(
         params["boundary_name"] = boundary_name
     response = auth.get(auth.directory.identity, params=params)
     if response.status_code != 200:
-        raise exceptions.UI(f"Unable to find identity {','.join('='.join(kv) for kv in params.items())}")
+        raise client.exceptions.UI(f"Unable to find identity {','.join('='.join(kv) for kv in params.items())}")
     identities = response.json()["identities"]
     return identities
 
@@ -38,7 +38,7 @@ def _identities(
 def _identity(args, auth):
     identities = _identities(auth, id=args.id)
     if len(identities) == 0:
-        raise exceptions.UI("No identity found")
+        raise client.exceptions.UI("No identity found")
     assert len(identities) == 1
     return identities[0]
 
@@ -49,7 +49,7 @@ def _tag(tag: str):
     else:
         equal = tag.find("=")
         if equal == -1:
-            raise exceptions.UI(f"Tag format is name=value, not {tag}")
+            raise client.exceptions.UI(f"Tag format is name=value, not {tag}")
         name = tag[:equal]
         value = tag[equal + 1 :]
         return {"name": name, "value": value}
@@ -63,7 +63,7 @@ def _boundary(s: str):
 
 
 def _identity_list_function(args):
-    c = config.Config.load(args.config)
+    c = client.Config.load(args.config)
     api = client.Client(c)
     auth = api.session_auth(c.session_key)
     identities = _identities(
@@ -97,7 +97,7 @@ def _identity_list_function(args):
 
 
 def _identity_read_function(args):
-    c = config.Config.load(args.config)
+    c = client.Config.load(args.config)
     api = client.Client(c)
     auth = api.session_auth(c.session_key)
     identity = _identity(args, auth)
@@ -119,25 +119,25 @@ def _identity_read_function(args):
 
 
 def _identity_delete_function(args):
-    c = config.Config.load(args.config)
+    c = client.Config.load(args.config)
     api = client.Client(c)
     auth = api.session_auth(c.session_key)
     response = auth.delete(f"{api.directory.identity}/{args.id}")
     if response.status_code != 204:
-        raise exceptions.UI(f"Unable to delete identity. {response.json()['title']}")
+        raise client.exceptions.UI(f"Unable to delete identity. {response.json()['title']}")
 
 
 def _parse_tag(s):
     equal = s.find("=")
     if equal == -1:
-        raise exceptions.UI(f"Tag is invalid. Expected format: name=value. Got: {s}")
+        raise client.exceptions.UI(f"Tag is invalid. Expected format: name=value. Got: {s}")
     name = s[:equal]
     value = s[equal + 1 :]
     return {"name": name, "value": value}
 
 
 def _identity_create_function(args):
-    c = config.Config.load(args.config)
+    c = client.Config.load(args.config)
     api = client.Client(c)
     auth = api.session_auth(c.session_key)
     boundary_id_list = [int(b) for b in args.boundary if b.isdigit()]
@@ -155,11 +155,11 @@ def _identity_create_function(args):
         },
     )
     if response.status_code != 201:
-        raise exceptions.UI(f"Unable to create identity. {response.json()['title']}")
+        raise client.exceptions.UI(f"Unable to create identity. {response.json()['title']}")
 
 
 def _identity_invite_function(args):
-    c = config.Config.load(args.config)
+    c = client.Config.load(args.config)
     api = client.Client(c)
     auth = api.session_auth(c.session_key)
     response = auth.post(f"{api.directory.identity}/{args.id}/invite", json={"delivery": args.delivery})
@@ -169,11 +169,11 @@ def _identity_invite_function(args):
         data = response.json()
         print(data["key"]["k"])
     else:
-        raise exceptions.UI(f"Unable to invite identity. {response.json()['title']}")
+        raise client.exceptions.UI(f"Unable to invite identity. {response.json()['title']}")
 
 
 def _identity_update_function(args):
-    c = config.Config.load(args.config)
+    c = client.Config.load(args.config)
     api = client.Client(c)
     auth = api.session_auth(c.session_key)
     query = {}
@@ -181,7 +181,7 @@ def _identity_update_function(args):
         query["name"] = args.name
     response = auth.patch(f"{api.directory.identity}/{args.id}", json=query)
     if response.status_code != 200:
-        raise exceptions.UI(f"Unable to update identity. {response.json()['title']}.")
+        raise client.exceptions.UI(f"Unable to update identity. {response.json()['title']}.")
 
 
 class TagAction(argparse.Action):
@@ -209,7 +209,7 @@ def _format_tag_op(op, values):
 
 def _identity_tag_function(args):
 
-    c = config.Config.load(args.config)
+    c = client.Config.load(args.config)
     api = client.Client(c)
     auth = api.session_auth(c.session_key)
 
@@ -222,7 +222,7 @@ def _identity_tag_function(args):
         },
     )
     if response.status_code != 200:
-        raise exceptions.UI(f"Unable to update identity. {response.json()['title']}.")
+        raise client.exceptions.UI(f"Unable to update identity. {response.json()['title']}.")
 
 
 def add_subparser(parser):

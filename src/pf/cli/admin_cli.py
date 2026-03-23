@@ -1,14 +1,15 @@
-from . import boundary_cli, client, config, exceptions, grant_cli, identity_cli, role_cli, tag_cli, tenant_cli
+from .. import client
+from . import boundary_cli, grant_cli, identity_cli, role_cli, tag_cli, tenant_cli
 
 
 def _initialize_function(args):
-    c = config.Config.load(args.config)
+    c = client.Config.load(args.config)
     api = client.Client(c)
     response = api.no_auth.post(api.directory.initialize)
     if response.status_code == 204:
-        raise exceptions.UI("Unable to initialize app: it is already initialized.")
+        raise client.exceptions.UI("Unable to initialize app: it is already initialized.")
     if response.status_code != 200:
-        raise exceptions.UI("Unable to initialize app: expected error.")
+        raise client.exceptions.UI("Unable to initialize app: expected error.")
     data = response.json()
     print(data["key"]["k"])
 

@@ -2,7 +2,8 @@ import json
 
 import tabulate
 
-from . import client, config, exceptions, grant, yaml_utils
+from .. import client
+from . import grant, yaml_utils
 
 
 def _roles(auth, id=None, name=None):
@@ -13,7 +14,7 @@ def _roles(auth, id=None, name=None):
         params["name"] = name
     response = auth.get(auth.directory.role, params=params)
     if response.status_code != 200:
-        raise exceptions.UI(f"Unable to find role {','.join(f'{k}={v}' for k, v in params.items())}")
+        raise client.exceptions.UI(f"Unable to find role {','.join(f'{k}={v}' for k, v in params.items())}")
     roles = response.json()["roles"]
     return roles
 
@@ -21,7 +22,7 @@ def _roles(auth, id=None, name=None):
 def _role(args, auth):
     roles = _roles(auth, id=args.id)
     if len(roles) == 0:
-        raise exceptions.UI("No role found")
+        raise client.exceptions.UI("No role found")
     assert len(roles) == 1
     return roles[0]
 
@@ -35,7 +36,7 @@ def _sort_by_name(t):
 
 
 def _role_list_function(args):
-    c = config.Config.load(args.config)
+    c = client.Config.load(args.config)
     api = client.Client(c)
     auth = api.session_auth(c.session_key)
     roles = _roles(auth, id=args.id, name=args.name)
@@ -68,7 +69,7 @@ def _role_list_function(args):
 
 
 def _role_read_function(args):
-    c = config.Config.load(args.config)
+    c = client.Config.load(args.config)
     api = client.Client(c)
     auth = api.session_auth(c.session_key)
     role = _role(args, auth)
@@ -96,16 +97,16 @@ def _role_read_function(args):
 
 
 def _role_delete_function(args):
-    c = config.Config.load(args.config)
+    c = client.Config.load(args.config)
     api = client.Client(c)
     auth = api.session_auth(c.session_key)
     response = auth.delete(f"{api.directory.role}/{args.id}")
     if response.status_code != 204:
-        raise exceptions.UI(f"Unable to delete role. {response.json()['title']}")
+        raise client.exceptions.UI(f"Unable to delete role. {response.json()['title']}")
 
 
 def _role_create_function(args):
-    c = config.Config.load(args.config)
+    c = client.Config.load(args.config)
     api = client.Client(c)
     auth = api.session_auth(c.session_key)
     response = auth.post(
@@ -113,11 +114,11 @@ def _role_create_function(args):
         json={"name": args.name, "description": "" if args.description is None else args.description},
     )
     if response.status_code != 201:
-        raise exceptions.UI(f"Unable to create role. {response.json()['title']}")
+        raise client.exceptions.UI(f"Unable to create role. {response.json()['title']}")
 
 
 def _role_update_function(args):
-    c = config.Config.load(args.config)
+    c = client.Config.load(args.config)
     api = client.Client(c)
     auth = api.session_auth(c.session_key)
     query = {}
@@ -127,11 +128,11 @@ def _role_update_function(args):
         query["description"] = args.description
     response = auth.patch(f"{api.directory.role}/{args.id}", json=query)
     if response.status_code != 200:
-        raise exceptions.UI(f"Unable to update role. {response.json()['title']}.")
+        raise client.exceptions.UI(f"Unable to update role. {response.json()['title']}.")
 
 
 def _role_grant_function(args, action, grant):
-    c = config.Config.load(args.config)
+    c = client.Config.load(args.config)
     api = client.Client(c)
     auth = api.session_auth(c.session_key)
     role = _role(args, auth)
@@ -153,7 +154,7 @@ def _role_grant_function(args, action, grant):
         },
     )
     if response.status_code != 200:
-        raise exceptions.UI(f"Unable to update role. {response.json()['title']}.")
+        raise client.exceptions.UI(f"Unable to update role. {response.json()['title']}.")
 
 
 def _role_member_function(args):
@@ -171,7 +172,7 @@ def _role_member_function(args):
             return True
         return False
 
-    c = config.Config.load(args.config)
+    c = client.Config.load(args.config)
     api = client.Client(c)
     auth = api.session_auth(c.session_key)
     role = _role(args, auth)
@@ -196,7 +197,7 @@ def _role_member_function(args):
         },
     )
     if response.status_code != 200:
-        raise exceptions.UI(f"Unable to update role. {response.json()['title']}.")
+        raise client.exceptions.UI(f"Unable to update role. {response.json()['title']}.")
 
 
 def add_subparser(parser):
