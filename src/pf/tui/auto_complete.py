@@ -1,17 +1,19 @@
 import textual
 import textual_autocomplete
 
+
 class MultiAutoComplete(textual_autocomplete.AutoComplete):
     DEFAULT_CSS = """\
     MultiAutoComplete {
         height: 5
     }
     """
+
     def get_search_string(self, state: textual_autocomplete.TargetState) -> str:
-        current_input = state.text[:state.cursor_position]
+        current_input = state.text[: state.cursor_position]
         space = current_input.rfind(" ")
         if space != -1:
-            current_input = current_input[space+1:]
+            current_input = current_input[space + 1 :]
         return current_input
 
     def apply_completion(self, value: str, state: textual_autocomplete.TargetState) -> None:
@@ -19,15 +21,16 @@ class MultiAutoComplete(textual_autocomplete.AutoComplete):
         if space == -1:
             start = 0
         else:
-            start = space+1
-        new_value = state.text[:start] + value + state.text[state.cursor_position:]
+            start = space + 1
+        new_value = state.text[:start] + value + state.text[state.cursor_position :]
         new_cursor_position = len(state.text[:start] + value)
 
         with self.prevent(textual.widgets.Input.Changed):
             self.target.value = new_value
             self.target.cursor_position = new_cursor_position
 
-    def get_matches(self,
+    def get_matches(
+        self,
         target_state: textual_autocomplete.TargetState,
         candidates: list[textual_autocomplete.DropdownItem],
         search_string: str,

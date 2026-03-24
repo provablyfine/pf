@@ -20,19 +20,19 @@ class TuiApp(textual.app.App[None]):
 
     def on_mount(self) -> None:
         grant = {
-            'type': 'role',
-            'filter': {'name': None},
-            'permission': {
-                'create': False,
-                'read': False,
-                'update': {
-                    'name': False,
-                    'description': False,
-                    'grant_list': False,
-                    'member_list': False,
+            "type": "role",
+            "filter": {"name": None},
+            "permission": {
+                "create": False,
+                "read": False,
+                "update": {
+                    "name": False,
+                    "description": False,
+                    "grant_list": False,
+                    "member_list": False,
                 },
-                'delete': False
-            }
+                "delete": False,
+            },
         }
         self.push_screen(grant_edit.GrantEditScreen(grant))
 
@@ -51,4 +51,3 @@ def pfat() -> None:
         sys.exit(2)
 
     TuiApp(auth).run()
-

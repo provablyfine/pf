@@ -7,41 +7,45 @@ from . import auto_complete
 
 
 def _role_filter_empty():
-    return {'name': None}
+    return {"name": None}
+
 
 def _role_permission_empty():
     return {
-        'create': False,
-        'read': False,
-        'update': {
-            'name': False,
-            'description': False,
-            'grant_list': False,
-            'member_list': False,
+        "create": False,
+        "read": False,
+        "update": {
+            "name": False,
+            "description": False,
+            "grant_list": False,
+            "member_list": False,
         },
-        'delete': False,
+        "delete": False,
     }
+
 
 def _identity_filter_empty():
     return {
-        'name': None,
-        'tag_list': None,
-        'boundary_list': None,
+        "name": None,
+        "tag_list": None,
+        "boundary_list": None,
     }
+
 
 def _identity_permission_empty():
     return {
-        'create': {
-            'allowed': False,
-            'allowed_tag_list': [],
-            'required_boundary_list': None,
+        "create": {
+            "allowed": False,
+            "allowed_tag_list": [],
+            "required_boundary_list": None,
         },
-        'read': False,
-        'update': {
-            'name': False,
+        "read": False,
+        "update": {
+            "name": False,
         },
-        'delete': False,
+        "delete": False,
     }
+
 
 class RoleGrantEditWidget(textual.widget.Widget):
     DEFAULT_CSS = """
@@ -78,24 +82,26 @@ class RoleGrantEditWidget(textual.widget.Widget):
             yield textual.widgets.Label("Filters", classes="label")
             with textual.containers.Container(id="filters"):
                 yield textual.widgets.Label("Name is", classes="label")
-                yield textual.widgets.Select.from_values(["*"], compact=True, allow_blank=False, disabled=True, id="filter-select-name")
+                yield textual.widgets.Select.from_values(
+                    ["*"], compact=True, allow_blank=False, disabled=True, id="filter-select-name"
+                )
         with textual.containers.VerticalGroup(classes="section"):
             yield textual.widgets.Label("Permissions", classes="label")
             yield textual.widgets.SelectionList(
-                ("Create", "create", self._permission['create']),
-                ("Read", "read", self._permission['read']),
-                ("Update name", "update.name", self._permission['update']['name']),
-                ("Update description", "update.description", self._permission['update']['description']),
-                ("Update member list", "update.member_list", self._permission['update']['member_list']),
-                ("Update grant list", "update.grant_list", self._permission['update']['grant_list']),
-                ("Delete", "delete", self._permission['delete']),
-                compact=True
+                ("Create", "create", self._permission["create"]),
+                ("Read", "read", self._permission["read"]),
+                ("Update name", "update.name", self._permission["update"]["name"]),
+                ("Update description", "update.description", self._permission["update"]["description"]),
+                ("Update member list", "update.member_list", self._permission["update"]["member_list"]),
+                ("Update grant list", "update.grant_list", self._permission["update"]["grant_list"]),
+                ("Delete", "delete", self._permission["delete"]),
+                compact=True,
             )
 
     async def on_mount(self) -> None:
         roles = await self._list_roles()
         select = self.query_one("#filter-select-name")
-        select.set_options([("*", None)] + [(f"role \"{r['name']}\"", r["id"]) for r in roles])
+        select.set_options([("*", None)] + [(f'role "{r["name"]}"', r["id"]) for r in roles])
         select.disabled = False
 
 
@@ -154,7 +160,9 @@ class IdentityGrantEditWidget(textual.widget.Widget):
             yield textual.widgets.Label("Filters", classes="label")
             with textual.containers.Container(id="filters"):
                 yield textual.widgets.Label("Name is", classes="label")
-                yield textual.widgets.Select.from_values(["*"], compact=True, allow_blank=False, disabled=True, id="filter-select-name")
+                yield textual.widgets.Select.from_values(
+                    ["*"], compact=True, allow_blank=False, disabled=True, id="filter-select-name"
+                )
                 yield textual.widgets.Label("Tagged by", classes="label")
                 tagged_by = textual.widgets.Input(placeholder="Type a tag name=value", compact=True)
                 yield tagged_by
@@ -166,19 +174,31 @@ class IdentityGrantEditWidget(textual.widget.Widget):
             yield auto_complete.MultiAutoComplete(tagged_by, id="filter-tagged-by-auto-complete")
         with textual.containers.VerticalGroup(classes="section"):
             yield textual.widgets.Label("Permissions", classes="label")
-            yield textual.widgets.Checkbox("Create", value=self._permission['create']['allowed'], id="permission-create", compact=True)
-            with textual.containers.Container(id="permission-create-fields", disabled=not self._permission['create']['allowed']):
+            yield textual.widgets.Checkbox(
+                "Create", value=self._permission["create"]["allowed"], id="permission-create", compact=True
+            )
+            with textual.containers.Container(
+                id="permission-create-fields", disabled=not self._permission["create"]["allowed"]
+            ):
                 yield textual.widgets.Label("Allowed tags", classes="label")
                 allowed_tags = textual.widgets.Input(placeholder="Type a tag name=value", compact=True)
                 yield allowed_tags
                 yield textual.widgets.Label("Required Boundaries", classes="label")
                 required_boundaries = textual.widgets.Input(placeholder="Type a boundary name", compact=True)
                 yield required_boundaries
-            yield textual.widgets.Checkbox("Read", value=self._permission['read'], id="permission-read", compact=True)
-            yield textual.widgets.Checkbox("Update", value=self._permission['update']['name'], id="permission-update-name", compact=True)
-            yield textual.widgets.Checkbox("Delete", value=self._permission['delete'], id="permission-delete", compact=True)
-            yield auto_complete.MultiAutoComplete(required_boundaries, id="permission-create-allowed-tags-auto-complete")
-            yield auto_complete.MultiAutoComplete(allowed_tags, id="permission-create-required-boundaries-auto-complete")
+            yield textual.widgets.Checkbox("Read", value=self._permission["read"], id="permission-read", compact=True)
+            yield textual.widgets.Checkbox(
+                "Update", value=self._permission["update"]["name"], id="permission-update-name", compact=True
+            )
+            yield textual.widgets.Checkbox(
+                "Delete", value=self._permission["delete"], id="permission-delete", compact=True
+            )
+            yield auto_complete.MultiAutoComplete(
+                required_boundaries, id="permission-create-allowed-tags-auto-complete"
+            )
+            yield auto_complete.MultiAutoComplete(
+                allowed_tags, id="permission-create-required-boundaries-auto-complete"
+            )
 
     async def on_mount(self) -> None:
         identities = await self._list_identities()
@@ -187,13 +207,18 @@ class IdentityGrantEditWidget(textual.widget.Widget):
         select.disabled = False
 
         tags = await self._list_tags()
+        tags = [textual_autocomplete.DropdownItem(main=f"{t['name']}={t['value']}") for t in tags]
         tagged_by_auto_complete = self.query_one("#filter-tagged-by-auto-complete")
-        tagged_by_auto_complete.candidates = [textual_autocomplete.DropdownItem(main=f"{t['name']}={t['value']}") for t in tags]
+        tagged_by_auto_complete.candidates = tags
+        allowed_tags_auto_complete = self.query_one("#permission-create-allowed-tags-auto-complete")
+        allowed_tags_auto_complete.candidates = tags
 
         boundaries = await self._list_boundaries()
+        boundaries = [textual_autocomplete.DropdownItem(main=b["name"]) for b in boundaries]
         bounded_by_auto_complete = self.query_one("#filter-bounded-by-auto-complete")
-        bounded_by_auto_complete.candidates = [textual_autocomplete.DropdownItem(main=b["name"]) for b in boundaries]
-
+        bounded_by_auto_complete.candidates = boundaries
+        required_boundaries_auto_complete = self.query_one("#permission-create-required-boundaries-auto-complete")
+        required_boundaries_auto_complete.candidates = boundaries
 
 
 class GrantEditScreen(textual.screen.Screen[None]):
@@ -218,36 +243,35 @@ class GrantEditScreen(textual.screen.Screen[None]):
 
     def __init__(self, grant):
         super().__init__(id="grant-edit")
-        self.grant_type = grant['type']
-        self._filter = grant['filter']
-        self._permission = grant['permission']
+        self.grant_type = grant["type"]
+        self._filter = grant["filter"]
+        self._permission = grant["permission"]
 
     async def watch_grant_type(self, value: str) -> None:
         fields = self.query_one("#dynamic-grant-fields")
         await fields.query("*").remove()
         match self.grant_type:
-            case 'role':
+            case "role":
                 widget = RoleGrantEditWidget(self._filter, self._permission)
-            case 'identity':
+            case "identity":
                 widget = IdentityGrantEditWidget(self._filter, self._permission)
             case _:
                 assert False
         await fields.mount(widget)
 
-
     @textual.on(textual.widgets.Select.Changed, "#grant-type-select")
     def on_grant_type_changed(self, event: textual.widgets.Select.Changed) -> None:
         self.grant_type = str(event.value)
         match self.grant_type:
-            case 'role':
+            case "role":
                 self._filter = _role_filter_empty()
                 self._permission = _role_permission_empty()
-            case 'identity':
+            case "identity":
                 self._filter = _identity_filter_empty()
                 self._permission = _identity_permission_empty()
 
     def compose(self) -> textual.widget.ComposeResult:
-        self.sub_title = 'Roles > 2 > Grants > Edit'
+        self.sub_title = "Roles > 2 > Grants > Edit"
         with textual.containers.VerticalGroup(classes="sections"):
             with textual.containers.VerticalGroup(classes="section"):
                 yield textual.widgets.Label("Type", classes="label")
@@ -256,6 +280,6 @@ class GrantEditScreen(textual.screen.Screen[None]):
                     value=self.grant_type,
                     compact=True,
                     allow_blank=False,
-                    id="grant-type-select"
+                    id="grant-type-select",
                 )
             yield textual.containers.Container(id="dynamic-grant-fields")
