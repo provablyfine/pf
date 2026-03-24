@@ -6,6 +6,43 @@ import textual_autocomplete
 from . import auto_complete
 
 
+def _role_filter_empty():
+    return {'name': None}
+
+def _role_permission_empty():
+    return {
+        'create': False,
+        'read': False,
+        'update': {
+            'name': False,
+            'description': False,
+            'grant_list': False,
+            'member_list': False,
+        },
+        'delete': False,
+    }
+
+def _identity_filter_empty():
+    return {
+        'name': None,
+        'tag_list': None,
+        'boundary_list': None,
+    }
+
+def _identity_permission_empty():
+    return {
+        'create': {
+            'allowed': False,
+            'allowed_tag_list': [],
+            'required_boundary_list': None,
+        },
+        'read': False,
+        'update': {
+            'name': False,
+        },
+        'delete': False,
+    }
+
 class RoleGrantEditWidget(textual.widget.Widget):
     DEFAULT_CSS = """
     #filter-select-name {
@@ -75,6 +112,15 @@ class IdentityGrantEditWidget(textual.widget.Widget):
         grid-rows: 1fr;
         grid-gutter: 0 2;
     }
+    #permission-create-fields {
+        height: 2;
+        margin: 0 0 0 3;
+        layout: grid;
+        grid-size: 2;
+        grid-columns: auto 1fr;
+        grid-rows: 1fr;
+        grid-gutter: 0 2;
+    }
     """
 
     def __init__(self, filter, permission):
@@ -120,13 +166,19 @@ class IdentityGrantEditWidget(textual.widget.Widget):
             yield auto_complete.MultiAutoComplete(tagged_by, id="filter-tagged-by-auto-complete")
         with textual.containers.VerticalGroup(classes="section"):
             yield textual.widgets.Label("Permissions", classes="label")
-            yield textual.widgets.SelectionList(
-                ("Create", "create", self._permission['create']),
-                ("Read", "read", self._permission['read']),
-                ("Update name", "update.name", self._permission['update']['name']),
-                ("Delete", "delete", self._permission['delete']),
-                compact=True
-            )
+            yield textual.widgets.Checkbox("Create", value=self._permission['create']['allowed'], id="permission-create", compact=True)
+            with textual.containers.Container(id="permission-create-fields", disabled=not self._permission['create']['allowed']):
+                yield textual.widgets.Label("Allowed tags", classes="label")
+                allowed_tags = textual.widgets.Input(placeholder="Type a tag name=value", compact=True)
+                yield allowed_tags
+                yield textual.widgets.Label("Required Boundaries", classes="label")
+                required_boundaries = textual.widgets.Input(placeholder="Type a boundary name", compact=True)
+                yield required_boundaries
+            yield textual.widgets.Checkbox("Read", value=self._permission['read'], id="permission-read", compact=True)
+            yield textual.widgets.Checkbox("Update", value=self._permission['update']['name'], id="permission-update-name", compact=True)
+            yield textual.widgets.Checkbox("Delete", value=self._permission['delete'], id="permission-delete", compact=True)
+            yield auto_complete.MultiAutoComplete(required_boundaries, id="permission-create-allowed-tags-auto-complete")
+            yield auto_complete.MultiAutoComplete(allowed_tags, id="permission-create-required-boundaries-auto-complete")
 
     async def on_mount(self) -> None:
         identities = await self._list_identities()
@@ -186,6 +238,13 @@ class GrantEditScreen(textual.screen.Screen[None]):
     @textual.on(textual.widgets.Select.Changed, "#grant-type-select")
     def on_grant_type_changed(self, event: textual.widgets.Select.Changed) -> None:
         self.grant_type = str(event.value)
+        match self.grant_type:
+            case 'role':
+                self._filter = _role_filter_empty()
+                self._permission = _role_permission_empty()
+            case 'identity':
+                self._filter = _identity_filter_empty()
+                self._permission = _identity_permission_empty()
 
     def compose(self) -> textual.widget.ComposeResult:
         self.sub_title = 'Roles > 2 > Grants > Edit'
