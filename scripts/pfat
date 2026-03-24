@@ -5,6 +5,7 @@
 #   "requests",
 #   "http-message-signatures",
 #   "textual>=0.86",
+#   "textual-autocomplete",
 #   "pf",
 #   "pydantic",
 # ]
