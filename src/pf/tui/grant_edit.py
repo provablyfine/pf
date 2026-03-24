@@ -13,6 +13,16 @@ from .. import client
 from . import auto_complete
 
 
+def _update_field(update: dict | None, field: str) -> bool:
+    """Return the value of an update permission field.
+
+    When update is None it means all update permissions are granted (wildcard).
+    """
+    if update is None:
+        return True
+    return update[field]
+
+
 def _role_filter_empty():
     return {"name": None}
 
@@ -98,10 +108,10 @@ class RoleGrantEditWidget(textual.widget.Widget):
             yield textual.widgets.SelectionList(
                 ("Create", "create", self._permission["create"]),
                 ("Read", "read", self._permission["read"]),
-                ("Update name", "update.name", self._permission["update"]["name"]),
-                ("Update description", "update.description", self._permission["update"]["description"]),
-                ("Update member list", "update.member_list", self._permission["update"]["member_list"]),
-                ("Update grant list", "update.grant_list", self._permission["update"]["grant_list"]),
+                ("Update name", "update.name", _update_field(self._permission["update"], "name")),
+                ("Update description", "update.description", _update_field(self._permission["update"], "description")),
+                ("Update member list", "update.member_list", _update_field(self._permission["update"], "member_list")),
+                ("Update grant list", "update.grant_list", _update_field(self._permission["update"], "grant_list")),
                 ("Delete", "delete", self._permission["delete"]),
                 compact=True,
             )
@@ -197,7 +207,8 @@ class IdentityGrantEditWidget(textual.widget.Widget):
                 yield required_boundaries
             yield textual.widgets.Checkbox("Read", value=self._permission["read"], id="permission-read", compact=True)
             yield textual.widgets.Checkbox(
-                "Update", value=self._permission["update"]["name"], id="permission-update-name", compact=True
+                "Update", value=_update_field(self._permission["update"], "name"), id="permission-update-name",
+                compact=True
             )
             yield textual.widgets.Checkbox(
                 "Delete", value=self._permission["delete"], id="permission-delete", compact=True
