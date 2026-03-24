@@ -2,11 +2,10 @@ import sys
 
 import tabulate
 
-from .. import jwk, ssh
-from ..client import exceptions, ssh_utils
+from .. import client, jwk, ssh
 
 
-@ssh_utils.exception
+@client.ssh_utils.exception
 def _agent_list_identities_function(args):
     ssh_agent = ssh.agent.Client()
     if args.quiet:
@@ -30,10 +29,10 @@ def _agent_find_by_fingerprint(ssh_agent, fingerprint):
     for identity in ssh_agent.list_identities():
         if identity.public_key.match_ssh_fingerprint(fingerprint):
             return identity
-    raise exceptions.UI(f"Unable to find key {fingerprint}")
+    raise client.exceptions.UI(f"Unable to find key {fingerprint}")
 
 
-@ssh_utils.exception
+@client.ssh_utils.exception
 def _agent_sign_function(args):
     def is_rsa(key):
         return key.type in [
@@ -62,12 +61,12 @@ def _agent_sign_function(args):
     sys.stdout.buffer.write(signature)
 
 
-@ssh_utils.exception
+@client.ssh_utils.exception
 def _agent_add_function(args):
     ssh_agent = ssh.agent.Client()
     with open(args.key, "rb") as f:
         data = f.read()
-    key = ssh_utils.load_private_key(data)
+    key = client.ssh_utils.load_private_key(data)
     if args.certificate is None:
         cert = None
     else:
@@ -78,7 +77,7 @@ def _agent_add_function(args):
     )
 
 
-@ssh_utils.exception
+@client.ssh_utils.exception
 def _agent_del_function(args):
     ssh_agent = ssh.agent.Client()
     if args.all:

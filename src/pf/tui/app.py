@@ -5,7 +5,7 @@ import sys
 import textual.app
 
 from .. import client
-from . import grant_edit
+from . import role_list
 
 _DEFAULT_CONFIG = os.path.join(os.path.expanduser("~"), ".config", "pf", "config.json")
 
@@ -18,22 +18,7 @@ class TuiApp(textual.app.App[None]):
         self.auth = auth
 
     def on_mount(self) -> None:
-        grant = {
-            "type": "role",
-            "filter": {"name": None},
-            "permission": {
-                "create": False,
-                "read": False,
-                "update": {
-                    "name": False,
-                    "description": False,
-                    "grant_list": False,
-                    "member_list": False,
-                },
-                "delete": False,
-            },
-        }
-        self.push_screen(grant_edit.GrantEditScreen(self.auth, grant))
+        self.push_screen(role_list.RoleListScreen(self.auth))
 
 
 def pfat() -> None:

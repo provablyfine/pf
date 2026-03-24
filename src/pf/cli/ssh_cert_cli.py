@@ -3,18 +3,17 @@ import datetime
 import dateparser
 import tabulate
 
-from .. import ssh
-from ..client import exceptions, ssh_utils
+from .. import client, ssh
 
 
 def _parse_timestamp(s: str):
     dt = dateparser.parse(s)
     if dt is None:
-        raise exceptions.UI(f'Unable to parse "{s}"')
+        raise client.exceptions.UI(f'Unable to parse "{s}"')
     return int(dt.timestamp())
 
 
-@ssh_utils.exception
+@client.ssh_utils.exception
 def _read_function(args):
     with open(args.filename, "rb") as f:
         data = f.read()
@@ -73,10 +72,10 @@ def _read_function(args):
 def _sign_host_function(args):
     with open(args.key, "rb") as f:
         data = f.read()
-    public_key = ssh_utils.load_public_key(data)
+    public_key = client.ssh_utils.load_public_key(data)
     with open(args.with_key, "rb") as f:
         data = f.read()
-    signer_private_key = ssh_utils.load_private_key(data, password=None)
+    signer_private_key = client.ssh_utils.load_private_key(data, password=None)
     if args.identifier is not None:
         identifier = args.identifier
     else:
@@ -106,10 +105,10 @@ def _sign_host_function(args):
 def _sign_user_function(args):
     with open(args.key, "rb") as f:
         data = f.read()
-    public_key = ssh_utils.load_public_key(data)
+    public_key = client.ssh_utils.load_public_key(data)
     with open(args.with_key, "rb") as f:
         data = f.read()
-    signer_private_key = ssh_utils.load_private_key(data, password=None)
+    signer_private_key = client.ssh_utils.load_private_key(data, password=None)
     if args.identifier is not None:
         identifier = args.identifier
     else:

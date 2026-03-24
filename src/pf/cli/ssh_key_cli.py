@@ -1,14 +1,13 @@
 import sys
 
-from .. import jwk
-from ..client import exceptions, ssh_utils
+from .. import client, jwk
 
 
 def _convert_function(args):
     with open(args.filename, "rb") as f:
         data = f.read()
     try:
-        key = ssh_utils.load_public_key(data)
+        key = client.ssh_utils.load_public_key(data)
         match args.to:
             case "openssh":
                 output = key.to_openssh()
@@ -17,9 +16,9 @@ def _convert_function(args):
     except Exception:
         pass
     try:
-        key = ssh_utils.load_private_key(data)
+        key = client.ssh_utils.load_private_key(data)
     except Exception:
-        raise exceptions.UI("Unable to load and convert key as either a public or a private key")
+        raise client.exceptions.UI("Unable to load and convert key as either a public or a private key")
     else:
         output = _format(key, args.to)
     sys.stdout.write(output.decode("utf-8"))
@@ -61,7 +60,7 @@ def _generate_function(args):
 def _public_function(args):
     with open(args.filename, "rb") as f:
         data = f.read()
-    key = ssh_utils.load_private_key(data)
+    key = client.ssh_utils.load_private_key(data)
     output = _format(key.public(), args.format)
     sys.stdout.write(output.decode("utf-8"))
 
