@@ -86,7 +86,7 @@ def _role_read_function(args):
             for m in role["member_list"]:
                 rows.append(["member", m["name"]])
             for g in role["grant_list"]:
-                type, filter, permission = grant.to_text(g)
+                type, filter, permission = client.grant.to_text(g)
                 rows.append(["grant", f"type:       {type}"])
                 rows.append(["", f"filter:     {filter}"])
                 rows.append(["", f"permission: {permission}"])

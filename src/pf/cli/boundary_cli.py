@@ -89,12 +89,12 @@ def _boundary_read_function(args):
                 rows.append(["ceiling", "[]"])
             else:
                 for g in boundary["ceiling_list"]:
-                    type, filter, permission = grant.to_text(g)
+                    type, filter, permission = client.grant.to_text(g)
                     rows.append(["ceiling", f"type:       {type}"])
                     rows.append(["", f"filter:     {filter}"])
                     rows.append(["", f"permission: {permission}"])
             for g in boundary["denied_list"]:
-                type, filter, permission = grant.to_text(g)
+                type, filter, permission = client.grant.to_text(g)
                 rows.append(["denied", f"type:       {type}"])
                 rows.append(["", f"filter:     {filter}"])
                 rows.append(["", f"permission: {permission}"])
