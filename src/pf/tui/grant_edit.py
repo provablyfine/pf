@@ -1,4 +1,3 @@
-import asyncio
 import typing
 
 import textual
@@ -10,8 +9,7 @@ import textual.widget
 import textual.widgets
 import textual_autocomplete
 
-from .. import client
-from . import auto_complete
+from . import async_client, auto_complete
 
 
 def _update_field(update: dict | None, field: str) -> bool:
@@ -93,7 +91,7 @@ class RoleGrantEditWidget(textual.widget.Widget):
     }
     """
 
-    def __init__(self, auth: client.HttpClient, filter: dict, permission: dict):
+    def __init__(self, auth: async_client.AsyncClient, filter: dict, permission: dict):
         super().__init__()
         self._auth = auth
         self._filter_name: object = filter["name"]
@@ -106,7 +104,7 @@ class RoleGrantEditWidget(textual.widget.Widget):
         self._perm_delete: bool = permission["delete"]
 
     async def _list_roles(self):
-        response = await asyncio.to_thread(self._auth.get, self._auth.directory.role)
+        response = await self._auth.get(self._auth.directory.role)
         if response.status_code != 200:
             self.notify(response.json().get("title", "Failed to read list of roles"), severity="error")
             return []
@@ -196,7 +194,7 @@ class IdentityGrantEditWidget(textual.widget.Widget):
     }
     """
 
-    def __init__(self, auth: client.HttpClient, filter: dict, permission: dict):
+    def __init__(self, auth: async_client.AsyncClient, filter: dict, permission: dict):
         super().__init__()
         self._auth = auth
         self._filter_name: object = filter["name"]
@@ -214,21 +212,21 @@ class IdentityGrantEditWidget(textual.widget.Widget):
         self._perm_delete: bool = permission["delete"]
 
     async def _list_identities(self):
-        response = await asyncio.to_thread(self._auth.get, self._auth.directory.identity)
+        response = await self._auth.get(self._auth.directory.identity)
         if response.status_code != 200:
             self.notify(response.json().get("title", "Failed to read list of identities"), severity="error")
             return []
         return response.json()["identities"]
 
     async def _list_tags(self):
-        response = await asyncio.to_thread(self._auth.get, self._auth.directory.tag)
+        response = await self._auth.get(self._auth.directory.tag)
         if response.status_code != 200:
             self.notify(response.json().get("title", "Failed to read list of tags"), severity="error")
             return []
         return response.json()["tags"]
 
     async def _list_boundaries(self):
-        response = await asyncio.to_thread(self._auth.get, self._auth.directory.boundary)
+        response = await self._auth.get(self._auth.directory.boundary)
         if response.status_code != 200:
             self.notify(response.json().get("title", "Failed to read list of boundaries"), severity="error")
             return []
@@ -400,7 +398,7 @@ class GrantEditScreen(textual.screen.Screen[dict | None]):
     BINDINGS: typing.ClassVar = [("ctrl+s", "save", "Save"), ("escape", "cancel", "Cancel")]
     grant_type: textual.reactive.Reactive[str] = textual.reactive.Reactive("")
 
-    def __init__(self, auth: client.HttpClient, grant: dict):
+    def __init__(self, auth: async_client.AsyncClient, grant: dict):
         super().__init__(id="grant-edit")
         self._auth = auth
         self.grant_type = grant["type"]

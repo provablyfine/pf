@@ -1,4 +1,3 @@
-import asyncio
 import typing
 
 import textual
@@ -7,13 +6,13 @@ import textual.screen
 import textual.widgets
 
 from .. import client
-from . import grant_edit
+from . import async_client, grant_edit
 
 
 class GrantListScreen(textual.screen.Screen[None]):
     BINDINGS: typing.ClassVar = [("escape", "app.pop_screen", "Back"), ("e", "edit_grant", "Edit")]
 
-    def __init__(self, auth: client.HttpClient, grant_list: list, sub_title: str, role_id: int) -> None:
+    def __init__(self, auth: async_client.AsyncClient, grant_list: list, sub_title: str, role_id: int) -> None:
         super().__init__()
         self._auth = auth
         self._grant_list = grant_list
@@ -40,19 +39,13 @@ class GrantListScreen(textual.screen.Screen[None]):
         index = table.cursor_row
         updated_grant = await self.app.push_screen_wait(grant_edit.GrantEditScreen(self._auth, self._grant_list[index]))
         if updated_grant is None:
-            print("updated is nonoe")
             return
-        print("updated ok")
-        print(updated_grant)
         self._grant_list[index] = updated_grant
-        response = await asyncio.to_thread(
-            self._auth.patch,
+        response = await self._auth.patch(
             f"{self._auth.directory.role}/{self._role_id}",
             json={"grant_list": self._grant_list},
         )
-        print("patched")
         if response.status_code != 200:
-            print(response.json())
             self.notify(response.json().get("title", "Failed to save grants"), severity="error")
             return
         table.clear(columns=False)
@@ -60,4 +53,3 @@ class GrantListScreen(textual.screen.Screen[None]):
             grant_type, filter_str, perm_str = client.grant.to_text(grant)
             table.add_row(grant_type, filter_str, perm_str)
         self.notify("Grants saved")
-        print("saved")

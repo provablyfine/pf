@@ -1,12 +1,10 @@
-import asyncio
 import typing
 
 import textual.app
 import textual.screen
 import textual.widgets
 
-from .. import client
-from . import grant_list
+from . import async_client, grant_list
 
 
 def _ellipsize(s: str, max_len: int) -> str:
@@ -19,13 +17,13 @@ class RoleListScreen(textual.screen.Screen[None]):
     TITLE = "Provably Fine"
     BINDINGS: typing.ClassVar = [("g", "view_grants", "View grants")]
 
-    def __init__(self, auth: client.HttpClient) -> None:
+    def __init__(self, auth: async_client.AsyncClient) -> None:
         super().__init__()
         self._auth = auth
         self._roles: list = []
 
     async def _list_roles(self) -> list:
-        response = await asyncio.to_thread(self._auth.get, self._auth.directory.role)
+        response = await self._auth.get(self._auth.directory.role)
         if response.status_code != 200:
             self.notify(response.json().get("title", "Failed to read list of roles"), severity="error")
             return []

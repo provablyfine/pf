@@ -1,2 +1,2 @@
-class UI(BaseException):
+class UI(Exception):
     pass
