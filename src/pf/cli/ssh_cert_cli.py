@@ -4,7 +4,7 @@ import dateparser
 import tabulate
 
 from .. import ssh
-from . import exceptions, ssh_utils
+from ..client import exceptions, ssh_utils
 
 
 def _parse_timestamp(s: str):

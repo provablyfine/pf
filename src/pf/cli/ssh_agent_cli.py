@@ -3,7 +3,7 @@ import sys
 import tabulate
 
 from .. import jwk, ssh
-from . import exceptions, ssh_utils
+from ..client import exceptions, ssh_utils
 
 
 @ssh_utils.exception

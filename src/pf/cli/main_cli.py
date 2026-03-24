@@ -8,7 +8,7 @@ import traceback
 import requests
 import requests.auth
 
-from .. import jwk, ssh, client
+from .. import client, jwk, ssh
 from . import admin_cli, openssh_cli
 
 logger = logging.getLogger(__name__)
@@ -54,7 +54,7 @@ def _login_function(args):
         with open(args.session_key, "rb") as f:
             data = f.read()
         try:
-            session_key = ssh_utils.load_private_key(data)
+            session_key = client.ssh_utils.load_private_key(data)
         except ValueError:
             raise client.exceptions.UI("Unable to parse data either as PEM or SSH format")
         c.session_key = args.session_key

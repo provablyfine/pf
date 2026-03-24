@@ -1,4 +1,5 @@
 import textual
+import textual.widgets
 import textual_autocomplete
 
 
@@ -9,8 +10,8 @@ class MultiAutoComplete(textual_autocomplete.AutoComplete):
     }
     """
 
-    def get_search_string(self, state: textual_autocomplete.TargetState) -> str:
-        current_input = state.text[: state.cursor_position]
+    def get_search_string(self, target_state: textual_autocomplete.TargetState) -> str:
+        current_input = target_state.text[: target_state.cursor_position]
         space = current_input.rfind(" ")
         if space != -1:
             current_input = current_input[space + 1 :]

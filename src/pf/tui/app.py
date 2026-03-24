@@ -4,7 +4,6 @@ import sys
 
 import textual.app
 
-
 from .. import client
 from . import grant_edit
 
@@ -34,7 +33,7 @@ class TuiApp(textual.app.App[None]):
                 "delete": False,
             },
         }
-        self.push_screen(grant_edit.GrantEditScreen(grant))
+        self.push_screen(grant_edit.GrantEditScreen(self.auth, grant))
 
 
 def pfat() -> None:

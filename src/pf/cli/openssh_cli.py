@@ -2,7 +2,7 @@ import base64
 import os
 import time
 
-from .. import jwk, ssh, client
+from .. import client, jwk, ssh
 
 
 def _refresh_known_hosts(auth, known_hosts):

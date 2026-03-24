@@ -1,8 +1,15 @@
 import asyncio
 
 import textual
+import textual.app
+import textual.containers
+import textual.reactive
+import textual.screen
+import textual.widget
+import textual.widgets
 import textual_autocomplete
 
+from .. import client
 from . import auto_complete
 
 
@@ -65,19 +72,20 @@ class RoleGrantEditWidget(textual.widget.Widget):
     }
     """
 
-    def __init__(self, filter, permission):
+    def __init__(self, auth: client.HttpClient, filter, permission):
         super().__init__()
+        self._auth = auth
         self._filter = filter
         self._permission = permission
 
     async def _list_roles(self):
-        response = await asyncio.to_thread(self.app.auth.get, self.app.auth.directory.role)
+        response = await asyncio.to_thread(self._auth.get, self._auth.directory.role)
         if response.status_code != 200:
             self.notify(response.json().get("title", "Failed to read list of roles"), severity="error")
             return []
         return response.json()["roles"]
 
-    def compose(self) -> textual.widget.ComposeResult:
+    def compose(self) -> textual.app.ComposeResult:
         with textual.containers.VerticalGroup(classes="section"):
             yield textual.widgets.Label("Filters", classes="label")
             with textual.containers.Container(id="filters"):
@@ -100,7 +108,7 @@ class RoleGrantEditWidget(textual.widget.Widget):
 
     async def on_mount(self) -> None:
         roles = await self._list_roles()
-        select = self.query_one("#filter-select-name")
+        select = self.query_one("#filter-select-name", textual.widgets.Select)
         select.set_options([("*", None)] + [(f'role "{r["name"]}"', r["id"]) for r in roles])
         select.disabled = False
 
@@ -129,33 +137,34 @@ class IdentityGrantEditWidget(textual.widget.Widget):
     }
     """
 
-    def __init__(self, filter, permission):
+    def __init__(self, auth: client.HttpClient, filter, permission):
         super().__init__()
+        self._auth = auth
         self._filter = filter
         self._permission = permission
 
     async def _list_identities(self):
-        response = await asyncio.to_thread(self.app.auth.get, self.app.auth.directory.identity)
+        response = await asyncio.to_thread(self._auth.get, self._auth.directory.identity)
         if response.status_code != 200:
             self.notify(response.json().get("title", "Failed to read list of identities"), severity="error")
             return []
         return response.json()["identities"]
 
     async def _list_tags(self):
-        response = await asyncio.to_thread(self.app.auth.get, self.app.auth.directory.tag)
+        response = await asyncio.to_thread(self._auth.get, self._auth.directory.tag)
         if response.status_code != 200:
             self.notify(response.json().get("title", "Failed to read list of tags"), severity="error")
             return []
         return response.json()["tags"]
 
     async def _list_boundaries(self):
-        response = await asyncio.to_thread(self.app.auth.get, self.app.auth.directory.boundary)
+        response = await asyncio.to_thread(self._auth.get, self._auth.directory.boundary)
         if response.status_code != 200:
             self.notify(response.json().get("title", "Failed to read list of boundaries"), severity="error")
             return []
         return response.json()["boundaries"]
 
-    def compose(self) -> textual.widget.ComposeResult:
+    def compose(self) -> textual.app.ComposeResult:
         with textual.containers.VerticalGroup(classes="section"):
             yield textual.widgets.Label("Filters", classes="label")
             with textual.containers.Container(id="filters"):
@@ -202,22 +211,26 @@ class IdentityGrantEditWidget(textual.widget.Widget):
 
     async def on_mount(self) -> None:
         identities = await self._list_identities()
-        select = self.query_one("#filter-select-name")
+        select = self.query_one("#filter-select-name", textual.widgets.Select)
         select.set_options([("*", None)] + [(i["name"], i["id"]) for i in identities])
         select.disabled = False
 
         tags = await self._list_tags()
         tags = [textual_autocomplete.DropdownItem(main=f"{t['name']}={t['value']}") for t in tags]
-        tagged_by_auto_complete = self.query_one("#filter-tagged-by-auto-complete")
+        tagged_by_auto_complete = self.query_one("#filter-tagged-by-auto-complete", auto_complete.MultiAutoComplete)
         tagged_by_auto_complete.candidates = tags
-        allowed_tags_auto_complete = self.query_one("#permission-create-allowed-tags-auto-complete")
+        allowed_tags_auto_complete = self.query_one(
+            "#permission-create-allowed-tags-auto-complete", auto_complete.MultiAutoComplete
+        )
         allowed_tags_auto_complete.candidates = tags
 
         boundaries = await self._list_boundaries()
         boundaries = [textual_autocomplete.DropdownItem(main=b["name"]) for b in boundaries]
-        bounded_by_auto_complete = self.query_one("#filter-bounded-by-auto-complete")
+        bounded_by_auto_complete = self.query_one("#filter-bounded-by-auto-complete", auto_complete.MultiAutoComplete)
         bounded_by_auto_complete.candidates = boundaries
-        required_boundaries_auto_complete = self.query_one("#permission-create-required-boundaries-auto-complete")
+        required_boundaries_auto_complete = self.query_one(
+            "#permission-create-required-boundaries-auto-complete", auto_complete.MultiAutoComplete
+        )
         required_boundaries_auto_complete.candidates = boundaries
 
 
@@ -241,8 +254,9 @@ class GrantEditScreen(textual.screen.Screen[None]):
     """
     grant_type: textual.reactive.Reactive[str] = textual.reactive.Reactive("")
 
-    def __init__(self, grant):
+    def __init__(self, auth: client.HttpClient, grant):
         super().__init__(id="grant-edit")
+        self._auth = auth
         self.grant_type = grant["type"]
         self._filter = grant["filter"]
         self._permission = grant["permission"]
@@ -252,9 +266,9 @@ class GrantEditScreen(textual.screen.Screen[None]):
         await fields.query("*").remove()
         match self.grant_type:
             case "role":
-                widget = RoleGrantEditWidget(self._filter, self._permission)
+                widget = RoleGrantEditWidget(self._auth, self._filter, self._permission)
             case "identity":
-                widget = IdentityGrantEditWidget(self._filter, self._permission)
+                widget = IdentityGrantEditWidget(self._auth, self._filter, self._permission)
             case _:
                 assert False
         await fields.mount(widget)
@@ -270,7 +284,7 @@ class GrantEditScreen(textual.screen.Screen[None]):
                 self._filter = _identity_filter_empty()
                 self._permission = _identity_permission_empty()
 
-    def compose(self) -> textual.widget.ComposeResult:
+    def compose(self) -> textual.app.ComposeResult:
         self.sub_title = "Roles > 2 > Grants > Edit"
         with textual.containers.VerticalGroup(classes="sections"):
             with textual.containers.VerticalGroup(classes="section"):
