@@ -308,3 +308,4 @@ class GrantEditScreen(textual.screen.Screen[None]):
                     id="grant-type-select",
                 )
             yield textual.containers.Container(id="dynamic-grant-fields")
+        yield textual.widgets.Footer()
