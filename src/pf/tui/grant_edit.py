@@ -1,4 +1,5 @@
 import asyncio
+import typing
 
 import textual
 import textual.app
@@ -21,6 +22,16 @@ def _update_field(update: dict | None, field: str) -> bool:
     if update is None:
         return True
     return update[field]
+
+
+def _parse_tag_list(text: str) -> list | None:
+    items = [s.split("=", 1) for s in text.split() if "=" in s]
+    return [{"name": k, "value": v} for k, v in items] or None
+
+
+def _parse_boundary_list(text: str) -> list | None:
+    items = text.split()
+    return items or None
 
 
 def _role_filter_empty():
@@ -82,11 +93,17 @@ class RoleGrantEditWidget(textual.widget.Widget):
     }
     """
 
-    def __init__(self, auth: client.HttpClient, filter, permission):
+    def __init__(self, auth: client.HttpClient, filter: dict, permission: dict):
         super().__init__()
         self._auth = auth
-        self._filter = filter
-        self._permission = permission
+        self._filter_name: object = filter["name"]
+        self._perm_create: bool = permission["create"]
+        self._perm_read: bool = permission["read"]
+        self._perm_update_name: bool = _update_field(permission["update"], "name")
+        self._perm_update_description: bool = _update_field(permission["update"], "description")
+        self._perm_update_member_list: bool = _update_field(permission["update"], "member_list")
+        self._perm_update_grant_list: bool = _update_field(permission["update"], "grant_list")
+        self._perm_delete: bool = permission["delete"]
 
     async def _list_roles(self):
         response = await asyncio.to_thread(self._auth.get, self._auth.directory.role)
@@ -106,13 +123,13 @@ class RoleGrantEditWidget(textual.widget.Widget):
         with textual.containers.VerticalGroup(classes="section"):
             yield textual.widgets.Label("Permissions", classes="label")
             yield textual.widgets.SelectionList(
-                ("Create", "create", self._permission["create"]),
-                ("Read", "read", self._permission["read"]),
-                ("Update name", "update.name", _update_field(self._permission["update"], "name")),
-                ("Update description", "update.description", _update_field(self._permission["update"], "description")),
-                ("Update member list", "update.member_list", _update_field(self._permission["update"], "member_list")),
-                ("Update grant list", "update.grant_list", _update_field(self._permission["update"], "grant_list")),
-                ("Delete", "delete", self._permission["delete"]),
+                ("Create", "create", self._perm_create),
+                ("Read", "read", self._perm_read),
+                ("Update name", "update.name", self._perm_update_name),
+                ("Update description", "update.description", self._perm_update_description),
+                ("Update member list", "update.member_list", self._perm_update_member_list),
+                ("Update grant list", "update.grant_list", self._perm_update_grant_list),
+                ("Delete", "delete", self._perm_delete),
                 compact=True,
             )
 
@@ -121,6 +138,38 @@ class RoleGrantEditWidget(textual.widget.Widget):
         select = self.query_one("#filter-select-name", textual.widgets.Select)
         select.set_options([("*", None)] + [(f'role "{r["name"]}"', r["id"]) for r in roles])
         select.disabled = False
+
+    @textual.on(textual.widgets.Select.Changed, "#filter-select-name")
+    def _on_filter_name_changed(self, event: textual.widgets.Select.Changed) -> None:
+        if event.value is not textual.widgets.Select.BLANK:
+            self._filter_name = event.value
+
+    @textual.on(textual.widgets.SelectionList.SelectedChanged)
+    def _on_selection_changed(self, event: textual.widgets.SelectionList.SelectedChanged) -> None:
+        selected = set(event.selection_list.selected)
+        self._perm_create = "create" in selected
+        self._perm_read = "read" in selected
+        self._perm_update_name = "update.name" in selected
+        self._perm_update_description = "update.description" in selected
+        self._perm_update_member_list = "update.member_list" in selected
+        self._perm_update_grant_list = "update.grant_list" in selected
+        self._perm_delete = "delete" in selected
+
+    def get_grant_data(self) -> tuple[dict, dict]:
+        return (
+            {"name": self._filter_name},
+            {
+                "create": self._perm_create,
+                "read": self._perm_read,
+                "update": {
+                    "name": self._perm_update_name,
+                    "description": self._perm_update_description,
+                    "member_list": self._perm_update_member_list,
+                    "grant_list": self._perm_update_grant_list,
+                },
+                "delete": self._perm_delete,
+            },
+        )
 
 
 class IdentityGrantEditWidget(textual.widget.Widget):
@@ -147,11 +196,22 @@ class IdentityGrantEditWidget(textual.widget.Widget):
     }
     """
 
-    def __init__(self, auth: client.HttpClient, filter, permission):
+    def __init__(self, auth: client.HttpClient, filter: dict, permission: dict):
         super().__init__()
         self._auth = auth
-        self._filter = filter
-        self._permission = permission
+        self._filter_name: object = filter["name"]
+        tag_list = filter.get("tag_list") or []
+        self._filter_tag_list_str: str = " ".join(f"{t['name']}={t['value']}" for t in tag_list)
+        boundary_list = filter.get("boundary_list") or []
+        self._filter_boundary_list_str: str = " ".join(boundary_list)
+        self._perm_create_allowed: bool = permission["create"]["allowed"]
+        allowed_tags = permission["create"].get("allowed_tag_list") or []
+        self._perm_create_allowed_tags_str: str = " ".join(f"{t['name']}={t['value']}" for t in allowed_tags)
+        req_boundaries = permission["create"].get("required_boundary_list") or []
+        self._perm_create_req_boundaries_str: str = " ".join(req_boundaries)
+        self._perm_read: bool = permission["read"]
+        self._perm_update_name: bool = _update_field(permission["update"], "name")
+        self._perm_delete: bool = permission["delete"]
 
     async def _list_identities(self):
         response = await asyncio.to_thread(self._auth.get, self._auth.directory.identity)
@@ -183,36 +243,51 @@ class IdentityGrantEditWidget(textual.widget.Widget):
                     ["*"], compact=True, allow_blank=False, disabled=True, id="filter-select-name"
                 )
                 yield textual.widgets.Label("Tagged by", classes="label")
-                tagged_by = textual.widgets.Input(placeholder="Type a tag name=value", compact=True)
+                tagged_by = textual.widgets.Input(
+                    value=self._filter_tag_list_str,
+                    placeholder="Type a tag name=value",
+                    compact=True,
+                    id="filter-tagged-by",
+                )
                 yield tagged_by
 
                 yield textual.widgets.Label("Bounded by", classes="label")
-                bounded_by = textual.widgets.Input(placeholder="Type a boundary name", compact=True)
+                bounded_by = textual.widgets.Input(
+                    value=self._filter_boundary_list_str,
+                    placeholder="Type a boundary name",
+                    compact=True,
+                    id="filter-bounded-by",
+                )
                 yield bounded_by
             yield auto_complete.MultiAutoComplete(bounded_by, id="filter-bounded-by-auto-complete")
             yield auto_complete.MultiAutoComplete(tagged_by, id="filter-tagged-by-auto-complete")
         with textual.containers.VerticalGroup(classes="section"):
             yield textual.widgets.Label("Permissions", classes="label")
             yield textual.widgets.Checkbox(
-                "Create", value=self._permission["create"]["allowed"], id="permission-create", compact=True
+                "Create", value=self._perm_create_allowed, id="permission-create", compact=True
             )
-            with textual.containers.Container(
-                id="permission-create-fields", disabled=not self._permission["create"]["allowed"]
-            ):
+            with textual.containers.Container(id="permission-create-fields", disabled=not self._perm_create_allowed):
                 yield textual.widgets.Label("Allowed tags", classes="label")
-                allowed_tags = textual.widgets.Input(placeholder="Type a tag name=value", compact=True)
+                allowed_tags = textual.widgets.Input(
+                    value=self._perm_create_allowed_tags_str,
+                    placeholder="Type a tag name=value",
+                    compact=True,
+                    id="permission-create-allowed-tags",
+                )
                 yield allowed_tags
                 yield textual.widgets.Label("Required Boundaries", classes="label")
-                required_boundaries = textual.widgets.Input(placeholder="Type a boundary name", compact=True)
+                required_boundaries = textual.widgets.Input(
+                    value=self._perm_create_req_boundaries_str,
+                    placeholder="Type a boundary name",
+                    compact=True,
+                    id="permission-create-required-boundaries",
+                )
                 yield required_boundaries
-            yield textual.widgets.Checkbox("Read", value=self._permission["read"], id="permission-read", compact=True)
+            yield textual.widgets.Checkbox("Read", value=self._perm_read, id="permission-read", compact=True)
             yield textual.widgets.Checkbox(
-                "Update", value=_update_field(self._permission["update"], "name"), id="permission-update-name",
-                compact=True
+                "Update", value=self._perm_update_name, id="permission-update-name", compact=True
             )
-            yield textual.widgets.Checkbox(
-                "Delete", value=self._permission["delete"], id="permission-delete", compact=True
-            )
+            yield textual.widgets.Checkbox("Delete", value=self._perm_delete, id="permission-delete", compact=True)
             yield auto_complete.MultiAutoComplete(
                 required_boundaries, id="permission-create-allowed-tags-auto-complete"
             )
@@ -244,8 +319,67 @@ class IdentityGrantEditWidget(textual.widget.Widget):
         )
         required_boundaries_auto_complete.candidates = boundaries
 
+    @textual.on(textual.widgets.Select.Changed, "#filter-select-name")
+    def _on_filter_name_changed(self, event: textual.widgets.Select.Changed) -> None:
+        if event.value is not textual.widgets.Select.BLANK:
+            self._filter_name = event.value
 
-class GrantEditScreen(textual.screen.Screen[None]):
+    @textual.on(textual.widgets.Input.Changed, "#filter-tagged-by")
+    def _on_filter_tagged_by_changed(self, event: textual.widgets.Input.Changed) -> None:
+        self._filter_tag_list_str = event.value
+
+    @textual.on(textual.widgets.Input.Changed, "#filter-bounded-by")
+    def _on_filter_bounded_by_changed(self, event: textual.widgets.Input.Changed) -> None:
+        self._filter_boundary_list_str = event.value
+
+    @textual.on(textual.widgets.Checkbox.Changed, "#permission-create")
+    def _on_perm_create_changed(self, event: textual.widgets.Checkbox.Changed) -> None:
+        self._perm_create_allowed = event.value
+        self.query_one("#permission-create-fields").disabled = not event.value
+
+    @textual.on(textual.widgets.Input.Changed, "#permission-create-allowed-tags")
+    def _on_perm_create_allowed_tags_changed(self, event: textual.widgets.Input.Changed) -> None:
+        self._perm_create_allowed_tags_str = event.value
+
+    @textual.on(textual.widgets.Input.Changed, "#permission-create-required-boundaries")
+    def _on_perm_create_req_boundaries_changed(self, event: textual.widgets.Input.Changed) -> None:
+        self._perm_create_req_boundaries_str = event.value
+
+    @textual.on(textual.widgets.Checkbox.Changed, "#permission-read")
+    def _on_perm_read_changed(self, event: textual.widgets.Checkbox.Changed) -> None:
+        self._perm_read = event.value
+
+    @textual.on(textual.widgets.Checkbox.Changed, "#permission-update-name")
+    def _on_perm_update_name_changed(self, event: textual.widgets.Checkbox.Changed) -> None:
+        self._perm_update_name = event.value
+
+    @textual.on(textual.widgets.Checkbox.Changed, "#permission-delete")
+    def _on_perm_delete_changed(self, event: textual.widgets.Checkbox.Changed) -> None:
+        self._perm_delete = event.value
+
+    def get_grant_data(self) -> tuple[dict, dict]:
+        return (
+            {
+                "name": self._filter_name,
+                "tag_list": _parse_tag_list(self._filter_tag_list_str),
+                "boundary_list": _parse_boundary_list(self._filter_boundary_list_str),
+            },
+            {
+                "create": {
+                    "allowed": self._perm_create_allowed,
+                    "allowed_tag_list": _parse_tag_list(self._perm_create_allowed_tags_str) or [],
+                    "required_boundary_list": _parse_boundary_list(self._perm_create_req_boundaries_str),
+                },
+                "read": self._perm_read,
+                "update": {
+                    "name": self._perm_update_name,
+                },
+                "delete": self._perm_delete,
+            },
+        )
+
+
+class GrantEditScreen(textual.screen.Screen[dict | None]):
     DEFAULT_CSS = """
     .sections {
         padding: 0 1;
@@ -263,9 +397,10 @@ class GrantEditScreen(textual.screen.Screen[None]):
         width: 20;
     }
     """
+    BINDINGS: typing.ClassVar = [("ctrl+s", "save", "Save"), ("escape", "cancel", "Cancel")]
     grant_type: textual.reactive.Reactive[str] = textual.reactive.Reactive("")
 
-    def __init__(self, auth: client.HttpClient, grant):
+    def __init__(self, auth: client.HttpClient, grant: dict):
         super().__init__(id="grant-edit")
         self._auth = auth
         self.grant_type = grant["type"]
@@ -275,13 +410,13 @@ class GrantEditScreen(textual.screen.Screen[None]):
     async def watch_grant_type(self, value: str) -> None:
         fields = self.query_one("#dynamic-grant-fields")
         await fields.query("*").remove()
-        match self.grant_type:
+        match value:
             case "role":
-                widget = RoleGrantEditWidget(self._auth, self._filter, self._permission)
+                widget: textual.widget.Widget = RoleGrantEditWidget(self._auth, self._filter, self._permission)
             case "identity":
                 widget = IdentityGrantEditWidget(self._auth, self._filter, self._permission)
             case _:
-                assert False
+                return
         await fields.mount(widget)
 
     @textual.on(textual.widgets.Select.Changed, "#grant-type-select")
@@ -294,6 +429,21 @@ class GrantEditScreen(textual.screen.Screen[None]):
             case "identity":
                 self._filter = _identity_filter_empty()
                 self._permission = _identity_permission_empty()
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
+    def action_save(self) -> None:
+        fields = self.query_one("#dynamic-grant-fields")
+        role_widgets = list(fields.query(RoleGrantEditWidget))
+        identity_widgets = list(fields.query(IdentityGrantEditWidget))
+        if role_widgets:
+            filter_dict, permission = role_widgets[0].get_grant_data()
+        elif identity_widgets:
+            filter_dict, permission = identity_widgets[0].get_grant_data()
+        else:
+            return
+        self.dismiss({"type": self.grant_type, "filter": filter_dict, "permission": permission})
 
     def compose(self) -> textual.app.ComposeResult:
         self.sub_title = "Roles > 2 > Grants > Edit"

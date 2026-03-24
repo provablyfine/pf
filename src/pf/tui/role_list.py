@@ -32,7 +32,7 @@ class RoleListScreen(textual.screen.Screen[None]):
         return response.json()["roles"]
 
     def compose(self) -> textual.app.ComposeResult:
-        yield textual.widgets.DataTable()
+        yield textual.widgets.DataTable(cursor_type="row")
         yield textual.widgets.Footer()
 
     async def on_mount(self) -> None:
@@ -53,5 +53,5 @@ class RoleListScreen(textual.screen.Screen[None]):
             return
         role = self._roles[table.cursor_row]
         self.app.push_screen(
-            grant_list.GrantListScreen(self._auth, role["grant_list"], f"Roles > {role['name']} > Grants")
+            grant_list.GrantListScreen(self._auth, role["grant_list"], f"Roles > {role['name']} > Grants", role["id"])
         )
