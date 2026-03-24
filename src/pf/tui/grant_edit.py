@@ -3,6 +3,8 @@ import asyncio
 import textual
 import textual_autocomplete
 
+from . import auto_complete
+
 
 class RoleGrantEditWidget(textual.widget.Widget):
     DEFAULT_CSS = """
@@ -11,6 +13,14 @@ class RoleGrantEditWidget(textual.widget.Widget):
     }
     RoleGrantEditWidget {
         height: auto;
+    }
+    #filters {
+        height: 1;
+        layout: grid;
+        grid-size: 2;
+        grid-columns: auto 1fr;
+        grid-rows: 1fr;
+        grid-gutter: 0 2;
     }
     """
 
@@ -28,10 +38,12 @@ class RoleGrantEditWidget(textual.widget.Widget):
 
     def compose(self) -> textual.widget.ComposeResult:
         with textual.containers.VerticalGroup(classes="section"):
-            yield textual.widgets.Label("Applied to", classes="label")
-            yield textual.widgets.Select.from_values(["all"], compact=True, allow_blank=False, disabled=True, id="filter-select-name")
+            yield textual.widgets.Label("Filters", classes="label")
+            with textual.containers.Container(id="filters"):
+                yield textual.widgets.Label("Name is", classes="label")
+                yield textual.widgets.Select.from_values(["*"], compact=True, allow_blank=False, disabled=True, id="filter-select-name")
         with textual.containers.VerticalGroup(classes="section"):
-            yield textual.widgets.Label("Grants", classes="label")
+            yield textual.widgets.Label("Permissions", classes="label")
             yield textual.widgets.SelectionList(
                 ("Create", "create", self._permission['create']),
                 ("Read", "read", self._permission['read']),
@@ -46,48 +58,8 @@ class RoleGrantEditWidget(textual.widget.Widget):
     async def on_mount(self) -> None:
         roles = await self._list_roles()
         select = self.query_one("#filter-select-name")
-        select.set_options([("all", None)] + [(f"role \"{r['name']}\"", r["id"]) for r in roles])
+        select.set_options([("*", None)] + [(f"role \"{r['name']}\"", r["id"]) for r in roles])
         select.disabled = False
-
-
-class MultiAutoComplete(textual_autocomplete.AutoComplete):
-    DEFAULT_CSS = """\
-    MultiAutoComplete {
-        height: 5
-    }
-    """
-    def get_search_string(self, state: textual_autocomplete.TargetState) -> str:
-        current_input = state.text[:state.cursor_position]
-        space = current_input.rfind(" ")
-        if space != -1:
-            current_input = current_input[space+1:]
-        return current_input
-
-    def apply_completion(self, value: str, state: textual_autocomplete.TargetState) -> None:
-        space = state.text.rfind(" ", 0, state.cursor_position)
-        if space == -1:
-            start = 0
-        else:
-            start = space+1
-        new_value = state.text[:start] + value + state.text[state.cursor_position:]
-        new_cursor_position = len(state.text[:start] + value)
-
-        with self.prevent(textual.widgets.Input.Changed):
-            self.target.value = new_value
-            self.target.cursor_position = new_cursor_position
-
-    def get_matches(self,
-        target_state: textual_autocomplete.TargetState,
-        candidates: list[textual_autocomplete.DropdownItem],
-        search_string: str,
-    ) -> list[textual_autocomplete.DropdownItem]:
-        retval = []
-        for candidate in candidates:
-            if not candidate.value.startswith(search_string):
-                continue
-            retval.append(candidate)
-        self.styles.height = min(5, len(retval))
-        return retval
 
 
 class IdentityGrantEditWidget(textual.widget.Widget):
@@ -133,7 +105,7 @@ class IdentityGrantEditWidget(textual.widget.Widget):
 
     def compose(self) -> textual.widget.ComposeResult:
         with textual.containers.VerticalGroup(classes="section"):
-            yield textual.widgets.Label("Applied to", classes="label")
+            yield textual.widgets.Label("Filters", classes="label")
             with textual.containers.Container(id="filters"):
                 yield textual.widgets.Label("Name is", classes="label")
                 yield textual.widgets.Select.from_values(["*"], compact=True, allow_blank=False, disabled=True, id="filter-select-name")
@@ -144,8 +116,17 @@ class IdentityGrantEditWidget(textual.widget.Widget):
                 yield textual.widgets.Label("Bounded by", classes="label")
                 bounded_by = textual.widgets.Input(placeholder="Type a boundary name", compact=True)
                 yield bounded_by
-            yield MultiAutoComplete(bounded_by, id="filter-bounded-by-auto-complete")
-            yield MultiAutoComplete(tagged_by, id="filter-tagged-by-auto-complete")
+            yield auto_complete.MultiAutoComplete(bounded_by, id="filter-bounded-by-auto-complete")
+            yield auto_complete.MultiAutoComplete(tagged_by, id="filter-tagged-by-auto-complete")
+        with textual.containers.VerticalGroup(classes="section"):
+            yield textual.widgets.Label("Permissions", classes="label")
+            yield textual.widgets.SelectionList(
+                ("Create", "create", self._permission['create']),
+                ("Read", "read", self._permission['read']),
+                ("Update name", "update.name", self._permission['update']['name']),
+                ("Delete", "delete", self._permission['delete']),
+                compact=True
+            )
 
     async def on_mount(self) -> None:
         identities = await self._list_identities()
