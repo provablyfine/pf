@@ -44,6 +44,7 @@ class CheckboxInput(textual.widget.Widget):
         self._active = active
         self._value = value
         self._placeholder = placeholder
+        self._autocomplete: auto_complete.MultiAutoComplete | None = None
 
     @property
     def active(self) -> bool:
@@ -62,10 +63,20 @@ class CheckboxInput(textual.widget.Widget):
         )
         yield textual.widgets.Checkbox(self._label, value=self._active, compact=True)
         yield inp
-        yield auto_complete.MultiAutoComplete(inp)
+
+    def on_mount(self) -> None:
+        inp = self.query_one(textual.widgets.Input)
+        self._autocomplete = auto_complete.MultiAutoComplete(inp)
+        self.screen.mount(self._autocomplete)
+
+    def on_unmount(self) -> None:
+        if self._autocomplete is not None:
+            self._autocomplete.remove()
+            self._autocomplete = None
 
     def set_candidates(self, candidates: list) -> None:
-        self.query_one(auto_complete.MultiAutoComplete).candidates = candidates
+        if self._autocomplete is not None:
+            self._autocomplete.candidates = candidates
 
     @textual.on(textual.widgets.Checkbox.Changed)
     def _on_checkbox_changed(self, event: textual.widgets.Checkbox.Changed) -> None:

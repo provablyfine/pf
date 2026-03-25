@@ -4,7 +4,6 @@ import textual_autocomplete
 
 
 class MultiAutoComplete(textual_autocomplete.AutoComplete):
-    can_focus = False
     DEFAULT_CSS = """\
     MultiAutoComplete {
         height: 5
@@ -37,6 +36,9 @@ class MultiAutoComplete(textual_autocomplete.AutoComplete):
         candidates: list[textual_autocomplete.DropdownItem],
         search_string: str,
     ) -> list[textual_autocomplete.DropdownItem]:
+        if not search_string:
+            self.styles.height = 0
+            return []
         retval = []
         for candidate in candidates:
             if not candidate.value.startswith(search_string):
