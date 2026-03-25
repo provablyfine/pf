@@ -319,17 +319,15 @@ class IdentityGrantEditWidget(textual.widget.Widget):
                     id="permission-create-required-boundaries",
                 )
                 yield required_boundaries
+            yield auto_complete.MultiAutoComplete(allowed_tags, id="permission-create-allowed-tags-auto-complete")
+            yield auto_complete.MultiAutoComplete(
+                required_boundaries, id="permission-create-req-boundaries-auto-complete"
+            )
             yield textual.widgets.Checkbox("Read", value=self._perm_read, id="permission-read", compact=True)
             yield textual.widgets.Checkbox(
                 "Update", value=self._perm_update_name, id="permission-update-name", compact=True
             )
             yield textual.widgets.Checkbox("Delete", value=self._perm_delete, id="permission-delete", compact=True)
-            yield auto_complete.MultiAutoComplete(
-                required_boundaries, id="permission-create-allowed-tags-auto-complete"
-            )
-            yield auto_complete.MultiAutoComplete(
-                allowed_tags, id="permission-create-required-boundaries-auto-complete"
-            )
 
     async def on_mount(self) -> None:
         identities = await self._list_identities()
@@ -353,7 +351,7 @@ class IdentityGrantEditWidget(textual.widget.Widget):
         bounded_by_auto_complete = self.query_one("#filter-bounded-by-auto-complete", auto_complete.MultiAutoComplete)
         bounded_by_auto_complete.candidates = boundaries
         required_boundaries_auto_complete = self.query_one(
-            "#permission-create-required-boundaries-auto-complete", auto_complete.MultiAutoComplete
+            "#permission-create-req-boundaries-auto-complete", auto_complete.MultiAutoComplete
         )
         required_boundaries_auto_complete.candidates = boundaries
 
