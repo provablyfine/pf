@@ -455,9 +455,6 @@ class GrantEditScreen(textual.screen.Screen[dict | None]):
     .label {
         padding: 0 0;
     }
-    #grant-type-select {
-        width: 12;
-    }
     #filter-select-name {
         width: 20;
     }
@@ -478,6 +475,7 @@ class GrantEditScreen(textual.screen.Screen[dict | None]):
         self._permission = grant["permission"]
 
     async def watch_grant_type(self, value: str) -> None:
+        self.sub_title = f"Edit {value} grant"
         fields = self.query_one("#dynamic-grant-fields")
         await fields.query("*").remove()
         match value:
@@ -488,17 +486,6 @@ class GrantEditScreen(textual.screen.Screen[dict | None]):
             case _:
                 return
         await fields.mount(widget)
-
-    @textual.on(textual.widgets.Select.Changed, "#grant-type-select")
-    def on_grant_type_changed(self, event: textual.widgets.Select.Changed) -> None:
-        self.grant_type = str(event.value)
-        match self.grant_type:
-            case "role":
-                self._filter = _role_filter_empty()
-                self._permission = _role_permission_empty()
-            case "identity":
-                self._filter = _identity_filter_empty()
-                self._permission = _identity_permission_empty()
 
     def action_cancel(self) -> None:
         self.dismiss(None)
@@ -516,17 +503,7 @@ class GrantEditScreen(textual.screen.Screen[dict | None]):
         self.dismiss({"type": self.grant_type, "filter": filter_dict, "permission": permission})
 
     def compose(self) -> textual.app.ComposeResult:
-        self.sub_title = "Roles > 2 > Grants > Edit"
         yield header.AppHeader()
         with textual.containers.VerticalGroup(classes="sections"):
-            with textual.containers.VerticalGroup(classes="section"):
-                yield textual.widgets.Label("Type", classes="label")
-                yield textual.widgets.Select.from_values(
-                    ["identity", "tag", "role", "boundary", "tenant"],
-                    value=self.grant_type,
-                    compact=True,
-                    allow_blank=False,
-                    id="grant-type-select",
-                )
             yield textual.containers.Container(id="dynamic-grant-fields")
         yield textual.widgets.Footer()
