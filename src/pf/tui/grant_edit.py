@@ -32,6 +32,10 @@ def _parse_boundary_list(text: str) -> list | None:
     return items or None
 
 
+def _parse_invite_list(text: str) -> list[str]:
+    return [s for s in text.split() if s in ("email", "manual")]
+
+
 def _role_filter_empty():
     return {"name": None}
 
@@ -70,6 +74,9 @@ def _identity_permission_empty():
             "name": False,
         },
         "delete": False,
+        "add_tag_list": None,
+        "del_tag_list": None,
+        "invite_list": None,
     }
 
 
@@ -221,6 +228,15 @@ class IdentityGrantEditWidget(textual.widget.Widget):
         self._perm_read: bool = permission["read"]
         self._perm_update_name: bool = _update_field(permission["update"], "name")
         self._perm_delete: bool = permission["delete"]
+        add_tag_list = permission.get("add_tag_list")
+        self._perm_add_tag_list_active: bool = add_tag_list is not None
+        self._perm_add_tag_list_str: str = " ".join(f"{t['name']}={t['value']}" for t in (add_tag_list or []))
+        del_tag_list = permission.get("del_tag_list")
+        self._perm_del_tag_list_active: bool = del_tag_list is not None
+        self._perm_del_tag_list_str: str = " ".join(f"{t['name']}={t['value']}" for t in (del_tag_list or []))
+        invite_list = permission.get("invite_list")
+        self._perm_invite_list_active: bool = invite_list is not None
+        self._perm_invite_list_str: str = " ".join(invite_list or [])
 
     def compose(self) -> textual.app.ComposeResult:
         with textual.containers.VerticalGroup(classes="section"):
@@ -271,6 +287,27 @@ class IdentityGrantEditWidget(textual.widget.Widget):
                 "Update", value=self._perm_update_name, id="permission-update-name", compact=True
             )
             yield textual.widgets.Checkbox("Delete", value=self._perm_delete, id="permission-delete", compact=True)
+            yield checkbox_input.CheckboxInput(
+                "Add tag",
+                active=self._perm_add_tag_list_active,
+                value=self._perm_add_tag_list_str,
+                placeholder="Type a tag name=value",
+                id="permission-add-tag",
+            )
+            yield checkbox_input.CheckboxInput(
+                "Del tag",
+                active=self._perm_del_tag_list_active,
+                value=self._perm_del_tag_list_str,
+                placeholder="Type a tag name=value",
+                id="permission-del-tag",
+            )
+            yield checkbox_input.CheckboxInput(
+                "Invite",
+                active=self._perm_invite_list_active,
+                value=self._perm_invite_list_str,
+                placeholder="email manual",
+                id="permission-invite",
+            )
 
     async def on_mount(self) -> None:
         identities = await self._auth.list_identities()
@@ -284,11 +321,16 @@ class IdentityGrantEditWidget(textual.widget.Widget):
         tags = [textual_autocomplete.DropdownItem(main=f"{t['name']}={t['value']}") for t in tags_raw]
         self.query_one("#filter-tagged-by", checkbox_input.CheckboxInput).set_candidates(tags)
         self.query_one("#permission-create-allowed-tags", checkbox_input.CheckboxInput).set_candidates(tags)
+        self.query_one("#permission-add-tag", checkbox_input.CheckboxInput).set_candidates(tags)
+        self.query_one("#permission-del-tag", checkbox_input.CheckboxInput).set_candidates(tags)
 
         boundaries_raw = await self._auth.list_boundaries()
         boundaries = [textual_autocomplete.DropdownItem(main=b["name"]) for b in boundaries_raw]
         self.query_one("#filter-bounded-by", checkbox_input.CheckboxInput).set_candidates(boundaries)
         self.query_one("#permission-create-req-boundaries", checkbox_input.CheckboxInput).set_candidates(boundaries)
+
+        invite_methods = [textual_autocomplete.DropdownItem(main=m) for m in ("email", "manual")]
+        self.query_one("#permission-invite", checkbox_input.CheckboxInput).set_candidates(invite_methods)
 
     @textual.on(textual.widgets.Select.Changed, "#filter-select-name")
     def _on_filter_name_changed(self, event: textual.widgets.Select.Changed) -> None:
@@ -341,6 +383,21 @@ class IdentityGrantEditWidget(textual.widget.Widget):
     def _on_perm_delete_changed(self, event: textual.widgets.Checkbox.Changed) -> None:
         self._perm_delete = event.value
 
+    @textual.on(checkbox_input.CheckboxInput.Changed, "#permission-add-tag")
+    def _on_perm_add_tag_changed(self, event: checkbox_input.CheckboxInput.Changed) -> None:
+        self._perm_add_tag_list_active = event.active
+        self._perm_add_tag_list_str = event.value
+
+    @textual.on(checkbox_input.CheckboxInput.Changed, "#permission-del-tag")
+    def _on_perm_del_tag_changed(self, event: checkbox_input.CheckboxInput.Changed) -> None:
+        self._perm_del_tag_list_active = event.active
+        self._perm_del_tag_list_str = event.value
+
+    @textual.on(checkbox_input.CheckboxInput.Changed, "#permission-invite")
+    def _on_perm_invite_changed(self, event: checkbox_input.CheckboxInput.Changed) -> None:
+        self._perm_invite_list_active = event.active
+        self._perm_invite_list_str = event.value
+
     def get_grant_data(self) -> tuple[dict, dict]:
         return (
             {
@@ -367,6 +424,15 @@ class IdentityGrantEditWidget(textual.widget.Widget):
                     "name": self._perm_update_name,
                 },
                 "delete": self._perm_delete,
+                "add_tag_list": (_parse_tag_list(self._perm_add_tag_list_str) or [])
+                if self._perm_add_tag_list_active
+                else None,
+                "del_tag_list": (_parse_tag_list(self._perm_del_tag_list_str) or [])
+                if self._perm_del_tag_list_active
+                else None,
+                "invite_list": _parse_invite_list(self._perm_invite_list_str)
+                if self._perm_invite_list_active
+                else None,
             },
         )
 
