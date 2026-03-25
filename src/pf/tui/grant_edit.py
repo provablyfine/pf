@@ -95,6 +95,7 @@ class RoleGrantEditWidget(textual.widget.Widget):
         super().__init__()
         self._auth = auth
         self._filter_name: object = filter["name"]
+        self._filter_name_active: bool = filter["name"] is not None
         self._perm_create: bool = permission["create"]
         self._perm_read: bool = permission["read"]
         self._perm_update_name: bool = _update_field(permission["update"], "name")
@@ -114,9 +115,11 @@ class RoleGrantEditWidget(textual.widget.Widget):
         with textual.containers.VerticalGroup(classes="section"):
             yield textual.widgets.Label("Filters", classes="label")
             with textual.containers.Container(id="filters"):
-                yield textual.widgets.Label("Name is", classes="label")
+                yield textual.widgets.Checkbox(
+                    "Name", value=self._filter_name_active, compact=True, id="filter-name-active"
+                )
                 yield textual.widgets.Select.from_values(
-                    ["*"], compact=True, allow_blank=False, disabled=True, id="filter-select-name"
+                    [], compact=True, allow_blank=True, disabled=True, id="filter-select-name"
                 )
         with textual.containers.VerticalGroup(classes="section"):
             yield textual.widgets.Label("Permissions", classes="label")
@@ -134,8 +137,19 @@ class RoleGrantEditWidget(textual.widget.Widget):
     async def on_mount(self) -> None:
         roles = await self._list_roles()
         select = self.query_one("#filter-select-name", textual.widgets.Select)
-        select.set_options([("*", None)] + [(f'role "{r["name"]}"', r["id"]) for r in roles])
-        select.disabled = False
+        select.set_options([(r["name"], r["name"]) for r in roles])
+        if self._filter_name_active and self._filter_name is not None:
+            select.value = self._filter_name
+        select.disabled = not self._filter_name_active
+
+    @textual.on(textual.widgets.Checkbox.Changed, "#filter-name-active")
+    def _on_filter_name_active_changed(self, event: textual.widgets.Checkbox.Changed) -> None:
+        self._filter_name_active = event.value
+        select = self.query_one("#filter-select-name", textual.widgets.Select)
+        if not event.value:
+            select.clear()
+            self._filter_name = None
+        select.disabled = not event.value
 
     @textual.on(textual.widgets.Select.Changed, "#filter-select-name")
     def _on_filter_name_changed(self, event: textual.widgets.Select.Changed) -> None:
@@ -155,7 +169,7 @@ class RoleGrantEditWidget(textual.widget.Widget):
 
     def get_grant_data(self) -> tuple[dict, dict]:
         return (
-            {"name": self._filter_name},
+            {"name": self._filter_name if self._filter_name_active else None},
             {
                 "create": self._perm_create,
                 "read": self._perm_read,
@@ -198,6 +212,9 @@ class IdentityGrantEditWidget(textual.widget.Widget):
         super().__init__()
         self._auth = auth
         self._filter_name: object = filter["name"]
+        self._filter_name_active: bool = filter["name"] is not None
+        self._filter_tag_list_active: bool = filter.get("tag_list") is not None
+        self._filter_boundary_list_active: bool = filter.get("boundary_list") is not None
         tag_list = filter.get("tag_list") or []
         self._filter_tag_list_str: str = " ".join(f"{t['name']}={t['value']}" for t in tag_list)
         boundary_list = filter.get("boundary_list") or []
@@ -236,24 +253,32 @@ class IdentityGrantEditWidget(textual.widget.Widget):
         with textual.containers.VerticalGroup(classes="section"):
             yield textual.widgets.Label("Filters", classes="label")
             with textual.containers.Container(id="filters"):
-                yield textual.widgets.Label("Name is", classes="label")
-                yield textual.widgets.Select.from_values(
-                    ["*"], compact=True, allow_blank=False, disabled=True, id="filter-select-name"
+                yield textual.widgets.Checkbox(
+                    "Name", value=self._filter_name_active, compact=True, id="filter-name-active"
                 )
-                yield textual.widgets.Label("Tagged by", classes="label")
+                yield textual.widgets.Select.from_values(
+                    [], compact=True, allow_blank=True, disabled=True, id="filter-select-name"
+                )
+                yield textual.widgets.Checkbox(
+                    "Tagged by", value=self._filter_tag_list_active, compact=True, id="filter-tagged-by-active"
+                )
                 tagged_by = textual.widgets.Input(
                     value=self._filter_tag_list_str,
                     placeholder="Type a tag name=value",
                     compact=True,
+                    disabled=not self._filter_tag_list_active,
                     id="filter-tagged-by",
                 )
                 yield tagged_by
 
-                yield textual.widgets.Label("Bounded by", classes="label")
+                yield textual.widgets.Checkbox(
+                    "Bounded by", value=self._filter_boundary_list_active, compact=True, id="filter-bounded-by-active"
+                )
                 bounded_by = textual.widgets.Input(
                     value=self._filter_boundary_list_str,
                     placeholder="Type a boundary name",
                     compact=True,
+                    disabled=not self._filter_boundary_list_active,
                     id="filter-bounded-by",
                 )
                 yield bounded_by
@@ -296,8 +321,10 @@ class IdentityGrantEditWidget(textual.widget.Widget):
     async def on_mount(self) -> None:
         identities = await self._list_identities()
         select = self.query_one("#filter-select-name", textual.widgets.Select)
-        select.set_options([("*", None)] + [(i["name"], i["id"]) for i in identities])
-        select.disabled = False
+        select.set_options([(i["name"], i["name"]) for i in identities])
+        if self._filter_name_active and self._filter_name is not None:
+            select.value = self._filter_name
+        select.disabled = not self._filter_name_active
 
         tags = await self._list_tags()
         tags = [textual_autocomplete.DropdownItem(main=f"{t['name']}={t['value']}") for t in tags]
@@ -330,6 +357,33 @@ class IdentityGrantEditWidget(textual.widget.Widget):
     def _on_filter_bounded_by_changed(self, event: textual.widgets.Input.Changed) -> None:
         self._filter_boundary_list_str = event.value
 
+    @textual.on(textual.widgets.Checkbox.Changed, "#filter-name-active")
+    def _on_filter_name_active_changed(self, event: textual.widgets.Checkbox.Changed) -> None:
+        self._filter_name_active = event.value
+        select = self.query_one("#filter-select-name", textual.widgets.Select)
+        if not event.value:
+            select.clear()
+            self._filter_name = None
+        select.disabled = not event.value
+
+    @textual.on(textual.widgets.Checkbox.Changed, "#filter-tagged-by-active")
+    def _on_filter_tagged_by_active_changed(self, event: textual.widgets.Checkbox.Changed) -> None:
+        self._filter_tag_list_active = event.value
+        inp = self.query_one("#filter-tagged-by", textual.widgets.Input)
+        if not event.value:
+            inp.clear()
+            self._filter_tag_list_str = ""
+        inp.disabled = not event.value
+
+    @textual.on(textual.widgets.Checkbox.Changed, "#filter-bounded-by-active")
+    def _on_filter_boundary_list_active_changed(self, event: textual.widgets.Checkbox.Changed) -> None:
+        self._filter_boundary_list_active = event.value
+        inp = self.query_one("#filter-bounded-by", textual.widgets.Input)
+        if not event.value:
+            inp.clear()
+            self._filter_boundary_list_str = ""
+        inp.disabled = not event.value
+
     @textual.on(textual.widgets.Checkbox.Changed, "#permission-create")
     def _on_perm_create_changed(self, event: textual.widgets.Checkbox.Changed) -> None:
         self._perm_create_allowed = event.value
@@ -358,9 +412,13 @@ class IdentityGrantEditWidget(textual.widget.Widget):
     def get_grant_data(self) -> tuple[dict, dict]:
         return (
             {
-                "name": self._filter_name,
-                "tag_list": _parse_tag_list(self._filter_tag_list_str),
-                "boundary_list": _parse_boundary_list(self._filter_boundary_list_str),
+                "name": self._filter_name if self._filter_name_active else None,
+                "tag_list": (_parse_tag_list(self._filter_tag_list_str) or [])
+                if self._filter_tag_list_active
+                else None,
+                "boundary_list": (_parse_boundary_list(self._filter_boundary_list_str) or [])
+                if self._filter_boundary_list_active
+                else None,
             },
             {
                 "create": {
@@ -441,6 +499,7 @@ class GrantEditScreen(textual.screen.Screen[dict | None]):
             filter_dict, permission = identity_widgets[0].get_grant_data()
         else:
             return
+        print(filter_dict)
         self.dismiss({"type": self.grant_type, "filter": filter_dict, "permission": permission})
 
     def compose(self) -> textual.app.ComposeResult:
