@@ -9,7 +9,7 @@ import textual.widget
 import textual.widgets
 import textual_autocomplete
 
-from . import async_client, auto_complete
+from . import async_client, checkbox_input
 
 
 def _update_field(update: dict | None, field: str) -> bool:
@@ -104,13 +104,6 @@ class RoleGrantEditWidget(textual.widget.Widget):
         self._perm_update_grant_list: bool = _update_field(permission["update"], "grant_list")
         self._perm_delete: bool = permission["delete"]
 
-    async def _list_roles(self):
-        response = await self._auth.get(self._auth.directory.role)
-        if response.status_code != 200:
-            self.notify(response.json().get("title", "Failed to read list of roles"), severity="error")
-            return []
-        return response.json()["roles"]
-
     def compose(self) -> textual.app.ComposeResult:
         with textual.containers.VerticalGroup(classes="section"):
             yield textual.widgets.Label("Filters", classes="label")
@@ -135,7 +128,7 @@ class RoleGrantEditWidget(textual.widget.Widget):
             )
 
     async def on_mount(self) -> None:
-        roles = await self._list_roles()
+        roles = await self._auth.list_roles()
         select = self.query_one("#filter-select-name", textual.widgets.Select)
         select.set_options([(r["name"], r["name"]) for r in roles])
         if self._filter_name_active and self._filter_name is not None:
@@ -229,27 +222,6 @@ class IdentityGrantEditWidget(textual.widget.Widget):
         self._perm_update_name: bool = _update_field(permission["update"], "name")
         self._perm_delete: bool = permission["delete"]
 
-    async def _list_identities(self):
-        response = await self._auth.get(self._auth.directory.identity)
-        if response.status_code != 200:
-            self.notify(response.json().get("title", "Failed to read list of identities"), severity="error")
-            return []
-        return response.json()["identities"]
-
-    async def _list_tags(self):
-        response = await self._auth.get(self._auth.directory.tag)
-        if response.status_code != 200:
-            self.notify(response.json().get("title", "Failed to read list of tags"), severity="error")
-            return []
-        return response.json()["tags"]
-
-    async def _list_boundaries(self):
-        response = await self._auth.get(self._auth.directory.boundary)
-        if response.status_code != 200:
-            self.notify(response.json().get("title", "Failed to read list of boundaries"), severity="error")
-            return []
-        return response.json()["boundaries"]
-
     def compose(self) -> textual.app.ComposeResult:
         with textual.containers.VerticalGroup(classes="section"):
             yield textual.widgets.Label("Filters", classes="label")
@@ -260,69 +232,40 @@ class IdentityGrantEditWidget(textual.widget.Widget):
                 yield textual.widgets.Select.from_values(
                     [], compact=True, allow_blank=True, disabled=True, id="filter-select-name"
                 )
-                yield textual.widgets.Checkbox(
-                    "Tagged by", value=self._filter_tag_list_active, compact=True, id="filter-tagged-by-active"
-                )
-                tagged_by = textual.widgets.Input(
+                yield checkbox_input.CheckboxInput(
+                    "Tagged by",
+                    active=self._filter_tag_list_active,
                     value=self._filter_tag_list_str,
                     placeholder="Type a tag name=value",
-                    compact=True,
-                    disabled=not self._filter_tag_list_active,
                     id="filter-tagged-by",
                 )
-                yield tagged_by
-
-                yield textual.widgets.Checkbox(
-                    "Bounded by", value=self._filter_boundary_list_active, compact=True, id="filter-bounded-by-active"
-                )
-                bounded_by = textual.widgets.Input(
+                yield checkbox_input.CheckboxInput(
+                    "Bounded by",
+                    active=self._filter_boundary_list_active,
                     value=self._filter_boundary_list_str,
                     placeholder="Type a boundary name",
-                    compact=True,
-                    disabled=not self._filter_boundary_list_active,
                     id="filter-bounded-by",
                 )
-                yield bounded_by
-            yield auto_complete.MultiAutoComplete(bounded_by, id="filter-bounded-by-auto-complete")
-            yield auto_complete.MultiAutoComplete(tagged_by, id="filter-tagged-by-auto-complete")
         with textual.containers.VerticalGroup(classes="section"):
             yield textual.widgets.Label("Permissions", classes="label")
             yield textual.widgets.Checkbox(
                 "Create", value=self._perm_create_allowed, id="permission-create", compact=True
             )
             with textual.containers.Container(id="permission-create-fields", disabled=not self._perm_create_allowed):
-                yield textual.widgets.Checkbox(
+                yield checkbox_input.CheckboxInput(
                     "Create allowed tags",
-                    value=self._perm_create_allowed_tags_active,
-                    compact=True,
-                    id="permission-create-allowed-tags-active",
-                )
-                allowed_tags = textual.widgets.Input(
+                    active=self._perm_create_allowed_tags_active,
                     value=self._perm_create_allowed_tags_str,
                     placeholder="Type a tag name=value",
-                    compact=True,
-                    disabled=not self._perm_create_allowed_tags_active,
                     id="permission-create-allowed-tags",
                 )
-                yield allowed_tags
-                yield textual.widgets.Checkbox(
+                yield checkbox_input.CheckboxInput(
                     "Create required boundaries",
-                    value=self._perm_create_req_boundaries_active,
-                    compact=True,
-                    id="permission-create-req-boundaries-active",
-                )
-                required_boundaries = textual.widgets.Input(
+                    active=self._perm_create_req_boundaries_active,
                     value=self._perm_create_req_boundaries_str,
                     placeholder="Type a boundary name",
-                    compact=True,
-                    disabled=not self._perm_create_req_boundaries_active,
-                    id="permission-create-required-boundaries",
+                    id="permission-create-req-boundaries",
                 )
-                yield required_boundaries
-            yield auto_complete.MultiAutoComplete(allowed_tags, id="permission-create-allowed-tags-auto-complete")
-            yield auto_complete.MultiAutoComplete(
-                required_boundaries, id="permission-create-req-boundaries-auto-complete"
-            )
             yield textual.widgets.Checkbox("Read", value=self._perm_read, id="permission-read", compact=True)
             yield textual.widgets.Checkbox(
                 "Update", value=self._perm_update_name, id="permission-update-name", compact=True
@@ -330,43 +273,27 @@ class IdentityGrantEditWidget(textual.widget.Widget):
             yield textual.widgets.Checkbox("Delete", value=self._perm_delete, id="permission-delete", compact=True)
 
     async def on_mount(self) -> None:
-        identities = await self._list_identities()
+        identities = await self._auth.list_identities()
         select = self.query_one("#filter-select-name", textual.widgets.Select)
         select.set_options([(i["name"], i["name"]) for i in identities])
         if self._filter_name_active and self._filter_name is not None:
             select.value = self._filter_name
         select.disabled = not self._filter_name_active
 
-        tags = await self._list_tags()
-        tags = [textual_autocomplete.DropdownItem(main=f"{t['name']}={t['value']}") for t in tags]
-        tagged_by_auto_complete = self.query_one("#filter-tagged-by-auto-complete", auto_complete.MultiAutoComplete)
-        tagged_by_auto_complete.candidates = tags
-        allowed_tags_auto_complete = self.query_one(
-            "#permission-create-allowed-tags-auto-complete", auto_complete.MultiAutoComplete
-        )
-        allowed_tags_auto_complete.candidates = tags
+        tags_raw = await self._auth.list_tags()
+        tags = [textual_autocomplete.DropdownItem(main=f"{t['name']}={t['value']}") for t in tags_raw]
+        self.query_one("#filter-tagged-by", checkbox_input.CheckboxInput).set_candidates(tags)
+        self.query_one("#permission-create-allowed-tags", checkbox_input.CheckboxInput).set_candidates(tags)
 
-        boundaries = await self._list_boundaries()
-        boundaries = [textual_autocomplete.DropdownItem(main=b["name"]) for b in boundaries]
-        bounded_by_auto_complete = self.query_one("#filter-bounded-by-auto-complete", auto_complete.MultiAutoComplete)
-        bounded_by_auto_complete.candidates = boundaries
-        required_boundaries_auto_complete = self.query_one(
-            "#permission-create-req-boundaries-auto-complete", auto_complete.MultiAutoComplete
-        )
-        required_boundaries_auto_complete.candidates = boundaries
+        boundaries_raw = await self._auth.list_boundaries()
+        boundaries = [textual_autocomplete.DropdownItem(main=b["name"]) for b in boundaries_raw]
+        self.query_one("#filter-bounded-by", checkbox_input.CheckboxInput).set_candidates(boundaries)
+        self.query_one("#permission-create-req-boundaries", checkbox_input.CheckboxInput).set_candidates(boundaries)
 
     @textual.on(textual.widgets.Select.Changed, "#filter-select-name")
     def _on_filter_name_changed(self, event: textual.widgets.Select.Changed) -> None:
         if event.value is not textual.widgets.Select.BLANK:
             self._filter_name = event.value
-
-    @textual.on(textual.widgets.Input.Changed, "#filter-tagged-by")
-    def _on_filter_tagged_by_changed(self, event: textual.widgets.Input.Changed) -> None:
-        self._filter_tag_list_str = event.value
-
-    @textual.on(textual.widgets.Input.Changed, "#filter-bounded-by")
-    def _on_filter_bounded_by_changed(self, event: textual.widgets.Input.Changed) -> None:
-        self._filter_boundary_list_str = event.value
 
     @textual.on(textual.widgets.Checkbox.Changed, "#filter-name-active")
     def _on_filter_name_active_changed(self, event: textual.widgets.Checkbox.Changed) -> None:
@@ -377,53 +304,29 @@ class IdentityGrantEditWidget(textual.widget.Widget):
             self._filter_name = None
         select.disabled = not event.value
 
-    @textual.on(textual.widgets.Checkbox.Changed, "#filter-tagged-by-active")
-    def _on_filter_tagged_by_active_changed(self, event: textual.widgets.Checkbox.Changed) -> None:
-        self._filter_tag_list_active = event.value
-        inp = self.query_one("#filter-tagged-by", textual.widgets.Input)
-        if not event.value:
-            inp.clear()
-            self._filter_tag_list_str = ""
-        inp.disabled = not event.value
+    @textual.on(checkbox_input.CheckboxInput.Changed, "#filter-tagged-by")
+    def _on_filter_tagged_by_changed(self, event: checkbox_input.CheckboxInput.Changed) -> None:
+        self._filter_tag_list_active = event.active
+        self._filter_tag_list_str = event.value
 
-    @textual.on(textual.widgets.Checkbox.Changed, "#filter-bounded-by-active")
-    def _on_filter_boundary_list_active_changed(self, event: textual.widgets.Checkbox.Changed) -> None:
-        self._filter_boundary_list_active = event.value
-        inp = self.query_one("#filter-bounded-by", textual.widgets.Input)
-        if not event.value:
-            inp.clear()
-            self._filter_boundary_list_str = ""
-        inp.disabled = not event.value
+    @textual.on(checkbox_input.CheckboxInput.Changed, "#filter-bounded-by")
+    def _on_filter_bounded_by_changed(self, event: checkbox_input.CheckboxInput.Changed) -> None:
+        self._filter_boundary_list_active = event.active
+        self._filter_boundary_list_str = event.value
 
     @textual.on(textual.widgets.Checkbox.Changed, "#permission-create")
     def _on_perm_create_changed(self, event: textual.widgets.Checkbox.Changed) -> None:
         self._perm_create_allowed = event.value
         self.query_one("#permission-create-fields").disabled = not event.value
 
-    @textual.on(textual.widgets.Checkbox.Changed, "#permission-create-allowed-tags-active")
-    def _on_perm_create_allowed_tags_active_changed(self, event: textual.widgets.Checkbox.Changed) -> None:
-        self._perm_create_allowed_tags_active = event.value
-        inp = self.query_one("#permission-create-allowed-tags", textual.widgets.Input)
-        if not event.value:
-            inp.clear()
-            self._perm_create_allowed_tags_str = ""
-        inp.disabled = not event.value
-
-    @textual.on(textual.widgets.Checkbox.Changed, "#permission-create-req-boundaries-active")
-    def _on_perm_create_req_boundaries_active_changed(self, event: textual.widgets.Checkbox.Changed) -> None:
-        self._perm_create_req_boundaries_active = event.value
-        inp = self.query_one("#permission-create-required-boundaries", textual.widgets.Input)
-        if not event.value:
-            inp.clear()
-            self._perm_create_req_boundaries_str = ""
-        inp.disabled = not event.value
-
-    @textual.on(textual.widgets.Input.Changed, "#permission-create-allowed-tags")
-    def _on_perm_create_allowed_tags_changed(self, event: textual.widgets.Input.Changed) -> None:
+    @textual.on(checkbox_input.CheckboxInput.Changed, "#permission-create-allowed-tags")
+    def _on_perm_create_allowed_tags_changed(self, event: checkbox_input.CheckboxInput.Changed) -> None:
+        self._perm_create_allowed_tags_active = event.active
         self._perm_create_allowed_tags_str = event.value
 
-    @textual.on(textual.widgets.Input.Changed, "#permission-create-required-boundaries")
-    def _on_perm_create_req_boundaries_changed(self, event: textual.widgets.Input.Changed) -> None:
+    @textual.on(checkbox_input.CheckboxInput.Changed, "#permission-create-req-boundaries")
+    def _on_perm_create_req_boundaries_changed(self, event: checkbox_input.CheckboxInput.Changed) -> None:
+        self._perm_create_req_boundaries_active = event.active
         self._perm_create_req_boundaries_str = event.value
 
     @textual.on(textual.widgets.Checkbox.Changed, "#permission-read")
@@ -486,7 +389,12 @@ class GrantEditScreen(textual.screen.Screen[dict | None]):
         width: 20;
     }
     """
-    BINDINGS: typing.ClassVar = [("ctrl+s", "save", "Save"), ("escape", "cancel", "Cancel")]
+    BINDINGS: typing.ClassVar = [
+        ("ctrl+s", "save", "Save"),
+        ("escape", "cancel", "Cancel"),
+        ("up", "app.focus_previous", ""),
+        ("down", "app.focus_next", ""),
+    ]
     grant_type: textual.reactive.Reactive[str] = textual.reactive.Reactive("")
 
     def __init__(self, auth: async_client.AsyncClient, grant: dict):
@@ -532,7 +440,6 @@ class GrantEditScreen(textual.screen.Screen[dict | None]):
             filter_dict, permission = identity_widgets[0].get_grant_data()
         else:
             return
-        print(filter_dict)
         self.dismiss({"type": self.grant_type, "filter": filter_dict, "permission": permission})
 
     def compose(self) -> textual.app.ComposeResult:

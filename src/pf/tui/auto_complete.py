@@ -4,6 +4,7 @@ import textual_autocomplete
 
 
 class MultiAutoComplete(textual_autocomplete.AutoComplete):
+    can_focus = False
     DEFAULT_CSS = """\
     MultiAutoComplete {
         height: 5
