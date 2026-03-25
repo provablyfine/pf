@@ -10,7 +10,7 @@ import textual.widget
 import textual.widgets
 import textual_autocomplete
 
-from . import async_client, checkbox_input
+from . import async_client, checkbox_input, header
 
 
 @dataclasses.dataclass
@@ -64,8 +64,6 @@ def _update_field(update: dict | None, field: str) -> bool:
     if update is None:
         return True
     return update[field]
-
-
 
 
 def new_grant(grant_type: str) -> dict:
@@ -519,6 +517,7 @@ class GrantEditScreen(textual.screen.Screen[dict | None]):
 
     def compose(self) -> textual.app.ComposeResult:
         self.sub_title = "Roles > 2 > Grants > Edit"
+        yield header.AppHeader()
         with textual.containers.VerticalGroup(classes="sections"):
             with textual.containers.VerticalGroup(classes="section"):
                 yield textual.widgets.Label("Type", classes="label")

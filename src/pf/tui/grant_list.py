@@ -7,7 +7,7 @@ import textual.screen
 import textual.widgets
 
 from .. import client
-from . import async_client, grant_edit
+from . import async_client, grant_edit, header
 
 GRANT_TYPES = ["identity", "tag", "role", "boundary", "tenant"]
 
@@ -60,6 +60,7 @@ class GrantListScreen(textual.screen.Screen[None]):
         self._role_id = role_id
 
     def compose(self) -> textual.app.ComposeResult:
+        yield header.AppHeader()
         yield textual.widgets.DataTable(cursor_type="row")
         yield textual.widgets.Footer()
 

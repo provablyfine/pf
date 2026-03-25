@@ -4,7 +4,7 @@ import textual.app
 import textual.screen
 import textual.widgets
 
-from . import async_client, grant_list
+from . import async_client, grant_list, header
 
 
 def _ellipsize(s: str, max_len: int) -> str:
@@ -23,6 +23,7 @@ class RoleListScreen(textual.screen.Screen[None]):
         self._roles: list = []
 
     def compose(self) -> textual.app.ComposeResult:
+        yield header.AppHeader()
         yield textual.widgets.DataTable(cursor_type="row")
         yield textual.widgets.Footer()
 
