@@ -9,7 +9,7 @@ import textual.widgets
 from .. import client
 from . import async_client, grant_edit, header
 
-GRANT_TYPES = ["identity", "tag", "role", "boundary", "tenant"]
+GRANT_TYPES = ["identity", "tag", "role", "boundary", "tenant", "ssh"]
 
 
 class GrantTypeScreen(textual.screen.ModalScreen[str | None]):

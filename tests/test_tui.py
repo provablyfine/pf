@@ -394,3 +394,48 @@ async def test_tui_tenant_grant_edit(api):
     assert grant["filter"]["id"] is None
     assert grant["permission"]["read"] is True
     assert grant["permission"]["create"] is False
+
+
+@pytest.mark.anyio
+async def test_tui_ssh_grant_edit(api):
+    """Edit an SSH grant: set filter.name, restrict username_list, enable permit_pty."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        auth = _setup(api, tmpdir)
+
+        await auth.post(auth.directory.tag, json={"name": "env", "value": "prod"})
+        await auth.post(auth.directory.boundary, json={"name": "zone1"})
+        role_id = await _setup_role_with_grant(auth, pf.tui.grant_edit.new_grant("ssh"))
+
+        app = pf.tui.app.TuiApp(auth)
+        async with app.run_test(size=(200, 50)) as pilot:
+            await pilot.pause(1.0)
+            await pilot.press("down")  # navigate to test-role (row 1)
+            await pilot.press("g")
+            await pilot.pause(0.5)
+            await pilot.press("e")
+            await pilot.pause(3.0)  # SshGrantEditWidget.on_mount: 3 API calls
+
+            await pilot.click("#filter-name Checkbox")
+            await pilot.pause(0.1)
+            await pilot.press(*"root")
+            await pilot.pause(0.1)
+
+            # username_list: enable checkbox and type "alice"
+            await pilot.click("#perm-username-list Checkbox")
+            await pilot.pause(0.1)
+            await pilot.press(*"alice")
+            await pilot.pause(0.1)
+
+            await pilot.click("#perm-permit-pty")
+
+            await pilot.press("ctrl+s")
+            await pilot.pause(2.0)
+
+        assert not [n for n in app._notifications if n.severity == "error"]
+
+    grant = await _get_grant(auth, role_id)
+    assert grant["filter"]["name"] == "root"
+    assert grant["permission"]["username_list"] == ["alice"]
+    assert grant["permission"]["force_command_list"] is None
+    assert grant["permission"]["permit_pty"] is True
+    assert grant["permission"]["permit_user_rc"] is False
