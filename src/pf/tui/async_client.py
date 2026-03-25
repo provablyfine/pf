@@ -47,3 +47,6 @@ class AsyncClient:
 
     async def list_boundaries(self) -> list:
         return await self.get_list(self.directory.boundary, "boundaries", "Failed to read list of boundaries")
+
+    async def list_tenants(self) -> list:
+        return await self.get_list(self.directory.tenant, "tenants", "Failed to read list of tenants")

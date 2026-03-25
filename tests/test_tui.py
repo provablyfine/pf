@@ -274,3 +274,123 @@ async def test_tui_identity_grant_edit_permissions(api):
     assert perm["add_tag_list"] == [{"name": "env", "value": "prod"}]
     assert perm["del_tag_list"] == [{"name": "env", "value": "prod"}]
     assert perm["invite_list"] == ["email"]
+
+
+@pytest.mark.anyio
+async def test_tui_tag_grant_edit(api):
+    """Edit a tag grant: set filter.name_value and enable create + read."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        auth = _setup(api, tmpdir)
+
+        await auth.post(auth.directory.tag, json={"name": "env", "value": "prod"})
+        role_id = await _setup_role_with_grant(auth, pf.tui.grant_edit.new_grant("tag"))
+
+        app = pf.tui.app.TuiApp(auth)
+        async with app.run_test(size=(200, 50)) as pilot:
+            await pilot.pause(1.0)
+            await pilot.press("down")  # navigate to test-role (row 1)
+            await pilot.press("g")
+            await pilot.pause(0.5)
+            await pilot.press("e")
+            await pilot.pause(1.0)  # TagGrantEditWidget.on_mount: 1 API call
+
+            await pilot.click("#filter-name-value Checkbox")
+            await pilot.pause(0.1)
+            await pilot.press(*"env=prod")
+            await pilot.pause(0.1)
+
+            app.screen.query_one(textual.widgets.SelectionList).focus()
+            await pilot.pause(0.1)
+            await pilot.press("space")  # create=0
+            await pilot.press("down")
+            await pilot.press("space")  # read=1
+
+            await pilot.press("ctrl+s")
+            await pilot.pause(2.0)
+
+        assert not [n for n in app._notifications if n.severity == "error"]
+
+    grant = await _get_grant(auth, role_id)
+    assert grant["filter"]["name_value"] == {"name": "env", "value": "prod"}
+    assert grant["permission"]["create"] is True
+    assert grant["permission"]["read"] is True
+    assert grant["permission"]["delete"] is False
+
+
+@pytest.mark.anyio
+async def test_tui_boundary_grant_edit(api):
+    """Edit a boundary grant: set filter.name and enable create + read + update.name."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        auth = _setup(api, tmpdir)
+
+        await auth.post(auth.directory.boundary, json={"name": "zone1"})
+        role_id = await _setup_role_with_grant(auth, pf.tui.grant_edit.new_grant("boundary"))
+
+        app = pf.tui.app.TuiApp(auth)
+        async with app.run_test(size=(200, 50)) as pilot:
+            await pilot.pause(1.0)
+            await pilot.press("down")  # navigate to test-role (row 1)
+            await pilot.press("g")
+            await pilot.pause(0.5)
+            await pilot.press("e")
+            await pilot.pause(1.0)  # BoundaryGrantEditWidget.on_mount: 1 API call
+
+            await pilot.click("#filter-name Checkbox")
+            await pilot.pause(0.1)
+            await pilot.press(*"zone1")
+            await pilot.pause(0.1)
+
+            # SelectionList: create=0, read=1, update.name=2, ...
+            app.screen.query_one(textual.widgets.SelectionList).focus()
+            await pilot.pause(0.1)
+            await pilot.press("space")  # create=0
+            await pilot.press("down")
+            await pilot.press("space")  # read=1
+            await pilot.press("down")
+            await pilot.press("space")  # update.name=2
+
+            await pilot.press("ctrl+s")
+            await pilot.pause(2.0)
+
+        assert not [n for n in app._notifications if n.severity == "error"]
+
+    grant = await _get_grant(auth, role_id)
+    assert grant["filter"]["name"] == "zone1"
+    assert grant["permission"]["create"] is True
+    assert grant["permission"]["read"] is True
+    assert grant["permission"]["update"]["name"] is True
+    assert grant["permission"]["update"]["description"] is False
+
+
+@pytest.mark.anyio
+async def test_tui_tenant_grant_edit(api):
+    """Edit a tenant grant: leave filter.id as wildcard and enable read."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        auth = _setup(api, tmpdir)
+
+        role_id = await _setup_role_with_grant(auth, pf.tui.grant_edit.new_grant("tenant"))
+
+        app = pf.tui.app.TuiApp(auth)
+        async with app.run_test(size=(200, 50)) as pilot:
+            await pilot.pause(1.0)
+            await pilot.press("down")  # navigate to test-role (row 1)
+            await pilot.press("g")
+            await pilot.pause(0.5)
+            await pilot.press("e")
+            await pilot.pause(1.0)  # TenantGrantEditWidget.on_mount: 1 API call
+
+            # SelectionList: create=0, read=1, ...
+            app.screen.query_one(textual.widgets.SelectionList).focus()
+            await pilot.pause(0.1)
+            await pilot.press("down")  # move to read=1
+            await pilot.press("space")  # toggle read
+
+            await pilot.press("ctrl+s")
+            await pilot.pause(2.0)
+
+        assert not [n for n in app._notifications if n.severity == "error"]
+
+    grant = await _get_grant(auth, role_id)
+    assert grant["filter"]["id"] is None
+    assert grant["permission"]["read"] is True
+    assert grant["permission"]["create"] is False

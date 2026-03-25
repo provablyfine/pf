@@ -41,6 +41,21 @@ class _Field:
         name = self.value.strip()
         return name if (self.active and name) else None
 
+    def tag_name_value_filter(self) -> dict | None:
+        if not self.active:
+            return None
+        items = [s.split("=", 1) for s in self.value.split() if "=" in s]
+        if not items:
+            return None
+        k, v = items[0]
+        return {"name": k, "value": v}
+
+    def int_filter(self) -> int | None:
+        if not self.active:
+            return None
+        s = self.value.strip()
+        return int(s) if s.isdigit() else None
+
     @classmethod
     def from_tag_list(cls, tag_list: list | None) -> "_Field":
         return cls(
@@ -98,6 +113,34 @@ def new_grant(grant_type: str) -> dict:
                     "add_tag_list": None,
                     "del_tag_list": None,
                     "invite_list": None,
+                },
+            }
+        case "tag":
+            return {
+                "type": "tag",
+                "filter": {"name_value": None},
+                "permission": {"create": False, "read": False, "delete": False},
+            }
+        case "boundary":
+            return {
+                "type": "boundary",
+                "filter": {"name": None},
+                "permission": {
+                    "create": False,
+                    "read": False,
+                    "update": {"name": False, "description": False, "ceiling_list": False, "denied_list": False},
+                    "delete": False,
+                },
+            }
+        case "tenant":
+            return {
+                "type": "tenant",
+                "filter": {"id": None},
+                "permission": {
+                    "create": False,
+                    "read": False,
+                    "update": {"display_name": False, "is_enabled": False},
+                    "delete": False,
                 },
             }
         case _:
@@ -326,6 +369,181 @@ class IdentityGrantEditWidget(_GrantEditWidget):
         )
 
 
+class TagGrantEditWidget(_GrantEditWidget):
+    DEFAULT_CSS = """
+    TagGrantEditWidget {
+        height: auto;
+    }
+    """
+
+    def __init__(self, auth: async_client.AsyncClient, filter: dict, permission: dict):
+        super().__init__()
+        self._auth = auth
+        self._initial_filter = filter
+        self._initial_permission = permission
+
+    def compose(self) -> textual.app.ComposeResult:
+        f = self._initial_filter
+        p = self._initial_permission
+        nv = f["name_value"]
+        with textual.containers.VerticalGroup(classes="section"):
+            yield textual.widgets.Label("Filters", classes="label")
+            yield checkbox_input.CheckboxInput(
+                "Name=Value",
+                active=nv is not None,
+                value=f"{nv['name']}={nv['value']}" if nv is not None else "",
+                placeholder="name=value",
+                id="filter-name-value",
+                autocomplete=auto_complete.MonoAutoComplete,
+            )
+        with textual.containers.VerticalGroup(classes="section"):
+            yield textual.widgets.Label("Permissions", classes="label")
+            yield textual.widgets.SelectionList(
+                ("Create", "create", p["create"]),
+                ("Read", "read", p["read"]),
+                ("Delete", "delete", p["delete"]),
+                compact=True,
+            )
+
+    async def on_mount(self) -> None:
+        tags_raw = await self._auth.list_tags()
+        candidates = [textual_autocomplete.DropdownItem(main=f"{t['name']}={t['value']}") for t in tags_raw]
+        self.query_one("#filter-name-value", checkbox_input.CheckboxInput).set_candidates(candidates)
+
+    def get_grant_data(self) -> tuple[dict, dict]:
+        selected = set(self.query_one(textual.widgets.SelectionList).selected)
+        return (
+            {"name_value": self._read_field("#filter-name-value").tag_name_value_filter()},
+            {
+                "create": "create" in selected,
+                "read": "read" in selected,
+                "delete": "delete" in selected,
+            },
+        )
+
+
+class BoundaryGrantEditWidget(_GrantEditWidget):
+    DEFAULT_CSS = """
+    BoundaryGrantEditWidget {
+        height: auto;
+    }
+    """
+
+    def __init__(self, auth: async_client.AsyncClient, filter: dict, permission: dict):
+        super().__init__()
+        self._auth = auth
+        self._initial_filter = filter
+        self._initial_permission = permission
+
+    def compose(self) -> textual.app.ComposeResult:
+        f = self._initial_filter
+        p = self._initial_permission
+        update = p["update"]
+        with textual.containers.VerticalGroup(classes="section"):
+            yield textual.widgets.Label("Filters", classes="label")
+            yield checkbox_input.CheckboxInput(
+                "Name",
+                active=f["name"] is not None,
+                value=f["name"] or "",
+                placeholder="boundary name",
+                id="filter-name",
+                autocomplete=auto_complete.MonoAutoComplete,
+            )
+        with textual.containers.VerticalGroup(classes="section"):
+            yield textual.widgets.Label("Permissions", classes="label")
+            yield textual.widgets.SelectionList(
+                ("Create", "create", p["create"]),
+                ("Read", "read", p["read"]),
+                ("Update name", "update.name", _resolve_update_perm(update, "name")),
+                ("Update description", "update.description", _resolve_update_perm(update, "description")),
+                ("Update ceiling list", "update.ceiling_list", _resolve_update_perm(update, "ceiling_list")),
+                ("Update denied list", "update.denied_list", _resolve_update_perm(update, "denied_list")),
+                ("Delete", "delete", p["delete"]),
+                compact=True,
+            )
+
+    async def on_mount(self) -> None:
+        boundaries_raw = await self._auth.list_boundaries()
+        candidates = [textual_autocomplete.DropdownItem(main=b["name"]) for b in boundaries_raw]
+        self.query_one("#filter-name", checkbox_input.CheckboxInput).set_candidates(candidates)
+
+    def get_grant_data(self) -> tuple[dict, dict]:
+        selected = set(self.query_one(textual.widgets.SelectionList).selected)
+        return (
+            {"name": self._read_field("#filter-name").name_filter()},
+            {
+                "create": "create" in selected,
+                "read": "read" in selected,
+                "update": {
+                    "name": "update.name" in selected,
+                    "description": "update.description" in selected,
+                    "ceiling_list": "update.ceiling_list" in selected,
+                    "denied_list": "update.denied_list" in selected,
+                },
+                "delete": "delete" in selected,
+            },
+        )
+
+
+class TenantGrantEditWidget(_GrantEditWidget):
+    DEFAULT_CSS = """
+    TenantGrantEditWidget {
+        height: auto;
+    }
+    """
+
+    def __init__(self, auth: async_client.AsyncClient, filter: dict, permission: dict):
+        super().__init__()
+        self._auth = auth
+        self._initial_filter = filter
+        self._initial_permission = permission
+
+    def compose(self) -> textual.app.ComposeResult:
+        f = self._initial_filter
+        p = self._initial_permission
+        update = p["update"]
+        with textual.containers.VerticalGroup(classes="section"):
+            yield textual.widgets.Label("Filters", classes="label")
+            yield checkbox_input.CheckboxInput(
+                "ID",
+                active=f["id"] is not None,
+                value=str(f["id"]) if f["id"] is not None else "",
+                placeholder="tenant id",
+                id="filter-id",
+                autocomplete=auto_complete.MonoAutoComplete,
+            )
+        with textual.containers.VerticalGroup(classes="section"):
+            yield textual.widgets.Label("Permissions", classes="label")
+            yield textual.widgets.SelectionList(
+                ("Create", "create", p["create"]),
+                ("Read", "read", p["read"]),
+                ("Update display name", "update.display_name", _resolve_update_perm(update, "display_name")),
+                ("Update is enabled", "update.is_enabled", _resolve_update_perm(update, "is_enabled")),
+                ("Delete", "delete", p["delete"]),
+                compact=True,
+            )
+
+    async def on_mount(self) -> None:
+        tenants_raw = await self._auth.list_tenants()
+        candidates = [textual_autocomplete.DropdownItem(main=str(t["id"])) for t in tenants_raw]
+        self.query_one("#filter-id", checkbox_input.CheckboxInput).set_candidates(candidates)
+
+    def get_grant_data(self) -> tuple[dict, dict]:
+        selected = set(self.query_one(textual.widgets.SelectionList).selected)
+        return (
+            {"id": self._read_field("#filter-id").int_filter()},
+            {
+                "create": "create" in selected,
+                "read": "read" in selected,
+                "update": {
+                    "display_name": "update.display_name" in selected,
+                    "is_enabled": "update.is_enabled" in selected,
+                },
+                "delete": "delete" in selected,
+            },
+        )
+
+
 class GrantEditScreen(textual.screen.Screen[dict | None]):
     DEFAULT_CSS = """
     .sections {
@@ -362,6 +580,12 @@ class GrantEditScreen(textual.screen.Screen[dict | None]):
                 widget: _GrantEditWidget = RoleGrantEditWidget(self._auth, self._filter, self._permission)
             case "identity":
                 widget = IdentityGrantEditWidget(self._auth, self._filter, self._permission)
+            case "tag":
+                widget = TagGrantEditWidget(self._auth, self._filter, self._permission)
+            case "boundary":
+                widget = BoundaryGrantEditWidget(self._auth, self._filter, self._permission)
+            case "tenant":
+                widget = TenantGrantEditWidget(self._auth, self._filter, self._permission)
             case _:
                 return
         await fields.mount(widget)
