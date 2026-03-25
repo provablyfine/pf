@@ -166,6 +166,23 @@ class IdentityChecker:
             if p.create.required_boundary_id_list is not None and not all(
                 boundary_id in boundary_id_list for boundary_id in p.create.required_boundary_id_list
             ):
+                # Note how the semantics of this are oh so very slightly different
+                # from the semantics of allowed_tag_id_list because the above for loop
+                # is looping over the REQUIRED items rather than the PROVIDED items.
+                # the result is that required_boundary_id_list really behaves like
+                # list of items that MUST be present in the PROVIDED list.
+                # the reason why the two lists (allowed_tag vs required_boundary) behave
+                # differently is because if you create an identity with more tags than
+                # allowed, you might grant more power to this identity while if you
+                # create an identity with more boundaries that required, you will merely
+                # add more constraints on this identity.
+                # So, creating identities with more tags is not safe while creating
+                # identities with more boundaries is safe.
+                # Where "safe" is defined as meaning: "not getting more permissions than
+                # expected".
+                # Another note: a side-effect of the required boundary semantics is that
+                # specifying a required_boundary_id_list as None or as an empty list
+                # is equivalent: both allow the user to provide any boundary or no boundary.
                 return False
             return True
 
