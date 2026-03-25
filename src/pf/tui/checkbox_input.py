@@ -3,6 +3,7 @@ import textual.app
 import textual.message
 import textual.widget
 import textual.widgets
+import textual_autocomplete
 
 from . import auto_complete
 
@@ -38,13 +39,23 @@ class CheckboxInput(textual.widget.Widget):
         def control(self) -> "CheckboxInput":
             return self.widget
 
-    def __init__(self, label: str, *, active: bool, value: str, placeholder: str, id: str | None = None) -> None:
+    def __init__(
+        self,
+        label: str,
+        *,
+        active: bool,
+        value: str,
+        placeholder: str,
+        id: str | None = None,
+        autocomplete: type[textual_autocomplete.AutoComplete] = auto_complete.MultiAutoComplete,
+    ) -> None:
         super().__init__(id=id)
         self._label = label
         self._active = active
         self._initial_value = value
         self._placeholder = placeholder
-        self._autocomplete: auto_complete.MultiAutoComplete | None = None
+        self._autocomplete_class = autocomplete
+        self._autocomplete: textual_autocomplete.AutoComplete | None = None
 
     @property
     def active(self) -> bool:
@@ -66,7 +77,7 @@ class CheckboxInput(textual.widget.Widget):
 
     def on_mount(self) -> None:
         inp = self.query_one(textual.widgets.Input)
-        self._autocomplete = auto_complete.MultiAutoComplete(inp)
+        self._autocomplete = self._autocomplete_class(inp)
         self.screen.mount(self._autocomplete)
 
     def on_unmount(self) -> None:

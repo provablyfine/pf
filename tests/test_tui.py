@@ -111,11 +111,9 @@ async def test_tui_role_grant_edit(api):
             await pilot.press("e")
             await pilot.pause(1.0)  # RoleGrantEditWidget.on_mount: 1 API call
 
-            # Enable filter.name checkbox and set the Select value directly to
-            # trigger _on_filter_name_changed without relying on overlay navigation.
-            await pilot.click("#filter-name-active")
+            await pilot.click("#filter-name Checkbox")
             await pilot.pause(0.1)
-            app.screen.query_one("#filter-select-name", textual.widgets.Select).value = "aaa"
+            await pilot.press(*"aaa")
             await pilot.pause(0.1)
 
             # Enable all 7 permissions in the SelectionList.
@@ -167,11 +165,9 @@ async def test_tui_identity_grant_edit_filters(api):
             await pilot.press("e")
             await pilot.pause(3.0)  # IdentityGrantEditWidget.on_mount: 3 API calls
 
-            # filter.name: enable checkbox and set the Select value directly to
-            # trigger _on_filter_name_changed without relying on overlay navigation.
-            await pilot.click("#filter-name-active")
+            await pilot.click("#filter-name Checkbox")
             await pilot.pause(0.1)
-            app.screen.query_one("#filter-select-name", textual.widgets.Select).value = "root"
+            await pilot.press(*"root")
             await pilot.pause(0.1)
 
             # filter.tag_list: enable CheckboxInput and type "env=prod".

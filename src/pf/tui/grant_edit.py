@@ -10,7 +10,7 @@ import textual.widget
 import textual.widgets
 import textual_autocomplete
 
-from . import async_client, checkbox_input, header
+from . import async_client, auto_complete, checkbox_input, header
 
 
 @dataclasses.dataclass
@@ -36,6 +36,10 @@ class _Field:
 
     def invite_perm(self) -> list[str]:
         return [s for s in self.value.split() if s in ("email", "manual")] if self.active else []
+
+    def name_filter(self) -> str | None:
+        name = self.value.strip()
+        return name if (self.active and name) else None
 
     @classmethod
     def from_tag_list(cls, tag_list: list | None) -> "_Field":
@@ -111,19 +115,8 @@ class _GrantEditWidget(textual.widget.Widget):
 
 class RoleGrantEditWidget(_GrantEditWidget):
     DEFAULT_CSS = """
-    #filter-select-name {
-        width: 20;
-    }
     RoleGrantEditWidget {
         height: auto;
-    }
-    #filters {
-        height: 1;
-        layout: grid;
-        grid-size: 2;
-        grid-columns: auto 1fr;
-        grid-rows: 1fr;
-        grid-gutter: 0 2;
     }
     """
 
@@ -139,13 +132,14 @@ class RoleGrantEditWidget(_GrantEditWidget):
         update = p["update"]
         with textual.containers.VerticalGroup(classes="section"):
             yield textual.widgets.Label("Filters", classes="label")
-            with textual.containers.Container(id="filters"):
-                yield textual.widgets.Checkbox(
-                    "Name", value=f["name"] is not None, compact=True, id="filter-name-active"
-                )
-                yield textual.widgets.Select.from_values(
-                    [], compact=True, allow_blank=True, disabled=True, id="filter-select-name"
-                )
+            yield checkbox_input.CheckboxInput(
+                "Name",
+                active=f["name"] is not None,
+                value=f["name"] or "",
+                placeholder="Type a role name",
+                id="filter-name",
+                autocomplete=auto_complete.MonoAutoComplete,
+            )
         with textual.containers.VerticalGroup(classes="section"):
             yield textual.widgets.Label("Permissions", classes="label")
             yield textual.widgets.SelectionList(
@@ -161,27 +155,13 @@ class RoleGrantEditWidget(_GrantEditWidget):
 
     async def on_mount(self) -> None:
         roles = await self._auth.list_roles()
-        select = self.query_one("#filter-select-name", textual.widgets.Select)
-        select.set_options([(r["name"], r["name"]) for r in roles])
-        filter_name = self._initial_filter["name"]
-        if filter_name is not None:
-            select.value = filter_name
-        select.disabled = filter_name is None
-
-    @textual.on(textual.widgets.Checkbox.Changed, "#filter-name-active")
-    def _on_filter_name_active_changed(self, event: textual.widgets.Checkbox.Changed) -> None:
-        select = self.query_one("#filter-select-name", textual.widgets.Select)
-        if not event.value:
-            select.clear()
-        select.disabled = not event.value
+        candidates = [textual_autocomplete.DropdownItem(main=r["name"]) for r in roles]
+        self.query_one("#filter-name", checkbox_input.CheckboxInput).set_candidates(candidates)
 
     def get_grant_data(self) -> tuple[dict, dict]:
-        name_checkbox = self.query_one("#filter-name-active", textual.widgets.Checkbox)
-        select = self.query_one("#filter-select-name", textual.widgets.Select)
-        name = select.value if (name_checkbox.value and select.value is not textual.widgets.Select.BLANK) else None
         selected = set(self.query_one(textual.widgets.SelectionList).selected)
         return (
-            {"name": name},
+            {"name": self._read_field("#filter-name").name_filter()},
             {
                 "create": "create" in selected,
                 "read": "read" in selected,
@@ -200,14 +180,6 @@ class IdentityGrantEditWidget(_GrantEditWidget):
     DEFAULT_CSS = """
     IdentityGrantEditWidget {
         height: auto;
-    }
-    #filters {
-        height: 3;
-        layout: grid;
-        grid-size: 2;
-        grid-columns: auto 1fr;
-        grid-rows: 1fr;
-        grid-gutter: 0 2;
     }
     #permission-create-fields {
         height: 2;
@@ -238,27 +210,28 @@ class IdentityGrantEditWidget(_GrantEditWidget):
         invite = _Field.from_invite_list(p.get("invite_list"))
         with textual.containers.VerticalGroup(classes="section"):
             yield textual.widgets.Label("Filters", classes="label")
-            with textual.containers.Container(id="filters"):
-                yield textual.widgets.Checkbox(
-                    "Name", value=f["name"] is not None, compact=True, id="filter-name-active"
-                )
-                yield textual.widgets.Select.from_values(
-                    [], compact=True, allow_blank=True, disabled=True, id="filter-select-name"
-                )
-                yield checkbox_input.CheckboxInput(
-                    "Tagged by",
-                    active=tag_list.active,
-                    value=tag_list.value,
-                    placeholder="Type a tag name=value",
-                    id="filter-tagged-by",
-                )
-                yield checkbox_input.CheckboxInput(
-                    "Bounded by",
-                    active=boundary_list.active,
-                    value=boundary_list.value,
-                    placeholder="Type a boundary name",
-                    id="filter-bounded-by",
-                )
+            yield checkbox_input.CheckboxInput(
+                "Name",
+                active=f["name"] is not None,
+                value=f["name"] or "",
+                placeholder="Type an identity name",
+                id="filter-name",
+                autocomplete=auto_complete.MonoAutoComplete,
+            )
+            yield checkbox_input.CheckboxInput(
+                "Tagged by",
+                active=tag_list.active,
+                value=tag_list.value,
+                placeholder="Type a tag name=value",
+                id="filter-tagged-by",
+            )
+            yield checkbox_input.CheckboxInput(
+                "Bounded by",
+                active=boundary_list.active,
+                value=boundary_list.value,
+                placeholder="Type a boundary name",
+                id="filter-bounded-by",
+            )
         with textual.containers.VerticalGroup(classes="section"):
             yield textual.widgets.Label("Permissions", classes="label")
             yield textual.widgets.Checkbox("Create", value=create["allowed"], id="permission-create", compact=True)
@@ -306,12 +279,8 @@ class IdentityGrantEditWidget(_GrantEditWidget):
 
     async def on_mount(self) -> None:
         identities = await self._auth.list_identities()
-        select = self.query_one("#filter-select-name", textual.widgets.Select)
-        select.set_options([(i["name"], i["name"]) for i in identities])
-        filter_name = self._initial_filter["name"]
-        if filter_name is not None:
-            select.value = filter_name
-        select.disabled = filter_name is None
+        identity_candidates = [textual_autocomplete.DropdownItem(main=i["name"]) for i in identities]
+        self.query_one("#filter-name", checkbox_input.CheckboxInput).set_candidates(identity_candidates)
 
         tags_raw = await self._auth.list_tags()
         tags = [textual_autocomplete.DropdownItem(main=f"{t['name']}={t['value']}") for t in tags_raw]
@@ -328,24 +297,14 @@ class IdentityGrantEditWidget(_GrantEditWidget):
         invite_methods = [textual_autocomplete.DropdownItem(main=m) for m in ("email", "manual")]
         self.query_one("#permission-invite", checkbox_input.CheckboxInput).set_candidates(invite_methods)
 
-    @textual.on(textual.widgets.Checkbox.Changed, "#filter-name-active")
-    def _on_filter_name_active_changed(self, event: textual.widgets.Checkbox.Changed) -> None:
-        select = self.query_one("#filter-select-name", textual.widgets.Select)
-        if not event.value:
-            select.clear()
-        select.disabled = not event.value
-
     @textual.on(textual.widgets.Checkbox.Changed, "#permission-create")
     def _on_perm_create_changed(self, event: textual.widgets.Checkbox.Changed) -> None:
         self.query_one("#permission-create-fields").disabled = not event.value
 
     def get_grant_data(self) -> tuple[dict, dict]:
-        name_checkbox = self.query_one("#filter-name-active", textual.widgets.Checkbox)
-        select = self.query_one("#filter-select-name", textual.widgets.Select)
-        name = select.value if (name_checkbox.value and select.value is not textual.widgets.Select.BLANK) else None
         return (
             {
-                "name": name,
+                "name": self._read_field("#filter-name").name_filter(),
                 "tag_list": self._read_field("#filter-tagged-by").tag_filter(),
                 "boundary_list": self._read_field("#filter-bounded-by").boundary_filter(),
             },
@@ -377,9 +336,6 @@ class GrantEditScreen(textual.screen.Screen[dict | None]):
     }
     .label {
         padding: 0 0;
-    }
-    #filter-select-name {
-        width: 20;
     }
     """
     BINDINGS: typing.ClassVar = [
