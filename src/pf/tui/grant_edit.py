@@ -184,42 +184,28 @@ class RoleGrantEditWidget(textual.widget.Widget):
 
     @textual.on(textual.widgets.Checkbox.Changed, "#filter-name-active")
     def _on_filter_name_active_changed(self, event: textual.widgets.Checkbox.Changed) -> None:
-        self._filter_name_active = event.value
         select = self.query_one("#filter-select-name", textual.widgets.Select)
         if not event.value:
             select.clear()
-            self._filter_name = None
         select.disabled = not event.value
 
-    @textual.on(textual.widgets.Select.Changed, "#filter-select-name")
-    def _on_filter_name_changed(self, event: textual.widgets.Select.Changed) -> None:
-        if event.value is not textual.widgets.Select.BLANK:
-            self._filter_name = event.value
-
-    @textual.on(textual.widgets.SelectionList.SelectedChanged)
-    def _on_selection_changed(self, event: textual.widgets.SelectionList.SelectedChanged) -> None:
-        selected = set(event.selection_list.selected)
-        self._perm_create = "create" in selected
-        self._perm_read = "read" in selected
-        self._perm_update_name = "update.name" in selected
-        self._perm_update_description = "update.description" in selected
-        self._perm_update_member_list = "update.member_list" in selected
-        self._perm_update_grant_list = "update.grant_list" in selected
-        self._perm_delete = "delete" in selected
-
     def get_grant_data(self) -> tuple[dict, dict]:
+        name_checkbox = self.query_one("#filter-name-active", textual.widgets.Checkbox)
+        select = self.query_one("#filter-select-name", textual.widgets.Select)
+        name = select.value if (name_checkbox.value and select.value is not textual.widgets.Select.BLANK) else None
+        selected = set(self.query_one(textual.widgets.SelectionList).selected)
         return (
-            {"name": self._filter_name if self._filter_name_active else None},
+            {"name": name},
             {
-                "create": self._perm_create,
-                "read": self._perm_read,
+                "create": "create" in selected,
+                "read": "read" in selected,
                 "update": {
-                    "name": self._perm_update_name,
-                    "description": self._perm_update_description,
-                    "member_list": self._perm_update_member_list,
-                    "grant_list": self._perm_update_grant_list,
+                    "name": "update.name" in selected,
+                    "description": "update.description" in selected,
+                    "member_list": "update.member_list" in selected,
+                    "grant_list": "update.grant_list" in selected,
                 },
-                "delete": self._perm_delete,
+                "delete": "delete" in selected,
             },
         )
 
@@ -358,88 +344,49 @@ class IdentityGrantEditWidget(textual.widget.Widget):
         invite_methods = [textual_autocomplete.DropdownItem(main=m) for m in ("email", "manual")]
         self.query_one("#permission-invite", checkbox_input.CheckboxInput).set_candidates(invite_methods)
 
-    @textual.on(textual.widgets.Select.Changed, "#filter-select-name")
-    def _on_filter_name_changed(self, event: textual.widgets.Select.Changed) -> None:
-        if event.value is not textual.widgets.Select.BLANK:
-            self._filter_name = event.value
-
     @textual.on(textual.widgets.Checkbox.Changed, "#filter-name-active")
     def _on_filter_name_active_changed(self, event: textual.widgets.Checkbox.Changed) -> None:
-        self._filter_name_active = event.value
         select = self.query_one("#filter-select-name", textual.widgets.Select)
         if not event.value:
             select.clear()
-            self._filter_name = None
         select.disabled = not event.value
-
-    @textual.on(checkbox_input.CheckboxInput.Changed, "#filter-tagged-by")
-    def _on_filter_tagged_by_changed(self, event: checkbox_input.CheckboxInput.Changed) -> None:
-        self._filter_tag_list = _Field(event.active, event.value)
-
-    @textual.on(checkbox_input.CheckboxInput.Changed, "#filter-bounded-by")
-    def _on_filter_bounded_by_changed(self, event: checkbox_input.CheckboxInput.Changed) -> None:
-        self._filter_boundary_list = _Field(event.active, event.value)
 
     @textual.on(textual.widgets.Checkbox.Changed, "#permission-create")
     def _on_perm_create_changed(self, event: textual.widgets.Checkbox.Changed) -> None:
-        self._perm_create_allowed = event.value
         self.query_one("#permission-create-fields").disabled = not event.value
 
-    @textual.on(checkbox_input.CheckboxInput.Changed, "#permission-create-allowed-tags")
-    def _on_perm_create_allowed_tags_changed(self, event: checkbox_input.CheckboxInput.Changed) -> None:
-        self._perm_create_allowed_tags = _Field(event.active, event.value)
-
-    @textual.on(checkbox_input.CheckboxInput.Changed, "#permission-create-req-boundaries")
-    def _on_perm_create_req_boundaries_changed(self, event: checkbox_input.CheckboxInput.Changed) -> None:
-        self._perm_create_req_boundaries = _Field(event.active, event.value)
-
-    @textual.on(textual.widgets.Checkbox.Changed, "#permission-read")
-    def _on_perm_read_changed(self, event: textual.widgets.Checkbox.Changed) -> None:
-        self._perm_read = event.value
-
-    @textual.on(textual.widgets.Checkbox.Changed, "#permission-update-name")
-    def _on_perm_update_name_changed(self, event: textual.widgets.Checkbox.Changed) -> None:
-        self._perm_update_name = event.value
-
-    @textual.on(textual.widgets.Checkbox.Changed, "#permission-delete")
-    def _on_perm_delete_changed(self, event: textual.widgets.Checkbox.Changed) -> None:
-        self._perm_delete = event.value
-
-    @textual.on(checkbox_input.CheckboxInput.Changed, "#permission-add-tag")
-    def _on_perm_add_tag_changed(self, event: checkbox_input.CheckboxInput.Changed) -> None:
-        self._perm_add_tag_list = _Field(event.active, event.value)
-
-    @textual.on(checkbox_input.CheckboxInput.Changed, "#permission-del-tag")
-    def _on_perm_del_tag_changed(self, event: checkbox_input.CheckboxInput.Changed) -> None:
-        self._perm_del_tag_list = _Field(event.active, event.value)
-
-    @textual.on(checkbox_input.CheckboxInput.Changed, "#permission-invite")
-    def _on_perm_invite_changed(self, event: checkbox_input.CheckboxInput.Changed) -> None:
-        self._perm_invite_list = _Field(event.active, event.value)
+    def _read_field(self, widget_id: str) -> "_Field":
+        w = self.query_one(widget_id, checkbox_input.CheckboxInput)
+        return _Field(w.active, w.value)
 
     def get_grant_data(self) -> tuple[dict, dict]:
+        name_checkbox = self.query_one("#filter-name-active", textual.widgets.Checkbox)
+        select = self.query_one("#filter-select-name", textual.widgets.Select)
+        name = select.value if (name_checkbox.value and select.value is not textual.widgets.Select.BLANK) else None
         return (
             {
-                "name": self._filter_name if self._filter_name_active else None,
-                "tag_list": self._filter_tag_list.to_tag_list(inactive=None),
-                "boundary_list": self._filter_boundary_list.to_boundary_list(inactive=None),
+                "name": name,
+                "tag_list": self._read_field("#filter-tagged-by").to_tag_list(inactive=None),
+                "boundary_list": self._read_field("#filter-bounded-by").to_boundary_list(inactive=None),
             },
             {
                 "create": {
-                    "allowed": self._perm_create_allowed,
-                    "allowed_tag_list": self._perm_create_allowed_tags.to_tag_list(inactive=[]),
+                    "allowed": self.query_one("#permission-create", textual.widgets.Checkbox).value,
+                    "allowed_tag_list": self._read_field("#permission-create-allowed-tags").to_tag_list(inactive=[]),
                     # Note that the inactive argument to to_boundary_list really does not
                     # matter because [] and None are semantically equivalent for this field.
-                    "required_boundary_list": self._perm_create_req_boundaries.to_boundary_list(inactive=[]),
+                    "required_boundary_list": self._read_field("#permission-create-req-boundaries").to_boundary_list(
+                        inactive=[]
+                    ),
                 },
-                "read": self._perm_read,
+                "read": self.query_one("#permission-read", textual.widgets.Checkbox).value,
                 "update": {
-                    "name": self._perm_update_name,
+                    "name": self.query_one("#permission-update-name", textual.widgets.Checkbox).value,
                 },
-                "delete": self._perm_delete,
-                "add_tag_list": self._perm_add_tag_list.to_tag_list(inactive=[]),
-                "del_tag_list": self._perm_del_tag_list.to_tag_list(inactive=[]),
-                "invite_list": self._perm_invite_list.to_invite_list(),
+                "delete": self.query_one("#permission-delete", textual.widgets.Checkbox).value,
+                "add_tag_list": self._read_field("#permission-add-tag").to_tag_list(inactive=[]),
+                "del_tag_list": self._read_field("#permission-del-tag").to_tag_list(inactive=[]),
+                "invite_list": self._read_field("#permission-invite").to_invite_list(),
             },
         )
 

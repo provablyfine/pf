@@ -42,7 +42,7 @@ class CheckboxInput(textual.widget.Widget):
         super().__init__(id=id)
         self._label = label
         self._active = active
-        self._value = value
+        self._initial_value = value
         self._placeholder = placeholder
         self._autocomplete: auto_complete.MultiAutoComplete | None = None
 
@@ -52,11 +52,11 @@ class CheckboxInput(textual.widget.Widget):
 
     @property
     def value(self) -> str:
-        return self._value
+        return self.query_one(textual.widgets.Input).value
 
     def compose(self) -> textual.app.ComposeResult:
         inp = textual.widgets.Input(
-            value=self._value,
+            value=self._initial_value,
             placeholder=self._placeholder,
             compact=True,
             disabled=not self._active,
@@ -85,14 +85,12 @@ class CheckboxInput(textual.widget.Widget):
         inp = self.query_one(textual.widgets.Input)
         if not event.value:
             inp.clear()
-            self._value = ""
         inp.disabled = not event.value
         if event.value:
             inp.focus()
-        self.post_message(self.Changed(self, self._active, self._value))
+        self.post_message(self.Changed(self, self._active, inp.value))
 
     @textual.on(textual.widgets.Input.Changed)
     def _on_input_changed(self, event: textual.widgets.Input.Changed) -> None:
         event.stop()
-        self._value = event.value
-        self.post_message(self.Changed(self, self._active, self._value))
+        self.post_message(self.Changed(self, self._active, event.value))
