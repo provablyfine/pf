@@ -18,20 +18,20 @@ class _Field:
     active: bool
     value: str
 
-    def to_tag_list(self, inactive: list | None = None) -> list | None:
+    def to_tag_list(self, inactive: list | None) -> list | None:
         if not self.active:
             return inactive
         items = [s.split("=", 1) for s in self.value.split() if "=" in s]
         return [{"name": k, "value": v} for k, v in items]
 
-    def to_boundary_list(self, inactive: list | None = None) -> list | None:
+    def to_boundary_list(self, inactive: list | None) -> list | None:
         if not self.active:
             return inactive
         return self.value.split()
 
     def to_invite_list(self) -> list[str] | None:
         if not self.active:
-            return None
+            return []
         return [s for s in self.value.split() if s in ("email", "manual")]
 
     @classmethod
@@ -413,22 +413,24 @@ class IdentityGrantEditWidget(textual.widget.Widget):
         return (
             {
                 "name": self._filter_name if self._filter_name_active else None,
-                "tag_list": self._filter_tag_list.to_tag_list(),
-                "boundary_list": self._filter_boundary_list.to_boundary_list(),
+                "tag_list": self._filter_tag_list.to_tag_list(inactive=None),
+                "boundary_list": self._filter_boundary_list.to_boundary_list(inactive=None),
             },
             {
                 "create": {
                     "allowed": self._perm_create_allowed,
                     "allowed_tag_list": self._perm_create_allowed_tags.to_tag_list(inactive=[]),
-                    "required_boundary_list": self._perm_create_req_boundaries.to_boundary_list(),
+                    # Note that the inactive argument to to_boundary_list really does not
+                    # matter because [] and None are semantically equivalent for this field.
+                    "required_boundary_list": self._perm_create_req_boundaries.to_boundary_list(inactive=[]),
                 },
                 "read": self._perm_read,
                 "update": {
                     "name": self._perm_update_name,
                 },
                 "delete": self._perm_delete,
-                "add_tag_list": self._perm_add_tag_list.to_tag_list(),
-                "del_tag_list": self._perm_del_tag_list.to_tag_list(),
+                "add_tag_list": self._perm_add_tag_list.to_tag_list(inactive=[]),
+                "del_tag_list": self._perm_del_tag_list.to_tag_list(inactive=[]),
                 "invite_list": self._perm_invite_list.to_invite_list(),
             },
         )
