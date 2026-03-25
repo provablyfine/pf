@@ -68,6 +68,16 @@ def _update_field(update: dict | None, field: str) -> bool:
 
 
 
+def new_grant(grant_type: str) -> dict:
+    match grant_type:
+        case "role":
+            return {"type": "role", "filter": _role_filter_empty(), "permission": _role_permission_empty()}
+        case "identity":
+            return {"type": "identity", "filter": _identity_filter_empty(), "permission": _identity_permission_empty()}
+        case _:
+            return {"type": grant_type, "filter": {}, "permission": {}}
+
+
 def _role_filter_empty():
     return {"name": None}
 

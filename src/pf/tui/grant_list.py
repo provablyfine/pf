@@ -2,15 +2,55 @@ import typing
 
 import textual
 import textual.app
+import textual.containers
 import textual.screen
 import textual.widgets
 
 from .. import client
 from . import async_client, grant_edit
 
+GRANT_TYPES = ["identity", "tag", "role", "boundary", "tenant"]
+
+
+class GrantTypeScreen(textual.screen.ModalScreen[str | None]):
+    DEFAULT_CSS = """
+    GrantTypeScreen {
+        align: center middle;
+    }
+    GrantTypeScreen > VerticalGroup {
+        width: 30;
+        height: auto;
+        padding: 1 2;
+        background: $surface;
+        border: thick $primary;
+    }
+    """
+    BINDINGS: typing.ClassVar = [("escape", "cancel", "Cancel")]
+
+    def compose(self) -> textual.app.ComposeResult:
+        with textual.containers.VerticalGroup():
+            yield textual.widgets.Label("Grant type")
+            yield textual.widgets.Select.from_values(GRANT_TYPES, allow_blank=False, compact=True)
+            yield textual.widgets.Button("Add", variant="primary")
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
+    @textual.on(textual.widgets.Button.Pressed)
+    def _on_add(self) -> None:
+        select = self.query_one(textual.widgets.Select)
+        if select.value is textual.widgets.Select.BLANK:
+            return
+        self.dismiss(str(select.value))
+
 
 class GrantListScreen(textual.screen.Screen[None]):
-    BINDINGS: typing.ClassVar = [("escape", "app.pop_screen", "Back"), ("e", "edit_grant", "Edit")]
+    BINDINGS: typing.ClassVar = [
+        ("escape", "app.pop_screen", "Back"),
+        ("a", "add_grant", "Add"),
+        ("d", "delete_grant", "Delete"),
+        ("e", "edit_grant", "Edit"),
+    ]
 
     def __init__(self, auth: async_client.AsyncClient, grant_list: list, sub_title: str, role_id: int) -> None:
         super().__init__()
@@ -27,9 +67,52 @@ class GrantListScreen(textual.screen.Screen[None]):
         self.sub_title = self._sub_title
         table = self.query_one(textual.widgets.DataTable)
         table.add_columns("Type", "Filter", "Permissions")
+        self._populate_table(table)
+
+    def _populate_table(self, table: textual.widgets.DataTable) -> None:
+        table.clear(columns=False)
         for grant in self._grant_list:
             grant_type, filter_str, perm_str = client.grant.to_text(grant)
             table.add_row(grant_type, filter_str, perm_str)
+
+    async def _save_grants(self) -> bool:
+        response = await self._auth.patch(
+            f"{self._auth.directory.role}/{self._role_id}",
+            json={"grant_list": self._grant_list},
+        )
+        if response.status_code != 200:
+            self.notify(response.json().get("title", "Failed to save grants"), severity="error")
+            return False
+        return True
+
+    @textual.work
+    async def action_add_grant(self) -> None:
+        grant_type = await self.app.push_screen_wait(GrantTypeScreen())
+        if grant_type is None:
+            return
+        new_grant = grant_edit.new_grant(grant_type)
+        updated_grant = await self.app.push_screen_wait(grant_edit.GrantEditScreen(self._auth, new_grant))
+        if updated_grant is None:
+            return
+        self._grant_list.append(updated_grant)
+        if not await self._save_grants():
+            self._grant_list.pop()
+            return
+        self._populate_table(self.query_one(textual.widgets.DataTable))
+        self.notify("Grant added")
+
+    @textual.work
+    async def action_delete_grant(self) -> None:
+        table = self.query_one(textual.widgets.DataTable)
+        if not self._grant_list:
+            return
+        index = table.cursor_row
+        deleted = self._grant_list.pop(index)
+        if not await self._save_grants():
+            self._grant_list.insert(index, deleted)
+            return
+        self._populate_table(table)
+        self.notify("Grant deleted")
 
     @textual.work
     async def action_edit_grant(self) -> None:
@@ -41,15 +124,7 @@ class GrantListScreen(textual.screen.Screen[None]):
         if updated_grant is None:
             return
         self._grant_list[index] = updated_grant
-        response = await self._auth.patch(
-            f"{self._auth.directory.role}/{self._role_id}",
-            json={"grant_list": self._grant_list},
-        )
-        if response.status_code != 200:
-            self.notify(response.json().get("title", "Failed to save grants"), severity="error")
+        if not await self._save_grants():
             return
-        table.clear(columns=False)
-        for grant in self._grant_list:
-            grant_type, filter_str, perm_str = client.grant.to_text(grant)
-            table.add_row(grant_type, filter_str, perm_str)
+        self._populate_table(table)
         self.notify("Grants saved")
