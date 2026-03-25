@@ -199,7 +199,6 @@ class IdentityGrantEditWidget(textual.widget.Widget):
     }
     #permission-create-fields {
         height: 2;
-        margin: 0 0 0 3;
         layout: grid;
         grid-size: 2;
         grid-columns: auto 1fr;
@@ -221,9 +220,11 @@ class IdentityGrantEditWidget(textual.widget.Widget):
         self._filter_boundary_list_str: str = " ".join(boundary_list)
         self._perm_create_allowed: bool = permission["create"]["allowed"]
         allowed_tags = permission["create"].get("allowed_tag_list") or []
+        self._perm_create_allowed_tags_active: bool = bool(allowed_tags)
         self._perm_create_allowed_tags_str: str = " ".join(f"{t['name']}={t['value']}" for t in allowed_tags)
-        req_boundaries = permission["create"].get("required_boundary_list") or []
-        self._perm_create_req_boundaries_str: str = " ".join(req_boundaries)
+        req_boundaries = permission["create"].get("required_boundary_list")
+        self._perm_create_req_boundaries_active: bool = req_boundaries is not None
+        self._perm_create_req_boundaries_str: str = " ".join(req_boundaries or [])
         self._perm_read: bool = permission["read"]
         self._perm_update_name: bool = _update_field(permission["update"], "name")
         self._perm_delete: bool = permission["delete"]
@@ -290,19 +291,31 @@ class IdentityGrantEditWidget(textual.widget.Widget):
                 "Create", value=self._perm_create_allowed, id="permission-create", compact=True
             )
             with textual.containers.Container(id="permission-create-fields", disabled=not self._perm_create_allowed):
-                yield textual.widgets.Label("Allowed tags", classes="label")
+                yield textual.widgets.Checkbox(
+                    "Create allowed tags",
+                    value=self._perm_create_allowed_tags_active,
+                    compact=True,
+                    id="permission-create-allowed-tags-active",
+                )
                 allowed_tags = textual.widgets.Input(
                     value=self._perm_create_allowed_tags_str,
                     placeholder="Type a tag name=value",
                     compact=True,
+                    disabled=not self._perm_create_allowed_tags_active,
                     id="permission-create-allowed-tags",
                 )
                 yield allowed_tags
-                yield textual.widgets.Label("Required Boundaries", classes="label")
+                yield textual.widgets.Checkbox(
+                    "Create required boundaries",
+                    value=self._perm_create_req_boundaries_active,
+                    compact=True,
+                    id="permission-create-req-boundaries-active",
+                )
                 required_boundaries = textual.widgets.Input(
                     value=self._perm_create_req_boundaries_str,
                     placeholder="Type a boundary name",
                     compact=True,
+                    disabled=not self._perm_create_req_boundaries_active,
                     id="permission-create-required-boundaries",
                 )
                 yield required_boundaries
@@ -389,6 +402,24 @@ class IdentityGrantEditWidget(textual.widget.Widget):
         self._perm_create_allowed = event.value
         self.query_one("#permission-create-fields").disabled = not event.value
 
+    @textual.on(textual.widgets.Checkbox.Changed, "#permission-create-allowed-tags-active")
+    def _on_perm_create_allowed_tags_active_changed(self, event: textual.widgets.Checkbox.Changed) -> None:
+        self._perm_create_allowed_tags_active = event.value
+        inp = self.query_one("#permission-create-allowed-tags", textual.widgets.Input)
+        if not event.value:
+            inp.clear()
+            self._perm_create_allowed_tags_str = ""
+        inp.disabled = not event.value
+
+    @textual.on(textual.widgets.Checkbox.Changed, "#permission-create-req-boundaries-active")
+    def _on_perm_create_req_boundaries_active_changed(self, event: textual.widgets.Checkbox.Changed) -> None:
+        self._perm_create_req_boundaries_active = event.value
+        inp = self.query_one("#permission-create-required-boundaries", textual.widgets.Input)
+        if not event.value:
+            inp.clear()
+            self._perm_create_req_boundaries_str = ""
+        inp.disabled = not event.value
+
     @textual.on(textual.widgets.Input.Changed, "#permission-create-allowed-tags")
     def _on_perm_create_allowed_tags_changed(self, event: textual.widgets.Input.Changed) -> None:
         self._perm_create_allowed_tags_str = event.value
@@ -423,8 +454,12 @@ class IdentityGrantEditWidget(textual.widget.Widget):
             {
                 "create": {
                     "allowed": self._perm_create_allowed,
-                    "allowed_tag_list": _parse_tag_list(self._perm_create_allowed_tags_str) or [],
-                    "required_boundary_list": _parse_boundary_list(self._perm_create_req_boundaries_str),
+                    "allowed_tag_list": (_parse_tag_list(self._perm_create_allowed_tags_str) or [])
+                    if self._perm_create_allowed_tags_active
+                    else [],
+                    "required_boundary_list": (_parse_boundary_list(self._perm_create_req_boundaries_str) or [])
+                    if self._perm_create_req_boundaries_active
+                    else None,
                 },
                 "read": self._perm_read,
                 "update": {
