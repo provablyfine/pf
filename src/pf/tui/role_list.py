@@ -1,10 +1,11 @@
 import typing
 
+import textual
 import textual.app
 import textual.screen
 import textual.widgets
 
-from . import async_client, grant_list, header, member_list
+from . import async_client, header, role_view
 
 
 def _ellipsize(s: str, max_len: int) -> str:
@@ -16,8 +17,7 @@ def _ellipsize(s: str, max_len: int) -> str:
 class RoleListScreen(textual.screen.Screen[None]):
     TITLE = "Provably Fine"
     BINDINGS: typing.ClassVar = [
-        ("g", "view_grants", "View grants"),
-        ("m", "view_members", "Members"),
+        ("enter", "view_role", "View"),
     ]
 
     def __init__(self, auth: async_client.AsyncClient) -> None:
@@ -42,22 +42,13 @@ class RoleListScreen(textual.screen.Screen[None]):
                 str(len(role["grant_list"])),
             )
 
-    def action_view_grants(self) -> None:
-        table = self.query_one(textual.widgets.DataTable)
-        if not self._roles:
-            return
-        role = self._roles[table.cursor_row]
-        self.app.push_screen(
-            grant_list.GrantListScreen(self._auth, role["grant_list"], f"Roles > {role['name']} > Grants", role["id"])
-        )
+    @textual.on(textual.widgets.DataTable.RowSelected)
+    def _on_row_selected(self) -> None:
+        self.action_view_role()
 
-    def action_view_members(self) -> None:
-        table = self.query_one(textual.widgets.DataTable)
+    def action_view_role(self) -> None:
         if not self._roles:
             return
+        table = self.query_one(textual.widgets.DataTable)
         role = self._roles[table.cursor_row]
-        self.app.push_screen(
-            member_list.MemberListScreen(
-                self._auth, role["member_list"], f"Roles > {role['name']} > Members", role["id"]
-            )
-        )
+        self.app.push_screen(role_view.RoleViewScreen(self._auth, role))

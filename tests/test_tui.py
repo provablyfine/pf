@@ -53,19 +53,29 @@ async def test_tui_grant_edit_identity_fails(api):
             # Wait for the role list to load
             await pilot.pause(1.0)
 
-            # Root role is the only role and the cursor is on it; press 'g' to view grants
-            await pilot.press("g")
+            # Root role is the only role; press enter to open the role view
+            await pilot.press("enter")
             await pilot.pause(0.5)
 
-            # The identity grant is the first row (row 0)
-            # Press 'e' to open the edit screen
-            await pilot.press("e")
+            # Tab to the grants DataTable; the identity grant is row 0
+            await pilot.press("tab")
+            await pilot.press("enter")
 
             # Wait for the GrantEditScreen and IdentityGrantEditWidget.on_mount
             # (three API calls: identities, tags, boundaries)
             await pilot.pause(3.0)
 
-            # Save without changes
+            # Enable filter.name to make the grant differ from its saved state
+            await pilot.click("#filter-name Checkbox")
+            await pilot.pause(0.1)
+            await pilot.press(*"root")
+            await pilot.pause(0.1)
+
+            # Confirm grant edits (returns to RoleViewScreen, no DB write yet)
+            await pilot.press("ctrl+s")
+
+            # Save the role (triggers PATCH for changed grant_list, which should fail)
+            await pilot.pause(0.5)
             await pilot.press("ctrl+s")
 
             # Wait for the PATCH response and notification
@@ -106,9 +116,10 @@ async def test_tui_role_grant_edit(api):
         async with app.run_test(size=(200, 50)) as pilot:
             await pilot.pause(1.0)
             await pilot.press("down", "down")  # navigate to test-role (row 2)
-            await pilot.press("g")
+            await pilot.press("enter")  # open role view
             await pilot.pause(0.5)
-            await pilot.press("e")
+            await pilot.press("tab")  # focus grants DataTable
+            await pilot.press("enter")
             await pilot.pause(1.0)  # RoleGrantEditWidget.on_mount: 1 API call
 
             await pilot.click("#filter-name Checkbox")
@@ -126,7 +137,9 @@ async def test_tui_role_grant_edit(api):
                 await pilot.press("space")  # toggle current item
                 await pilot.press("down")  # advance cursor (no-op on last item)
 
-            await pilot.press("ctrl+s")
+            await pilot.press("ctrl+s")  # confirm grant edits
+            await pilot.pause(0.5)
+            await pilot.press("ctrl+s")  # save role
             await pilot.pause(2.0)
 
         assert not [n for n in app._notifications if n.severity == "error"]
@@ -160,9 +173,10 @@ async def test_tui_identity_grant_edit_filters(api):
         async with app.run_test(size=(200, 50)) as pilot:
             await pilot.pause(1.0)
             await pilot.press("down")  # navigate to test-role (row 1)
-            await pilot.press("g")
+            await pilot.press("enter")  # open role view
             await pilot.pause(0.5)
-            await pilot.press("e")
+            await pilot.press("tab")  # focus grants DataTable
+            await pilot.press("enter")
             await pilot.pause(3.0)  # IdentityGrantEditWidget.on_mount: 3 API calls
 
             await pilot.click("#filter-name Checkbox")
@@ -182,7 +196,9 @@ async def test_tui_identity_grant_edit_filters(api):
             await pilot.press(*"zone1")
             await pilot.pause(0.1)
 
-            await pilot.press("ctrl+s")
+            await pilot.press("ctrl+s")  # confirm grant edits
+            await pilot.pause(0.5)
+            await pilot.press("ctrl+s")  # save role
             await pilot.pause(2.0)
 
         assert not [n for n in app._notifications if n.severity == "error"]
@@ -211,9 +227,10 @@ async def test_tui_identity_grant_edit_permissions(api):
         async with app.run_test(size=(200, 50)) as pilot:
             await pilot.pause(1.0)
             await pilot.press("down")  # navigate to test-role (row 1)
-            await pilot.press("g")
+            await pilot.press("enter")  # open role view
             await pilot.pause(0.5)
-            await pilot.press("e")
+            await pilot.press("tab")  # focus grants DataTable
+            await pilot.press("enter")
             await pilot.pause(3.0)  # IdentityGrantEditWidget.on_mount: 3 API calls
 
             # permission.create: enable (also enables the sub-fields container).
@@ -258,7 +275,9 @@ async def test_tui_identity_grant_edit_permissions(api):
             await pilot.press(*"email")
             await pilot.pause(0.1)
 
-            await pilot.press("ctrl+s")
+            await pilot.press("ctrl+s")  # confirm grant edits
+            await pilot.pause(0.5)
+            await pilot.press("ctrl+s")  # save role
             await pilot.pause(2.0)
 
         assert not [n for n in app._notifications if n.severity == "error"]
@@ -289,9 +308,10 @@ async def test_tui_tag_grant_edit(api):
         async with app.run_test(size=(200, 50)) as pilot:
             await pilot.pause(1.0)
             await pilot.press("down")  # navigate to test-role (row 1)
-            await pilot.press("g")
+            await pilot.press("enter")  # open role view
             await pilot.pause(0.5)
-            await pilot.press("e")
+            await pilot.press("tab")  # focus grants DataTable
+            await pilot.press("enter")
             await pilot.pause(1.0)  # TagGrantEditWidget.on_mount: 1 API call
 
             await pilot.click("#filter-name-value Checkbox")
@@ -305,7 +325,9 @@ async def test_tui_tag_grant_edit(api):
             await pilot.press("down")
             await pilot.press("space")  # read=1
 
-            await pilot.press("ctrl+s")
+            await pilot.press("ctrl+s")  # confirm grant edits
+            await pilot.pause(0.5)
+            await pilot.press("ctrl+s")  # save role
             await pilot.pause(2.0)
 
         assert not [n for n in app._notifications if n.severity == "error"]
@@ -330,9 +352,10 @@ async def test_tui_boundary_grant_edit(api):
         async with app.run_test(size=(200, 50)) as pilot:
             await pilot.pause(1.0)
             await pilot.press("down")  # navigate to test-role (row 1)
-            await pilot.press("g")
+            await pilot.press("enter")  # open role view
             await pilot.pause(0.5)
-            await pilot.press("e")
+            await pilot.press("tab")  # focus grants DataTable
+            await pilot.press("enter")
             await pilot.pause(1.0)  # BoundaryGrantEditWidget.on_mount: 1 API call
 
             await pilot.click("#filter-name Checkbox")
@@ -349,7 +372,9 @@ async def test_tui_boundary_grant_edit(api):
             await pilot.press("down")
             await pilot.press("space")  # update.name=2
 
-            await pilot.press("ctrl+s")
+            await pilot.press("ctrl+s")  # confirm grant edits
+            await pilot.pause(0.5)
+            await pilot.press("ctrl+s")  # save role
             await pilot.pause(2.0)
 
         assert not [n for n in app._notifications if n.severity == "error"]
@@ -374,9 +399,10 @@ async def test_tui_tenant_grant_edit(api):
         async with app.run_test(size=(200, 50)) as pilot:
             await pilot.pause(1.0)
             await pilot.press("down")  # navigate to test-role (row 1)
-            await pilot.press("g")
+            await pilot.press("enter")  # open role view
             await pilot.pause(0.5)
-            await pilot.press("e")
+            await pilot.press("tab")  # focus grants DataTable
+            await pilot.press("enter")
             await pilot.pause(1.0)  # TenantGrantEditWidget.on_mount: 1 API call
 
             # SelectionList: create=0, read=1, ...
@@ -385,7 +411,9 @@ async def test_tui_tenant_grant_edit(api):
             await pilot.press("down")  # move to read=1
             await pilot.press("space")  # toggle read
 
-            await pilot.press("ctrl+s")
+            await pilot.press("ctrl+s")  # confirm grant edits
+            await pilot.pause(0.5)
+            await pilot.press("ctrl+s")  # save role
             await pilot.pause(2.0)
 
         assert not [n for n in app._notifications if n.severity == "error"]
@@ -410,9 +438,10 @@ async def test_tui_ssh_grant_edit(api):
         async with app.run_test(size=(200, 50)) as pilot:
             await pilot.pause(1.0)
             await pilot.press("down")  # navigate to test-role (row 1)
-            await pilot.press("g")
+            await pilot.press("enter")  # open role view
             await pilot.pause(0.5)
-            await pilot.press("e")
+            await pilot.press("tab")  # focus grants DataTable
+            await pilot.press("enter")
             await pilot.pause(3.0)  # SshGrantEditWidget.on_mount: 3 API calls
 
             await pilot.click("#filter-name Checkbox")
@@ -428,7 +457,9 @@ async def test_tui_ssh_grant_edit(api):
 
             await pilot.click("#perm-permit-pty")
 
-            await pilot.press("ctrl+s")
+            await pilot.press("ctrl+s")  # confirm grant edits
+            await pilot.pause(0.5)
+            await pilot.press("ctrl+s")  # save role
             await pilot.pause(2.0)
 
         assert not [n for n in app._notifications if n.severity == "error"]

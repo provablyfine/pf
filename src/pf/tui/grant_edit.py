@@ -681,7 +681,7 @@ class GrantEditScreen(textual.screen.Screen[dict | None]):
     }
     """
     BINDINGS: typing.ClassVar = [
-        ("ctrl+s", "save", "Save"),
+        ("ctrl+s", "confirm", "Confirm"),
         ("escape", "cancel", "Cancel"),
         ("up", "app.focus_previous", ""),
         ("down", "app.focus_next", ""),
@@ -719,7 +719,7 @@ class GrantEditScreen(textual.screen.Screen[dict | None]):
     def action_cancel(self) -> None:
         self.dismiss(None)
 
-    def action_save(self) -> None:
+    def action_confirm(self) -> None:
         widgets = list(self.query_one("#dynamic-grant-fields").query(_GrantEditWidget))
         if not widgets:
             return
