@@ -17,7 +17,6 @@ class RoleViewScreen(textual.screen.Screen[None]):
         ("escape", "app.pop_screen", "Back"),
         ("a", "add", "Add"),
         ("d", "delete", "Delete"),
-        ("enter", "edit_grant", "Edit grant"),
     ]
 
     def __init__(self, auth: async_client.AsyncClient, role: dict) -> None:
@@ -53,7 +52,6 @@ class RoleViewScreen(textual.screen.Screen[None]):
         self.query_one("#grants", textual.widgets.DataTable).add_columns("Type", "Filter", "Permissions")
         await self._populate_members()
         self._populate_grants()
-        self.query_one("#members").focus()
 
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
         if action == "edit_grant":

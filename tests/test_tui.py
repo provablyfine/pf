@@ -58,7 +58,7 @@ async def test_tui_grant_edit_identity_fails(api):
             await pilot.pause(0.5)
 
             # Tab to the grants DataTable; the identity grant is row 0
-            await pilot.press("tab")
+            await pilot.press("tab", "tab", "tab")
             await pilot.press("enter")
 
             # Wait for the GrantEditScreen and IdentityGrantEditWidget.on_mount
@@ -118,7 +118,7 @@ async def test_tui_role_grant_edit(api):
             await pilot.press("down", "down")  # navigate to test-role (row 2)
             await pilot.press("enter")  # open role view
             await pilot.pause(0.5)
-            await pilot.press("tab")  # focus grants DataTable
+            await pilot.press("tab", "tab", "tab")  # focus grants DataTable
             await pilot.press("enter")
             await pilot.pause(1.0)  # RoleGrantEditWidget.on_mount: 1 API call
 
@@ -175,7 +175,7 @@ async def test_tui_identity_grant_edit_filters(api):
             await pilot.press("down")  # navigate to test-role (row 1)
             await pilot.press("enter")  # open role view
             await pilot.pause(0.5)
-            await pilot.press("tab")  # focus grants DataTable
+            await pilot.press("tab", "tab", "tab")  # focus grants DataTable
             await pilot.press("enter")
             await pilot.pause(3.0)  # IdentityGrantEditWidget.on_mount: 3 API calls
 
@@ -229,7 +229,7 @@ async def test_tui_identity_grant_edit_permissions(api):
             await pilot.press("down")  # navigate to test-role (row 1)
             await pilot.press("enter")  # open role view
             await pilot.pause(0.5)
-            await pilot.press("tab")  # focus grants DataTable
+            await pilot.press("tab", "tab", "tab")  # focus grants DataTable
             await pilot.press("enter")
             await pilot.pause(3.0)  # IdentityGrantEditWidget.on_mount: 3 API calls
 
@@ -310,7 +310,7 @@ async def test_tui_tag_grant_edit(api):
             await pilot.press("down")  # navigate to test-role (row 1)
             await pilot.press("enter")  # open role view
             await pilot.pause(0.5)
-            await pilot.press("tab")  # focus grants DataTable
+            await pilot.press("tab", "tab", "tab")  # focus grants DataTable
             await pilot.press("enter")
             await pilot.pause(1.0)  # TagGrantEditWidget.on_mount: 1 API call
 
@@ -354,7 +354,7 @@ async def test_tui_boundary_grant_edit(api):
             await pilot.press("down")  # navigate to test-role (row 1)
             await pilot.press("enter")  # open role view
             await pilot.pause(0.5)
-            await pilot.press("tab")  # focus grants DataTable
+            await pilot.press("tab", "tab", "tab")  # focus grants DataTable
             await pilot.press("enter")
             await pilot.pause(1.0)  # BoundaryGrantEditWidget.on_mount: 1 API call
 
@@ -401,7 +401,7 @@ async def test_tui_tenant_grant_edit(api):
             await pilot.press("down")  # navigate to test-role (row 1)
             await pilot.press("enter")  # open role view
             await pilot.pause(0.5)
-            await pilot.press("tab")  # focus grants DataTable
+            await pilot.press("tab", "tab", "tab")  # focus grants DataTable
             await pilot.press("enter")
             await pilot.pause(1.0)  # TenantGrantEditWidget.on_mount: 1 API call
 
@@ -440,7 +440,7 @@ async def test_tui_ssh_grant_edit(api):
             await pilot.press("down")  # navigate to test-role (row 1)
             await pilot.press("enter")  # open role view
             await pilot.pause(0.5)
-            await pilot.press("tab")  # focus grants DataTable
+            await pilot.press("tab", "tab", "tab")  # focus grants DataTable
             await pilot.press("enter")
             await pilot.pause(3.0)  # SshGrantEditWidget.on_mount: 3 API calls
 
