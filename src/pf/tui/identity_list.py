@@ -6,7 +6,7 @@ import textual.containers
 import textual.screen
 import textual.widgets
 
-from . import async_client, header, identity_view
+from . import async_client, clipboard, header, identity_view
 
 
 class _IdentityCreateScreen(textual.screen.ModalScreen[str | None]):
@@ -98,7 +98,6 @@ class _InviteSecretScreen(textual.screen.ModalScreen[None]):
     """
     BINDINGS: typing.ClassVar = [
         ("escape", "dismiss_screen", "Close"),
-        ("ctrl+c", "copy", "Copy"),
     ]
 
     def __init__(self, secret: str) -> None:
@@ -109,14 +108,15 @@ class _InviteSecretScreen(textual.screen.ModalScreen[None]):
         with textual.containers.VerticalGroup() as container:
             container.border_title = "Invitation secret"
             yield textual.widgets.Input(self._secret, id="secret", compact=True)
-            yield textual.widgets.Label("ctrl+c to copy · escape to close")
 
-    def on_mount(self) -> None:
+    @textual.work
+    async def on_mount(self) -> None:
         self.query_one("#secret", textual.widgets.Input).can_focus = False
-
-    def action_copy(self) -> None:
-        self.app.copy_to_clipboard(self._secret)
-        self.notify("Copied to clipboard")
+        try:
+            await clipboard.copy(self.app, self._secret)
+            self.notify("Copied to clipboard")
+        except Exception:
+            self.notify("Failed to copy to clipboard", severity="warning")
 
     def action_dismiss_screen(self) -> None:
         self.dismiss(None)
@@ -225,7 +225,7 @@ class IdentityListScreen(textual.screen.Screen[None]):
             f"{self._auth.directory.identity}/{identity['id']}/invite",
             json={"delivery": method},
         )
-        if response.status_code != 200:
+        if response.status_code >= 400:
             self.notify(response.json().get("title", "Failed to invite identity"), severity="error")
             return
         if method == "manual":
