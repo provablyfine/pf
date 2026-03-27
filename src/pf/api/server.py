@@ -1,8 +1,8 @@
 import argparse
 import datetime
+import signal
 import socket
 import urllib.parse
-import signal
 
 import uvicorn
 

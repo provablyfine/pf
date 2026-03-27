@@ -619,15 +619,23 @@ class SshGrantEditWidget(_GrantEditWidget):
                 id="perm-force-command-list",
             )
             yield textual.widgets.Checkbox("Permit PTY", value=p["permit_pty"], id="perm-permit-pty", compact=True)
-            yield textual.widgets.Checkbox("Permit user RC", value=p["permit_user_rc"], id="perm-permit-user-rc", compact=True)
+            yield textual.widgets.Checkbox(
+                "Permit user RC", value=p["permit_user_rc"], id="perm-permit-user-rc", compact=True
+            )
             yield textual.widgets.Checkbox(
                 "Permit X11 forwarding", value=p["permit_x11_forwarding"], id="perm-permit-x11-forwarding", compact=True
             )
             yield textual.widgets.Checkbox(
-                "Permit agent forwarding", value=p["permit_agent_forwarding"], id="perm-permit-agent-forwarding", compact=True
+                "Permit agent forwarding",
+                value=p["permit_agent_forwarding"],
+                id="perm-permit-agent-forwarding",
+                compact=True,
             )
             yield textual.widgets.Checkbox(
-                "Permit port forwarding", value=p["permit_port_forwarding"], id="perm-permit-port-forwarding", compact=True
+                "Permit port forwarding",
+                value=p["permit_port_forwarding"],
+                id="perm-permit-port-forwarding",
+                compact=True,
             )
 
     async def on_mount(self) -> None:

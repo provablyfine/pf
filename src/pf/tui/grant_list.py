@@ -42,13 +42,16 @@ class GrantTypeScreen(textual.screen.ModalScreen[str | None]):
 
     def compose(self) -> textual.app.ComposeResult:
         with textual.containers.VerticalGroup(id="popup"):
-            yield textual.widgets.ListView(*[
-                textual.widgets.ListItem(textual.widgets.Label(grant_type), id=grant_type) for grant_type in GRANT_TYPES
-            ])
+            yield textual.widgets.ListView(
+                *[
+                    textual.widgets.ListItem(textual.widgets.Label(grant_type), id=grant_type)
+                    for grant_type in GRANT_TYPES
+                ]
+            )
 
     def on_mount(self) -> None:
-         self.query_one("#popup").border_title = "Add grant"
-         self.query_one("#popup").border_title_align = "left"
+        self.query_one("#popup").border_title = "Add grant"
+        self.query_one("#popup").border_title_align = "left"
 
     def action_cancel(self) -> None:
         self.dismiss(None)

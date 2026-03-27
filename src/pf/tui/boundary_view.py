@@ -152,9 +152,7 @@ class BoundaryViewScreen(textual.screen.Screen[None]):
         if not grant_list_ref:
             return
         index = table.cursor_row
-        updated_grant = await self.app.push_screen_wait(
-            grant_edit.GrantEditScreen(self._auth, grant_list_ref[index])
-        )
+        updated_grant = await self.app.push_screen_wait(grant_edit.GrantEditScreen(self._auth, grant_list_ref[index]))
         if updated_grant is None:
             return
         grant_list_ref[index] = updated_grant

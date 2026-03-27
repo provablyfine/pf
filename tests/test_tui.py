@@ -511,7 +511,7 @@ async def test_tui_tag_list(api):
             await pilot.press("a")  # open add modal
             await pilot.pause(0.1)
             await pilot.press(*"env")  # type name
-            await pilot.press("tab")   # move to value input
+            await pilot.press("tab")  # move to value input
             await pilot.press(*"prod")  # type value
             await pilot.press("enter")  # submit
             await pilot.pause(1.0)
@@ -561,7 +561,7 @@ async def test_tui_boundary_list(api):
             await pilot.press("a")  # open add modal
             await pilot.pause(0.1)
             await pilot.press(*"zone1")  # type name
-            await pilot.press("enter")   # submit (description is optional)
+            await pilot.press("enter")  # submit (description is optional)
             await pilot.pause(1.0)
 
         assert not [n for n in app._notifications if n.severity == "error"]
@@ -611,7 +611,7 @@ async def test_tui_identity_list(api):
             await pilot.press("a")  # open add modal
             await pilot.pause(0.1)
             await pilot.press(*"alice")  # type name
-            await pilot.press("enter")   # submit
+            await pilot.press("enter")  # submit
             await pilot.pause(1.0)
 
         assert not [n for n in app._notifications if n.severity == "error"]
@@ -634,10 +634,10 @@ async def test_tui_tenant_list(api):
 
             await pilot.press("a")  # open add modal
             await pilot.pause(0.1)
-            await pilot.press(*"acme")      # type name
-            await pilot.press("tab")        # move to display_name input
+            await pilot.press(*"acme")  # type name
+            await pilot.press("tab")  # move to display_name input
             await pilot.press(*"Acme Corp")  # type display name
-            await pilot.press("enter")       # submit
+            await pilot.press("enter")  # submit
             await pilot.pause(1.0)
 
         assert not [n for n in app._notifications if n.severity == "error"]
@@ -678,7 +678,13 @@ async def test_tui_identity_delete(api):
         auth = _setup(api, tmpdir)
         await auth.post(
             auth.directory.identity,
-            json={"name": "alice", "boundary_id_list": [], "boundary_name_list": [], "tag_id_list": [], "tag_name_value_list": []},
+            json={
+                "name": "alice",
+                "boundary_id_list": [],
+                "boundary_name_list": [],
+                "tag_id_list": [],
+                "tag_name_value_list": [],
+            },
         )
         app = pf.tui.app.TuiApp(auth)
 
@@ -768,7 +774,13 @@ async def test_tui_identity_add_tag(api):
         # create a non-root identity so we can PATCH it (patching self is not allowed)
         response = await auth.post(
             auth.directory.identity,
-            json={"name": "alice", "boundary_id_list": [], "boundary_name_list": [], "tag_id_list": [], "tag_name_value_list": []},
+            json={
+                "name": "alice",
+                "boundary_id_list": [],
+                "boundary_name_list": [],
+                "tag_id_list": [],
+                "tag_name_value_list": [],
+            },
         )
         alice_id = response.json()["id"]
 
