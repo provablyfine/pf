@@ -644,3 +644,162 @@ async def test_tui_tenant_list(api):
 
     tenants = await auth.list_tenants()
     assert any(t["name"] == "acme" and t["display_name"] == "Acme Corp" for t in tenants)
+
+
+@pytest.mark.anyio
+async def test_tui_role_delete(api):
+    """Delete a role via the TUI."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        auth = _setup(api, tmpdir)
+        await auth.post(auth.directory.role, json={"name": "to-delete"})
+        app = pf.tui.app.TuiApp(auth)
+
+        async with app.run_test(size=(200, 50)) as pilot:
+            await pilot.pause(1.0)
+            await pilot.press("down", "down", "down", "down")  # navigate to Roles (index 4)
+            await pilot.press("enter")  # open RoleListScreen
+            await pilot.pause(0.5)
+
+            # role list: root=row0, to-delete=row1
+            await pilot.press("down")
+            await pilot.press("d")  # delete to-delete
+            await pilot.pause(1.0)
+
+        assert not [n for n in app._notifications if n.severity == "error"]
+
+    roles = await auth.list_roles()
+    assert not any(r["name"] == "to-delete" for r in roles)
+
+
+@pytest.mark.anyio
+async def test_tui_identity_delete(api):
+    """Delete an identity via the TUI."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        auth = _setup(api, tmpdir)
+        await auth.post(
+            auth.directory.identity,
+            json={"name": "alice", "boundary_id_list": [], "boundary_name_list": [], "tag_id_list": [], "tag_name_value_list": []},
+        )
+        app = pf.tui.app.TuiApp(auth)
+
+        async with app.run_test(size=(200, 50)) as pilot:
+            await pilot.pause(1.0)
+            await pilot.press("down")  # navigate to Identities (index 1)
+            await pilot.press("enter")  # open IdentityListScreen
+            await pilot.pause(0.5)
+
+            # identity list: root=row0, alice=row1
+            await pilot.press("down")
+            await pilot.press("d")  # delete alice
+            await pilot.pause(1.0)
+
+        assert not [n for n in app._notifications if n.severity == "error"]
+
+    identities = await auth.list_identities()
+    assert not any(i["name"] == "alice" for i in identities)
+
+
+@pytest.mark.anyio
+async def test_tui_tenant_delete(api):
+    """Delete a tenant via the TUI."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        auth = _setup(api, tmpdir)
+        await auth.post(auth.directory.tenant, json={"name": "acme", "display_name": "Acme Corp"})
+        tenants_before = await auth.list_tenants()
+        tenant_id = next(t["id"] for t in tenants_before if t["name"] == "acme")
+        app = pf.tui.app.TuiApp(auth)
+
+        async with app.run_test(size=(200, 50)) as pilot:
+            await pilot.pause(1.0)
+            await pilot.press("enter")  # open TenantListScreen (index 0, no down needed)
+            await pilot.pause(0.5)
+
+            await pilot.press("d")  # delete row 0 (the only tenant)
+            await pilot.pause(1.0)
+
+        assert not [n for n in app._notifications if n.severity == "error"]
+
+        # verify deletion: direct GET for the specific tenant returns 404
+        check = await auth.get(auth.directory.tenant, params={"id": tenant_id})
+        assert check.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_tui_boundary_edit_description(api):
+    """Edit a boundary's description via BoundaryViewScreen and save."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        auth = _setup(api, tmpdir)
+        response = await auth.post(auth.directory.boundary, json={"name": "zone1"})
+        boundary_id = response.json()["boundary"]["id"]
+        app = pf.tui.app.TuiApp(auth)
+
+        async with app.run_test(size=(200, 50)) as pilot:
+            await pilot.pause(1.0)
+            await pilot.press("down", "down")  # navigate to Boundaries (index 2)
+            await pilot.press("enter")  # open BoundaryListScreen
+            await pilot.pause(0.5)
+
+            # boundary list: root=row0, zone1=row1
+            await pilot.press("down")
+            await pilot.press("enter")  # open zone1 BoundaryViewScreen
+            await pilot.pause(0.5)
+
+            # BoundaryViewScreen: Input#name is focused; tab to Input#description
+            await pilot.press("tab")
+            await pilot.press(*"A test boundary")
+
+            await pilot.press("ctrl+s")
+            await pilot.pause(2.0)
+
+        assert not [n for n in app._notifications if n.severity == "error"]
+
+    response = await auth.get(auth.directory.boundary, params={"id": boundary_id})
+    boundary = response.json()["boundaries"][0]
+    assert boundary["description"] == "A test boundary"
+
+
+@pytest.mark.anyio
+async def test_tui_identity_add_tag(api):
+    """Add a tag to an identity via IdentityViewScreen and save."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        auth = _setup(api, tmpdir)
+        await auth.post(auth.directory.tag, json={"name": "env", "value": "prod"})
+
+        # create a non-root identity so we can PATCH it (patching self is not allowed)
+        response = await auth.post(
+            auth.directory.identity,
+            json={"name": "alice", "boundary_id_list": [], "boundary_name_list": [], "tag_id_list": [], "tag_name_value_list": []},
+        )
+        alice_id = response.json()["id"]
+
+        app = pf.tui.app.TuiApp(auth)
+
+        async with app.run_test(size=(200, 50)) as pilot:
+            await pilot.pause(1.0)
+            await pilot.press("down")  # navigate to Identities (index 1)
+            await pilot.press("enter")  # open IdentityListScreen
+            await pilot.pause(0.5)
+
+            # identity list: root=row0, alice=row1
+            await pilot.press("down")
+            await pilot.press("enter")  # open alice's IdentityViewScreen
+            await pilot.pause(0.5)
+
+            # IdentityViewScreen: Input#name is focused; tab to ListView#tags
+            # (action_add_tag requires #tags to have focus)
+            await pilot.press("tab")
+            await pilot.press("a")  # action_add_tag → _TagAddScreen opens
+            await pilot.pause(1.0)  # wait for list_tags API call
+
+            await pilot.press(*"env=prod")  # type exact tag label
+            await pilot.press("enter")  # submit; _TagAddScreen dismisses with tag dict
+            await pilot.pause(0.1)
+
+            await pilot.press("ctrl+s")  # save identity
+            await pilot.pause(2.0)
+
+        assert not [n for n in app._notifications if n.severity == "error"]
+
+    response = await auth.get(auth.directory.identity, params={"id": alice_id})
+    identity = response.json()["identities"][0]
+    assert any(t["name"] == "env" and t["value"] == "prod" for t in identity["tags"])
