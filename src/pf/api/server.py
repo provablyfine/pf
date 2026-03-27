@@ -2,6 +2,7 @@ import argparse
 import datetime
 import socket
 import urllib.parse
+import signal
 
 import uvicorn
 
@@ -34,6 +35,24 @@ def run():
 
     print(f"Starting Uvicorn on {host}:{port} using FD {sock.fileno()}")
 
+    def handler(signum, frame):
+        # We do nothing on purpose: this allows uvicorn.run to return
+        # gracefully and this all other handlers run naturally which
+        # specifically is good for coverage tracking
+        # Now, you might want to know why doing nothing here (which
+        # consumes the signal) would result in uvicorn.run returning.
+        # This happens because uvicorn calls signal.set_wakeup_fd so
+        # that the python C code wakes up the file descriptor whenever
+        # a signal is received, regardless of what the corresponding
+        # python handler did.
+        # We do nothing, so, the asyncio main loop runs, uvicorn eventually
+        # reads from this file descriptor, sees that a SIGTERM was received
+        # and just returns from the run() function below.
+        #
+        # OMG. I wish I did not know any of this.
+        pass
+
+    signal.signal(signal.SIGTERM, handler)
     try:
         uvicorn.run(application, fd=sock.fileno(), log_level="info")
     except SystemExit:
