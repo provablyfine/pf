@@ -52,6 +52,7 @@ class RoleListScreen(textual.screen.Screen[None]):
         ("enter", "view_role", "View"),
         ("a", "add_role", "Add"),
         ("d", "delete_role", "Delete"),
+        ("escape", "app.pop_screen", "Back"),
     ]
 
     def __init__(self, auth: async_client.AsyncClient) -> None:

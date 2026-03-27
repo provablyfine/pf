@@ -6,7 +6,7 @@ import textual.app
 import textual.worker
 
 from .. import client
-from . import async_client, role_list
+from . import async_client, home
 
 _DEFAULT_CONFIG = os.path.join(os.path.expanduser("~"), ".config", "pf", "config.json")
 
@@ -19,7 +19,7 @@ class TuiApp(textual.app.App[None]):
         self.auth = auth
 
     def on_mount(self) -> None:
-        self.push_screen(role_list.RoleListScreen(self.auth))
+        self.push_screen(home.HomeScreen(self.auth))
 
     def _handle_exception(self, error: Exception) -> None:
         ui_error: client.exceptions.UI | None = None

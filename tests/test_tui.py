@@ -50,8 +50,10 @@ async def test_tui_grant_edit_identity_fails(api):
         app = pf.tui.app.TuiApp(auth)
 
         async with app.run_test(size=(200, 50)) as pilot:
-            # Wait for the role list to load
             await pilot.pause(1.0)
+            await pilot.press("down", "down", "down", "down")  # navigate to Roles
+            await pilot.press("enter")  # open RoleListScreen
+            await pilot.pause(0.5)  # wait for role list to load
 
             # Root role is the only role; press enter to open the role view
             await pilot.press("enter")
@@ -115,6 +117,9 @@ async def test_tui_role_grant_edit(api):
         app = pf.tui.app.TuiApp(auth)
         async with app.run_test(size=(200, 50)) as pilot:
             await pilot.pause(1.0)
+            await pilot.press("down", "down", "down", "down")  # navigate to Roles
+            await pilot.press("enter")  # open RoleListScreen
+            await pilot.pause(0.5)  # wait for role list to load
             await pilot.press("down", "down")  # navigate to test-role (row 2)
             await pilot.press("enter")  # open role view
             await pilot.pause(0.5)
@@ -172,6 +177,9 @@ async def test_tui_identity_grant_edit_filters(api):
         app = pf.tui.app.TuiApp(auth)
         async with app.run_test(size=(200, 50)) as pilot:
             await pilot.pause(1.0)
+            await pilot.press("down", "down", "down", "down")  # navigate to Roles
+            await pilot.press("enter")  # open RoleListScreen
+            await pilot.pause(0.5)  # wait for role list to load
             await pilot.press("down")  # navigate to test-role (row 1)
             await pilot.press("enter")  # open role view
             await pilot.pause(0.5)
@@ -226,6 +234,9 @@ async def test_tui_identity_grant_edit_permissions(api):
         app = pf.tui.app.TuiApp(auth)
         async with app.run_test(size=(200, 50)) as pilot:
             await pilot.pause(1.0)
+            await pilot.press("down", "down", "down", "down")  # navigate to Roles
+            await pilot.press("enter")  # open RoleListScreen
+            await pilot.pause(0.5)  # wait for role list to load
             await pilot.press("down")  # navigate to test-role (row 1)
             await pilot.press("enter")  # open role view
             await pilot.pause(0.5)
@@ -307,6 +318,9 @@ async def test_tui_tag_grant_edit(api):
         app = pf.tui.app.TuiApp(auth)
         async with app.run_test(size=(200, 50)) as pilot:
             await pilot.pause(1.0)
+            await pilot.press("down", "down", "down", "down")  # navigate to Roles
+            await pilot.press("enter")  # open RoleListScreen
+            await pilot.pause(0.5)  # wait for role list to load
             await pilot.press("down")  # navigate to test-role (row 1)
             await pilot.press("enter")  # open role view
             await pilot.pause(0.5)
@@ -351,6 +365,9 @@ async def test_tui_boundary_grant_edit(api):
         app = pf.tui.app.TuiApp(auth)
         async with app.run_test(size=(200, 50)) as pilot:
             await pilot.pause(1.0)
+            await pilot.press("down", "down", "down", "down")  # navigate to Roles
+            await pilot.press("enter")  # open RoleListScreen
+            await pilot.pause(0.5)  # wait for role list to load
             await pilot.press("down")  # navigate to test-role (row 1)
             await pilot.press("enter")  # open role view
             await pilot.pause(0.5)
@@ -398,6 +415,9 @@ async def test_tui_tenant_grant_edit(api):
         app = pf.tui.app.TuiApp(auth)
         async with app.run_test(size=(200, 50)) as pilot:
             await pilot.pause(1.0)
+            await pilot.press("down", "down", "down", "down")  # navigate to Roles
+            await pilot.press("enter")  # open RoleListScreen
+            await pilot.pause(0.5)  # wait for role list to load
             await pilot.press("down")  # navigate to test-role (row 1)
             await pilot.press("enter")  # open role view
             await pilot.pause(0.5)
@@ -437,6 +457,9 @@ async def test_tui_ssh_grant_edit(api):
         app = pf.tui.app.TuiApp(auth)
         async with app.run_test(size=(200, 50)) as pilot:
             await pilot.pause(1.0)
+            await pilot.press("down", "down", "down", "down")  # navigate to Roles
+            await pilot.press("enter")  # open RoleListScreen
+            await pilot.pause(0.5)  # wait for role list to load
             await pilot.press("down")  # navigate to test-role (row 1)
             await pilot.press("enter")  # open role view
             await pilot.pause(0.5)
