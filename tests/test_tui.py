@@ -493,3 +493,154 @@ async def test_tui_ssh_grant_edit(api):
     assert grant["permission"]["force_command_list"] is None
     assert grant["permission"]["permit_pty"] is True
     assert grant["permission"]["permit_user_rc"] is False
+
+
+@pytest.mark.anyio
+async def test_tui_tag_list(api):
+    """Add a tag via the TUI, verify it exists, then delete it."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        auth = _setup(api, tmpdir)
+        app = pf.tui.app.TuiApp(auth)
+
+        async with app.run_test(size=(200, 50)) as pilot:
+            await pilot.pause(1.0)
+            await pilot.press("down", "down", "down")  # navigate to Tags (index 3)
+            await pilot.press("enter")  # open TagListScreen
+            await pilot.pause(0.5)
+
+            await pilot.press("a")  # open add modal
+            await pilot.pause(0.1)
+            await pilot.press(*"env")  # type name
+            await pilot.press("tab")   # move to value input
+            await pilot.press(*"prod")  # type value
+            await pilot.press("enter")  # submit
+            await pilot.pause(1.0)
+
+        assert not [n for n in app._notifications if n.severity == "error"]
+
+    tags = await auth.list_tags()
+    assert any(t["name"] == "env" and t["value"] == "prod" for t in tags)
+
+
+@pytest.mark.anyio
+async def test_tui_tag_delete(api):
+    """Delete a tag via the TUI."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        auth = _setup(api, tmpdir)
+        await auth.post(auth.directory.tag, json={"name": "env", "value": "prod"})
+        app = pf.tui.app.TuiApp(auth)
+
+        async with app.run_test(size=(200, 50)) as pilot:
+            await pilot.pause(1.0)
+            await pilot.press("down", "down", "down")  # navigate to Tags (index 3)
+            await pilot.press("enter")  # open TagListScreen
+            await pilot.pause(0.5)
+
+            await pilot.press("d")  # delete row 0 (the only tag)
+            await pilot.pause(1.0)
+
+        assert not [n for n in app._notifications if n.severity == "error"]
+
+    tags = await auth.list_tags()
+    assert not any(t["name"] == "env" and t["value"] == "prod" for t in tags)
+
+
+@pytest.mark.anyio
+async def test_tui_boundary_list(api):
+    """Add a boundary via the TUI, verify it exists, then delete it."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        auth = _setup(api, tmpdir)
+        app = pf.tui.app.TuiApp(auth)
+
+        async with app.run_test(size=(200, 50)) as pilot:
+            await pilot.pause(1.0)
+            await pilot.press("down", "down")  # navigate to Boundaries (index 2)
+            await pilot.press("enter")  # open BoundaryListScreen
+            await pilot.pause(0.5)
+
+            await pilot.press("a")  # open add modal
+            await pilot.pause(0.1)
+            await pilot.press(*"zone1")  # type name
+            await pilot.press("enter")   # submit (description is optional)
+            await pilot.pause(1.0)
+
+        assert not [n for n in app._notifications if n.severity == "error"]
+
+    boundaries = await auth.list_boundaries()
+    assert any(b["name"] == "zone1" for b in boundaries)
+
+
+@pytest.mark.anyio
+async def test_tui_boundary_delete(api):
+    """Delete a boundary via the TUI."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        auth = _setup(api, tmpdir)
+        await auth.post(auth.directory.boundary, json={"name": "zone1", "description": ""})
+        app = pf.tui.app.TuiApp(auth)
+
+        async with app.run_test(size=(200, 50)) as pilot:
+            await pilot.pause(1.0)
+            await pilot.press("down", "down")  # navigate to Boundaries (index 2)
+            await pilot.press("enter")  # open BoundaryListScreen
+            await pilot.pause(0.5)
+
+            # initialize creates a root boundary at row 0; zone1 is at row 1
+            await pilot.press("down")
+            await pilot.press("d")  # delete zone1
+            await pilot.pause(1.0)
+
+        assert not [n for n in app._notifications if n.severity == "error"]
+
+    boundaries = await auth.list_boundaries()
+    assert not any(b["name"] == "zone1" for b in boundaries)
+
+
+@pytest.mark.anyio
+async def test_tui_identity_list(api):
+    """Add an identity via the TUI and verify it exists."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        auth = _setup(api, tmpdir)
+        app = pf.tui.app.TuiApp(auth)
+
+        async with app.run_test(size=(200, 50)) as pilot:
+            await pilot.pause(1.0)
+            await pilot.press("down")  # navigate to Identities (index 1)
+            await pilot.press("enter")  # open IdentityListScreen
+            await pilot.pause(0.5)
+
+            await pilot.press("a")  # open add modal
+            await pilot.pause(0.1)
+            await pilot.press(*"alice")  # type name
+            await pilot.press("enter")   # submit
+            await pilot.pause(1.0)
+
+        assert not [n for n in app._notifications if n.severity == "error"]
+
+    identities = await auth.list_identities()
+    assert any(i["name"] == "alice" for i in identities)
+
+
+@pytest.mark.anyio
+async def test_tui_tenant_list(api):
+    """Add a tenant via the TUI and verify it exists."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        auth = _setup(api, tmpdir)
+        app = pf.tui.app.TuiApp(auth)
+
+        async with app.run_test(size=(200, 50)) as pilot:
+            await pilot.pause(1.0)
+            await pilot.press("enter")  # open TenantListScreen (index 0, no down needed)
+            await pilot.pause(0.5)
+
+            await pilot.press("a")  # open add modal
+            await pilot.pause(0.1)
+            await pilot.press(*"acme")      # type name
+            await pilot.press("tab")        # move to display_name input
+            await pilot.press(*"Acme Corp")  # type display name
+            await pilot.press("enter")       # submit
+            await pilot.pause(1.0)
+
+        assert not [n for n in app._notifications if n.severity == "error"]
+
+    tenants = await auth.list_tenants()
+    assert any(t["name"] == "acme" and t["display_name"] == "Acme Corp" for t in tenants)
