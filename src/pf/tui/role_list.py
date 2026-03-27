@@ -31,15 +31,13 @@ class _RoleNameScreen(textual.screen.ModalScreen[str | None]):
     BINDINGS: typing.ClassVar = [("escape", "cancel", "Cancel")]
 
     def compose(self) -> textual.app.ComposeResult:
-        with textual.containers.VerticalGroup():
-            yield textual.widgets.Label("Role name")
+        with textual.containers.VerticalGroup() as container:
+            container.border_title = "Add a role"
             yield textual.widgets.Input(placeholder="name", id="name", compact=True)
-            yield textual.widgets.Button("Create", variant="primary")
 
     def action_cancel(self) -> None:
         self.dismiss(None)
 
-    @textual.on(textual.widgets.Button.Pressed)
     @textual.on(textual.widgets.Input.Submitted)
     def _on_submit(self) -> None:
         name = self.query_one(textual.widgets.Input).value.strip()
