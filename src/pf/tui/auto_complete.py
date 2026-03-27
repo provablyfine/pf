@@ -70,10 +70,6 @@ class MultiAutoComplete(textual_autocomplete.AutoComplete):
         if not search_string:
             self.styles.height = 0
             return []
-        retval = []
-        for candidate in candidates:
-            if not candidate.value.startswith(search_string):
-                continue
-            retval.append(candidate)
+        retval = [c for c in candidates if c.value.startswith(search_string)]
         self.styles.height = min(5, len(retval))
         return retval

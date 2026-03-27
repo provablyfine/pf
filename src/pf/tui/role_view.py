@@ -49,7 +49,6 @@ class RoleViewScreen(textual.screen.Screen[None]):
         yield header.AppHeader()
         with textual.containers.Vertical():
             with textual.containers.HorizontalGroup(classes="field") as container:
-                #yield textual.widgets.Label("Name", classes="section-label")
                 container.border_title = "Name"
                 yield textual.widgets.Input(self._role["name"], id="name", compact=True)
             with textual.containers.Horizontal(classes="field") as container:
@@ -153,9 +152,7 @@ class RoleViewScreen(textual.screen.Screen[None]):
         if not self._grant_list:
             return
         index = table.cursor_row
-        updated_grant = await self.app.push_screen_wait(
-            grant_edit.GrantEditScreen(self._auth, self._grant_list[index])
-        )
+        updated_grant = await self.app.push_screen_wait(grant_edit.GrantEditScreen(self._auth, self._grant_list[index]))
         if updated_grant is None:
             return
         self._grant_list[index] = updated_grant

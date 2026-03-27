@@ -23,14 +23,10 @@ def _supports_osc52() -> bool:
 
 
 def _copy_via_subprocess(text: str) -> None:
-    print('d')
     if os.environ.get("WAYLAND_DISPLAY"):
-        print('e')
         subprocess.run(["wl-copy"], input=text.encode(), check=True)
         return
-    print('f')
     if os.environ.get("DISPLAY"):
-        print('g')
         try:
             subprocess.run(["xsel", "-bi"], input=text.encode(), check=True)
             return
@@ -42,10 +38,7 @@ def _copy_via_subprocess(text: str) -> None:
 
 
 async def copy(app: "textual.app.App[object]", text: str) -> None:
-    print('a')
     if _supports_osc52():
-        print('b')
         app.copy_to_clipboard(text)
         return
-    print('c')
     await asyncio.to_thread(_copy_via_subprocess, text)

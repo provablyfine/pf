@@ -6,13 +6,7 @@ import textual.containers
 import textual.screen
 import textual.widgets
 
-from . import async_client, boundary_view, header
-
-
-def _ellipsize(s: str, max_len: int) -> str:
-    if len(s) <= max_len:
-        return s
-    return s[:max_len] + "…"
+from . import _utils, async_client, boundary_view, header
 
 
 class _BoundaryCreateScreen(textual.screen.ModalScreen[str | None]):
@@ -82,7 +76,7 @@ class BoundaryListScreen(textual.screen.Screen[None]):
             ceiling_count = str(len(ceiling)) if ceiling is not None else "—"
             table.add_row(
                 boundary["name"],
-                _ellipsize(boundary["description"], 40),
+                _utils.ellipsize(boundary["description"], 40),
                 str(len(boundary["denied_list"])),
                 ceiling_count,
             )

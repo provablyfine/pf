@@ -6,13 +6,7 @@ import textual.containers
 import textual.screen
 import textual.widgets
 
-from . import async_client, header, role_view
-
-
-def _ellipsize(s: str, max_len: int) -> str:
-    if len(s) <= max_len:
-        return s
-    return s[:max_len] + "…"
+from . import _utils, async_client, header, role_view
 
 
 class _RoleNameScreen(textual.screen.ModalScreen[str | None]):
@@ -71,12 +65,17 @@ class RoleListScreen(textual.screen.Screen[None]):
         self._roles = await self._auth.list_roles()
         self._populate_table(table)
 
+    @textual.work
+    async def on_screen_resume(self) -> None:
+        self._roles = await self._auth.list_roles()
+        self._populate_table(self.query_one(textual.widgets.DataTable))
+
     def _populate_table(self, table: textual.widgets.DataTable) -> None:
         table.clear(columns=False)
         for role in self._roles:
             table.add_row(
                 role["name"],
-                _ellipsize(role["description"], 40),
+                _utils.ellipsize(role["description"], 40),
                 str(len(role["member_list"])),
                 str(len(role["grant_list"])),
             )
