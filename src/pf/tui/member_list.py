@@ -4,8 +4,10 @@ import textual
 import textual.app
 import textual.containers
 import textual.screen
-import textual.suggester
 import textual.widgets
+import textual_autocomplete
+
+from . import auto_complete
 
 
 class MemberAddScreen(textual.screen.ModalScreen[str | None]):
@@ -28,12 +30,10 @@ class MemberAddScreen(textual.screen.ModalScreen[str | None]):
         self._identity_names = identity_names
 
     def compose(self) -> textual.app.ComposeResult:
+        candidates = [textual_autocomplete.DropdownItem(main=n) for n in self._identity_names]
         with textual.containers.VerticalGroup():
-            yield textual.widgets.Input(
-                placeholder="name",
-                suggester=textual.suggester.SuggestFromList(self._identity_names, case_sensitive=False),
-                compact=True,
-            )
+            yield textual.widgets.Input(placeholder="name", compact=True, id="member-name")
+        yield auto_complete.MonoAutoComplete("#member-name", candidates=candidates)
 
     def on_mount(self) -> None:
         self.query_one(textual.containers.VerticalGroup).border_title = "Add member"
