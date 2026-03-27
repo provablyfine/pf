@@ -10,25 +10,31 @@ class AsyncClient:
 
     def __init__(self, http_client: client.HttpClient):
         self._client = http_client
+        self._lock = asyncio.Lock()
 
     @property
     def directory(self):
         return self._client.directory
 
     async def get(self, *args, **kwargs) -> requests.Response:
-        return await asyncio.to_thread(self._client.get, *args, **kwargs)
+        async with self._lock:
+            return await asyncio.to_thread(self._client.get, *args, **kwargs)
 
     async def post(self, *args, **kwargs) -> requests.Response:
-        return await asyncio.to_thread(self._client.post, *args, **kwargs)
+        async with self._lock:
+            return await asyncio.to_thread(self._client.post, *args, **kwargs)
 
     async def patch(self, *args, **kwargs) -> requests.Response:
-        return await asyncio.to_thread(self._client.patch, *args, **kwargs)
+        async with self._lock:
+            return await asyncio.to_thread(self._client.patch, *args, **kwargs)
 
     async def put(self, *args, **kwargs) -> requests.Response:
-        return await asyncio.to_thread(self._client.put, *args, **kwargs)
+        async with self._lock:
+            return await asyncio.to_thread(self._client.put, *args, **kwargs)
 
     async def delete(self, *args, **kwargs) -> requests.Response:
-        return await asyncio.to_thread(self._client.delete, *args, **kwargs)
+        async with self._lock:
+            return await asyncio.to_thread(self._client.delete, *args, **kwargs)
 
     async def get_list(self, url: str, key: str, error_msg: str) -> list:
         response = await self.get(url)
