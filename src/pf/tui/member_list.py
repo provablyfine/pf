@@ -4,6 +4,7 @@ import textual
 import textual.app
 import textual.containers
 import textual.screen
+import textual.suggester
 import textual.widgets
 
 
@@ -28,16 +29,21 @@ class MemberAddScreen(textual.screen.ModalScreen[str | None]):
 
     def compose(self) -> textual.app.ComposeResult:
         with textual.containers.VerticalGroup():
-            yield textual.widgets.Label("Add member")
-            yield textual.widgets.Select.from_values(self._identity_names, allow_blank=True, compact=True)
-            yield textual.widgets.Button("Add", variant="primary")
+            yield textual.widgets.Input(
+                placeholder="name",
+                suggester=textual.suggester.SuggestFromList(self._identity_names, case_sensitive=False),
+                compact=True,
+            )
+
+    def on_mount(self) -> None:
+        self.query_one(textual.containers.VerticalGroup).border_title = "Add member"
 
     def action_cancel(self) -> None:
         self.dismiss(None)
 
-    @textual.on(textual.widgets.Button.Pressed)
-    def _on_add(self) -> None:
-        select = self.query_one(textual.widgets.Select)
-        if select.value is textual.widgets.Select.BLANK:
+    @textual.on(textual.widgets.Input.Submitted)
+    def _on_submit(self) -> None:
+        name = self.query_one(textual.widgets.Input).value.strip()
+        if not name:
             return
-        self.dismiss(str(select.value))
+        self.dismiss(name)

@@ -18,6 +18,21 @@ class RoleViewScreen(textual.screen.Screen[None]):
         ("a", "add", "Add"),
         ("d", "delete", "Delete"),
     ]
+    DEFAULT_CSS = """
+    Vertical {
+        height: auto;
+    }
+    .label {
+        padding: 0 2 0 0;
+    }
+    .field {
+        border: solid;
+        height: auto;
+    }
+    #description, #members {
+        height: auto;
+    }
+    """
 
     def __init__(self, auth: async_client.AsyncClient, role: dict) -> None:
         super().__init__()
@@ -33,18 +48,21 @@ class RoleViewScreen(textual.screen.Screen[None]):
     def compose(self) -> textual.app.ComposeResult:
         yield header.AppHeader()
         with textual.containers.Vertical():
-            with textual.containers.Horizontal():
-                yield textual.widgets.Label("Name")
+            with textual.containers.HorizontalGroup(classes="field") as container:
+                #yield textual.widgets.Label("Name", classes="section-label")
+                container.border_title = "Name"
                 yield textual.widgets.Input(self._role["name"], id="name", compact=True)
-            with textual.containers.Horizontal():
-                yield textual.widgets.Label("Description")
+            with textual.containers.Horizontal(classes="field") as container:
+                container.border_title = "Description"
                 yield textual.widgets.Input(self._role["description"], id="description", compact=True)
-            yield textual.widgets.Label("Members", classes="section-label")
-            yield textual.widgets.ListView(id="members")
-            yield textual.widgets.Label("No members — add one with 'a'", id="members-placeholder")
-            yield textual.widgets.Label("Grants", classes="section-label")
-            yield textual.widgets.DataTable(id="grants", cursor_type="row")
-            yield textual.widgets.Label("No grants — add one with 'a'", id="grants-placeholder")
+            with textual.containers.Container(classes="field") as container:
+                container.border_title = "Members"
+                yield textual.widgets.ListView(id="members")
+                yield textual.widgets.Label("No members — add one with 'a'", id="members-placeholder")
+            with textual.containers.Container(classes="field") as container:
+                container.border_title = "Grants"
+                yield textual.widgets.DataTable(id="grants", cursor_type="row")
+                yield textual.widgets.Label("No grants — add one with 'a'", id="grants-placeholder")
         yield textual.widgets.Footer()
 
     async def on_mount(self) -> None:
@@ -92,7 +110,8 @@ class RoleViewScreen(textual.screen.Screen[None]):
             return
         if focused.id == "members":
             identities = await self._auth.list_identities()
-            names = [i["name"] for i in identities]
+            existing = {m["name"] for m in self._member_list}
+            names = [i["name"] for i in identities if i["name"] not in existing]
             name = await self.app.push_screen_wait(member_list.MemberAddScreen(names))
             if name is None:
                 return
