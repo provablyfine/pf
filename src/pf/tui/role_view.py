@@ -63,7 +63,7 @@ class RoleViewScreen(textual.screen.Screen[None]):
                 container.border_title = "Grants"
                 yield textual.widgets.DataTable(id="grants", cursor_type="row")
                 yield textual.widgets.Label("No grants — add one with 'a'", id="grants-placeholder")
-        yield textual.widgets.Footer()
+        yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
         self.sub_title = f"Roles > {self._role['name']}"

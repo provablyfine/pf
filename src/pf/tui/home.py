@@ -41,7 +41,7 @@ class HomeScreen(textual.screen.Screen[None]):
             lv.border_title = "Resources"
             for name, _ in _RESOURCES:
                 yield textual.widgets.ListItem(textual.widgets.Label(name))
-        yield textual.widgets.Footer()
+        yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     def action_select(self) -> None:
         lv = self.query_one(textual.widgets.ListView)

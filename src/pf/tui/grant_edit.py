@@ -730,4 +730,4 @@ class GrantEditScreen(textual.screen.Screen[dict | None]):
         yield header.AppHeader()
         with textual.containers.VerticalGroup(classes="sections"):
             yield textual.containers.Container(id="dynamic-grant-fields")
-        yield textual.widgets.Footer()
+        yield textual.widgets.Footer(compact=True, show_command_palette=False)

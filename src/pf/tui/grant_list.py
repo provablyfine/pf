@@ -76,7 +76,7 @@ class GrantListScreen(textual.screen.Screen[None]):
     def compose(self) -> textual.app.ComposeResult:
         yield header.AppHeader()
         yield textual.widgets.DataTable(cursor_type="row")
-        yield textual.widgets.Footer()
+        yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     def on_mount(self) -> None:
         self.sub_title = self._sub_title
