@@ -51,7 +51,6 @@ class GrantTypeScreen(textual.screen.ModalScreen[str | None]):
 
     def on_mount(self) -> None:
         self.query_one("#popup").border_title = "Add grant"
-        self.query_one("#popup").border_title_align = "left"
 
     def action_cancel(self) -> None:
         self.dismiss(None)
