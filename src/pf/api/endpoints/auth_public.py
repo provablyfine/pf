@@ -12,10 +12,12 @@ def auth_public_endpoint(name: str) -> schemas.AuthPublic:
         raise responses.ProblemHTTPException(responses.problem_response(status_code=404, title="Auth config not found"))
     issuer = ac.config.get("issuer") if ac.type == "oidc" else None
     client_id = ac.config.get("client_id") if ac.type == "oidc" else None
+    client_secret = ac.config.get("client_secret") if ac.type == "oidc" else None
     return schemas.AuthPublic(
         name=ac.name,
         type=ac.type,  # type: ignore[arg-type]
         description=ac.description,
         issuer=issuer,
         client_id=client_id,
+        client_secret=client_secret,
     )

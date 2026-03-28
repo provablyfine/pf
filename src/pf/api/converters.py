@@ -502,6 +502,7 @@ def auth_config_to_schema(ac: model.auth_config.AuthConfig) -> schemas.Auth:
         params: schemas.OidcParams | schemas.HttpSigParams = schemas.OidcParams(
             issuer=ac.config["issuer"],
             client_id=ac.config["client_id"],
+            client_secret=ac.config.get("client_secret"),
         )
     else:
         params = schemas.HttpSigParams()

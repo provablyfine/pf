@@ -129,17 +129,16 @@ def _do_oidc_login(args, c, api, auth_public):
     code = code_holder[0]
 
     # Exchange code for id_token
-    token_resp = requests.post(
-        token_endpoint,
-        data={
-            "grant_type": "authorization_code",
-            "code": code,
-            "code_verifier": code_verifier,
-            "redirect_uri": redirect_uri,
-            "client_id": auth_public["client_id"],
-        },
-        timeout=10,
-    )
+    token_data: dict = {
+        "grant_type": "authorization_code",
+        "code": code,
+        "code_verifier": code_verifier,
+        "redirect_uri": redirect_uri,
+        "client_id": auth_public["client_id"],
+    }
+    if auth_public.get("client_secret"):
+        token_data["client_secret"] = auth_public["client_secret"]
+    token_resp = requests.post(token_endpoint, data=token_data, timeout=10)
     if token_resp.status_code != 200:
         raise client.exceptions.UI(f"Unable to exchange code for token: {token_resp.text}")
     id_token = token_resp.json().get("id_token")

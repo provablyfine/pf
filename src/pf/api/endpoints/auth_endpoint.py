@@ -12,7 +12,10 @@ _204 = fastapi.responses.Response(status_code=204)
 def _build_config(data: schemas.AuthCreateRequest) -> dict:
     if data.type == "oidc":
         assert data.oidc_params is not None
-        return {"issuer": data.oidc_params.issuer, "client_id": data.oidc_params.client_id}
+        config: dict = {"issuer": data.oidc_params.issuer, "client_id": data.oidc_params.client_id}
+        if data.oidc_params.client_secret is not None:
+            config["client_secret"] = data.oidc_params.client_secret
+        return config
     return {}
 
 
@@ -130,6 +133,8 @@ def update_endpoint(auth_id: int, data: schemas.AuthUpdateRequest) -> schemas.Au
         config = dict(ac.config)
         config["issuer"] = data.oidc_params.issuer
         config["client_id"] = data.oidc_params.client_id
+        if data.oidc_params.client_secret is not None:
+            config["client_secret"] = data.oidc_params.client_secret
         fields_to_update["config"] = config
 
     if fields_to_update:

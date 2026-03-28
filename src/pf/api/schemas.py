@@ -460,6 +460,7 @@ class HttpSigParams(APIBase):
 class OidcParams(APIBase):
     issuer: str
     client_id: str
+    client_secret: str | None = None
 
 
 class Auth(APIBase):
@@ -505,6 +506,7 @@ class AuthPublic(APIBase):
     description: str
     issuer: str | None
     client_id: str | None
+    client_secret: str | None
 
 
 class OidcLoginRequest(APIBase):

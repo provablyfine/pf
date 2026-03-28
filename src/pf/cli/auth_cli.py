@@ -47,7 +47,10 @@ def _auth_create_function(args):
     if args.type == "oidc":
         if not args.issuer or not args.client_id:
             raise client.exceptions.UI("--issuer and --client-id are required for type oidc")
-        body["oidc_params"] = {"issuer": args.issuer, "client_id": args.client_id}
+        oidc_params: dict = {"issuer": args.issuer, "client_id": args.client_id}
+        if args.client_secret:
+            oidc_params["client_secret"] = args.client_secret
+        body["oidc_params"] = oidc_params
     response = auth.post(auth.directory.auth, json=body)
     if response.status_code != 201:
         raise client.exceptions.UI(f"Unable to create auth config. {response.json()['title']}")
@@ -84,6 +87,8 @@ def _auth_read_function(args):
                 params = a.get("params", {})
                 rows.append(["issuer", params.get("issuer", "")])
                 rows.append(["client_id", params.get("client_id", "")])
+                if params.get("client_secret"):
+                    rows.append(["client_secret", params.get("client_secret", "")])
             print(tabulate.tabulate(rows, tablefmt="plain"))
         case _:
             assert False, args.format
@@ -102,12 +107,14 @@ def _auth_update_function(args):
         body["is_enabled"] = True
     if args.disable:
         body["is_enabled"] = False
-    if args.issuer is not None or args.client_id is not None:
+    if args.issuer is not None or args.client_id is not None or args.client_secret is not None:
         oidc_params: dict = {}
         if args.issuer is not None:
             oidc_params["issuer"] = args.issuer
         if args.client_id is not None:
             oidc_params["client_id"] = args.client_id
+        if args.client_secret is not None:
+            oidc_params["client_secret"] = args.client_secret
         body["oidc_params"] = oidc_params
     if not body:
         raise client.exceptions.UI("Nothing to update")
@@ -144,6 +151,7 @@ def add_subparser(parser):
     create_parser.add_argument("--tag-id", type=int, action="append", dest="tag_id", help="Tag ID (repeatable)")
     create_parser.add_argument("--issuer", help="OIDC issuer URL (required for type oidc)")
     create_parser.add_argument("--client-id", help="OIDC client ID (required for type oidc)")
+    create_parser.add_argument("--client-secret", help="OIDC client secret (optional, for providers that require it)")
     create_parser.set_defaults(func=_auth_create_function)
 
     read_parser = subparsers.add_parser("read", help="Read an auth config")
@@ -161,6 +169,7 @@ def add_subparser(parser):
     enable_group.add_argument("--disable", action="store_true", default=False, help="Disable auth config")
     update_parser.add_argument("--issuer", help="New OIDC issuer URL")
     update_parser.add_argument("--client-id", help="New OIDC client ID")
+    update_parser.add_argument("--client-secret", help="New OIDC client secret")
     update_parser.set_defaults(func=_auth_update_function)
 
     delete_parser = subparsers.add_parser("delete", help="Delete an auth config")
