@@ -1,14 +1,19 @@
 import argparse
+import hashlib
+import http.server
 import logging
 import os
 import os.path
+import secrets
 import sys
 import traceback
+import urllib.parse
+import webbrowser
 
 import requests
 import requests.auth
 
-from .. import client, jwk, ssh
+from .. import base64url, client, jwk, ssh
 from . import admin_cli, openssh_cli
 
 logger = logging.getLogger(__name__)
@@ -39,9 +44,7 @@ def _accept_function(args):
 
 
 @client.ssh_utils.exception
-def _login_function(args):
-    c = client.Config.load(args.config)
-    api = client.Client(c)
+def _do_http_sig_login(args, c, api):
     if args.session_key is None:
         try:
             ssh_agent = ssh.agent.Client()
@@ -64,6 +67,130 @@ def _login_function(args):
     if response.status_code != 204:
         raise client.exceptions.UI(f"Unable to login successfully: {response.text}")
     c.save(args.config)
+
+
+def _do_oidc_login(args, c, api, auth_public):
+    # Fetch OIDC discovery
+    discovery_resp = requests.get(f"{auth_public['issuer']}/.well-known/openid-configuration", timeout=10)
+    if discovery_resp.status_code != 200:
+        raise client.exceptions.UI("Unable to fetch OIDC discovery document")
+    discovery = discovery_resp.json()
+    authorization_endpoint = discovery["authorization_endpoint"]
+    token_endpoint = discovery["token_endpoint"]
+
+    # Generate PKCE code verifier and challenge
+    code_verifier = base64url.encode(secrets.token_bytes(32))
+    code_challenge = base64url.encode(hashlib.sha256(code_verifier.encode()).digest())
+
+    # Bind a free local port for the redirect
+    import socket
+
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    port = sock.getsockname()[1]
+    sock.close()
+
+    redirect_uri = f"http://127.0.0.1:{port}/callback"
+    auth_url = (
+        f"{authorization_endpoint}"
+        f"?client_id={urllib.parse.quote(auth_public['client_id'])}"
+        f"&redirect_uri={urllib.parse.quote(redirect_uri)}"
+        f"&response_type=code"
+        f"&scope=openid+email"
+        f"&code_challenge={urllib.parse.quote(code_challenge)}"
+        f"&code_challenge_method=S256"
+    )
+
+    print("Opening browser for OIDC login...")
+    webbrowser.open(auth_url)
+
+    # Start local HTTP server to capture the authorization code
+    code_holder: list[str] = []
+
+    class CallbackHandler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            parsed = urllib.parse.urlparse(self.path)
+            params = urllib.parse.parse_qs(parsed.query)
+            if "code" in params:
+                code_holder.append(params["code"][0])
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"Login successful. You may close this tab.")
+
+        def log_message(self, format, *args):
+            pass  # suppress server log output
+
+    server = http.server.HTTPServer(("127.0.0.1", port), CallbackHandler)
+    server.handle_request()
+    server.server_close()
+
+    if not code_holder:
+        raise client.exceptions.UI("OIDC callback did not receive an authorization code")
+    code = code_holder[0]
+
+    # Exchange code for id_token
+    token_resp = requests.post(
+        token_endpoint,
+        data={
+            "grant_type": "authorization_code",
+            "code": code,
+            "code_verifier": code_verifier,
+            "redirect_uri": redirect_uri,
+            "client_id": auth_public["client_id"],
+        },
+        timeout=10,
+    )
+    if token_resp.status_code != 200:
+        raise client.exceptions.UI(f"Unable to exchange code for token: {token_resp.text}")
+    id_token = token_resp.json().get("id_token")
+    if not id_token:
+        raise client.exceptions.UI("Token response did not include id_token")
+
+    # Generate session key and add to SSH agent
+    try:
+        ssh_agent = ssh.agent.Client()
+    except Exception:
+        raise client.exceptions.UI("Unable to connect to user's SSH agent")
+    session_key = jwk.Private.generate_ed25519()
+    ssh_agent.add(session_key, comment="pf-session", lifetime=1800)
+    c.session_key = session_key.public().ssh_fingerprint()
+
+    # POST /auth/oidc/login signed with the new session key
+    oidc_auth = api.session_auth(session=c.session_key)
+    response = oidc_auth.post(
+        url=oidc_auth.directory.login_oidc,
+        json={
+            "auth_name": auth_public["name"],
+            "id_token": id_token,
+            "session_public_key": session_key.public().to_dict(),
+        },
+    )
+    if response.status_code != 204:
+        raise client.exceptions.UI(f"Unable to login via OIDC: {response.text}")
+    c.save(args.config)
+
+
+@client.ssh_utils.exception
+def _login_function(args):
+    c = client.Config.load(args.config)
+    api = client.Client(c)
+    auth_name = args.auth or "default"
+
+    # Discover auth config type
+    response = api.no_auth.get(f"{api.directory.auth}/{auth_name}")
+    if response.status_code == 404:
+        raise client.exceptions.UI(f"Auth config '{auth_name}' not found")
+    if response.status_code != 200:
+        raise client.exceptions.UI(f"Unable to read auth config: {response.text}")
+    auth_public = response.json()
+
+    match auth_public["type"]:
+        case "http_sig":
+            _do_http_sig_login(args, c, api)
+        case "oidc":
+            _do_oidc_login(args, c, api, auth_public)
+        case _:
+            raise client.exceptions.UI(f"Unsupported auth type: {auth_public['type']}")
 
 
 def _do_main(args):
@@ -132,6 +259,11 @@ def pf():
         "If none is provided, a new one is generated, "
         "stored in the user' SSH agent and its hash is "
         "saved in the configuration file",
+    )
+    login_parser.add_argument(
+        "--auth",
+        default=None,
+        help="Auth config name to use for login. Defaults to 'default'.",
     )
     login_parser.set_defaults(func=_login_function)
 

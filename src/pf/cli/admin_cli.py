@@ -1,5 +1,5 @@
 from .. import client
-from . import boundary_cli, grant_cli, identity_cli, role_cli, tag_cli, tenant_cli
+from . import auth_cli, boundary_cli, grant_cli, identity_cli, role_cli, tag_cli, tenant_cli
 
 
 def _initialize_function(args):
@@ -37,3 +37,6 @@ def add_subparsers(parser):
 
     tenant_parser = subparsers.add_parser("tenant", help="View and manage tenants")
     tenant_cli.add_subparser(tenant_parser)
+
+    auth_parser = subparsers.add_parser("auth", help="Manage authentication configurations")
+    auth_cli.add_subparser(auth_parser)

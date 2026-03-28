@@ -217,7 +217,10 @@ def create(conf) -> fastapi.FastAPI:
 
     fastapi_app.include_router(endpoints.directory.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
     fastapi_app.include_router(endpoints.initialize.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
-    fastapi_app.include_router(endpoints.auth.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
+    fastapi_app.include_router(endpoints.auth_http_sig.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
+    fastapi_app.include_router(endpoints.auth_oidc.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
+    fastapi_app.include_router(endpoints.auth_endpoint.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
+    fastapi_app.include_router(endpoints.auth_public.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
     fastapi_app.include_router(endpoints.boundary.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
     fastapi_app.include_router(endpoints.identity.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
     fastapi_app.include_router(endpoints.role.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])

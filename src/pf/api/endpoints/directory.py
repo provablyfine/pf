@@ -12,8 +12,10 @@ def directory_endpoint(tenant_name: str) -> schemas.DirectoryReadResponse:
     p = f"{base}/pf/t/{tenant_name}"
     return schemas.DirectoryReadResponse(
         initialize=f"{p}/initialize",
-        accept_invitation=f"{p}/accept-invitation",
-        login=f"{p}/login",
+        accept_invitation=f"{p}/auth/http_sig/accept-invitation",
+        login=f"{p}/auth/http_sig/login",
+        login_oidc=f"{p}/auth/oidc/login",
+        auth=f"{p}/auth",
         boundary=f"{p}/boundary",
         tag=f"{p}/tag",
         role=f"{p}/role",

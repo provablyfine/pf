@@ -196,12 +196,33 @@ class TenantGrant(APIBase):
     permission: TenantPermission
 
 
+class AuthFilter(APIBase):
+    name: str | None  # human name of auth config, None = any
+
+
+class AuthUpdatePermission(APIBase):
+    name: bool
+    description: bool
+    is_enabled: bool
+    config: bool
+
+
+class AuthPermission(CRDPermission):
+    update: AuthUpdatePermission | None
+
+
+class AuthGrant(APIBase):
+    type: typing.Literal["auth"] = "auth"
+    filter: AuthFilter
+    permission: AuthPermission
+
+
 class InvalidGrant(APIBase):
     type: typing.Literal["invalid"] = "invalid"
 
 
 Grant = typing.Annotated[
-    BoundaryGrant | TagGrant | RoleGrant | IdentityGrant | SSHGrant | TenantGrant | InvalidGrant,
+    BoundaryGrant | TagGrant | RoleGrant | IdentityGrant | SSHGrant | TenantGrant | AuthGrant | InvalidGrant,
     pydantic.Field(discriminator="type"),
 ]
 
@@ -432,10 +453,72 @@ class SSHUserCertificateResponse(SSHCertificateResponse):
 # --- Initialization/login ---
 
 
+class HttpSigParams(APIBase):
+    pass  # no extra params
+
+
+class OidcParams(APIBase):
+    issuer: str
+    client_id: str
+
+
+class Auth(APIBase):
+    id: int
+    name: str
+    description: str
+    tag_id_list: list[int]
+    created_at: int
+    is_enabled: bool
+    type: typing.Literal["http_sig", "oidc"]
+    params: OidcParams | HttpSigParams
+
+
+class AuthListResponse(APIBase):
+    auths: list[Auth]
+
+
+class AuthCreateRequest(APIBase):
+    name: str
+    description: str = ""
+    tag_id_list: list[int] = []
+    type: typing.Literal["http_sig", "oidc"]
+    oidc_params: OidcParams | None = None  # required when type == "oidc"
+
+    @pydantic.model_validator(mode="after")
+    def validate_oidc_params(self):
+        if self.type == "oidc" and self.oidc_params is None:
+            raise ValueError("oidc_params is required when type is 'oidc'")
+        return self
+
+
+class AuthUpdateRequest(APIBase):
+    name: str | None = None
+    description: str | None = None
+    tag_id_list: list[int] | None = None
+    is_enabled: bool | None = None
+    oidc_params: OidcParams | None = None
+
+
+class AuthPublic(APIBase):
+    name: str
+    type: typing.Literal["http_sig", "oidc"]
+    description: str
+    issuer: str | None
+    client_id: str | None
+
+
+class OidcLoginRequest(APIBase):
+    auth_name: str
+    id_token: str
+    session_public_key: PublicJWK
+
+
 class DirectoryReadResponse(APIBase):
     initialize: str
     accept_invitation: str
     login: str
+    login_oidc: str
+    auth: str
     boundary: str
     tag: str
     role: str

@@ -175,8 +175,29 @@ class TenantGrant(DBBase):
     permission: TenantPermission
 
 
+class AuthFilter(Filter):
+    id: int | None
+
+
+class AuthUpdatePermission(DBBase):
+    name: bool
+    description: bool
+    is_enabled: bool
+    config: bool
+
+
+class AuthPermission(CRDPermission):
+    update: AuthUpdatePermission | None
+
+
+class AuthGrant(DBBase):
+    type: typing.Literal["auth"] = "auth"
+    filter: AuthFilter
+    permission: AuthPermission
+
+
 Grant = typing.Annotated[
-    BoundaryGrant | TagGrant | RoleGrant | IdentityGrant | SSHGrant | TenantGrant,
+    BoundaryGrant | TagGrant | RoleGrant | IdentityGrant | SSHGrant | TenantGrant | AuthGrant,
     pydantic.Field(discriminator="type"),
 ]
 

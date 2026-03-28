@@ -145,6 +145,28 @@ class GrantConverter:
         assert identity_list is not None and len(identity_list) == 1
         return identity_list[0]
 
+    @return_none_if_none
+    @cache_list
+    def to_auth_list(self, auth_id_list: list[int]) -> dict[int, str]:
+        return {a.id: a.name for a in ctx.db.auth.read_all(id=auth_id_list)}
+
+    @return_none_if_none
+    def to_auth(self, auth_id: int) -> str:
+        auth_list = self.to_auth_list([auth_id])
+        assert auth_list is not None and len(auth_list) == 1
+        return auth_list[0]
+
+    @return_none_if_none
+    @cache_list
+    def from_auth_list(self, name_list: list[str]) -> dict[str, int]:
+        return {a.name: a.id for a in ctx.db.auth.read_all(name=name_list)}
+
+    @return_none_if_none
+    def from_auth(self, name: str) -> int:
+        auth_list = self.from_auth_list([name])
+        assert auth_list is not None and len(auth_list) == 1
+        return auth_list[0]
+
 
 def grant_to_schema(converter: GrantConverter, grant: model.grant.Grant) -> schemas.Grant:
     try:
@@ -253,6 +275,22 @@ def _grant_to_schema(converter: GrantConverter, grant: model.grant.Grant) -> sch
                 ),
             )
             g = schemas.TenantGrant(filter=filter, permission=permission)
+        case "auth":
+            filter = schemas.AuthFilter(name=converter.to_auth(grant.filter.id))
+            permission = schemas.AuthPermission(
+                create=grant.permission.create,
+                read=grant.permission.read,
+                update=None
+                if grant.permission.update is None
+                else schemas.AuthUpdatePermission(
+                    name=grant.permission.update.name,
+                    description=grant.permission.update.description,
+                    is_enabled=grant.permission.update.is_enabled,
+                    config=grant.permission.update.config,
+                ),
+                delete=grant.permission.delete,
+            )
+            g = schemas.AuthGrant(filter=filter, permission=permission)
         case _:
             assert False
     return g
@@ -370,6 +408,22 @@ def _grant_from_schema(converter: GrantConverter, grant: schemas.Grant) -> model
                 ),
             )
             g = model.grant.TenantGrant(filter=filter, permission=permission)
+        case "auth":
+            filter = model.grant.AuthFilter(id=converter.from_auth(grant.filter.name))
+            permission = model.grant.AuthPermission(
+                create=grant.permission.create,
+                read=grant.permission.read,
+                update=None
+                if grant.permission.update is None
+                else model.grant.AuthUpdatePermission(
+                    name=grant.permission.update.name,
+                    description=grant.permission.update.description,
+                    is_enabled=grant.permission.update.is_enabled,
+                    config=grant.permission.update.config,
+                ),
+                delete=grant.permission.delete,
+            )
+            g = model.grant.AuthGrant(filter=filter, permission=permission)
         case _:
             assert False
     return g
@@ -441,3 +495,23 @@ def identity_list_to_schema(identities: list[model.identity.Identity]) -> list[s
 
 def identity_to_schema(identity: model.identity.Identity) -> schemas.Identity:
     return identity_list_to_schema([identity])[0]
+
+
+def auth_config_to_schema(ac: model.auth_config.AuthConfig) -> schemas.Auth:
+    if ac.type == "oidc":
+        params: schemas.OidcParams | schemas.HttpSigParams = schemas.OidcParams(
+            issuer=ac.config["issuer"],
+            client_id=ac.config["client_id"],
+        )
+    else:
+        params = schemas.HttpSigParams()
+    return schemas.Auth(
+        id=ac.id,
+        name=ac.name,
+        description=ac.description,
+        tag_id_list=ac.tag_id_list,
+        created_at=ac.created_at,
+        is_enabled=ac.is_enabled,
+        type=ac.type,  # type: ignore[arg-type]
+        params=params,
+    )

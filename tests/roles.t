@@ -36,6 +36,9 @@ List existing roles (there is one)
   grant        type:       tenant
                filter:     *
                permission: create read update.display_name update.is_enabled delete
+  grant        type:       auth
+               filter:     *
+               permission: create read update.* delete
 
 Create tags to be able to define tag-related permissions in role
   $ pfa -c config.json tag create -n env -v dev

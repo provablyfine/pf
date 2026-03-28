@@ -23,6 +23,7 @@ from . import utils
         "generic-exception-handler.t",
         "tenant.t",
         "tenant-isolation.t",
+        "auth.t",
     ],
 )
 def test_pf_cram(api, filename):

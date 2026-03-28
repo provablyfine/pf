@@ -24,6 +24,7 @@ auth = sqlalchemy.Table(
     metadata,
     sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
     sqlalchemy.Column("name", sqlalchemy.String, nullable=False, unique=True, index=True),
+    sqlalchemy.Column("description", sqlalchemy.String, nullable=False, server_default=""),
     sqlalchemy.Column("tag_id_list", sqlalchemy.JSON, nullable=False),
     sqlalchemy.Column("created_at", sqlalchemy.Integer, nullable=False),
     sqlalchemy.Column("is_enabled", sqlalchemy.Boolean, nullable=False),

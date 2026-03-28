@@ -301,6 +301,39 @@ class SSHChecker:
         return self._to_list(grants)
 
 
+class AuthChecker:
+    def __init__(self, boundaries: list[model.boundary.Boundary], roles: list[model.role.Role], auth_id: int | None):
+        def cmp(filter: model.grant.Filter) -> bool:
+            if not isinstance(filter, model.grant.AuthFilter):
+                return False
+            if filter.id is not None and filter.id != auth_id:
+                return False
+            return True
+
+        self._checker = Checker(boundaries, roles, cmp)
+
+    def can_create(self) -> bool:
+        return self._checker.can(lambda p: p.create)
+
+    def can_read(self) -> bool:
+        return self._checker.can(lambda p: p.read)
+
+    def can_update(self, field: str) -> bool:
+        assert field in ["name", "description", "is_enabled", "config"], (
+            "You tried to update a field that does not exist"
+        )
+
+        def check(p) -> bool:
+            if p.update is None:
+                return True
+            return getattr(p.update, field)
+
+        return self._checker.can(check)
+
+    def can_delete(self) -> bool:
+        return self._checker.can(lambda p: p.delete)
+
+
 class Grants:
     def __init__(self, boundaries, roles):
         self._boundaries = boundaries
@@ -339,3 +372,6 @@ class Grants:
 
     def tenant(self, tenant_id: int | None) -> TenantChecker:
         return TenantChecker(self._boundaries, self._roles, tenant_id)
+
+    def auth(self, auth_id: int | None) -> AuthChecker:
+        return AuthChecker(self._boundaries, self._roles, auth_id)

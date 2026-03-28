@@ -92,6 +92,10 @@ def _provision(allow_tenant_create: bool):
         filter=model.grant.BoundaryFilter(id=None),
         permission=model.grant.BoundaryPermission(create=True, read=True, update=None, delete=True),
     )
+    auth_grant_all = model.grant.AuthGrant(
+        filter=model.grant.AuthFilter(id=None),
+        permission=model.grant.AuthPermission(create=True, read=True, update=None, delete=True),
+    )
 
     if allow_tenant_create:
         ceiling_list = None
@@ -107,6 +111,7 @@ def _provision(allow_tenant_create: bool):
             role_grant_all,
             boundary_grant_all,
             tenant_grant_all,
+            auth_grant_all,
         ]
 
     root_boundary_id = model.boundary.create(
@@ -127,6 +132,7 @@ def _provision(allow_tenant_create: bool):
         role_grant_all,
         boundary_grant_all,
         tenant_grant_all,
+        auth_grant_all,
     ]
     root_role_id = model.role.create(
         name="root",
@@ -138,6 +144,14 @@ def _provision(allow_tenant_create: bool):
         grant_list=all_grants,
     )
     ctx.db.role_member.create(role_id=root_role_id, identity_id=root_id)
+
+    model.auth_config.create(
+        name="default",
+        description="Default HTTP signature authentication",
+        tag_id_list=[],
+        type="http_sig",
+        config={},
+    )
 
 
 @router.post(
