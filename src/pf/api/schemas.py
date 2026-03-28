@@ -521,12 +521,7 @@ class AuthPublic(APIBase):
     name: str
     type: typing.Literal["http_sig", "oidc", "oauth2-github"]
     description: str
-    # oidc fields (None for other types):
-    issuer: str | None
-    client_id: str | None
-    client_secret: str | None
-    # oauth2 fields (None for other types):
-    authorization_endpoint: str | None
+    params: OidcParams | OAuth2Params | HttpSigParams
 
 
 class OidcLoginRequest(APIBase):

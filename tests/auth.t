@@ -131,11 +131,11 @@ Update oidc params
   client_id    other-client-id
 
 Public discovery endpoint returns correct data for http_sig
-  $ curl -s http://127.0.0.1:$API_PORT/pf/t/root/auth/default | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['name'], d['type'], d['issuer'], d['client_id'])"
-  default http_sig None None
+  $ curl -s http://127.0.0.1:$API_PORT/pf/t/root/auth/default | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['name'], d['type'], d['params'])"
+  default http_sig {}
 
 Public discovery endpoint returns correct data for oidc
-  $ curl -s http://127.0.0.1:$API_PORT/pf/t/root/auth/google | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['name'], d['type'], d['issuer'], d['client_id'])"
+  $ curl -s http://127.0.0.1:$API_PORT/pf/t/root/auth/google | python3 -c "import sys,json; d=json.load(sys.stdin); p=d['params']; print(d['name'], d['type'], p['issuer'], p['client_id'])"
   google oidc https://login.microsoftonline.com/common other-client-id
 
 Create an oauth2-github auth config
@@ -158,8 +158,8 @@ Create an oauth2-github auth config without client-secret (should fail)
   pfa auth create oauth2-github: error: the following arguments are required: --client-secret
 
 Public discovery endpoint returns oauth2-github data without client_secret
-  $ curl -s http://127.0.0.1:$API_PORT/pf/t/root/auth/corp-oauth2 | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['name'], d['type'], d['authorization_endpoint'], d['client_id'], d['client_secret'])"
-  corp-oauth2 oauth2-github https://github.com/login/oauth/authorize my-app None
+  $ curl -s http://127.0.0.1:$API_PORT/pf/t/root/auth/corp-oauth2 | python3 -c "import sys,json; d=json.load(sys.stdin); p=d['params']; print(d['name'], d['type'], p['authorization_endpoint'], p['client_id'])"
+  corp-oauth2 oauth2-github https://github.com/login/oauth/authorize my-app
 
 Delete the oauth2 auth config
   $ pfa -c config.json auth delete -i 4

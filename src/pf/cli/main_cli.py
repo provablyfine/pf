@@ -70,8 +70,9 @@ def _do_http_sig_login(args, c, api):
 
 
 def _do_oidc_login(args, c, api, auth_public):
+    params = auth_public["params"]
     # Fetch OIDC discovery
-    discovery_resp = requests.get(f"{auth_public['issuer']}/.well-known/openid-configuration", timeout=10)
+    discovery_resp = requests.get(f"{params['issuer']}/.well-known/openid-configuration", timeout=10)
     if discovery_resp.status_code != 200:
         raise client.exceptions.UI("Unable to fetch OIDC discovery document")
     discovery = discovery_resp.json()
@@ -93,7 +94,7 @@ def _do_oidc_login(args, c, api, auth_public):
     redirect_uri = f"http://127.0.0.1:{port}/callback"
     auth_url = (
         f"{authorization_endpoint}"
-        f"?client_id={urllib.parse.quote(auth_public['client_id'])}"
+        f"?client_id={urllib.parse.quote(params['client_id'])}"
         f"&redirect_uri={urllib.parse.quote(redirect_uri)}"
         f"&response_type=code"
         f"&scope=openid+email"
@@ -134,10 +135,10 @@ def _do_oidc_login(args, c, api, auth_public):
         "code": code,
         "code_verifier": code_verifier,
         "redirect_uri": redirect_uri,
-        "client_id": auth_public["client_id"],
+        "client_id": params["client_id"],
     }
-    if auth_public.get("client_secret"):
-        token_data["client_secret"] = auth_public["client_secret"]
+    if params.get("client_secret"):
+        token_data["client_secret"] = params["client_secret"]
     token_resp = requests.post(token_endpoint, data=token_data, timeout=10)
     if token_resp.status_code != 200:
         raise client.exceptions.UI(f"Unable to exchange code for token: {token_resp.text}")
@@ -170,7 +171,8 @@ def _do_oidc_login(args, c, api, auth_public):
 
 
 def _do_oauth2_login(args, c, api, auth_public):
-    authorization_endpoint = auth_public["authorization_endpoint"]
+    params = auth_public["params"]
+    authorization_endpoint = params["authorization_endpoint"]
 
     # Generate PKCE code verifier and challenge
     code_verifier = base64url.encode(secrets.token_bytes(32))
@@ -187,7 +189,7 @@ def _do_oauth2_login(args, c, api, auth_public):
     redirect_uri = f"http://127.0.0.1:{port}/callback"
     auth_url = (
         f"{authorization_endpoint}"
-        f"?client_id={urllib.parse.quote(auth_public['client_id'])}"
+        f"?client_id={urllib.parse.quote(params['client_id'])}"
         f"&redirect_uri={urllib.parse.quote(redirect_uri)}"
         f"&response_type=code"
         f"&scope=user:email"
@@ -195,7 +197,6 @@ def _do_oauth2_login(args, c, api, auth_public):
         f"&code_challenge_method=S256"
     )
 
-    start_url = f"http://127.0.0.1:{port}/start"
     callback_html = b"""<!DOCTYPE html>
 <html><body>
 <script>window.close();</script>
