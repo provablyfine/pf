@@ -169,6 +169,90 @@ def _do_oidc_login(args, c, api, auth_public):
     c.save(args.config)
 
 
+def _do_oauth2_login(args, c, api, auth_public):
+    authorization_endpoint = auth_public["authorization_endpoint"]
+
+    # Generate PKCE code verifier and challenge
+    code_verifier = base64url.encode(secrets.token_bytes(32))
+    code_challenge = base64url.encode(hashlib.sha256(code_verifier.encode()).digest())
+
+    # Bind a free local port for the redirect
+    import socket
+
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    port = sock.getsockname()[1]
+    sock.close()
+
+    redirect_uri = f"http://127.0.0.1:{port}/callback"
+    auth_url = (
+        f"{authorization_endpoint}"
+        f"?client_id={urllib.parse.quote(auth_public['client_id'])}"
+        f"&redirect_uri={urllib.parse.quote(redirect_uri)}"
+        f"&response_type=code"
+        f"&scope=user:email"
+        f"&code_challenge={urllib.parse.quote(code_challenge)}"
+        f"&code_challenge_method=S256"
+    )
+
+    start_url = f"http://127.0.0.1:{port}/start"
+    callback_html = b"""<!DOCTYPE html>
+<html><body>
+<script>window.close();</script>
+<p>Login successful. This window will close automatically.</p>
+</body></html>"""
+
+    print("Opening browser for OAuth2 login...")
+    webbrowser.open(auth_url)
+
+    # Start local HTTP server to capture the authorization code
+    code_holder: list[str] = []
+
+    class CallbackHandler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            parsed = urllib.parse.urlparse(self.path)
+            params = urllib.parse.parse_qs(parsed.query)
+            if "code" in params:
+                code_holder.append(params["code"][0])
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.end_headers()
+            self.wfile.write(callback_html)
+
+        def log_message(self, format, *args):
+            pass  # suppress server log output
+
+    server = http.server.HTTPServer(("127.0.0.1", port), CallbackHandler)
+    while not code_holder:
+        server.handle_request()
+    server.server_close()
+
+    # Generate session key and add to SSH agent
+    try:
+        ssh_agent = ssh.agent.Client()
+    except Exception:
+        raise client.exceptions.UI("Unable to connect to user's SSH agent")
+    session_key = jwk.Private.generate_ed25519()
+    ssh_agent.add(session_key, comment="pf-session", lifetime=1800)
+    c.session_key = session_key.public().ssh_fingerprint()
+
+    # POST /auth/oauth2/login — server exchanges the code using its client_secret
+    oauth2_auth = api.session_auth(session=c.session_key)
+    response = oauth2_auth.post(
+        url=oauth2_auth.directory.login_oauth2,
+        json={
+            "auth_name": auth_public["name"],
+            "code": code_holder[0],
+            "redirect_uri": redirect_uri,
+            "code_verifier": code_verifier,
+            "session_public_key": session_key.public().to_dict(),
+        },
+    )
+    if response.status_code != 204:
+        raise client.exceptions.UI(f"Unable to login via OAuth2: {response.text}")
+    c.save(args.config)
+
+
 @client.ssh_utils.exception
 def _login_function(args):
     c = client.Config.load(args.config)
@@ -188,6 +272,8 @@ def _login_function(args):
             _do_http_sig_login(args, c, api)
         case "oidc":
             _do_oidc_login(args, c, api, auth_public)
+        case "oauth2-github":
+            _do_oauth2_login(args, c, api, auth_public)
         case _:
             raise client.exceptions.UI(f"Unsupported auth type: {auth_public['type']}")
 

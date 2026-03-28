@@ -1,4 +1,5 @@
 import dataclasses
+import json
 import time
 
 from ..context import ctx
@@ -26,7 +27,7 @@ def _from_db(row) -> AuthConfig:
         created_at=row.created_at,
         is_enabled=row.is_enabled,
         type=row.type,
-        config=row.config,
+        config=json.loads(ctx.kek.decrypt(row.config)),
     )
 
 
@@ -39,7 +40,7 @@ def create(name: str, description: str, tag_id_list: list[int], type: str, confi
         created_at=now,
         is_enabled=True,
         type=type,
-        config=config,
+        config=ctx.kek.encrypt(json.dumps(config).encode()),
     )
     assert auth_id is not None
     audit_log.create("auth-create", id=auth_id, name=name)
@@ -61,9 +62,12 @@ def read_one(**kwargs) -> AuthConfig | None:
 def update(id: int, **fields) -> None:
     allowed = {"name", "description", "tag_id_list", "is_enabled", "config"}
     update_fields = {k: v for k, v in fields.items() if k in allowed and v is not None}
+    audit_fields = {k: v for k, v in update_fields.items() if k != "config"}
+    if "config" in update_fields:
+        update_fields["config"] = ctx.kek.encrypt(json.dumps(update_fields["config"]).encode())
     if update_fields:
         ctx.db.auth.update(**update_fields).where(id=id)
-    audit_log.create("auth-update", id=id, **update_fields)
+    audit_log.create("auth-update", id=id, **audit_fields)
 
 
 def delete(id: int) -> None:

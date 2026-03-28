@@ -74,7 +74,7 @@ Create an oidc auth config without client-id (should fail)
   pfa auth create oidc: error: the following arguments are required: --client-id
 
 Update auth config name
-  $ pfa -c config.json auth update -i 2 --name corp-http-sig
+  $ pfa -c config.json auth update http_sig -i 2 --name corp-http-sig
   $ pfa -c config.json auth read -i 2
   id           2
   name         corp-http-sig
@@ -85,7 +85,7 @@ Update auth config name
   tag_id_list
 
 Update auth config description
-  $ pfa -c config.json auth update -i 2 --description "Corporate HTTP signature auth"
+  $ pfa -c config.json auth update http_sig -i 2 --description "Corporate HTTP signature auth"
   $ pfa -c config.json auth read -i 2
   id           2
   name         corp-http-sig
@@ -96,7 +96,7 @@ Update auth config description
   tag_id_list
 
 Disable an auth config
-  $ pfa -c config.json auth update -i 2 --disable
+  $ pfa -c config.json auth update http_sig -i 2 --disable
   $ pfa -c config.json auth read -i 2
   id           2
   name         corp-http-sig
@@ -107,7 +107,7 @@ Disable an auth config
   tag_id_list
 
 Re-enable an auth config
-  $ pfa -c config.json auth update -i 2 --enable
+  $ pfa -c config.json auth update http_sig -i 2 --enable
   $ pfa -c config.json auth read -i 2
   id           2
   name         corp-http-sig
@@ -118,7 +118,7 @@ Re-enable an auth config
   tag_id_list
 
 Update oidc params
-  $ pfa -c config.json auth update -i 3 --issuer https://login.microsoftonline.com/common --client-id other-client-id
+  $ pfa -c config.json auth update oidc -i 3 --issuer https://login.microsoftonline.com/common --client-id other-client-id
   $ pfa -c config.json auth read -i 3
   id           3
   name         google
@@ -138,15 +138,41 @@ Public discovery endpoint returns correct data for oidc
   $ curl -s http://127.0.0.1:$API_PORT/pf/t/root/auth/google | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['name'], d['type'], d['issuer'], d['client_id'])"
   google oidc https://login.microsoftonline.com/common other-client-id
 
+Create an oauth2-github auth config
+  $ pfa -c config.json auth create oauth2-github -n corp-oauth2 --client-id my-app --client-secret s3cr3t
+
+Read the oauth2-github auth config (client_secret must not appear)
+  $ pfa -c config.json auth read -i 4
+  id                      4
+  name                    corp-oauth2
+  type                    oauth2-github
+  description
+  enabled                 True
+  created_at              .* (re)
+  tag_id_list
+  authorization_endpoint  https://github.com/login/oauth/authorize
+  client_id               my-app
+
+Create an oauth2-github auth config without client-secret (should fail)
+  $ pfa -c config.json auth create oauth2-github -n bad-oauth2 --client-id my-app 2>&1 | grep "error:"
+  pfa auth create oauth2-github: error: the following arguments are required: --client-secret
+
+Public discovery endpoint returns oauth2-github data without client_secret
+  $ curl -s http://127.0.0.1:$API_PORT/pf/t/root/auth/corp-oauth2 | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['name'], d['type'], d['authorization_endpoint'], d['client_id'], d['client_secret'])"
+  corp-oauth2 oauth2-github https://github.com/login/oauth/authorize my-app None
+
+Delete the oauth2 auth config
+  $ pfa -c config.json auth delete -i 4
+
 Public discovery endpoint returns 404 for unknown name
   $ curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:$API_PORT/pf/t/root/auth/nonexistent
   404
 
 Public discovery endpoint returns 404 for disabled auth config
-  $ pfa -c config.json auth update -i 3 --disable
+  $ pfa -c config.json auth update oidc -i 3 --disable
   $ curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:$API_PORT/pf/t/root/auth/google
   404
-  $ pfa -c config.json auth update -i 3 --enable
+  $ pfa -c config.json auth update oidc -i 3 --enable
 
 Read a non-existent auth config
   $ pfa -c config.json auth read -i 999
@@ -154,7 +180,7 @@ Read a non-existent auth config
   [2]
 
 Update a non-existent auth config
-  $ pfa -c config.json auth update -i 999 --name whatever
+  $ pfa -c config.json auth update http_sig -i 999 --name whatever
   Auth config not found
   [2]
 

@@ -16,6 +16,12 @@ def _build_config(data: schemas.AuthCreateRequest) -> dict:
         if data.oidc_params.client_secret is not None:
             config["client_secret"] = data.oidc_params.client_secret
         return config
+    if data.type == "oauth2-github":
+        assert data.oauth2_params is not None
+        return {
+            "client_id": data.oauth2_params.client_id,
+            "client_secret": data.oauth2_params.client_secret,
+        }
     return {}
 
 

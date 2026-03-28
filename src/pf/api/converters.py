@@ -5,7 +5,7 @@ import typing
 import pydantic
 
 from .. import jwk, ssh
-from . import model, responses, schemas
+from . import model, oauth2_providers, responses, schemas
 from .context import ctx
 
 logger = logging.getLogger(__name__)
@@ -499,10 +499,15 @@ def identity_to_schema(identity: model.identity.Identity) -> schemas.Identity:
 
 def auth_config_to_schema(ac: model.auth_config.AuthConfig) -> schemas.Auth:
     if ac.type == "oidc":
-        params: schemas.OidcParams | schemas.HttpSigParams = schemas.OidcParams(
+        params: schemas.OidcParams | schemas.OAuth2Params | schemas.HttpSigParams = schemas.OidcParams(
             issuer=ac.config["issuer"],
             client_id=ac.config["client_id"],
             client_secret=ac.config.get("client_secret"),
+        )
+    elif ac.type in oauth2_providers.PROVIDER_CONFIG:
+        params = schemas.OAuth2Params(
+            client_id=ac.config["client_id"],
+            authorization_endpoint=oauth2_providers.PROVIDER_CONFIG[ac.type]["authorization_endpoint"],
         )
     else:
         params = schemas.HttpSigParams()

@@ -463,6 +463,20 @@ class OidcParams(APIBase):
     client_secret: str | None = None
 
 
+class OAuth2Params(APIBase):
+    """OAuth2 params as returned in API responses — client_secret intentionally omitted."""
+
+    client_id: str
+    authorization_endpoint: str
+
+
+class OAuth2CreateParams(APIBase):
+    """OAuth2 params for create requests — includes client_secret."""
+
+    client_id: str
+    client_secret: str
+
+
 class Auth(APIBase):
     id: int
     name: str
@@ -470,8 +484,8 @@ class Auth(APIBase):
     tag_id_list: list[int]
     created_at: int
     is_enabled: bool
-    type: typing.Literal["http_sig", "oidc"]
-    params: OidcParams | HttpSigParams
+    type: typing.Literal["http_sig", "oidc", "oauth2-github"]
+    params: OidcParams | OAuth2Params | HttpSigParams
 
 
 class AuthListResponse(APIBase):
@@ -482,13 +496,16 @@ class AuthCreateRequest(APIBase):
     name: str
     description: str = ""
     tag_id_list: list[int] = []
-    type: typing.Literal["http_sig", "oidc"]
-    oidc_params: OidcParams | None = None  # required when type == "oidc"
+    type: typing.Literal["http_sig", "oidc", "oauth2-github"]
+    oidc_params: OidcParams | None = None
+    oauth2_params: OAuth2CreateParams | None = None
 
     @pydantic.model_validator(mode="after")
-    def validate_oidc_params(self):
+    def validate_params(self):
         if self.type == "oidc" and self.oidc_params is None:
             raise ValueError("oidc_params is required when type is 'oidc'")
+        if self.type == "oauth2-github" and self.oauth2_params is None:
+            raise ValueError("oauth2_params is required when type is 'oauth2-github'")
         return self
 
 
@@ -502,11 +519,14 @@ class AuthUpdateRequest(APIBase):
 
 class AuthPublic(APIBase):
     name: str
-    type: typing.Literal["http_sig", "oidc"]
+    type: typing.Literal["http_sig", "oidc", "oauth2-github"]
     description: str
+    # oidc fields (None for other types):
     issuer: str | None
     client_id: str | None
     client_secret: str | None
+    # oauth2 fields (None for other types):
+    authorization_endpoint: str | None
 
 
 class OidcLoginRequest(APIBase):
@@ -515,11 +535,20 @@ class OidcLoginRequest(APIBase):
     session_public_key: PublicJWK
 
 
+class OAuth2LoginRequest(APIBase):
+    auth_name: str
+    code: str
+    redirect_uri: str
+    code_verifier: str
+    session_public_key: PublicJWK
+
+
 class DirectoryReadResponse(APIBase):
     initialize: str
     accept_invitation: str
     login: str
     login_oidc: str
+    login_oauth2: str
     auth: str
     boundary: str
     tag: str

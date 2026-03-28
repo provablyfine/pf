@@ -29,7 +29,7 @@ auth = sqlalchemy.Table(
     sqlalchemy.Column("created_at", sqlalchemy.Integer, nullable=False),
     sqlalchemy.Column("is_enabled", sqlalchemy.Boolean, nullable=False),
     sqlalchemy.Column("type", sqlalchemy.String, nullable=False),
-    sqlalchemy.Column("config", sqlalchemy.JSON, nullable=False),
+    sqlalchemy.Column("config", sqlalchemy.LargeBinary, nullable=False),
 )
 
 public_key_denylist = sqlalchemy.Table(
