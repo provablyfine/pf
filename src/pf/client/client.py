@@ -222,7 +222,7 @@ class HttpClient:
             else:
                 raise exceptions.UI(f"{title}")
 
-        if "Content-Type" in response.headers and response.headers["Content-Type"] == "application/json":
+        if "Content-Type" in response.headers and response.headers["Content-Type"] in ["application/json", "application/problem+json"]:
             problem = response.json()
             instance = problem.get("instance")
             title = problem.get("title")
