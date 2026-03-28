@@ -34,23 +34,34 @@ def _auth_list_function(args):
         print(output)
 
 
-def _auth_create_function(args):
+def _auth_create_http_sig_function(args):
     c = client.Config.load(args.config)
     api = client.Client(c)
     auth = api.session_auth(c.session_key)
     body: dict = {
         "name": args.name,
         "description": args.description or "",
-        "type": args.type,
+        "type": "http_sig",
         "tag_id_list": args.tag_id or [],
     }
-    if args.type == "oidc":
-        if not args.issuer or not args.client_id:
-            raise client.exceptions.UI("--issuer and --client-id are required for type oidc")
-        oidc_params: dict = {"issuer": args.issuer, "client_id": args.client_id}
-        if args.client_secret:
-            oidc_params["client_secret"] = args.client_secret
-        body["oidc_params"] = oidc_params
+    response = auth.post(auth.directory.auth, json=body)
+    if response.status_code != 201:
+        raise client.exceptions.UI(f"Unable to create auth config. {response.json()['title']}")
+
+
+def _auth_create_oidc_function(args):
+    c = client.Config.load(args.config)
+    api = client.Client(c)
+    auth = api.session_auth(c.session_key)
+    body: dict = {
+        "name": args.name,
+        "description": args.description or "",
+        "type": "oidc",
+        "tag_id_list": args.tag_id or [],
+        "oidc_params": {"issuer": args.issuer, "client_id": args.client_id},
+    }
+    if args.client_secret:
+        body["oidc_params"]["client_secret"] = args.client_secret
     response = auth.post(auth.directory.auth, json=body)
     if response.status_code != 201:
         raise client.exceptions.UI(f"Unable to create auth config. {response.json()['title']}")
@@ -145,14 +156,24 @@ def add_subparser(parser):
     list_parser.set_defaults(func=_auth_list_function)
 
     create_parser = subparsers.add_parser("create", help="Create an auth config")
-    create_parser.add_argument("-n", "--name", required=True, help="Name of auth config")
-    create_parser.add_argument("--description", help="Description")
-    create_parser.add_argument("--type", required=True, choices=["http_sig", "oidc"], help="Auth type")
-    create_parser.add_argument("--tag-id", type=int, action="append", dest="tag_id", help="Tag ID (repeatable)")
-    create_parser.add_argument("--issuer", help="OIDC issuer URL (required for type oidc)")
-    create_parser.add_argument("--client-id", help="OIDC client ID (required for type oidc)")
-    create_parser.add_argument("--client-secret", help="OIDC client secret (optional, for providers that require it)")
-    create_parser.set_defaults(func=_auth_create_function)
+    create_type_subparsers = create_parser.add_subparsers(required=True)
+
+    create_http_sig_parser = create_type_subparsers.add_parser("http_sig", help="HTTP signature auth")
+    create_http_sig_parser.add_argument("-n", "--name", required=True, help="Name of auth config")
+    create_http_sig_parser.add_argument("--description", help="Description")
+    create_http_sig_parser.add_argument(
+        "--tag-id", type=int, action="append", dest="tag_id", help="Tag ID (repeatable)"
+    )
+    create_http_sig_parser.set_defaults(func=_auth_create_http_sig_function)
+
+    create_oidc_parser = create_type_subparsers.add_parser("oidc", help="OpenID Connect auth")
+    create_oidc_parser.add_argument("-n", "--name", required=True, help="Name of auth config")
+    create_oidc_parser.add_argument("--description", help="Description")
+    create_oidc_parser.add_argument("--tag-id", type=int, action="append", dest="tag_id", help="Tag ID (repeatable)")
+    create_oidc_parser.add_argument("--issuer", required=True, help="OIDC issuer URL")
+    create_oidc_parser.add_argument("--client-id", required=True, help="OIDC client ID")
+    create_oidc_parser.add_argument("--client-secret", help="OIDC client secret (for providers that require it)")
+    create_oidc_parser.set_defaults(func=_auth_create_oidc_function)
 
     read_parser = subparsers.add_parser("read", help="Read an auth config")
     read_parser.add_argument("-i", "--id", type=int, required=True, help="ID of auth config")

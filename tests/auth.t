@@ -23,7 +23,7 @@ Read the default auth config
   tag_id_list
 
 Create a new http_sig auth config
-  $ pfa -c config.json auth create --type http_sig -n corporate
+  $ pfa -c config.json auth create http_sig -n corporate
 
 List auth configs (two now)
   $ pfa -c config.json auth list -q
@@ -41,17 +41,17 @@ Read the new auth config
   tag_id_list
 
 Create a duplicate auth config
-  $ pfa -c config.json auth create --type http_sig -n default
+  $ pfa -c config.json auth create http_sig -n default
   Auth config already exists
   [2]
 
 Create an auth config with an integer name (should fail)
-  $ pfa -c config.json auth create --type http_sig -n 42
+  $ pfa -c config.json auth create http_sig -n 42
   Auth config name must not be a pure integer
   [2]
 
 Create an oidc auth config
-  $ pfa -c config.json auth create --type oidc -n google --issuer https://accounts.google.com --client-id my-client-id
+  $ pfa -c config.json auth create oidc -n google --issuer https://accounts.google.com --client-id my-client-id
 
 Read the oidc auth config
   $ pfa -c config.json auth read -i 3
@@ -66,14 +66,12 @@ Read the oidc auth config
   client_id    my-client-id
 
 Create an oidc auth config without issuer (should fail)
-  $ pfa -c config.json auth create --type oidc -n bad-oidc --client-id my-client-id
-  --issuer and --client-id are required for type oidc
-  [2]
+  $ pfa -c config.json auth create oidc -n bad-oidc --client-id my-client-id 2>&1 | grep "error:"
+  pfa auth create oidc: error: the following arguments are required: --issuer
 
 Create an oidc auth config without client-id (should fail)
-  $ pfa -c config.json auth create --type oidc -n bad-oidc --issuer https://accounts.google.com
-  --issuer and --client-id are required for type oidc
-  [2]
+  $ pfa -c config.json auth create oidc -n bad-oidc --issuer https://accounts.google.com 2>&1 | grep "error:"
+  pfa auth create oidc: error: the following arguments are required: --client-id
 
 Update auth config name
   $ pfa -c config.json auth update -i 2 --name corp-http-sig
