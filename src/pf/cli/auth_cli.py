@@ -114,6 +114,7 @@ def _auth_read_function(args):
                 params = a.get("params", {})
                 rows.append(["issuer", params.get("issuer", "")])
                 rows.append(["client_id", params.get("client_id", "")])
+                rows.append(["callback_url", params.get("callback_url", "")])
                 if params.get("client_secret"):
                     rows.append(["client_secret", params.get("client_secret", "")])
             elif a["type"] == "oauth2-github":

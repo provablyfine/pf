@@ -55,15 +55,16 @@ Create an oidc auth config
 
 Read the oidc auth config
   $ pfa -c config.json auth read -i 3
-  id           3
-  name         google
-  type         oidc
+  id            3
+  name          google
+  type          oidc
   description
-  enabled      True
-  created_at   .* (re)
+  enabled       True
+  created_at    .* (re)
   tag_id_list
-  issuer       https://accounts.google.com
-  client_id    my-client-id
+  issuer        https://accounts.google.com
+  client_id     my-client-id
+  callback_url  http://127.0.0.1/callback
 
 Create an oidc auth config without issuer (should fail)
   $ pfa -c config.json auth create oidc -n bad-oidc --client-id my-client-id 2>&1 | grep "error:"
@@ -120,23 +121,24 @@ Re-enable an auth config
 Update oidc params
   $ pfa -c config.json auth update oidc -i 3 --issuer https://login.microsoftonline.com/common --client-id other-client-id
   $ pfa -c config.json auth read -i 3
-  id           3
-  name         google
-  type         oidc
+  id            3
+  name          google
+  type          oidc
   description
-  enabled      True
-  created_at   .* (re)
+  enabled       True
+  created_at    .* (re)
   tag_id_list
-  issuer       https://login.microsoftonline.com/common
-  client_id    other-client-id
+  issuer        https://login.microsoftonline.com/common
+  client_id     other-client-id
+  callback_url  http://127.0.0.1/callback
 
 Public discovery endpoint returns correct data for http_sig
   $ curl -s http://127.0.0.1:$API_PORT/pf/t/root/auth/default | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['name'], d['type'], d['params'])"
   default http_sig {}
 
 Public discovery endpoint returns correct data for oidc
-  $ curl -s http://127.0.0.1:$API_PORT/pf/t/root/auth/google | python3 -c "import sys,json; d=json.load(sys.stdin); p=d['params']; print(d['name'], d['type'], p['issuer'], p['client_id'])"
-  google oidc https://login.microsoftonline.com/common other-client-id
+  $ curl -s http://127.0.0.1:$API_PORT/pf/t/root/auth/google | python3 -c "import sys,json; d=json.load(sys.stdin); p=d['params']; print(d['name'], d['type'], p['issuer'], p['client_id'], p['callback_url'])"
+  google oidc https://login.microsoftonline.com/common other-client-id http://127.0.0.1/callback
 
 Create an oauth2-github auth config
   $ pfa -c config.json auth create oauth2-github -n corp-oauth2 --client-id my-app --client-secret s3cr3t

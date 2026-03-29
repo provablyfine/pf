@@ -461,6 +461,7 @@ class OidcParams(APIBase):
     issuer: str
     client_id: str
     client_secret: str | None = None
+    callback_url: str = "http://127.0.0.1/callback"
 
 
 class OAuth2Params(APIBase):
