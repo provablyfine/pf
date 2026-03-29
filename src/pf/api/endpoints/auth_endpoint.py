@@ -26,19 +26,19 @@ def _build_config(data: schemas.AuthCreateRequest) -> dict:
 
 
 @router.get("", status_code=200, responses={403: responses.PROBLEM})
-def list_endpoint() -> schemas.AuthListResponse:
+def list_endpoint(tenant_name: str) -> schemas.AuthListResponse:
     auths = model.auth_config.read_all()
     grants = grant.Grants.create()
     output = []
     for ac in auths:
         if not grants.auth(ac.id).can_read():
             continue
-        output.append(converters.auth_config_to_schema(ac))
+        output.append(converters.auth_config_to_schema(ac, tenant_name))
     return schemas.AuthListResponse(auths=output)
 
 
 @router.post("", status_code=201, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
-def create_endpoint(data: schemas.AuthCreateRequest) -> schemas.Auth:
+def create_endpoint(data: schemas.AuthCreateRequest, tenant_name: str) -> schemas.Auth:
     # Auth config names must not be pure integers to avoid shadowing GET /auth/{id:int}
     if data.name.isdigit():
         raise responses.ProblemHTTPException(
@@ -66,11 +66,11 @@ def create_endpoint(data: schemas.AuthCreateRequest) -> schemas.Auth:
         )
     ac = model.auth_config.read_one(id=auth_id)
     assert ac is not None
-    return converters.auth_config_to_schema(ac)
+    return converters.auth_config_to_schema(ac, tenant_name)
 
 
 @router.get("/{auth_id:int}", status_code=200, responses={403: responses.PROBLEM, 404: responses.PROBLEM})
-def read_endpoint(auth_id: int) -> schemas.Auth:
+def read_endpoint(auth_id: int, tenant_name: str) -> schemas.Auth:
     ac = model.auth_config.read_one(id=auth_id)
     if ac is None:
         raise responses.ProblemHTTPException(
@@ -81,7 +81,7 @@ def read_endpoint(auth_id: int) -> schemas.Auth:
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=403, title="Not allowed to read auth config")
         )
-    return converters.auth_config_to_schema(ac)
+    return converters.auth_config_to_schema(ac, tenant_name)
 
 
 @router.patch(
@@ -89,7 +89,7 @@ def read_endpoint(auth_id: int) -> schemas.Auth:
     status_code=200,
     responses={400: responses.PROBLEM, 403: responses.PROBLEM, 404: responses.PROBLEM},
 )
-def update_endpoint(auth_id: int, data: schemas.AuthUpdateRequest) -> schemas.Auth:
+def update_endpoint(auth_id: int, data: schemas.AuthUpdateRequest, tenant_name: str) -> schemas.Auth:
     ac = model.auth_config.read_one(id=auth_id)
     if ac is None:
         raise responses.ProblemHTTPException(
@@ -148,7 +148,7 @@ def update_endpoint(auth_id: int, data: schemas.AuthUpdateRequest) -> schemas.Au
 
     updated = model.auth_config.read_one(id=auth_id)
     assert updated is not None
-    return converters.auth_config_to_schema(updated)
+    return converters.auth_config_to_schema(updated, tenant_name)
 
 
 @router.delete("/{auth_id:int}", status_code=204, responses={403: responses.PROBLEM, 404: responses.PROBLEM})

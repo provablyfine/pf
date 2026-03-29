@@ -181,6 +181,21 @@ audit_log = sqlalchemy.Table(
 )
 
 
+oauth2_login_request = sqlalchemy.Table(
+    "oauth2_login_request",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.String, primary_key=True),
+    sqlalchemy.Column("session_key_thumbprint", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("session_public_key", sqlalchemy.JSON, nullable=False),
+    sqlalchemy.Column("auth_config_id", sqlalchemy.Integer, nullable=False),
+    sqlalchemy.Column("code_verifier", sqlalchemy.LargeBinary, nullable=False),
+    sqlalchemy.Column("redirect_uri", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("client_redirect_uri", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("created_at", sqlalchemy.Integer, nullable=False),
+    sqlalchemy.Column("expires_at", sqlalchemy.Integer, nullable=False),
+)
+
+
 def create_tables(url):
     engine = sqlalchemy.create_engine(url)
     metadata.create_all(engine)

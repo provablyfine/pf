@@ -171,62 +171,7 @@ def _do_oidc_login(args, c, api, auth_public):
 
 
 def _do_oauth2_login(args, c, api, auth_public):
-    params = auth_public["params"]
-    authorization_endpoint = params["authorization_endpoint"]
-
-    # Generate PKCE code verifier and challenge
-    code_verifier = base64url.encode(secrets.token_bytes(32))
-    code_challenge = base64url.encode(hashlib.sha256(code_verifier.encode()).digest())
-
-    # Bind a free local port for the redirect
     import socket
-
-    sock = socket.socket()
-    sock.bind(("127.0.0.1", 0))
-    port = sock.getsockname()[1]
-    sock.close()
-
-    redirect_uri = f"http://127.0.0.1:{port}/callback"
-    auth_url = (
-        f"{authorization_endpoint}"
-        f"?client_id={urllib.parse.quote(params['client_id'])}"
-        f"&redirect_uri={urllib.parse.quote(redirect_uri)}"
-        f"&response_type=code"
-        f"&scope=user:email"
-        f"&code_challenge={urllib.parse.quote(code_challenge)}"
-        f"&code_challenge_method=S256"
-    )
-
-    callback_html = b"""<!DOCTYPE html>
-<html><body>
-<script>window.close();</script>
-<p>Login successful. This window will close automatically.</p>
-</body></html>"""
-
-    print("Opening browser for OAuth2 login...")
-    webbrowser.open(auth_url)
-
-    # Start local HTTP server to capture the authorization code
-    code_holder: list[str] = []
-
-    class CallbackHandler(http.server.BaseHTTPRequestHandler):
-        def do_GET(self):
-            parsed = urllib.parse.urlparse(self.path)
-            params = urllib.parse.parse_qs(parsed.query)
-            if "code" in params:
-                code_holder.append(params["code"][0])
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html")
-            self.end_headers()
-            self.wfile.write(callback_html)
-
-        def log_message(self, format, *args):
-            pass  # suppress server log output
-
-    server = http.server.HTTPServer(("127.0.0.1", port), CallbackHandler)
-    while not code_holder:
-        server.handle_request()
-    server.server_close()
 
     # Generate session key and add to SSH agent
     try:
@@ -237,20 +182,54 @@ def _do_oauth2_login(args, c, api, auth_public):
     ssh_agent.add(session_key, comment="pf-session", lifetime=1800)
     c.session_key = session_key.public().ssh_fingerprint()
 
-    # POST /auth/oauth2/login — server exchanges the code using its client_secret
+    # Bind a free local port for the completion redirect
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    port = sock.getsockname()[1]
+    sock.close()
+    client_redirect_uri = f"http://127.0.0.1:{port}/done"
+
+    # Start OAuth2 flow on server
     oauth2_auth = api.session_auth(session=c.session_key)
     response = oauth2_auth.post(
-        url=oauth2_auth.directory.login_oauth2,
+        url=oauth2_auth.directory.login_oauth2_start,
         json={
             "auth_name": auth_public["name"],
-            "code": code_holder[0],
-            "redirect_uri": redirect_uri,
-            "code_verifier": code_verifier,
             "session_public_key": session_key.public().to_dict(),
+            "client_redirect_uri": client_redirect_uri,
         },
     )
-    if response.status_code != 204:
-        raise client.exceptions.UI(f"Unable to login via OAuth2: {response.text}")
+    if response.status_code != 200:
+        raise client.exceptions.UI(f"Unable to start OAuth2 login: {response.text}")
+
+    print("Opening browser for OAuth2 login...")
+    webbrowser.open(response.json()["auth_url"])
+
+    # Wait for server to redirect browser back after completing the exchange
+    result_holder: list[dict] = []
+
+    class DoneHandler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            parsed = urllib.parse.urlparse(self.path)
+            qs = urllib.parse.parse_qs(parsed.query)
+            status = qs.get("status", ["error"])[0]
+            reason = qs.get("reason", ["Unknown error"])[0]
+            result_holder.append({"status": status, "reason": reason})
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.end_headers()
+            if status == "ok":
+                self.wfile.write(b"Login successful. You may close this tab.")
+            else:
+                self.wfile.write(b"Login failed: " + reason.encode() + b". You may close this tab.")
+
+        def log_message(self, format, *args):
+            pass
+
+    http.server.HTTPServer(("127.0.0.1", port), DoneHandler).handle_request()
+
+    if result_holder[0]["status"] != "ok":
+        raise client.exceptions.UI(f"OAuth2 login failed: {result_holder[0]['reason']}")
     c.save(args.config)
 
 

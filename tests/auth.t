@@ -152,14 +152,15 @@ Read the oauth2-github auth config (client_secret must not appear)
   tag_id_list
   authorization_endpoint  https://github.com/login/oauth/authorize
   client_id               my-app
+  callback_url            .*/auth/oauth2/callback (re)
 
 Create an oauth2-github auth config without client-secret (should fail)
   $ pfa -c config.json auth create oauth2-github -n bad-oauth2 --client-id my-app 2>&1 | grep "error:"
   pfa auth create oauth2-github: error: the following arguments are required: --client-secret
 
 Public discovery endpoint returns oauth2-github data without client_secret
-  $ curl -s http://127.0.0.1:$API_PORT/pf/t/root/auth/corp-oauth2 | python3 -c "import sys,json; d=json.load(sys.stdin); p=d['params']; print(d['name'], d['type'], p['authorization_endpoint'], p['client_id'])"
-  corp-oauth2 oauth2-github https://github.com/login/oauth/authorize my-app
+  $ curl -s http://127.0.0.1:$API_PORT/pf/t/root/auth/corp-oauth2 | python3 -c "import sys,json; d=json.load(sys.stdin); p=d['params']; print(d['name'], d['type'], p['authorization_endpoint'], p['client_id'], 'callback' in p['callback_url'])"
+  corp-oauth2 oauth2-github https://github.com/login/oauth/authorize my-app True
 
 Delete the oauth2 auth config
   $ pfa -c config.json auth delete -i 4

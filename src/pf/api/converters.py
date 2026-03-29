@@ -497,7 +497,7 @@ def identity_to_schema(identity: model.identity.Identity) -> schemas.Identity:
     return identity_list_to_schema([identity])[0]
 
 
-def auth_config_to_schema(ac: model.auth_config.AuthConfig) -> schemas.Auth:
+def auth_config_to_schema(ac: model.auth_config.AuthConfig, tenant_name: str) -> schemas.Auth:
     if ac.type == "oidc":
         params: schemas.OidcParams | schemas.OAuth2Params | schemas.HttpSigParams = schemas.OidcParams(
             issuer=ac.config["issuer"],
@@ -505,9 +505,11 @@ def auth_config_to_schema(ac: model.auth_config.AuthConfig) -> schemas.Auth:
             client_secret=ac.config.get("client_secret"),
         )
     elif ac.type in oauth2_providers.PROVIDER_CONFIG:
+        callback_url = f"{ctx.config.base_url}/pf/t/{tenant_name}/auth/oauth2/callback"
         params = schemas.OAuth2Params(
             client_id=ac.config["client_id"],
             authorization_endpoint=oauth2_providers.PROVIDER_CONFIG[ac.type]["authorization_endpoint"],
+            callback_url=callback_url,
         )
     else:
         params = schemas.HttpSigParams()

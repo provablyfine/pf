@@ -468,6 +468,7 @@ class OAuth2Params(APIBase):
 
     client_id: str
     authorization_endpoint: str
+    callback_url: str
 
 
 class OAuth2CreateParams(APIBase):
@@ -530,12 +531,14 @@ class OidcLoginRequest(APIBase):
     session_public_key: PublicJWK
 
 
-class OAuth2LoginRequest(APIBase):
+class OAuth2StartRequest(APIBase):
     auth_name: str
-    code: str
-    redirect_uri: str
-    code_verifier: str
     session_public_key: PublicJWK
+    client_redirect_uri: str
+
+
+class OAuth2StartResponse(APIBase):
+    auth_url: str
 
 
 class DirectoryReadResponse(APIBase):
@@ -543,7 +546,7 @@ class DirectoryReadResponse(APIBase):
     accept_invitation: str
     login: str
     login_oidc: str
-    login_oauth2: str
+    login_oauth2_start: str
     auth: str
     boundary: str
     tag: str
