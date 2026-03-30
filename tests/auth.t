@@ -20,7 +20,7 @@ Read the default auth config
   description  Default HTTP signature authentication
   enabled      True
   created_at   .* (re)
-  tag_id_list
+  tags
 
 Create a new http_sig auth config
   $ pfa -c config.json auth create http_sig -n corporate
@@ -38,7 +38,7 @@ Read the new auth config
   description
   enabled      True
   created_at   .* (re)
-  tag_id_list
+  tags
 
 Create a duplicate auth config
   $ pfa -c config.json auth create http_sig -n default
@@ -61,7 +61,7 @@ Read the oidc auth config
   description
   enabled       True
   created_at    .* (re)
-  tag_id_list
+  tags
   issuer        https://accounts.google.com
   client_id     my-client-id
   callback_url  http://127.0.0.1/callback
@@ -83,7 +83,7 @@ Update auth config name
   description
   enabled      True
   created_at   .* (re)
-  tag_id_list
+  tags
 
 Update auth config description
   $ pfa -c config.json auth update http_sig -i 2 --description "Corporate HTTP signature auth"
@@ -94,7 +94,7 @@ Update auth config description
   description  Corporate HTTP signature auth
   enabled      True
   created_at   .* (re)
-  tag_id_list
+  tags
 
 Disable an auth config
   $ pfa -c config.json auth update http_sig -i 2 --disable
@@ -105,7 +105,7 @@ Disable an auth config
   description  Corporate HTTP signature auth
   enabled      False
   created_at   .* (re)
-  tag_id_list
+  tags
 
 Re-enable an auth config
   $ pfa -c config.json auth update http_sig -i 2 --enable
@@ -116,7 +116,7 @@ Re-enable an auth config
   description  Corporate HTTP signature auth
   enabled      True
   created_at   .* (re)
-  tag_id_list
+  tags
 
 Update oidc params
   $ pfa -c config.json auth update oidc -i 3 --issuer https://login.microsoftonline.com/common --client-id other-client-id
@@ -127,7 +127,7 @@ Update oidc params
   description
   enabled       True
   created_at    .* (re)
-  tag_id_list
+  tags
   issuer        https://login.microsoftonline.com/common
   client_id     other-client-id
   callback_url  http://127.0.0.1/callback
@@ -151,7 +151,7 @@ Read the oauth2-github auth config (client_secret must not appear)
   description
   enabled                 True
   created_at              .* (re)
-  tag_id_list
+  tags
   authorization_endpoint  https://github.com/login/oauth/authorize
   client_id               my-app
   callback_url            .*/auth/oauth2/callback (re)

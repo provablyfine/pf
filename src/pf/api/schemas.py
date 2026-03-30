@@ -483,7 +483,7 @@ class Auth(APIBase):
     id: int
     name: str
     description: str
-    tag_id_list: list[int]
+    tags: list[TagNameValue]
     created_at: int
     is_enabled: bool
     type: typing.Literal["http_sig", "oidc", "oauth2-github"]
@@ -497,7 +497,7 @@ class AuthListResponse(APIBase):
 class AuthCreateRequest(APIBase):
     name: str
     description: str = ""
-    tag_id_list: list[int] = []
+    tags: list[TagNameValue] = []
     type: typing.Literal["http_sig", "oidc", "oauth2-github"]
     oidc_params: OidcParams | None = None
     oauth2_params: OAuth2CreateParams | None = None
@@ -514,7 +514,7 @@ class AuthCreateRequest(APIBase):
 class AuthUpdateRequest(APIBase):
     name: str | None = None
     description: str | None = None
-    tag_id_list: list[int] | None = None
+    tags: list[TagNameValue] | None = None
     is_enabled: bool | None = None
     oidc_params: OidcParams | None = None
 

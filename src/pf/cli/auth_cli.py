@@ -42,7 +42,7 @@ def _auth_create_http_sig_function(args):
         "name": args.name,
         "description": args.description or "",
         "type": "http_sig",
-        "tag_id_list": args.tag_id or [],
+        "tags": [{"name": t.split("=", 1)[0], "value": t.split("=", 1)[1]} for t in (args.tag or [])],
     }
     response = auth.post(auth.directory.auth, json=body)
     if response.status_code != 201:
@@ -57,7 +57,7 @@ def _auth_create_oidc_function(args):
         "name": args.name,
         "description": args.description or "",
         "type": "oidc",
-        "tag_id_list": args.tag_id or [],
+        "tags": [{"name": t.split("=", 1)[0], "value": t.split("=", 1)[1]} for t in (args.tag or [])],
         "oidc_params": {"issuer": args.issuer, "client_id": args.client_id},
     }
     if args.client_secret:
@@ -75,7 +75,7 @@ def _auth_create_oauth2_github_function(args):
         "name": args.name,
         "description": args.description or "",
         "type": "oauth2-github",
-        "tag_id_list": args.tag_id or [],
+        "tags": [{"name": t.split("=", 1)[0], "value": t.split("=", 1)[1]} for t in (args.tag or [])],
         "oauth2_params": {"client_id": args.client_id, "client_secret": args.client_secret},
     }
     response = auth.post(auth.directory.auth, json=body)
@@ -108,7 +108,7 @@ def _auth_read_function(args):
                 ["description", a["description"]],
                 ["enabled", a["is_enabled"]],
                 ["created_at", a["created_at"]],
-                ["tag_id_list", ", ".join(str(t) for t in a.get("tag_id_list", []))],
+                ["tags", " ".join(f"{t['name']}={t['value']}" for t in a.get("tags", []))],
             ]
             if a["type"] == "oidc":
                 params = a.get("params", {})
@@ -200,15 +200,13 @@ def add_subparser(parser):
     create_http_sig_parser = create_type_subparsers.add_parser("http_sig", help="HTTP signature auth")
     create_http_sig_parser.add_argument("-n", "--name", required=True, help="Name of auth config")
     create_http_sig_parser.add_argument("--description", help="Description")
-    create_http_sig_parser.add_argument(
-        "--tag-id", type=int, action="append", dest="tag_id", help="Tag ID (repeatable)"
-    )
+    create_http_sig_parser.add_argument("--tag", action="append", dest="tag", help="Tag name=value (repeatable)")
     create_http_sig_parser.set_defaults(func=_auth_create_http_sig_function)
 
     create_oidc_parser = create_type_subparsers.add_parser("oidc", help="OpenID Connect auth")
     create_oidc_parser.add_argument("-n", "--name", required=True, help="Name of auth config")
     create_oidc_parser.add_argument("--description", help="Description")
-    create_oidc_parser.add_argument("--tag-id", type=int, action="append", dest="tag_id", help="Tag ID (repeatable)")
+    create_oidc_parser.add_argument("--tag", action="append", dest="tag", help="Tag name=value (repeatable)")
     create_oidc_parser.add_argument("--issuer", required=True, help="OIDC issuer URL")
     create_oidc_parser.add_argument("--client-id", required=True, help="OIDC client ID")
     create_oidc_parser.add_argument("--client-secret", help="OIDC client secret (for providers that require it)")
@@ -217,9 +215,7 @@ def add_subparser(parser):
     create_oauth2_github_parser = create_type_subparsers.add_parser("oauth2-github", help="GitHub OAuth2 auth")
     create_oauth2_github_parser.add_argument("-n", "--name", required=True, help="Name of auth config")
     create_oauth2_github_parser.add_argument("--description", help="Description")
-    create_oauth2_github_parser.add_argument(
-        "--tag-id", type=int, action="append", dest="tag_id", help="Tag ID (repeatable)"
-    )
+    create_oauth2_github_parser.add_argument("--tag", action="append", dest="tag", help="Tag name=value (repeatable)")
     create_oauth2_github_parser.add_argument("--client-id", required=True, help="GitHub OAuth2 client ID")
     create_oauth2_github_parser.add_argument("--client-secret", required=True, help="GitHub OAuth2 client secret")
     create_oauth2_github_parser.set_defaults(func=_auth_create_oauth2_github_function)

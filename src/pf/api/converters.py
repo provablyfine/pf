@@ -513,11 +513,12 @@ def auth_config_to_schema(ac: model.auth_config.AuthConfig, tenant_name: str) ->
         )
     else:
         params = schemas.HttpSigParams()
+    converter = GrantConverter()
     return schemas.Auth(
         id=ac.id,
         name=ac.name,
         description=ac.description,
-        tag_id_list=ac.tag_id_list,
+        tags=converter.to_tag_list(ac.tag_id_list) or [],
         created_at=ac.created_at,
         is_enabled=ac.is_enabled,
         type=ac.type,  # type: ignore[arg-type]

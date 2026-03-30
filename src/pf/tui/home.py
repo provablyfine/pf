@@ -6,7 +6,7 @@ import textual.app
 import textual.screen
 import textual.widgets
 
-from . import async_client, boundary_list, header, identity_list, role_list, tag_list, tenant_list
+from . import async_client, auth_list, boundary_list, header, identity_list, role_list, tag_list, tenant_list
 
 _RESOURCES: list[tuple[str, collections.abc.Callable[[async_client.AsyncClient], textual.screen.Screen]]] = [
     ("Tenants", tenant_list.TenantListScreen),
@@ -14,6 +14,7 @@ _RESOURCES: list[tuple[str, collections.abc.Callable[[async_client.AsyncClient],
     ("Boundaries", boundary_list.BoundaryListScreen),
     ("Tags", tag_list.TagListScreen),
     ("Roles", role_list.RoleListScreen),
+    ("Auths", auth_list.AuthListScreen),
 ]
 
 
