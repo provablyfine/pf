@@ -110,16 +110,20 @@ def _identity_create(tag_id_list: list[int] | None, boundary_id_list: list[int] 
     )
 
 
-def _ssh_username(usernames: list[str] | None):
+def _ssh_shell(usernames: list[str]):
     return {
-        "force_command_list": [],
         "username_list": usernames,
-        "permit_pty": False,
-        "permit_user_rc": False,
-        "permit_x11_forwarding": False,
         "permit_agent_forwarding": False,
-        "permit_port_forwarding": False,
+        "permit_x11_forwarding": False,
     }
+
+
+def _ssh_port_forwarding(usernames: list[str]):
+    return {"username_list": usernames}
+
+
+def _ssh_command(usernames: list[str], command_list: list[str]):
+    return {"username_list": usernames, "command_list": command_list}
 
 
 ######## TAG ########
@@ -526,38 +530,54 @@ def test_identity_create(tag_id_list, boundary_id_list, expected1, expected2):
 def test_empty_ssh():
     grants = grant.Grants([], [])
 
-    assert len(grants.ssh(1, [], []).list_can_username("hello")) == 0
+    assert len(grants.ssh(1, [], []).list_shell_can_username("hello")) == 0
+    assert len(grants.ssh(1, [], []).list_port_forwarding_can_username("hello")) == 0
+    assert len(grants.ssh(1, [], []).list_command_can("hello", "ls")) == 0
+    assert len(grants.ssh(1, [], []).list_any()) == 0
 
 
-def test_one_ssh():
+def test_ssh_shell():
     grants = single_grants(
         {
-            "type": "ssh",
+            "type": "ssh-shell",
             "filter": {"id": None, "tag_id_list": None, "boundary_id_list": None},
-            "permission": _ssh_username(["alice", "bob"]),
+            "permission": _ssh_shell(["alice", "bob"]),
         }
     )
 
-    assert len(grants.ssh(1, [], []).list_can_username("hello")) == 0
-    assert len(grants.ssh(1, [], []).list_can_username("alice")) > 0
-    assert len(grants.ssh(1, [], []).list_can_username("bob")) > 0
+    assert len(grants.ssh(1, [], []).list_shell_can_username("hello")) == 0
+    assert len(grants.ssh(1, [], []).list_shell_can_username("alice")) > 0
+    assert len(grants.ssh(1, [], []).list_shell_can_username("bob")) > 0
+    assert len(grants.ssh(1, [], []).list_port_forwarding_can_username("alice")) == 0
+    assert len(grants.ssh(1, [], []).list_any()) > 0
 
+
+def test_ssh_port_forwarding():
     grants = single_grants(
         {
-            "type": "ssh",
+            "type": "ssh-port-forwarding",
             "filter": {"id": None, "tag_id_list": None, "boundary_id_list": None},
-            "permission": _ssh_username(None),
+            "permission": _ssh_port_forwarding(["alice"]),
         }
     )
-    assert len(grants.ssh(1, [], []).list_can_username("hello")) > 0
-    assert len(grants.ssh(1, [], []).list_can_username("any")) > 0
 
+    assert len(grants.ssh(1, [], []).list_port_forwarding_can_username("alice")) > 0
+    assert len(grants.ssh(1, [], []).list_port_forwarding_can_username("bob")) == 0
+    assert len(grants.ssh(1, [], []).list_shell_can_username("alice")) == 0
+    assert len(grants.ssh(1, [], []).list_any()) > 0
+
+
+def test_ssh_command():
     grants = single_grants(
         {
-            "type": "ssh",
+            "type": "ssh-command",
             "filter": {"id": None, "tag_id_list": None, "boundary_id_list": None},
-            "permission": _ssh_username([]),
+            "permission": _ssh_command(["alice"], ["git-upload-pack /repo"]),
         }
     )
-    assert len(grants.ssh(1, [], []).list_can_username("hello")) == 0
-    assert len(grants.ssh(1, [], []).list_can_username("any")) == 0
+
+    assert len(grants.ssh(1, [], []).list_command_can("alice", "git-upload-pack /repo")) > 0
+    assert len(grants.ssh(1, [], []).list_command_can("alice", "rm -rf /")) == 0
+    assert len(grants.ssh(1, [], []).list_command_can("bob", "git-upload-pack /repo")) == 0
+    assert len(grants.ssh(1, [], []).list_shell_can_username("alice")) == 0
+    assert len(grants.ssh(1, [], []).list_any()) > 0

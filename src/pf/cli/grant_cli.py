@@ -123,25 +123,52 @@ def _identity_function(args):
     _output(args, identity)
 
 
-def _ssh_function(args):
-    ssh = {
-        "type": "ssh",
+def _ssh_shell_function(args):
+    grant = {
+        "type": "ssh-shell",
         "filter": {
             "name": args.name,
             "tag_list": _tag_list(args.tag),
             "boundary_list": args.boundary,
         },
         "permission": {
-            "force_command_list": args.force_command,
             "username_list": args.username,
-            "permit_pty": args.permit_pty,
-            "permit_user_rc": args.permit_user_rc,
-            "permit_x11_forwarding": args.permit_x11_forwarding,
             "permit_agent_forwarding": args.permit_agent_forwarding,
-            "permit_port_forwarding": args.permit_port_forwarding,
+            "permit_x11_forwarding": args.permit_x11_forwarding,
         },
     }
-    _output(args, ssh)
+    _output(args, grant)
+
+
+def _ssh_port_forwarding_function(args):
+    grant = {
+        "type": "ssh-port-forwarding",
+        "filter": {
+            "name": args.name,
+            "tag_list": _tag_list(args.tag),
+            "boundary_list": args.boundary,
+        },
+        "permission": {
+            "username_list": args.username,
+        },
+    }
+    _output(args, grant)
+
+
+def _ssh_command_function(args):
+    grant = {
+        "type": "ssh-command",
+        "filter": {
+            "name": args.name,
+            "tag_list": _tag_list(args.tag),
+            "boundary_list": args.boundary,
+        },
+        "permission": {
+            "username_list": args.username,
+            "command_list": args.command,
+        },
+    }
+    _output(args, grant)
 
 
 def add_subparser(parser):
@@ -216,18 +243,35 @@ def add_subparser(parser):
     group.add_argument("--invite", default=[], nargs="*", choices=["email", "manual"])
     identity_parser.set_defaults(func=_identity_function)
 
-    ssh_parser = subparsers.add_parser("ssh")
-    ssh_parser.add_argument("-f", "--format", choices=["yaml", "json"], default="yaml")
-    group = ssh_parser.add_argument_group("filter")
+    ssh_shell_parser = subparsers.add_parser("ssh-shell")
+    ssh_shell_parser.add_argument("-f", "--format", choices=["yaml", "json"], default="yaml")
+    group = ssh_shell_parser.add_argument_group("filter")
     group.add_argument("--name", default=None)
     group.add_argument("--tag", default=None, nargs="*")
     group.add_argument("--boundary", default=None, nargs="*")
-    group = ssh_parser.add_argument_group("permission")
-    group.add_argument("--force-command", nargs="*", default=None)
-    group.add_argument("--username", nargs="*", default=None)
-    group.add_argument("--permit-pty", action="store_true")
-    group.add_argument("--permit-user-rc", action="store_true")
-    group.add_argument("--permit-x11-forwarding", action="store_true")
+    group = ssh_shell_parser.add_argument_group("permission")
+    group.add_argument("--username", nargs="*", default=[])
     group.add_argument("--permit-agent-forwarding", action="store_true")
-    group.add_argument("--permit-port-forwarding", action="store_true")
-    ssh_parser.set_defaults(func=_ssh_function)
+    group.add_argument("--permit-x11-forwarding", action="store_true")
+    ssh_shell_parser.set_defaults(func=_ssh_shell_function)
+
+    ssh_port_forwarding_parser = subparsers.add_parser("ssh-port-forwarding")
+    ssh_port_forwarding_parser.add_argument("-f", "--format", choices=["yaml", "json"], default="yaml")
+    group = ssh_port_forwarding_parser.add_argument_group("filter")
+    group.add_argument("--name", default=None)
+    group.add_argument("--tag", default=None, nargs="*")
+    group.add_argument("--boundary", default=None, nargs="*")
+    group = ssh_port_forwarding_parser.add_argument_group("permission")
+    group.add_argument("--username", nargs="*", default=[])
+    ssh_port_forwarding_parser.set_defaults(func=_ssh_port_forwarding_function)
+
+    ssh_command_parser = subparsers.add_parser("ssh-command")
+    ssh_command_parser.add_argument("-f", "--format", choices=["yaml", "json"], default="yaml")
+    group = ssh_command_parser.add_argument_group("filter")
+    group.add_argument("--name", default=None)
+    group.add_argument("--tag", default=None, nargs="*")
+    group.add_argument("--boundary", default=None, nargs="*")
+    group = ssh_command_parser.add_argument_group("permission")
+    group.add_argument("--username", nargs="*", default=[])
+    group.add_argument("--command", nargs="*", default=[])
+    ssh_command_parser.set_defaults(func=_ssh_command_function)

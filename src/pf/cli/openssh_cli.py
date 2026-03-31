@@ -32,8 +32,15 @@ def _auth_function(args):
     user_key = jwk.Private.generate_ed25519()
     cert_response = auth.post(
         f"{auth.directory.ssh}/user/certificate",
-        json={"public_key": user_key.public().to_dict(), "hostname": args.host, "username": args.user},
+        json={
+            "public_key": user_key.public().to_dict(),
+            "hostname": args.host,
+            "username": args.user,
+            "action": "shell",
+        },
     )
+    if cert_response.status_code == 403:
+        return
     if cert_response.status_code != 200:
         raise client.exceptions.UI(cert_response.json()["title"])
 

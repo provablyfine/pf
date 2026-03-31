@@ -284,21 +284,42 @@ class SSHChecker:
 
         self._checker = Checker(boundaries, roles, cmp)
 
-    def _to_list(self, items: list[model.grant.Grant]) -> list[model.grant.SSHGrant]:
-        retval = []
-        for i in items:
-            assert isinstance(i, model.grant.SSHGrant)
-            retval.append(i)
-        return retval
-
-    def list_can_username(self, username: str) -> list[model.grant.SSHGrant]:
+    def list_shell_can_username(self, username: str) -> list[model.grant.SSHShellGrant]:
         def check(p) -> bool:
-            if p.username_list is None:
-                return True
-            return username in p.username_list
+            return isinstance(p, model.grant.SSHShellPermission) and username in p.username_list
 
-        grants = self._checker.list_can(check)
-        return self._to_list(grants)
+        return [g for g in self._checker.list_can(check) if isinstance(g, model.grant.SSHShellGrant)]
+
+    def list_port_forwarding_can_username(self, username: str) -> list[model.grant.SSHPortForwardingGrant]:
+        def check(p) -> bool:
+            return isinstance(p, model.grant.SSHPortForwardingPermission) and username in p.username_list
+
+        return [g for g in self._checker.list_can(check) if isinstance(g, model.grant.SSHPortForwardingGrant)]
+
+    def list_command_can(self, username: str, command: str) -> list[model.grant.SSHCommandGrant]:
+        def check(p) -> bool:
+            return (
+                isinstance(p, model.grant.SSHCommandPermission)
+                and username in p.username_list
+                and command in p.command_list
+            )
+
+        return [g for g in self._checker.list_can(check) if isinstance(g, model.grant.SSHCommandGrant)]
+
+    def list_any(
+        self,
+    ) -> list[model.grant.SSHShellGrant | model.grant.SSHPortForwardingGrant | model.grant.SSHCommandGrant]:
+        def check(p) -> bool:
+            return isinstance(
+                p,
+                (
+                    model.grant.SSHShellPermission,
+                    model.grant.SSHPortForwardingPermission,
+                    model.grant.SSHCommandPermission,
+                ),
+            )
+
+        return self._checker.list_can(check)
 
 
 class AuthChecker:

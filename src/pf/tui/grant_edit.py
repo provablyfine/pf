@@ -143,19 +143,27 @@ def new_grant(grant_type: str) -> dict:
                     "delete": False,
                 },
             }
-        case "ssh":
+        case "ssh-shell":
             return {
-                "type": "ssh",
+                "type": "ssh-shell",
                 "filter": {"name": None, "tag_list": None, "boundary_list": None},
                 "permission": {
-                    "username_list": None,
-                    "force_command_list": None,
-                    "permit_pty": False,
-                    "permit_user_rc": False,
-                    "permit_x11_forwarding": False,
+                    "username_list": [],
                     "permit_agent_forwarding": False,
-                    "permit_port_forwarding": False,
+                    "permit_x11_forwarding": False,
                 },
+            }
+        case "ssh-port-forwarding":
+            return {
+                "type": "ssh-port-forwarding",
+                "filter": {"name": None, "tag_list": None, "boundary_list": None},
+                "permission": {"username_list": []},
+            }
+        case "ssh-command":
+            return {
+                "type": "ssh-command",
+                "filter": {"name": None, "tag_list": None, "boundary_list": None},
+                "permission": {"username_list": [], "command_list": []},
             }
         case _:
             return {"type": grant_type, "filter": {}, "permission": {}}
@@ -558,26 +566,16 @@ class TenantGrantEditWidget(_GrantEditWidget):
         )
 
 
-class SshGrantEditWidget(_GrantEditWidget):
-    DEFAULT_CSS = """
-    SshGrantEditWidget {
-        height: auto;
-    }
-    """
-
+class _SshBaseGrantEditWidget(_GrantEditWidget):
     def __init__(self, auth: async_client.AsyncClient, filter: dict, permission: dict):
         super().__init__()
         self._auth = auth
         self._initial_filter = filter
         self._initial_permission = permission
 
-    def compose(self) -> textual.app.ComposeResult:
-        f = self._initial_filter
-        p = self._initial_permission
+    def _compose_filter(self, f: dict):
         tag_list = _Field.from_tag_list(f.get("tag_list"))
         boundary_list = _Field.from_boundary_list(f.get("boundary_list"))
-        username_list = _Field.from_boundary_list(p.get("username_list"))
-        force_command_list = _Field.from_boundary_list(p.get("force_command_list"))
         with textual.containers.VerticalGroup(classes="section"):
             yield textual.widgets.Label("Filters", classes="label")
             yield checkbox_input.CheckboxInput(
@@ -602,43 +600,8 @@ class SshGrantEditWidget(_GrantEditWidget):
                 placeholder="Type a boundary name",
                 id="filter-bounded-by",
             )
-        with textual.containers.VerticalGroup(classes="section"):
-            yield textual.widgets.Label("Permissions", classes="label")
-            yield checkbox_input.CheckboxInput(
-                "Username list",
-                active=username_list.active,
-                value=username_list.value,
-                placeholder="Type a username",
-                id="perm-username-list",
-            )
-            yield checkbox_input.CheckboxInput(
-                "Force command list",
-                active=force_command_list.active,
-                value=force_command_list.value,
-                placeholder="Type a command",
-                id="perm-force-command-list",
-            )
-            yield textual.widgets.Checkbox("Permit PTY", value=p["permit_pty"], id="perm-permit-pty", compact=True)
-            yield textual.widgets.Checkbox(
-                "Permit user RC", value=p["permit_user_rc"], id="perm-permit-user-rc", compact=True
-            )
-            yield textual.widgets.Checkbox(
-                "Permit X11 forwarding", value=p["permit_x11_forwarding"], id="perm-permit-x11-forwarding", compact=True
-            )
-            yield textual.widgets.Checkbox(
-                "Permit agent forwarding",
-                value=p["permit_agent_forwarding"],
-                id="perm-permit-agent-forwarding",
-                compact=True,
-            )
-            yield textual.widgets.Checkbox(
-                "Permit port forwarding",
-                value=p["permit_port_forwarding"],
-                id="perm-permit-port-forwarding",
-                compact=True,
-            )
 
-    async def on_mount(self) -> None:
+    async def _mount_filter_candidates(self) -> None:
         identities = await self._auth.list_identities()
         identity_candidates = [textual_autocomplete.DropdownItem(main=i["name"]) for i in identities]
         self.query_one("#filter-name", checkbox_input.CheckboxInput).set_candidates(identity_candidates)
@@ -651,27 +614,139 @@ class SshGrantEditWidget(_GrantEditWidget):
         boundaries = [textual_autocomplete.DropdownItem(main=b["name"]) for b in boundaries_raw]
         self.query_one("#filter-bounded-by", checkbox_input.CheckboxInput).set_candidates(boundaries)
 
-        self.query_one("#perm-username-list", checkbox_input.CheckboxInput).set_candidates([])
-        self.query_one("#perm-force-command-list", checkbox_input.CheckboxInput).set_candidates([])
+    def _filter_data(self) -> dict:
+        return {
+            "name": self._read_field("#filter-name").name_filter(),
+            "tag_list": self._read_field("#filter-tagged-by").tag_filter(),
+            "boundary_list": self._read_field("#filter-bounded-by").boundary_filter(),
+        }
 
-    def _perm_checkbox(self, id: str) -> bool:
-        return self.query_one(f"#{id}", textual.widgets.Checkbox).value
+
+class SshShellGrantEditWidget(_SshBaseGrantEditWidget):
+    DEFAULT_CSS = """
+    SshShellGrantEditWidget {
+        height: auto;
+    }
+    """
+
+    def compose(self) -> textual.app.ComposeResult:
+        f = self._initial_filter
+        p = self._initial_permission
+        username_field = _Field(active=True, value=" ".join(p.get("username_list") or []))
+        yield from self._compose_filter(f)
+        with textual.containers.VerticalGroup(classes="section"):
+            yield textual.widgets.Label("Permissions", classes="label")
+            yield checkbox_input.CheckboxInput(
+                "Usernames",
+                active=True,
+                value=username_field.value,
+                placeholder="Type a username",
+                id="perm-username-list",
+            )
+            yield textual.widgets.Checkbox(
+                "Permit agent forwarding",
+                value=p.get("permit_agent_forwarding", False),
+                id="perm-permit-agent-forwarding",
+                compact=True,
+            )
+            yield textual.widgets.Checkbox(
+                "Permit X11 forwarding",
+                value=p.get("permit_x11_forwarding", False),
+                id="perm-permit-x11-forwarding",
+                compact=True,
+            )
+
+    async def on_mount(self) -> None:
+        await self._mount_filter_candidates()
+        self.query_one("#perm-username-list", checkbox_input.CheckboxInput).set_candidates([])
 
     def get_grant_data(self) -> tuple[dict, dict]:
         return (
+            self._filter_data(),
             {
-                "name": self._read_field("#filter-name").name_filter(),
-                "tag_list": self._read_field("#filter-tagged-by").tag_filter(),
-                "boundary_list": self._read_field("#filter-bounded-by").boundary_filter(),
+                "username_list": self._read_field("#perm-username-list").boundary_perm(),
+                "permit_agent_forwarding": self.query_one(
+                    "#perm-permit-agent-forwarding", textual.widgets.Checkbox
+                ).value,
+                "permit_x11_forwarding": self.query_one("#perm-permit-x11-forwarding", textual.widgets.Checkbox).value,
             },
+        )
+
+
+class SshPortForwardingGrantEditWidget(_SshBaseGrantEditWidget):
+    DEFAULT_CSS = """
+    SshPortForwardingGrantEditWidget {
+        height: auto;
+    }
+    """
+
+    def compose(self) -> textual.app.ComposeResult:
+        f = self._initial_filter
+        p = self._initial_permission
+        username_field = _Field(active=True, value=" ".join(p.get("username_list") or []))
+        yield from self._compose_filter(f)
+        with textual.containers.VerticalGroup(classes="section"):
+            yield textual.widgets.Label("Permissions", classes="label")
+            yield checkbox_input.CheckboxInput(
+                "Usernames",
+                active=True,
+                value=username_field.value,
+                placeholder="Type a username",
+                id="perm-username-list",
+            )
+
+    async def on_mount(self) -> None:
+        await self._mount_filter_candidates()
+        self.query_one("#perm-username-list", checkbox_input.CheckboxInput).set_candidates([])
+
+    def get_grant_data(self) -> tuple[dict, dict]:
+        return (
+            self._filter_data(),
+            {"username_list": self._read_field("#perm-username-list").boundary_perm()},
+        )
+
+
+class SshCommandGrantEditWidget(_SshBaseGrantEditWidget):
+    DEFAULT_CSS = """
+    SshCommandGrantEditWidget {
+        height: auto;
+    }
+    """
+
+    def compose(self) -> textual.app.ComposeResult:
+        f = self._initial_filter
+        p = self._initial_permission
+        username_field = _Field(active=True, value=" ".join(p.get("username_list") or []))
+        command_field = _Field(active=True, value=" ".join(p.get("command_list") or []))
+        yield from self._compose_filter(f)
+        with textual.containers.VerticalGroup(classes="section"):
+            yield textual.widgets.Label("Permissions", classes="label")
+            yield checkbox_input.CheckboxInput(
+                "Usernames",
+                active=True,
+                value=username_field.value,
+                placeholder="Type a username",
+                id="perm-username-list",
+            )
+            yield checkbox_input.CheckboxInput(
+                "Commands",
+                active=True,
+                value=command_field.value,
+                placeholder="Type a command",
+                id="perm-command-list",
+            )
+
+    async def on_mount(self) -> None:
+        await self._mount_filter_candidates()
+        self.query_one("#perm-username-list", checkbox_input.CheckboxInput).set_candidates([])
+        self.query_one("#perm-command-list", checkbox_input.CheckboxInput).set_candidates([])
+
+    def get_grant_data(self) -> tuple[dict, dict]:
+        return (
+            self._filter_data(),
             {
-                "username_list": self._read_field("#perm-username-list").boundary_filter(),
-                "force_command_list": self._read_field("#perm-force-command-list").boundary_filter(),
-                "permit_pty": self._perm_checkbox("perm-permit-pty"),
-                "permit_user_rc": self._perm_checkbox("perm-permit-user-rc"),
-                "permit_x11_forwarding": self._perm_checkbox("perm-permit-x11-forwarding"),
-                "permit_agent_forwarding": self._perm_checkbox("perm-permit-agent-forwarding"),
-                "permit_port_forwarding": self._perm_checkbox("perm-permit-port-forwarding"),
+                "username_list": self._read_field("#perm-username-list").boundary_perm(),
+                "command_list": self._read_field("#perm-command-list").boundary_perm(),
             },
         )
 
@@ -718,8 +793,12 @@ class GrantEditScreen(textual.screen.Screen[dict | None]):
                 widget = BoundaryGrantEditWidget(self._auth, self._filter, self._permission)
             case "tenant":
                 widget = TenantGrantEditWidget(self._auth, self._filter, self._permission)
-            case "ssh":
-                widget = SshGrantEditWidget(self._auth, self._filter, self._permission)
+            case "ssh-shell":
+                widget = SshShellGrantEditWidget(self._auth, self._filter, self._permission)
+            case "ssh-port-forwarding":
+                widget = SshPortForwardingGrantEditWidget(self._auth, self._filter, self._permission)
+            case "ssh-command":
+                widget = SshCommandGrantEditWidget(self._auth, self._filter, self._permission)
             case _:
                 return
         await fields.mount(widget)

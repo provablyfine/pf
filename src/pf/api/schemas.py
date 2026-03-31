@@ -154,24 +154,41 @@ class IdentityGrant(APIBase):
     permission: IdentityPermission
 
 
-class SSHPermission(APIBase):
-    force_command_list: list[str] | None
-    username_list: list[str] | None
-    permit_pty: bool
-    permit_user_rc: bool
-    permit_x11_forwarding: bool
-    permit_agent_forwarding: bool
-    permit_port_forwarding: bool
-
-
 class SSHFilter(TripletFilter):
     pass
 
 
-class SSHGrant(APIBase):
-    type: typing.Literal["ssh"] = "ssh"
+class SSHShellPermission(APIBase):
+    username_list: list[str]
+    permit_agent_forwarding: bool = False
+    permit_x11_forwarding: bool = False
+
+
+class SSHShellGrant(APIBase):
+    type: typing.Literal["ssh-shell"] = "ssh-shell"
     filter: SSHFilter
-    permission: SSHPermission
+    permission: SSHShellPermission
+
+
+class SSHPortForwardingPermission(APIBase):
+    username_list: list[str]
+
+
+class SSHPortForwardingGrant(APIBase):
+    type: typing.Literal["ssh-port-forwarding"] = "ssh-port-forwarding"
+    filter: SSHFilter
+    permission: SSHPortForwardingPermission
+
+
+class SSHCommandPermission(APIBase):
+    username_list: list[str]
+    command_list: list[str]
+
+
+class SSHCommandGrant(APIBase):
+    type: typing.Literal["ssh-command"] = "ssh-command"
+    filter: SSHFilter
+    permission: SSHCommandPermission
 
 
 class TenantUpdatePermission(APIBase):
@@ -222,7 +239,16 @@ class InvalidGrant(APIBase):
 
 
 Grant = typing.Annotated[
-    BoundaryGrant | TagGrant | RoleGrant | IdentityGrant | SSHGrant | TenantGrant | AuthGrant | InvalidGrant,
+    BoundaryGrant
+    | TagGrant
+    | RoleGrant
+    | IdentityGrant
+    | SSHShellGrant
+    | SSHPortForwardingGrant
+    | SSHCommandGrant
+    | TenantGrant
+    | AuthGrant
+    | InvalidGrant,
     pydantic.Field(discriminator="type"),
 ]
 
@@ -444,6 +470,8 @@ class SSHUserCertificateRequest(APIBase):
     hostname: str
     username: str
     public_key: PublicJWK
+    action: typing.Literal["shell", "port-forwarding", "command"]
+    command: str | None = None
 
 
 class SSHUserCertificateResponse(SSHCertificateResponse):

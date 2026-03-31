@@ -21,9 +21,15 @@ List existing roles (there is one)
   grant        type:       identity
                filter:     *
                permission: create read update.* delete add_tag_list:* del_tag_list:* invite_list:*
-  grant        type:       ssh
+  grant        type:       ssh-shell
                filter:     *
-               permission: username_list:* force_command_list:* permit_pty permit_user_rc permit_x11_forwarding permit_agent_forwarding permit_port_forwarding
+               permission: username_list:root permit_agent_forwarding permit_x11_forwarding
+  grant        type:       ssh-port-forwarding
+               filter:     *
+               permission: username_list:root
+  grant        type:       ssh-command
+               filter:     *
+               permission: username_list:root
   grant        type:       tag
                filter:     *
                permission: create read delete
@@ -71,7 +77,7 @@ Create a new role
   >       - name: env
   >         value: dev
   >     invite_list: ["email"]
-  > - type: ssh
+  > - type: ssh-shell
   >   filter:
   >     name: null
   >     tag_list:
@@ -80,10 +86,6 @@ Create a new role
   >     boundary_list: null
   >   permission:
   >     username_list: ["root"]
-  >     force_command_list: null
-  >     permit_pty: true
-  >     permit_user_rc: true
   >     permit_agent_forwarding: false
   >     permit_x11_forwarding: false
-  >     permit_port_forwarding: true
   > EOF

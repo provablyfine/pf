@@ -213,7 +213,10 @@ def test_resolve_update_perm_explicit() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("grant_type", ["role", "identity", "tag", "boundary", "tenant", "ssh"])
+@pytest.mark.parametrize(
+    "grant_type",
+    ["role", "identity", "tag", "boundary", "tenant", "ssh-shell", "ssh-port-forwarding", "ssh-command"],
+)
 def test_new_grant_structure(grant_type: str) -> None:
     g = grant_edit.new_grant(grant_type)
     assert g["type"] == grant_type

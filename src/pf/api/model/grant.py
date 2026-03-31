@@ -133,24 +133,41 @@ class IdentityGrant(DBBase):
     permission: IdentityPermission
 
 
-class SSHPermission(DBBase):
-    force_command_list: list[str] | None
-    username_list: list[str] | None
-    permit_pty: bool
-    permit_user_rc: bool
-    permit_x11_forwarding: bool
-    permit_agent_forwarding: bool
-    permit_port_forwarding: bool
-
-
 class SSHFilter(TripletFilter):
     pass
 
 
-class SSHGrant(DBBase):
-    type: typing.Literal["ssh"] = "ssh"
+class SSHShellPermission(DBBase):
+    username_list: list[str]
+    permit_agent_forwarding: bool = False
+    permit_x11_forwarding: bool = False
+
+
+class SSHShellGrant(DBBase):
+    type: typing.Literal["ssh-shell"] = "ssh-shell"
     filter: SSHFilter
-    permission: SSHPermission
+    permission: SSHShellPermission
+
+
+class SSHPortForwardingPermission(DBBase):
+    username_list: list[str]
+
+
+class SSHPortForwardingGrant(DBBase):
+    type: typing.Literal["ssh-port-forwarding"] = "ssh-port-forwarding"
+    filter: SSHFilter
+    permission: SSHPortForwardingPermission
+
+
+class SSHCommandPermission(DBBase):
+    username_list: list[str]
+    command_list: list[str]
+
+
+class SSHCommandGrant(DBBase):
+    type: typing.Literal["ssh-command"] = "ssh-command"
+    filter: SSHFilter
+    permission: SSHCommandPermission
 
 
 class TenantUpdatePermission(DBBase):
@@ -197,7 +214,15 @@ class AuthGrant(DBBase):
 
 
 Grant = typing.Annotated[
-    BoundaryGrant | TagGrant | RoleGrant | IdentityGrant | SSHGrant | TenantGrant | AuthGrant,
+    BoundaryGrant
+    | TagGrant
+    | RoleGrant
+    | IdentityGrant
+    | SSHShellGrant
+    | SSHPortForwardingGrant
+    | SSHCommandGrant
+    | TenantGrant
+    | AuthGrant,
     pydantic.Field(discriminator="type"),
 ]
 

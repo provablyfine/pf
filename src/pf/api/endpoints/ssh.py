@@ -80,23 +80,19 @@ def sign_user_certificate(data: schemas.SSHUserCertificateRequest) -> schemas.SS
     if host is None:
         raise responses.ProblemHTTPException(responses.problem_response(status_code=404, title="Unknown host"))
 
-    grants = grant.Grants.create()
-    grants_allowed = grants.ssh(host.id, host.tag_id_list, host.boundary_id_list).list_can_username(data.username)
-
+    ssh_checker = grant.Grants.create().ssh(host.id, host.tag_id_list, host.boundary_id_list)
     public_key = converters.public_from_schema(data.public_key)
-    certificates = []
     signers = _read_current(db.SigningKeyType.USER, ctx.config.user_key_staging_period)
     signer = signers[0]
     serial_number = signer.serial_number
     now = int(time.time())
 
-    for allowed in grants_allowed:
-        permission = allowed.permission
-        if permission.force_command_list is None or len(permission.force_command_list) == 0:
-            force_commands = [None]
-        else:
-            force_commands = permission.force_command_list
-        for command in force_commands:
+    match data.action:
+        case "shell":
+            allowed_list = ssh_checker.list_shell_can_username(data.username)
+            if not allowed_list:
+                raise responses.ProblemHTTPException(responses.problem_response(status_code=403, title="Forbidden"))
+            perm = allowed_list[0].permission
             cert = ssh.cert.Cert.create_user(
                 public_key=public_key,
                 serial_number=serial_number,
@@ -104,36 +100,80 @@ def sign_user_certificate(data: schemas.SSHUserCertificateRequest) -> schemas.SS
                 principals=[f"{data.username}@{host.id}"],
                 valid_after=now - 10,
                 valid_before=now + ctx.config.user_certificate_lifetime,
-                critical_options=ssh.cert.CriticalOptions(force_command=command),
+                critical_options=ssh.cert.CriticalOptions(force_command=None),
                 extensions=ssh.cert.Extensions(
-                    permit_port_forwarding=permission.permit_port_forwarding,
-                    permit_pty=permission.permit_pty,
-                    permit_user_rc=permission.permit_user_rc,
-                    permit_x11_forwarding=permission.permit_x11_forwarding,
-                    permit_agent_forwarding=permission.permit_agent_forwarding,
+                    permit_pty=True,
+                    permit_user_rc=True,
+                    permit_port_forwarding=False,
+                    permit_x11_forwarding=perm.permit_x11_forwarding,
+                    permit_agent_forwarding=perm.permit_agent_forwarding,
                 ),
                 signer=signer.key,
             )
-            serial_number += 1
-            certificates.append(cert)
+        case "port-forwarding":
+            allowed_list = ssh_checker.list_port_forwarding_can_username(data.username)
+            if not allowed_list:
+                raise responses.ProblemHTTPException(responses.problem_response(status_code=403, title="Forbidden"))
+            cert = ssh.cert.Cert.create_user(
+                public_key=public_key,
+                serial_number=serial_number,
+                identifier=f"{ctx.identity_id}:{caller.name}",
+                principals=[f"{data.username}@{host.id}"],
+                valid_after=now - 10,
+                valid_before=now + ctx.config.user_certificate_lifetime,
+                critical_options=ssh.cert.CriticalOptions(force_command=None),
+                extensions=ssh.cert.Extensions(
+                    permit_pty=False,
+                    permit_user_rc=False,
+                    permit_port_forwarding=True,
+                    permit_x11_forwarding=False,
+                    permit_agent_forwarding=False,
+                ),
+                signer=signer.key,
+            )
+        case "command":
+            if data.command is None:
+                raise responses.ProblemHTTPException(
+                    responses.problem_response(status_code=400, title="command required for action=command")
+                )
+            allowed_list = ssh_checker.list_command_can(data.username, data.command)
+            if not allowed_list:
+                raise responses.ProblemHTTPException(responses.problem_response(status_code=403, title="Forbidden"))
+            cert = ssh.cert.Cert.create_user(
+                public_key=public_key,
+                serial_number=serial_number,
+                identifier=f"{ctx.identity_id}:{caller.name}",
+                principals=[f"{data.username}@{host.id}"],
+                valid_after=now - 10,
+                valid_before=now + ctx.config.user_certificate_lifetime,
+                critical_options=ssh.cert.CriticalOptions(force_command=data.command),
+                extensions=ssh.cert.Extensions(
+                    permit_pty=False,
+                    permit_user_rc=False,
+                    permit_port_forwarding=False,
+                    permit_x11_forwarding=False,
+                    permit_agent_forwarding=False,
+                ),
+                signer=signer.key,
+            )
 
-    logger.info(f"Generated certificates={len(certificates)} for username={data.username}")
+    serial_number += 1
     model.signing_key.update(signer.id, serial_number=serial_number)
 
-    for c in certificates:
-        model.audit_log.create(
-            "create-user-certificate",
-            signing_key_id=signer.id,
-            public_key=public_key.to_dict(),
-            serial_number=c.serial_number,
-            principals=c.principals,
-            valid_after=c.valid_after,
-            valid_before=c.valid_before,
-            extensions=c.extensions.to_dict(),
-            critical_options=c.critical_options.to_dict(),
-        )
+    model.audit_log.create(
+        "create-user-certificate",
+        signing_key_id=signer.id,
+        public_key=public_key.to_dict(),
+        serial_number=cert.serial_number,
+        principals=cert.principals,
+        valid_after=cert.valid_after,
+        valid_before=cert.valid_before,
+        extensions=cert.extensions.to_dict(),
+        critical_options=cert.critical_options.to_dict(),
+    )
 
-    return schemas.SSHUserCertificateResponse(certificates=[converters.cert_to_schema(c) for c in certificates])
+    logger.info(f"Generated certificate for username={data.username} action={data.action}")
+    return schemas.SSHUserCertificateResponse(certificates=[converters.cert_to_schema(cert)])
 
 
 @router.get("/user/trusted-keys", status_code=200)

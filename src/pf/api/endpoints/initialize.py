@@ -68,17 +68,21 @@ def _provision(allow_tenant_create: bool):
             invite_list=None,
         ),
     )
-    ssh_grant_all = model.grant.SSHGrant(
+    ssh_shell_grant_all = model.grant.SSHShellGrant(
         filter=model.grant.SSHFilter(id=None, tag_id_list=None, boundary_id_list=None),
-        permission=model.grant.SSHPermission(
-            force_command_list=None,
-            username_list=None,
-            permit_pty=True,
-            permit_user_rc=True,
-            permit_x11_forwarding=True,
+        permission=model.grant.SSHShellPermission(
+            username_list=["root"],
             permit_agent_forwarding=True,
-            permit_port_forwarding=True,
+            permit_x11_forwarding=True,
         ),
+    )
+    ssh_port_forwarding_grant_all = model.grant.SSHPortForwardingGrant(
+        filter=model.grant.SSHFilter(id=None, tag_id_list=None, boundary_id_list=None),
+        permission=model.grant.SSHPortForwardingPermission(username_list=["root"]),
+    )
+    ssh_command_grant_all = model.grant.SSHCommandGrant(
+        filter=model.grant.SSHFilter(id=None, tag_id_list=None, boundary_id_list=None),
+        permission=model.grant.SSHCommandPermission(username_list=["root"], command_list=[]),
     )
     tag_grant_all = model.grant.TagGrant(
         filter=model.grant.TagFilter(id=None),
@@ -106,7 +110,9 @@ def _provision(allow_tenant_create: bool):
         # to be False, which would block the operation.
         ceiling_list = [
             identity_grant_all,
-            ssh_grant_all,
+            ssh_shell_grant_all,
+            ssh_port_forwarding_grant_all,
+            ssh_command_grant_all,
             tag_grant_all,
             role_grant_all,
             boundary_grant_all,
@@ -127,7 +133,9 @@ def _provision(allow_tenant_create: bool):
     )
     all_grants = [
         identity_grant_all,
-        ssh_grant_all,
+        ssh_shell_grant_all,
+        ssh_port_forwarding_grant_all,
+        ssh_command_grant_all,
         tag_grant_all,
         role_grant_all,
         boundary_grant_all,

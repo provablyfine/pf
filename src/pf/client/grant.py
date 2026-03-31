@@ -115,20 +115,26 @@ def _identity_grant_to_text(grant):
     return "identity", _triplet_filter(grant["filter"]), _identity_permission(grant["permission"])
 
 
-def _ssh_permission(p):
-    output = _permission_list(p, "username_list", lambda i: i) + _permission_list(p, "force_command_list", lambda i: i)
-    output += (
-        _bool(p, "permit_pty")
-        + _bool(p, "permit_user_rc")
-        + _bool(p, "permit_x11_forwarding")
+def _ssh_shell_grant_to_text(grant):
+    p = grant["permission"]
+    output = (
+        _permission_list(p, "username_list", lambda i: i)
         + _bool(p, "permit_agent_forwarding")
-        + _bool(p, "permit_port_forwarding")
+        + _bool(p, "permit_x11_forwarding")
     )
-    return " ".join(output)
+    return "ssh-shell", _triplet_filter(grant["filter"]), " ".join(output)
 
 
-def _ssh_grant_to_text(grant):
-    return "ssh", _triplet_filter(grant["filter"]), _ssh_permission(grant["permission"])
+def _ssh_port_forwarding_grant_to_text(grant):
+    p = grant["permission"]
+    output = _permission_list(p, "username_list", lambda i: i)
+    return "ssh-port-forwarding", _triplet_filter(grant["filter"]), " ".join(output)
+
+
+def _ssh_command_grant_to_text(grant):
+    p = grant["permission"]
+    output = _permission_list(p, "username_list", lambda i: i) + _permission_list(p, "command_list", lambda i: i)
+    return "ssh-command", _triplet_filter(grant["filter"]), " ".join(output)
 
 
 @_none
@@ -169,8 +175,12 @@ def to_text(grant):
             return _boundary_grant_to_text(grant)
         case "identity":
             return _identity_grant_to_text(grant)
-        case "ssh":
-            return _ssh_grant_to_text(grant)
+        case "ssh-shell":
+            return _ssh_shell_grant_to_text(grant)
+        case "ssh-port-forwarding":
+            return _ssh_port_forwarding_grant_to_text(grant)
+        case "ssh-command":
+            return _ssh_command_grant_to_text(grant)
         case "tenant":
             return _tenant_grant_to_text(grant)
         case "auth":

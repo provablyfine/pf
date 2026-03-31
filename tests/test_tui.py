@@ -446,13 +446,13 @@ async def test_tui_tenant_grant_edit(api):
 
 @pytest.mark.anyio
 async def test_tui_ssh_grant_edit(api):
-    """Edit an SSH grant: set filter.name, restrict username_list, enable permit_pty."""
+    """Edit an SSH shell grant: set filter.name, set username_list, enable permit_agent_forwarding."""
     with tempfile.TemporaryDirectory() as tmpdir:
         auth = _setup(api, tmpdir)
 
         await auth.post(auth.directory.tag, json={"name": "env", "value": "prod"})
         await auth.post(auth.directory.boundary, json={"name": "zone1"})
-        role_id = await _setup_role_with_grant(auth, pf.tui.grant_edit.new_grant("ssh"))
+        role_id = await _setup_role_with_grant(auth, pf.tui.grant_edit.new_grant("ssh-shell"))
 
         app = pf.tui.app.TuiApp(auth)
         async with app.run_test(size=(200, 50)) as pilot:
@@ -465,20 +465,20 @@ async def test_tui_ssh_grant_edit(api):
             await pilot.pause(0.5)
             await pilot.press("tab", "tab", "tab")  # focus grants DataTable
             await pilot.press("enter")
-            await pilot.pause(3.0)  # SshGrantEditWidget.on_mount: 3 API calls
+            await pilot.pause(3.0)  # SshShellGrantEditWidget.on_mount: 3 API calls
 
             await pilot.click("#filter-name Checkbox")
             await pilot.pause(0.1)
             await pilot.press(*"root")
             await pilot.pause(0.1)
 
-            # username_list: enable checkbox and type "alice"
-            await pilot.click("#perm-username-list Checkbox")
+            # username_list: click the input and type "alice"
+            await pilot.click("#perm-username-list Input")
             await pilot.pause(0.1)
             await pilot.press(*"alice")
             await pilot.pause(0.1)
 
-            await pilot.click("#perm-permit-pty")
+            await pilot.click("#perm-permit-agent-forwarding")
 
             await pilot.press("ctrl+s")  # confirm grant edits
             await pilot.pause(0.5)
@@ -490,9 +490,8 @@ async def test_tui_ssh_grant_edit(api):
     grant = await _get_grant(auth, role_id)
     assert grant["filter"]["name"] == "root"
     assert grant["permission"]["username_list"] == ["alice"]
-    assert grant["permission"]["force_command_list"] is None
-    assert grant["permission"]["permit_pty"] is True
-    assert grant["permission"]["permit_user_rc"] is False
+    assert grant["permission"]["permit_agent_forwarding"] is True
+    assert grant["permission"]["permit_x11_forwarding"] is False
 
 
 @pytest.mark.anyio
