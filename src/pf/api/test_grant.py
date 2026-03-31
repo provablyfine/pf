@@ -110,7 +110,7 @@ def _identity_create(tag_id_list: list[int] | None, boundary_id_list: list[int] 
     )
 
 
-def _ssh_shell(usernames: list[str]):
+def _ssh_shell(usernames: list[str] | None):
     return {
         "username_list": usernames,
         "permit_agent_forwarding": False,
@@ -118,11 +118,11 @@ def _ssh_shell(usernames: list[str]):
     }
 
 
-def _ssh_port_forwarding(usernames: list[str]):
+def _ssh_port_forwarding(usernames: list[str] | None):
     return {"username_list": usernames}
 
 
-def _ssh_command(usernames: list[str], command_list: list[str]):
+def _ssh_command(usernames: list[str] | None, command_list: list[str]):
     return {"username_list": usernames, "command_list": command_list}
 
 
@@ -550,6 +550,20 @@ def test_ssh_shell():
     assert not grants.ssh(1, [], []).can_port_forward("alice")
 
 
+def test_ssh_shell_any_username():
+    grants = single_grants(
+        {
+            "type": "ssh-shell",
+            "filter": {"id": None, "tag_id_list": None, "boundary_id_list": None},
+            "permission": _ssh_shell(None),
+        }
+    )
+
+    assert grants.ssh(1, [], []).can_shell("alice") is not None
+    assert grants.ssh(1, [], []).can_shell("bob") is not None
+    assert grants.ssh(1, [], []).can_shell("anyone") is not None
+
+
 def test_ssh_port_forwarding():
     grants = single_grants(
         {
@@ -562,6 +576,20 @@ def test_ssh_port_forwarding():
     assert grants.ssh(1, [], []).can_port_forward("alice")
     assert not grants.ssh(1, [], []).can_port_forward("bob")
     assert grants.ssh(1, [], []).can_shell("alice") is None
+
+
+def test_ssh_port_forwarding_any_username():
+    grants = single_grants(
+        {
+            "type": "ssh-port-forwarding",
+            "filter": {"id": None, "tag_id_list": None, "boundary_id_list": None},
+            "permission": _ssh_port_forwarding(None),
+        }
+    )
+
+    assert grants.ssh(1, [], []).can_port_forward("alice")
+    assert grants.ssh(1, [], []).can_port_forward("bob")
+    assert grants.ssh(1, [], []).can_port_forward("anyone")
 
 
 def test_ssh_command():
@@ -577,3 +605,17 @@ def test_ssh_command():
     assert not grants.ssh(1, [], []).can_command("alice", "rm -rf /")
     assert not grants.ssh(1, [], []).can_command("bob", "git-upload-pack /repo")
     assert grants.ssh(1, [], []).can_shell("alice") is None
+
+
+def test_ssh_command_any_username():
+    grants = single_grants(
+        {
+            "type": "ssh-command",
+            "filter": {"id": None, "tag_id_list": None, "boundary_id_list": None},
+            "permission": _ssh_command(None, ["git-upload-pack /repo"]),
+        }
+    )
+
+    assert grants.ssh(1, [], []).can_command("alice", "git-upload-pack /repo")
+    assert grants.ssh(1, [], []).can_command("bob", "git-upload-pack /repo")
+    assert not grants.ssh(1, [], []).can_command("alice", "rm -rf /")

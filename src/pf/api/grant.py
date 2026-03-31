@@ -288,7 +288,10 @@ class SSHChecker:
         matching = [
             g
             for g in self._checker.list_can(
-                lambda p: isinstance(p, model.grant.SSHShellPermission) and username in p.username_list
+                lambda p: (
+                    isinstance(p, model.grant.SSHShellPermission)
+                    and (p.username_list is None or username in p.username_list)
+                )
             )
             if isinstance(g, model.grant.SSHShellGrant)
         ]
@@ -302,14 +305,17 @@ class SSHChecker:
 
     def can_port_forward(self, username: str) -> bool:
         return self._checker.can(
-            lambda p: isinstance(p, model.grant.SSHPortForwardingPermission) and username in p.username_list
+            lambda p: (
+                isinstance(p, model.grant.SSHPortForwardingPermission)
+                and (p.username_list is None or username in p.username_list)
+            )
         )
 
     def can_command(self, username: str, command: str) -> bool:
         return self._checker.can(
             lambda p: (
                 isinstance(p, model.grant.SSHCommandPermission)
-                and username in p.username_list
+                and (p.username_list is None or username in p.username_list)
                 and command in p.command_list
             )
         )
