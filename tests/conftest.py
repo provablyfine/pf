@@ -98,6 +98,7 @@ RekeyLimit default none
 
 SyslogFacility AUTH
 LogLevel INFO
+#LogLevel DEBUG
 
 LoginGraceTime 2m
 PermitRootLogin yes

@@ -11,6 +11,7 @@ class Config:
     account_key: str | None = None
     session_key: str | None = None
     directory: dict | None = None
+    known_hosts: str | None = None
 
     @staticmethod
     def load(filename: str):

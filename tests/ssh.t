@@ -19,15 +19,15 @@ Provision new host
 
 New host starts
   $ DIRECTORY_URL=http://127.0.0.1:$API_PORT/pf/t/root/directory
-  $ pf -c config.json -c host.json config --directory $DIRECTORY_URL
+  $ pf -c host.json config --directory $DIRECTORY_URL
   $ ssh-keygen -t ed25519 -f host-account -N "" > /dev/null
-  $ pf -c config.json -c host.json accept --invitation=$INVITATION  --key host-account
+  $ pf -c host.json accept --invitation=$INVITATION  --key host-account
   $ ssh-keygen -t ed25519 -f host-session -N "" > /dev/null
-  $ pf -c config.json -c host.json login --session-key host-session
+  $ pf -c host.json login --session-key host-session
 
 New host SSH setup
-  $ pf -c config.json -c host.json openssh sign-host --public-key=$SSHD_KEYS_DIRECTORY/ssh_host_rsa_key.pub --public-key=$SSHD_KEYS_DIRECTORY/ssh_host_ecdsa_key.pub --public-key=$SSHD_KEYS_DIRECTORY/ssh_host_ed25519_key.pub
-  $ pf -c config.json -c host.json openssh user-trusted-keys > $SSHD_KEYS_DIRECTORY/user-ca.pub
+  $ pf -c host.json openssh sign-host --public-key=$SSHD_KEYS_DIRECTORY/ssh_host_rsa_key.pub --public-key=$SSHD_KEYS_DIRECTORY/ssh_host_ecdsa_key.pub --public-key=$SSHD_KEYS_DIRECTORY/ssh_host_ed25519_key.pub
+  $ pf -c host.json openssh user-trusted-keys > $SSHD_KEYS_DIRECTORY/user-ca.pub
   $ podman exec $SSHD_CONTAINER_ID pkill -HUP sshd
 
 Provision new user
@@ -41,17 +41,17 @@ Provision new user
 
 User accepts invite and logs in
   $ DIRECTORY_URL=http://127.0.0.1:$API_PORT/pf/t/root/directory
-  $ pf -c config.json -c user.json config --directory $DIRECTORY_URL
+  $ pf -c user.json config --directory $DIRECTORY_URL
   $ ssh-keygen -t ed25519 -f user-account -N "" > /dev/null
-  $ pf -c config.json -c user.json accept --invitation=$INVITATION --key user-account
+  $ pf -c user.json accept --invitation=$INVITATION --key user-account
   $ ssh-keygen -t ed25519 -f user-session -N "" > /dev/null
-  $ pf -c config.json -c user.json login --session-key user-session
+  $ pf -c user.json login --session-key user-session
 
 User connects to host via pf ssh
-  $ pf -c config.json -c user.json ssh -o "Hostname=127.0.0.1" -o "HostKeyAlias=host" -p $SSHD_PORT root@host "whoami"
+  $ pf -c user.json ssh -n -o "Hostname=127.0.0.1" -o "HostKeyAlias=host" -p $SSHD_PORT root@host "whoami"
   root
-  $ pf -c config.json -c user.json ssh -o "Hostname=127.0.0.1" -o "HostKeyAlias=host" -p $SSHD_PORT bob@host "whoami"
-  bob@127.0.0.1: Permission denied (publickey).\r (esc)
-  [255]
-  $ pf -c config.json -c user.json ssh -o "Hostname=127.0.0.1" -o "HostKeyAlias=host" -p $SSHD_PORT alice@host "whoami"
+  $ pf -c user.json ssh -n -o "Hostname=127.0.0.1" -o "HostKeyAlias=host" -p $SSHD_PORT bob@host "whoami"
+  User is not authorized to connect to host
+  [2]
+  $ pf -c user.json ssh -n -o "Hostname=127.0.0.1" -o "HostKeyAlias=host" -p $SSHD_PORT alice@host "whoami"
   alice
