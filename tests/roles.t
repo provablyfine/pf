@@ -21,15 +21,6 @@ List existing roles (there is one)
   grant        type:       identity
                filter:     *
                permission: create read update.* delete add_tag_list:* del_tag_list:* invite_list:*
-  grant        type:       ssh-shell
-               filter:     *
-               permission: username_list:root permit_agent_forwarding permit_x11_forwarding
-  grant        type:       ssh-port-forwarding
-               filter:     *
-               permission: username_list:root
-  grant        type:       ssh-command
-               filter:     *
-               permission: username_list:root
   grant        type:       tag
                filter:     *
                permission: create read delete
