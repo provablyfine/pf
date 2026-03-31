@@ -138,7 +138,7 @@ class SSHFilter(TripletFilter):
 
 
 class SSHShellPermission(DBBase):
-    username_list: list[str] | None
+    username_list: list[str]
     permit_agent_forwarding: bool = False
     permit_x11_forwarding: bool = False
 
@@ -150,7 +150,7 @@ class SSHShellGrant(DBBase):
 
 
 class SSHPortForwardingPermission(DBBase):
-    username_list: list[str] | None
+    username_list: list[str]
 
 
 class SSHPortForwardingGrant(DBBase):
@@ -160,7 +160,7 @@ class SSHPortForwardingGrant(DBBase):
 
 
 class SSHCommandPermission(DBBase):
-    username_list: list[str] | None
+    username_list: list[str]
     command_list: list[str]
 
 
