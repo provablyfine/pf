@@ -13,8 +13,8 @@ import webbrowser
 import requests
 import requests.auth
 
-from .. import base64url, client, jwk, ssh
-from . import admin_cli, openssh_cli, ssh_cli
+from ... import base64url, client, jwk, ssh
+from . import openssh_cli, ssh_cli
 
 logger = logging.getLogger(__name__)
 
@@ -284,17 +284,6 @@ def _do_main(args):
         exitcode = 1
 
     sys.exit(exitcode)
-
-
-def pfa():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-d", "--debug", help="Increase debugging level", action="count", default=0)
-    parser.add_argument("-c", "--config", help="configuration file", default=_DEFAULT_CONFIG)
-    admin_cli.add_subparsers(parser)
-
-    args = parser.parse_args()
-
-    _do_main(args)
 
 
 def pf():

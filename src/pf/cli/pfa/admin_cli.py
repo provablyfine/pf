@@ -1,4 +1,4 @@
-from .. import client
+from ... import client
 from . import auth_cli, boundary_cli, grant_cli, identity_cli, role_cli, tag_cli, tenant_cli
 
 

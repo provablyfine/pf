@@ -1,7 +1,7 @@
 import base64
 import os
 
-from .. import client, jwk, ssh
+from ... import client, jwk, ssh
 
 
 def _user_trusted_keys_function(args):

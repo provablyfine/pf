@@ -2,7 +2,7 @@ import json
 
 import tabulate
 
-from .. import client
+from ... import client
 
 
 def _tags(args, auth):

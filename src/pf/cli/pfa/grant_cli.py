@@ -1,7 +1,7 @@
 import json
 
-from .. import client
-from . import yaml_utils
+from ... import client
+from .. import yaml_utils
 
 
 def _output(args, data):

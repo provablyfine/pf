@@ -4,7 +4,7 @@ import os
 import tempfile
 import time
 
-from .. import client, jwk, ssh
+from ... import client, jwk, ssh
 
 
 def _refresh_known_hosts(auth, known_hosts):

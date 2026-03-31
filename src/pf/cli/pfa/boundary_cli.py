@@ -2,8 +2,8 @@ import json
 
 import tabulate
 
-from .. import client
-from . import grant, yaml_utils
+from ... import client
+from .. import grant, yaml_utils
 
 
 def _boundaries(auth, id=None, name=None):
