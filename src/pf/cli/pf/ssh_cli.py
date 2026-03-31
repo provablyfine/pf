@@ -4,19 +4,7 @@ import os
 import tempfile
 
 from ... import client, jwk, ssh
-
-
-def _has_valid_session(c: client.Config) -> bool:
-    if not c.session_key:
-        return False
-    try:
-        agent = ssh.agent.Client()
-        for identity in agent.list_identities():
-            if identity.public_key.match_ssh_fingerprint(c.session_key):
-                return True
-    except Exception:
-        pass
-    return False
+from .. import login
 
 
 @client.ssh_utils.exception
@@ -34,7 +22,7 @@ def _ssh_function(args):
     destination = f"{user}@{host}"
 
     # Auto-login for http_sig only; other auth types require pf login first
-    if not _has_valid_session(c):
+    if not login.has_valid_session(c):
         api = client.Client(c)
         response = api.no_auth.get(f"{api.directory.auth}/default")
         if response.status_code != 200:
@@ -95,18 +83,16 @@ def _ssh_function(args):
         ssh_agent.add(user_key, comment=host, lifetime=60)
         # save certificate to disk
         decoded = base64.b64decode(certificates[0])
-        cert = ssh.cert.Cert.from_openssh(decoded)
         certfd, certfile = tempfile.mkstemp(suffix=".cert")
         with os.fdopen(certfd, "wb") as f:
             f.write(decoded)
-
 
     # Write public key to temp file so ssh picks this exact key from the agent.
     # File left in /tmp after exec (public key only, not sensitive).
     pubkeyfd, pubkeyfile = tempfile.mkstemp(suffix=".pub")
     with os.fdopen(pubkeyfd, "wb") as f:
         f.write(user_key.public().to_openssh())
-        f.write(b'\n')
+        f.write(b"\n")
 
     # Write cached known_hosts to a temp file; survives execvp (delete=False).
     khfd, khfile = tempfile.mkstemp(suffix=".known_hosts")
@@ -115,8 +101,9 @@ def _ssh_function(args):
 
     ssh_cmd = [
         "ssh",
-#        "-vvv",
-        "-F", "none",
+        #        "-vvv",
+        "-F",
+        "none",
         "-o",
         f"UserKnownHostsFile={khfile}",
         "-o",
@@ -150,7 +137,7 @@ def add_subparser(subparsers):
         metavar="OPTION",
         help="SSH option passed through to the underlying ssh command",
     )
-    ssh_parser.add_argument("-n", dest="stdin_null", action='store_true', help="Redirect stdin from null")
+    ssh_parser.add_argument("-n", dest="stdin_null", action="store_true", help="Redirect stdin from null")
     ssh_parser.add_argument("-l", dest="login_user", default=None, help="Login username")
     ssh_parser.add_argument("-p", dest="port", default=None, help="Port to connect to")
     ssh_parser.add_argument("destination", help="[user@]hostname (pf identity name of the host)")

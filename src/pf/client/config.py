@@ -12,6 +12,7 @@ class Config:
     session_key: str | None = None
     directory: dict | None = None
     known_hosts: str | None = None
+    auth_name: str | None = None
 
     @staticmethod
     def load(filename: str):

@@ -8,12 +8,10 @@ Create and initialize child tenant "acme"
   .* (re)
   .* (re)
   .* (re)
-  $ pf -c acme.json config --directory http://127.0.0.1:$API_PORT/pf/t/acme/directory
-  $ ACME_INV=$(pfa -c acme.json initialize)
   $ ssh-keygen -t ed25519 -f acme-account -N "" > /dev/null
-  $ pf -c acme.json accept --invitation=$ACME_INV --key acme-account
+  $ pfa -c acme.json initialize http://127.0.0.1:$API_PORT/pf/t/acme/directory --key acme-account
   $ ssh-keygen -t ed25519 -f acme-session -N "" > /dev/null
-  $ pf -c acme.json login --session-key acme-session
+  $ pfa -c acme.json login --session-key acme-session
   $ pfa -c acme.json tag create -n scope -v acme-only
 
 Create and initialize child tenant "beta"
@@ -21,12 +19,10 @@ Create and initialize child tenant "beta"
   .* (re)
   .* (re)
   .* (re)
-  $ pf -c beta.json config --directory http://127.0.0.1:$API_PORT/pf/t/beta/directory
-  $ BETA_INV=$(pfa -c beta.json initialize)
   $ ssh-keygen -t ed25519 -f beta-account -N "" > /dev/null
-  $ pf -c beta.json accept --invitation=$BETA_INV --key beta-account
+  $ pfa -c beta.json initialize http://127.0.0.1:$API_PORT/pf/t/beta/directory --key beta-account
   $ ssh-keygen -t ed25519 -f beta-session -N "" > /dev/null
-  $ pf -c beta.json login --session-key beta-session
+  $ pfa -c beta.json login --session-key beta-session
   $ pfa -c beta.json tag create -n scope -v beta-only
 
 Scenario 1: child tenant cannot see owner tenant

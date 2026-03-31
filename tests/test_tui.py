@@ -21,17 +21,13 @@ def _setup(api, tmpdir):
     directory_url = f"http://127.0.0.1:{api.port}/pf/t/root/directory"
     config_file = os.path.join(tmpdir, "config.json")
 
-    _run(["pf", "-c", config_file, "config", "--directory", directory_url], env)
-    result = _run(["pfa", "-c", config_file, "initialize"], env, text=True)
-    invitation = result.stdout.strip()
-
     account_key = os.path.join(tmpdir, "account")
     _run(["ssh-keygen", "-t", "ed25519", "-f", account_key, "-N", ""], env)
-    _run(["pf", "-c", config_file, "accept", f"--invitation={invitation}", f"--key={account_key}"], env)
+    _run(["pfa", "-c", config_file, "initialize", directory_url, f"--key={account_key}"], env)
 
     session_key = os.path.join(tmpdir, "session")
     _run(["ssh-keygen", "-t", "ed25519", "-f", session_key, "-N", ""], env)
-    _run(["pf", "-c", config_file, "login", f"--session-key={session_key}"], env)
+    _run(["pfa", "-c", config_file, "login", f"--session-key={session_key}"], env)
 
     cfg = pf.client.Config.load(config_file)
     http_client = pf.client.Client(cfg).session_auth(cfg.session_key)

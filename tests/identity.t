@@ -38,7 +38,7 @@ Create a new identity to be able to update and delete it
   boundary  root
   boundary  boundary1
   $ pfa -c config.json identity invite -i $USER2_ID --manual
-  [A-Za-z0-9_-]+ (re)
+  https?://.+ (re)
 
 We can add and remove tags from identities
   $ pfa -c config.json identity tag -i $USER2_ID -a env=prod -d env=dev

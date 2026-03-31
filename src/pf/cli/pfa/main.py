@@ -4,11 +4,71 @@ import os
 import os.path
 import sys
 import traceback
+import urllib.parse
+
+import requests
 
 from ... import client
+from .. import login
 from . import admin_cli
 
 _DEFAULT_CONFIG = os.path.join(os.path.expanduser("~"), ".config", "pf", "config.json")
+
+
+def _initialize_function(args):
+    response = requests.get(args.url)
+    if response.status_code != 200:
+        raise client.exceptions.UI(f"Unable to read directory: {response.text}")
+    c = client.Config(directory_url=args.url, directory=response.json())
+    api = client.Client(c)
+
+    response = api.no_auth.post(api.directory.initialize)
+    if response.status_code == 204:
+        raise client.exceptions.UI("Unable to initialize app: it is already initialized.")
+    if response.status_code != 200:
+        raise client.exceptions.UI(f"Unable to initialize app. Unexpected error: {response.status_code}.")
+    invitation_key = response.json()["key"]["k"]
+
+    auth = api.invitation_auth(account=args.key, invitation=invitation_key)
+    response = auth.post(url=auth.directory.accept_invitation, json={"account_public_key": auth.public_key})
+    if response.status_code != 204:
+        raise client.exceptions.UI(f"Unable to accept invitation: {response.text}")
+
+    c.account_key = args.key
+    c.auth_name = "default"
+    c.save(args.config)
+
+
+def _connect_function(args):
+    parsed = urllib.parse.urlparse(args.url)
+    params = urllib.parse.parse_qs(parsed.query)
+    clean_url = urllib.parse.urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, "", parsed.fragment))
+
+    invitation = params.get("invitation", [None])[0] or args.invitation
+    auth_name = params.get("auth", [None])[0] or args.auth or "default"
+
+    response = requests.get(clean_url)
+    if response.status_code != 200:
+        raise client.exceptions.UI(f"Unable to read directory: {response.text}")
+    c = client.Config(directory_url=clean_url, directory=response.json())
+    api = client.Client(c)
+
+    if invitation and args.key:
+        auth = api.invitation_auth(account=args.key, invitation=invitation)
+        response = auth.post(url=auth.directory.accept_invitation, json={"account_public_key": auth.public_key})
+        if response.status_code != 204:
+            raise client.exceptions.UI(f"Unable to accept invitation: {response.text}")
+        c.account_key = args.key
+
+    c.auth_name = auth_name
+    c.save(args.config)
+
+
+def _login_function(args):
+    c = client.Config.load(args.config)
+    api = client.Client(c)
+    auth_name = args.auth or c.auth_name or "default"
+    login.login(api, c, auth_name, args.config, session_key_path=args.session_key)
 
 
 def _do_main(args):
@@ -25,6 +85,16 @@ def _do_main(args):
                 level = logging.DEBUG
 
         logging.basicConfig(stream=sys.stdout, level=level)
+
+    if getattr(args, "auto_login", False):
+        try:
+            c = client.Config.load(args.config)
+            if not login.has_valid_session(c):
+                api = client.Client(c)
+                auth_name = c.auth_name or "default"
+                login.login(api, c, auth_name, args.config)
+        except client.exceptions.UI:
+            pass
 
     try:
         args.func(args)
@@ -43,7 +113,31 @@ def pfa():
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--debug", help="Increase debugging level", action="count", default=0)
     parser.add_argument("-c", "--config", help="configuration file", default=_DEFAULT_CONFIG)
-    admin_cli.add_subparsers(parser)
+    parser.add_argument("--auto-login", action="store_true", default=False)
+    subparsers = parser.add_subparsers(required=True)
+
+    initialize_parser = subparsers.add_parser("initialize", help="Initialize a new server and register account key")
+    initialize_parser.add_argument("url", help="Directory URL of the server")
+    initialize_parser.add_argument("--key", required=True, help="Account key (filename or fingerprint)")
+    initialize_parser.set_defaults(func=_initialize_function)
+
+    connect_parser = subparsers.add_parser("connect", help="Connect to an existing server")
+    connect_parser.add_argument("url", help="Directory URL (may include invitation= and auth= query params)")
+    connect_parser.add_argument("--auth", default=None, help="Auth config name")
+    connect_parser.add_argument("--invitation", default=None, help="Invitation key")
+    connect_parser.add_argument("--key", default=None, help="Account key (filename or fingerprint)")
+    connect_parser.set_defaults(func=_connect_function)
+
+    login_parser = subparsers.add_parser("login", help="Login using the configured auth method")
+    login_parser.add_argument("--auth", default=None, help="Auth config name to use for login")
+    login_parser.add_argument(
+        "--session-key",
+        default=None,
+        help="Session key file. If none is provided, a new one is generated in SSH agent.",
+    )
+    login_parser.set_defaults(func=_login_function)
+
+    admin_cli.add_subparsers(subparsers)
 
     args = parser.parse_args()
 

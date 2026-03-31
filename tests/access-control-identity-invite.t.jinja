@@ -23,7 +23,7 @@ Check that permission "{{permission}}" is actually enforcing access control
   [2]
   $ pfa -c config.json grant identity {{grant}} | pfa -c config.json role grant -i $ROLE_ID --add
   $ pfa -c user1.json identity invite -i $USER4_ID --manual
-  [A-Za-z0-9_-]+ (re)
+  https?://.+ (re)
   $ pfa -c config.json role read -i $ROLE_ID -f json | jq '.grant_list[-1]' | pfa -c config.json role grant -i $ROLE_ID --del
 {% endfor %}
 

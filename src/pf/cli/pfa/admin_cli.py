@@ -1,25 +1,7 @@
-from ... import client
 from . import auth_cli, boundary_cli, grant_cli, identity_cli, role_cli, tag_cli, tenant_cli
 
 
-def _initialize_function(args):
-    c = client.Config.load(args.config)
-    api = client.Client(c)
-    response = api.no_auth.post(api.directory.initialize)
-    if response.status_code == 204:
-        raise client.exceptions.UI("Unable to initialize app: it is already initialized.")
-    if response.status_code != 200:
-        raise client.exceptions.UI("Unable to initialize app: expected error.")
-    data = response.json()
-    print(data["key"]["k"])
-
-
-def add_subparsers(parser):
-    subparsers = parser.add_subparsers(required=True)
-
-    initialize_parser = subparsers.add_parser("initialize")
-    initialize_parser.set_defaults(func=_initialize_function)
-
+def add_subparsers(subparsers):
     boundary_parser = subparsers.add_parser("boundary", help="View and edit boundaries")
     boundary_cli.add_subparser(boundary_parser)
 

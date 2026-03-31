@@ -167,7 +167,9 @@ def _identity_invite_function(args):
         return
     elif response.status_code == 200:
         data = response.json()
-        print(data["key"]["k"])
+        if args.delivery == "manual":
+            auth_name = args.auth or c.auth_name or "default"
+            print(f"{c.directory_url}?invitation={data['key']['k']}&auth={auth_name}")
     else:
         raise client.exceptions.UI(f"Unable to invite identity. {response.json()['title']}")
 
@@ -259,6 +261,7 @@ def add_subparser(parser):
 
     invite_parser = subparsers.add_parser("invite", help="Invite an identity")
     invite_parser.add_argument("-i", "--id", type=int, help="Id of identity")
+    invite_parser.add_argument("--auth", default=None, help="Auth config name to include in invitation URL")
     group = invite_parser.add_mutually_exclusive_group(required=True)
     group.add_argument(
         "--manual",
