@@ -89,10 +89,9 @@ def sign_user_certificate(data: schemas.SSHUserCertificateRequest) -> schemas.SS
 
     match data.action:
         case "shell":
-            allowed_list = ssh_checker.list_shell_can_username(data.username)
-            if not allowed_list:
+            perm = ssh_checker.can_shell(data.username)
+            if perm is None:
                 raise responses.ProblemHTTPException(responses.problem_response(status_code=403, title="Forbidden"))
-            perm = allowed_list[0].permission
             cert = ssh.cert.Cert.create_user(
                 public_key=public_key,
                 serial_number=serial_number,
@@ -111,8 +110,7 @@ def sign_user_certificate(data: schemas.SSHUserCertificateRequest) -> schemas.SS
                 signer=signer.key,
             )
         case "port-forwarding":
-            allowed_list = ssh_checker.list_port_forwarding_can_username(data.username)
-            if not allowed_list:
+            if not ssh_checker.can_port_forward(data.username):
                 raise responses.ProblemHTTPException(responses.problem_response(status_code=403, title="Forbidden"))
             cert = ssh.cert.Cert.create_user(
                 public_key=public_key,
@@ -136,8 +134,7 @@ def sign_user_certificate(data: schemas.SSHUserCertificateRequest) -> schemas.SS
                 raise responses.ProblemHTTPException(
                     responses.problem_response(status_code=400, title="command required for action=command")
                 )
-            allowed_list = ssh_checker.list_command_can(data.username, data.command)
-            if not allowed_list:
+            if not ssh_checker.can_command(data.username, data.command):
                 raise responses.ProblemHTTPException(responses.problem_response(status_code=403, title="Forbidden"))
             cert = ssh.cert.Cert.create_user(
                 public_key=public_key,

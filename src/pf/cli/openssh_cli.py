@@ -1,81 +1,7 @@
 import base64
 import os
-import time
 
 from .. import client, jwk, ssh
-
-
-def _refresh_known_hosts(auth, known_hosts):
-    known_hosts = os.path.abspath(os.path.expanduser(known_hosts))
-    now = int(time.time())
-    try:
-        st = os.stat(known_hosts)
-        if st.st_mtime + 60 > now:
-            # We do not refresh known hosts more often than once every 60s
-            return
-    except FileNotFoundError:
-        pass
-    host_trusted_keys_response = auth.get(f"{auth.directory.ssh}/host/trusted-keys")
-    if host_trusted_keys_response.status_code != 200:
-        raise client.exceptions.UI(host_trusted_keys_response.json()["title"])
-    with open(known_hosts, "wb+") as f:
-        for line in host_trusted_keys_response.content.split(b"\n"):
-            f.write(line)
-
-
-@client.ssh_utils.exception
-def _auth_function(args):
-    c = client.Config.load(args.config)
-    api = client.Client(c)
-    auth = api.session_auth(c.session_key)
-
-    user_key = jwk.Private.generate_ed25519()
-    cert_response = auth.post(
-        f"{auth.directory.ssh}/user/certificate",
-        json={
-            "public_key": user_key.public().to_dict(),
-            "hostname": args.host,
-            "username": args.user,
-            "action": "shell",
-        },
-    )
-    if cert_response.status_code == 403:
-        return
-    if cert_response.status_code != 200:
-        raise client.exceptions.UI(cert_response.json()["title"])
-
-    try:
-        ssh_agent = ssh.agent.Client()
-    except Exception:
-        raise client.exceptions.UI("Unable to connect to user's SSH agent")
-
-    for certificate in cert_response.json()["certificates"]:
-        cert = ssh.cert.Cert.from_openssh(base64.b64decode(certificate))
-        ssh_agent.add(user_key, cert=cert, comment=args.host, lifetime=60)
-
-    # host_krl_response = auth.get(f'{auth.directory.ssh}/host/krl')
-    # if host_krl_response.status_code != 200:
-    #    raise client.exceptions.UI(host_krl_response.json()['title'])
-
-    # with open(args.identity_file, 'wb+') as f:
-    #    f.write(user_key.public().to_openssh())
-    # with open(args.certificate_file, 'wb+') as f:
-    #    f.write(cert_response.content)
-    _refresh_known_hosts(auth, args.known_hosts)
-    # with open(args.host_krl, 'wb+') as f:
-    #    f.write(host_krl_response.content)
-
-
-def _known_hosts_function(args):
-    c = client.Config.load(args.config)
-    api = client.Client(c)
-    auth = api.session_auth(c.session_key)
-
-    host_trusted_keys_response = auth.get(f"{auth.directory.ssh}/host/trusted-keys")
-    if host_trusted_keys_response.status_code != 200:
-        raise client.exceptions.UI(host_trusted_keys_response.json()["title"])
-    for line in host_trusted_keys_response.text.split("\n"):
-        print(line)
 
 
 def _user_trusted_keys_function(args):
@@ -144,24 +70,12 @@ def _authorized_principals(args):
 def add_subparsers(parser):
     subparsers = parser.add_subparsers(required=True)
 
-    auth_parser = subparsers.add_parser("auth")
-    auth_parser.add_argument("--host", help="Name of host we want to connect to", required=True)
-    auth_parser.add_argument("--user", help="Name of user account we want to connect to", required=True)
-    auth_parser.add_argument("--known-hosts", help="Known hosts file to generate", default="~/.ssh/known_hosts")
-    auth_parser.add_argument("--host-krl", help="KRL file to generate")
-    auth_parser.add_argument("--identity-file", help="Public key of the generated key")
-    auth_parser.add_argument("--certificate-file", help="Certificate for the generated key")
-    auth_parser.set_defaults(func=_auth_function)
-
     sign_host_parser = subparsers.add_parser("sign-host")
     sign_host_parser.add_argument("--public-key", action="append", default=[], help="Public key to sign")
     sign_host_parser.set_defaults(func=_sign_host_function)
 
     user_trusted_keys_parser = subparsers.add_parser("user-trusted-keys")
     user_trusted_keys_parser.set_defaults(func=_user_trusted_keys_function)
-
-    known_hosts_parser = subparsers.add_parser("known-hosts")
-    known_hosts_parser.set_defaults(func=_known_hosts_function)
 
     authorized_principals_parser = subparsers.add_parser("authorized-principals")
     authorized_principals_parser.add_argument(

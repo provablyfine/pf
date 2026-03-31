@@ -47,20 +47,11 @@ User accepts invite and logs in
   $ ssh-keygen -t ed25519 -f user-session -N "" > /dev/null
   $ pf -c config.json -c user.json login --session-key user-session
 
-User attempts to log into host
-  $ IDBCTL=$(whereis -b pf |cut -d' ' -f2)
-  $ pf -c config.json -c user.json openssh known-hosts > ./known_hosts
-  $ cat <<EOF > ssh_config
-  > Match Exec "pf -c config.json -c user.json openssh auth --host %h --user %r --known-hosts ./known_hosts --host-krl ./host.krl --identity-file ./device.name.pub --certificate-file ./device.name.cert"
-  >      KnownHostsCommand /usr/bin/cat ./known_hosts
-  >      Hostname 127.0.0.1
-  >      HostKeyAlias host
-  >      Port $SSHD_PORT
-  > EOF
-  $ ssh -n -F ./ssh_config root@host "whoami"
+User connects to host via pf ssh
+  $ pf -c config.json -c user.json ssh -o "Hostname=127.0.0.1" -o "HostKeyAlias=host" -p $SSHD_PORT root@host "whoami"
   root
-  $ ssh -n -F ./ssh_config bob@host "whoami"
+  $ pf -c config.json -c user.json ssh -o "Hostname=127.0.0.1" -o "HostKeyAlias=host" -p $SSHD_PORT bob@host "whoami"
   bob@127.0.0.1: Permission denied (publickey).\r (esc)
   [255]
-  $ ssh -n -F ./ssh_config alice@host "whoami"
+  $ pf -c config.json -c user.json ssh -o "Hostname=127.0.0.1" -o "HostKeyAlias=host" -p $SSHD_PORT alice@host "whoami"
   alice

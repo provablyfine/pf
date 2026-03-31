@@ -284,42 +284,35 @@ class SSHChecker:
 
         self._checker = Checker(boundaries, roles, cmp)
 
-    def list_shell_can_username(self, username: str) -> list[model.grant.SSHShellGrant]:
-        def check(p) -> bool:
-            return isinstance(p, model.grant.SSHShellPermission) and username in p.username_list
+    def can_shell(self, username: str) -> model.grant.SSHShellPermission | None:
+        matching = [
+            g
+            for g in self._checker.list_can(
+                lambda p: isinstance(p, model.grant.SSHShellPermission) and username in p.username_list
+            )
+            if isinstance(g, model.grant.SSHShellGrant)
+        ]
+        if not matching:
+            return None
+        return model.grant.SSHShellPermission(
+            username_list=[username],
+            permit_agent_forwarding=any(g.permission.permit_agent_forwarding for g in matching),
+            permit_x11_forwarding=any(g.permission.permit_x11_forwarding for g in matching),
+        )
 
-        return [g for g in self._checker.list_can(check) if isinstance(g, model.grant.SSHShellGrant)]
+    def can_port_forward(self, username: str) -> bool:
+        return self._checker.can(
+            lambda p: isinstance(p, model.grant.SSHPortForwardingPermission) and username in p.username_list
+        )
 
-    def list_port_forwarding_can_username(self, username: str) -> list[model.grant.SSHPortForwardingGrant]:
-        def check(p) -> bool:
-            return isinstance(p, model.grant.SSHPortForwardingPermission) and username in p.username_list
-
-        return [g for g in self._checker.list_can(check) if isinstance(g, model.grant.SSHPortForwardingGrant)]
-
-    def list_command_can(self, username: str, command: str) -> list[model.grant.SSHCommandGrant]:
-        def check(p) -> bool:
-            return (
+    def can_command(self, username: str, command: str) -> bool:
+        return self._checker.can(
+            lambda p: (
                 isinstance(p, model.grant.SSHCommandPermission)
                 and username in p.username_list
                 and command in p.command_list
             )
-
-        return [g for g in self._checker.list_can(check) if isinstance(g, model.grant.SSHCommandGrant)]
-
-    def list_any(
-        self,
-    ) -> list[model.grant.SSHShellGrant | model.grant.SSHPortForwardingGrant | model.grant.SSHCommandGrant]:
-        def check(p) -> bool:
-            return isinstance(
-                p,
-                (
-                    model.grant.SSHShellPermission,
-                    model.grant.SSHPortForwardingPermission,
-                    model.grant.SSHCommandPermission,
-                ),
-            )
-
-        return self._checker.list_can(check)
+        )
 
 
 class AuthChecker:

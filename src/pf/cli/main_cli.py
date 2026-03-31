@@ -14,7 +14,7 @@ import requests
 import requests.auth
 
 from .. import base64url, client, jwk, ssh
-from . import admin_cli, openssh_cli
+from . import admin_cli, openssh_cli, ssh_cli
 
 logger = logging.getLogger(__name__)
 
@@ -334,6 +334,8 @@ def pf():
 
     openssh_parser = subparsers.add_parser("openssh", help="OpenSSH integration")
     openssh_cli.add_subparsers(openssh_parser)
+
+    ssh_cli.add_subparser(subparsers)
 
     args = parser.parse_args()
 
