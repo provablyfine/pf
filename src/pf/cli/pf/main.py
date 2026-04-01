@@ -7,10 +7,16 @@ import traceback
 import urllib.parse
 
 import requests
+import tabulate
 
 from ... import client
 from .. import login
 from . import openssh_cli, ssh_cli
+
+
+logger = logging.getLogger(__name__)
+
+_DEFAULT_CONFIG = os.path.join(os.path.expanduser("~"), ".config", "pf", "config.json")
 
 
 @client.ssh_utils.exception
@@ -21,16 +27,12 @@ def _hosts_function(args):
     response = auth.get(f"{auth.directory.ssh}/hosts")
     if response.status_code != 200:
         raise client.exceptions.UI(response.json().get("title", "Failed to list hosts"))
+    rows = []
     for entry in response.json().get("hosts", []):
-        parts = [entry["hostname"], entry["type"]]
-        if entry.get("command"):
-            parts.append(entry["command"])
-        print("\t".join(parts))
-
-
-logger = logging.getLogger(__name__)
-
-_DEFAULT_CONFIG = os.path.join(os.path.expanduser("~"), ".config", "pf", "config.json")
+        rows.append((entry["hostname"], entry["type"], entry.get("command", "")))
+    if len(rows) > 0:
+        output = tabulate.tabulate(rows, headers=("host", "type", "details"))
+        print(output)
 
 
 def _config_function(args):

@@ -58,7 +58,9 @@ User connects to host via pf ssh
 
 User lists hosts — shell only so far
   $ pf -c user.json hosts
-  host	shell
+  host    type    details
+  ------  ------  ---------
+  host    shell
 
 Add port-forwarding and command grants
   $ pfa -c config.json grant ssh-port-forwarding --tag id=device --username root | pfa -c config.json role grant -i $ROLE_ID --add
@@ -66,10 +68,11 @@ Add port-forwarding and command grants
 
 User lists hosts — all permission types
   $ pf -c user.json hosts
-  host	shell
-  host	port
-  host	command	/bin/df
-  host	command	/bin/ls
+  host    type     details
+  ------  -------  ---------
+  host    shell
+  host    port
+  host    command  /bin/ls
 
 Local port forwarding (-L) succeeds for root (has port-forwarding permission)
   $ pf -c user.json ssh -L 19901:localhost:22 -n -o "Hostname=127.0.0.1" -o "HostKeyAlias=host" -p $SSHD_PORT root@host "echo ok"
@@ -83,3 +86,14 @@ Local port forwarding (-L) rejected for alice (shell permission only)
 Remote port forwarding (-R) succeeds for root
   $ pf -c user.json ssh -R 19903:localhost:22 -n -o "Hostname=127.0.0.1" -o "HostKeyAlias=host" -p $SSHD_PORT root@host "echo ok"
   ok
+
+Add command-only grant for charlie
+  $ pfa -c config.json grant ssh-command --tag id=device --username charlie --command /bin/true | pfa -c config.json role grant -i $ROLE_ID --add
+
+Command fallback: charlie has command(/bin/true) but not shell — shell cert rejected, command cert accepted
+  $ pf -c user.json ssh -n -o "Hostname=127.0.0.1" -o "HostKeyAlias=host" -p $SSHD_PORT charlie@host "/bin/true"
+
+Command fallback fails: /bin/ls not in charlie's allowed command list
+  $ pf -c user.json ssh -n -o "Hostname=127.0.0.1" -o "HostKeyAlias=host" -p $SSHD_PORT charlie@host "/bin/ls"
+  User is not authorized to connect to host
+  [2]

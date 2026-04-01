@@ -60,15 +60,18 @@ def _ssh_function(args):
 
     action = "port-forwarding" if (args.forward_local or args.forward_remote) else "shell"
     user_key = jwk.Private.generate_ed25519()
-    cert_response = auth.post(
-        f"{auth.directory.ssh}/user/certificate",
-        json={
-            "public_key": user_key.public().to_dict(),
-            "hostname": host,
-            "username": user,
-            "action": action,
-        },
-    )
+    cert_request = {
+        "public_key": user_key.public().to_dict(),
+        "hostname": host,
+        "username": user,
+        "action": action,
+    }
+    cert_response = auth.post(f"{auth.directory.ssh}/user/certificate", json=cert_request)
+    if cert_response.status_code == 403 and action == "shell" and args.command:
+        cert_response = auth.post(
+            f"{auth.directory.ssh}/user/certificate",
+            json={**cert_request, "action": "command", "command": args.command},
+        )
     if cert_response.status_code == 403:
         raise client.exceptions.UI("User is not authorized to connect to host")
     elif cert_response.status_code != 200:
