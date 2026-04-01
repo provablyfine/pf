@@ -133,11 +133,11 @@ Update oidc params
   callback_url  http://127.0.0.1/callback
 
 Public discovery endpoint returns correct data for http_sig
-  $ curl -s http://127.0.0.1:$API_PORT/pf/t/root/auth/default | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['name'], d['type'], d['params'])"
+  $ curl -s http://127.0.0.1:$API_PORT/pf/t/root/public/auth/default | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['name'], d['type'], d['params'])"
   default http_sig {}
 
 Public discovery endpoint returns correct data for oidc
-  $ curl -s http://127.0.0.1:$API_PORT/pf/t/root/auth/google | python3 -c "import sys,json; d=json.load(sys.stdin); p=d['params']; print(d['name'], d['type'], p['issuer'], p['client_id'], p['callback_url'])"
+  $ curl -s http://127.0.0.1:$API_PORT/pf/t/root/public/auth/google | python3 -c "import sys,json; d=json.load(sys.stdin); p=d['params']; print(d['name'], d['type'], p['issuer'], p['client_id'], p['callback_url'])"
   google oidc https://login.microsoftonline.com/common other-client-id http://127.0.0.1/callback
 
 Create an oauth2-github auth config
@@ -161,19 +161,19 @@ Create an oauth2-github auth config without client-secret (should fail)
   pfa auth create oauth2-github: error: the following arguments are required: --client-secret
 
 Public discovery endpoint returns oauth2-github data without client_secret
-  $ curl -s http://127.0.0.1:$API_PORT/pf/t/root/auth/corp-oauth2 | python3 -c "import sys,json; d=json.load(sys.stdin); p=d['params']; print(d['name'], d['type'], p['authorization_endpoint'], p['client_id'], 'callback' in p['callback_url'])"
+  $ curl -s http://127.0.0.1:$API_PORT/pf/t/root/public/auth/corp-oauth2 | python3 -c "import sys,json; d=json.load(sys.stdin); p=d['params']; print(d['name'], d['type'], p['authorization_endpoint'], p['client_id'], 'callback' in p['callback_url'])"
   corp-oauth2 oauth2-github https://github.com/login/oauth/authorize my-app True
 
 Delete the oauth2 auth config
   $ pfa -c config.json auth delete -i 4
 
 Public discovery endpoint returns 404 for unknown name
-  $ curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:$API_PORT/pf/t/root/auth/nonexistent
+  $ curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:$API_PORT/pf/t/root/public/auth/nonexistent
   404
 
 Public discovery endpoint returns 404 for disabled auth config
   $ pfa -c config.json auth update oidc -i 3 --disable
-  $ curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:$API_PORT/pf/t/root/auth/google
+  $ curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:$API_PORT/pf/t/root/public/auth/google
   404
   $ pfa -c config.json auth update oidc -i 3 --enable
 

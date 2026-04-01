@@ -570,6 +570,15 @@ class OAuth2StartResponse(APIBase):
     auth_url: str
 
 
+class AuthPublicSummary(APIBase):
+    name: str
+    type: typing.Literal["http_sig", "oidc", "oauth2-github"]
+
+
+class AuthPublicListResponse(APIBase):
+    auths: list[AuthPublicSummary]
+
+
 class DirectoryReadResponse(APIBase):
     initialize: str
     accept_invitation: str
@@ -577,6 +586,7 @@ class DirectoryReadResponse(APIBase):
     login_oidc: str
     login_oauth2_start: str
     auth: str
+    public_auth: str
     boundary: str
     tag: str
     role: str

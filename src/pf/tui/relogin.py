@@ -55,7 +55,7 @@ def oidc_login(api: client.Client, auth_name: str) -> str:
     agent.add(session_key, comment="pf-session", lifetime=1800)
     fp = session_key.public().ssh_fingerprint()
 
-    response = api.no_auth.get(f"{api.directory.auth}/{auth_name}")
+    response = api.no_auth.get(f"{api.directory.public_auth}/{auth_name}")
     if response.status_code != 200:
         raise client.exceptions.UI(f"Unable to read auth config: {response.text}")
     auth_public = response.json()
@@ -141,7 +141,7 @@ def oauth2_login(api: client.Client, auth_name: str) -> str:
     agent.add(session_key, comment="pf-session", lifetime=1800)
     fp = session_key.public().ssh_fingerprint()
 
-    response = api.no_auth.get(f"{api.directory.auth}/{auth_name}")
+    response = api.no_auth.get(f"{api.directory.public_auth}/{auth_name}")
     if response.status_code != 200:
         raise client.exceptions.UI(f"Unable to read auth config: {response.text}")
     auth_public = response.json()
@@ -230,8 +230,9 @@ class ReloginScreen(textual.screen.Screen[None]):
         auth_name = self._cfg.auth_name or "default"
         status = self.query_one("#status", textual.widgets.Label)
 
+        url = f"{self._api.directory.public_auth}/{auth_name}"
         try:
-            resp = await asyncio.to_thread(lambda: self._api.no_auth.get(f"{self._api.directory.auth}/{auth_name}"))
+            resp = await asyncio.to_thread(lambda: self._api.no_auth.get(url))
         except client.exceptions.UI as e:
             self.notify(str(e), severity="error")
             return

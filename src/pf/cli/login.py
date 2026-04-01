@@ -74,7 +74,7 @@ def oidc_login(api: client.Client, config: client.Config, auth_name: str):
         The session key fingerprint that was stored in config
     """
     # Fetch auth config
-    response = api.no_auth.get(f"{api.directory.auth}/{auth_name}")
+    response = api.no_auth.get(f"{api.directory.public_auth}/{auth_name}")
     if response.status_code != 200:
         raise client.exceptions.UI(f"Unable to read auth config: {response.text}")
     auth_public = response.json()
@@ -195,7 +195,7 @@ def oauth2_login(api: client.Client, config: client.Config, auth_name: str):
     import socket
 
     # Fetch auth config first
-    response = api.no_auth.get(f"{api.directory.auth}/{auth_name}")
+    response = api.no_auth.get(f"{api.directory.public_auth}/{auth_name}")
     if response.status_code != 200:
         raise client.exceptions.UI(f"Unable to read auth config: {response.text}")
     auth_public = response.json()
@@ -278,7 +278,7 @@ def login(
         The session key fingerprint
     """
     # Discover auth config type
-    response = api.no_auth.get(f"{api.directory.auth}/{auth_name}")
+    response = api.no_auth.get(f"{api.directory.public_auth}/{auth_name}")
     if response.status_code == 404:
         raise client.exceptions.UI(f"Auth config '{auth_name}' not found")
     if response.status_code != 200:

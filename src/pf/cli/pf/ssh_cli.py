@@ -24,7 +24,7 @@ def _ssh_function(args):
     # Auto-login for http_sig only; other auth types require pf login first
     if not login.has_valid_session(c):
         api = client.Client(c)
-        response = api.no_auth.get(f"{api.directory.auth}/default")
+        response = api.no_auth.get(f"{api.directory.public_auth}/default")
         if response.status_code != 200:
             raise client.exceptions.UI("Not logged in. Run 'pf login' first.")
         auth_public = response.json()

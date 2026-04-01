@@ -343,7 +343,6 @@ class ConnectScreen(textual.screen.Screen[None]):
             try:
                 resp = await asyncio.to_thread(lambda: api.no_auth.get(api.directory.public_auth))
                 auths = resp.json().get("auths", [])
-                auths = [a for a in auths if a["type"] != "http_sig"]
             except client.exceptions.UI as e:
                 self.notify(str(e), severity="error")
                 status.update("Paste invitation URL or directory URL")
