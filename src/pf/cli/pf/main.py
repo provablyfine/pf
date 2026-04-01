@@ -13,7 +13,6 @@ from ... import client
 from .. import login
 from . import openssh_cli, ssh_cli
 
-
 logger = logging.getLogger(__name__)
 
 _DEFAULT_CONFIG = os.path.join(os.path.expanduser("~"), ".config", "pf", "config.json")
