@@ -13,6 +13,7 @@ import textual.screen
 import textual.widgets
 
 from .. import base64url, client, jwk, ssh
+from . import async_client
 
 
 def has_valid_session(config: client.Config) -> bool:
@@ -225,14 +226,13 @@ class ReloginScreen(textual.screen.Screen[None]):
 
     @textual.work
     async def on_mount(self) -> None:
-        import asyncio
-
         auth_name = self._cfg.auth_name or "default"
         status = self.query_one("#status", textual.widgets.Label)
 
+        no_auth = async_client.AsyncClient(self._api.no_auth)
         url = f"{self._api.directory.public_auth}/{auth_name}"
         try:
-            resp = await asyncio.to_thread(lambda: self._api.no_auth.get(url))
+            resp = await no_auth.get(url)
         except client.exceptions.UI as e:
             self.notify(str(e), severity="error")
             return

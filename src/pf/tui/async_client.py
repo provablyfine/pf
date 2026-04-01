@@ -16,6 +16,10 @@ class AsyncClient:
     def directory(self):
         return self._client.directory
 
+    @property
+    def public_key(self):
+        return self._client.public_key
+
     async def get(self, *args, **kwargs) -> requests.Response:
         async with self._lock:
             return await asyncio.to_thread(self._client.get, *args, **kwargs)

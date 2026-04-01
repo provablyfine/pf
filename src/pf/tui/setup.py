@@ -11,7 +11,7 @@ import textual.screen
 import textual.widgets
 
 from .. import client, ssh
-from . import relogin
+from . import async_client, relogin
 
 
 def _list_ssh_keys() -> list[tuple[str, str]]:
@@ -324,9 +324,8 @@ class ConnectScreen(textual.screen.Screen[None]):
 
             status.update("Accepting invitation...")
             try:
-                inv_auth = api.invitation_auth(account=account_key, invitation=invitation)
-                response = await asyncio.to_thread(
-                    inv_auth.post,
+                inv_auth = async_client.AsyncClient(api.invitation_auth(account=account_key, invitation=invitation))
+                response = await inv_auth.post(
                     inv_auth.directory.accept_invitation,
                     json={"account_public_key": inv_auth.public_key},
                 )
@@ -341,7 +340,8 @@ class ConnectScreen(textual.screen.Screen[None]):
         if not auth_name:
             status.update("Fetching auth methods...")
             try:
-                resp = await asyncio.to_thread(lambda: api.no_auth.get(api.directory.public_auth))
+                no_auth = async_client.AsyncClient(api.no_auth)
+                resp = await no_auth.get(api.directory.public_auth)
                 auths = resp.json().get("auths", [])
             except client.exceptions.UI as e:
                 self.notify(str(e), severity="error")
@@ -359,7 +359,8 @@ class ConnectScreen(textual.screen.Screen[None]):
             auth_type = selected["type"]
         else:
             try:
-                resp = await asyncio.to_thread(lambda: api.no_auth.get(f"{api.directory.public_auth}/{auth_name}"))
+                no_auth = async_client.AsyncClient(api.no_auth)
+                resp = await no_auth.get(f"{api.directory.public_auth}/{auth_name}")
                 if resp.status_code != 200:
                     raise client.exceptions.UI(f"Auth config '{auth_name}' not found")
                 auth_type = resp.json()["type"]
