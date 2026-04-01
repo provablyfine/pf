@@ -173,6 +173,29 @@ def sign_user_certificate(data: schemas.SSHUserCertificateRequest) -> schemas.SS
     return schemas.SSHUserCertificateResponse(certificates=[converters.cert_to_schema(cert)])
 
 
+@router.get(
+    "/hosts",
+    status_code=200,
+    dependencies=[fastapi.Depends(signature.verify_session)],
+)
+def list_hosts() -> schemas.SSHHostsResponse:
+    identities = model.identity.read_all()
+    grants = grant.Grants.create()
+    entries: list[schemas.SSHHostEntry] = []
+    for identity in identities:
+        checker = grants.ssh(identity.id, identity.tag_id_list, identity.boundary_id_list)
+        if checker.list_shell_grants():
+            entries.append(schemas.SSHHostEntry(hostname=identity.name, type="shell"))
+        if checker.list_port_forward_grants():
+            entries.append(schemas.SSHHostEntry(hostname=identity.name, type="port"))
+        commands: set[str] = set()
+        for g in checker.list_command_grants():
+            commands.update(g.permission.command_list)
+        for cmd in sorted(commands):
+            entries.append(schemas.SSHHostEntry(hostname=identity.name, type="command", command=cmd))
+    return schemas.SSHHostsResponse(hosts=entries)
+
+
 @router.get("/user/trusted-keys", status_code=200)
 def read_user_trusted_keys() -> fastapi.responses.Response:
     now = int(time.time())

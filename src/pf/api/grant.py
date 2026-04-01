@@ -314,6 +314,27 @@ class SSHChecker:
             )
         )
 
+    def list_shell_grants(self) -> list[model.grant.SSHShellGrant]:
+        return [
+            g
+            for g in self._checker.list_can(lambda p: isinstance(p, model.grant.SSHShellPermission))
+            if isinstance(g, model.grant.SSHShellGrant)
+        ]
+
+    def list_port_forward_grants(self) -> list[model.grant.SSHPortForwardingGrant]:
+        return [
+            g
+            for g in self._checker.list_can(lambda p: isinstance(p, model.grant.SSHPortForwardingPermission))
+            if isinstance(g, model.grant.SSHPortForwardingGrant)
+        ]
+
+    def list_command_grants(self) -> list[model.grant.SSHCommandGrant]:
+        return [
+            g
+            for g in self._checker.list_can(lambda p: isinstance(p, model.grant.SSHCommandPermission))
+            if isinstance(g, model.grant.SSHCommandGrant)
+        ]
+
 
 class AuthChecker:
     def __init__(self, boundaries: list[model.boundary.Boundary], roles: list[model.role.Role], auth_id: int | None):

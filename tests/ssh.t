@@ -55,3 +55,18 @@ User connects to host via pf ssh
   [2]
   $ pf -c user.json ssh -n -o "Hostname=127.0.0.1" -o "HostKeyAlias=host" -p $SSHD_PORT alice@host "whoami"
   alice
+
+User lists hosts — shell only so far
+  $ pf -c user.json hosts
+  host	shell
+
+Add port-forwarding and command grants
+  $ pfa -c config.json grant ssh-port-forwarding --tag id=device --username root | pfa -c config.json role grant -i $ROLE_ID --add
+  $ pfa -c config.json grant ssh-command --tag id=device --username root --command /bin/df --command /bin/ls | pfa -c config.json role grant -i $ROLE_ID --add
+
+User lists hosts — all permission types
+  $ pf -c user.json hosts
+  host	shell
+  host	port
+  host	command	/bin/df
+  host	command	/bin/ls

@@ -12,6 +12,22 @@ from ... import client
 from .. import login
 from . import openssh_cli, ssh_cli
 
+
+@client.ssh_utils.exception
+def _hosts_function(args):
+    c = client.Config.load(args.config)
+    api = client.Client(c)
+    auth = api.session_auth(c.session_key)
+    response = auth.get(f"{auth.directory.ssh}/hosts")
+    if response.status_code != 200:
+        raise client.exceptions.UI(response.json().get("title", "Failed to list hosts"))
+    for entry in response.json().get("hosts", []):
+        parts = [entry["hostname"], entry["type"]]
+        if entry.get("command"):
+            parts.append(entry["command"])
+        print("\t".join(parts))
+
+
 logger = logging.getLogger(__name__)
 
 _DEFAULT_CONFIG = os.path.join(os.path.expanduser("~"), ".config", "pf", "config.json")
@@ -125,6 +141,9 @@ def pf():
     openssh_cli.add_subparsers(openssh_parser)
 
     ssh_cli.add_subparser(subparsers)
+
+    hosts_parser = subparsers.add_parser("hosts", help="List accessible hosts and permissions")
+    hosts_parser.set_defaults(func=_hosts_function)
 
     args = parser.parse_args()
 

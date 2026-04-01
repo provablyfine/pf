@@ -478,6 +478,16 @@ class SSHUserCertificateResponse(SSHCertificateResponse):
     pass
 
 
+class SSHHostEntry(APIBase):
+    hostname: str
+    type: typing.Literal["shell", "port", "command"]
+    command: str | None = None
+
+
+class SSHHostsResponse(APIBase):
+    hosts: list[SSHHostEntry]
+
+
 # --- Initialization/login ---
 
 
