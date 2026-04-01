@@ -337,7 +337,7 @@ class ConnectScreen(textual.screen.Screen[None]):
                 return
             c.account_key = account_key
 
-        if not auth_name:
+        if auth_name is None:
             status.update("Fetching auth methods...")
             try:
                 no_auth = async_client.AsyncClient(api.no_auth)
@@ -368,8 +368,20 @@ class ConnectScreen(textual.screen.Screen[None]):
                 self.notify(str(e), severity="error")
                 status.update("Paste invitation URL or directory URL")
                 return
-
         c.auth_name = auth_name
+
+        if auth_type == "http_sig" and account_key is None:
+            keys = await asyncio.to_thread(_list_ssh_keys)
+            if not keys:
+                self.notify("No SSH keys found — cannot login", severity="error")
+                status.update("Paste invitation URL or directory URL")
+                return
+            account_key = await self.app.push_screen_wait(_KeySelectScreen(keys))
+            if account_key is None:
+                self.notify("No SSH key selected — cannot login", severity="error")
+                status.update("Paste invitation URL or directory URL")
+                return
+            c.account_key = account_key
 
         status.update(f"Logging in via {auth_name}...")
         try:
