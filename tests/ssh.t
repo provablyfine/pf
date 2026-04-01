@@ -70,3 +70,16 @@ User lists hosts — all permission types
   host	port
   host	command	/bin/df
   host	command	/bin/ls
+
+Local port forwarding (-L) succeeds for root (has port-forwarding permission)
+  $ pf -c user.json ssh -L 19901:localhost:22 -n -o "Hostname=127.0.0.1" -o "HostKeyAlias=host" -p $SSHD_PORT root@host "echo ok"
+  ok
+
+Local port forwarding (-L) rejected for alice (shell permission only)
+  $ pf -c user.json ssh -L 19902:localhost:22 -n -o "Hostname=127.0.0.1" -o "HostKeyAlias=host" -p $SSHD_PORT alice@host "echo ok"
+  User is not authorized to connect to host
+  [2]
+
+Remote port forwarding (-R) succeeds for root
+  $ pf -c user.json ssh -R 19903:localhost:22 -n -o "Hostname=127.0.0.1" -o "HostKeyAlias=host" -p $SSHD_PORT root@host "echo ok"
+  ok

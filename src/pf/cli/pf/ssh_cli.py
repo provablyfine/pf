@@ -58,6 +58,7 @@ def _ssh_function(args):
     c.known_hosts = host_trusted_keys_response.content.decode("utf-8")
     c.save(args.config)
 
+    action = "port-forwarding" if (args.forward_local or args.forward_remote) else "shell"
     user_key = jwk.Private.generate_ed25519()
     cert_response = auth.post(
         f"{auth.directory.ssh}/user/certificate",
@@ -65,7 +66,7 @@ def _ssh_function(args):
             "public_key": user_key.public().to_dict(),
             "hostname": host,
             "username": user,
-            "action": "shell",
+            "action": action,
         },
     )
     if cert_response.status_code == 403:
@@ -121,6 +122,10 @@ def _ssh_function(args):
         ssh_cmd += ["-o", opt]
     if args.stdin_null:
         ssh_cmd += ["-n"]
+    for fwd in args.forward_local:
+        ssh_cmd += ["-L", fwd]
+    for fwd in args.forward_remote:
+        ssh_cmd += ["-R", fwd]
     ssh_cmd.append(destination)
     if args.command:
         ssh_cmd.append(args.command)
@@ -138,6 +143,22 @@ def add_subparser(subparsers):
         help="SSH option passed through to the underlying ssh command",
     )
     ssh_parser.add_argument("-n", dest="stdin_null", action="store_true", help="Redirect stdin from null")
+    ssh_parser.add_argument(
+        "-L",
+        dest="forward_local",
+        action="append",
+        default=[],
+        metavar="[bind_address:]port:host:hostport",
+        help="Local port forwarding",
+    )
+    ssh_parser.add_argument(
+        "-R",
+        dest="forward_remote",
+        action="append",
+        default=[],
+        metavar="[bind_address:]port:host:hostport",
+        help="Remote port forwarding",
+    )
     ssh_parser.add_argument("-l", dest="login_user", default=None, help="Login username")
     ssh_parser.add_argument("-p", dest="port", default=None, help="Port to connect to")
     ssh_parser.add_argument("destination", help="[user@]hostname (pf identity name of the host)")
