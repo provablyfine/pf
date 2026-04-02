@@ -3,7 +3,6 @@ import asyncio
 import contextlib
 import logging
 import socket
-import typing
 
 import fastapi
 import fastapi.requests
@@ -66,38 +65,44 @@ async def register(ws: fastapi.websockets.WebSocket, request: fastapi.requests.R
     await tunnel_server.serve(ws, "", server.resolve_host)
 
 
-@router.api_route("/connect/{hostname}", methods=["CONNECT"])
-async def connect(hostname: str, request: fastapi.requests.Request):
+@router.websocket("/connect")
+async def connect(
+    ws: fastapi.websockets.WebSocket,
+    hostname: str,
+    request: fastapi.requests.Request,
+):
+    await ws.accept(subprotocol="h2")
     server = request.app.state.bastion
     target = server.resolve_host(hostname)
     if target is None:
-        return fastapi.responses.JSONResponse(
-            status_code=404,
-            content={"error": "Identity not found"},
-        )
+        await ws.close(code=4004, reason="Identity not found")
+        return
 
     host, port = target
-
     reader, writer = await asyncio.open_connection(host, port)
 
-    async def forward() -> typing.AsyncGenerator[bytes, None]:
+    async def forward() -> None:
         try:
             while True:
                 data = await reader.read(4096)
                 if not data:
                     break
-                yield data
+                await ws.send_bytes(data)
         except Exception as e:
             logger.debug(f"Forward error: {e}")
         finally:
             writer.close()
             await writer.wait_closed()
 
-    return fastapi.responses.StreamingResponse(
-        forward(),
-        media_type="application/octet-stream",
-        status_code=200,
-    )
+    asyncio.create_task(forward())  # noqa: RUF006
+
+    try:
+        while True:
+            data = await ws.receive_bytes()
+            writer.write(data)
+            await writer.drain()
+    except Exception as e:
+        logger.debug(f"Receive error: {e}")
 
 
 def create(conf) -> fastapi.FastAPI:
