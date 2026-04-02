@@ -522,6 +522,9 @@ def identity_list_to_schema(identities: list[model.identity.Identity]) -> list[s
             name=i.name,
             tags=[tag_by_id[tag_id] for tag_id in i.tag_id_list],
             boundaries=[boundary_by_id[boundary_id] for boundary_id in i.boundary_id_list],
+            ipv4_address_list=i.ipv4_address_list,
+            ipv6_address_list=i.ipv6_address_list,
+            last_seen_at=i.last_seen_at,
         )
 
     return [_one(i) for i in identities]
@@ -558,3 +561,19 @@ def auth_config_to_schema(ac: model.auth_config.AuthConfig, tenant_name: str) ->
         type=ac.type,  # type: ignore[arg-type]
         params=params,
     )
+
+
+def bastion_to_schema(converter: GrantConverter, bastion: model.bastion.Bastion) -> schemas.Bastion:
+    tag_dict = converter.to_tag_list(bastion.tag_id_list)
+    return schemas.Bastion(
+        id=bastion.id,
+        register_url=bastion.register_url,
+        connect_url=bastion.connect_url,
+        ssh_proxy_jump=bastion.ssh_proxy_jump,
+        tag_list=tag_dict if tag_dict else [],
+    )
+
+
+def bastion_list_to_schema(bastions: list[model.bastion.Bastion]) -> list[schemas.Bastion]:
+    converter = GrantConverter()
+    return [bastion_to_schema(converter, b) for b in bastions]

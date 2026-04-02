@@ -52,10 +52,93 @@ def list_endpoint(
 
 @router.get("/self", status_code=200, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
 def read_self_endpoint() -> schemas.Identity:
-    identity = model.identity.read_one(id=ctx.identity_id)
+    identity_id = ctx.identity_id
+    assert identity_id is not None
+    identity = model.identity.read_one(id=identity_id)
     assert identity is not None
 
-    return converters.identity_to_schema(identity)
+    matching_bastions = model.bastion.read_matching()
+    bastion_schema_list: list[schemas.Bastion] = []
+
+    if matching_bastions:
+        grant_converter = converters.GrantConverter()
+        for bastion in matching_bastions:
+            token = model.bastion.generate_token(bastion.id)
+            bastion_schema = converters.bastion_to_schema(grant_converter, bastion)
+            bastion_schema.token = token
+            bastion_schema.ip_address_list = identity.ipv4_address_list + identity.ipv6_address_list
+            bastion_schema_list.append(bastion_schema)
+
+    result = converters.identity_to_schema(identity)
+    result.bastion_list = bastion_schema_list
+    return result
+
+
+@router.post(
+    "/self",
+    status_code=200,
+    responses={400: responses.PROBLEM, 403: responses.PROBLEM},
+)
+def update_self_endpoint(data: schemas.IdentitySelfUpdateRequest) -> schemas.Identity:
+    import time as time_module
+
+    identity_id = ctx.identity_id
+    assert identity_id is not None
+    now = int(time_module.time())
+    model.identity.update(
+        id=identity_id,  # type: ignore[arg-type]
+        ipv4_address_list=data.ipv4_address_list,
+        ipv6_address_list=data.ipv6_address_list,
+        last_seen_at=now,
+    )
+
+    identity = model.identity.read_one(id=identity_id)  # type: ignore[arg-type]
+    assert identity is not None
+
+    matching_bastions = model.bastion.read_matching()
+    bastion_schema_list: list[schemas.Bastion] = []
+
+    if matching_bastions:
+        grant_converter = converters.GrantConverter()
+        for bastion in matching_bastions:
+            token = model.bastion.generate_token(bastion.id)
+            bastion_schema = converters.bastion_to_schema(grant_converter, bastion)
+            bastion_schema.token = token
+            bastion_schema.ip_address_list = identity.ipv4_address_list + identity.ipv6_address_list
+            bastion_schema_list.append(bastion_schema)
+
+    result = converters.identity_to_schema(identity)
+    result.bastion_list = bastion_schema_list
+    return result
+
+
+@router.get(
+    "/self/token",
+    status_code=200,
+    responses={400: responses.PROBLEM, 403: responses.PROBLEM, 404: responses.PROBLEM},
+)
+def read_self_token_endpoint(service: str) -> schemas.APIBase:
+    if not service.startswith("bastion:"):
+        raise responses.ProblemHTTPException(responses.problem_response(status_code=400, title="Invalid service"))
+
+    bastion_id_str = service[8:]
+    try:
+        bastion_id = int(bastion_id_str)
+    except ValueError:
+        raise responses.ProblemHTTPException(responses.problem_response(status_code=400, title="Invalid bastion id"))
+
+    bastion = model.bastion.read_one(id=bastion_id)
+    if bastion is None:
+        raise responses.ProblemHTTPException(responses.problem_response(status_code=404, title="Bastion not found"))
+
+    matching_bastions = model.bastion.read_matching()
+    if bastion not in matching_bastions:
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=403, title="Not allowed to access this bastion")
+        )
+
+    token = model.bastion.generate_token(bastion_id)
+    return schemas.TokenResponse(token=token)
 
 
 def _read_boundary_ids(boundary_id_list: list[int], boundary_name_list: list[str]) -> list[int]:

@@ -377,6 +377,10 @@ class Identity(APIBase):
     name: str
     tags: list[Tag]
     boundaries: list[IdentityBoundary]
+    ipv4_address_list: list[str] = []
+    ipv6_address_list: list[str] = []
+    last_seen_at: int | None = None
+    bastion_list: list[Bastion] = []
 
 
 class IdentityListResponse(APIBase):
@@ -443,12 +447,73 @@ class IdentityUpdateRequest(APIBase):
         return self
 
 
+class IdentitySelfUpdateRequest(APIBase):
+    ipv4_address_list: list[str] = []
+    ipv6_address_list: list[str] = []
+
+
 class IdentityInviteRequest(APIBase):
     delivery: typing.Literal["manual", "email"]
 
 
 class IdentityInviteManualResponse(APIBase):
     key: SymmetricJWK
+
+
+class TokenResponse(APIBase):
+    token: str
+
+
+# --- Bastion ---
+
+
+class Bastion(APIBase):
+    id: int
+    register_url: str
+    connect_url: str | None = None
+    ssh_proxy_jump: str | None = None
+    tag_list: list[TagNameValue] = []
+    token: str | None = None
+    ip_address_list: list[str] = []
+
+
+class BastionListResponse(APIBase):
+    bastions: list[Bastion]
+
+
+class BastionCreateRequest(APIBase):
+    register_url: str
+    connect_url: str | None = None
+    ssh_proxy_jump: str | None = None
+    tag_id_list: list[int] = []
+    tag_name_value_list: list[IdentityTagNameValue] = []
+
+    @pydantic.model_validator(mode="after")
+    def validate_tags(self):
+        if len(self.tag_name_value_list) > 0 and len(self.tag_id_list) > 0:
+            raise ValueError("Cannot specify both 'tag_id_list' and 'tag_name_value_list'")
+        return self
+
+
+class BastionUpdateRequest(APIBase):
+    register_url: str | None = None
+    connect_url: str | None = None
+    ssh_proxy_jump: str | None = None
+    tag_id_list: list[int] | None = None
+    tag_name_value_list: list[IdentityTagNameValue] | None = None
+
+    @pydantic.model_validator(mode="after")
+    def validate_tags(self):
+        if self.tag_name_value_list is not None and self.tag_id_list is not None:
+            raise ValueError("Cannot specify both 'tag_id_list' and 'tag_name_value_list'")
+        if self.tag_name_value_list is not None or self.tag_id_list is not None:
+            return self
+        if self.connect_url is not None or self.ssh_proxy_jump is not None:
+            return self
+        raise ValueError(
+            "At least one of 'register_url', 'connect_url', 'ssh_proxy_jump', "
+            "'tag_id_list', or 'tag_name_value_list' must be specified"
+        )
 
 
 # --- SSH ---
@@ -475,7 +540,8 @@ class SSHUserCertificateRequest(APIBase):
 
 
 class SSHUserCertificateResponse(SSHCertificateResponse):
-    pass
+    bastion_list: list[Bastion] = []
+    ip_address_list: list[str] = []
 
 
 class SSHHostEntry(APIBase):

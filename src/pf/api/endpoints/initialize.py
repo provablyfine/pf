@@ -139,6 +139,14 @@ def _provision(allow_tenant_create: bool):
         config={},
     )
 
+    if ctx.config.default_bastion is not None and ctx.config.default_bastion.register_url is not None:
+        model.bastion.create(
+            register_url=ctx.config.default_bastion.register_url,
+            connect_url=ctx.config.default_bastion.connect_url,
+            ssh_proxy_jump=ctx.config.default_bastion.ssh_proxy_jump,
+            tag_id_list=[],
+        )
+
 
 @router.post(
     "/initialize",

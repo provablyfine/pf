@@ -11,7 +11,7 @@ import tabulate
 
 from ... import client
 from .. import login
-from . import openssh_cli, ssh_cli
+from . import bastion_cli, openssh_cli, ssh_cli
 
 logger = logging.getLogger(__name__)
 
@@ -140,6 +140,8 @@ def pf():
 
     openssh_parser = subparsers.add_parser("openssh", help="OpenSSH integration")
     openssh_cli.add_subparsers(openssh_parser)
+
+    bastion_cli.add_subparser(subparsers)
 
     ssh_cli.add_subparser(subparsers)
 

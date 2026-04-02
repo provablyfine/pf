@@ -96,6 +96,9 @@ identity = sqlalchemy.Table(
     sqlalchemy.Column("created_by_id", sqlalchemy.Integer, index=False, unique=False, nullable=True),
     sqlalchemy.Column("created_at", sqlalchemy.Integer, nullable=False),
     sqlalchemy.Column("name", sqlalchemy.String, index=True, unique=True, nullable=False),
+    sqlalchemy.Column("ipv4_address_list", sqlalchemy.JSON, nullable=False, server_default="[]"),
+    sqlalchemy.Column("ipv6_address_list", sqlalchemy.JSON, nullable=False, server_default="[]"),
+    sqlalchemy.Column("last_seen_at", sqlalchemy.Integer, nullable=True),
     # We need autoincrement to make sure ids are not recycled EVER.
     sqlite_autoincrement=True,
 )
@@ -167,6 +170,19 @@ default = sqlalchemy.Table(
     "default",
     metadata,
     sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
+)
+
+bastion = sqlalchemy.Table(
+    "bastion",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
+    sqlalchemy.Column("register_url", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("connect_url", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("ssh_proxy_jump", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("tag_id_list", sqlalchemy.JSON, nullable=False, server_default="[]"),
+    sqlalchemy.Column("created_at", sqlalchemy.Integer, nullable=False),
+    sqlalchemy.Column("created_by_id", sqlalchemy.Integer, nullable=True),
+    sqlite_autoincrement=True,
 )
 
 audit_log = sqlalchemy.Table(

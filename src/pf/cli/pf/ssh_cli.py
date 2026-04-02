@@ -76,63 +76,103 @@ def _ssh_function(args):
         raise client.exceptions.UI("User is not authorized to connect to host")
     elif cert_response.status_code != 200:
         raise client.exceptions.UI(cert_response.json()["title"])
-    else:
-        try:
-            ssh_agent = ssh.agent.Client()
-        except Exception:
-            raise client.exceptions.UI("Unable to connect to user's SSH agent")
-        certificates = cert_response.json()["certificates"]
-        assert len(certificates) == 1
-        # we have a valid certificate. We add the private key to the agent
-        ssh_agent.add(user_key, comment=host, lifetime=60)
-        # save certificate to disk
-        decoded = base64.b64decode(certificates[0])
-        certfd, certfile = tempfile.mkstemp(suffix=".cert")
-        with os.fdopen(certfd, "wb") as f:
-            f.write(decoded)
 
-    # Write public key to temp file so ssh picks this exact key from the agent.
-    # File left in /tmp after exec (public key only, not sensitive).
+    cert_data = cert_response.json()
+    certificates = cert_data["certificates"]
+    assert len(certificates) == 1
+    bastion_list = cert_data.get("bastion_list", [])
+    ip_address_list = cert_data.get("ip_address_list", [])
+
+    try:
+        ssh_agent = ssh.agent.Client()
+    except Exception:
+        raise client.exceptions.UI("Unable to connect to user's SSH agent")
+
+    ssh_agent.add(user_key, comment=host, lifetime=60)
+
+    decoded = base64.b64decode(certificates[0])
+    certfd, certfile = tempfile.mkstemp(suffix=".cert")
+    with os.fdopen(certfd, "wb") as f:
+        f.write(decoded)
+
     pubkeyfd, pubkeyfile = tempfile.mkstemp(suffix=".pub")
     with os.fdopen(pubkeyfd, "wb") as f:
         f.write(user_key.public().to_openssh())
         f.write(b"\n")
 
-    # Write cached known_hosts to a temp file; survives execvp (delete=False).
     khfd, khfile = tempfile.mkstemp(suffix=".known_hosts")
     with os.fdopen(khfd, "wb") as f:
         f.write(c.known_hosts.encode("utf-8") if c.known_hosts else b"")
 
-    ssh_cmd = [
-        "ssh",
-        #        "-vvv",
-        "-F",
-        "none",
-        "-o",
-        f"UserKnownHostsFile={khfile}",
-        "-o",
-        "StrictHostKeyChecking=yes",
-        "-o",
-        f"CertificateFile={certfile}",
-        "-o",
-        f"IdentityFile={pubkeyfile}",
-        "-o",
-        "IdentitiesOnly=yes",
-    ]
-    if args.port:
-        ssh_cmd += ["-p", args.port]
-    for opt in args.ssh_options:
-        ssh_cmd += ["-o", opt]
-    if args.stdin_null:
-        ssh_cmd += ["-n"]
-    for fwd in args.forward_local:
-        ssh_cmd += ["-L", fwd]
-    for fwd in args.forward_remote:
-        ssh_cmd += ["-R", fwd]
-    ssh_cmd.append(destination)
-    if args.command:
-        ssh_cmd.append(args.command)
-    os.execvp("ssh", ssh_cmd)
+    def build_ssh_cmd(
+        target_host: str,
+        proxy_command: str | None = None,
+        proxy_jump: str | None = None,
+    ) -> list[str]:
+        cmd = [
+            "ssh",
+            "-F",
+            "none",
+            "-o",
+            f"UserKnownHostsFile={khfile}",
+            "-o",
+            "StrictHostKeyChecking=yes",
+            "-o",
+            f"CertificateFile={certfile}",
+            "-o",
+            f"IdentityFile={pubkeyfile}",
+            "-o",
+            "IdentitiesOnly=yes",
+        ]
+        if args.port:
+            cmd += ["-p", args.port]
+        for opt in args.ssh_options:
+            cmd += ["-o", opt]
+        if args.stdin_null:
+            cmd += ["-n"]
+        for fwd in args.forward_local:
+            cmd += ["-L", fwd]
+        for fwd in args.forward_remote:
+            cmd += ["-R", fwd]
+        if proxy_command:
+            cmd += ["-o", f"ProxyCommand={proxy_command}"]
+        if proxy_jump:
+            cmd += ["-o", f"ProxyJump={proxy_jump}"]
+        target = f"{user}@{target_host}"
+        cmd.append(target)
+        if args.command:
+            cmd.append(args.command)
+        return cmd
+
+    last_error: Exception | None = None
+
+    for bastion in bastion_list:
+        if bastion.get("connect_url") and bastion.get("token"):
+            token = bastion["token"]
+            connect_url = bastion["connect_url"]
+            proxy_cmd = f"pf bastion connect --token {token} --url {connect_url} --hostname {host}"
+            ssh_cmd = build_ssh_cmd("localhost", proxy_command=proxy_cmd)
+            try:
+                os.execvp("ssh", ssh_cmd)
+            except Exception as e:
+                last_error = e
+
+        if bastion.get("ssh_proxy_jump"):
+            proxy_jump = bastion["ssh_proxy_jump"]
+            ssh_cmd = build_ssh_cmd(host, proxy_jump=proxy_jump)
+            try:
+                os.execvp("ssh", ssh_cmd)
+            except Exception as e:
+                last_error = e
+
+    for ip in ip_address_list:
+        ssh_cmd = build_ssh_cmd(ip, proxy_command=f"Hostname={host}")
+        try:
+            os.execvp("ssh", ssh_cmd)
+        except Exception as e:
+            last_error = e
+
+    raise client.exceptions.UI(f"Failed to connect via any bastion or direct IP: {last_error}")
 
 
 def add_subparser(subparsers):

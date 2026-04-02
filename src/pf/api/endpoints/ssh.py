@@ -170,7 +170,26 @@ def sign_user_certificate(data: schemas.SSHUserCertificateRequest) -> schemas.SS
     )
 
     logger.info(f"Generated certificate for username={data.username} action={data.action}")
-    return schemas.SSHUserCertificateResponse(certificates=[converters.cert_to_schema(cert)])
+
+    matching_bastions = model.bastion.read_matching()
+    bastion_schema_list: list[schemas.Bastion] = []
+    ip_address_list: list[str] = []
+
+    if matching_bastions:
+        ip_address_list = host.ipv4_address_list + host.ipv6_address_list
+        grant_converter = converters.GrantConverter()
+        for bastion in matching_bastions:
+            token = model.bastion.generate_token(bastion.id)
+            bastion_schema = converters.bastion_to_schema(grant_converter, bastion)
+            bastion_schema.token = token
+            bastion_schema.ip_address_list = ip_address_list
+            bastion_schema_list.append(bastion_schema)
+
+    return schemas.SSHUserCertificateResponse(
+        certificates=[converters.cert_to_schema(cert)],
+        bastion_list=bastion_schema_list,
+        ip_address_list=ip_address_list,
+    )
 
 
 @router.get(

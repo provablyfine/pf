@@ -15,11 +15,15 @@ dependencies = [
   "requests>=2.32.5",
   "pydantic",
   "textual-autocomplete>=4.0.6",
+  "websockets>=13.0",
+  "h2>=4.0.0",
+  "python-jose[cryptography]>=3.3.0",
 ]
 
 [project.scripts]
 pf = "pf.cli.pf.main:pf"
 pfa = "pf.cli.pfa.main:pfa"
+pf-bastion = "pf.bastion.server:run"
 
 [dependency-groups]
 dev = [
@@ -28,6 +32,7 @@ dev = [
     "pyright>=1.1.408",
     "pytest>=9.0.2",
     "pytest-xdist>=3.8.0",
+    "pytest-anyio",
     "ruff>=0.15.6",
 ]
 
