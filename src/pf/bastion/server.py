@@ -11,7 +11,7 @@ from . import app
 def run():
     parser = argparse.ArgumentParser()
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("--issuer-prefix", required=True, help="OIDC issuer url")
+    group.add_argument("--issuer-prefix", help="OIDC issuer url")
     group.add_argument("--dev", action='store_true')
     parser.add_argument("-p", "--port", type=int, default=0)
     parser.add_argument("--port-file", default=None)
