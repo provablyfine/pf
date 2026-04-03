@@ -10,8 +10,6 @@ from . import mux
 
 logger = logging.getLogger(__name__)
 
-_403 = fastapi.HTTPException(status_code=403, detail="Invalid authorization")
-
 
 @dataclasses.dataclass
 class Config:
@@ -42,13 +40,13 @@ class TrustedKeys:
         self._issuer_prefix = issuer_prefix
         self._client_by_iss = {}
 
-    def lookup(self, token: str) -> TrustedKey:
+    def lookup(self, token: str) -> TrustedKey | None:
         # we manually decode the token to extract the iss
         try:
             unverified = jwt.decode(token, options={"verify_signature": False, "require": ["iss", "kid"]})
         except jwt.exceptions.InvalidTokenError as e:
             logger.debug(f"Invalid token: {e}")
-            raise _403
+            return None
 
         iss, kid = unverified["iss"], unverified["kid"]
 
@@ -56,7 +54,7 @@ class TrustedKeys:
         # match because we have multiple tenants !
         if not iss.startswith(self._issuer_prefix):
             logger.debug(f"Invalid token: issuer does not match our prefix: {iss}!={self._issuer_prefix}")
-            raise _403
+            return None
 
         client = self._client_by_iss.get(iss)
         if client is None:
@@ -69,7 +67,7 @@ class TrustedKeys:
                 f"Invalid key iss={iss} kid={kid}. "
                 "Something is wrong with your key rotation or someone is trying to screw you."
             )
-            raise _403
+            return None
 
         return TrustedKey(issuer=iss, key=key)
 
@@ -80,18 +78,20 @@ def verify_token(ws: fastapi.websockets.WebSocket, expected_permission: str) -> 
 
     if "Authorization" not in ws.headers:
         logger.debug("Missing Authorization header")
-        raise _403
+        return None
     authorization = ws.headers["Authorization"]
     space = authorization.find(" ")
     if space == -1:
         logger.debug("Invalid Authorization header")
-        raise _403
+        return None
     if authorization[:space] != "Bearer":
         logger.debug("Authorization header must contain a Bearer token")
-        raise _403
+        return None
     token = authorization[space + 1 :].strip(" ")
 
     trusted_key = ws.app.state.trusted_keys.lookup(token)
+    if trusted_key is None:
+        return None
 
     try:
         payload = jwt.decode(
@@ -104,14 +104,15 @@ def verify_token(ws: fastapi.websockets.WebSocket, expected_permission: str) -> 
         )
     except jwt.exceptions.InvalidTokenError as e:
         logger.debug(f"Invalid token: {e}")
-        raise _403
+        return None
 
     # Final checks before we declare victory
     if expected_permission not in payload["permissions"]:
-        raise _403
+        logger.debug("Invalid permission requested. Someone is using tokens incorrectly.")
+        return None
     if not isinstance(payload["tenant_id"], int):
         logger.debug(f"Invalid token: tenant_id is not an integer: {payload['tenant_id']}")
-        raise _403
+        return None
 
     assert payload["tenant_id"] >= 1
     return Token(name=payload["name"], tenant_id=payload["tenant_id"])
@@ -123,6 +124,9 @@ router = fastapi.APIRouter()
 @router.websocket("/register")
 async def register(ws: fastapi.websockets.WebSocket) -> None:
     token = verify_token(ws, "register")
+    if token is None:
+        await ws.close(code=1008)
+        return
 
     await ws.accept(subprotocol="mux-ssh")
 
@@ -167,6 +171,9 @@ async def _relay_channel_to_ws(ws: fastapi.WebSocket, ch: mux.Channel) -> None:
 @router.websocket("/connect")
 async def connect(ws: fastapi.websockets.WebSocket, hostname: str):
     token = verify_token(ws, "connect")
+    if token is None:
+        await ws.close(code=1008)
+        return
     client_key = (token.tenant_id, hostname)
     multiplexer = ws.app.state.clients.get(client_key)
     if multiplexer is None:
