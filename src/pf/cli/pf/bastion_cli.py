@@ -1,4 +1,6 @@
 import asyncio
+import base64
+import json
 import logging
 import signal
 import ssl
@@ -6,7 +8,6 @@ import sys
 
 import websockets
 
-from ....tunnel import client as tunnel_client  # noqa: D  # type: ignore[import-not-found]
 from ... import client
 from .. import login
 
@@ -30,54 +31,100 @@ def _get_token(api: client.Client, auth: client.HttpClient, bastion_id: int) -> 
     return response.json()["token"]
 
 
+_ACK_THRESHOLD = 8  # mirrors mux.ACK_THRESHOLD
+
+
 async def _register_bastion(register_url: str, token: str, local_port: int) -> None:
     headers = {"Authorization": f"Bearer {token}"}
-    async with websockets.connect(register_url, extra_headers=headers) as ws:
-        tunnel = tunnel_client.TunnelClient(ws)
-        await tunnel.start()
+    async with websockets.connect(
+        register_url,
+        extra_headers=headers,
+        subprotocols=("mux-ssh",),  # type: ignore[arg-type]
+    ) as ws:
+        # Single serialised outbound queue — avoids concurrent ws.send() calls.
+        tx_queue: asyncio.Queue[dict | None] = asyncio.Queue()
 
-        async def handle_connection(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
+        # Per-channel state
+        writers: dict[str, asyncio.StreamWriter] = {}
+        tx_semaphores: dict[str, asyncio.Semaphore] = {}
+        consumed: dict[str, int] = {}  # data frames received since last ack
+        channel_tasks: list[asyncio.Task] = []
+
+        async def _writer() -> None:
+            while True:
+                msg = await tx_queue.get()
+                if msg is None:
+                    break
+                await ws.send(json.dumps(msg))
+
+        async def _tcp_to_mux(channel_id: str, reader: asyncio.StreamReader) -> None:
             try:
-                remote_reader, remote_writer = await tunnel.connect("localhost", 1)
+                while True:
+                    data = await reader.read(4096)
+                    if not data:
+                        break
+                    await tx_semaphores[channel_id].acquire()
+                    await tx_queue.put(
+                        {
+                            "type": "data",
+                            "channel_id": channel_id,
+                            "payload": base64.b64encode(data).decode(),
+                        }
+                    )
+            except Exception:
+                pass
+            finally:
+                await tx_queue.put({"type": "close", "channel_id": channel_id})
 
-                async def forward_local_to_remote():
+        writer_task = asyncio.create_task(_writer())
+        try:
+            async for raw in ws:
+                msg = json.loads(raw)
+                msg_type = msg.get("type")
+                channel_id = msg.get("channel_id")
+
+                if msg_type == "open":
                     try:
-                        while True:
-                            data = await reader.read(4096)
-                            if not data:
-                                break
-                            remote_writer.write(data)
-                            await remote_writer.drain()
-                    except Exception:
-                        pass
-                    finally:
-                        remote_writer.close()
-                        await remote_writer.wait_closed()
+                        reader, writer = await asyncio.open_connection("127.0.0.1", local_port)
+                    except Exception as e:
+                        logger.debug(f"Cannot connect to local port {local_port}: {e}")
+                        await tx_queue.put({"type": "close", "channel_id": channel_id})
+                        continue
+                    writers[channel_id] = writer
+                    tx_semaphores[channel_id] = asyncio.Semaphore(msg["credits"])
+                    consumed[channel_id] = 0
+                    channel_tasks.append(asyncio.create_task(_tcp_to_mux(channel_id, reader)))
 
-                async def forward_remote_to_local():
-                    try:
-                        while True:
-                            data = await remote_reader.read(4096)
-                            if not data:
-                                break
-                            writer.write(data)
-                            await writer.drain()
-                    except Exception:
-                        pass
-                    finally:
-                        writer.close()
-                        await writer.wait_closed()
+                elif msg_type == "data" and channel_id in writers:
+                    writers[channel_id].write(base64.b64decode(msg["payload"]))
+                    await writers[channel_id].drain()
+                    consumed[channel_id] += 1
+                    if consumed[channel_id] >= _ACK_THRESHOLD:
+                        await tx_queue.put(
+                            {
+                                "type": "ack",
+                                "channel_id": channel_id,
+                                "credits": consumed[channel_id],
+                            }
+                        )
+                        consumed[channel_id] = 0
 
-                asyncio.create_task(forward_local_to_remote())  # noqa: RUF006
-                asyncio.create_task(forward_remote_to_local())  # noqa: RUF006
-            except Exception as e:
-                logger.debug(f"Connection error: {e}")
-                writer.close()
-                await writer.wait_closed()
+                elif msg_type == "ack" and channel_id in tx_semaphores:
+                    for _ in range(msg.get("credits", 1)):
+                        tx_semaphores[channel_id].release()
 
-        server = await asyncio.start_server(handle_connection, "localhost", local_port)
-        print(f"Listening on localhost:{local_port}")
-        await server.serve_forever()
+                elif msg_type in ("close", "error") and channel_id in writers:
+                    writers.pop(channel_id).close()
+                    tx_semaphores.pop(channel_id, None)
+                    consumed.pop(channel_id, None)
+
+        finally:
+            await tx_queue.put(None)
+            await writer_task
+            for t in channel_tasks:
+                t.cancel()
+            for w in writers.values():
+                w.close()
 
 
 @client.ssh_utils.exception
