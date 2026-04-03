@@ -1,5 +1,7 @@
 import asyncio
+import base64
 import copy
+import json
 import os
 import random
 import subprocess
@@ -115,3 +117,185 @@ async def test_bastion_100k_transfer(bastion):
             print("client: sent data", flush=True)
 
     await asyncio.gather(host(), client())
+
+
+@pytest.mark.anyio
+async def test_host_reads_client_data(bastion):
+    """
+    E2E test: client sends data through the bastion, host reads it via the mux protocol.
+
+    The host speaks the mux client-side protocol over the /register WebSocket:
+    it waits for an "open" frame, reads "data" frames (base64 payload), sends
+    "ack" frames to replenish flow-control credits, and stops on "close".
+    """
+    port = bastion
+    data_to_send = random.randbytes(50 * 1024)
+    subprotocol_mux = cast(Sequence[websockets.typing.Subprotocol], ("mux-ssh",))
+    subprotocol_ssh = cast(Sequence[websockets.typing.Subprotocol], ("ssh",))
+
+    received_chunks: list[bytes] = []
+
+    async def host():
+        uri = f"ws://127.0.0.1:{port}/register"
+        async with websockets.connect(uri, subprotocols=subprotocol_mux) as ws:
+            # Wait for the server to open a mux channel (triggered when client connects).
+            raw = await ws.recv()
+            msg = json.loads(raw)
+            assert msg["type"] == "open"
+            channel_id = msg["channel_id"]
+
+            # Read data frames until the channel is closed.
+            consumed = 0
+            ack_threshold = 8  # mirrors mux.ACK_THRESHOLD
+            while True:
+                raw = await ws.recv()
+                msg = json.loads(raw)
+                if msg["type"] == "close" and msg["channel_id"] == channel_id:
+                    break
+                if msg["type"] == "data" and msg["channel_id"] == channel_id:
+                    received_chunks.append(base64.b64decode(msg["payload"]))
+                    consumed += 1
+                    if consumed >= ack_threshold:
+                        await ws.send(json.dumps({
+                            "type": "ack",
+                            "channel_id": channel_id,
+                            "credits": consumed,
+                        }))
+                        consumed = 0
+
+    async def client():
+        await asyncio.sleep(0.5)
+        uri = f"ws://127.0.0.1:{port}/connect?hostname=hello"
+        async with websockets.connect(uri, subprotocols=subprotocol_ssh) as ws:
+            await ws.send(data_to_send)
+
+    await asyncio.gather(host(), client())
+
+    assert b"".join(received_chunks) == data_to_send
+
+
+@pytest.mark.anyio
+async def test_host_reads_two_concurrent_clients(bastion):
+    """
+    E2E test: two clients send data concurrently; host reads both streams correctly.
+
+    The server opens a separate mux channel for each client. The host dispatches
+    inbound frames by channel_id, accumulating data per channel, and sends acks
+    to keep flow control healthy. The test verifies that neither stream is lost
+    or mixed up.
+    """
+    port = bastion
+    data1 = random.randbytes(20 * 1024)
+    data2 = random.randbytes(20 * 1024)
+    subprotocol_mux = cast(Sequence[websockets.typing.Subprotocol], ("mux-ssh",))
+    subprotocol_ssh = cast(Sequence[websockets.typing.Subprotocol], ("ssh",))
+
+    # channel_id -> list of received chunks
+    received: dict[str, list[bytes]] = {}
+
+    async def host():
+        uri = f"ws://127.0.0.1:{port}/register"
+        async with websockets.connect(uri, subprotocols=subprotocol_mux) as ws:
+            ack_threshold = 8  # mirrors mux.ACK_THRESHOLD
+            consumed: dict[str, int] = {}
+            closed: set[str] = set()
+
+            # Keep reading until both channels have been closed.
+            while len(closed) < 2:
+                raw = await ws.recv()
+                msg = json.loads(raw)
+                msg_type = msg.get("type")
+                channel_id = msg.get("channel_id")
+
+                if msg_type == "open":
+                    received[channel_id] = []
+                    consumed[channel_id] = 0
+                elif msg_type == "data" and channel_id in received:
+                    received[channel_id].append(base64.b64decode(msg["payload"]))
+                    consumed[channel_id] += 1
+                    if consumed[channel_id] >= ack_threshold:
+                        await ws.send(json.dumps({
+                            "type": "ack",
+                            "channel_id": channel_id,
+                            "credits": consumed[channel_id],
+                        }))
+                        consumed[channel_id] = 0
+                elif msg_type == "close" and channel_id in received:
+                    closed.add(channel_id)
+
+    async def client(data: bytes):
+        await asyncio.sleep(0.5)
+        uri = f"ws://127.0.0.1:{port}/connect?hostname=hello"
+        async with websockets.connect(uri, subprotocols=subprotocol_ssh) as ws:
+            await ws.send(data)
+
+    await asyncio.gather(host(), client(data1), client(data2))
+
+    assert len(received) == 2
+    received_payloads = {b"".join(chunks) for chunks in received.values()}
+    assert received_payloads == {data1, data2}
+
+
+@pytest.mark.anyio
+async def test_host_echoes_data_to_clients(bastion):
+    """
+    E2E test: host echoes each client's data back; clients verify what they receive.
+
+    Two clients connect concurrently, each sending a unique payload. The host
+    reads each data frame and sends it straight back on the same channel. Each
+    client asserts that the bytes it receives match what it originally sent.
+
+    This exercises the full bidirectional relay: client→server→host (via mux
+    data frames) and host→server→client (via mux data frames back through the
+    channel-to-ws relay).
+    """
+    port = bastion
+    data1 = random.randbytes(10 * 1024)
+    data2 = random.randbytes(10 * 1024)
+    subprotocol_mux = cast(Sequence[websockets.typing.Subprotocol], ("mux-ssh",))
+    subprotocol_ssh = cast(Sequence[websockets.typing.Subprotocol], ("ssh",))
+
+    async def host():
+        uri = f"ws://127.0.0.1:{port}/register"
+        async with websockets.connect(uri, subprotocols=subprotocol_mux) as ws:
+            ack_threshold = 8  # mirrors mux.ACK_THRESHOLD
+            consumed: dict[str, int] = {}
+            closed: set[str] = set()
+
+            while len(closed) < 2:
+                raw = await ws.recv()
+                msg = json.loads(raw)
+                msg_type = msg.get("type")
+                channel_id = msg.get("channel_id")
+
+                if msg_type == "open":
+                    consumed[channel_id] = 0
+                elif msg_type == "data" and channel_id in consumed:
+                    # Echo the payload back unchanged (reuse the base64 string as-is).
+                    await ws.send(json.dumps({
+                        "type": "data",
+                        "channel_id": channel_id,
+                        "payload": msg["payload"],
+                    }))
+                    consumed[channel_id] += 1
+                    if consumed[channel_id] >= ack_threshold:
+                        await ws.send(json.dumps({
+                            "type": "ack",
+                            "channel_id": channel_id,
+                            "credits": consumed[channel_id],
+                        }))
+                        consumed[channel_id] = 0
+                elif msg_type == "close" and channel_id in consumed:
+                    closed.add(channel_id)
+
+    async def client(data: bytes) -> bytes:
+        await asyncio.sleep(0.5)
+        uri = f"ws://127.0.0.1:{port}/connect?hostname=hello"
+        async with websockets.connect(uri, subprotocols=subprotocol_ssh) as ws:
+            await ws.send(data)
+            return cast(bytes, await ws.recv())
+
+    _, echo1, echo2 = await asyncio.gather(host(), client(data1), client(data2))
+
+    assert echo1 == data1
+    assert echo2 == data2
