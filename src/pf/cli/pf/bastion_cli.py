@@ -151,10 +151,10 @@ async def _connect_async(url: str, token: str, hostname: str) -> None:
         async def forward_stdin():
             try:
                 while True:
-                    data = await sys.stdin.buffer.read(4096)
+                    data = sys.stdin.buffer.read(4096)
                     if not data:
                         break
-                    await ws.send_bytes(data)
+                    await ws.send_bytes(data)  # type: ignore[attr-assign]
             except Exception:
                 pass
             finally:
@@ -165,11 +165,11 @@ async def _connect_async(url: str, token: str, hostname: str) -> None:
         async def forward_stdout():
             try:
                 while True:
-                    data = await ws.receive_bytes()
+                    data = await ws.receive_bytes()  # type: ignore[attr-assign]
                     if not data:
                         break
-                    await sys.stdout.buffer.write(data)
-                    await sys.stdout.buffer.flush()
+                    sys.stdout.buffer.write(data)
+                    sys.stdout.buffer.flush()
             except Exception:
                 pass
             finally:

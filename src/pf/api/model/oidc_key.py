@@ -58,18 +58,14 @@ def get_signing_key() -> jwk.Private:
     rotation_period = ctx.config.oidc_key_rotation_period
 
     keys = ctx.db.oidc_key.read_all()
-    active_keys = [
-        k for k in keys if k.valid_after <= now + staging_period and k.valid_before > now
-    ]
+    active_keys = [k for k in keys if k.valid_after <= now + staging_period and k.valid_before > now]
 
     if not active_keys:
         valid_after = now + staging_period
         valid_before = now + rotation_period + staging_period
         create("EdDSA", valid_after, valid_before)
         keys = ctx.db.oidc_key.read_all()
-        active_keys = [
-            k for k in keys if k.valid_after <= now + staging_period and k.valid_before > now
-        ]
+        active_keys = [k for k in keys if k.valid_after <= now + staging_period and k.valid_before > now]
 
     active_keys.sort(key=lambda k: k.created_at, reverse=True)
     key_row = active_keys[0]

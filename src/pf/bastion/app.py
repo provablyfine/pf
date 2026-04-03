@@ -72,7 +72,7 @@ class TrustedKeys:
         return TrustedKey(issuer=iss, key=key)
 
 
-def verify_token(ws: fastapi.websockets.WebSocket, expected_permission: str) -> Token:
+def verify_token(ws: fastapi.websockets.WebSocket, expected_permission: str) -> Token | None:
     if ws.app.state.dev_tenant_id is not None and ws.app.state.dev_name is not None:
         return Token(tenant_id=ws.app.state.dev_tenant_id, name=ws.app.state.dev_name)
 
