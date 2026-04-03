@@ -4,8 +4,7 @@ import time
 import jwt
 
 from ..context import ctx
-from . import audit_log
-from . import oidc_key
+from . import audit_log, oidc_key
 
 
 @dataclasses.dataclass(frozen=True)
