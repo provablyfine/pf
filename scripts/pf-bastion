@@ -1,15 +1,11 @@
 #!/usr/bin/env -S uv run -q --script
 # /// script
 # dependencies = [
-#   "openapi-core",
-#   "sqlalchemy",
 #   "cryptography",
 #   "fastapi",
 #   "uvicorn",
-#   "http-message-signatures",
 #   "pytest",
 #   "coverage",
-#   "pydantic",
 #   "pyjwt",
 #   "pf",
 # ]
@@ -25,9 +21,9 @@ if __name__ == '__main__':
         cov = coverage.Coverage()
         cov.start()
 
-    import pf.api.server
+    import pf.bastion.server
     try:
-        pf.api.server.run()
+        pf.bastion.server.run()
     finally:
         if cov:
             cov.stop()
