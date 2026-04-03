@@ -143,10 +143,10 @@ async def test_host_reads_client_data(bastion):
             msg = json.loads(raw)
             assert msg["type"] == "open"
             channel_id = msg["channel_id"]
+            ack_threshold = msg["ack_threshold"]
 
             # Read data frames until the channel is closed.
             consumed = 0
-            ack_threshold = 8  # mirrors mux.ACK_THRESHOLD
             while True:
                 raw = await ws.recv()
                 msg = json.loads(raw)
@@ -156,11 +156,15 @@ async def test_host_reads_client_data(bastion):
                     received_chunks.append(base64.b64decode(msg["payload"]))
                     consumed += 1
                     if consumed >= ack_threshold:
-                        await ws.send(json.dumps({
-                            "type": "ack",
-                            "channel_id": channel_id,
-                            "credits": consumed,
-                        }))
+                        await ws.send(
+                            json.dumps(
+                                {
+                                    "type": "ack",
+                                    "channel_id": channel_id,
+                                    "credits": consumed,
+                                }
+                            )
+                        )
                         consumed = 0
 
     async def client():
@@ -196,8 +200,8 @@ async def test_host_reads_two_concurrent_clients(bastion):
     async def host():
         uri = f"ws://127.0.0.1:{port}/register"
         async with websockets.connect(uri, subprotocols=subprotocol_mux) as ws:
-            ack_threshold = 8  # mirrors mux.ACK_THRESHOLD
             consumed: dict[str, int] = {}
+            ack_thresholds: dict[str, int] = {}
             closed: set[str] = set()
 
             # Keep reading until both channels have been closed.
@@ -210,15 +214,20 @@ async def test_host_reads_two_concurrent_clients(bastion):
                 if msg_type == "open":
                     received[channel_id] = []
                     consumed[channel_id] = 0
+                    ack_thresholds[channel_id] = msg["ack_threshold"]
                 elif msg_type == "data" and channel_id in received:
                     received[channel_id].append(base64.b64decode(msg["payload"]))
                     consumed[channel_id] += 1
-                    if consumed[channel_id] >= ack_threshold:
-                        await ws.send(json.dumps({
-                            "type": "ack",
-                            "channel_id": channel_id,
-                            "credits": consumed[channel_id],
-                        }))
+                    if consumed[channel_id] >= ack_thresholds[channel_id]:
+                        await ws.send(
+                            json.dumps(
+                                {
+                                    "type": "ack",
+                                    "channel_id": channel_id,
+                                    "credits": consumed[channel_id],
+                                }
+                            )
+                        )
                         consumed[channel_id] = 0
                 elif msg_type == "close" and channel_id in received:
                     closed.add(channel_id)
@@ -258,8 +267,8 @@ async def test_host_echoes_data_to_clients(bastion):
     async def host():
         uri = f"ws://127.0.0.1:{port}/register"
         async with websockets.connect(uri, subprotocols=subprotocol_mux) as ws:
-            ack_threshold = 8  # mirrors mux.ACK_THRESHOLD
             consumed: dict[str, int] = {}
+            ack_thresholds: dict[str, int] = {}
             closed: set[str] = set()
 
             while len(closed) < 2:
@@ -270,20 +279,29 @@ async def test_host_echoes_data_to_clients(bastion):
 
                 if msg_type == "open":
                     consumed[channel_id] = 0
+                    ack_thresholds[channel_id] = msg["ack_threshold"]
                 elif msg_type == "data" and channel_id in consumed:
                     # Echo the payload back unchanged (reuse the base64 string as-is).
-                    await ws.send(json.dumps({
-                        "type": "data",
-                        "channel_id": channel_id,
-                        "payload": msg["payload"],
-                    }))
+                    await ws.send(
+                        json.dumps(
+                            {
+                                "type": "data",
+                                "channel_id": channel_id,
+                                "payload": msg["payload"],
+                            }
+                        )
+                    )
                     consumed[channel_id] += 1
-                    if consumed[channel_id] >= ack_threshold:
-                        await ws.send(json.dumps({
-                            "type": "ack",
-                            "channel_id": channel_id,
-                            "credits": consumed[channel_id],
-                        }))
+                    if consumed[channel_id] >= ack_thresholds[channel_id]:
+                        await ws.send(
+                            json.dumps(
+                                {
+                                    "type": "ack",
+                                    "channel_id": channel_id,
+                                    "credits": consumed[channel_id],
+                                }
+                            )
+                        )
                         consumed[channel_id] = 0
                 elif msg_type == "close" and channel_id in consumed:
                     closed.add(channel_id)

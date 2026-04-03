@@ -2,9 +2,12 @@
 WebSocket multiplexer — server-initiated logical channels over a single WebSocket.
 
 Protocol messages (JSON):
-  Server → Client  {"type": "open",  "channel_id": str, "meta": dict, "credits": int}
-                     Opens a new logical channel and grants the client initial
-                     RX credits (i.e. how many messages the client may send).
+  Server → Client  {"type": "open",  "channel_id": str, "meta": dict,
+                    "credits": int, "ack_threshold": int}
+                     Opens a new logical channel.
+                     credits       — how many data frames the client may send initially.
+                     ack_threshold — client must send an ack after consuming this
+                                     many server-sent data frames.
   Both directions  {"type": "data",  "channel_id": str, "payload": any}
   Both directions  {"type": "close", "channel_id": str}
   Both directions  {"type": "ack",   "channel_id": str, "credits": int}
@@ -41,21 +44,20 @@ Error handling:
 """
 
 import asyncio
+import base64
+import dataclasses
 import logging
 import uuid
-import dataclasses
-import base64
 
 import fastapi
-
 
 logger = logging.getLogger(__name__)
 
 
-TX_QUEUE_SIZE      = 100  # global TX queue depth (messages)
-INITIAL_TX_CREDITS = 16   # server→client: initial send credits per channel
-INITIAL_RX_CREDITS = 16   # client→server: initial send credits granted to client
-ACK_THRESHOLD      = 8    # both sides send an ack after consuming this many msgs
+TX_QUEUE_SIZE = 100  # global TX queue depth (messages)
+INITIAL_TX_CREDITS = 16  # server→client: initial send credits per channel
+INITIAL_RX_CREDITS = 16  # client→server: initial send credits granted to client
+ACK_THRESHOLD = 8  # both sides send an ack after consuming this many msgs
 
 
 class MuxError(Exception):
@@ -69,6 +71,7 @@ class ChannelError(Exception):
 @dataclasses.dataclass
 class _ErrorSentinel:
     """Injected into an RX queue to unblock a waiting receive() on failure."""
+
     exc: Exception
 
 
@@ -82,7 +85,7 @@ class Channel:
     def __init__(
         self,
         channel_id: str,
-        tx_queue: asyncio.Queue,        # shared global TX queue
+        tx_queue: asyncio.Queue,  # shared global TX queue
         mux_closed: asyncio.Event,
         initial_tx_credits: int = INITIAL_TX_CREDITS,
         rx_queue_size: int = INITIAL_RX_CREDITS + ACK_THRESHOLD,
@@ -132,11 +135,13 @@ class Channel:
             raise ChannelError(f"Channel {self.channel_id} closed while waiting for TX credit")
 
         # Enqueue for the writer task; also blocks if the global TX queue is full.
-        await self._tx.put({
-            "type": "data",
-            "channel_id": self.channel_id,
-            "payload": base64.b64encode(payload).decode('ascii'),
-        })
+        await self._tx.put(
+            {
+                "type": "data",
+                "channel_id": self.channel_id,
+                "payload": base64.b64encode(payload).decode("ascii"),
+            }
+        )
 
     async def receive(self) -> bytes:
         """
@@ -152,9 +157,7 @@ class Channel:
         msg = await self._rx.get()
 
         if isinstance(msg, _ErrorSentinel):
-            raise ChannelError(
-                f"Channel {self.channel_id}: connection lost"
-            ) from msg.exc
+            raise ChannelError(f"Channel {self.channel_id}: connection lost") from msg.exc
 
         if msg.get("type") == "close":
             self._closed = True
@@ -166,7 +169,7 @@ class Channel:
             await self._send_rx_ack(self._rx_consumed)
             self._rx_consumed = 0
 
-        return base64.b64decode(msg["payload"].encode('ascii'))
+        return base64.b64decode(msg["payload"].encode("ascii"))
 
     async def close(self) -> None:
         """Send a close frame to the client and mark this channel as closed."""
@@ -197,11 +200,13 @@ class Channel:
     async def _send_rx_ack(self, credits: int) -> None:
         """Send an ack to replenish the client's RX send credits."""
         try:
-            await self._tx.put({
-                "type": "ack",
-                "channel_id": self.channel_id,
-                "credits": credits,
-            })
+            await self._tx.put(
+                {
+                    "type": "ack",
+                    "channel_id": self.channel_id,
+                    "credits": credits,
+                }
+            )
         except Exception:
             pass
 
@@ -264,15 +269,20 @@ class Server:
         )
         self._channels[channel_id] = channel
 
-        await self._tx_queue.put({
-            "type": "open",
-            "channel_id": channel_id,
-            "meta": meta or {},
-            "credits": self._initial_rx_credits,  # RX credits granted to client
-        })
+        await self._tx_queue.put(
+            {
+                "type": "open",
+                "channel_id": channel_id,
+                "meta": meta or {},
+                "credits": self._initial_rx_credits,  # RX credits granted to client
+                "ack_threshold": ACK_THRESHOLD,
+            }
+        )
         logger.debug(
             "Opened channel %s (tx_credits=%d, rx_credits=%d)",
-            channel_id, self._initial_tx_credits, self._initial_rx_credits,
+            channel_id,
+            self._initial_tx_credits,
+            self._initial_rx_credits,
         )
         return channel
 
@@ -292,13 +302,11 @@ class Server:
         # Push a None sentinel so the writer exits cleanly after draining.
         await self._tx_queue.put(None)
 
-        writer_task = next(
-            (t for t in self._tasks if t.get_name() == "mux-writer"), None
-        )
+        writer_task = next((t for t in self._tasks if t.get_name() == "mux-writer"), None)
         if writer_task:
             try:
                 await asyncio.wait_for(writer_task, timeout=5.0)
-            except (asyncio.TimeoutError, Exception):
+            except (TimeoutError, Exception):
                 writer_task.cancel()
 
         self._closed.set()
@@ -324,7 +332,7 @@ class Server:
         try:
             while True:
                 msg = await self._tx_queue.get()
-                if msg is None:      # shutdown sentinel from close()
+                if msg is None:  # shutdown sentinel from close()
                     break
                 await self._ws.send_json(msg)
         except (fastapi.WebSocketDisconnect, Exception) as exc:
@@ -352,7 +360,7 @@ class Server:
         be full. This is a protocol violation: we close the offending channel
         with an error rather than silently dropping the message.
         """
-        msg_type   = msg.get("type")
+        msg_type = msg.get("type")
         channel_id = msg.get("channel_id")
         ch = self._channels.get(channel_id) if channel_id else None
 
@@ -384,20 +392,20 @@ class Server:
                 logger.debug("Channel %s closed by client", channel_id)
 
         else:
-            logger.warning(
-                "Unknown message type %r for channel %s — ignoring", msg_type, channel_id
-            )
+            logger.warning("Unknown message type %r for channel %s — ignoring", msg_type, channel_id)
 
     async def _close_channel_with_error(self, ch: Channel, reason: str) -> None:
         """Send an error frame to the client and tear down the channel."""
         ch._closed = True
         self._channels.pop(ch.channel_id, None)
         try:
-            await self._tx_queue.put({
-                "type": "error",
-                "channel_id": ch.channel_id,
-                "reason": reason,
-            })
+            await self._tx_queue.put(
+                {
+                    "type": "error",
+                    "channel_id": ch.channel_id,
+                    "reason": reason,
+                }
+            )
         except Exception:
             pass
 

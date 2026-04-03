@@ -31,9 +31,6 @@ def _get_token(api: client.Client, auth: client.HttpClient, bastion_id: int) -> 
     return response.json()["token"]
 
 
-_ACK_THRESHOLD = 8  # mirrors mux.ACK_THRESHOLD
-
-
 async def _register_bastion(register_url: str, token: str, local_port: int) -> None:
     headers = {"Authorization": f"Bearer {token}"}
     async with websockets.connect(
@@ -48,6 +45,7 @@ async def _register_bastion(register_url: str, token: str, local_port: int) -> N
         writers: dict[str, asyncio.StreamWriter] = {}
         tx_semaphores: dict[str, asyncio.Semaphore] = {}
         consumed: dict[str, int] = {}  # data frames received since last ack
+        ack_thresholds: dict[str, int] = {}
         channel_tasks: list[asyncio.Task] = []
 
         async def _writer() -> None:
@@ -93,13 +91,14 @@ async def _register_bastion(register_url: str, token: str, local_port: int) -> N
                     writers[channel_id] = writer
                     tx_semaphores[channel_id] = asyncio.Semaphore(msg["credits"])
                     consumed[channel_id] = 0
+                    ack_thresholds[channel_id] = msg["ack_threshold"]
                     channel_tasks.append(asyncio.create_task(_tcp_to_mux(channel_id, reader)))
 
                 elif msg_type == "data" and channel_id in writers:
                     writers[channel_id].write(base64.b64decode(msg["payload"]))
                     await writers[channel_id].drain()
                     consumed[channel_id] += 1
-                    if consumed[channel_id] >= _ACK_THRESHOLD:
+                    if consumed[channel_id] >= ack_thresholds[channel_id]:
                         await tx_queue.put(
                             {
                                 "type": "ack",
@@ -117,6 +116,7 @@ async def _register_bastion(register_url: str, token: str, local_port: int) -> N
                     writers.pop(channel_id).close()
                     tx_semaphores.pop(channel_id, None)
                     consumed.pop(channel_id, None)
+                    ack_thresholds.pop(channel_id, None)
 
         finally:
             await tx_queue.put(None)
