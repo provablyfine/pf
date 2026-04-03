@@ -1,6 +1,8 @@
 import asyncio
 import logging
 import signal
+import ssl
+import sys
 
 import websockets
 
@@ -135,7 +137,6 @@ def _register_function(args):
 
 
 async def _connect_async(url: str, token: str, hostname: str) -> None:
-    import ssl
 
     ssl_context = ssl.create_default_context()
     headers = {"Authorization": f"Bearer {token}"}
@@ -144,41 +145,37 @@ async def _connect_async(url: str, token: str, hostname: str) -> None:
         url,
         ssl=ssl_context,
         extra_headers=headers,
-        subprotocols=("h2",),  # type: ignore[arg-type]
+        subprotocols=("ssh",),  # type: ignore[arg-type]
     ) as ws:
-        tunnel = tunnel_client.TunnelClient(ws)
-        await tunnel.start()
-
-        remote_reader, remote_writer = await tunnel.connect(hostname, 1)
 
         async def forward_stdin():
             try:
-                import sys
-
                 while True:
-                    data = sys.stdin.buffer.read(4096)
+                    data = await sys.stdin.buffer.read(4096)
                     if not data:
                         break
-                    remote_writer.write(data)
-                    await remote_writer.drain()
+                    await ws.send_bytes(data)
             except Exception:
                 pass
             finally:
-                remote_writer.close()
-                await remote_writer.wait_closed()
+                # XXX: should we close stdin/stdout ?
+                # to make sure gather completes ?
+                await ws.close()
 
         async def forward_stdout():
             try:
-                import sys
-
                 while True:
-                    data = await remote_reader.read(4096)
+                    data = await ws.receive_bytes()
                     if not data:
                         break
-                    sys.stdout.buffer.write(data)
-                    sys.stdout.buffer.flush()
+                    await sys.stdout.buffer.write(data)
+                    await sys.stdout.buffer.flush()
             except Exception:
                 pass
+            finally:
+                # XXX: should we close stdin/stdout ?
+                # to make sure gather completes ?
+                await ws.close()
 
         await asyncio.gather(forward_stdin(), forward_stdout())
 
