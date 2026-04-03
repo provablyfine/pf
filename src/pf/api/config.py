@@ -24,7 +24,6 @@ class Config:
     tenants_dir: str = "tenants"
     kek_filename: str = "kek.key"
     session_duration_s: int = 3600
-    bastion_private_key_filename: str = "bastion-private.key"
 
     host_key_staging_period: int = 12 * 3600
     host_key_rotation_period: int = 24 * 3600

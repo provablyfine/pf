@@ -42,11 +42,36 @@ def _ensure_active_keys() -> None:
 def get_jwks() -> dict:
     _ensure_active_keys()
     now = int(datetime.datetime.now().timestamp())
-    staging_period = ctx.config.oidc_key_staging_period
+    stage_period = ctx.config.oidc_key_staging_period
 
     keys = ctx.db.oidc_key.read_all()
     active_keys = [
-        json.loads(k.public_key) for k in keys if k.valid_after <= now + staging_period and k.valid_before > now
+        json.loads(k.public_key) for k in keys if k.valid_after <= now + stage_period and k.valid_before > now
     ]
 
     return {"keys": active_keys}
+
+
+def get_signing_key() -> jwk.Private:
+    now = int(datetime.datetime.now().timestamp())
+    staging_period = ctx.config.oidc_key_staging_period
+    rotation_period = ctx.config.oidc_key_rotation_period
+
+    keys = ctx.db.oidc_key.read_all()
+    active_keys = [
+        k for k in keys if k.valid_after <= now + staging_period and k.valid_before > now
+    ]
+
+    if not active_keys:
+        valid_after = now + staging_period
+        valid_before = now + rotation_period + staging_period
+        create("EdDSA", valid_after, valid_before)
+        keys = ctx.db.oidc_key.read_all()
+        active_keys = [
+            k for k in keys if k.valid_after <= now + staging_period and k.valid_before > now
+        ]
+
+    active_keys.sort(key=lambda k: k.created_at, reverse=True)
+    key_row = active_keys[0]
+    decrypted = ctx.kek.decrypt(key_row.private_key)
+    return jwk.Private.from_dict(json.loads(decrypted.decode("utf-8")))

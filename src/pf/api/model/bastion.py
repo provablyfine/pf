@@ -1,11 +1,11 @@
 import dataclasses
 import time
 
-import jose.jwt
+import jwt
 
-from ... import jwk
 from ..context import ctx
 from . import audit_log
+from . import oidc_key
 
 
 @dataclasses.dataclass(frozen=True)
@@ -127,13 +127,8 @@ def read_matching() -> list[Bastion]:
     return matching
 
 
-def _load_bastion_private_key() -> jwk.Private:
-    with open(ctx.config.bastion_private_key_filename, "rb") as f:
-        return jwk.Private.from_pem(f.read())
-
-
 def generate_token(bastion_id: int) -> str:
-    private_key = _load_bastion_private_key()
+    private_key = oidc_key.get_signing_key()
     now = int(time.time())
     claims = {
         "sub": str(ctx.identity_id),
@@ -141,4 +136,4 @@ def generate_token(bastion_id: int) -> str:
         "iat": now,
         "exp": now + 60,
     }
-    return jose.jwt.encode(claims, private_key.to_crypto(), algorithm="EdDSA")
+    return jwt.encode(claims, private_key.to_crypto(), algorithm="EdDSA")
