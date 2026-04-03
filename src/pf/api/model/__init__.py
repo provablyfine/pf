@@ -7,6 +7,7 @@ from . import (
     grant,
     identity,
     identity_invitation_key,
+    oidc_key,
     role,
     signing_key,
 )
@@ -20,6 +21,7 @@ __all__ = [
     "grant",
     "identity",
     "identity_invitation_key",
+    "oidc_key",
     "role",
     "signing_key",
 ]

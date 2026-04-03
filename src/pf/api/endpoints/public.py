@@ -6,6 +6,11 @@ from ..context import ctx
 router = fastapi.APIRouter()
 
 
+@router.get("/public/oidc/.well-known/jwks.json", status_code=200)
+def public_oidc_jwks(tenant_name: str) -> schemas.OidcJwksResponse:
+    return schemas.OidcJwksResponse.model_validate(model.oidc_key.get_jwks())
+
+
 @router.get("/public/auth", status_code=200)
 def public_auth_list(tenant_name: str) -> schemas.AuthPublicListResponse:
     acs = model.auth_config.read_all(is_enabled=True)

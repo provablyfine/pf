@@ -211,6 +211,21 @@ oauth2_login_request = sqlalchemy.Table(
     sqlalchemy.Column("expires_at", sqlalchemy.Integer, nullable=False),
 )
 
+oidc_key = sqlalchemy.Table(
+    "oidc_key",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
+    sqlalchemy.Column("key_id", sqlalchemy.String, nullable=False, unique=True),
+    sqlalchemy.Column("algorithm", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("private_key", sqlalchemy.LargeBinary, nullable=False),
+    sqlalchemy.Column("public_key", sqlalchemy.Text, nullable=False),
+    sqlalchemy.Column("valid_after", sqlalchemy.Integer, nullable=False),
+    sqlalchemy.Column("valid_before", sqlalchemy.Integer, nullable=False),
+    sqlalchemy.Column("created_at", sqlalchemy.Integer, nullable=False),
+    sqlalchemy.Index("idx_oidc_key_valid", "valid_before", "valid_after"),
+    sqlite_autoincrement=True,
+)
+
 
 def create_tables(url):
     engine = sqlalchemy.create_engine(url)
