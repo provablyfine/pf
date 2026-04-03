@@ -10,8 +10,6 @@ import json
 import socket
 import struct
 
-import fastapi
-
 FIN = 0x80
 TEXT = 0x01
 CLOSE = 0x08
@@ -126,7 +124,7 @@ class MockWebSocket:
 
     async def send_json(self, msg: dict | list) -> None:
         if self._closed:
-            raise fastapi.websockets.WebSocketDisconnect(1000, "")
+            raise ConnectionResetError("WebSocket closed")
         msg = dict(msg)
         if msg.get("type") == "data" and "payload" in msg:
             payload = msg["payload"]
@@ -144,12 +142,12 @@ class MockWebSocket:
 
     async def receive_json(self) -> dict | list:
         if self._closed:
-            raise fastapi.websockets.WebSocketDisconnect(1000, "")
+            raise ConnectionResetError("WebSocket closed")
         try:
             payload = await asyncio.wait_for(self._out_queue.get(), timeout=1.0)
             return json.loads(payload)
         except TimeoutError:
-            raise fastapi.websockets.WebSocketDisconnect(1000, "")
+            raise ConnectionResetError("WebSocket closed")
 
     async def close(self) -> None:
         if self._closed:
@@ -178,3 +176,107 @@ def create_websocket_pair() -> tuple[MockWebSocket, MockWebSocket]:
     server = MockWebSocket(s1, is_server=True)
     client = MockWebSocket(s2, is_server=False)
     return server, client
+
+
+# ---------------------------------------------------------------------------
+# Queue-backed mock pair for testing demux.Client
+# ---------------------------------------------------------------------------
+
+
+class _Pipe:
+    """One-directional channel between two mock WebSocket sides."""
+
+    def __init__(self) -> None:
+        self._q: asyncio.Queue[str | None] = asyncio.Queue()
+
+    async def put(self, item: str) -> None:
+        await self._q.put(item)
+
+    async def get(self) -> str | None:
+        return await self._q.get()
+
+    def close(self) -> None:
+        """Signal EOF to the reader."""
+        self._q.put_nowait(None)
+
+
+class MockServerSide:
+    """
+    Simulates the mux.Server's WebSocket view for use in test_demux.py.
+
+    Implements the send_json / receive_json interface so tests can drive the
+    server side of the protocol without a real network connection.
+    """
+
+    def __init__(self, to_client: "_Pipe", from_client: "_Pipe") -> None:
+        self._to = to_client
+        self._from = from_client
+        self._closed = False
+
+    async def send_json(self, msg: dict) -> None:
+        if self._closed:
+            raise ConnectionResetError("closed")
+        await self._to.put(json.dumps(msg))
+
+    async def receive_json(self) -> dict:
+        raw = await self._from.get()
+        if raw is None:
+            raise ConnectionResetError("closed")
+        return json.loads(raw)
+
+    async def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        self._to.close()
+        self._from.close()
+
+    @property
+    def is_closed(self) -> bool:
+        return self._closed
+
+
+class MockClientWebSocket:
+    """
+    Simulates the websockets.ClientConnection view for use in test_demux.py.
+
+    Implements send(str) and async iteration so demux.Client can be constructed
+    around it without a real WebSocket connection.
+    """
+
+    def __init__(self, from_server: "_Pipe", to_server: "_Pipe") -> None:
+        self._from = from_server
+        self._to = to_server
+        self._closed = False
+
+    async def send(self, data: str) -> None:
+        await self._to.put(data)
+
+    def __aiter__(self) -> "MockClientWebSocket":
+        return self
+
+    async def __anext__(self) -> str:
+        raw = await self._from.get()
+        if raw is None:
+            raise StopAsyncIteration
+        return raw
+
+    async def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        self._from.close()
+        self._to.close()
+
+
+def create_demux_pair() -> tuple[MockServerSide, MockClientWebSocket]:
+    """
+    Create a pair for testing demux.Client.
+
+    Returns:
+        (server, client_ws): server speaks send_json/receive_json;
+                             client_ws speaks send/async-iteration.
+    """
+    to_client = _Pipe()
+    from_client = _Pipe()
+    return MockServerSide(to_client, from_client), MockClientWebSocket(to_client, from_client)

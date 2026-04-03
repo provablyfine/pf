@@ -47,9 +47,8 @@ import asyncio
 import base64
 import dataclasses
 import logging
+import typing
 import uuid
-
-import fastapi
 
 logger = logging.getLogger(__name__)
 
@@ -213,16 +212,18 @@ class Channel:
 
 class Server:
     """
-    Multiplexes multiple logical channels over a single FastAPI WebSocket.
+    Multiplexes multiple logical channels over a single WebSocket.
 
     The server is always the initiator of logical channels. The client receives
     an "open" frame and may then send data back on that channel within its
     granted credit budget.
+
+    The WebSocket object must support send_json(dict) and receive_json() → dict.
     """
 
     def __init__(
         self,
-        ws: fastapi.WebSocket,
+        ws: typing.Any,
         tx_queue_size: int = TX_QUEUE_SIZE,
         initial_tx_credits: int = INITIAL_TX_CREDITS,
         initial_rx_credits: int = INITIAL_RX_CREDITS,
@@ -335,7 +336,7 @@ class Server:
                 if msg is None:  # shutdown sentinel from close()
                     break
                 await self._ws.send_json(msg)
-        except (fastapi.WebSocketDisconnect, Exception) as exc:
+        except Exception as exc:
             logger.warning("Mux writer failed: %s", exc)
             await self._fail(exc)
 
@@ -345,7 +346,7 @@ class Server:
             while True:
                 msg = await self._ws.receive_json()
                 await self._dispatch(msg)
-        except (fastapi.WebSocketDisconnect, Exception) as exc:
+        except Exception as exc:
             logger.warning("Mux reader failed: %s", exc)
             await self._fail(exc)
 
@@ -388,7 +389,7 @@ class Server:
         elif msg_type == "close":
             if ch:
                 ch._rx.put_nowait(msg)
-                del self._channels[channel_id]
+                self._channels.pop(channel_id, None)  # type: ignore[arg-type]
                 logger.debug("Channel %s closed by client", channel_id)
 
         else:

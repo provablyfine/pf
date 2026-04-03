@@ -1,7 +1,5 @@
 import asyncio
-import base64
 import copy
-import json
 import os
 import random
 import subprocess
@@ -14,6 +12,8 @@ import pytest
 import websockets
 import websockets.client
 import websockets.typing
+
+from pf.bastion import demux
 
 
 @pytest.fixture
@@ -138,34 +138,13 @@ async def test_host_reads_client_data(bastion):
     async def host():
         uri = f"ws://127.0.0.1:{port}/register"
         async with websockets.connect(uri, subprotocols=subprotocol_mux) as ws:
-            # Wait for the server to open a mux channel (triggered when client connects).
-            raw = await ws.recv()
-            msg = json.loads(raw)
-            assert msg["type"] == "open"
-            channel_id = msg["channel_id"]
-            ack_threshold = msg["ack_threshold"]
-
-            # Read data frames until the channel is closed.
-            consumed = 0
-            while True:
-                raw = await ws.recv()
-                msg = json.loads(raw)
-                if msg["type"] == "close" and msg["channel_id"] == channel_id:
-                    break
-                if msg["type"] == "data" and msg["channel_id"] == channel_id:
-                    received_chunks.append(base64.b64decode(msg["payload"]))
-                    consumed += 1
-                    if consumed >= ack_threshold:
-                        await ws.send(
-                            json.dumps(
-                                {
-                                    "type": "ack",
-                                    "channel_id": channel_id,
-                                    "credits": consumed,
-                                }
-                            )
-                        )
-                        consumed = 0
+            mux_client = demux.Client(ws)
+            ch = await mux_client.accept_channel()
+            try:
+                while True:
+                    received_chunks.append(await ch.receive())
+            except demux.ChannelError:
+                pass
 
     async def client():
         await asyncio.sleep(0.5)
@@ -200,37 +179,18 @@ async def test_host_reads_two_concurrent_clients(bastion):
     async def host():
         uri = f"ws://127.0.0.1:{port}/register"
         async with websockets.connect(uri, subprotocols=subprotocol_mux) as ws:
-            consumed: dict[str, int] = {}
-            ack_thresholds: dict[str, int] = {}
-            closed: set[str] = set()
+            mux_client = demux.Client(ws)
 
-            # Keep reading until both channels have been closed.
-            while len(closed) < 2:
-                raw = await ws.recv()
-                msg = json.loads(raw)
-                msg_type = msg.get("type")
-                channel_id = msg.get("channel_id")
+            async def drain(ch: demux.Channel) -> None:
+                received[ch.channel_id] = []
+                try:
+                    while True:
+                        received[ch.channel_id].append(await ch.receive())
+                except demux.ChannelError:
+                    pass
 
-                if msg_type == "open":
-                    received[channel_id] = []
-                    consumed[channel_id] = 0
-                    ack_thresholds[channel_id] = msg["ack_threshold"]
-                elif msg_type == "data" and channel_id in received:
-                    received[channel_id].append(base64.b64decode(msg["payload"]))
-                    consumed[channel_id] += 1
-                    if consumed[channel_id] >= ack_thresholds[channel_id]:
-                        await ws.send(
-                            json.dumps(
-                                {
-                                    "type": "ack",
-                                    "channel_id": channel_id,
-                                    "credits": consumed[channel_id],
-                                }
-                            )
-                        )
-                        consumed[channel_id] = 0
-                elif msg_type == "close" and channel_id in received:
-                    closed.add(channel_id)
+            channels = [await mux_client.accept_channel() for _ in range(2)]
+            await asyncio.gather(*[drain(ch) for ch in channels])
 
     async def client(data: bytes):
         await asyncio.sleep(0.5)
@@ -267,44 +227,17 @@ async def test_host_echoes_data_to_clients(bastion):
     async def host():
         uri = f"ws://127.0.0.1:{port}/register"
         async with websockets.connect(uri, subprotocols=subprotocol_mux) as ws:
-            consumed: dict[str, int] = {}
-            ack_thresholds: dict[str, int] = {}
-            closed: set[str] = set()
+            mux_client = demux.Client(ws)
 
-            while len(closed) < 2:
-                raw = await ws.recv()
-                msg = json.loads(raw)
-                msg_type = msg.get("type")
-                channel_id = msg.get("channel_id")
+            async def echo(ch: demux.Channel) -> None:
+                try:
+                    while True:
+                        await ch.send(await ch.receive())
+                except demux.ChannelError:
+                    pass
 
-                if msg_type == "open":
-                    consumed[channel_id] = 0
-                    ack_thresholds[channel_id] = msg["ack_threshold"]
-                elif msg_type == "data" and channel_id in consumed:
-                    # Echo the payload back unchanged (reuse the base64 string as-is).
-                    await ws.send(
-                        json.dumps(
-                            {
-                                "type": "data",
-                                "channel_id": channel_id,
-                                "payload": msg["payload"],
-                            }
-                        )
-                    )
-                    consumed[channel_id] += 1
-                    if consumed[channel_id] >= ack_thresholds[channel_id]:
-                        await ws.send(
-                            json.dumps(
-                                {
-                                    "type": "ack",
-                                    "channel_id": channel_id,
-                                    "credits": consumed[channel_id],
-                                }
-                            )
-                        )
-                        consumed[channel_id] = 0
-                elif msg_type == "close" and channel_id in consumed:
-                    closed.add(channel_id)
+            channels = [await mux_client.accept_channel() for _ in range(2)]
+            await asyncio.gather(*[echo(ch) for ch in channels])
 
     async def client(data: bytes) -> bytes:
         await asyncio.sleep(0.5)

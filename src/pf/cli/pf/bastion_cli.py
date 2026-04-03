@@ -1,6 +1,4 @@
 import asyncio
-import base64
-import json
 import logging
 import signal
 import ssl
@@ -9,6 +7,7 @@ import sys
 import websockets
 
 from ... import client
+from ...bastion import demux
 from .. import login
 
 logger = logging.getLogger(__name__)
@@ -31,6 +30,40 @@ def _get_token(api: client.Client, auth: client.HttpClient, bastion_id: int) -> 
     return response.json()["token"]
 
 
+async def _handle_channel(ch: demux.Channel, local_port: int) -> None:
+    try:
+        reader, writer = await asyncio.open_connection("127.0.0.1", local_port)
+    except Exception as e:
+        logger.debug(f"Cannot connect to local port {local_port}: {e}")
+        await ch.close()
+        return
+
+    async def tcp_to_ch() -> None:
+        try:
+            while True:
+                data = await reader.read(4096)
+                if not data:
+                    break
+                await ch.send(data)
+        except Exception:
+            pass
+
+    async def ch_to_tcp() -> None:
+        try:
+            while True:
+                data = await ch.receive()
+                writer.write(data)
+                await writer.drain()
+        except (demux.MuxError, demux.ChannelError):
+            pass
+
+    try:
+        await asyncio.gather(tcp_to_ch(), ch_to_tcp())
+    finally:
+        await ch.close()
+        writer.close()
+
+
 async def _register_bastion(register_url: str, token: str, local_port: int) -> None:
     headers = {"Authorization": f"Bearer {token}"}
     async with websockets.connect(
@@ -38,93 +71,13 @@ async def _register_bastion(register_url: str, token: str, local_port: int) -> N
         extra_headers=headers,
         subprotocols=("mux-ssh",),  # type: ignore[arg-type]
     ) as ws:
-        # Single serialised outbound queue — avoids concurrent ws.send() calls.
-        tx_queue: asyncio.Queue[dict | None] = asyncio.Queue()
-
-        # Per-channel state
-        writers: dict[str, asyncio.StreamWriter] = {}
-        tx_semaphores: dict[str, asyncio.Semaphore] = {}
-        consumed: dict[str, int] = {}  # data frames received since last ack
-        ack_thresholds: dict[str, int] = {}
-        channel_tasks: list[asyncio.Task] = []
-
-        async def _writer() -> None:
-            while True:
-                msg = await tx_queue.get()
-                if msg is None:
-                    break
-                await ws.send(json.dumps(msg))
-
-        async def _tcp_to_mux(channel_id: str, reader: asyncio.StreamReader) -> None:
-            try:
-                while True:
-                    data = await reader.read(4096)
-                    if not data:
-                        break
-                    await tx_semaphores[channel_id].acquire()
-                    await tx_queue.put(
-                        {
-                            "type": "data",
-                            "channel_id": channel_id,
-                            "payload": base64.b64encode(data).decode(),
-                        }
-                    )
-            except Exception:
-                pass
-            finally:
-                await tx_queue.put({"type": "close", "channel_id": channel_id})
-
-        writer_task = asyncio.create_task(_writer())
+        mux_client = demux.Client(ws)
         try:
-            async for raw in ws:
-                msg = json.loads(raw)
-                msg_type = msg.get("type")
-                channel_id = msg.get("channel_id")
-
-                if msg_type == "open":
-                    try:
-                        reader, writer = await asyncio.open_connection("127.0.0.1", local_port)
-                    except Exception as e:
-                        logger.debug(f"Cannot connect to local port {local_port}: {e}")
-                        await tx_queue.put({"type": "close", "channel_id": channel_id})
-                        continue
-                    writers[channel_id] = writer
-                    tx_semaphores[channel_id] = asyncio.Semaphore(msg["credits"])
-                    consumed[channel_id] = 0
-                    ack_thresholds[channel_id] = msg["ack_threshold"]
-                    channel_tasks.append(asyncio.create_task(_tcp_to_mux(channel_id, reader)))
-
-                elif msg_type == "data" and channel_id in writers:
-                    writers[channel_id].write(base64.b64decode(msg["payload"]))
-                    await writers[channel_id].drain()
-                    consumed[channel_id] += 1
-                    if consumed[channel_id] >= ack_thresholds[channel_id]:
-                        await tx_queue.put(
-                            {
-                                "type": "ack",
-                                "channel_id": channel_id,
-                                "credits": consumed[channel_id],
-                            }
-                        )
-                        consumed[channel_id] = 0
-
-                elif msg_type == "ack" and channel_id in tx_semaphores:
-                    for _ in range(msg.get("credits", 1)):
-                        tx_semaphores[channel_id].release()
-
-                elif msg_type in ("close", "error") and channel_id in writers:
-                    writers.pop(channel_id).close()
-                    tx_semaphores.pop(channel_id, None)
-                    consumed.pop(channel_id, None)
-                    ack_thresholds.pop(channel_id, None)
-
-        finally:
-            await tx_queue.put(None)
-            await writer_task
-            for t in channel_tasks:
-                t.cancel()
-            for w in writers.values():
-                w.close()
+            while not mux_client.is_closed:
+                ch = await mux_client.accept_channel()
+                asyncio.create_task(_handle_channel(ch, local_port))  # noqa: RUF006
+        except demux.MuxError:
+            pass
 
 
 @client.ssh_utils.exception
