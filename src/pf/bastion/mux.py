@@ -44,7 +44,7 @@ import asyncio
 import logging
 import uuid
 import dataclasses
-import typing
+import base64
 
 import fastapi
 
@@ -105,7 +105,7 @@ class Channel:
 
         self._closed = False
 
-    async def send(self, payload: typing.Any) -> None:
+    async def send(self, payload: bytes) -> None:
         """
         Send a payload to the client on this channel.
 
@@ -135,10 +135,10 @@ class Channel:
         await self._tx.put({
             "type": "data",
             "channel_id": self.channel_id,
-            "payload": payload,
+            "payload": base64.b64encode(payload).decode('ascii'),
         })
 
-    async def receive(self) -> typing.Any:
+    async def receive(self) -> bytes:
         """
         Receive the next payload sent by the client on this channel.
 
@@ -166,7 +166,7 @@ class Channel:
             await self._send_rx_ack(self._rx_consumed)
             self._rx_consumed = 0
 
-        return msg["payload"]
+        return base64.b64decode(msg["payload"].encode('ascii'))
 
     async def close(self) -> None:
         """Send a close frame to the client and mark this channel as closed."""

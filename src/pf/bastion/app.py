@@ -142,7 +142,7 @@ async def _relay_ws_to_channel(ws: fastapi.WebSocket, ch: mux.Channel) -> None:
     """Forward messages from the local WebSocket to the mux channel."""
     try:
         while True:
-            data = await ws.receive_json()
+            data = await ws.receive_bytes()
             await ch.send(data)
     except fastapi.WebSocketDisconnect:
         raise
@@ -155,7 +155,7 @@ async def _relay_channel_to_ws(ws: fastapi.WebSocket, ch: mux.Channel) -> None:
     try:
         while True:
             data = await ch.receive()
-            await ws.send_json(data)
+            await ws.send_bytes(data)
     except (mux.ChannelError, mux.MuxError):
         raise
     except Exception as exc:
