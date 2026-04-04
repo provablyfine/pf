@@ -6,8 +6,7 @@ import sys
 
 import websockets
 
-from ... import client
-from ... import bastion
+from ... import bastion, client
 from .. import login
 
 logger = logging.getLogger(__name__)
