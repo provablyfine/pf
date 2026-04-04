@@ -5,15 +5,14 @@ import random
 import subprocess
 import tempfile
 import time
-from collections.abc import Sequence
-from typing import cast
+import typing
 
 import pytest
 import websockets
 import websockets.client
 import websockets.typing
 
-from pf.bastion import demux
+import pf.bastion.demux as demux
 
 
 @pytest.fixture
@@ -96,13 +95,13 @@ async def test_bastion_100k_transfer(bastion):
     """
     port = bastion
     data_to_send = random.randbytes(100 * 1024)
-    subprotocol_mux = cast(Sequence[websockets.typing.Subprotocol], ("mux-ssh",))
-    subprotocol_ssh = cast(Sequence[websockets.typing.Subprotocol], ("ssh",))
+    subprotocol_mux = websockets.typing.Subprotocol("mux-ssh")
+    subprotocol_ssh = websockets.typing.Subprotocol("ssh")
 
     async def host():
         print("host: connecting to /register", flush=True)
         uri = f"ws://127.0.0.1:{port}/register"
-        async with websockets.connect(uri, subprotocols=subprotocol_mux):
+        async with websockets.connect(uri, subprotocols=[subprotocol_mux]):
             print("host: connected, waiting...", flush=True)
             await asyncio.sleep(10)
             print("host: done waiting", flush=True)
@@ -111,7 +110,7 @@ async def test_bastion_100k_transfer(bastion):
         await asyncio.sleep(0.5)
         print("client: connecting to /connect", flush=True)
         uri = f"ws://127.0.0.1:{port}/connect?hostname=hello"
-        async with websockets.connect(uri, subprotocols=subprotocol_ssh) as ws:
+        async with websockets.connect(uri, subprotocols=[subprotocol_ssh]) as ws:
             print("client: connected, sending data...", flush=True)
             await ws.send(data_to_send)
             print("client: sent data", flush=True)
@@ -130,14 +129,14 @@ async def test_host_reads_client_data(bastion):
     """
     port = bastion
     data_to_send = random.randbytes(50 * 1024)
-    subprotocol_mux = cast(Sequence[websockets.typing.Subprotocol], ("mux-ssh",))
-    subprotocol_ssh = cast(Sequence[websockets.typing.Subprotocol], ("ssh",))
+    subprotocol_mux = websockets.typing.Subprotocol("mux-ssh")
+    subprotocol_ssh = websockets.typing.Subprotocol("ssh")
 
     received_chunks: list[bytes] = []
 
     async def host():
         uri = f"ws://127.0.0.1:{port}/register"
-        async with websockets.connect(uri, subprotocols=subprotocol_mux) as ws:
+        async with websockets.connect(uri, subprotocols=[subprotocol_mux]) as ws:
             mux_client = demux.Client(ws)
             ch = await mux_client.accept_channel()
             try:
@@ -149,7 +148,7 @@ async def test_host_reads_client_data(bastion):
     async def client():
         await asyncio.sleep(0.5)
         uri = f"ws://127.0.0.1:{port}/connect?hostname=hello"
-        async with websockets.connect(uri, subprotocols=subprotocol_ssh) as ws:
+        async with websockets.connect(uri, subprotocols=[subprotocol_ssh]) as ws:
             await ws.send(data_to_send)
 
     await asyncio.gather(host(), client())
@@ -170,15 +169,15 @@ async def test_host_reads_two_concurrent_clients(bastion):
     port = bastion
     data1 = random.randbytes(20 * 1024)
     data2 = random.randbytes(20 * 1024)
-    subprotocol_mux = cast(Sequence[websockets.typing.Subprotocol], ("mux-ssh",))
-    subprotocol_ssh = cast(Sequence[websockets.typing.Subprotocol], ("ssh",))
+    subprotocol_mux = websockets.typing.Subprotocol("mux-ssh")
+    subprotocol_ssh = websockets.typing.Subprotocol("ssh")
 
     # channel_id -> list of received chunks
     received: dict[str, list[bytes]] = {}
 
     async def host():
         uri = f"ws://127.0.0.1:{port}/register"
-        async with websockets.connect(uri, subprotocols=subprotocol_mux) as ws:
+        async with websockets.connect(uri, subprotocols=[subprotocol_mux]) as ws:
             mux_client = demux.Client(ws)
 
             async def drain(ch: demux.Channel) -> None:
@@ -195,7 +194,7 @@ async def test_host_reads_two_concurrent_clients(bastion):
     async def client(data: bytes):
         await asyncio.sleep(0.5)
         uri = f"ws://127.0.0.1:{port}/connect?hostname=hello"
-        async with websockets.connect(uri, subprotocols=subprotocol_ssh) as ws:
+        async with websockets.connect(uri, subprotocols=[subprotocol_ssh]) as ws:
             await ws.send(data)
 
     await asyncio.gather(host(), client(data1), client(data2))
@@ -221,12 +220,12 @@ async def test_host_echoes_data_to_clients(bastion):
     port = bastion
     data1 = random.randbytes(10 * 1024)
     data2 = random.randbytes(10 * 1024)
-    subprotocol_mux = cast(Sequence[websockets.typing.Subprotocol], ("mux-ssh",))
-    subprotocol_ssh = cast(Sequence[websockets.typing.Subprotocol], ("ssh",))
+    subprotocol_mux = websockets.typing.Subprotocol("mux-ssh")
+    subprotocol_ssh = websockets.typing.Subprotocol("ssh")
 
     async def host():
         uri = f"ws://127.0.0.1:{port}/register"
-        async with websockets.connect(uri, subprotocols=subprotocol_mux) as ws:
+        async with websockets.connect(uri, subprotocols=[subprotocol_mux]) as ws:
             mux_client = demux.Client(ws)
 
             async def echo(ch: demux.Channel) -> None:
@@ -242,9 +241,9 @@ async def test_host_echoes_data_to_clients(bastion):
     async def client(data: bytes) -> bytes:
         await asyncio.sleep(0.5)
         uri = f"ws://127.0.0.1:{port}/connect?hostname=hello"
-        async with websockets.connect(uri, subprotocols=subprotocol_ssh) as ws:
+        async with websockets.connect(uri, subprotocols=[subprotocol_ssh]) as ws:
             await ws.send(data)
-            return cast(bytes, await ws.recv())
+            return typing.cast(bytes, await ws.recv())
 
     _, echo1, echo2 = await asyncio.gather(host(), client(data1), client(data2))
 
