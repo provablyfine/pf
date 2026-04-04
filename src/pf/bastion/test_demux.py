@@ -3,13 +3,12 @@ import base64
 
 import pytest
 
-from . import demux
-from ._test_websocket import create_demux_pair
+from . import _test_websocket, demux
 
 
 @pytest.fixture
 async def pair():
-    server, client_ws = create_demux_pair()
+    server, client_ws = _test_websocket.create_demux_pair()
     client = demux.Client(client_ws)
     yield server, client
     await client.close()

@@ -4,13 +4,12 @@ import uuid
 
 import pytest
 
-from . import mux
-from ._test_websocket import create_websocket_pair
+from . import _test_websocket, mux
 
 
 @pytest.fixture
 async def ws_pair():
-    server_ws, client_ws = create_websocket_pair()
+    server_ws, client_ws = _test_websocket.create_websocket_pair()
     yield server_ws, client_ws
     await server_ws.close()
     await client_ws.close()
