@@ -23,6 +23,7 @@ dependencies = [
 [project.scripts]
 pf = "pf.cli.pf.main:pf"
 pfa = "pf.cli.pfa.main:pfa"
+pfat = "pf.tui.app:pfat"
 
 [dependency-groups]
 dev = [
