@@ -10,6 +10,7 @@ import pf.tui.app
 import pf.tui.async_client
 import pf.tui.grant_edit
 
+
 def _run(args, env, **kwargs):
     return subprocess.run(args, env=env, check=True, capture_output=True, **kwargs)
 

@@ -383,8 +383,6 @@ class Identity(APIBase):
     name: str
     tags: list[Tag]
     boundaries: list[IdentityBoundary]
-    ipv4_address_list: list[str] = []
-    ipv6_address_list: list[str] = []
     last_seen_at: int | None = None
     bastion_list: list[Bastion] = []
 
@@ -454,8 +452,7 @@ class IdentityUpdateRequest(APIBase):
 
 
 class IdentitySelfUpdateRequest(APIBase):
-    ipv4_address_list: list[str] = []
-    ipv6_address_list: list[str] = []
+    pass
 
 
 class IdentityInviteRequest(APIBase):

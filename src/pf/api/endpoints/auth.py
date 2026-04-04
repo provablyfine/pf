@@ -86,5 +86,6 @@ def login_endpoint(request: fastapi.requests.Request, data: schemas.LoginRequest
         is_revoked=False,
         revoked_at=None,
         expires_at=now + ctx.config.session_duration_s,
+        login_ip=request.client.host if request.client else None,
     )
     return _204

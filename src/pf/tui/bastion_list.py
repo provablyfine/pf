@@ -41,11 +41,13 @@ class _BastionCreateScreen(textual.screen.ModalScreen[dict | None]):
             return
         connect_url = self.query_one("#connect_url", textual.widgets.Input).value.strip() or None
         ssh_proxy_jump = self.query_one("#ssh_proxy_jump", textual.widgets.Input).value.strip() or None
-        self.dismiss({
-            "register_url": register_url,
-            "connect_url": connect_url,
-            "ssh_proxy_jump": ssh_proxy_jump,
-        })
+        self.dismiss(
+            {
+                "register_url": register_url,
+                "connect_url": connect_url,
+                "ssh_proxy_jump": ssh_proxy_jump,
+            }
+        )
 
 
 class BastionListScreen(textual.screen.Screen[None]):

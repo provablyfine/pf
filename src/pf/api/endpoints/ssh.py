@@ -173,10 +173,14 @@ def sign_user_certificate(data: schemas.SSHUserCertificateRequest) -> schemas.SS
 
     matching_bastions = model.bastion.read_matching()
     bastion_schema_list: list[schemas.Bastion] = []
-    ip_address_list: list[str] = []
+
+    sessions = ctx.db.identity_session_key.read_all(
+        identity_id=ctx.identity_id,
+        is_revoked=False,
+    )
+    ip_address_list = [s.login_ip for s in sessions if s.login_ip and s.expires_at > now]
 
     if matching_bastions:
-        ip_address_list = host.ipv4_address_list + host.ipv6_address_list
         grant_converter = converters.GrantConverter()
         for bastion in matching_bastions:
             token = model.bastion.generate_token(bastion.id)

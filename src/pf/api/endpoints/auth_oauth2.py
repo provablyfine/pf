@@ -128,6 +128,7 @@ def oauth2_start_endpoint(
     status_code=302,
 )
 def oauth2_callback_endpoint(
+    request: fastapi.requests.Request,
     code: str | None = None,
     state: str | None = None,
 ) -> fastapi.responses.Response:
@@ -197,6 +198,7 @@ def oauth2_callback_endpoint(
         is_revoked=False,
         revoked_at=None,
         expires_at=now + ctx.config.session_duration_s,
+        login_ip=request.client.host if request.client else None,
     )
 
     return fastapi.responses.RedirectResponse(

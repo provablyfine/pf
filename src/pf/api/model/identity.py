@@ -11,8 +11,6 @@ class Identity:
     name: str
     tag_id_list: list[int]
     boundary_id_list: list[int]
-    ipv4_address_list: list[str] = dataclasses.field(default_factory=list)
-    ipv6_address_list: list[str] = dataclasses.field(default_factory=list)
     last_seen_at: int | None = None
 
 
@@ -93,8 +91,6 @@ def read_all(**kwargs):
             name=i.name,
             tag_id_list=tag_ids_by_identity_id.get(i.id, []),
             boundary_id_list=boundary_ids_by_identity_id[i.id],
-            ipv4_address_list=i.ipv4_address_list or [],
-            ipv6_address_list=i.ipv6_address_list or [],
             last_seen_at=i.last_seen_at,
         )
         for i in identities
@@ -107,8 +103,6 @@ def update(
     name: str | None = None,
     added_tag_id_list: list[int] | None = None,
     deleted_tag_id_list: list[int] | None = None,
-    ipv4_address_list: list[str] | None = None,
-    ipv6_address_list: list[str] | None = None,
     last_seen_at: int | None = None,
 ):
     update_fields = {}
@@ -119,10 +113,6 @@ def update(
             name=name,
         )
         update_fields["name"] = name
-    if ipv4_address_list is not None:
-        update_fields["ipv4_address_list"] = ipv4_address_list
-    if ipv6_address_list is not None:
-        update_fields["ipv6_address_list"] = ipv6_address_list
     if last_seen_at is not None:
         update_fields["last_seen_at"] = last_seen_at
 

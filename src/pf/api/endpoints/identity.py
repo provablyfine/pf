@@ -66,7 +66,7 @@ def read_self_endpoint() -> schemas.Identity:
             token = model.bastion.generate_token(bastion.id)
             bastion_schema = converters.bastion_to_schema(grant_converter, bastion)
             bastion_schema.token = token
-            bastion_schema.ip_address_list = identity.ipv4_address_list + identity.ipv6_address_list
+
             bastion_schema_list.append(bastion_schema)
 
     result = converters.identity_to_schema(identity)
@@ -87,8 +87,6 @@ def update_self_endpoint(data: schemas.IdentitySelfUpdateRequest) -> schemas.Ide
     now = int(time_module.time())
     model.identity.update(
         id=identity_id,  # type: ignore[arg-type]
-        ipv4_address_list=data.ipv4_address_list,
-        ipv6_address_list=data.ipv6_address_list,
         last_seen_at=now,
     )
 
@@ -104,7 +102,7 @@ def update_self_endpoint(data: schemas.IdentitySelfUpdateRequest) -> schemas.Ide
             token = model.bastion.generate_token(bastion.id)
             bastion_schema = converters.bastion_to_schema(grant_converter, bastion)
             bastion_schema.token = token
-            bastion_schema.ip_address_list = identity.ipv4_address_list + identity.ipv6_address_list
+
             bastion_schema_list.append(bastion_schema)
 
     result = converters.identity_to_schema(identity)

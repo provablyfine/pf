@@ -61,6 +61,7 @@ identity_session_key = sqlalchemy.Table(
     sqlalchemy.Column("is_revoked", sqlalchemy.Boolean, nullable=False),
     sqlalchemy.Column("revoked_at", sqlalchemy.INTEGER, nullable=True),
     sqlalchemy.Column("expires_at", sqlalchemy.INTEGER, nullable=False),
+    sqlalchemy.Column("login_ip", sqlalchemy.String, nullable=True),
 )
 
 identity_invitation_key = sqlalchemy.Table(
@@ -96,8 +97,6 @@ identity = sqlalchemy.Table(
     sqlalchemy.Column("created_by_id", sqlalchemy.Integer, index=False, unique=False, nullable=True),
     sqlalchemy.Column("created_at", sqlalchemy.Integer, nullable=False),
     sqlalchemy.Column("name", sqlalchemy.String, index=True, unique=True, nullable=False),
-    sqlalchemy.Column("ipv4_address_list", sqlalchemy.JSON, nullable=False, server_default="[]"),
-    sqlalchemy.Column("ipv6_address_list", sqlalchemy.JSON, nullable=False, server_default="[]"),
     sqlalchemy.Column("last_seen_at", sqlalchemy.Integer, nullable=True),
     # We need autoincrement to make sure ids are not recycled EVER.
     sqlite_autoincrement=True,
