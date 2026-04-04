@@ -7,7 +7,7 @@ import sys
 import websockets
 
 from ... import client
-from ...bastion import demux
+from ... import bastion
 from .. import login
 
 logger = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ def _get_token(api: client.Client, auth: client.HttpClient, bastion_id: int) -> 
     return response.json()["token"]
 
 
-async def _handle_channel(ch: demux.Channel, local_port: int) -> None:
+async def _handle_channel(ch: bastion.demux.Channel, local_port: int) -> None:
     try:
         reader, writer = await asyncio.open_connection("127.0.0.1", local_port)
     except Exception as e:
@@ -54,7 +54,7 @@ async def _handle_channel(ch: demux.Channel, local_port: int) -> None:
                 data = await ch.receive()
                 writer.write(data)
                 await writer.drain()
-        except (demux.MuxError, demux.ChannelError):
+        except (bastion.demux.MuxError, bastion.demux.ChannelError):
             pass
 
     try:
@@ -71,12 +71,12 @@ async def _register_bastion(register_url: str, token: str, local_port: int) -> N
         extra_headers=headers,
         subprotocols=("mux-ssh",),  # type: ignore[arg-type]
     ) as ws:
-        mux_client = demux.Client(ws)
+        mux_client = bastion.demux.Client(ws)
         try:
             while not mux_client.is_closed:
                 ch = await mux_client.accept_channel()
                 asyncio.create_task(_handle_channel(ch, local_port))  # noqa: RUF006
-        except demux.MuxError:
+        except bastion.demux.MuxError:
             pass
 
 
