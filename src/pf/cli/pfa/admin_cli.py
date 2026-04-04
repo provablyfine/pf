@@ -1,4 +1,4 @@
-from . import auth_cli, boundary_cli, grant_cli, identity_cli, role_cli, tag_cli, tenant_cli
+from . import auth_cli, bastion_cli, boundary_cli, grant_cli, identity_cli, role_cli, tag_cli, tenant_cli
 
 
 def add_subparsers(subparsers):
@@ -22,3 +22,6 @@ def add_subparsers(subparsers):
 
     auth_parser = subparsers.add_parser("auth", help="Manage authentication configurations")
     auth_cli.add_subparser(auth_parser)
+
+    bastion_parser = subparsers.add_parser("bastion", help="View and edit bastions")
+    bastion_cli.add_subparser(bastion_parser)

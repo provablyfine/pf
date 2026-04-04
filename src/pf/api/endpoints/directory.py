@@ -23,5 +23,6 @@ def directory_endpoint(tenant_name: str) -> schemas.DirectoryReadResponse:
         role=f"{p}/role",
         identity=f"{p}/identity",
         ssh=f"{p}/ssh",
+        bastion=f"{p}/bastion",
         tenant=f"{p}/tenant",
     )

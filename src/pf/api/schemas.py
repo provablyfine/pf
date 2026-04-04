@@ -674,6 +674,7 @@ class DirectoryReadResponse(APIBase):
     role: str
     identity: str
     ssh: str
+    bastion: str
     tenant: str
 
 
