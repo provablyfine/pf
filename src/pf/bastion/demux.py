@@ -1,31 +1,43 @@
 """
 WebSocket multiplexer — client side.
 
-Symmetric counterpart to mux.Server. The server always opens logical channels
-(via "open" frames); this client receives them and exposes them via
-accept_channel().
+Symmetric counterpart to mux.Server. This client acts as the h2 SERVER:
+it receives channels opened by the mux.Server (h2 client) via RequestReceived
+events and exposes them via accept_channel().
 
-Protocol messages are identical to those in mux.py — see that module for the
-full wire format documentation.
+Transport: h2 binary frames are exchanged as WebSocket binary messages.
 
 The WebSocket object passed to Client must support:
-    ws.send(str)         — send a JSON frame
-    async for raw in ws  — receive frames (str)
+    ws.send(data: bytes)     — send a binary frame
+    async for frame in ws    — receive frames (bytes)
     ws.close()
 This matches the websockets.ClientConnection interface.
 """
 
 import asyncio
-import base64
 import dataclasses
 import json
 import logging
 import typing
 
+import h2.config
+import h2.connection
+import h2.events
+import h2.exceptions
+
 logger = logging.getLogger(__name__)
 
-# Sentinel pushed into _open_queue to unblock accept_channel() on failure.
-_CLOSED: typing.Any = object()
+_CLOSED: typing.Any = object()  # pushed into _open_queue to unblock accept_channel()
+
+
+@dataclasses.dataclass
+class _Sentinel:
+    """Injected into a channel RX queue to unblock receive() on connection loss."""
+
+    exc: Exception
+
+
+_STREAM_ENDED = object()  # signals graceful remote half-close
 
 
 class MuxError(Exception):
@@ -36,11 +48,15 @@ class ChannelError(Exception):
     """A specific logical channel was closed or failed."""
 
 
-@dataclasses.dataclass
-class _ErrorSentinel:
-    """Injected into a channel RX queue to unblock receive() on failure."""
-
-    exc: Exception
+def _meta_from_headers(headers: list) -> dict:
+    """Extract channel metadata from h2 request headers."""
+    for name, value in headers:
+        if name == "x-pf-meta":
+            try:
+                return json.loads(value)  # type: ignore[arg-type]
+            except Exception:
+                return {}
+    return {}
 
 
 class Channel:
@@ -52,144 +68,88 @@ class Channel:
 
     def __init__(
         self,
-        channel_id: str,
+        stream_id: int,
         meta: dict,
-        tx_queue: asyncio.Queue,
-        mux_closed: asyncio.Event,
-        initial_tx_credits: int,
-        ack_threshold: int,
+        mux: "Client",
     ) -> None:
-        self.channel_id = channel_id
+        self.channel_id = str(stream_id)
         self.meta = meta
-        self._tx = tx_queue
-        self._mux_closed = mux_closed
-        self._ack_threshold = ack_threshold
-
-        self._rx: asyncio.Queue = asyncio.Queue(maxsize=ack_threshold * 3)
-        self._tx_credits = asyncio.Semaphore(initial_tx_credits)
-        self._rx_consumed = 0
-        self._closed = False
+        self._stream_id = stream_id
+        self._mux = mux
+        self._rx: asyncio.Queue[bytes | _Sentinel | object] = asyncio.Queue()
+        self._send_closed = False
 
     async def send(self, payload: bytes) -> None:
         """
         Send payload to the server on this channel.
 
-        Blocks when TX credits are exhausted (server is consuming slowly)
-        or when the global TX queue is full.
+        Blocks when the h2 flow control window is exhausted.
 
         Raises:
             ChannelError: if this channel is already closed.
             MuxError: if the WebSocket connection is lost.
         """
-        if self._closed:
+        if self._send_closed:
             raise ChannelError(f"Channel {self.channel_id} is already closed")
-        if self._mux_closed.is_set():
+        if self._mux._closed.is_set():
             raise MuxError("WebSocket connection is closed")
-
-        await self._tx_credits.acquire()
-
-        if self._mux_closed.is_set():
-            raise MuxError("WebSocket connection lost while waiting for TX credit")
-        if self._closed:
-            raise ChannelError(f"Channel {self.channel_id} closed while waiting for TX credit")
-
-        await self._tx.put(
-            {
-                "type": "data",
-                "channel_id": self.channel_id,
-                "payload": base64.b64encode(payload).decode("ascii"),
-            }
-        )
+        await self._mux._send_data(self._stream_id, payload, end_stream=False)
 
     async def receive(self) -> bytes:
         """
         Receive the next payload sent by the server on this channel.
 
-        After consuming ack_threshold messages, sends an ack back to replenish
-        the server's TX credits.
-
         Raises:
             ChannelError: if the channel is closed or the connection is lost.
         """
         msg = await self._rx.get()
-
-        if isinstance(msg, _ErrorSentinel):
+        if isinstance(msg, _Sentinel):
             raise ChannelError(f"Channel {self.channel_id}: connection lost") from msg.exc
-
-        if msg.get("type") == "close":
-            self._closed = True
+        if msg is _STREAM_ENDED:
             raise ChannelError(f"Channel {self.channel_id} closed by remote")
-
-        self._rx_consumed += 1
-        if self._rx_consumed >= self._ack_threshold:
-            await self._send_rx_ack(self._rx_consumed)
-            self._rx_consumed = 0
-
-        return base64.b64decode(msg["payload"].encode("ascii"))
+        assert isinstance(msg, bytes)
+        return msg
 
     async def close(self) -> None:
-        """Send a close frame to the server and mark this channel as closed."""
-        if self._closed:
+        """Send END_STREAM to the server and mark this channel as closed."""
+        if self._send_closed:
             return
-        self._closed = True
-        if self._rx_consumed > 0:
-            await self._send_rx_ack(self._rx_consumed)
-            self._rx_consumed = 0
+        self._send_closed = True
         try:
-            await self._tx.put({"type": "close", "channel_id": self.channel_id})
+            await self._mux._send_data(self._stream_id, b"", end_stream=True)
         except Exception:
             pass
 
-    def _replenish_tx_credits(self, n: int) -> None:
-        """Restore TX credits when an ack arrives from the server."""
-        for _ in range(n):
-            self._tx_credits.release()
-
-    def _inject_sentinel(self, exc: Exception) -> None:
-        """Unblock any coroutine waiting on receive() by injecting a sentinel."""
+    def _inject(self, item: object) -> None:
+        """Enqueue an item into the RX queue (non-blocking, best-effort)."""
         try:
-            self._rx.put_nowait(_ErrorSentinel(exc=exc))
+            self._rx.put_nowait(item)
         except asyncio.QueueFull:
-            pass
-
-    async def _send_rx_ack(self, credits: int) -> None:
-        try:
-            await self._tx.put(
-                {
-                    "type": "ack",
-                    "channel_id": self.channel_id,
-                    "credits": credits,
-                }
-            )
-        except Exception:
             pass
 
 
 class Client:
     """
-    Client side of the mux protocol over a websockets-style WebSocket.
+    Client side of the h2-over-WebSocket mux protocol.
 
-    The server opens logical channels by sending "open" frames; each one is
-    queued and returned by accept_channel(). The client may then call
+    The mux.Server opens logical channels by sending HEADERS frames; each one
+    is queued and returned by accept_channel(). The client may then call
     send() / receive() / close() on the resulting Channel.
     """
 
-    def __init__(
-        self,
-        ws: typing.Any,
-        tx_queue_size: int = 100,
-    ) -> None:
+    def __init__(self, ws: typing.Any) -> None:
         self._ws = ws
-
-        self._tx_queue: asyncio.Queue[dict | None] = asyncio.Queue(maxsize=tx_queue_size)
-        self._channels: dict[str, Channel] = {}
-        self._open_queue: asyncio.Queue = asyncio.Queue()
-
-        self._closed = asyncio.Event()
+        self._h2 = h2.connection.H2Connection(
+            config=h2.config.H2Configuration(client_side=False, header_encoding="utf-8")
+        )
+        self._h2.initiate_connection()
+        self._cond: asyncio.Condition = asyncio.Condition()
+        self._channels: dict[int, Channel] = {}
+        self._open_queue: asyncio.Queue[Channel | object] = asyncio.Queue()
+        self._closed: asyncio.Event = asyncio.Event()
         self._close_exc: Exception | None = None
 
         self._tasks = [
-            asyncio.create_task(self._writer(), name="demux-writer"),
             asyncio.create_task(self._reader(), name="demux-reader"),
         ]
 
@@ -201,10 +161,10 @@ class Client:
         """
         item = await self._open_queue.get()
         if item is _CLOSED:
-            # Put the sentinel back so subsequent callers also raise.
             self._open_queue.put_nowait(_CLOSED)
             raise MuxError("WebSocket connection is closed")
-        return item  # type: ignore[return-value]
+        assert isinstance(item, Channel)
+        return item
 
     async def close(self) -> None:
         """Gracefully shut down the client."""
@@ -214,20 +174,25 @@ class Client:
         for ch in list(self._channels.values()):
             await ch.close()
 
-        await self._tx_queue.put(None)
-
-        writer_task = next((t for t in self._tasks if t.get_name() == "demux-writer"), None)
-        if writer_task:
+        outdata: bytes = b""
+        async with self._cond:
             try:
-                await asyncio.wait_for(writer_task, timeout=5.0)
-            except (TimeoutError, Exception):
-                writer_task.cancel()
+                self._h2.close_connection()
+                outdata = self._h2.data_to_send()
+            except Exception:
+                pass
+        if outdata:
+            try:
+                await self._ws.send(outdata)
+            except Exception:
+                pass
 
         self._closed.set()
+        async with self._cond:
+            self._cond.notify_all()
 
         for t in self._tasks:
             t.cancel()
-
         try:
             await self._ws.close()
         except Exception:
@@ -241,98 +206,146 @@ class Client:
         """Wait until the WebSocket connection is closed (by either side)."""
         await self._closed.wait()
 
-    async def _writer(self) -> None:
-        """Drain the TX queue and write JSON frames to the WebSocket."""
-        try:
-            while True:
-                msg = await self._tx_queue.get()
-                if msg is None:
-                    break
-                await self._ws.send(json.dumps(msg))
-        except Exception as exc:
-            logger.warning("Demux writer failed: %s", exc)
-            await self._fail(exc)
+    async def _send_data(self, stream_id: int, data: bytes, end_stream: bool) -> None:
+        """Send data on a stream, respecting h2 flow control."""
+        remaining = data
+        while True:
+            outdata: bytes = b""
+            done = False
+
+            async with self._cond:
+                if self._closed.is_set():
+                    raise MuxError("WebSocket connection is closed")
+
+                window = self._h2.local_flow_control_window(stream_id)
+
+                if remaining and window == 0:
+                    await self._cond.wait()
+                    continue
+
+                if remaining:
+                    max_chunk = min(window, self._h2.max_outbound_frame_size)
+                    chunk = remaining[:max_chunk]
+                    remaining = remaining[max_chunk:]
+                    last = not remaining
+                    try:
+                        self._h2.send_data(stream_id, chunk, end_stream=(last and end_stream))
+                    except h2.exceptions.ProtocolError as exc:
+                        raise ChannelError(str(exc)) from exc
+                    done = last
+                else:
+                    try:
+                        self._h2.send_data(stream_id, b"", end_stream=True)
+                    except h2.exceptions.ProtocolError as exc:
+                        raise ChannelError(str(exc)) from exc
+                    done = True
+
+                outdata = self._h2.data_to_send()
+
+            if outdata:
+                await self._ws.send(outdata)
+
+            if done:
+                return
 
     async def _reader(self) -> None:
-        """Read frames from the WebSocket and dispatch to channels."""
-        exc: Exception = Exception("WebSocket connection closed")
-        try:
-            async for raw in self._ws:
-                try:
-                    msg = json.loads(raw)
-                except Exception:
-                    logger.warning("Demux: ignoring non-JSON frame")
-                    continue
-                await self._dispatch(msg)
-        except Exception as e:
-            exc = e
-            logger.warning("Demux reader failed: %s", exc)
-        await self._fail(exc)
-
-    async def _dispatch(self, msg: dict) -> None:
-        msg_type = msg.get("type")
-        channel_id = msg.get("channel_id")
-        ch = self._channels.get(channel_id) if channel_id else None  # type: ignore[arg-type]
-
-        if msg_type == "open":
-            channel_id = msg["channel_id"]
-            ch = Channel(
-                channel_id=channel_id,
-                meta=msg.get("meta", {}),
-                tx_queue=self._tx_queue,
-                mux_closed=self._closed,
-                initial_tx_credits=msg["credits"],
-                ack_threshold=msg["ack_threshold"],
-            )
-            self._channels[channel_id] = ch
-            await self._open_queue.put(ch)
-
-        elif msg_type == "data" and ch is not None:
+        """Send h2 server preface, then read and dispatch incoming frames."""
+        # Flush the server's initial SETTINGS generated by initiate_connection().
+        async with self._cond:
+            outdata = self._h2.data_to_send()
+        if outdata:
             try:
-                ch._rx.put_nowait(msg)
-            except asyncio.QueueFull:
-                logger.error(
-                    "Channel %s: RX queue full — server violated flow control, closing channel",
-                    channel_id,
-                )
-                await self._close_channel_with_error(ch, "flow control violation")
+                await self._ws.send(outdata)
+            except Exception as exc:
+                await self._fail(exc)
+                return
 
-        elif msg_type == "ack" and ch is not None:
-            ch._replenish_tx_credits(msg.get("credits", 1))
-
-        elif msg_type in ("close", "error") and ch is not None:
-            ch._rx.put_nowait(msg)
-            self._channels.pop(channel_id, None)  # type: ignore[arg-type]
-
-        else:
-            logger.debug("Demux: unhandled frame type=%r channel=%r", msg_type, channel_id)
-
-    async def _close_channel_with_error(self, ch: Channel, reason: str) -> None:
-        ch._closed = True
-        self._channels.pop(ch.channel_id, None)
+        exc_out: Exception = Exception("WebSocket connection closed")
         try:
-            await self._tx_queue.put(
-                {
-                    "type": "error",
-                    "channel_id": ch.channel_id,
-                    "reason": reason,
-                }
-            )
-        except Exception:
+            async for frame in self._ws:
+                if not isinstance(frame, bytes):
+                    continue  # skip text frames (shouldn't occur)
+                outdata = b""
+                async with self._cond:
+                    events = self._h2.receive_data(frame)
+                    for event in events:
+                        self._handle_event(event)
+                    self._cond.notify_all()
+                    outdata = self._h2.data_to_send()
+                if outdata:
+                    await self._ws.send(outdata)
+        except Exception as exc:
+            exc_out = exc
+            logger.debug("Demux reader terminated: %s", exc)
+        await self._fail(exc_out)
+
+    def _handle_event(self, event: h2.events.Event) -> None:
+        """
+        Dispatch a single h2 event. Must be called under self._cond.
+        """
+        if isinstance(event, h2.events.RequestReceived):
+            stream_id = event.stream_id
+            meta = _meta_from_headers(event.headers)
+            # Accept the CONNECT tunnel by sending 200 response headers.
+            self._h2.send_headers(stream_id, [(":status", "200")])
+            channel = Channel(stream_id, meta, self)
+            self._channels[stream_id] = channel
+            self._open_queue.put_nowait(channel)
+            logger.debug("Demux: accepted channel (stream_id=%d)", stream_id)
+
+        elif isinstance(event, h2.events.DataReceived):
+            ch = self._channels.get(event.stream_id)
+            if ch and event.data:
+                ch._inject(event.data)
+            self._h2.acknowledge_received_data(event.flow_controlled_length, event.stream_id)
+            if event.stream_ended:
+                if ch:
+                    ch._inject(_STREAM_ENDED)
+                self._channels.pop(event.stream_id, None)
+
+        elif isinstance(event, h2.events.StreamEnded):
+            ch = self._channels.pop(event.stream_id, None)
+            if ch:
+                ch._inject(_STREAM_ENDED)
+
+        elif isinstance(event, h2.events.StreamReset):
+            ch = self._channels.pop(event.stream_id, None)
+            if ch:
+                ch._inject(_Sentinel(exc=ChannelError(f"Stream {event.stream_id} reset by remote")))
+
+        elif isinstance(event, h2.events.WindowUpdated):
+            self._cond.notify_all()
+
+        elif isinstance(event, h2.events.ConnectionTerminated):
+            raise ConnectionError(f"h2 connection terminated: {event.error_code}")
+
+        elif isinstance(
+            event,
+            (
+                h2.events.RemoteSettingsChanged,
+                h2.events.SettingsAcknowledged,
+                h2.events.UnknownFrameReceived,
+            ),
+        ):
             pass
 
+        else:
+            logger.debug("Demux: unhandled h2 event %r", event)
+
     async def _fail(self, exc: Exception) -> None:
-        """Handle a fatal WebSocket error — unblock all waiting coroutines."""
+        """Handle a fatal error: mark closed, unblock all channels and accept_channel()."""
         if self._closed.is_set():
             return
         self._closed.set()
         self._close_exc = exc
 
-        for ch in self._channels.values():
-            ch._inject_sentinel(exc)
-        self._channels.clear()
+        sentinel = _Sentinel(exc=exc)
+        async with self._cond:
+            for ch in self._channels.values():
+                ch._inject(sentinel)
+            self._channels.clear()
+            self._cond.notify_all()
 
-        # Unblock any accept_channel() call.
         self._open_queue.put_nowait(_CLOSED)
 
         for t in self._tasks:

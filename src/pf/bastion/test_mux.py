@@ -1,47 +1,46 @@
+"""
+Tests for mux.Server (h2 client side).
+
+Tests create a connected (mux.Server, demux.Client) pair and verify the
+server-side behaviour: opening channels, sending/receiving data, close
+semantics, and error handling.
+"""
+
 import asyncio
-import base64
-import uuid
 
 import pytest
 
-from . import _test_websocket, mux
+from . import _test_websocket, demux, mux
 
 
 @pytest.fixture
-async def ws_pair():
-    server_ws, client_ws = _test_websocket.create_websocket_pair()
-    yield server_ws, client_ws
-    await server_ws.close()
-    await client_ws.close()
-
-
-@pytest.fixture
-async def server(ws_pair):
-    server_ws, client_ws = ws_pair
+async def pair():
+    server_ws, client_ws = await _test_websocket.create_ws_pair()
     srv = mux.Server(server_ws)
-    yield srv, client_ws
+    cli = demux.Client(client_ws)
+    yield srv, cli
     await srv.close()
+    await cli.close()
+
+
+# ---------------------------------------------------------------------------
+# Channel opening
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.anyio
-async def test_server_open_channel(server):
-    srv, client = server
-    channel = await srv.open_channel(meta={"name": "test-channel"})
+async def test_server_open_channel(pair):
+    srv, cli = pair
+    srv_ch = await srv.open_channel(meta={"name": "test-channel"})
+    cli_ch = await cli.accept_channel()
 
-    assert channel.channel_id is not None
-    assert len(channel.channel_id) == 36
-
-    open_msg = await client.receive_json()
-    assert open_msg["type"] == "open"
-    assert open_msg["channel_id"] == channel.channel_id
-    assert "credits" in open_msg
-    assert open_msg["meta"]["name"] == "test-channel"
+    assert srv_ch.channel_id is not None
+    assert cli_ch.meta == {"name": "test-channel"}
 
 
 @pytest.mark.anyio
-async def test_server_open_channel_when_closed(ws_pair):
-    server_ws, _ = ws_pair
-    srv = mux.Server(server_ws)
+async def test_server_open_channel_when_closed(pair):
+    srv, _cli = pair
     await srv.close()
 
     with pytest.raises(mux.MuxError):
@@ -49,200 +48,177 @@ async def test_server_open_channel_when_closed(ws_pair):
 
 
 @pytest.mark.anyio
-async def test_server_dispatch_data(server):
-    srv, client = server
-    channel = await srv.open_channel()
+async def test_server_open_channel_empty_meta(pair):
+    srv, cli = pair
+    await srv.open_channel()
+    cli_ch = await cli.accept_channel()
+    assert cli_ch.meta == {}
 
-    open_msg = await client.receive_json()
-    channel_id = open_msg["channel_id"]
 
-    await client.send_json(
-        {
-            "type": "data",
-            "channel_id": channel_id,
-            "payload": "hello from client",
-        }
-    )
-
-    received = await channel.receive()
-    assert received == b"hello from client"
+# ---------------------------------------------------------------------------
+# Data transfer
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.anyio
-async def test_server_dispatch_ack(server):
-    srv, client = server
-    channel = await srv.open_channel()
+async def test_server_sends_data_to_client(pair):
+    srv, cli = pair
+    srv_ch = await srv.open_channel()
+    cli_ch = await cli.accept_channel()
 
-    open_msg = await client.receive_json()
-    channel_id = open_msg["channel_id"]
-
-    for i in range(8):
-        await client.send_json(
-            {
-                "type": "data",
-                "channel_id": channel_id,
-                "payload": f"test{i}",
-            }
-        )
-        await channel.receive()
-
-    ack_msg = await client.receive_json()
-    assert ack_msg["type"] == "ack"
-    assert ack_msg["channel_id"] == channel_id
-    assert ack_msg["credits"] >= 1
+    await srv_ch.send(b"hello from server")
+    data = await cli_ch.receive()
+    assert data == b"hello from server"
 
 
 @pytest.mark.anyio
-async def test_server_dispatch_close(server):
-    srv, client = server
-    channel = await srv.open_channel()
+async def test_client_sends_data_to_server(pair):
+    srv, cli = pair
+    srv_ch = await srv.open_channel()
+    cli_ch = await cli.accept_channel()
 
-    open_msg = await client.receive_json()
-    channel_id = open_msg["channel_id"]
+    await cli_ch.send(b"hello from client")
+    data = await srv_ch.receive()
+    assert data == b"hello from client"
 
-    await client.send_json(
-        {
-            "type": "close",
-            "channel_id": channel_id,
-        }
-    )
+
+@pytest.mark.anyio
+async def test_bidirectional_data(pair):
+    srv, cli = pair
+    srv_ch = await srv.open_channel(meta={"role": "test"})
+    cli_ch = await cli.accept_channel()
+
+    await srv_ch.send(b"ping")
+    assert await cli_ch.receive() == b"ping"
+
+    await cli_ch.send(b"pong")
+    assert await srv_ch.receive() == b"pong"
+
+
+@pytest.mark.anyio
+async def test_binary_data(pair):
+    srv, cli = pair
+    srv_ch = await srv.open_channel()
+    cli_ch = await cli.accept_channel()
+
+    payload = bytes(range(256))
+    await srv_ch.send(payload)
+    assert await cli_ch.receive() == payload
+
+
+# ---------------------------------------------------------------------------
+# Channel close
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_server_closes_channel(pair):
+    srv, cli = pair
+    srv_ch = await srv.open_channel()
+    cli_ch = await cli.accept_channel()
+
+    await srv_ch.close()
+
+    with pytest.raises(demux.ChannelError, match="closed by remote"):
+        await cli_ch.receive()
+
+
+@pytest.mark.anyio
+async def test_client_closes_channel(pair):
+    srv, cli = pair
+    srv_ch = await srv.open_channel()
+    cli_ch = await cli.accept_channel()
+
+    await cli_ch.close()
 
     with pytest.raises(mux.ChannelError, match="closed by remote"):
-        await channel.receive()
+        await srv_ch.receive()
 
 
 @pytest.mark.anyio
-async def test_server_dispatch_unknown_channel(ws_pair):
-    server_ws, client_ws = ws_pair
-    srv = mux.Server(server_ws)
+async def test_server_close_raises_on_subsequent_send(pair):
+    srv, cli = pair
+    srv_ch = await srv.open_channel()
+    await cli.accept_channel()
 
-    await srv.open_channel()
+    await srv_ch.close()
 
-    await client_ws.send_json(
-        {
-            "type": "data",
-            "channel_id": str(uuid.uuid4()),
-            "payload": "unknown",
-        }
-    )
-
-    await asyncio.sleep(0.1)
+    with pytest.raises(mux.ChannelError, match="already closed"):
+        await srv_ch.send(b"after close")
 
 
 @pytest.mark.anyio
-async def test_server_channel_send(server):
-    srv, client = server
-    channel = await srv.open_channel()
+async def test_server_close_idempotent(pair):
+    srv, cli = pair
+    srv_ch = await srv.open_channel()
+    await cli.accept_channel()
 
-    open_msg = await client.receive_json()
-    channel_id = open_msg["channel_id"]
-
-    await channel.send(b"hello from server")
-
-    data_msg = await client.receive_json()
-    assert data_msg["type"] == "data"
-    assert data_msg["channel_id"] == channel_id
-    assert data_msg["payload"] == "aGVsbG8gZnJvbSBzZXJ2ZXI="
+    await srv_ch.close()
+    await srv_ch.close()  # second close is a no-op
 
 
-@pytest.mark.anyio
-async def test_server_channel_send_blocks_on_credit(ws_pair):
-    server_ws, client_ws = ws_pair
-    srv = mux.Server(server_ws, initial_tx_credits=2)
-
-    channel = await srv.open_channel()
-
-    await client_ws.receive_json()
-
-    await channel.send(b"msg1")
-    await channel.send(b"msg2")
-
-    with pytest.raises(TimeoutError):
-        await asyncio.wait_for(channel.send(b"msg3"), timeout=0.5)
-
-    await srv.close()
+# ---------------------------------------------------------------------------
+# Multiple channels
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.anyio
-async def test_server_fail_on_disconnect(ws_pair):
-    server_ws, client_ws = ws_pair
-    srv = mux.Server(server_ws)
+async def test_multiple_channels(pair):
+    srv, cli = pair
+    ch1 = await srv.open_channel(meta={"id": 1})
+    ch2 = await srv.open_channel(meta={"id": 2})
 
-    channel = await srv.open_channel()
+    cli_ch1 = await cli.accept_channel()
+    cli_ch2 = await cli.accept_channel()
 
-    await client_ws.receive_json()
+    await ch1.send(b"ch1 data")
+    await ch2.send(b"ch2 data")
 
-    await client_ws.close()
+    assert await cli_ch1.receive() == b"ch1 data"
+    assert await cli_ch2.receive() == b"ch2 data"
 
+
+# ---------------------------------------------------------------------------
+# Disconnection
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_server_fail_on_disconnect(pair):
+    srv, cli = pair
+    srv_ch = await srv.open_channel()
+    await cli.accept_channel()
+
+    await cli.close()
     await asyncio.sleep(0.1)
 
     with pytest.raises(mux.ChannelError, match="connection lost"):
-        await channel.receive()
+        await srv_ch.receive()
+
+
+# ---------------------------------------------------------------------------
+# Integration
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.anyio
-async def test_server_channel_close(server):
-    srv, client = server
-    channel = await srv.open_channel()
+async def test_integration_full_cycle(pair):
+    srv, cli = pair
+    srv_ch = await srv.open_channel(meta={"role": "test"})
+    cli_ch = await cli.accept_channel()
 
-    open_msg = await client.receive_json()
-    channel_id = open_msg["channel_id"]
-
-    await channel.close()
-
-    close_msg = await client.receive_json()
-    assert close_msg["type"] == "close"
-    assert close_msg["channel_id"] == channel_id
-
-    with pytest.raises(mux.ChannelError, match="already closed"):
-        await channel.send(b"after close")
-
-
-@pytest.mark.anyio
-async def test_server_channel_close_idempotent(server):
-    srv, client = server
-    channel = await srv.open_channel()
-
-    await client.receive_json()
-
-    await channel.close()
-    await channel.close()
-
-
-@pytest.mark.anyio
-async def test_integration_full_cycle(server):
-    srv, client = server
-    channel = await srv.open_channel(meta={"role": "test"})
-
-    open_msg = await client.receive_json()
-    channel_id = open_msg["channel_id"]
-    initial_credit = open_msg["credits"]
-
-    assert initial_credit == 16
+    assert cli_ch.meta == {"role": "test"}
 
     for i in range(8):
-        await client.send_json(
-            {
-                "type": "data",
-                "channel_id": channel_id,
-                "payload": f"client message {i}",
-            }
-        )
+        await cli_ch.send(f"client message {i}".encode())
 
     for i in range(8):
-        msg = await channel.receive()
+        msg = await srv_ch.receive()
         assert msg == f"client message {i}".encode()
 
-    ack = await client.receive_json()
-    assert ack["type"] == "ack"
+    await srv_ch.send(b"server response")
+    assert await cli_ch.receive() == b"server response"
 
-    await channel.send(b"server response")
-
-    resp = await client.receive_json()
-    assert resp["type"] == "data"
-    assert base64.b64decode(resp["payload"]).decode() == "server response"
-
-    await channel.close()
-
-    close_msg = await client.receive_json()
-    assert close_msg["type"] == "close"
+    await srv_ch.close()
+    with pytest.raises(demux.ChannelError, match="closed by remote"):
+        await cli_ch.receive()
