@@ -1,3 +1,3 @@
-from . import server, demux
+from . import demux, server
 
-__all__ = ["server", "demux"]
+__all__ = ["demux", "server"]
