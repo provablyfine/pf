@@ -33,6 +33,7 @@ dev = [
     "pytest-xdist>=3.8.0",
     "pytest-anyio",
     "ruff>=0.15.6",
+    "pytest-env>=1.6.0",
 ]
 
 [tool.pytest.ini_options]
@@ -42,6 +43,11 @@ testpaths = [
     "src/pf",
     "tests",
 ]
+[tool.pytest_env]
+HTTP_PROXY = { unset = true }
+HTTPS_PROXY = { unset = true }
+http_proxy = { unset = true }
+https_proxy = { unset = true }
 
 [tool.pyright]
 include = ["src/pf", "tests"]

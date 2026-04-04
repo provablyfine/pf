@@ -10,7 +10,6 @@ import pf.tui.app
 import pf.tui.async_client
 import pf.tui.grant_edit
 
-
 def _run(args, env, **kwargs):
     return subprocess.run(args, env=env, check=True, capture_output=True, **kwargs)
 
@@ -47,7 +46,7 @@ async def test_tui_grant_edit_identity_fails(api):
 
         async with app.run_test(size=(200, 50)) as pilot:
             await pilot.pause(1.0)
-            await pilot.press("down", "down", "down", "down")  # navigate to Roles
+            await pilot.press("down", "down", "down", "down", "down")  # navigate to Roles
             await pilot.press("enter")  # open RoleListScreen
             await pilot.pause(0.5)  # wait for role list to load
 
@@ -113,7 +112,7 @@ async def test_tui_role_grant_edit(api):
         app = pf.tui.app.TuiApp(auth)
         async with app.run_test(size=(200, 50)) as pilot:
             await pilot.pause(1.0)
-            await pilot.press("down", "down", "down", "down")  # navigate to Roles
+            await pilot.press("down", "down", "down", "down", "down")  # navigate to Roles
             await pilot.press("enter")  # open RoleListScreen
             await pilot.pause(0.5)  # wait for role list to load
             await pilot.press("down", "down")  # navigate to test-role (row 2)
@@ -173,7 +172,7 @@ async def test_tui_identity_grant_edit_filters(api):
         app = pf.tui.app.TuiApp(auth)
         async with app.run_test(size=(200, 50)) as pilot:
             await pilot.pause(1.0)
-            await pilot.press("down", "down", "down", "down")  # navigate to Roles
+            await pilot.press("down", "down", "down", "down", "down")  # navigate to Roles
             await pilot.press("enter")  # open RoleListScreen
             await pilot.pause(0.5)  # wait for role list to load
             await pilot.press("down")  # navigate to test-role (row 1)
@@ -230,7 +229,7 @@ async def test_tui_identity_grant_edit_permissions(api):
         app = pf.tui.app.TuiApp(auth)
         async with app.run_test(size=(200, 50)) as pilot:
             await pilot.pause(1.0)
-            await pilot.press("down", "down", "down", "down")  # navigate to Roles
+            await pilot.press("down", "down", "down", "down", "down")  # navigate to Roles
             await pilot.press("enter")  # open RoleListScreen
             await pilot.pause(0.5)  # wait for role list to load
             await pilot.press("down")  # navigate to test-role (row 1)
@@ -314,7 +313,7 @@ async def test_tui_tag_grant_edit(api):
         app = pf.tui.app.TuiApp(auth)
         async with app.run_test(size=(200, 50)) as pilot:
             await pilot.pause(1.0)
-            await pilot.press("down", "down", "down", "down")  # navigate to Roles
+            await pilot.press("down", "down", "down", "down", "down")  # navigate to Roles
             await pilot.press("enter")  # open RoleListScreen
             await pilot.pause(0.5)  # wait for role list to load
             await pilot.press("down")  # navigate to test-role (row 1)
@@ -361,7 +360,7 @@ async def test_tui_boundary_grant_edit(api):
         app = pf.tui.app.TuiApp(auth)
         async with app.run_test(size=(200, 50)) as pilot:
             await pilot.pause(1.0)
-            await pilot.press("down", "down", "down", "down")  # navigate to Roles
+            await pilot.press("down", "down", "down", "down", "down")  # navigate to Roles
             await pilot.press("enter")  # open RoleListScreen
             await pilot.pause(0.5)  # wait for role list to load
             await pilot.press("down")  # navigate to test-role (row 1)
@@ -411,7 +410,7 @@ async def test_tui_tenant_grant_edit(api):
         app = pf.tui.app.TuiApp(auth)
         async with app.run_test(size=(200, 50)) as pilot:
             await pilot.pause(1.0)
-            await pilot.press("down", "down", "down", "down")  # navigate to Roles
+            await pilot.press("down", "down", "down", "down", "down")  # navigate to Roles
             await pilot.press("enter")  # open RoleListScreen
             await pilot.pause(0.5)  # wait for role list to load
             await pilot.press("down")  # navigate to test-role (row 1)
@@ -453,7 +452,7 @@ async def test_tui_ssh_grant_edit(api):
         app = pf.tui.app.TuiApp(auth)
         async with app.run_test(size=(200, 50)) as pilot:
             await pilot.pause(1.0)
-            await pilot.press("down", "down", "down", "down")  # navigate to Roles
+            await pilot.press("down", "down", "down", "down", "down")  # navigate to Roles
             await pilot.press("enter")  # open RoleListScreen
             await pilot.pause(0.5)  # wait for role list to load
             await pilot.press("down")  # navigate to test-role (row 1)
@@ -499,7 +498,7 @@ async def test_tui_tag_list(api):
 
         async with app.run_test(size=(200, 50)) as pilot:
             await pilot.pause(1.0)
-            await pilot.press("down", "down", "down")  # navigate to Tags (index 3)
+            await pilot.press("down", "down", "down", "down")  # navigate to Tag (index 4)
             await pilot.press("enter")  # open TagListScreen
             await pilot.pause(0.5)
 
@@ -527,7 +526,7 @@ async def test_tui_tag_delete(api):
 
         async with app.run_test(size=(200, 50)) as pilot:
             await pilot.pause(1.0)
-            await pilot.press("down", "down", "down")  # navigate to Tags (index 3)
+            await pilot.press("down", "down", "down", "down")  # navigate to Tag (index 4)
             await pilot.press("enter")  # open TagListScreen
             await pilot.pause(0.5)
 
@@ -549,7 +548,7 @@ async def test_tui_boundary_list(api):
 
         async with app.run_test(size=(200, 50)) as pilot:
             await pilot.pause(1.0)
-            await pilot.press("down", "down")  # navigate to Boundaries (index 2)
+            await pilot.press("down", "down", "down")  # navigate to Boundary (index 3)
             await pilot.press("enter")  # open BoundaryListScreen
             await pilot.pause(0.5)
 
@@ -575,7 +574,7 @@ async def test_tui_boundary_delete(api):
 
         async with app.run_test(size=(200, 50)) as pilot:
             await pilot.pause(1.0)
-            await pilot.press("down", "down")  # navigate to Boundaries (index 2)
+            await pilot.press("down", "down", "down")  # navigate to Boundary (index 3)
             await pilot.press("enter")  # open BoundaryListScreen
             await pilot.pause(0.5)
 
@@ -588,6 +587,117 @@ async def test_tui_boundary_delete(api):
 
     boundaries = await auth.list_boundaries()
     assert not any(b["name"] == "zone1" for b in boundaries)
+
+
+@pytest.mark.anyio
+async def test_tui_bastion_list(api):
+    """Add a bastion via the TUI and verify it exists."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        auth = _setup(api, tmpdir)
+        app = pf.tui.app.TuiApp(auth)
+
+        async with app.run_test(size=(200, 50)) as pilot:
+            await pilot.pause(1.0)
+            await pilot.press("down", "down")  # navigate to Bastions (index 2)
+            await pilot.press("enter")  # open BastionListScreen
+            await pilot.pause(0.5)
+
+            await pilot.press("a")  # open add modal
+            await pilot.pause(0.1)
+            await pilot.press(*"https://register.example.com")  # type register_url
+            await pilot.press("tab")  # move to connect_url
+            await pilot.press(*"ssh://bastion.example.com")  # type connect_url
+            await pilot.press("tab")  # move to ssh_proxy_jump
+            await pilot.press(*"proxy.example.com")  # type ssh_proxy_jump
+            await pilot.press("enter")  # submit
+            await pilot.pause(1.0)
+
+        assert not [n for n in app._notifications if n.severity == "error"]
+
+    bastions = await auth.list_bastions()
+    assert any(b["register_url"] == "https://register.example.com" for b in bastions)
+
+
+@pytest.mark.anyio
+async def test_tui_bastion_delete(api):
+    """Delete a bastion via the TUI."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        auth = _setup(api, tmpdir)
+        response = await auth.post(
+            auth.directory.bastion,
+            json={
+                "register_url": "https://register.example.com",
+                "connect_url": "ssh://bastion.example.com",
+                "ssh_proxy_jump": "proxy.example.com",
+                "tag_id_list": [],
+                "tag_name_value_list": [],
+            },
+        )
+        bastion_id = response.json()["id"]
+        app = pf.tui.app.TuiApp(auth)
+
+        async with app.run_test(size=(200, 50)) as pilot:
+            await pilot.pause(1.0)
+            await pilot.press("down", "down")  # navigate to Bastions (index 2)
+            await pilot.press("enter")  # open BastionListScreen
+            await pilot.pause(0.5)
+
+            await pilot.press("d")  # delete row 0 (the only bastion)
+            await pilot.pause(1.0)
+
+        assert not [n for n in app._notifications if n.severity == "error"]
+
+    bastions = await auth.list_bastions()
+    assert not any(b["id"] == bastion_id for b in bastions)
+
+
+@pytest.mark.anyio
+async def test_tui_bastion_add_tag(api):
+    """Add a tag to a bastion via BastionViewScreen and save."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        auth = _setup(api, tmpdir)
+        await auth.post(auth.directory.tag, json={"name": "env", "value": "prod"})
+
+        response = await auth.post(
+            auth.directory.bastion,
+            json={
+                "register_url": "https://register.example.com",
+                "connect_url": None,
+                "ssh_proxy_jump": None,
+                "tag_id_list": [],
+                "tag_name_value_list": [],
+            },
+        )
+        bastion_id = response.json()["id"]
+
+        app = pf.tui.app.TuiApp(auth)
+
+        async with app.run_test(size=(200, 50)) as pilot:
+            await pilot.pause(1.0)
+            await pilot.press("down", "down")  # navigate to Bastions (index 2)
+            await pilot.press("enter")  # open BastionListScreen
+            await pilot.pause(0.5)
+
+            await pilot.press("enter")  # open bastion's BastionViewScreen
+            await pilot.pause(0.5)
+
+            # BastionViewScreen: Input#register_url is focused; tab to #ssh_proxy_jump, then to #tags
+            await pilot.press("tab", "tab", "tab")
+            await pilot.press("a")  # action_add_tag → _TagAddScreen opens
+            await pilot.pause(1.0)  # wait for list_tags API call
+
+            await pilot.press(*"env=prod")  # type exact tag label
+            await pilot.press("enter")  # submit; _TagAddScreen dismisses with tag dict
+            await pilot.pause(0.1)
+
+            await pilot.press("ctrl+s")  # save bastion
+            await pilot.pause(2.0)
+
+        assert not [n for n in app._notifications if n.severity == "error"]
+
+    response = await auth.get(auth.directory.bastion, params={"id": bastion_id})
+    bastion = response.json()["bastions"][0]
+    assert any(t["name"] == "env" and t["value"] == "prod" for t in bastion["tag_list"])
 
 
 @pytest.mark.anyio
@@ -651,7 +761,7 @@ async def test_tui_role_delete(api):
 
         async with app.run_test(size=(200, 50)) as pilot:
             await pilot.pause(1.0)
-            await pilot.press("down", "down", "down", "down")  # navigate to Roles (index 4)
+            await pilot.press("down", "down", "down", "down", "down")  # navigate to Roles (index 4)
             await pilot.press("enter")  # open RoleListScreen
             await pilot.pause(0.5)
 
@@ -736,7 +846,7 @@ async def test_tui_boundary_edit_description(api):
 
         async with app.run_test(size=(200, 50)) as pilot:
             await pilot.pause(1.0)
-            await pilot.press("down", "down")  # navigate to Boundaries (index 2)
+            await pilot.press("down", "down", "down")  # navigate to Boundary (index 3)
             await pilot.press("enter")  # open BoundaryListScreen
             await pilot.pause(0.5)
 

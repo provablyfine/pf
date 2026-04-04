@@ -59,7 +59,10 @@ class AsyncClient:
         return await self.get_list(self.directory.boundary, "boundaries", "Failed to read list of boundaries")
 
     async def list_tenants(self) -> list:
-        return await self.get_list(self.directory.tenant, "tenants", "Failed to read list of tenants")
+        return await self.get_list(self.directory.tenant, "tenants", "Failed to read list of tenant")
 
     async def list_auths(self) -> list:
         return await self.get_list(self.directory.auth, "auths", "Failed to read list of auths")
+
+    async def list_bastions(self) -> list:
+        return await self.get_list(self.directory.bastion, "bastions", "Failed to read list of bastion")
