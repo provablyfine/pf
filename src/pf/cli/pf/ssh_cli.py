@@ -166,11 +166,17 @@ def _ssh_function(args):
                 last_error = e
 
     for ip in ip_address_list:
-        ssh_cmd = build_ssh_cmd(ip, proxy_command=f"Hostname={host}")
+        ssh_cmd = build_ssh_cmd(ip)
         try:
             os.execvp("ssh", ssh_cmd)
         except Exception as e:
             last_error = e
+
+    ssh_cmd = build_ssh_cmd(host)
+    try:
+        os.execvp("ssh", ssh_cmd)
+    except Exception as e:
+        last_error = e
 
     raise client.exceptions.UI(f"Failed to connect via any bastion or direct IP: {last_error}")
 
