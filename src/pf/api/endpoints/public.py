@@ -1,5 +1,6 @@
 import fastapi
 
+from ... import jwk
 from .. import model, oauth2_providers, responses, schemas
 from ..context import ctx
 
@@ -8,7 +9,10 @@ router = fastapi.APIRouter()
 
 @router.get("/public/oidc/.well-known/jwks.json", status_code=200)
 def public_oidc_jwks(tenant_name: str) -> schemas.OidcJwksResponse:
-    return schemas.OidcJwksResponse.model_validate(model.oidc_key.get_jwks())
+    public_keys = model.oidc_key.get_public_keys()
+    assert all(k.type == jwk.KeyType.ED25519 for k in public_keys)
+    keys = [schemas.OidcJwk(kid=k.thumbprint(), alg="EdDSA", use="sig", **k.to_dict()) for k in public_keys]
+    return schemas.OidcJwksResponse(keys=keys)
 
 
 @router.get("/public/auth", status_code=200)

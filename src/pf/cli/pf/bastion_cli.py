@@ -67,7 +67,7 @@ async def _register_bastion(register_url: str, token: str, local_port: int) -> N
     headers = {"Authorization": f"Bearer {token}"}
     async with websockets.connect(
         register_url,
-        extra_headers=headers,
+        additional_headers=headers,
         subprotocols=("mux-ssh",),  # type: ignore[arg-type]
     ) as ws:
         mux_client = bastion.demux.Client(ws)
@@ -137,13 +137,14 @@ def _register_function(args):
 
 async def _connect_async(url: str, token: str, hostname: str) -> None:
 
-    ssl_context = ssl.create_default_context()
+    ssl_context = ssl.create_default_context() if url.startswith("wss://") else None
     headers = {"Authorization": f"Bearer {token}"}
+    connect_url = f"{url}?hostname={hostname}"
 
     async with websockets.connect(
-        url,
+        connect_url,
         ssl=ssl_context,
-        extra_headers=headers,
+        additional_headers=headers,
         subprotocols=("ssh",),  # type: ignore[arg-type]
     ) as ws:
 

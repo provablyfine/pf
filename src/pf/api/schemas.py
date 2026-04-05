@@ -37,15 +37,19 @@ class ED25519PublicJWK(APIBase):
     crv: typing.Literal["Ed25519"]
     kty: typing.Literal["OKP"]
     x: str
-    alg: str | None = None
-    kid: str | None = None
 
 
 PublicJWK = typing.Annotated[RSAPublicJWK | ECDSAPublicJWK | ED25519PublicJWK, pydantic.Field(discriminator="kty")]
 
 
+class OidcJwk(ED25519PublicJWK):
+    kid: str
+    alg: typing.Literal["EdDSA"]
+    use: typing.Literal["sig"]
+
+
 class OidcJwksResponse(APIBase):
-    keys: list[PublicJWK]
+    keys: list[OidcJwk]
 
 
 class SymmetricJWK(APIBase):

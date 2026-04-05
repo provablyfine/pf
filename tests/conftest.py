@@ -283,6 +283,64 @@ def api(request):
     tmp_dir.cleanup()
 
 
+@dataclasses.dataclass(frozen=True)
+class BastionServer:
+    port: int
+
+
+@pytest.fixture
+def bastion_server(request, api):
+    tmp_dir = tempfile.TemporaryDirectory()
+    port_file = os.path.join(tmp_dir.name, "bastion.port")
+    log_file = os.path.join(tmp_dir.name, "bastion.log")
+
+    env = copy.copy(os.environ)
+    env["PYTHONUNBUFFERED"] = "1"
+    log_f = open(log_file, "w+")
+    issuer_prefix = f"http://127.0.0.1:{api.port}/pf/t"
+    popen = subprocess.Popen(
+        ["scripts/pf-bastion", "--issuer-prefix", issuer_prefix, "--port-file", port_file],
+        stdout=log_f,
+        stderr=subprocess.STDOUT,
+        text=True,
+        env=env,
+    )
+
+    start = time.time()
+    port = None
+    while time.time() - start < 5:
+        try:
+            with open(port_file) as f:
+                data = f.read()
+        except FileNotFoundError:
+            time.sleep(0.1)
+            continue
+        try:
+            port = int(data.strip())
+        except Exception:
+            time.sleep(0.1)
+            continue
+        break
+
+    if port is None:
+        log_f.flush()
+        with open(log_file) as f:
+            print(f"Bastion log: {f.read()}")
+        raise Exception("Unable to start bastion server")
+
+    yield BastionServer(port=port)
+
+    popen.terminate()
+    popen.wait()
+    log_f.close()
+    if hasattr(request.node, "rep_call"):
+        if request.node.rep_call.failed:
+            with open(log_file) as f:
+                print(f"Bastion log:\n{f.read()}")
+            return
+    tmp_dir.cleanup()
+
+
 @pytest.hookimpl(tryfirst=True, hookwrapper=True)
 def pytest_runtest_makereport(item, call):
     outcome = yield

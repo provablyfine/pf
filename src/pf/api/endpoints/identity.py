@@ -63,7 +63,7 @@ def read_self_endpoint() -> schemas.Identity:
     if matching_bastions:
         grant_converter = converters.GrantConverter()
         for bastion in matching_bastions:
-            token = model.bastion.generate_token(bastion.id)
+            token = model.bastion.generate_token(bastion.id, "connect")
             bastion_schema = converters.bastion_to_schema(grant_converter, bastion)
             bastion_schema.token = token
 
@@ -99,7 +99,7 @@ def update_self_endpoint(data: schemas.IdentitySelfUpdateRequest) -> schemas.Ide
     if matching_bastions:
         grant_converter = converters.GrantConverter()
         for bastion in matching_bastions:
-            token = model.bastion.generate_token(bastion.id)
+            token = model.bastion.generate_token(bastion.id, "connect")
             bastion_schema = converters.bastion_to_schema(grant_converter, bastion)
             bastion_schema.token = token
 
@@ -135,7 +135,7 @@ def read_self_token_endpoint(service: str) -> schemas.APIBase:
             responses.problem_response(status_code=403, title="Not allowed to access this bastion")
         )
 
-    token = model.bastion.generate_token(bastion_id)
+    token = model.bastion.generate_token(bastion_id, "register")
     return schemas.TokenResponse(token=token)
 
 

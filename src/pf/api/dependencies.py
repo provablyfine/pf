@@ -31,5 +31,6 @@ async def tenant_context(
     with engines[tenant_name].begin() as conn:
         dao = dao_factory.create(conn, db.metadata)
         with ctx.set_tenant_id(tenant_row.id):
-            with ctx.set_db(dao):
-                yield
+            with ctx.set_tenant_name(tenant_name):
+                with ctx.set_db(dao):
+                    yield

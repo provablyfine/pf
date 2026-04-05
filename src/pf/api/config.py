@@ -36,7 +36,7 @@ class Config:
     user_certificate_lifetime: int = 60
     user_extra_trusted_keys_filename: str = "user-trusted-key.pub"
 
-    oidc_key_staging_period: int = 7 * 86400
+    oidc_key_grace_period: int = 7 * 86400
     oidc_key_rotation_period: int = 30 * 86400
 
     default_bastion: DefaultBastion | None = None

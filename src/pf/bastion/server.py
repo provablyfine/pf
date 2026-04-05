@@ -2,6 +2,8 @@ import argparse
 import datetime
 import signal
 import socket
+import logging
+import sys
 
 import uvicorn
 
@@ -15,8 +17,10 @@ def run():
     group.add_argument("--dev", action="store_true")
     parser.add_argument("-p", "--port", type=int, default=0)
     parser.add_argument("--port-file", default=None)
+    parser.add_argument("-d", "--debug", action="count", default=0)
     args = parser.parse_args()
 
+    logging.basicConfig(stream=sys.stdout, level='DEBUG')
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.bind(("127.0.0.1", args.port))

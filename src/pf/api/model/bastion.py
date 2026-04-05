@@ -3,6 +3,7 @@ import time
 
 import jwt
 
+from ... import jwk
 from ..context import ctx
 from . import audit_log, oidc_key
 
@@ -126,13 +127,21 @@ def read_matching() -> list[Bastion]:
     return matching
 
 
-def generate_token(bastion_id: int) -> str:
-    private_key = oidc_key.get_signing_key()
+def generate_token(bastion_id: int, permission: str) -> str:
+    private_key = oidc_key.get_private_key()
+    assert private_key.type == jwk.KeyType.ED25519
+    identity = ctx.db.identity.read_one(id=ctx.identity_id)
+    assert identity is not None
+    iss = f"{ctx.config.base_url}/pf/t/{ctx.tenant_name}/public/oidc"
     now = int(time.time())
     claims = {
         "sub": str(ctx.identity_id),
-        "aud": f"bastion:{bastion_id}",
+        "iss": iss,
+        "aud": "bastion",
         "iat": now,
         "exp": now + 60,
+        "name": identity.name,
+        "permissions": [permission],
+        "tenant_id": ctx.tenant_id,
     }
-    return jwt.encode(claims, private_key.to_crypto(), algorithm="EdDSA")
+    return jwt.encode(claims, private_key.to_crypto(), algorithm="EdDSA", headers={"kid": private_key.thumbprint()})

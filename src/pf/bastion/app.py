@@ -2,6 +2,7 @@ import asyncio
 import contextlib
 import dataclasses
 import logging
+import sys
 
 import fastapi
 import jwt
@@ -16,6 +17,7 @@ class Config:
     dev_tenant_id: int | None
     dev_name: str | None
     issuer_prefix: str | None
+    log_level: str = "WARNING"
 
 
 class Client:
@@ -43,12 +45,17 @@ class TrustedKeys:
     def lookup(self, token: str) -> TrustedKey | None:
         # we manually decode the token to extract the iss
         try:
-            unverified = jwt.decode(token, options={"verify_signature": False, "require": ["iss", "kid"]})
+            unverified = jwt.decode_complete(token, options={"verify_signature": False, "require": ["iss"]})
         except jwt.exceptions.InvalidTokenError as e:
             logger.debug(f"Invalid token: {e}")
             return None
-
-        iss, kid = unverified["iss"], unverified["kid"]
+        header = unverified["header"]
+        payload = unverified["payload"]
+        kid = header.get("kid")
+        if kid is None:
+            logger.debug("Missing kid in header")
+            return None
+        iss = payload["iss"]
 
         # We manually validate the iss because we want to do a prefix match, not an exact
         # match because we have multiple tenants !
@@ -58,7 +65,7 @@ class TrustedKeys:
 
         client = self._client_by_iss.get(iss)
         if client is None:
-            client = jwt.PyJWKClient(iss)
+            client = jwt.PyJWKClient(f"{iss}/.well-known/jwks.json")
             self._client_by_iss[iss] = client
         try:
             key = client.get_signing_key(kid)
@@ -91,6 +98,7 @@ def verify_token(ws: fastapi.websockets.WebSocket, expected_permission: str) -> 
 
     trusted_key = ws.app.state.trusted_keys.lookup(token)
     if trusted_key is None:
+        logger.error("Could not find matching trusted key")
         return None
 
     try:
@@ -174,9 +182,12 @@ async def connect(ws: fastapi.websockets.WebSocket, hostname: str):
     if token is None:
         await ws.close(code=1008)
         return
+
+
     client_key = (token.tenant_id, hostname)
     multiplexer = ws.app.state.clients.get(client_key)
     if multiplexer is None:
+        # XXX: is 404 ok ?
         await ws.close(code=404, reason="Hostname is not registered")
         return
 
@@ -205,6 +216,19 @@ def create(conf: Config) -> fastapi.FastAPI:
         app.state.dev_tenant_id = conf.dev_tenant_id
         app.state.dev_name = conf.dev_name
         yield
+
+    match conf.log_level:
+        case "DEBUG":
+            level = logging.DEBUG
+        case "INFO":
+            level = logging.INFO
+        case "WARNING":
+            level = logging.WARN
+        case "ERROR":
+            level = logging.ERROR
+        case _:
+            assert False
+    logging.basicConfig(stream=sys.stdout, level=level)
 
     fastapi_app = fastapi.FastAPI(lifespan=lifespan)
     fastapi_app.include_router(router)

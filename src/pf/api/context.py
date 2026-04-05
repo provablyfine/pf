@@ -13,6 +13,7 @@ _db_var: contextvars.ContextVar[typing.Any | None] = contextvars.ContextVar("db"
 _identity_id_var: contextvars.ContextVar[int | None] = contextvars.ContextVar("identity_id", default=None)
 _invitation_var: contextvars.ContextVar = contextvars.ContextVar("invitation", default=None)
 _tenant_id_var: contextvars.ContextVar[int | None] = contextvars.ContextVar("tenant_id", default=None)
+_tenant_name_var: contextvars.ContextVar[str | None] = contextvars.ContextVar("tenant_name", default=None)
 
 
 class RequestContext:
@@ -105,6 +106,21 @@ class RequestContext:
             yield
         finally:
             _tenant_id_var.set(None)
+
+    @property
+    def tenant_name(self) -> str:
+        v = _tenant_name_var.get()
+        assert v is not None
+        return v
+
+    @contextlib.contextmanager
+    def set_tenant_name(self, tenant_name: str):
+        assert _tenant_name_var.get() is None
+        _tenant_name_var.set(tenant_name)
+        try:
+            yield
+        finally:
+            _tenant_name_var.set(None)
 
 
 ctx = RequestContext()
