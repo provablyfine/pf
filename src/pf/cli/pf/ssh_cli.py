@@ -147,10 +147,9 @@ def _ssh_function(args):
     last_error: Exception | None = None
 
     for bastion in bastion_list:
-        if bastion.get("connect_url") and bastion.get("token"):
-            token = bastion["token"]
+        if bastion.get("connect_url"):
             connect_url = bastion["connect_url"]
-            proxy_cmd = f"pf bastion connect --token {token} --url {connect_url} --hostname {host}"
+            proxy_cmd = f"pf -c {args.config} bastion connect --url={connect_url} --hostname={host}"
             ssh_cmd = build_ssh_cmd("localhost", proxy_command=proxy_cmd)
             try:
                 os.execvp("ssh", ssh_cmd)

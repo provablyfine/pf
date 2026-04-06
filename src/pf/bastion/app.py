@@ -20,11 +20,6 @@ class Config:
     log_level: str = "WARNING"
 
 
-class Client:
-    def __init__(self, socket: fastapi.websockets.WebSocket):
-        self._socket = socket
-
-
 @dataclasses.dataclass
 class Token:
     name: str
@@ -79,7 +74,7 @@ class TrustedKeys:
         return TrustedKey(issuer=iss, key=key)
 
 
-def verify_token(ws: fastapi.websockets.WebSocket, expected_permission: str) -> Token | None:
+def verify_token(ws: fastapi.websockets.WebSocket) -> Token | None:
     if ws.app.state.dev_tenant_id is not None and ws.app.state.dev_name is not None:
         return Token(tenant_id=ws.app.state.dev_tenant_id, name=ws.app.state.dev_name)
 
@@ -108,16 +103,12 @@ def verify_token(ws: fastapi.websockets.WebSocket, expected_permission: str) -> 
             algorithms=["EdDSA"],
             audience=ws.app.state.audience,
             issuer=trusted_key.issuer,
-            options={"require": ["sub", "name", "permissions", "tenant_id"]},
+            options={"require": ["sub", "name", "tenant_id"]},
         )
     except jwt.exceptions.InvalidTokenError as e:
         logger.debug(f"Invalid token: {e}")
         return None
 
-    # Final checks before we declare victory
-    if expected_permission not in payload["permissions"]:
-        logger.debug("Invalid permission requested. Someone is using tokens incorrectly.")
-        return None
     if not isinstance(payload["tenant_id"], int):
         logger.debug(f"Invalid token: tenant_id is not an integer: {payload['tenant_id']}")
         return None
@@ -131,7 +122,7 @@ router = fastapi.APIRouter()
 
 @router.websocket("/register")
 async def register(ws: fastapi.websockets.WebSocket) -> None:
-    token = verify_token(ws, "register")
+    token = verify_token(ws)
     if token is None:
         await ws.close(code=1008)
         return
@@ -148,62 +139,73 @@ async def register(ws: fastapi.websockets.WebSocket) -> None:
     finally:
         await multiplexer.close()
         del ws.app.state.clients[client_key]
-        await ws.close(code=1000)
+        try:
+            await ws.close()
+        except Exception:
+            pass
     return None
-
-
-async def _relay_ws_to_channel(ws: fastapi.WebSocket, ch: mux.Channel) -> None:
-    """Forward messages from the local WebSocket to the mux channel."""
-    try:
-        while True:
-            data = await ws.receive_bytes()
-            await ch.send(data)
-    except fastapi.WebSocketDisconnect:
-        raise
-    except Exception as exc:
-        raise mux.ChannelError("ws->channel relay failed") from exc
-
-
-async def _relay_channel_to_ws(ws: fastapi.WebSocket, ch: mux.Channel) -> None:
-    """Forward messages from the mux channel to the local WebSocket."""
-    try:
-        while True:
-            data = await ch.receive()
-            await ws.send_bytes(data)
-    except (mux.ChannelError, mux.MuxError):
-        raise
-    except Exception as exc:
-        raise fastapi.WebSocketDisconnect() from exc
 
 
 @router.websocket("/connect")
 async def connect(ws: fastapi.websockets.WebSocket, hostname: str):
-    token = verify_token(ws, "connect")
+    token = verify_token(ws)
     if token is None:
         await ws.close(code=1008)
         return
 
-
     client_key = (token.tenant_id, hostname)
-    multiplexer = ws.app.state.clients.get(client_key)
-    if multiplexer is None:
-        # XXX: is 404 ok ?
-        await ws.close(code=404, reason="Hostname is not registered")
+    host_mux = ws.app.state.clients.get(client_key)
+    if host_mux is None:
+        await ws.close(code=1008, reason="Hostname is not registered")
         return
 
-    await ws.accept(subprotocol="ssh")
+    await ws.accept(subprotocol="mux-ssh")
 
-    ch = await multiplexer.open_channel()
+    user_mux = mux.Server(ws)
+    user_ch = await user_mux.open_channel()
+    host_ch = await host_mux.open_channel()
+
+    async def relay_user_to_host() -> None:
+        logger.debug("relay_user_to_host start")
+        try:
+            while True:
+                data = await user_ch.receive()
+                logger.debug(f"relay_user_to_host rx={len(data)}")
+                await host_ch.send(data)
+                logger.debug(f"relay_user_to_host tx={len(data)}")
+        except (mux.ChannelError, mux.MuxError):
+            pass
+        finally:
+            await host_ch.close()
+
+    async def relay_host_to_user() -> None:
+        logger.debug("relay_host_to_user start")
+        try:
+            while True:
+                data = await host_ch.receive()
+                logger.debug(f"relay_host_to_user rx={len(data)}")
+                await user_ch.send(data)
+                logger.debug(f"relay_host_to_user tx={len(data)}")
+        except (mux.ChannelError, mux.MuxError):
+            pass
+        finally:
+            await user_ch.close()
+
     try:
         await asyncio.gather(
-            _relay_ws_to_channel(ws, ch),
-            _relay_channel_to_ws(ws, ch),
+            relay_user_to_host(),
+            relay_host_to_user(),
         )
-    except (mux.ChannelError, mux.MuxError, fastapi.WebSocketDisconnect):
+    except (mux.ChannelError, mux.MuxError):
         pass
     finally:
-        await ch.close()
-        await ws.close()
+        await host_ch.close()
+        await user_ch.close()
+        await user_mux.close()
+        try:
+            await ws.close()
+        except Exception:
+            pass
 
 
 def create(conf: Config) -> fastapi.FastAPI:

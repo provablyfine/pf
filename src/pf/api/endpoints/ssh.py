@@ -183,10 +183,7 @@ def sign_user_certificate(data: schemas.SSHUserCertificateRequest) -> schemas.SS
     if matching_bastions:
         grant_converter = converters.GrantConverter()
         for bastion in matching_bastions:
-            token = model.bastion.generate_token(bastion.id, "connect")
             bastion_schema = converters.bastion_to_schema(grant_converter, bastion)
-            bastion_schema.token = token
-            bastion_schema.ip_address_list = ip_address_list
             bastion_schema_list.append(bastion_schema)
 
     return schemas.SSHUserCertificateResponse(

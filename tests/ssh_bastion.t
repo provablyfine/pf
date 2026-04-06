@@ -25,8 +25,7 @@ New host starts
   $ pf -c host.json config --directory $DIRECTORY_URL
   $ ssh-keygen -t ed25519 -f host-account -N "" > /dev/null
   $ pf -c host.json accept --invitation=$INVITATION  --key host-account
-  $ ssh-keygen -t ed25519 -f host-session -N "" > /dev/null
-  $ pf -c host.json login --session-key host-session
+  $ pf -c host.json login
 
 New host SSH setup
   $ pf -c host.json openssh sign-host --public-key=$SSHD_KEYS_DIRECTORY/ssh_host_rsa_key.pub --public-key=$SSHD_KEYS_DIRECTORY/ssh_host_ecdsa_key.pub --public-key=$SSHD_KEYS_DIRECTORY/ssh_host_ed25519_key.pub
@@ -34,9 +33,10 @@ New host SSH setup
   $ podman exec $SSHD_CONTAINER_ID pkill -HUP sshd
 
 Host registers with bastion
-  $ pf -c host.json bastion register -p $SSHD_PORT > /dev/null 2>&1 &
+  $ pf -c host.json bastion register -p $SSHD_PORT > register.log 2>&1 &
   $ BASTION_REGISTER_PID=$!
-  $ sleep 1
+  $ sleep 2
+  $ cat register.log 2>&1 | head -10 || echo "log error"
 
 Provision new user
   $ pfa -c config.json identity create -n user
@@ -51,8 +51,7 @@ User accepts invite and logs in
   $ pf -c user.json config --directory $DIRECTORY_URL
   $ ssh-keygen -t ed25519 -f user-account -N "" > /dev/null
   $ pf -c user.json accept --invitation=$INVITATION --key user-account
-  $ ssh-keygen -t ed25519 -f user-session -N "" > /dev/null
-  $ pf -c user.json login --session-key user-session
+  $ pf -c user.json login
 
 User connects to host via pf ssh through bastion
   $ pf -c user.json ssh -n root@host "whoami"

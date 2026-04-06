@@ -97,7 +97,6 @@ identity = sqlalchemy.Table(
     sqlalchemy.Column("created_by_id", sqlalchemy.Integer, index=False, unique=False, nullable=True),
     sqlalchemy.Column("created_at", sqlalchemy.Integer, nullable=False),
     sqlalchemy.Column("name", sqlalchemy.String, index=True, unique=True, nullable=False),
-    sqlalchemy.Column("last_seen_at", sqlalchemy.Integer, nullable=True),
     # We need autoincrement to make sure ids are not recycled EVER.
     sqlite_autoincrement=True,
 )

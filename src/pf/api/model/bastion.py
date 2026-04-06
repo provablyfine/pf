@@ -127,7 +127,7 @@ def read_matching() -> list[Bastion]:
     return matching
 
 
-def generate_token(bastion_id: int, permission: str) -> str:
+def generate_token() -> str:
     private_key = oidc_key.get_private_key()
     assert private_key.type == jwk.KeyType.ED25519
     identity = ctx.db.identity.read_one(id=ctx.identity_id)
@@ -141,7 +141,6 @@ def generate_token(bastion_id: int, permission: str) -> str:
         "iat": now,
         "exp": now + 60,
         "name": identity.name,
-        "permissions": [permission],
         "tenant_id": ctx.tenant_id,
     }
     return jwt.encode(claims, private_key.to_crypto(), algorithm="EdDSA", headers={"kid": private_key.thumbprint()})

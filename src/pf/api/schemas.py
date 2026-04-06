@@ -387,8 +387,6 @@ class Identity(APIBase):
     name: str
     tags: list[Tag]
     boundaries: list[IdentityBoundary]
-    last_seen_at: int | None = None
-    bastion_list: list[Bastion] = []
 
 
 class IdentityListResponse(APIBase):
@@ -455,10 +453,6 @@ class IdentityUpdateRequest(APIBase):
         return self
 
 
-class IdentitySelfUpdateRequest(APIBase):
-    pass
-
-
 class IdentityInviteRequest(APIBase):
     delivery: typing.Literal["manual", "email"]
 
@@ -467,8 +461,12 @@ class IdentityInviteManualResponse(APIBase):
     key: SymmetricJWK
 
 
-class TokenResponse(APIBase):
+class IdentitySelfTokenResponse(APIBase):
     token: str
+
+class IdentitySelfBastionListResponse(APIBase):
+    bastions: list[Bastion]
+
 
 
 # --- Bastion ---
@@ -480,8 +478,6 @@ class Bastion(APIBase):
     connect_url: str | None = None
     ssh_proxy_jump: str | None = None
     tag_list: list[TagNameValue] = []
-    token: str | None = None
-    ip_address_list: list[str] = []
 
 
 class BastionListResponse(APIBase):

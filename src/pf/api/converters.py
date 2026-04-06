@@ -522,7 +522,6 @@ def identity_list_to_schema(identities: list[model.identity.Identity]) -> list[s
             name=i.name,
             tags=[tag_by_id[tag_id] for tag_id in i.tag_id_list],
             boundaries=[boundary_by_id[boundary_id] for boundary_id in i.boundary_id_list],
-            last_seen_at=i.last_seen_at,
         )
 
     return [_one(i) for i in identities]

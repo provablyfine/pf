@@ -20,7 +20,9 @@ def run():
     parser.add_argument("-d", "--debug", action="count", default=0)
     args = parser.parse_args()
 
-    logging.basicConfig(stream=sys.stdout, level='DEBUG')
+    log_level_map = {0: "WARNING", 1: "INFO", 2: "DEBUG"}
+    log_level = log_level_map.get(args.debug, "DEBUG")
+
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.bind(("127.0.0.1", args.port))
@@ -32,9 +34,9 @@ def run():
             f.write(str(port))
 
     if args.dev:
-        conf = app.Config(dev_tenant_id=1, dev_name="hello", issuer_prefix=None)
+        conf = app.Config(dev_tenant_id=1, dev_name="hello", issuer_prefix=None, log_level=log_level)
     else:
-        conf = app.Config(dev_tenant_id=None, dev_name=None, issuer_prefix=args.issuer_prefix)
+        conf = app.Config(dev_tenant_id=None, dev_name=None, issuer_prefix=args.issuer_prefix, log_level=log_level)
     application = app.create(conf)
 
     print(f"Starting Bastion on {host}:{port} using FD {sock.fileno()}")

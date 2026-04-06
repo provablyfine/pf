@@ -11,7 +11,6 @@ class Identity:
     name: str
     tag_id_list: list[int]
     boundary_id_list: list[int]
-    last_seen_at: int | None = None
 
 
 def create(name: str, boundary_id_list: list[int], tag_id_list: list[int]) -> int:
@@ -91,7 +90,6 @@ def read_all(**kwargs):
             name=i.name,
             tag_id_list=tag_ids_by_identity_id.get(i.id, []),
             boundary_id_list=boundary_ids_by_identity_id[i.id],
-            last_seen_at=i.last_seen_at,
         )
         for i in identities
     ]
@@ -103,7 +101,6 @@ def update(
     name: str | None = None,
     added_tag_id_list: list[int] | None = None,
     deleted_tag_id_list: list[int] | None = None,
-    last_seen_at: int | None = None,
 ):
     update_fields = {}
     if name is not None:
@@ -113,8 +110,6 @@ def update(
             name=name,
         )
         update_fields["name"] = name
-    if last_seen_at is not None:
-        update_fields["last_seen_at"] = last_seen_at
 
     if len(update_fields) > 0:
         ctx.db.identity.update(**update_fields).where(id=id)

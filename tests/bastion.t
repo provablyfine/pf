@@ -1,0 +1,50 @@
+Initialize server and login
+  $ bash $TESTDIR/fixture.sh
+  .* (re)
+
+Create bastion resource
+  $ pfa -c config.json bastion create --register-url ws://127.0.0.1:$BASTION_PORT/register --connect-url ws://127.0.0.1:$BASTION_PORT/connect
+
+Provision new host
+  $ pfa -c config.json identity create -n host 
+  $ HOST_ID=$(pfa -c config.json identity list -n host -q)
+  $ INVITATION=$(pfa -c config.json identity invite --manual -i $HOST_ID)
+  $ echo $INVITATION
+  .* (re)
+
+New host starts
+  $ DIRECTORY_URL=http://127.0.0.1:$API_PORT/pf/t/root/directory
+  $ pf -c host.json config --directory $DIRECTORY_URL
+  $ ssh-keygen -t ed25519 -f host-account -N "" > /dev/null
+  $ pf -c host.json accept --invitation=$INVITATION  --key host-account
+  $ pf -c host.json login
+
+Host starts echo server
+  $ ncat -e /bin/cat -k -t -l 1234 > echo-server.log 2>&1 & 
+  $ ECHO_PID=$!
+
+Host registers with bastion
+  $ pf -ddd -c host.json bastion register -p 1234 > register.log 2>&1 &
+  $ BASTION_REGISTER_PID=$!
+
+Provision new user
+  $ pfa -c config.json identity create -n user
+  $ USER_ID=$(pfa -c config.json identity list -n user -q)
+  $ INVITATION=$(pfa -c config.json identity invite --manual -i $USER_ID)
+  $ echo $INVITATION
+  .* (re)
+
+User accepts invite and logs in
+  $ DIRECTORY_URL=http://127.0.0.1:$API_PORT/pf/t/root/directory
+  $ pf -c user.json config --directory $DIRECTORY_URL
+  $ ssh-keygen -t ed25519 -f user-account -N "" > /dev/null
+  $ pf -c user.json accept --invitation=$INVITATION --key user-account
+  $ pf -c user.json login
+  $ echo "hello" | pf -c user.json bastion connect --url ws://127.0.0.1:$BASTION_PORT/connect --host host
+  hello
+
+#Cleanup
+#  $ kill $BASTION_REGISTER_PID
+#  $ wait $BASTION_REGISTER_PID 2>/dev/null; true
+#  $ kill $ECHO_PID
+#  $ wait $ECHO_PID 2>/dev/null; true
