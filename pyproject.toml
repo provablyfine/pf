@@ -50,6 +50,8 @@ HTTP_PROXY = { unset = true }
 HTTPS_PROXY = { unset = true }
 http_proxy = { unset = true }
 https_proxy = { unset = true }
+PYTHONASYNCIODEBUG = "1"
+PYTHONUNBUFFERED = "1"
 
 [tool.pyright]
 include = ["src/pf", "tests"]
