@@ -2,7 +2,6 @@ import asyncio
 import contextlib
 import dataclasses
 import logging
-import sys
 
 import fastapi
 import jwt

@@ -2,8 +2,6 @@ import argparse
 import datetime
 import signal
 import socket
-import logging
-import sys
 
 import uvicorn
 

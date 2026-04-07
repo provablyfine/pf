@@ -1,6 +1,5 @@
 import datetime
 import json
-import uuid
 
 from ... import jwk
 from ..context import ctx
