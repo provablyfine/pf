@@ -14,6 +14,7 @@ def run():
     parser.add_argument("-c", "--config", default="pf-server.yaml")
     parser.add_argument("-p", "--port", type=int, default=0)
     parser.add_argument("--port-file", default=None)
+    parser.add_argument("--log-filename", default=None)
     args = parser.parse_args()
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -27,6 +28,7 @@ def run():
             f.write(str(port))
 
     conf = config.Config.load(args.config)
+    conf.log_filename = args.log_filename
     base_url = urllib.parse.urlparse(conf.base_url)
     base_url = base_url._replace(netloc=f"{host}:{port}")
     conf.base_url = urllib.parse.urlunparse(base_url)

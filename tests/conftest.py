@@ -213,7 +213,6 @@ def api(request):
     api_kek_file = os.path.join(tmp_dir.name, "kek_file.key")
     api_config = os.path.join(tmp_dir.name, "config.json")
     api_port_file = os.path.join(tmp_dir.name, "api.port")
-    api_log = os.path.join(tmp_dir.name, "api.log")
     with open(api_kek_file, "wb+") as f:
         f.write(random.randbytes(32))
     with open(api_config, "w+") as f:
@@ -299,7 +298,7 @@ def bastion_server(request, api):
     log_f = open(log_file, "w+")
     issuer_prefix = f"http://127.0.0.1:{api.port}/pf/t"
     popen = subprocess.Popen(
-        ["scripts/pf-bastion", "--issuer-prefix", issuer_prefix, "--port-file", port_file], #, "-ddd", "--log-filename=/tmp/bastion.log"],
+        ["scripts/pf-bastion", "--issuer-prefix", issuer_prefix, "--port-file", port_file],
         stdout=log_f,
         stderr=subprocess.STDOUT,
         text=True,

@@ -1,5 +1,4 @@
 import argparse
-import logging
 import os
 import os.path
 import sys
@@ -9,6 +8,7 @@ import urllib.parse
 import requests
 
 from ... import client
+from ... import log
 from .. import login
 from . import admin_cli
 
@@ -72,19 +72,7 @@ def _login_function(args):
 
 
 def _do_main(args):
-    if args.debug > 0:
-        match args.debug:
-            case 3:
-                level = logging.DEBUG
-            case 2:
-                level = logging.INFO
-            case 1:
-                level = logging.WARN
-            case _:
-                assert args.debug > 3
-                level = logging.DEBUG
-
-        logging.basicConfig(stream=sys.stdout, level=level)
+    log.setup(args.debug, log.filename("pfa", args))
 
     if getattr(args, "auto_login", False):
         try:
@@ -111,10 +99,13 @@ def _do_main(args):
 
 def pfa():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-d", "--debug", help="Increase debugging level", action="count", default=0)
+    parser.add_argument(
+        "-d", "--debug", help="Increase debugging level", action="count", default=int(os.environ.get("PF_DEBUG") or "0")
+    )
+    parser.add_argument("--log-filename", help="Filename where logs will be written", default=None)
     parser.add_argument("-c", "--config", help="configuration file", default=_DEFAULT_CONFIG)
     parser.add_argument("--auto-login", action="store_true", default=False)
-    subparsers = parser.add_subparsers(required=True)
+    subparsers = parser.add_subparsers(required=True, dest="_cmd1")
 
     initialize_parser = subparsers.add_parser("initialize", help="Initialize a new server and register account key")
     initialize_parser.add_argument("url", help="Directory URL of the server")

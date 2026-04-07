@@ -187,7 +187,7 @@ def _auth_delete_function(args):
 
 
 def add_subparser(parser):
-    subparsers = parser.add_subparsers(required=True)
+    subparsers = parser.add_subparsers(required=True, dest="_cmd2")
 
     list_parser = subparsers.add_parser("list", help="List auth configs")
     list_parser.add_argument("-q", "--quiet", help="Equivalent to -f quiet", action="store_true")
@@ -195,7 +195,7 @@ def add_subparser(parser):
     list_parser.set_defaults(func=_auth_list_function)
 
     create_parser = subparsers.add_parser("create", help="Create an auth config")
-    create_type_subparsers = create_parser.add_subparsers(required=True)
+    create_type_subparsers = create_parser.add_subparsers(required=True, dest="_cmd3")
 
     create_http_sig_parser = create_type_subparsers.add_parser("http_sig", help="HTTP signature auth")
     create_http_sig_parser.add_argument("-n", "--name", required=True, help="Name of auth config")
@@ -227,7 +227,7 @@ def add_subparser(parser):
     read_parser.set_defaults(func=_auth_read_function)
 
     update_parser = subparsers.add_parser("update", help="Update an auth config")
-    update_type_subparsers = update_parser.add_subparsers(required=True)
+    update_type_subparsers = update_parser.add_subparsers(required=True, dest="_cmd3")
 
     def _add_update_common(p):
         p.add_argument("-i", "--id", type=int, required=True, help="ID of auth config")

@@ -147,13 +147,9 @@ async def _connect_async(url: str, token: str, hostname: str) -> None:
     loop = asyncio.get_running_loop()
 
     stdin_reader = asyncio.StreamReader()
-    await loop.connect_read_pipe(
-        lambda: asyncio.StreamReaderProtocol(stdin_reader), sys.stdin.buffer
-    )
+    await loop.connect_read_pipe(lambda: asyncio.StreamReaderProtocol(stdin_reader), sys.stdin.buffer)
 
-    stdout_writer, _ = await loop.connect_write_pipe(
-        asyncio.BaseProtocol, sys.stdout.buffer
-    )
+    stdout_writer, _ = await loop.connect_write_pipe(asyncio.BaseProtocol, sys.stdout.buffer)
 
     async with websockets.asyncio.client.connect(
         connect_url,
@@ -207,7 +203,7 @@ def _connect_function(args):
 
 def add_subparser(subparsers):
     parser = subparsers.add_parser("bastion", help="Bastion management")
-    sub = parser.add_subparsers(required=True)
+    sub = parser.add_subparsers(required=True, dest="_cmd2")
 
     register_parser = sub.add_parser("register", help="Register with bastions")
     register_parser.add_argument("-p", "--port", type=int, default=2222, help="Local port to listen on")

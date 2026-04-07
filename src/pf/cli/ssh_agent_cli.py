@@ -90,7 +90,7 @@ def _agent_del_function(args):
 
 
 def add_subparsers(parser):
-    agent_subparsers = parser.add_subparsers(required=True)
+    agent_subparsers = parser.add_subparsers(required=True, dest="_cmd2")
 
     agent_list_identities_parser = agent_subparsers.add_parser("ls")
     agent_list_identities_parser.add_argument("-q", "--quiet", action="store_true")

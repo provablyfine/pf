@@ -1,4 +1,5 @@
 import argparse
+import os
 import os.path
 import sys
 
@@ -7,6 +8,7 @@ import textual.screen
 import textual.worker
 
 from .. import client
+from .. import log
 from . import async_client, home, relogin, setup
 
 _DEFAULT_CONFIG = os.path.join(os.path.expanduser("~"), ".config", "pf", "config.json")
@@ -59,7 +61,13 @@ class TuiApp(textual.app.App[None]):
 def pfat() -> None:
     parser = argparse.ArgumentParser(description="pf admin TUI")
     parser.add_argument("-c", "--config", default=_DEFAULT_CONFIG, help="Configuration file")
+    parser.add_argument(
+        "-d", "--debug", help="Increase debugging level", action="count", default=int(os.environ.get("PF_DEBUG") or "0")
+    )
+    parser.add_argument("--log-filename", help="Filename where logs will be written", default=None)
     args = parser.parse_args()
+
+    log.setup(args.debug, log.filename("pfat", args))
 
     if not os.path.exists(args.config):
         app = SetupApp(setup.SetupChoiceScreen(args.config))

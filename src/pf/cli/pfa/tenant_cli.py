@@ -97,7 +97,7 @@ def _delete_function(args):
 
 
 def add_subparser(parser):
-    subparsers = parser.add_subparsers(required=True)
+    subparsers = parser.add_subparsers(required=True, dest="_cmd2")
 
     list_parser = subparsers.add_parser("list", help="List tenants")
     list_parser.add_argument("-q", "--quiet", action="store_true", help="Equivalent to -f quiet")

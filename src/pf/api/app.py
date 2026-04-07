@@ -2,7 +2,6 @@ import contextlib
 import logging
 import os
 import random
-import sys
 import time
 import traceback
 
@@ -16,6 +15,7 @@ import sqlalchemy
 import yaml
 
 from .. import base64url
+from .. import log
 from . import dao_factory, db, dependencies, endpoints, middleware, responses, tenant_db
 
 logger = logging.getLogger(__name__)
@@ -92,7 +92,7 @@ def create(conf) -> fastapi.FastAPI:
             level = logging.ERROR
         case _:
             assert False
-    logging.basicConfig(stream=sys.stdout, level=level)
+    log.setup_server("api", level, conf.log_filename)
 
     def _bootstrap_root_tenant(registry_engine: sqlalchemy.Engine):
         root_db_url = f"sqlite:///{os.path.join(conf.tenants_dir, 'root.db')}"

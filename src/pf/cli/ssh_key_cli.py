@@ -67,7 +67,7 @@ def _public_function(args):
 
 def add_subparsers(parser):
     # commands for debugging and testing
-    subparsers = parser.add_subparsers(required=True)
+    subparsers = parser.add_subparsers(required=True, dest="_cmd2")
 
     generate_parser = subparsers.add_parser("generate")
     generate_parser.add_argument(

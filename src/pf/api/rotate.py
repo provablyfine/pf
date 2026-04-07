@@ -1,12 +1,12 @@
 import argparse
 import datetime
 import logging
-import sys
 
 import cryptography.fernet
 import sqlalchemy
 
 from .. import base64url, jwk
+from .. import log
 from . import config, dao_factory, db, model, tenant_db
 from .context import ctx
 
@@ -43,6 +43,7 @@ def rotate(key_type: db.SigningKeyType, crypto_key_type: jwk.KeyType, rotation_p
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", "--config", help="Configuration file", required=True)
+    parser.add_argument("--log-filename", default=None)
     args = parser.parse_args()
 
     conf = config.Config.load(args.config)
@@ -58,7 +59,7 @@ def main():
             level = logging.ERROR
         case _:
             assert False
-    logging.basicConfig(stream=sys.stdout, level=level)
+    log.setup_server("rotate", level, args.log_filename)
 
     with open(conf.kek_filename, "rb") as f:
         kek_string = base64url.encode(f.read()) + "======"

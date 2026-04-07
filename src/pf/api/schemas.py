@@ -464,9 +464,9 @@ class IdentityInviteManualResponse(APIBase):
 class IdentitySelfTokenResponse(APIBase):
     token: str
 
+
 class IdentitySelfBastionListResponse(APIBase):
     bastions: list[Bastion]
-
 
 
 # --- Bastion ---

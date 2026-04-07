@@ -152,7 +152,7 @@ def _sign_user_function(args):
 
 
 def add_subparsers(parser):
-    subparsers = parser.add_subparsers(required=True)
+    subparsers = parser.add_subparsers(required=True, dest="_cmd2")
 
     read_parser = subparsers.add_parser("read", help="Read certificate")
     read_parser.add_argument("filename")

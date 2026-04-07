@@ -68,7 +68,7 @@ def _authorized_principals(args):
 
 
 def add_subparsers(parser):
-    subparsers = parser.add_subparsers(required=True)
+    subparsers = parser.add_subparsers(required=True, dest="_cmd2")
 
     sign_host_parser = subparsers.add_parser("sign-host")
     sign_host_parser.add_argument("--public-key", action="append", default=[], help="Public key to sign")

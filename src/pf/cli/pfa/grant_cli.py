@@ -172,7 +172,7 @@ def _ssh_command_function(args):
 
 
 def add_subparser(parser):
-    subparsers = parser.add_subparsers(required=True)
+    subparsers = parser.add_subparsers(required=True, dest="_cmd2")
 
     tag_parser = subparsers.add_parser("tag")
     tag_parser.add_argument("-f", "--format", choices=["yaml", "json"], default="yaml")

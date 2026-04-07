@@ -228,7 +228,7 @@ def _identity_tag_function(args):
 
 
 def add_subparser(parser):
-    subparsers = parser.add_subparsers(required=True)
+    subparsers = parser.add_subparsers(required=True, dest="_cmd2")
 
     list_parser = subparsers.add_parser("list", help="List identities we have access to")
     group = list_parser.add_argument_group(title="Filter criteria")

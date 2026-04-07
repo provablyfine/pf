@@ -23,18 +23,23 @@ def create(valid_after: int, valid_before: int):
 def get_public_keys() -> list[jwk.Public]:
     now = int(datetime.datetime.now().timestamp())
     grace_period = ctx.config.oidc_key_grace_period
-    keys = ctx.db.oidc_key.read_all(ctx.db.oidc_key.columns.valid_after <= now, ctx.db.oidc_key.columns.valid_before + grace_period > now)
+    keys = ctx.db.oidc_key.read_all(
+        ctx.db.oidc_key.columns.valid_after <= now, ctx.db.oidc_key.columns.valid_before + grace_period > now
+    )
     public_keys = [jwk.Public.from_dict(k.public_key) for k in keys]
     return public_keys
 
 
-
 def get_private_key() -> jwk.Private:
     now = int(datetime.datetime.now().timestamp())
-    active_keys = ctx.db.oidc_key.read_all(ctx.db.oidc_key.columns.valid_after <= now, ctx.db.oidc_key.columns.valid_before > now)
+    active_keys = ctx.db.oidc_key.read_all(
+        ctx.db.oidc_key.columns.valid_after <= now, ctx.db.oidc_key.columns.valid_before > now
+    )
     if len(active_keys) == 0:
         create(now, now + ctx.config.oidc_key_rotation_period)
-        active_keys = ctx.db.oidc_key.read_all(ctx.db.oidc_key.columns.valid_after <= now, ctx.db.oidc_key.columns.valid_before > now)
+        active_keys = ctx.db.oidc_key.read_all(
+            ctx.db.oidc_key.columns.valid_after <= now, ctx.db.oidc_key.columns.valid_before > now
+        )
 
     active_keys.sort(key=lambda k: k.created_at, reverse=True)
     key_row = active_keys[0]

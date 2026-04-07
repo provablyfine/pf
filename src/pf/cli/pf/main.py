@@ -10,6 +10,7 @@ import requests
 import tabulate
 
 from ... import client
+from ... import log
 from .. import login
 from . import bastion_cli, openssh_cli, ssh_cli
 
@@ -76,18 +77,7 @@ def _login_function(args):
 
 
 def _do_main(args):
-    if args.debug > 0:
-        match args.debug:
-            case 3:
-                level = logging.DEBUG
-            case 2:
-                level = logging.INFO
-            case 1:
-                level = logging.WARN
-            case _:
-                assert args.debug > 3
-                level = logging.DEBUG
-        logging.basicConfig(filename=args.log_filename, level=level, format='%(asctime)s - %(levelname)s - %(module)s.%(funcName)s %(message)s', datefmt='%H:%M:%S')
+    log.setup(args.debug, log.filename("pf", args))
 
     try:
         args.func(args)
@@ -104,10 +94,12 @@ def _do_main(args):
 
 def pf():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-d", "--debug", help="Increase debugging level", action="count", default=0)
-    parser.add_argument("--log-filename", help="Filename where logs will be written", default='/dev/stdout')
+    parser.add_argument(
+        "-d", "--debug", help="Increase debugging level", action="count", default=int(os.environ.get("PF_DEBUG") or "0")
+    )
+    parser.add_argument("--log-filename", help="Filename where logs will be written", default=None)
     parser.add_argument("-c", "--config", help="configuration file", default=_DEFAULT_CONFIG)
-    subparsers = parser.add_subparsers(required=True)
+    subparsers = parser.add_subparsers(required=True, dest="_cmd1")
 
     config_parser = subparsers.add_parser("config", help="Create a configuration file")
     config_parser.add_argument(

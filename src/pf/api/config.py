@@ -19,6 +19,7 @@ class Config:
     debug: bool = False
     debug_sql: bool = False
     log_level: str = "ERROR"
+    log_filename: str | None = None
     base_url: str = "http://127.0.0.1:8000"
     tenant_registry_url: str = "sqlite:///tenants.db"
     tenants_dir: str = "tenants"

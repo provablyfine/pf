@@ -6,6 +6,7 @@ import logging
 import fastapi
 import jwt
 
+from .. import log
 from . import mux
 
 logger = logging.getLogger(__name__)
@@ -17,7 +18,7 @@ class Config:
     dev_name: str | None
     issuer_prefix: str | None
     log_level: str = "WARNING"
-    log_filename: str = "/dev/stdout"
+    log_filename: str | None = None
 
 
 @dataclasses.dataclass
@@ -230,7 +231,7 @@ def create(conf: Config) -> fastapi.FastAPI:
             level = logging.ERROR
         case _:
             assert False
-    logging.basicConfig(filename=conf.log_filename, level=level, format='%(asctime)s - %(levelname)s - %(module)s.%(funcName)s %(message)s', datefmt='%H:%M:%S')
+    log.setup_server("bastion", level, conf.log_filename)
 
     fastapi_app = fastapi.FastAPI(lifespan=lifespan)
     fastapi_app.include_router(router)
