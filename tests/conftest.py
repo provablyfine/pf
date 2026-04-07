@@ -213,6 +213,7 @@ def api(request):
     api_kek_file = os.path.join(tmp_dir.name, "kek_file.key")
     api_config = os.path.join(tmp_dir.name, "config.json")
     api_port_file = os.path.join(tmp_dir.name, "api.port")
+    api_log = os.path.join(tmp_dir.name, "api.log")
     with open(api_kek_file, "wb+") as f:
         f.write(random.randbytes(32))
     with open(api_config, "w+") as f:
@@ -338,6 +339,27 @@ def bastion_server(request, api):
                 print(f"Bastion log:\n{f.read()}")
             return
     tmp_dir.cleanup()
+
+
+@pytest.fixture(autouse=True)
+def pf_log_directory(tmp_path, monkeypatch, request):
+    """Set PF_LOG_DIRECTORY to a unique temp directory for each test.
+
+    Logs are auto-deleted after passing tests. On failure, logs are preserved
+    and the location is printed. To keep all logs, run with:
+      uv run pytest --basetemp=/tmp/pf-test-logs tests/
+    """
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    monkeypatch.setenv("PF_LOG_DIRECTORY", str(log_dir))
+
+    def check_preserve_logs():
+        """Print log location if test failed."""
+        if hasattr(request.node, "rep_call") and request.node.rep_call.failed:
+            print(f"\n⚠️  Test failed. Logs preserved at: {log_dir}")
+
+    request.addfinalizer(check_preserve_logs)
+    return log_dir
 
 
 @pytest.hookimpl(tryfirst=True, hookwrapper=True)
