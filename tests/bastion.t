@@ -20,11 +20,11 @@ New host starts
   $ pf -c host.json login
 
 Host starts echo server
-  $ ncat -e /bin/cat -k -t -l 1234 > echo-server.log 2>&1 & 
+  $ socat TCP-LISTEN:1234,reuseaddr,fork EXEC:/bin/cat > echo-server.log 2>&1 &
   $ ECHO_PID=$!
 
 Host registers with bastion
-  $ pf -ddd -c host.json bastion register -p 1234 > register.log 2>&1 &
+  $ pf -c host.json bastion register -p 1234 > register.log 2>&1 &
   $ BASTION_REGISTER_PID=$!
 
 Provision new user
@@ -40,11 +40,13 @@ User accepts invite and logs in
   $ ssh-keygen -t ed25519 -f user-account -N "" > /dev/null
   $ pf -c user.json accept --invitation=$INVITATION --key user-account
   $ pf -c user.json login
+  $ sleep 1
   $ echo "hello" | pf -c user.json bastion connect --url ws://127.0.0.1:$BASTION_PORT/connect --host host
   hello
+#  $ cat register.log
+#  $ cat echo-server.log
 
-#Cleanup
-#  $ kill $BASTION_REGISTER_PID
-#  $ wait $BASTION_REGISTER_PID 2>/dev/null; true
-#  $ kill $ECHO_PID
-#  $ wait $ECHO_PID 2>/dev/null; true
+Cleanup
+  $ pkill -P -9 $BASTION_REGISTER_PID
+  $ kill $BASTION_REGISTER_PID
+  $ kill -TERM $ECHO_PID
