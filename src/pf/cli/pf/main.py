@@ -87,8 +87,7 @@ def _do_main(args):
             case _:
                 assert args.debug > 3
                 level = logging.DEBUG
-
-        logging.basicConfig(stream=sys.stdout, level=level)
+        logging.basicConfig(filename=args.log_filename, level=level, format='%(asctime)s - %(levelname)s - %(module)s.%(funcName)s %(message)s', datefmt='%H:%M:%S')
 
     try:
         args.func(args)
@@ -106,6 +105,7 @@ def _do_main(args):
 def pf():
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--debug", help="Increase debugging level", action="count", default=0)
+    parser.add_argument("--log-filename", help="Filename where logs will be written", default='/dev/stdout')
     parser.add_argument("-c", "--config", help="configuration file", default=_DEFAULT_CONFIG)
     subparsers = parser.add_subparsers(required=True)
 

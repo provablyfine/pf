@@ -35,8 +35,6 @@ New host SSH setup
 Host registers with bastion
   $ pf -c host.json bastion register -p $SSHD_PORT > register.log 2>&1 &
   $ BASTION_REGISTER_PID=$!
-  $ sleep 2
-  $ cat register.log 2>&1 | head -10 || echo "log error"
 
 Provision new user
   $ pfa -c config.json identity create -n user
@@ -63,5 +61,5 @@ User connects to host via pf ssh through bastion
   [2]
 
 Cleanup
+  $ pkill -P -9 $BASTION_REGISTER_PID
   $ kill $BASTION_REGISTER_PID
-  $ wait $BASTION_REGISTER_PID 2>/dev/null; true

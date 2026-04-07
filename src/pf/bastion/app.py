@@ -18,6 +18,7 @@ class Config:
     dev_name: str | None
     issuer_prefix: str | None
     log_level: str = "WARNING"
+    log_filename: str = "/dev/stdout"
 
 
 @dataclasses.dataclass
@@ -230,7 +231,7 @@ def create(conf: Config) -> fastapi.FastAPI:
             level = logging.ERROR
         case _:
             assert False
-    logging.basicConfig(stream=sys.stdout, level=level)
+    logging.basicConfig(filename=conf.log_filename, level=level, format='%(asctime)s - %(levelname)s - %(module)s.%(funcName)s %(message)s', datefmt='%H:%M:%S')
 
     fastapi_app = fastapi.FastAPI(lifespan=lifespan)
     fastapi_app.include_router(router)

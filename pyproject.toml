@@ -35,6 +35,7 @@ dev = [
     "pytest-anyio",
     "ruff>=0.15.6",
     "pytest-env>=1.6.0",
+    "pytest-timeout>=2.4.0",
 ]
 
 [tool.pytest.ini_options]

@@ -108,6 +108,7 @@ def _ssh_function(args):
         target_host: str,
         proxy_command: str | None = None,
         proxy_jump: str | None = None,
+        ip_address: str | None = None,
     ) -> list[str]:
         cmd = [
             "ssh",
@@ -138,6 +139,8 @@ def _ssh_function(args):
             cmd += ["-o", f"ProxyCommand={proxy_command}"]
         if proxy_jump:
             cmd += ["-o", f"ProxyJump={proxy_jump}"]
+        if ip_address:
+            cmd += ["-o", f"Hostname={ip_address}", "-o", f"HostKeyAlias={host}"]
         target = f"{user}@{target_host}"
         cmd.append(target)
         if args.command:
@@ -150,7 +153,7 @@ def _ssh_function(args):
         if bastion.get("connect_url"):
             connect_url = bastion["connect_url"]
             proxy_cmd = f"pf -c {args.config} bastion connect --url={connect_url} --hostname={host}"
-            ssh_cmd = build_ssh_cmd("localhost", proxy_command=proxy_cmd)
+            ssh_cmd = build_ssh_cmd(host, proxy_command=proxy_cmd)
             try:
                 os.execvp("ssh", ssh_cmd)
             except Exception as e:
@@ -165,17 +168,11 @@ def _ssh_function(args):
                 last_error = e
 
     for ip in ip_address_list:
-        ssh_cmd = build_ssh_cmd(ip)
+        ssh_cmd = build_ssh_cmd(host, ip_address=ip)
         try:
             os.execvp("ssh", ssh_cmd)
         except Exception as e:
             last_error = e
-
-    ssh_cmd = build_ssh_cmd(host)
-    try:
-        os.execvp("ssh", ssh_cmd)
-    except Exception as e:
-        last_error = e
 
     raise client.exceptions.UI(f"Failed to connect via any bastion or direct IP: {last_error}")
 

@@ -144,6 +144,17 @@ async def _connect_async(url: str, token: str, hostname: str) -> None:
     connect_url = f"{url}?hostname={hostname}"
     ssl_context = ssl.create_default_context() if url.startswith("wss://") else None
 
+    loop = asyncio.get_running_loop()
+
+    stdin_reader = asyncio.StreamReader()
+    await loop.connect_read_pipe(
+        lambda: asyncio.StreamReaderProtocol(stdin_reader), sys.stdin.buffer
+    )
+
+    stdout_writer, _ = await loop.connect_write_pipe(
+        asyncio.BaseProtocol, sys.stdout.buffer
+    )
+
     async with websockets.asyncio.client.connect(
         connect_url,
         ssl=ssl_context,
@@ -157,7 +168,7 @@ async def _connect_async(url: str, token: str, hostname: str) -> None:
             logger.debug("start forward stdin")
             try:
                 while True:
-                    data = sys.stdin.buffer.read(4096)
+                    data = await stdin_reader.read(4096)
                     if not data:
                         break
                     logger.debug(f"stdin: read={len(data)}")
@@ -174,8 +185,7 @@ async def _connect_async(url: str, token: str, hostname: str) -> None:
                 while True:
                     data = await ch.receive()
                     logger.debug(f"ch: read={len(data)}")
-                    sys.stdout.buffer.write(data)
-                    sys.stdout.buffer.flush()
+                    stdout_writer.write(data)
                     logger.debug(f"stdout: write={len(data)}")
             except (bastion.demux.ChannelError, bastion.demux.MuxError):
                 pass
