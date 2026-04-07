@@ -10,3 +10,4 @@
 **/*.patch
 **/*.swo
 .coverage*
+uv.lock
