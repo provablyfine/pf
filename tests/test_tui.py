@@ -4,11 +4,29 @@ import tempfile
 
 import pytest
 import textual.widgets
+from textual.worker import WorkerCancelled, WorkerFailed
 
 import pf.client
 import pf.tui.app
 import pf.tui.async_client
 import pf.tui.grant_edit
+
+
+async def _wait(pilot, app=None):
+    """Wait for pending events then all workers to complete.
+
+    Structure:
+    1. pilot.pause() — drain event loop, let message handlers run
+    2. wait_for_complete() — wait for @work-decorated methods (save/add/delete)
+    3. pilot.pause() — let UI re-render after worker result (notifications, updates)
+    """
+    await pilot.pause()  # let pending events dispatch and workers start
+    target = app if app is not None else pilot.app
+    try:
+        await target.workers.wait_for_complete()  # wait for save/add/delete
+    except (WorkerFailed, WorkerCancelled):
+        pass  # errors already handled by app._handle_exception → notify()
+    await pilot.pause()  # let UI re-render (notifications, table updates)
 
 
 def _run(args, env, **kwargs):
@@ -46,14 +64,16 @@ async def test_tui_grant_edit_identity_fails(api):
         app = pf.tui.app.TuiApp(auth)
 
         async with app.run_test(size=(200, 50)) as pilot:
-            await pilot.pause(1.0)
+            await pilot.pause()
             await pilot.press("down", "down", "down", "down", "down")  # navigate to Roles
             await pilot.press("enter")  # open RoleListScreen
-            await pilot.pause(0.5)  # wait for role list to load
+            await pilot.pause()
+            await pilot.pause()  # wait for role list to load
 
             # Root role is the only role; press enter to open the role view
             await pilot.press("enter")
-            await pilot.pause(0.5)
+            await pilot.pause()
+            await pilot.pause()
 
             # Tab to the grants DataTable; the identity grant is row 0
             await pilot.press("tab", "tab", "tab")
@@ -61,23 +81,24 @@ async def test_tui_grant_edit_identity_fails(api):
 
             # Wait for the GrantEditScreen and IdentityGrantEditWidget.on_mount
             # (three API calls: identities, tags, boundaries)
-            await pilot.pause(3.0)
+            await pilot.pause()
+            await pilot.pause()
 
             # Enable filter.name to make the grant differ from its saved state
             await pilot.click("#filter-name Checkbox")
-            await pilot.pause(0.1)
+            await pilot.pause()
             await pilot.press(*"root")
-            await pilot.pause(0.1)
+            await pilot.pause()
 
             # Confirm grant edits (returns to RoleViewScreen, no DB write yet)
             await pilot.press("ctrl+s")
 
             # Save the role (triggers PATCH for changed grant_list, which should fail)
-            await pilot.pause(0.5)
+            await _wait(pilot, app)
             await pilot.press("ctrl+s")
 
             # Wait for the PATCH response and notification
-            await pilot.pause(2.0)
+            await _wait(pilot, app)
 
         error_notifications = [n for n in app._notifications if n.severity == "error"]
         assert error_notifications, "Expected an error notification after saving identity grant"
@@ -112,36 +133,39 @@ async def test_tui_role_grant_edit(api):
 
         app = pf.tui.app.TuiApp(auth)
         async with app.run_test(size=(200, 50)) as pilot:
-            await pilot.pause(1.0)
+            await pilot.pause()
             await pilot.press("down", "down", "down", "down", "down")  # navigate to Roles
             await pilot.press("enter")  # open RoleListScreen
-            await pilot.pause(0.5)  # wait for role list to load
+            await pilot.pause()
+            await pilot.pause()  # wait for role list to load
             await pilot.press("down", "down")  # navigate to test-role (row 2)
             await pilot.press("enter")  # open role view
-            await pilot.pause(0.5)
+            await pilot.pause()
+            await pilot.pause()
             await pilot.press("tab", "tab", "tab")  # focus grants DataTable
             await pilot.press("enter")
-            await pilot.pause(1.0)  # RoleGrantEditWidget.on_mount: 1 API call
+            await pilot.pause()
+            await pilot.pause()  # RoleGrantEditWidget.on_mount: 1 API call
 
             await pilot.click("#filter-name Checkbox")
-            await pilot.pause(0.1)
+            await pilot.pause()
             await pilot.press(*"aaa")
-            await pilot.pause(0.1)
+            await pilot.pause()
 
             # Enable all 7 permissions in the SelectionList.
             # Options (compose order): create=0, read=1, update.name=2,
             # update.description=3, update.member_list=4, update.grant_list=5, delete=6.
             # Focus without clicking to avoid an accidental item toggle.
             app.screen.query_one(textual.widgets.SelectionList).focus()
-            await pilot.pause(0.1)
+            await pilot.pause()
             for _ in range(7):
                 await pilot.press("space")  # toggle current item
                 await pilot.press("down")  # advance cursor (no-op on last item)
 
             await pilot.press("ctrl+s")  # confirm grant edits
-            await pilot.pause(0.5)
+            await _wait(pilot, app)
             await pilot.press("ctrl+s")  # save role
-            await pilot.pause(2.0)
+            await _wait(pilot, app)
 
         assert not [n for n in app._notifications if n.severity == "error"]
 
@@ -172,38 +196,41 @@ async def test_tui_identity_grant_edit_filters(api):
 
         app = pf.tui.app.TuiApp(auth)
         async with app.run_test(size=(200, 50)) as pilot:
-            await pilot.pause(1.0)
+            await pilot.pause()
             await pilot.press("down", "down", "down", "down", "down")  # navigate to Roles
             await pilot.press("enter")  # open RoleListScreen
-            await pilot.pause(0.5)  # wait for role list to load
+            await pilot.pause()
+            await pilot.pause()  # wait for role list to load
             await pilot.press("down")  # navigate to test-role (row 1)
             await pilot.press("enter")  # open role view
-            await pilot.pause(0.5)
+            await pilot.pause()
+            await pilot.pause()
             await pilot.press("tab", "tab", "tab")  # focus grants DataTable
             await pilot.press("enter")
-            await pilot.pause(3.0)  # IdentityGrantEditWidget.on_mount: 3 API calls
+            await pilot.pause()
+            await pilot.pause()  # IdentityGrantEditWidget.on_mount: 3 API calls
 
             await pilot.click("#filter-name Checkbox")
-            await pilot.pause(0.1)
+            await pilot.pause()
             await pilot.press(*"root")
-            await pilot.pause(0.1)
+            await pilot.pause()
 
             # filter.tag_list: enable CheckboxInput and type "env=prod".
             await pilot.click("#filter-tagged-by Checkbox")
-            await pilot.pause(0.1)
+            await pilot.pause()
             await pilot.press(*"env=prod")
-            await pilot.pause(0.1)
+            await pilot.pause()
 
             # filter.boundary_list: enable CheckboxInput and type "zone1".
             await pilot.click("#filter-bounded-by Checkbox")
-            await pilot.pause(0.1)
+            await pilot.pause()
             await pilot.press(*"zone1")
-            await pilot.pause(0.1)
+            await pilot.pause()
 
             await pilot.press("ctrl+s")  # confirm grant edits
-            await pilot.pause(0.5)
+            await _wait(pilot, app)
             await pilot.press("ctrl+s")  # save role
-            await pilot.pause(2.0)
+            await _wait(pilot, app)
 
         assert not [n for n in app._notifications if n.severity == "error"]
 
@@ -229,63 +256,66 @@ async def test_tui_identity_grant_edit_permissions(api):
 
         app = pf.tui.app.TuiApp(auth)
         async with app.run_test(size=(200, 50)) as pilot:
-            await pilot.pause(1.0)
+            await pilot.pause()
             await pilot.press("down", "down", "down", "down", "down")  # navigate to Roles
             await pilot.press("enter")  # open RoleListScreen
-            await pilot.pause(0.5)  # wait for role list to load
+            await pilot.pause()
+            await pilot.pause()  # wait for role list to load
             await pilot.press("down")  # navigate to test-role (row 1)
             await pilot.press("enter")  # open role view
-            await pilot.pause(0.5)
+            await pilot.pause()
+            await pilot.pause()
             await pilot.press("tab", "tab", "tab")  # focus grants DataTable
             await pilot.press("enter")
-            await pilot.pause(3.0)  # IdentityGrantEditWidget.on_mount: 3 API calls
+            await pilot.pause()
+            await pilot.pause()  # IdentityGrantEditWidget.on_mount: 3 API calls
 
             # permission.create: enable (also enables the sub-fields container).
             await pilot.click("#permission-create")
-            await pilot.pause(0.1)
+            await pilot.pause()
 
             # permission.create.allowed_tag_list: enable and type "env=prod".
             await pilot.click("#permission-create-allowed-tags Checkbox")
-            await pilot.pause(0.1)
+            await pilot.pause()
             await pilot.press(*"env=prod")
-            await pilot.pause(0.1)
+            await pilot.pause()
 
             # permission.create.required_boundary_list: enable and type "zone1".
             await pilot.click("#permission-create-req-boundaries Checkbox")
-            await pilot.pause(0.1)
+            await pilot.pause()
             await pilot.press(*"zone1")
-            await pilot.pause(0.1)
+            await pilot.pause()
 
             # Simple permission checkboxes.
             await pilot.click("#permission-read")
-            await pilot.pause(0.1)
+            await pilot.pause()
             await pilot.click("#permission-update-name")
-            await pilot.pause(0.1)
+            await pilot.pause()
             await pilot.click("#permission-delete")
-            await pilot.pause(0.1)
+            await pilot.pause()
 
             # permission.add_tag_list: enable and type "env=prod".
             await pilot.click("#permission-add-tag Checkbox")
-            await pilot.pause(0.1)
+            await pilot.pause()
             await pilot.press(*"env=prod")
-            await pilot.pause(0.1)
+            await pilot.pause()
 
             # permission.del_tag_list: enable and type "env=prod".
             await pilot.click("#permission-del-tag Checkbox")
-            await pilot.pause(0.1)
+            await pilot.pause()
             await pilot.press(*"env=prod")
-            await pilot.pause(0.1)
+            await pilot.pause()
 
             # permission.invite_list: enable and type "email".
             await pilot.click("#permission-invite Checkbox")
-            await pilot.pause(0.1)
+            await pilot.pause()
             await pilot.press(*"email")
-            await pilot.pause(0.1)
+            await pilot.pause()
 
             await pilot.press("ctrl+s")  # confirm grant edits
-            await pilot.pause(0.5)
+            await _wait(pilot, app)
             await pilot.press("ctrl+s")  # save role
-            await pilot.pause(2.0)
+            await _wait(pilot, app)
 
         assert not [n for n in app._notifications if n.severity == "error"]
 
@@ -313,32 +343,35 @@ async def test_tui_tag_grant_edit(api):
 
         app = pf.tui.app.TuiApp(auth)
         async with app.run_test(size=(200, 50)) as pilot:
-            await pilot.pause(1.0)
+            await pilot.pause()
             await pilot.press("down", "down", "down", "down", "down")  # navigate to Roles
             await pilot.press("enter")  # open RoleListScreen
-            await pilot.pause(0.5)  # wait for role list to load
+            await pilot.pause()
+            await pilot.pause()  # wait for role list to load
             await pilot.press("down")  # navigate to test-role (row 1)
             await pilot.press("enter")  # open role view
-            await pilot.pause(0.5)
+            await pilot.pause()
+            await pilot.pause()
             await pilot.press("tab", "tab", "tab")  # focus grants DataTable
             await pilot.press("enter")
-            await pilot.pause(1.0)  # TagGrantEditWidget.on_mount: 1 API call
+            await pilot.pause()
+            await pilot.pause()  # TagGrantEditWidget.on_mount: 1 API call
 
             await pilot.click("#filter-name-value Checkbox")
-            await pilot.pause(0.1)
+            await pilot.pause()
             await pilot.press(*"env=prod")
-            await pilot.pause(0.1)
+            await pilot.pause()
 
             app.screen.query_one(textual.widgets.SelectionList).focus()
-            await pilot.pause(0.1)
+            await pilot.pause()
             await pilot.press("space")  # create=0
             await pilot.press("down")
             await pilot.press("space")  # read=1
 
             await pilot.press("ctrl+s")  # confirm grant edits
-            await pilot.pause(0.5)
+            await _wait(pilot, app)
             await pilot.press("ctrl+s")  # save role
-            await pilot.pause(2.0)
+            await _wait(pilot, app)
 
         assert not [n for n in app._notifications if n.severity == "error"]
 
@@ -360,25 +393,28 @@ async def test_tui_boundary_grant_edit(api):
 
         app = pf.tui.app.TuiApp(auth)
         async with app.run_test(size=(200, 50)) as pilot:
-            await pilot.pause(1.0)
+            await pilot.pause()
             await pilot.press("down", "down", "down", "down", "down")  # navigate to Roles
             await pilot.press("enter")  # open RoleListScreen
-            await pilot.pause(0.5)  # wait for role list to load
+            await pilot.pause()
+            await pilot.pause()  # wait for role list to load
             await pilot.press("down")  # navigate to test-role (row 1)
             await pilot.press("enter")  # open role view
-            await pilot.pause(0.5)
+            await pilot.pause()
+            await pilot.pause()
             await pilot.press("tab", "tab", "tab")  # focus grants DataTable
             await pilot.press("enter")
-            await pilot.pause(1.0)  # BoundaryGrantEditWidget.on_mount: 1 API call
+            await pilot.pause()
+            await pilot.pause()  # BoundaryGrantEditWidget.on_mount: 1 API call
 
             await pilot.click("#filter-name Checkbox")
-            await pilot.pause(0.1)
+            await pilot.pause()
             await pilot.press(*"zone1")
-            await pilot.pause(0.1)
+            await pilot.pause()
 
             # SelectionList: create=0, read=1, update.name=2, ...
             app.screen.query_one(textual.widgets.SelectionList).focus()
-            await pilot.pause(0.1)
+            await pilot.pause()
             await pilot.press("space")  # create=0
             await pilot.press("down")
             await pilot.press("space")  # read=1
@@ -386,9 +422,9 @@ async def test_tui_boundary_grant_edit(api):
             await pilot.press("space")  # update.name=2
 
             await pilot.press("ctrl+s")  # confirm grant edits
-            await pilot.pause(0.5)
+            await _wait(pilot, app)
             await pilot.press("ctrl+s")  # save role
-            await pilot.pause(2.0)
+            await _wait(pilot, app)
 
         assert not [n for n in app._notifications if n.severity == "error"]
 
@@ -410,27 +446,30 @@ async def test_tui_tenant_grant_edit(api):
 
         app = pf.tui.app.TuiApp(auth)
         async with app.run_test(size=(200, 50)) as pilot:
-            await pilot.pause(1.0)
+            await pilot.pause()
             await pilot.press("down", "down", "down", "down", "down")  # navigate to Roles
             await pilot.press("enter")  # open RoleListScreen
-            await pilot.pause(0.5)  # wait for role list to load
+            await pilot.pause()
+            await pilot.pause()  # wait for role list to load
             await pilot.press("down")  # navigate to test-role (row 1)
             await pilot.press("enter")  # open role view
-            await pilot.pause(0.5)
+            await pilot.pause()
+            await pilot.pause()
             await pilot.press("tab", "tab", "tab")  # focus grants DataTable
             await pilot.press("enter")
-            await pilot.pause(1.0)  # TenantGrantEditWidget.on_mount: 1 API call
+            await pilot.pause()
+            await pilot.pause()  # TenantGrantEditWidget.on_mount: 1 API call
 
             # SelectionList: create=0, read=1, ...
             app.screen.query_one(textual.widgets.SelectionList).focus()
-            await pilot.pause(0.1)
+            await pilot.pause()
             await pilot.press("down")  # move to read=1
             await pilot.press("space")  # toggle read
 
             await pilot.press("ctrl+s")  # confirm grant edits
-            await pilot.pause(0.5)
+            await _wait(pilot, app)
             await pilot.press("ctrl+s")  # save role
-            await pilot.pause(2.0)
+            await _wait(pilot, app)
 
         assert not [n for n in app._notifications if n.severity == "error"]
 
@@ -452,34 +491,37 @@ async def test_tui_ssh_grant_edit(api):
 
         app = pf.tui.app.TuiApp(auth)
         async with app.run_test(size=(200, 50)) as pilot:
-            await pilot.pause(1.0)
+            await pilot.pause()
             await pilot.press("down", "down", "down", "down", "down")  # navigate to Roles
             await pilot.press("enter")  # open RoleListScreen
-            await pilot.pause(0.5)  # wait for role list to load
+            await pilot.pause()
+            await pilot.pause()  # wait for role list to load
             await pilot.press("down")  # navigate to test-role (row 1)
             await pilot.press("enter")  # open role view
-            await pilot.pause(0.5)
+            await pilot.pause()
+            await pilot.pause()
             await pilot.press("tab", "tab", "tab")  # focus grants DataTable
             await pilot.press("enter")
-            await pilot.pause(3.0)  # SshShellGrantEditWidget.on_mount: 3 API calls
+            await pilot.pause()
+            await pilot.pause()  # SshShellGrantEditWidget.on_mount: 3 API calls
 
             await pilot.click("#filter-name Checkbox")
-            await pilot.pause(0.1)
+            await pilot.pause()
             await pilot.press(*"root")
-            await pilot.pause(0.1)
+            await pilot.pause()
 
             # username_list: click the input and type "alice"
             await pilot.click("#perm-username-list Input")
-            await pilot.pause(0.1)
+            await pilot.pause()
             await pilot.press(*"alice")
-            await pilot.pause(0.1)
+            await pilot.pause()
 
             await pilot.click("#perm-permit-agent-forwarding")
 
             await pilot.press("ctrl+s")  # confirm grant edits
-            await pilot.pause(0.5)
+            await _wait(pilot, app)
             await pilot.press("ctrl+s")  # save role
-            await pilot.pause(2.0)
+            await _wait(pilot, app)
 
         assert not [n for n in app._notifications if n.severity == "error"]
 
@@ -498,18 +540,20 @@ async def test_tui_tag_list(api):
         app = pf.tui.app.TuiApp(auth)
 
         async with app.run_test(size=(200, 50)) as pilot:
-            await pilot.pause(1.0)
+            await pilot.pause()
             await pilot.press("down", "down", "down", "down")  # navigate to Tag (index 4)
             await pilot.press("enter")  # open TagListScreen
-            await pilot.pause(0.5)
+            await pilot.pause()
+            await pilot.pause()
 
             await pilot.press("a")  # open add modal
-            await pilot.pause(0.1)
+            await pilot.pause()
+            await pilot.pause()
             await pilot.press(*"env")  # type name
             await pilot.press("tab")  # move to value input
             await pilot.press(*"prod")  # type value
             await pilot.press("enter")  # submit
-            await pilot.pause(1.0)
+            await _wait(pilot, app)
 
         assert not [n for n in app._notifications if n.severity == "error"]
 
@@ -526,13 +570,14 @@ async def test_tui_tag_delete(api):
         app = pf.tui.app.TuiApp(auth)
 
         async with app.run_test(size=(200, 50)) as pilot:
-            await pilot.pause(1.0)
+            await pilot.pause()
             await pilot.press("down", "down", "down", "down")  # navigate to Tag (index 4)
             await pilot.press("enter")  # open TagListScreen
-            await pilot.pause(0.5)
+            await pilot.pause()
+            await pilot.pause()
 
             await pilot.press("d")  # delete row 0 (the only tag)
-            await pilot.pause(1.0)
+            await _wait(pilot, app)
 
         assert not [n for n in app._notifications if n.severity == "error"]
 
@@ -548,16 +593,18 @@ async def test_tui_boundary_list(api):
         app = pf.tui.app.TuiApp(auth)
 
         async with app.run_test(size=(200, 50)) as pilot:
-            await pilot.pause(1.0)
+            await pilot.pause()
             await pilot.press("down", "down", "down")  # navigate to Boundary (index 3)
             await pilot.press("enter")  # open BoundaryListScreen
-            await pilot.pause(0.5)
+            await pilot.pause()
+            await pilot.pause()
 
             await pilot.press("a")  # open add modal
-            await pilot.pause(0.1)
+            await pilot.pause()
+            await pilot.pause()
             await pilot.press(*"zone1")  # type name
             await pilot.press("enter")  # submit (description is optional)
-            await pilot.pause(1.0)
+            await _wait(pilot, app)
 
         assert not [n for n in app._notifications if n.severity == "error"]
 
@@ -574,15 +621,16 @@ async def test_tui_boundary_delete(api):
         app = pf.tui.app.TuiApp(auth)
 
         async with app.run_test(size=(200, 50)) as pilot:
-            await pilot.pause(1.0)
+            await pilot.pause()
             await pilot.press("down", "down", "down")  # navigate to Boundary (index 3)
             await pilot.press("enter")  # open BoundaryListScreen
-            await pilot.pause(0.5)
+            await pilot.pause()
+            await pilot.pause()
 
             # initialize creates a root boundary at row 0; zone1 is at row 1
             await pilot.press("down")
             await pilot.press("d")  # delete zone1
-            await pilot.pause(1.0)
+            await _wait(pilot, app)
 
         assert not [n for n in app._notifications if n.severity == "error"]
 
@@ -598,20 +646,22 @@ async def test_tui_bastion_list(api):
         app = pf.tui.app.TuiApp(auth)
 
         async with app.run_test(size=(200, 50)) as pilot:
-            await pilot.pause(1.0)
+            await pilot.pause()
             await pilot.press("down", "down")  # navigate to Bastions (index 2)
             await pilot.press("enter")  # open BastionListScreen
-            await pilot.pause(0.5)
+            await pilot.pause()
+            await pilot.pause()
 
             await pilot.press("a")  # open add modal
-            await pilot.pause(0.1)
+            await pilot.pause()
+            await pilot.pause()
             await pilot.press(*"https://register.example.com")  # type register_url
             await pilot.press("tab")  # move to connect_url
             await pilot.press(*"ssh://bastion.example.com")  # type connect_url
             await pilot.press("tab")  # move to ssh_proxy_jump
             await pilot.press(*"proxy.example.com")  # type ssh_proxy_jump
             await pilot.press("enter")  # submit
-            await pilot.pause(1.0)
+            await _wait(pilot, app)
 
         assert not [n for n in app._notifications if n.severity == "error"]
 
@@ -638,13 +688,14 @@ async def test_tui_bastion_delete(api):
         app = pf.tui.app.TuiApp(auth)
 
         async with app.run_test(size=(200, 50)) as pilot:
-            await pilot.pause(1.0)
+            await pilot.pause()
             await pilot.press("down", "down")  # navigate to Bastions (index 2)
             await pilot.press("enter")  # open BastionListScreen
-            await pilot.pause(0.5)
+            await pilot.pause()
+            await pilot.pause()
 
             await pilot.press("d")  # delete row 0 (the only bastion)
-            await pilot.pause(1.0)
+            await _wait(pilot, app)
 
         assert not [n for n in app._notifications if n.severity == "error"]
 
@@ -674,25 +725,28 @@ async def test_tui_bastion_add_tag(api):
         app = pf.tui.app.TuiApp(auth)
 
         async with app.run_test(size=(200, 50)) as pilot:
-            await pilot.pause(1.0)
+            await pilot.pause()
             await pilot.press("down", "down")  # navigate to Bastions (index 2)
             await pilot.press("enter")  # open BastionListScreen
-            await pilot.pause(0.5)
+            await pilot.pause()
+            await pilot.pause()
 
             await pilot.press("enter")  # open bastion's BastionViewScreen
-            await pilot.pause(0.5)
+            await pilot.pause()
+            await pilot.pause()
 
             # BastionViewScreen: Input#register_url is focused; tab to #ssh_proxy_jump, then to #tags
             await pilot.press("tab", "tab", "tab")
             await pilot.press("a")  # action_add_tag → _TagAddScreen opens
-            await pilot.pause(1.0)  # wait for list_tags API call
+            await pilot.pause()
+            await pilot.pause()
 
             await pilot.press(*"env=prod")  # type exact tag label
             await pilot.press("enter")  # submit; _TagAddScreen dismisses with tag dict
-            await pilot.pause(0.1)
+            await _wait(pilot, app)
 
             await pilot.press("ctrl+s")  # save bastion
-            await pilot.pause(2.0)
+            await _wait(pilot, app)
 
         assert not [n for n in app._notifications if n.severity == "error"]
 
@@ -709,16 +763,18 @@ async def test_tui_identity_list(api):
         app = pf.tui.app.TuiApp(auth)
 
         async with app.run_test(size=(200, 50)) as pilot:
-            await pilot.pause(1.0)
+            await pilot.pause()
             await pilot.press("down")  # navigate to Identities (index 1)
             await pilot.press("enter")  # open IdentityListScreen
-            await pilot.pause(0.5)
+            await pilot.pause()
+            await pilot.pause()
 
             await pilot.press("a")  # open add modal
-            await pilot.pause(0.1)
+            await pilot.pause()
+            await pilot.pause()
             await pilot.press(*"alice")  # type name
             await pilot.press("enter")  # submit
-            await pilot.pause(1.0)
+            await _wait(pilot, app)
 
         assert not [n for n in app._notifications if n.severity == "error"]
 
@@ -734,17 +790,19 @@ async def test_tui_tenant_list(api):
         app = pf.tui.app.TuiApp(auth)
 
         async with app.run_test(size=(200, 50)) as pilot:
-            await pilot.pause(1.0)
+            await pilot.pause()
             await pilot.press("enter")  # open TenantListScreen (index 0, no down needed)
-            await pilot.pause(0.5)
+            await pilot.pause()
+            await pilot.pause()
 
             await pilot.press("a")  # open add modal
-            await pilot.pause(0.1)
+            await pilot.pause()
+            await pilot.pause()
             await pilot.press(*"acme")  # type name
             await pilot.press("tab")  # move to display_name input
             await pilot.press(*"Acme Corp")  # type display name
             await pilot.press("enter")  # submit
-            await pilot.pause(1.0)
+            await _wait(pilot, app)
 
         assert not [n for n in app._notifications if n.severity == "error"]
 
@@ -761,15 +819,16 @@ async def test_tui_role_delete(api):
         app = pf.tui.app.TuiApp(auth)
 
         async with app.run_test(size=(200, 50)) as pilot:
-            await pilot.pause(1.0)
+            await pilot.pause()
             await pilot.press("down", "down", "down", "down", "down")  # navigate to Roles (index 4)
             await pilot.press("enter")  # open RoleListScreen
-            await pilot.pause(0.5)
+            await pilot.pause()
+            await pilot.pause()
 
             # role list: root=row0, to-delete=row1
             await pilot.press("down")
             await pilot.press("d")  # delete to-delete
-            await pilot.pause(1.0)
+            await _wait(pilot, app)
 
         assert not [n for n in app._notifications if n.severity == "error"]
 
@@ -795,15 +854,16 @@ async def test_tui_identity_delete(api):
         app = pf.tui.app.TuiApp(auth)
 
         async with app.run_test(size=(200, 50)) as pilot:
-            await pilot.pause(1.0)
+            await pilot.pause()
             await pilot.press("down")  # navigate to Identities (index 1)
             await pilot.press("enter")  # open IdentityListScreen
-            await pilot.pause(0.5)
+            await pilot.pause()
+            await pilot.pause()
 
             # identity list: root=row0, alice=row1
             await pilot.press("down")
             await pilot.press("d")  # delete alice
-            await pilot.pause(1.0)
+            await _wait(pilot, app)
 
         assert not [n for n in app._notifications if n.severity == "error"]
 
@@ -822,12 +882,13 @@ async def test_tui_tenant_delete(api):
         app = pf.tui.app.TuiApp(auth)
 
         async with app.run_test(size=(200, 50)) as pilot:
-            await pilot.pause(1.0)
+            await pilot.pause()
             await pilot.press("enter")  # open TenantListScreen (index 0, no down needed)
-            await pilot.pause(0.5)
+            await pilot.pause()
+            await pilot.pause()
 
             await pilot.press("d")  # delete row 0 (the only tenant)
-            await pilot.pause(1.0)
+            await _wait(pilot, app)
 
         assert not [n for n in app._notifications if n.severity == "error"]
 
@@ -846,22 +907,24 @@ async def test_tui_boundary_edit_description(api):
         app = pf.tui.app.TuiApp(auth)
 
         async with app.run_test(size=(200, 50)) as pilot:
-            await pilot.pause(1.0)
+            await pilot.pause()
             await pilot.press("down", "down", "down")  # navigate to Boundary (index 3)
             await pilot.press("enter")  # open BoundaryListScreen
-            await pilot.pause(0.5)
+            await pilot.pause()
+            await pilot.pause()
 
             # boundary list: root=row0, zone1=row1
             await pilot.press("down")
             await pilot.press("enter")  # open zone1 BoundaryViewScreen
-            await pilot.pause(0.5)
+            await pilot.pause()
+            await pilot.pause()
 
             # BoundaryViewScreen: Input#name is focused; tab to Input#description
             await pilot.press("tab")
             await pilot.press(*"A test boundary")
 
             await pilot.press("ctrl+s")
-            await pilot.pause(2.0)
+            await _wait(pilot, app)
 
         assert not [n for n in app._notifications if n.severity == "error"]
 
@@ -893,28 +956,31 @@ async def test_tui_identity_add_tag(api):
         app = pf.tui.app.TuiApp(auth)
 
         async with app.run_test(size=(200, 50)) as pilot:
-            await pilot.pause(1.0)
+            await pilot.pause()
             await pilot.press("down")  # navigate to Identities (index 1)
             await pilot.press("enter")  # open IdentityListScreen
-            await pilot.pause(0.5)
+            await pilot.pause()
+            await pilot.pause()
 
             # identity list: root=row0, alice=row1
             await pilot.press("down")
             await pilot.press("enter")  # open alice's IdentityViewScreen
-            await pilot.pause(0.5)
+            await pilot.pause()
+            await pilot.pause()
 
             # IdentityViewScreen: Input#name is focused; tab to ListView#tags
             # (action_add_tag requires #tags to have focus)
             await pilot.press("tab")
             await pilot.press("a")  # action_add_tag → _TagAddScreen opens
-            await pilot.pause(1.0)  # wait for list_tags API call
+            await pilot.pause()
+            await pilot.pause()
 
             await pilot.press(*"env=prod")  # type exact tag label
             await pilot.press("enter")  # submit; _TagAddScreen dismisses with tag dict
-            await pilot.pause(0.1)
+            await _wait(pilot, app)
 
             await pilot.press("ctrl+s")  # save identity
-            await pilot.pause(2.0)
+            await _wait(pilot, app)
 
         assert not [n for n in app._notifications if n.severity == "error"]
 
