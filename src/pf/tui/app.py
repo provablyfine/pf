@@ -7,8 +7,7 @@ import textual.app
 import textual.screen
 import textual.worker
 
-from .. import client
-from .. import log
+from .. import client, log
 from . import async_client, home, relogin, setup
 
 _DEFAULT_CONFIG = os.path.join(os.path.expanduser("~"), ".config", "pf", "config.json")

@@ -7,8 +7,7 @@ import urllib.parse
 
 import requests
 
-from ... import client
-from ... import log
+from ... import client, log
 from .. import login
 from . import admin_cli
 

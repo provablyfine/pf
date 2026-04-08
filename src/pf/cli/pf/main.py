@@ -9,8 +9,7 @@ import urllib.parse
 import requests
 import tabulate
 
-from ... import client
-from ... import log
+from ... import client, log
 from .. import login
 from . import bastion_cli, openssh_cli, ssh_cli
 

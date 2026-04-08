@@ -5,8 +5,7 @@ import logging
 import cryptography.fernet
 import sqlalchemy
 
-from .. import base64url, jwk
-from .. import log
+from .. import base64url, jwk, log
 from . import config, dao_factory, db, model, tenant_db
 from .context import ctx
 

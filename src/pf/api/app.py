@@ -14,8 +14,7 @@ import pydantic
 import sqlalchemy
 import yaml
 
-from .. import base64url
-from .. import log
+from .. import base64url, log
 from . import dao_factory, db, dependencies, endpoints, middleware, responses, tenant_db
 
 logger = logging.getLogger(__name__)
