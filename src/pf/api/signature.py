@@ -183,7 +183,7 @@ def _get_keyid(request: fastapi.requests.Request, prefix: str) -> str:
             responses.problem_response(status_code=403, title="Missing Signature-Input header")
         )
     keyid_by_label = _parse_signature_input(request.headers["Signature-Input"])
-    for keyid, _signature_input in keyid_by_label.items():
+    for _label, (keyid, _signature_input) in keyid_by_label.items():
         if not keyid.startswith(f"{prefix}:"):
             continue
         return keyid[len(f"{prefix}:") :]
