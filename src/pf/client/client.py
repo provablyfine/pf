@@ -186,11 +186,11 @@ class HttpClient:
         self._timeout = timeout
 
     @property
-    def config(self):
+    def config(self) -> config.Config:
         return self._client.config
 
     @property
-    def directory(self):
+    def directory(self) -> types.SimpleNamespace:
         return self._client.directory
 
     @property
