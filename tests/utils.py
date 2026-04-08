@@ -7,7 +7,7 @@ import tempfile
 import jinja2
 
 
-def run_cram(filename: str, env: dict[str,str]):
+def run_cram(filename: str, env: dict[str, str]):
     environ = copy.copy(os.environ)
     path = os.path.abspath(os.path.join(os.getcwd(), "scripts"))
     environ["PATH"] = f"{path}:{environ['PATH']}"
