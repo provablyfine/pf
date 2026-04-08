@@ -45,6 +45,8 @@ testpaths = [
     "src/pf",
     "tests",
 ]
+timeout = 60
+
 [tool.pytest_env]
 HTTP_PROXY = { unset = true }
 HTTPS_PROXY = { unset = true }
