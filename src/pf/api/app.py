@@ -1,7 +1,7 @@
 import contextlib
 import logging
 import os
-import random
+import secrets
 import time
 import traceback
 
@@ -50,7 +50,6 @@ class _InMemoryDebugStore:
         self._prefix = prefix
         self._max_size = max_size
         self._store: dict[str, object] = {}
-        self._id_rng = random.Random()
 
     @property
     def prefix(self) -> str:
@@ -60,7 +59,7 @@ class _InMemoryDebugStore:
         if len(self._store) > self._max_size:
             first = next(iter(self._store))
             self._store.pop(first)
-        id = self._id_rng.randbytes(4).hex()
+        id = secrets.token_hex(4)
         self._store[id] = data
         return self._prefix + id
 

@@ -170,7 +170,7 @@ def _ssh_function(args):
     for ip in ip_address_list:
         ssh_cmd = build_ssh_cmd(host, ip_address=ip)
         try:
-            os.execvp("/usr/bin/ssh", ssh_cmd, shell=False)
+            os.execvp("/usr/bin/ssh", ssh_cmd)
         except Exception as e:
             last_error = e
 

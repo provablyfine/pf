@@ -149,32 +149,18 @@ class Public:
     def match_ssh_fingerprint(self, expected_fingerprint):
         colon = expected_fingerprint.find(":")
         prefix = expected_fingerprint[:colon]
-        match prefix:
-            case "MD5":
-                format = SshFingerprintFormat.MD5
-            case "SHA256":
-                format = SshFingerprintFormat.SHA256
-            case _:
-                assert False
-        got_fingerprint = self.ssh_fingerprint(format=format)
+        if prefix == "MD5":
+            raise ValueError("We do not support MD5 hash fingerprints")
+        got_fingerprint = self.ssh_fingerprint()
         return expected_fingerprint == got_fingerprint
 
-    def ssh_fingerprint(self, format: SshFingerprintFormat = SshFingerprintFormat.SHA256) -> str:
-        match format:
-            case SshFingerprintFormat.SHA256:
-                h = cryptography.hazmat.primitives.serialization.ssh_key_fingerprint(
-                    self.to_crypto(),
-                    cryptography.hazmat.primitives.hashes.SHA256(),
-                )
-                fingerprint = base64.b64encode(h).rstrip(b"=").decode("ascii")
-                return f"SHA256:{fingerprint}"
-            case SshFingerprintFormat.MD5:
-                h = cryptography.hazmat.primitives.serialization.ssh_key_fingerprint(
-                    self.to_crypto(),
-                    cryptography.hazmat.primitives.hashes.MD5(),
-                )
-                fingerprint = ":".join(f"{i:02x}" for i in h)
-                return f"MD5:{fingerprint}"
+    def ssh_fingerprint(self) -> str:
+        h = cryptography.hazmat.primitives.serialization.ssh_key_fingerprint(
+            self.to_crypto(),
+            cryptography.hazmat.primitives.hashes.SHA256(),
+        )
+        fingerprint = base64.b64encode(h).rstrip(b"=").decode("ascii")
+        return f"SHA256:{fingerprint}"
 
     def to_dict(self) -> dict:
         match self._key:
