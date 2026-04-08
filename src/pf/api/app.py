@@ -15,7 +15,7 @@ import sqlalchemy
 import yaml
 
 from .. import base64url, log
-from . import dao_factory, db, dependencies, endpoints, middleware, responses, tenant_db
+from . import config, dao_factory, db, dependencies, endpoints, middleware, responses, tenant_db
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +79,7 @@ class _Backtrace:
         return {"method": self._method, "path": self._path, "at": self._at, "backtrace": self._backtrace}
 
 
-def create(conf) -> fastapi.FastAPI:
+def create(conf: config.Config) -> fastapi.FastAPI:
     log.setup_server("api", conf.log_level, conf.log_filename)
 
     def _bootstrap_root_tenant(registry_engine: sqlalchemy.Engine):
