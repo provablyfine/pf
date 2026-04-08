@@ -1,3 +1,4 @@
+from __future__ import annotations
 import dataclasses
 import json
 import os
@@ -15,7 +16,7 @@ class Config:
     auth_name: str | None = None
 
     @staticmethod
-    def load(filename: str):
+    def load(filename: str) -> Config:
         try:
             with open(filename) as f:
                 data = json.load(f)
