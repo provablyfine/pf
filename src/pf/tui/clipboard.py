@@ -24,15 +24,15 @@ def _supports_osc52() -> bool:
 
 def _copy_via_subprocess(text: str) -> None:
     if os.environ.get("WAYLAND_DISPLAY"):
-        subprocess.run(["wl-copy"], input=text.encode(), check=True)
+        subprocess.run(["/usr/bin/wl-copy"], input=text.encode(), check=True)
         return
     if os.environ.get("DISPLAY"):
         try:
-            subprocess.run(["xsel", "-bi"], input=text.encode(), check=True)
+            subprocess.run(["/usr/bin/xsel", "-bi"], input=text.encode(), check=True)
             return
         except (FileNotFoundError, subprocess.CalledProcessError):
             pass
-        subprocess.run(["xclip", "-selection", "clipboard"], input=text.encode(), check=True)
+        subprocess.run(["/usr/bin/xclip", "-selection", "clipboard"], input=text.encode(), check=True)
         return
     raise RuntimeError("No clipboard mechanism available")
 

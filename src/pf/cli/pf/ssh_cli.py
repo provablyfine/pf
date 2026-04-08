@@ -155,7 +155,7 @@ def _ssh_function(args):
             proxy_cmd = f"pf -c {args.config} bastion connect --url={connect_url} --hostname={host}"
             ssh_cmd = build_ssh_cmd(host, proxy_command=proxy_cmd)
             try:
-                os.execvp("ssh", ssh_cmd)
+                os.execvp("/usr/bin/ssh", ssh_cmd)
             except Exception as e:
                 last_error = e
 
@@ -163,14 +163,14 @@ def _ssh_function(args):
             proxy_jump = bastion["ssh_proxy_jump"]
             ssh_cmd = build_ssh_cmd(host, proxy_jump=proxy_jump)
             try:
-                os.execvp("ssh", ssh_cmd)
+                os.execvp("/usr/bin/ssh", ssh_cmd)
             except Exception as e:
                 last_error = e
 
     for ip in ip_address_list:
         ssh_cmd = build_ssh_cmd(host, ip_address=ip)
         try:
-            os.execvp("ssh", ssh_cmd)
+            os.execvp("/usr/bin/ssh", ssh_cmd, shell=False)
         except Exception as e:
             last_error = e
 
