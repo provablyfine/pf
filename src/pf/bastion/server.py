@@ -15,12 +15,9 @@ def run():
     group.add_argument("--dev", action="store_true")
     parser.add_argument("-p", "--port", type=int, default=0)
     parser.add_argument("--port-file", default=None)
-    parser.add_argument("-d", "--debug", action="count", default=0)
+    parser.add_argument("-d", "--debug", help="Debugging level", action="count", default=0)
     parser.add_argument("--log-filename", default=None)
     args = parser.parse_args()
-
-    log_level_map = {0: "WARNING", 1: "INFO", 2: "DEBUG"}
-    log_level = log_level_map.get(args.debug, "DEBUG")
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -34,14 +31,14 @@ def run():
 
     if args.dev:
         conf = app.Config(
-            dev_tenant_id=1, dev_name="hello", issuer_prefix=None, log_level=log_level, log_filename=args.log_filename
+            dev_tenant_id=1, dev_name="hello", issuer_prefix=None, log_level=args.debug, log_filename=args.log_filename
         )
     else:
         conf = app.Config(
             dev_tenant_id=None,
             dev_name=None,
             issuer_prefix=args.issuer_prefix,
-            log_level=log_level,
+            log_level=args.debug,
             log_filename=args.log_filename,
         )
     application = app.create(conf)

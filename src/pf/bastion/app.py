@@ -17,7 +17,7 @@ class Config:
     dev_tenant_id: int | None
     dev_name: str | None
     issuer_prefix: str | None
-    log_level: str = "WARNING"
+    log_level: int = 0
     log_filename: str | None = None
 
 
@@ -220,19 +220,7 @@ def create(conf: Config) -> fastapi.FastAPI:
         app.state.dev_name = conf.dev_name
         yield
 
-    match conf.log_level:
-        case "DEBUG":
-            level = logging.DEBUG
-        case "INFO":
-            level = logging.INFO
-        case "WARNING":
-            level = logging.WARN
-        case "ERROR":
-            level = logging.ERROR
-        case _:
-            assert False
-    log.setup_server("bastion", level, conf.log_filename)
-
+    log.setup_server("bastion", conf.log_level, conf.log_filename)
     fastapi_app = fastapi.FastAPI(lifespan=lifespan)
     fastapi_app.include_router(router)
     return fastapi_app

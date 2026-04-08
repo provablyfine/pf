@@ -52,6 +52,7 @@ http_proxy = { unset = true }
 https_proxy = { unset = true }
 PYTHONASYNCIODEBUG = "1"
 PYTHONUNBUFFERED = "1"
+PF_LOG_LEVEL = "3"
 
 [tool.pyright]
 include = ["src/pf", "tests"]

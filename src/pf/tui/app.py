@@ -61,9 +61,7 @@ class TuiApp(textual.app.App[None]):
 def pfat() -> None:
     parser = argparse.ArgumentParser(description="pf admin TUI")
     parser.add_argument("-c", "--config", default=_DEFAULT_CONFIG, help="Configuration file")
-    parser.add_argument(
-        "-d", "--debug", help="Increase debugging level", action="count", default=int(os.environ.get("PF_DEBUG") or "0")
-    )
+    parser.add_argument("-d", "--debug", help="Debugging level", action="count", default=0)
     parser.add_argument("--log-filename", help="Filename where logs will be written", default=None)
     args = parser.parse_args()
 

@@ -81,18 +81,7 @@ class _Backtrace:
 
 
 def create(conf) -> fastapi.FastAPI:
-    match conf.log_level:
-        case "DEBUG":
-            level = logging.DEBUG
-        case "INFO":
-            level = logging.INFO
-        case "WARNING":
-            level = logging.WARN
-        case "ERROR":
-            level = logging.ERROR
-        case _:
-            assert False
-    log.setup_server("api", level, conf.log_filename)
+    log.setup_server("api", conf.log_level, conf.log_filename)
 
     def _bootstrap_root_tenant(registry_engine: sqlalchemy.Engine):
         root_db_url = f"sqlite:///{os.path.join(conf.tenants_dir, 'root.db')}"

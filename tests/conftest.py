@@ -230,7 +230,6 @@ def api(request):
             )
         )
     env = copy.copy(os.environ)
-    env["PYTHONUNBUFFERED"] = "1"
     api_log_file = open(api_log, "w+")
     popen = subprocess.Popen(
         ["scripts/pf-server", "-c", api_config, "--port-file", api_port_file],
@@ -295,7 +294,6 @@ def bastion_server(request, api):
     log_file = os.path.join(tmp_dir.name, "bastion.log")
 
     env = copy.copy(os.environ)
-    env["PYTHONUNBUFFERED"] = "1"
     log_f = open(log_file, "w+")
     issuer_prefix = f"http://127.0.0.1:{api.port}/pf/t"
     popen = subprocess.Popen(
@@ -342,7 +340,7 @@ def bastion_server(request, api):
 
 
 @pytest.fixture(autouse=True)
-def pf_log_directory(tmp_path, monkeypatch, request):
+def pf_log_directory(tmp_path, request):
     """Set PF_LOG_DIRECTORY to a unique temp directory for each test.
 
     Logs are auto-deleted after passing tests. On failure, logs are preserved
@@ -351,12 +349,11 @@ def pf_log_directory(tmp_path, monkeypatch, request):
     """
     log_dir = tmp_path / "logs"
     log_dir.mkdir()
-    monkeypatch.setenv("PF_LOG_DIRECTORY", str(log_dir))
+    os.environ["PF_LOG_DIRECTORY"] = str(log_dir)
 
     def check_preserve_logs():
-        """Print log location if test failed."""
         if hasattr(request.node, "rep_call") and request.node.rep_call.failed:
-            print(f"\n⚠️  Test failed. Logs preserved at: {log_dir}")
+            print(f"\nTest failed. Logs preserved at: {log_dir}")
 
     request.addfinalizer(check_preserve_logs)
     return log_dir

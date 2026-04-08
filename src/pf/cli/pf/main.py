@@ -94,11 +94,9 @@ def _do_main(args):
 
 def pf():
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "-d", "--debug", help="Increase debugging level", action="count", default=int(os.environ.get("PF_DEBUG") or "0")
-    )
-    parser.add_argument("--log-filename", help="Filename where logs will be written", default=None)
     parser.add_argument("-c", "--config", help="configuration file", default=_DEFAULT_CONFIG)
+    parser.add_argument("-d", "--debug", help="Debugging level", action="count", default=0)
+    parser.add_argument("--log-filename", help="Filename where logs will be written", default=None)
     subparsers = parser.add_subparsers(required=True, dest="_cmd1")
 
     config_parser = subparsers.add_parser("config", help="Create a configuration file")

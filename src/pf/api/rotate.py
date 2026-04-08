@@ -43,23 +43,13 @@ def rotate(key_type: db.SigningKeyType, crypto_key_type: jwk.KeyType, rotation_p
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", "--config", help="Configuration file", required=True)
+    parser.add_argument("-d", "--debug", help="Debugging level", action="count", default=0)
     parser.add_argument("--log-filename", default=None)
     args = parser.parse_args()
 
     conf = config.Config.load(args.config)
 
-    match conf.log_level:
-        case "DEBUG":
-            level = logging.DEBUG
-        case "INFO":
-            level = logging.INFO
-        case "WARNING":
-            level = logging.WARN
-        case "ERROR":
-            level = logging.ERROR
-        case _:
-            assert False
-    log.setup_server("rotate", level, args.log_filename)
+    log.setup_server("rotate", args.log_level, args.log_filename)
 
     with open(conf.kek_filename, "rb") as f:
         kek_string = base64url.encode(f.read()) + "======"

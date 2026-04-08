@@ -14,6 +14,7 @@ def run():
     parser.add_argument("-c", "--config", default="pf-server.yaml")
     parser.add_argument("-p", "--port", type=int, default=0)
     parser.add_argument("--port-file", default=None)
+    parser.add_argument("-d", "--debug", help="Debugging level", action="count", default=0)
     parser.add_argument("--log-filename", default=None)
     args = parser.parse_args()
 
