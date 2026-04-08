@@ -21,7 +21,7 @@ _DEFAULT_CONFIG = os.path.join(os.path.expanduser("~"), ".config", "pf", "config
 @client.ssh_utils.exception
 def _hosts_function(args):
     c = client.Config.load(args.config)
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
     response = auth.get(f"{auth.directory.ssh}/hosts")
     if response.status_code != 200:
@@ -35,7 +35,7 @@ def _hosts_function(args):
 
 
 def _config_function(args):
-    response = requests.get(args.directory)
+    response = requests.get(args.directory, timeout=0.5)
     if response.status_code != 200:
         raise client.exceptions.UI(f"Unable to read directory: {response.text}")
     c = client.Config(
@@ -57,7 +57,7 @@ def _parse_invitation(invitation: str) -> str:
 
 def _accept_function(args):
     c = client.Config.load(args.config)
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     invitation_key = _parse_invitation(args.invitation)
     auth = api.invitation_auth(account=args.key, invitation=invitation_key)
     response = auth.post(url=auth.directory.accept_invitation, json={"account_public_key": auth.public_key})
@@ -70,7 +70,7 @@ def _accept_function(args):
 @client.ssh_utils.exception
 def _login_function(args):
     c = client.Config.load(args.config)
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth_name = args.auth or "default"
     login.login(api, c, auth_name, args.config, session_key_path=args.session_key)
 
@@ -94,6 +94,7 @@ def _do_main(args):
 def pf():
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", "--config", help="configuration file", default=_DEFAULT_CONFIG)
+    parser.add_argument("--timeout", default=1.0, help="Timeout for HTTP requests")
     parser.add_argument("-d", "--debug", help="Debugging level", action="count", default=0)
     parser.add_argument("--log-filename", help="Filename where logs will be written", default=None)
     subparsers = parser.add_subparsers(required=True, dest="_cmd1")

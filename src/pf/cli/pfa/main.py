@@ -15,11 +15,11 @@ _DEFAULT_CONFIG = os.path.join(os.path.expanduser("~"), ".config", "pf", "config
 
 
 def _initialize_function(args):
-    response = requests.get(args.url)
+    response = requests.get(args.url, timeout=args.timeout)
     if response.status_code != 200:
         raise client.exceptions.UI(f"Unable to read directory: {response.text}")
     c = client.Config(directory_url=args.url, directory=response.json())
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
 
     response = api.no_auth.post(api.directory.initialize)
     if response.status_code == 204:
@@ -46,11 +46,11 @@ def _connect_function(args):
     invitation = params.get("invitation", [None])[0] or args.invitation
     auth_name = params.get("auth", [None])[0] or args.auth or "default"
 
-    response = requests.get(clean_url)
+    response = requests.get(clean_url, timeout=args.timeout)
     if response.status_code != 200:
         raise client.exceptions.UI(f"Unable to read directory: {response.text}")
     c = client.Config(directory_url=clean_url, directory=response.json())
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
 
     if invitation and args.key:
         auth = api.invitation_auth(account=args.key, invitation=invitation)
@@ -65,7 +65,7 @@ def _connect_function(args):
 
 def _login_function(args):
     c = client.Config.load(args.config)
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth_name = args.auth or c.auth_name or "default"
     login.login(api, c, auth_name, args.config, session_key_path=args.session_key)
 
@@ -77,7 +77,7 @@ def _do_main(args):
         try:
             c = client.Config.load(args.config)
             if not login.has_valid_session(c):
-                api = client.Client(c)
+                api = client.Client(c, timeout=args.timeout)
                 auth_name = c.auth_name or "default"
                 login.login(api, c, auth_name, args.config)
         except client.exceptions.UI:
@@ -98,12 +98,13 @@ def _do_main(args):
 
 def pfa():
     parser = argparse.ArgumentParser()
+    parser.add_argument("-c", "--config", help="configuration file", default=_DEFAULT_CONFIG)
+    parser.add_argument("--auto-login", action="store_true", default=False)
+    parser.add_argument("--timeout", default=1.0, help="Timeout for HTTP requests")
     parser.add_argument(
         "-d", "--debug", help="Increase debugging level", action="count", default=int(os.environ.get("PF_DEBUG") or "0")
     )
     parser.add_argument("--log-filename", help="Filename where logs will be written", default=None)
-    parser.add_argument("-c", "--config", help="configuration file", default=_DEFAULT_CONFIG)
-    parser.add_argument("--auto-login", action="store_true", default=False)
     subparsers = parser.add_subparsers(required=True, dest="_cmd1")
 
     initialize_parser = subparsers.add_parser("initialize", help="Initialize a new server and register account key")

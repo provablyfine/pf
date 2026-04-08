@@ -7,7 +7,7 @@ from ... import client
 
 def _auth_list_function(args):
     c = client.Config.load(args.config)
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
     response = auth.get(auth.directory.auth)
     if response.status_code != 200:
@@ -36,7 +36,7 @@ def _auth_list_function(args):
 
 def _auth_create_http_sig_function(args):
     c = client.Config.load(args.config)
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
     body: dict = {
         "name": args.name,
@@ -51,7 +51,7 @@ def _auth_create_http_sig_function(args):
 
 def _auth_create_oidc_function(args):
     c = client.Config.load(args.config)
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
     body: dict = {
         "name": args.name,
@@ -69,7 +69,7 @@ def _auth_create_oidc_function(args):
 
 def _auth_create_oauth2_github_function(args):
     c = client.Config.load(args.config)
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
     body: dict = {
         "name": args.name,
@@ -85,7 +85,7 @@ def _auth_create_oauth2_github_function(args):
 
 def _auth_read_function(args):
     c = client.Config.load(args.config)
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
     response = auth.get(f"{auth.directory.auth}/{args.id}")
     if response.status_code == 404:
@@ -144,7 +144,7 @@ def _auth_update_send(args, body: dict) -> None:
     if not body:
         raise client.exceptions.UI("Nothing to update")
     c = client.Config.load(args.config)
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
     response = auth.patch(f"{auth.directory.auth}/{args.id}", json=body)
     if response.status_code == 404:
@@ -177,7 +177,7 @@ def _auth_update_oauth2_github_function(args):
 
 def _auth_delete_function(args):
     c = client.Config.load(args.config)
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
     response = auth.delete(f"{auth.directory.auth}/{args.id}")
     if response.status_code == 404:

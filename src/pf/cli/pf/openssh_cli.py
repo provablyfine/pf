@@ -6,7 +6,7 @@ from ... import client, jwk, ssh
 
 def _user_trusted_keys_function(args):
     c = client.Config.load(args.config)
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     response = api.no_auth.get(f"{api.directory.ssh}/user/trusted-keys")
     if response.status_code != 200:
         raise client.exceptions.UI(response.json()["title"])
@@ -15,7 +15,7 @@ def _user_trusted_keys_function(args):
 
 def _sign_host_function(args):
     c = client.Config.load(args.config)
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
 
     public_keys = []

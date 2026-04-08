@@ -23,7 +23,7 @@ _SORT_KEYS = {
 
 def _list_function(args):
     c = client.Config.load(args.config)
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
     tenants = sorted(_tenants(auth), key=_SORT_KEYS[args.sort])
     if args.quiet:
@@ -43,7 +43,7 @@ def _list_function(args):
 
 def _get_function(args):
     c = client.Config.load(args.config)
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
     response = auth.get(f"{auth.directory.tenant}/{args.id}")
     if response.status_code == 404:
@@ -56,7 +56,7 @@ def _get_function(args):
 
 def _create_function(args):
     c = client.Config.load(args.config)
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
     response = auth.post(auth.directory.tenant, json={"name": args.name, "display_name": args.display_name})
     if response.status_code != 200:
@@ -67,7 +67,7 @@ def _create_function(args):
 
 def _update_function(args):
     c = client.Config.load(args.config)
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
     data = {}
     if args.display_name is not None:
@@ -87,7 +87,7 @@ def _update_function(args):
 
 def _delete_function(args):
     c = client.Config.load(args.config)
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
     response = auth.delete(f"{auth.directory.tenant}/{args.id}")
     if response.status_code == 404:

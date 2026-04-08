@@ -23,7 +23,7 @@ def _ssh_function(args):
 
     # Auto-login for http_sig only; other auth types require pf login first
     if not login.has_valid_session(c):
-        api = client.Client(c)
+        api = client.Client(c, timeout=args.timeout)
         response = api.no_auth.get(f"{api.directory.public_auth}/default")
         if response.status_code != 200:
             raise client.exceptions.UI("Not logged in. Run 'pf login' first.")
@@ -48,7 +48,7 @@ def _ssh_function(args):
             case _:
                 raise client.exceptions.UI(f"Session expired. Run 'pf login' first (auth type: {auth_public['type']}).")
 
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
 
     # Fetch and cache host trusted keys in config

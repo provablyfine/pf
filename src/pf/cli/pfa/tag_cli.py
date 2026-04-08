@@ -34,7 +34,7 @@ def _sort_by_value(t):
 
 def tag_list_function(args):
     c = client.Config.load(args.config)
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
     tags = _tags(args, auth)
     sort_functions = {
@@ -66,7 +66,7 @@ def tag_list_function(args):
 
 def _tag_create_function(args):
     c = client.Config.load(args.config)
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
     response = auth.post(
         api.directory.tag,
@@ -83,7 +83,7 @@ def _tag_delete_function(args):
     if args.id is None and args.name is None and args.value is None:
         raise client.exceptions.UI("You must specify a filtering criterion")
     c = client.Config.load(args.config)
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
     response = auth.delete(f"{api.directory.tag}/{args.id}")
     if response.status_code != 204:

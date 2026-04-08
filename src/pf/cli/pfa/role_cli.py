@@ -37,7 +37,7 @@ def _sort_by_name(t):
 
 def _role_list_function(args):
     c = client.Config.load(args.config)
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
     roles = _roles(auth, id=args.id, name=args.name)
     sort_functions = {
@@ -70,7 +70,7 @@ def _role_list_function(args):
 
 def _role_read_function(args):
     c = client.Config.load(args.config)
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
     role = _role(args, auth)
     match args.format:
@@ -98,7 +98,7 @@ def _role_read_function(args):
 
 def _role_delete_function(args):
     c = client.Config.load(args.config)
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
     response = auth.delete(f"{api.directory.role}/{args.id}")
     if response.status_code != 204:
@@ -107,7 +107,7 @@ def _role_delete_function(args):
 
 def _role_create_function(args):
     c = client.Config.load(args.config)
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
     response = auth.post(
         api.directory.role,
@@ -119,7 +119,7 @@ def _role_create_function(args):
 
 def _role_update_function(args):
     c = client.Config.load(args.config)
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
     query = {}
     if args.name is not None:
@@ -133,7 +133,7 @@ def _role_update_function(args):
 
 def _role_grant_function(args, action, grant):
     c = client.Config.load(args.config)
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
     role = _role(args, auth)
 
@@ -173,7 +173,7 @@ def _role_member_function(args):
         return False
 
     c = client.Config.load(args.config)
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
     role = _role(args, auth)
     member_list = role["member_list"]

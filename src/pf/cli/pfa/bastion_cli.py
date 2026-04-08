@@ -35,7 +35,7 @@ def _parse_tag(s):
 
 def _bastion_list_function(args):
     c = client.Config.load(args.config)
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
     bastions = _bastions(auth, id=args.id)
     if args.quiet:
@@ -61,7 +61,7 @@ def _bastion_list_function(args):
 
 def _bastion_read_function(args):
     c = client.Config.load(args.config)
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
     bastion = _bastion(args, auth)
     match args.format:
@@ -85,7 +85,7 @@ def _bastion_read_function(args):
 
 def _bastion_delete_function(args):
     c = client.Config.load(args.config)
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
     response = auth.delete(f"{api.directory.bastion}/{args.id}")
     if response.status_code != 204:
@@ -94,7 +94,7 @@ def _bastion_delete_function(args):
 
 def _bastion_create_function(args):
     c = client.Config.load(args.config)
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
     tag_id_list = [int(t) for t in args.tag if t.isdigit()]
     tag_name_value_list = [_parse_tag(t) for t in args.tag if not t.isdigit()]
@@ -114,7 +114,7 @@ def _bastion_create_function(args):
 
 def _bastion_update_function(args):
     c = client.Config.load(args.config)
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
     query = {}
     if args.register_url is not None:

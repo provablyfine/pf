@@ -92,7 +92,7 @@ def _register_function(args):
     if not login.has_valid_session(c):
         raise client.exceptions.UI("Not logged in. Run 'pf login' first.")
 
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
 
     active_tasks: dict[int, asyncio.Task] = {}
@@ -195,7 +195,7 @@ def _connect_function(args):
     if not login.has_valid_session(c):
         raise client.exceptions.UI("Not logged in. Run 'pf login' first.")
 
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
     token = _get_token(auth)
     asyncio.run(_connect_async(args.url, token, args.hostname))

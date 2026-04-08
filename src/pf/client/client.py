@@ -177,11 +177,12 @@ class RequestsAuth(requests.auth.AuthBase):
 
 
 class HttpClient:
-    def __init__(self, client, auth, public_key):
+    def __init__(self, client, auth, public_key, timeout):
         self._client = client
         self._auth = auth
         self._public_key = public_key
         self._session = requests.Session()
+        self._timeout = timeout
 
     @property
     def config(self):
@@ -205,7 +206,7 @@ class HttpClient:
         logger.debug(f"tx headers: {request.headers}")
         logger.debug(f"tx body: {request.body}")
         try:
-            response = self._session.send(request, timeout=1)
+            response = self._session.send(request, timeout=self._timeout)
         except requests.exceptions.ConnectionError:
             raise exceptions.UI("Unable to connect to server. #3")
         except requests.exceptions.ReadTimeout:
@@ -232,7 +233,7 @@ class HttpClient:
             if instance is not None and type is not None:
                 logger.warn(f"{title} {detail} {instance}")
             if instance is not None:
-                debug = requests.get(instance)
+                debug = requests.get(instance, timeout=0.5)
                 if "backtrace" in debug.json():
                     raise exceptions.UI(debug.json()["backtrace"])
                 raise exceptions.UI(str(debug.json()))
@@ -255,9 +256,10 @@ class HttpClient:
 
 
 class Client:
-    def __init__(self, config):
+    def __init__(self, config, timeout=1.0):
         self._config = config
         self._directory = None
+        self._timeout = timeout
 
     @property
     def config(self):
@@ -271,7 +273,7 @@ class Client:
             self._directory = types.SimpleNamespace(self._config.directory)
             return self._directory
         try:
-            response = requests.get(self._config.directory_url, timeout=0.5)
+            response = requests.get(self._config.directory_url, timeout=self._timeout)
         except requests.exceptions.ConnectionError:
             raise exceptions.UI("Unable to connect to server. #1")
         except requests.exceptions.ReadTimeout:
@@ -283,19 +285,19 @@ class Client:
 
     @property
     def no_auth(self) -> HttpClient:
-        return HttpClient(self, auth=None, public_key=None)
+        return HttpClient(self, auth=None, public_key=None, timeout=self._timeout)
 
     def invitation_auth(self, account: str | None, invitation: str) -> HttpClient:
         account_signer, account_public_key = private_key_signer("account", account)
         signers = [hmac_signer("invitation", invitation), account_signer]
-        return HttpClient(self, auth=RequestsAuth(signers), public_key=account_public_key)
+        return HttpClient(self, auth=RequestsAuth(signers), public_key=account_public_key, timeout=self._timeout)
 
     def login_auth(self, account: str | None, session: str | None) -> HttpClient:
         account_signer, _account_public_key = private_key_signer("account", account)
         session_signer, session_public_key = private_key_signer("session", session)
         signers = [account_signer, session_signer]
-        return HttpClient(self, auth=RequestsAuth(signers), public_key=session_public_key)
+        return HttpClient(self, auth=RequestsAuth(signers), public_key=session_public_key, timeout=self._timeout)
 
     def session_auth(self, session: str | None) -> HttpClient:
         signer, public_key = private_key_signer("session", session)
-        return HttpClient(self, auth=RequestsAuth([signer]), public_key=public_key)
+        return HttpClient(self, auth=RequestsAuth([signer]), public_key=public_key, timeout=self._timeout)

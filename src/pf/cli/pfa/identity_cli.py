@@ -64,7 +64,7 @@ def _boundary(s: str):
 
 def _identity_list_function(args):
     c = client.Config.load(args.config)
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
     identities = _identities(
         auth,
@@ -98,7 +98,7 @@ def _identity_list_function(args):
 
 def _identity_read_function(args):
     c = client.Config.load(args.config)
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
     identity = _identity(args, auth)
     match args.format:
@@ -120,7 +120,7 @@ def _identity_read_function(args):
 
 def _identity_delete_function(args):
     c = client.Config.load(args.config)
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
     response = auth.delete(f"{api.directory.identity}/{args.id}")
     if response.status_code != 204:
@@ -138,7 +138,7 @@ def _parse_tag(s):
 
 def _identity_create_function(args):
     c = client.Config.load(args.config)
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
     boundary_id_list = [int(b) for b in args.boundary if b.isdigit()]
     boundary_name_list = [b for b in args.boundary if not b.isdigit()]
@@ -160,7 +160,7 @@ def _identity_create_function(args):
 
 def _identity_invite_function(args):
     c = client.Config.load(args.config)
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
     response = auth.post(f"{api.directory.identity}/{args.id}/invite", json={"delivery": args.delivery})
     if response.status_code == 204:
@@ -176,7 +176,7 @@ def _identity_invite_function(args):
 
 def _identity_update_function(args):
     c = client.Config.load(args.config)
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
     query = {}
     if args.name is not None:
@@ -212,7 +212,7 @@ def _format_tag_op(op, values):
 def _identity_tag_function(args):
 
     c = client.Config.load(args.config)
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
 
     ops = [op for op_type, values in args.ops for op in _format_tag_op(op_type, values)]

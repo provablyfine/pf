@@ -37,7 +37,7 @@ def _sort_by_name(boundary):
 
 def _boundary_list_function(args):
     c = client.Config.load(args.config)
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
     boundaries = _boundaries(auth, id=args.id, name=args.name)
     sort_functions = {
@@ -70,7 +70,7 @@ def _boundary_list_function(args):
 
 def _boundary_read_function(args):
     c = client.Config.load(args.config)
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
     boundary = _boundary(auth, args.id)
     match args.format:
@@ -106,7 +106,7 @@ def _boundary_read_function(args):
 
 def _boundary_delete_function(args):
     c = client.Config.load(args.config)
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
     response = auth.delete(f"{api.directory.boundary}/{args.id}")
     if response.status_code != 204:
@@ -115,7 +115,7 @@ def _boundary_delete_function(args):
 
 def _boundary_create_function(args):
     c = client.Config.load(args.config)
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
     response = auth.post(
         api.directory.boundary,
@@ -127,7 +127,7 @@ def _boundary_create_function(args):
 
 def _boundary_update_function(args):
     c = client.Config.load(args.config)
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
     query = {}
     if args.name is not None:
@@ -141,7 +141,7 @@ def _boundary_update_function(args):
 
 def _boundary_grant_function(args, action, grant, field_name):
     c = client.Config.load(args.config)
-    api = client.Client(c)
+    api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
     boundary = _boundary(auth, args.id)
 
