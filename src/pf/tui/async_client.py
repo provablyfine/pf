@@ -1,4 +1,5 @@
 import asyncio
+from typing import Any
 
 import requests
 
@@ -20,25 +21,25 @@ class AsyncClient:
     def public_key(self):
         return self._client.public_key
 
-    async def get(self, *args, **kwargs) -> requests.Response:
+    async def get(self, url: str, *, params: dict[str, Any] | None = None) -> requests.Response:
         async with self._lock:
-            return await asyncio.to_thread(self._client.get, *args, **kwargs)
+            return await asyncio.to_thread(self._client.get, url, params=params)
 
-    async def post(self, *args, **kwargs) -> requests.Response:
+    async def post(self, url: str, *, json: Any = None) -> requests.Response:
         async with self._lock:
-            return await asyncio.to_thread(self._client.post, *args, **kwargs)
+            return await asyncio.to_thread(self._client.post, url, json=json)
 
-    async def patch(self, *args, **kwargs) -> requests.Response:
+    async def patch(self, url: str, *, json: Any = None) -> requests.Response:
         async with self._lock:
-            return await asyncio.to_thread(self._client.patch, *args, **kwargs)
+            return await asyncio.to_thread(self._client.patch, url, json=json)
 
-    async def put(self, *args, **kwargs) -> requests.Response:
+    async def put(self, url: str, *, json: Any = None) -> requests.Response:
         async with self._lock:
-            return await asyncio.to_thread(self._client.put, *args, **kwargs)
+            return await asyncio.to_thread(self._client.put, url, json=json)
 
-    async def delete(self, *args, **kwargs) -> requests.Response:
+    async def delete(self, url: str) -> requests.Response:
         async with self._lock:
-            return await asyncio.to_thread(self._client.delete, *args, **kwargs)
+            return await asyncio.to_thread(self._client.delete, url)
 
     async def get_list(self, url: str, key: str, error_msg: str) -> list:
         response = await self.get(url)

@@ -3,6 +3,7 @@ import logging
 import os.path
 import secrets
 import types
+import typing
 
 import http_message_signatures
 import requests
@@ -196,7 +197,16 @@ class HttpClient:
     def public_key(self):
         return self._public_key
 
-    def request(self, method, url, data=None, json=None, headers=None, timeout=None, params=None) -> requests.Response:
+    def request(
+        self,
+        method: str,
+        url: str,
+        data: typing.Any = None,
+        json: typing.Any = None,
+        headers: dict[str, str] | None = None,
+        timeout: float | None = None,
+        params: dict[str, typing.Any] | None = None,
+    ) -> requests.Response:
         request = requests.Request(
             method=method, url=url, data=data, json=json, headers=headers, auth=self._auth, params=params
         )
@@ -239,20 +249,20 @@ class HttpClient:
                 raise exceptions.UI(str(debug.json()))
         return response
 
-    def post(self, *args, **kwargs) -> requests.Response:
-        return self.request("POST", *args, **kwargs)
+    def get(self, url: str, *, params: dict[str, typing.Any] | None = None) -> requests.Response:
+        return self.request("GET", url, params=params)
 
-    def get(self, *args, **kwargs) -> requests.Response:
-        return self.request("GET", *args, **kwargs)
+    def post(self, url: str, *, json: typing.Any = None) -> requests.Response:
+        return self.request("POST", url, json=json)
 
-    def delete(self, *args, **kwargs) -> requests.Response:
-        return self.request("DELETE", *args, **kwargs)
+    def patch(self, url: str, *, json: typing.Any = None) -> requests.Response:
+        return self.request("PATCH", url, json=json)
 
-    def put(self, *args, **kwargs) -> requests.Response:
-        return self.request("PUT", *args, **kwargs)
+    def delete(self, url: str) -> requests.Response:
+        return self.request("DELETE", url)
 
-    def patch(self, *args, **kwargs) -> requests.Response:
-        return self.request("PATCH", *args, **kwargs)
+    def put(self, url: str, *, json: typing.Any = None) -> requests.Response:
+        return self.request("PUT", url, json=json)
 
 
 class Client:
