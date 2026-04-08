@@ -43,25 +43,6 @@ def _identity(args, auth):
     return identities[0]
 
 
-def _tag(tag: str):
-    if tag.isdigit():
-        return {"id": int(tag)}
-    else:
-        equal = tag.find("=")
-        if equal == -1:
-            raise client.exceptions.UI(f"Tag format is name=value, not {tag}")
-        name = tag[:equal]
-        value = tag[equal + 1 :]
-        return {"name": name, "value": value}
-
-
-def _boundary(s: str):
-    if s.isdigit():
-        return {"id": int(s)}
-    else:
-        return {"name": s}
-
-
 def _identity_list_function(args):
     c = client.Config.load(args.config)
     api = client.Client(c, timeout=args.timeout)
