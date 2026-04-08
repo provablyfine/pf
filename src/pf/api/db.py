@@ -223,6 +223,6 @@ oidc_key = sqlalchemy.Table(
 )
 
 
-def create_tables(url):
+def create_tables(url: str) -> None:
     engine = sqlalchemy.create_engine(url)
     metadata.create_all(engine)
