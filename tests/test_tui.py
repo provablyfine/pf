@@ -29,8 +29,8 @@ async def _wait(pilot, app=None):
     await pilot.pause()  # let UI re-render (notifications, table updates)
 
 
-def _run(args, env, **kwargs):
-    return subprocess.run(args, env=env, check=True, capture_output=True, **kwargs)
+def _run(args: list[str], env: dict[str,str]):
+    return subprocess.run(args, env=env, check=True, capture_output=True)
 
 
 def _setup(api, tmpdir):
