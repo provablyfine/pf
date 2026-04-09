@@ -7,12 +7,10 @@ import traceback
 
 import fastapi
 import fastapi.exceptions
-import fastapi.openapi.utils
 import fastapi.requests
 import fastapi.responses
 import pydantic
 import sqlalchemy
-import yaml
 
 from .. import base64url, log
 from . import config, dao_factory, db, dependencies, endpoints, middleware, responses, tenant_db
@@ -120,37 +118,33 @@ def create(conf: config.Config) -> fastapi.FastAPI:
 
     fastapi_app = fastapi.FastAPI(lifespan=lifespan, docs_url="/docs", redoc_url="/redoc")
 
-    @fastapi_app.exception_handler(responses.ProblemHTTPException)
     async def problem_exception_handler(
         request: fastapi.requests.Request, exc: responses.ProblemHTTPException
     ) -> fastapi.responses.Response:
         return exc.response
 
-    @fastapi_app.exception_handler(pydantic.ValidationError)
     async def validation_error_handler(
         request: fastapi.requests.Request, exc: pydantic.ValidationError
     ) -> fastapi.responses.Response:
         assert len(exc.errors()) > 0
         error = exc.errors()[0]
         return responses.problem_response(
-            status_code=400,
+            status_code=422,
             title="Request invalid.",
             detail=f"{error['msg']}: {'.'.join(map(str, error['loc']))}",
         )
 
-    @fastapi_app.exception_handler(fastapi.exceptions.RequestValidationError)
     async def request_validation_error_handler(
         request: fastapi.requests.Request, exc: fastapi.exceptions.RequestValidationError
     ) -> fastapi.responses.Response:
         assert len(exc.errors()) > 0
         error = exc.errors()[0]
         return responses.problem_response(
-            status_code=400,
+            status_code=422,
             title="Request invalid.",
             detail=f"{error['msg']}: {'.'.join(map(str, error['loc']))}",
         )
 
-    @fastapi_app.exception_handler(Exception)
     async def generic_exception_handler(
         request: fastapi.requests.Request, exc: Exception
     ) -> fastapi.responses.Response:
@@ -159,45 +153,33 @@ def create(conf: config.Config) -> fastapi.FastAPI:
         debug_url = request.app.state.config.base_url + debug_path
         return responses.problem_response(status_code=500, title="Internal Server Error", instance=debug_url)
 
+    fastapi_app.add_exception_handler(responses.ProblemHTTPException, problem_exception_handler)  # type: ignore[arg-type]
+    fastapi_app.add_exception_handler(pydantic.ValidationError, validation_error_handler)  # type: ignore[arg-type]
+    fastapi_app.add_exception_handler(fastapi.exceptions.RequestValidationError, request_validation_error_handler)  # type: ignore[arg-type]
+    fastapi_app.add_exception_handler(Exception, generic_exception_handler)
+
     # Middleware added in reverse order: last added = outermost
     fastapi_app.add_middleware(middleware.ConfigContextMiddleware)
     fastapi_app.add_middleware(middleware.KekContextMiddleware)
     fastapi_app.add_middleware(middleware.BodyReaderMiddleware)
 
-    def _openapi_schema() -> dict:
-        if fastapi_app.openapi_schema:
-            return fastapi_app.openapi_schema
-        schema = fastapi.openapi.utils.get_openapi(
-            title=fastapi_app.title, version=fastapi_app.version, routes=fastapi_app.routes
-        )
-        for path_item in schema.get("paths", {}).values():
-            for operation in path_item.values():
-                if isinstance(operation, dict):
-                    operation.get("responses", {}).pop("422", None)
-        fastapi_app.openapi_schema = schema
-        return schema
+    debug_router = fastapi.APIRouter()
 
-    fastapi_app.openapi = _openapi_schema  # type: ignore[method-assign]
-
-    @fastapi_app.get("/openapi.yaml", include_in_schema=False)
-    def openapi_yaml() -> fastapi.responses.Response:
-        return fastapi.responses.Response(
-            content=yaml.dump(_openapi_schema(), allow_unicode=True, sort_keys=False),
-            media_type="application/yaml",
-        )
-
-    @fastapi_app.get("/debug/trigger-error", include_in_schema=False)
-    def trigger_error_endpoint() -> fastapi.responses.Response:
+    @debug_router.get("/trigger-error", include_in_schema=False)
+    def trigger_error_endpoint() -> fastapi.responses.Response:  # type: ignore[reportUnusedFunction]
         raise RuntimeError("Triggered for testing")
 
-    @fastapi_app.get("/debug/{debug_id}")
-    def debug_endpoint(debug_id: str, request: fastapi.requests.Request) -> fastapi.responses.Response:
+    @debug_router.get("/{debug_id}")
+    def debug_endpoint(debug_id: str, request: fastapi.requests.Request) -> fastapi.responses.Response:  # type: ignore[reportUnusedFunction]
+        data = request.app.state.debug_store.get(debug_id)
         data = request.app.state.debug_store.get(debug_id)
         if data is None:
             return responses.problem_response(
                 status_code=404, title="Debug data could not be found", detail=f"Missing {debug_id}"
             )
         return fastapi.responses.JSONResponse(status_code=200, content=data)
+
+    fastapi_app.include_router(debug_router, prefix="/debug", tags=["debug"])
 
     _tenant_dep = fastapi.Depends(dependencies.tenant_context)
     _tenant_prefix = "/pf/t/{tenant_name}"
