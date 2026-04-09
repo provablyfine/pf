@@ -44,7 +44,7 @@ class Config:
 
     def __post_init__(self):
         if isinstance(self.default_bastion, dict):
-            self.default_bastion = DefaultBastion(**self.default_bastion)
+            self.default_bastion = DefaultBastion(**self.default_bastion)  # type: ignore[arg-type]
 
     @staticmethod
     def load(filename: str | None = None) -> Config:
@@ -61,5 +61,5 @@ class Config:
                     data = yaml.safe_load(f)
             else:
                 assert False
-        config = Config(**data)
+        config = Config(**data)  # type: ignore[arg-type]
         return config
