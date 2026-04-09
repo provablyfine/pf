@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import abc
 import hashlib
 import hmac
 import logging
@@ -10,6 +11,7 @@ import types
 import typing
 import urllib.parse
 
+import cryptography.hazmat.primitives.asymmetric.ed25519
 import http_sfv
 import requests
 
@@ -43,81 +45,88 @@ def _build_signature_base(
     return "\n".join(parts)
 
 
-class Signer:
-    def __init__(
-        self,
-        prefix: str,
-        key: jwk.Symmetric | jwk.Public,
-        sign_func: typing.Callable[[bytes], bytes],
-    ) -> None:
+class Signer(abc.ABC):
+    def __init__(self, prefix: str):
         self._prefix = prefix
+
+    def prefix(self) -> str:
+        return self._prefix
+
+    @abc.abstractmethod
+    def thumbprint(self) -> str:
+        pass
+
+    @abc.abstractmethod
+    def sign(self, data: bytes) -> bytes:
+        pass
+
+
+class PrivateSigner(Signer):
+    @abc.abstractmethod
+    def public_key(self) -> jwk.Public:
+        pass
+
+
+class FileSigner(PrivateSigner):
+    def __init__(self, prefix: str, key: jwk.Private) -> None:
+        super().__init__(prefix)
         self._key = key
-        self._sign_func = sign_func
 
-    def sign(self, request: requests.PreparedRequest, covered: tuple[str, ...]) -> tuple[str, str]:
-        """Generate HTTP signature headers for a single signer.
+    def public_key(self) -> jwk.Public:
+        return self._key.public()
 
-        Returns (Signature-Input entry, Signature entry) — caller joins multiple signers.
-        """
-        key_id = f"{self._prefix}:{self._key.thumbprint()}"
+    def thumbprint(self) -> str:
+        return self._key.thumbprint()
 
-        # Build Signature-Input params
-        inner = http_sfv.InnerList([http_sfv.Item(c) for c in covered])
-        inner.params["created"] = int(time.time())
-        inner.params["keyid"] = key_id
-        inner.params["nonce"] = secrets.token_hex(16)
+    def sign(self, data: bytes) -> bytes:
+        key  = self._key.to_crypto()
+        assert isinstance(key, cryptography.hazmat.primitives.asymmetric.ed25519.Ed25519PrivateKey)
+        return key.sign(data)
 
-        # Serialize to get sig_params value
-        sig_params = str(inner)
 
-        # Build and sign the signature base
-        sig_base = _build_signature_base(request, covered, sig_params)
-        sig_bytes = self._sign_func(sig_base.encode())
+class AgentSigner(PrivateSigner):
+    def __init__(self, prefix: str, key: jwk.Public) -> None:
+        super().__init__(prefix)
+        self._key = key
 
-        # Format the header values
-        return (
-            f"{self._prefix}={sig_params}",
-            f"{self._prefix}={http_sfv.Item(sig_bytes)}",
-        )
+    def public_key(self) -> jwk.Public:
+        return self._key
+
+    def thumbprint(self) -> str:
+        return self._key.thumbprint()
+
+    def sign(self, data: bytes) -> bytes:
+        fingerprint = self._key.ssh_fingerprint()
+        ssh_agent = ssh.agent.Client()
+        for identity in ssh_agent.list_identities():
+            if identity.public_key.match_ssh_fingerprint(fingerprint):
+                assert identity.public_key.type == jwk.KeyType.ED25519
+                return ssh_agent.sign(identity, data, 0)
+        raise exceptions.UI(f"Unable to find requested key={fingerprint}")
+
+
+class HmacSigner(Signer):
+    def __init__(self, prefix: str, key: jwk.Symmetric):
+        super().__init__(prefix)
+        self._key = key
+
+    def thumbprint(self) -> str:
+        return self._key.thumbprint()
+
+    def sign(self, data: bytes) -> bytes:
+        return hmac.new(self._key.to_bytes(), data, hashlib.sha256).digest()
 
 
 def hmac_signer(prefix: str, key: str) -> Signer:
-    """Create a Signer using HMAC-SHA256.
-
-    Args:
-        prefix: key ID prefix (e.g., 'invitation')
-        key: base64url-encoded symmetric key
-
-    Returns:
-        Signer instance with HMAC-SHA256 signing function
-    """
-    key_bytes = base64url.decode(key)
-    signing_key = jwk.Symmetric.from_bytes(key_bytes)
-
-    def sign_func(data: bytes) -> bytes:
-        return hmac.new(key_bytes, data, hashlib.sha256).digest()
-
-    return Signer(prefix, signing_key, sign_func)
+    k = jwk.Symmetric.from_bytes(base64url.decode(key))
+    return HmacSigner(prefix, k)
 
 
 @ssh_utils.exception
-def private_key_signer(prefix: str, filename: str | None) -> tuple[Signer, jwk.Public]:
-    """Create a Signer using Ed25519 from a file or SSH agent.
-
-    Args:
-        prefix: key ID prefix (e.g., 'account', 'session')
-        filename: path to private key file, or SSH agent key identifier
-
-    Returns:
-        (Signer, public_key_dict) tuple
-
-    Raises:
-        exceptions.UI if key not found or unsupported type
-    """
+def private_key_signer(prefix: str, filename: str | None) -> PrivateSigner:
     if filename is None:
         raise exceptions.UI("Did you forget to login ?")
 
-    # File-based key
     if os.path.exists(filename):
         with open(filename, "rb") as f:
             data = f.read()
@@ -127,26 +136,16 @@ def private_key_signer(prefix: str, filename: str | None) -> tuple[Signer, jwk.P
             raise exceptions.UI("Unable to parse data either as PEM or SSH format")
         if key.type != jwk.KeyType.ED25519:
             raise exceptions.UI(f"Unsupported: {key.type}")
-        private = key.to_crypto()
-        # Cast to narrow the overloaded signature to the Ed25519 case: (bytes) -> bytes
-        sign_func = typing.cast(typing.Callable[[bytes], bytes], private.sign)
-        return Signer(prefix, key.public(), sign_func), key.public()
+        return FileSigner(prefix, key)
 
-    # SSH agent-based key
     ssh_agent = ssh.agent.Client()
     for identity in ssh_agent.list_identities():
         if identity.comment == filename or identity.public_key.match_ssh_fingerprint(filename):
             if identity.public_key.type != jwk.KeyType.ED25519:
                 raise exceptions.UI(f"Unsupported: {identity.public_key.type}")
 
-            def sign_func(
-                data: bytes, agent: ssh.agent.Client = ssh_agent, ident: ssh.agent.Identity = identity
-            ) -> bytes:
-                return agent.sign(ident, data, 0)
-
-            return Signer(prefix, identity.public_key, sign_func), identity.public_key
-
-    raise exceptions.UI(f"Unable to find key matching {filename}")
+            return AgentSigner(prefix, identity.public_key)
+    raise exceptions.UI(f"Unable to find requested key={filename}")
 
 
 class RequestsAuth:
@@ -156,18 +155,41 @@ class RequestsAuth:
     Signature-Input and Signature headers.
     """
 
-    def __init__(self, signers: list[Signer]) -> None:
+    def __init__(self, signers: typing.Sequence[Signer]) -> None:
         self._signers = signers
+
+    def _sign(self, signer: Signer, request: requests.PreparedRequest, covered: tuple[str, ...]) -> tuple[str, str]:
+        """Generate HTTP signature headers for a single signer.
+
+        Returns (Signature-Input entry, Signature entry) — caller joins multiple signers.
+        """
+        key_id = f"{signer.prefix()}:{signer.thumbprint()}"
+
+        inner = http_sfv.InnerList([http_sfv.Item(c) for c in covered])
+        inner.params["created"] = int(time.time())
+        inner.params["keyid"] = key_id
+        inner.params["nonce"] = secrets.token_hex(16)
+
+        sig_params = str(inner)
+        sig_base = _build_signature_base(request, covered, sig_params)
+        sig_bytes = signer.sign(sig_base.encode())
+
+        return (
+            f"{signer.prefix()}={sig_params}",
+            f"{signer.prefix()}={http_sfv.Item(sig_bytes)}",
+        )
 
     def __call__(self, request: requests.PreparedRequest) -> requests.PreparedRequest:
         if "Content-Digest" not in request.headers:
             body = b"" if request.body is None else request.body
+            if isinstance(body, str):
+                body = body.encode()
             request.headers["Content-Digest"] = str(http_sfv.Dictionary({"sha-256": hashlib.sha256(body).digest()}))
         covered = ("@method", "@authority", "@target-uri", "content-digest")
         signatures_input: list[str] = []
         signatures: list[str] = []
         for signer in self._signers:
-            signature_input, signature = signer.sign(request, covered)
+            signature_input, signature = self._sign(signer, request, covered)
             signatures_input.append(signature_input)
             signatures.append(signature)
         request.headers["Signature-Input"] = ", ".join(signatures_input)
@@ -176,10 +198,9 @@ class RequestsAuth:
 
 
 class HttpClient:
-    def __init__(self, client: Client, auth: RequestsAuth|None, public_key: jwk.Public|None, timeout: float):
+    def __init__(self, client: Client, auth: RequestsAuth|None, timeout: float):
         self._client = client
         self._auth = auth
-        self._public_key = public_key
         self._session = requests.Session()
         self._timeout = timeout
 
@@ -190,10 +211,6 @@ class HttpClient:
     @property
     def directory(self) -> types.SimpleNamespace:
         return self._client.directory
-
-    @property
-    def public_key(self) -> jwk.Public|None:
-        return self._public_key
 
     def request(
         self,
@@ -264,6 +281,15 @@ class HttpClient:
     def put(self, url: str, *, json: typing.Any = None) -> requests.Response:
         return self.request("PUT", url, json=json)
 
+class InvitationHttpClient(HttpClient):
+    def __init__(self, client: Client, auth: RequestsAuth|None, timeout: float, account_public_key: jwk.Public):
+        super().__init__(client, auth, timeout)
+        self._account_public_key = account_public_key
+
+    @property
+    def account_public_key(self) -> jwk.Public:
+        return self._account_public_key
+
 
 class Client:
     def __init__(self, config: configuration.Config, timeout: float=1.0):
@@ -295,19 +321,26 @@ class Client:
 
     @property
     def no_auth(self) -> HttpClient:
-        return HttpClient(self, auth=None, public_key=None, timeout=self._timeout)
+        return HttpClient(self, auth=None, timeout=self._timeout)
 
-    def invitation_auth(self, account: str | None, invitation: str) -> HttpClient:
-        account_signer, account_public_key = private_key_signer("account", account)
-        signers = [hmac_signer("invitation", invitation), account_signer]
-        return HttpClient(self, auth=RequestsAuth(signers), public_key=account_public_key, timeout=self._timeout)
+    def invitation_auth(self, account: str | None, invitation: str) -> InvitationHttpClient:
+        invitation_signer = hmac_signer("invitation", invitation)
+        account_signer = private_key_signer("account", account)
+        signers = [ invitation_signer, account_signer]
+        return InvitationHttpClient(
+            self, 
+            auth=RequestsAuth(signers),
+            timeout=self._timeout,
+            account_public_key=account_signer.public_key(),
+        )
 
     def login_auth(self, account: str | None, session: str | None) -> HttpClient:
-        account_signer, _account_public_key = private_key_signer("account", account)
-        session_signer, session_public_key = private_key_signer("session", session)
-        signers = [account_signer, session_signer]
-        return HttpClient(self, auth=RequestsAuth(signers), public_key=session_public_key, timeout=self._timeout)
+        signers = [
+            private_key_signer("account", account),
+            private_key_signer("session", session),
+        ]
+        return HttpClient(self, auth=RequestsAuth(signers), timeout=self._timeout)
 
     def session_auth(self, session: str | None) -> HttpClient:
-        signer, public_key = private_key_signer("session", session)
-        return HttpClient(self, auth=RequestsAuth([signer]), public_key=public_key, timeout=self._timeout)
+        signers = [private_key_signer("session", session)]
+        return HttpClient(self, auth=RequestsAuth(signers), timeout=self._timeout)

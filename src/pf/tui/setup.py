@@ -232,7 +232,7 @@ class NewServerSetupScreen(textual.screen.Screen[None]):
             inv_auth = api.invitation_auth(account=account_key, invitation=invitation_key)
             response = inv_auth.post(
                 url=inv_auth.directory.accept_invitation,
-                json={"account_public_key": inv_auth.public_key},
+                json={"account_public_key": inv_auth.account_public_key.to_dict()},
             )
             if response.status_code != 204:
                 raise client.exceptions.UI(f"Unable to accept invitation: {response.text}")
@@ -324,10 +324,10 @@ class ConnectScreen(textual.screen.Screen[None]):
 
             status.update("Accepting invitation...")
             try:
-                inv_auth = async_client.AsyncClient(api.invitation_auth(account=account_key, invitation=invitation))
-                response = await inv_auth.post(
+                inv_auth = api.invitation_auth(account=account_key, invitation=invitation)
+                response = await async_client.AsyncClient(inv_auth).post(
                     inv_auth.directory.accept_invitation,
-                    json={"account_public_key": inv_auth.public_key},
+                    json={"account_public_key": inv_auth.account_public_key.to_dict()},
                 )
                 if response.status_code != 204:
                     raise client.exceptions.UI(f"Unable to accept invitation: {response.text}")
