@@ -1,9 +1,16 @@
+import functools
+import typing
+
 from .. import jwk, ssh
 from . import exceptions
 
+P = typing.ParamSpec("P")
+R = typing.TypeVar("R")
 
-def exception(f):
-    def wrapper(*args, **kwargs):
+
+def exception(f: typing.Callable[P, R]) -> typing.Callable[P, R]:  # noqa: UP047
+    @functools.wraps(f)
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
         try:
             return f(*args, **kwargs)
         except ssh.exceptions.Error as e:
