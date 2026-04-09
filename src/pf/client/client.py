@@ -1,120 +1,124 @@
+from __future__ import annotations
+
 import hashlib
+import hmac
 import logging
 import os.path
 import secrets
+import time
 import types
 import typing
+import urllib.parse
 
-import http_message_signatures
+import http_sfv
 import requests
 
 from .. import base64url, jwk, ssh
-from . import exceptions, ssh_utils, configuration
+from . import configuration, exceptions, ssh_utils
 
-# Because we import stuff from http_message_signatures
-# that is not explicitely exported.
-# No good idea to fix this short of re-implementing our own
+# http_sfv type stubs are incomplete (private imports, reportPrivateImportUsage)
 # pyright: reportPrivateImportUsage=false
-# pyright: reportAttributeAccessIssue=false
 
 logger = logging.getLogger(__name__)
 
 
-class KeyResolver(http_message_signatures.HTTPSignatureKeyResolver):
-    def __init__(self, private_key):
-        self._private_key = private_key
-
-    def resolve_public_key(self, key_id: str):
-        raise NotImplementedError("This method must be implemented by a subclass.")
-
-    def resolve_private_key(self, key_id: str):
-        return self._private_key
-
-
-class RequestMessage:
-    "Wrapper class to become compatible with http-message-signatures library"
-
-    def __init__(self, request: requests.Request):
-        self._request = request
-        self._headers = http_message_signatures.structures.CaseInsensitiveDict(
-            {k.lower(): v for k, v in request.headers.items()}
-        )
-
-    @property
-    def method(self):
-        return self._request.method
-
-    @property
-    def url(self):
-        return self._request.url
-
-    @property
-    def headers(self):
-        return self._headers
+def _build_signature_base(
+    request: requests.PreparedRequest,
+    covered: tuple[str, ...],
+    sig_params: str,
+) -> str:
+    """Build the signature base string per RFC 9421 §2.5."""
+    parts: list[str] = []
+    for c in covered:
+        match c:
+            case "@method":
+                parts.append(f'"@method": {request.method}')
+            case "@authority":
+                parts.append(f'"@authority": {urllib.parse.urlparse(request.url).netloc}')
+            case "@target-uri":
+                parts.append(f'"@target-uri": {request.url}')
+            case _:
+                parts.append(f'"{c}": {request.headers[c]}')
+    parts.append(f'"@signature-params": {sig_params}')
+    return "\n".join(parts)
 
 
 class Signer:
-    def __init__(self, prefix, key, signer):
+    def __init__(
+        self,
+        prefix: str,
+        key: jwk.Symmetric | jwk.Public,
+        sign_func: typing.Callable[[bytes], bytes],
+    ) -> None:
         self._prefix = prefix
         self._key = key
-        self._signer = signer
+        self._sign_func = sign_func
 
-    def sign(self, request, covered):
-        message = RequestMessage(request)
+    def sign(self, request: requests.PreparedRequest, covered: tuple[str, ...]) -> tuple[str, str]:
+        """Generate HTTP signature headers for a single signer.
+
+        Returns (Signature-Input entry, Signature entry) — caller joins multiple signers.
+        """
         key_id = f"{self._prefix}:{self._key.thumbprint()}"
-        nonce = secrets.token_hex(16)
-        self._signer.sign(
-            message,
-            key_id=key_id,
-            label=self._prefix,
-            covered_component_ids=covered,
-            nonce=nonce,
+
+        # Build Signature-Input params
+        inner = http_sfv.InnerList([http_sfv.Item(c) for c in covered])
+        inner.params["created"] = int(time.time())
+        inner.params["keyid"] = key_id
+        inner.params["nonce"] = secrets.token_hex(16)
+
+        # Serialize to get sig_params value
+        sig_params = str(inner)
+
+        # Build and sign the signature base
+        sig_base = _build_signature_base(request, covered, sig_params)
+        sig_bytes = self._sign_func(sig_base.encode())
+
+        # Format the header values
+        return (
+            f"{self._prefix}={sig_params}",
+            f"{self._prefix}={http_sfv.Item(sig_bytes)}",
         )
-        return message.headers["Signature-Input"], message.headers["Signature"]
 
 
-def hmac_signer(prefix: str, key: str):
-    signing_key = jwk.Symmetric.from_bytes(base64url.decode(key))
-    signer = http_message_signatures.HTTPMessageSigner(
-        signature_algorithm=http_message_signatures.algorithms.HMAC_SHA256,
-        key_resolver=KeyResolver(signing_key.to_bytes()),
-    )
-    return Signer(prefix, signing_key, signer)
+def hmac_signer(prefix: str, key: str) -> Signer:
+    """Create a Signer using HMAC-SHA256.
 
+    Args:
+        prefix: key ID prefix (e.g., 'invitation')
+        key: base64url-encoded symmetric key
 
-def create_algorithm_class(agent: ssh.agent.Client, key: jwk.Public):
-    match key.type:
-        case jwk.KeyType.ED25519:
-            algorithm_id = "ed25519"
-        case _:
-            assert False, key.type
+    Returns:
+        Signer instance with HMAC-SHA256 signing function
+    """
+    key_bytes = base64url.decode(key)
+    signing_key = jwk.Symmetric.from_bytes(key_bytes)
 
-    def _search_identity():
-        for identity in agent.list_identities():
-            if identity.public_key.thumbprint() == key.thumbprint():
-                return identity
-        raise exceptions.UI("Unable to find key {key.ssh_fingerprint()}")
+    def sign_func(data: bytes) -> bytes:
+        return hmac.new(key_bytes, data, hashlib.sha256).digest()
 
-    def custom_init(self, *args, **kwargs):
-        pass
-
-    def custom_sign(self, message):
-        identity = _search_identity()
-        return agent.sign(identity, message, 0)
-
-    Type = type(
-        "CustomSshAgentAlgorithm",
-        (http_message_signatures.HTTPSignatureAlgorithm,),
-        {"__init__": custom_init, "sign": custom_sign, "algorithm_id": algorithm_id},
-    )
-    return Type
+    return Signer(prefix, signing_key, sign_func)
 
 
 @ssh_utils.exception
-def private_key_signer(prefix: str, filename: str | None):
+def private_key_signer(prefix: str, filename: str | None) -> tuple[Signer, jwk.Public]:
+    """Create a Signer using Ed25519 from a file or SSH agent.
+
+    Args:
+        prefix: key ID prefix (e.g., 'account', 'session')
+        filename: path to private key file, or SSH agent key identifier
+
+    Returns:
+        (Signer, public_key_dict) tuple
+
+    Raises:
+        exceptions.UI if key not found or unsupported type
+    """
     if filename is None:
         raise exceptions.UI("Did you forget to login ?")
-    elif os.path.exists(filename):
+
+    # File-based key
+    if os.path.exists(filename):
         with open(filename, "rb") as f:
             data = f.read()
         try:
@@ -123,51 +127,45 @@ def private_key_signer(prefix: str, filename: str | None):
             raise exceptions.UI("Unable to parse data either as PEM or SSH format")
         if key.type != jwk.KeyType.ED25519:
             raise exceptions.UI(f"Unsupported: {key.type}")
-        algorithm = http_message_signatures.algorithms.ED25519
-        resolver = KeyResolver(key.to_crypto())
-        signer = http_message_signatures.HTTPMessageSigner(
-            signature_algorithm=algorithm,
-            key_resolver=resolver,
-        )
-        public_key = key.public()
-    else:
-        ssh_agent = ssh.agent.Client()
-        algorithm = None
-        public_key = None
-        for id in ssh_agent.list_identities():
-            if id.comment == filename or id.public_key.match_ssh_fingerprint(filename):
-                if id.public_key.type != jwk.KeyType.ED25519:
-                    raise exceptions.UI(f"Unsupported: {id.public_key.type}")
-                algorithm = create_algorithm_class(ssh_agent, id.public_key)
-                public_key = id.public_key
-                break
-        if algorithm is None:
-            raise exceptions.UI(f"Unable to find key matching {filename}")
-        assert public_key is not None
-        http_message_signatures._algorithms.signature_algorithms[algorithm.algorithm_id] = algorithm
-        resolver = KeyResolver(None)
-        signer = http_message_signatures.HTTPMessageSigner(
-            signature_algorithm=algorithm,
-            key_resolver=resolver,
-        )
-    return Signer(prefix, public_key, signer), public_key.to_dict()
+        private = key.to_crypto()
+        # Cast to narrow the overloaded signature to the Ed25519 case: (bytes) -> bytes
+        sign_func = typing.cast(typing.Callable[[bytes], bytes], private.sign)
+        return Signer(prefix, key.public(), sign_func), key.public()
+
+    # SSH agent-based key
+    ssh_agent = ssh.agent.Client()
+    for identity in ssh_agent.list_identities():
+        if identity.comment == filename or identity.public_key.match_ssh_fingerprint(filename):
+            if identity.public_key.type != jwk.KeyType.ED25519:
+                raise exceptions.UI(f"Unsupported: {identity.public_key.type}")
+
+            def sign_func(
+                data: bytes, agent: ssh.agent.Client = ssh_agent, ident: ssh.agent.Identity = identity
+            ) -> bytes:
+                return agent.sign(ident, data, 0)
+
+            return Signer(prefix, identity.public_key, sign_func), identity.public_key
+
+    raise exceptions.UI(f"Unable to find key matching {filename}")
 
 
-class RequestsAuth(requests.auth.AuthBase):
-    "wrapper class compatible with the requests Auth protocol"
+class RequestsAuth:
+    """HTTP Message Signature auth handler for requests library.
 
-    def __init__(self, signers):
+    Signs requests with one or more Signer instances and adds
+    Signature-Input and Signature headers.
+    """
+
+    def __init__(self, signers: list[Signer]) -> None:
         self._signers = signers
 
-    def __call__(self, request):
+    def __call__(self, request: requests.PreparedRequest) -> requests.PreparedRequest:
         if "Content-Digest" not in request.headers:
             body = b"" if request.body is None else request.body
-            request.headers["Content-Digest"] = str(
-                http_message_signatures.http_sfv.Dictionary({"sha-256": hashlib.sha256(body).digest()})
-            )
+            request.headers["Content-Digest"] = str(http_sfv.Dictionary({"sha-256": hashlib.sha256(body).digest()}))
         covered = ("@method", "@authority", "@target-uri", "content-digest")
-        signatures_input = []
-        signatures = []
+        signatures_input: list[str] = []
+        signatures: list[str] = []
         for signer in self._signers:
             signature_input, signature = signer.sign(request, covered)
             signatures_input.append(signature_input)
@@ -178,7 +176,7 @@ class RequestsAuth(requests.auth.AuthBase):
 
 
 class HttpClient:
-    def __init__(self, client, auth, public_key, timeout):
+    def __init__(self, client: Client, auth: RequestsAuth|None, public_key: jwk.Public|None, timeout: float):
         self._client = client
         self._auth = auth
         self._public_key = public_key
@@ -194,7 +192,7 @@ class HttpClient:
         return self._client.directory
 
     @property
-    def public_key(self):
+    def public_key(self) -> jwk.Public|None:
         return self._public_key
 
     def request(
@@ -208,9 +206,11 @@ class HttpClient:
         params: dict[str, typing.Any] | None = None,
     ) -> requests.Response:
         request = requests.Request(
-            method=method, url=url, data=data, json=json, headers=headers, auth=self._auth, params=params
+            method=method, url=url, data=data, json=json, headers=headers, params=params
         )
         request = request.prepare()
+        if self._auth is not None:
+            request = self._auth(request)
 
         logger.info(f"tx {request.method} to {request.url}")
         logger.debug(f"tx headers: {request.headers}")
@@ -241,7 +241,7 @@ class HttpClient:
             detail = problem.get("detail")
             type = problem.get("type")
             if instance is not None and type is not None:
-                logger.warn(f"{title} {detail} {instance}")
+                logger.warning(f"{title} {detail} {instance}")
             if instance is not None:
                 debug = requests.get(instance, timeout=0.5)
                 if "backtrace" in debug.json():
@@ -266,17 +266,17 @@ class HttpClient:
 
 
 class Client:
-    def __init__(self, config, timeout=1.0):
+    def __init__(self, config: configuration.Config, timeout: float=1.0):
         self._config = config
         self._directory = None
         self._timeout = timeout
 
     @property
-    def config(self):
+    def config(self) -> configuration.Config:
         return self._config
 
     @property
-    def directory(self):
+    def directory(self) -> types.SimpleNamespace:
         if self._directory is not None:
             return self._directory
         if self._config.directory is not None:
