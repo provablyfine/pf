@@ -11,7 +11,6 @@ _kek_var: contextvars.ContextVar[cryptography.fernet.Fernet | None] = contextvar
 _config_var: contextvars.ContextVar[config_module.Config | None] = contextvars.ContextVar("config", default=None)
 _db_var: contextvars.ContextVar[typing.Any | None] = contextvars.ContextVar("db", default=None)
 _identity_id_var: contextvars.ContextVar[int | None] = contextvars.ContextVar("identity_id", default=None)
-_invitation_var: contextvars.ContextVar = contextvars.ContextVar("invitation", default=None)
 _tenant_id_var: contextvars.ContextVar[int | None] = contextvars.ContextVar("tenant_id", default=None)
 _tenant_name_var: contextvars.ContextVar[str | None] = contextvars.ContextVar("tenant_name", default=None)
 
@@ -76,21 +75,6 @@ class RequestContext:
             yield
         finally:
             _identity_id_var.set(None)
-
-    @property
-    def invitation(self):
-        v = _invitation_var.get()
-        assert v is not None
-        return v
-
-    @contextlib.contextmanager
-    def set_invitation(self, invitation):
-        assert _invitation_var.get() is None
-        _invitation_var.set(invitation)
-        try:
-            yield
-        finally:
-            _invitation_var.set(None)
 
     @property
     def tenant_id(self) -> int:

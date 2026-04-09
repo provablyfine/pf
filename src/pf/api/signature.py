@@ -178,7 +178,9 @@ def _get_keyid(request: fastapi.requests.Request, prefix: str) -> str:
     )
 
 
-async def verify_invitation(request: fastapi.requests.Request) -> typing.AsyncGenerator[None, None]:
+async def verify_invitation(
+    request: fastapi.requests.Request,
+) -> typing.AsyncGenerator[model.identity_invitation_key.IdentityInvitationKey, None]:
     key_id = _get_keyid(request, "invitation")
     invitation = model.identity_invitation_key.read(key_id)
     if invitation is None:
@@ -192,9 +194,8 @@ async def verify_invitation(request: fastapi.requests.Request) -> typing.AsyncGe
         raise responses.ProblemHTTPException(responses.problem_response(status_code=403, title="Invitation is expired"))
     assert invitation.key.thumbprint() == key_id
     verify(request, key_id=f"invitation:{key_id}", key=invitation.key)
-    with ctx.set_invitation(invitation):
-        with ctx.set_identity_id(invitation.identity_id):
-            yield
+    with ctx.set_identity_id(invitation.identity_id):
+        yield invitation
 
 
 async def verify_account(request: fastapi.requests.Request) -> typing.AsyncGenerator[None, None]:
