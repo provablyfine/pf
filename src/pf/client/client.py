@@ -242,7 +242,7 @@ class HttpClient:
         logger.info(f"rx status: {response.status_code}")
         logger.debug(f"rx headers: {response.headers}")
         logger.debug(f"rx body: {response.content}")
-        if response.status_code == 400:
+        if response.status_code in [400, 422]:
             problem = response.json()
             title = problem.get("title")
             detail = problem.get("detail")
