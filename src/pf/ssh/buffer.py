@@ -2,7 +2,7 @@ from . import exceptions
 
 
 class Reader:
-    def __init__(self, buffer):
+    def __init__(self, buffer: bytes):
         self._buffer = buffer
         self._current = 0
 
@@ -48,7 +48,7 @@ class Reader:
 
 class Writer:
     def __init__(self):
-        self._bytes = []
+        self._bytes: list[int] = []
 
     def write_byte(self, b: int):
         self._bytes.extend(b.to_bytes(1))
@@ -59,11 +59,8 @@ class Writer:
     def write_uint64(self, value: int):
         self._bytes.extend(value.to_bytes(8, byteorder="big"))
 
-    def write_bytes(self, buffer):
-        if isinstance(buffer, Writer):
-            self._bytes.extend(buffer._bytes)
-        else:
-            self._bytes.extend(buffer)
+    def write_bytes(self, buffer: bytes):
+        self._bytes.extend(buffer)
 
     def write_string(self, buffer: bytes):
         self.write_uint32(len(buffer))

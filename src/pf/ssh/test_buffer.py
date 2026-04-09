@@ -4,7 +4,7 @@ from . import buffer
 
 
 @pytest.mark.parametrize("value", [0, 1, 2, 127, 128, 129, 255, 256, 0xFFFF, 0xFFFFFF, 0xFFFFFFFF])
-def test_uint32(value):
+def test_uint32(value: int):
     writer = buffer.Writer()
     writer.write_uint32(value)
     reader = buffer.Reader(writer.to_bytes())
@@ -13,7 +13,7 @@ def test_uint32(value):
 
 
 @pytest.mark.parametrize("value", [b"", b"\x00", b"\xde\xad\xbe\xaf"])
-def test_string(value):
+def test_string(value: bytes):
     writer = buffer.Writer()
     writer.write_string(value)
     reader = buffer.Reader(writer.to_bytes())
@@ -31,7 +31,7 @@ def test_string(value):
         (-128, b"\x00\x00\x00\x02\xff\x80"),
     ],
 )
-def test_mpint_writer(value, expected):
+def test_mpint_writer(value: int, expected: bytes):
     writer = buffer.Writer()
     writer.write_mpint(value)
     got = writer.to_bytes()
@@ -39,7 +39,7 @@ def test_mpint_writer(value, expected):
 
 
 @pytest.mark.parametrize("value", [0, 1, 2, 127, 128, 129, 255, 256, -1, -127, -128, -129, -255, -((1 << 16) + 1)])
-def test_mpint(value):
+def test_mpint(value: int):
     writer = buffer.Writer()
     writer.write_mpint(value)
     reader = buffer.Reader(writer.to_bytes())

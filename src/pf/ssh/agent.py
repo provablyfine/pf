@@ -1,15 +1,26 @@
 from __future__ import annotations
 
-import collections
 import getpass
 import os
 import socket
+import dataclasses
+import collections.abc
 
 from .. import jwk
 from . import buffer, cert, exceptions, serde
 
-Method = collections.namedtuple("Method", ["encrypt", "decrypt"])
 
+@dataclasses.dataclass
+class Identity:
+    public_key: jwk.Public
+    comment: str
+    raw: bytes
+
+
+@dataclasses.dataclass
+class Message:
+    type: int
+    contents: bytes
 
 class Client:
     # https://datatracker.ietf.org/doc/html/draft-miller-ssh-agent
@@ -23,8 +34,6 @@ class Client:
     SSH_AGENT_CONSTRAIN_LIFETIME = 1
     SSH_AGENT_CONSTRAIN_CONFIRM = 2
     SSH_AGENT_FAILURE = 5
-    Message = collections.namedtuple("Message", ["type", "contents"])
-    Identity = collections.namedtuple("Identity", ["public_key", "comment", "raw"])
 
     def __init__(self):
         path = os.environ["SSH_AUTH_SOCK"]
@@ -32,7 +41,7 @@ class Client:
         sock.connect(path.encode("ascii"))
         self._sock = sock
 
-    def _send_request(self, type, data):
+    def _send_request(self, type: int, data: bytes):
         request = buffer.Writer()
         request.write_uint32(len(data) + 1)
         request.write_byte(type)
@@ -40,13 +49,13 @@ class Client:
         written = self._sock.send(request.to_bytes())
         assert written == len(request)
 
-    def _recv_bytes(self, n):
+    def _recv_bytes(self, n: int) -> bytes:
         remaining = n
-        data = []
+        data: list[bytes] = []
         while remaining > 0:
             partial = self._sock.recv(remaining)
             if len(partial) == 0:
-                raise Exception("fuck")
+                raise Exception("Unable to read SSH Agent response")
             remaining -= len(partial)
             data.append(partial)
         return b"".join(data)
@@ -55,9 +64,9 @@ class Client:
         length = self._recv_bytes(4)
         length = int.from_bytes(length, byteorder="big")
         payload = self._recv_bytes(length)
-        return Client.Message(type=payload[0], contents=payload[1:])
+        return Message(type=payload[0], contents=payload[1:])
 
-    def list_identities(self):
+    def list_identities(self) -> collections.abc.Generator[Identity]:
         self._send_request(Client.SSH_AGENTC_REQUEST_IDENTITIES, b"")
         rx = self._recv_message()
         assert rx.type == Client.SSH_AGENT_IDENTITIES_ANSWER
@@ -68,14 +77,14 @@ class Client:
             raw_key = response.read_string()
             key = serde.deserialize_public(raw_key)
             comment = response.read_string()
-            yield Client.Identity(public_key=key, comment=comment, raw=raw_key)
+            yield Identity(public_key=key, comment=comment.decode("utf-8"), raw=raw_key)
 
-    def sign(self, identity: Client.Identity, data: bytes, flags: int) -> bytes:
+    def sign(self, identity: Identity, data: bytes, flags: int) -> bytes:
         request = buffer.Writer()
         request.write_string(identity.raw)
         request.write_string(data)
         request.write_uint32(flags)
-        self._send_request(Client.SSH_AGENTC_SIGN_REQUEST, request)
+        self._send_request(Client.SSH_AGENTC_SIGN_REQUEST, request.to_bytes())
         message = self._recv_message()
         if message.type == Client.SSH_AGENT_FAILURE:
             raise exceptions.Error(f"Unable to obtain signature from agent: {message.contents}")
@@ -113,7 +122,7 @@ class Client:
         if require_confirmation:
             request_id = Client.SSH_AGENTC_ADD_ID_CONSTRAINED
             request.write_byte(Client.SSH_AGENT_CONSTRAIN_CONFIRM)
-        self._send_request(request_id, request)
+        self._send_request(request_id, request.to_bytes())
         message = self._recv_message()
         if message.type == Client.SSH_AGENT_FAILURE:
             raise exceptions.Error(f"Unable to add key to agent: {message.contents}")
@@ -124,10 +133,10 @@ class Client:
         if message.type == Client.SSH_AGENT_FAILURE:
             raise exceptions.Error(f"Unable to remove keys from agent: {message.contents}")
 
-    def remove(self, identity: Client.Identity):
+    def remove(self, identity: Identity):
         request = buffer.Writer()
         request.write_string(identity.raw)
-        self._send_request(Client.SSH_AGENTC_REMOVE_IDENTITY, request)
+        self._send_request(Client.SSH_AGENTC_REMOVE_IDENTITY, request.to_bytes())
         message = self._recv_message()
         if message.type == Client.SSH_AGENT_FAILURE:
             raise exceptions.Error(f"Unable to remove key from agent: {message.contents}")

@@ -43,7 +43,7 @@ class Extensions:
 
 
 class Cert:
-    def __init__(self, cert):
+    def __init__(self, cert: cryptography.hazmat.primitives.serialization.SSHCertificate):
         self._cert = cert
 
     @property
@@ -71,7 +71,7 @@ class Cert:
         return self._cert.key_id.decode("utf-8")
 
     @property
-    def principals(self) -> tuple[str]:
+    def principals(self) -> tuple[str, ...]:
         return tuple([p.decode("utf-8") for p in self._cert.valid_principals])
 
     @property
