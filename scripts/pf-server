@@ -6,7 +6,7 @@
 #   "cryptography",
 #   "fastapi",
 #   "uvicorn",
-#   "http-message-signatures",
+#   "http-sfv",
 #   "pytest",
 #   "coverage",
 #   "pydantic",

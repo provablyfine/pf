@@ -39,9 +39,10 @@ def _build_signature_base(
                 parts.append(f'"@authority": {urllib.parse.urlparse(request.url).netloc}')
             case "@target-uri":
                 parts.append(f'"@target-uri": {request.url}')
+            case "@signature-params":
+                parts.append(f'"@signature-params": {sig_params}')
             case _:
                 parts.append(f'"{c}": {request.headers[c]}')
-    parts.append(f'"@signature-params": {sig_params}')
     return "\n".join(parts)
 
 
@@ -185,7 +186,7 @@ class RequestsAuth:
             if isinstance(body, str):
                 body = body.encode()
             request.headers["Content-Digest"] = str(http_sfv.Dictionary({"sha-256": hashlib.sha256(body).digest()}))
-        covered = ("@method", "@authority", "@target-uri", "content-digest")
+        covered = ("@method", "@authority", "@target-uri", "content-digest", "@signature-params")
         signatures_input: list[str] = []
         signatures: list[str] = []
         for signer in self._signers:

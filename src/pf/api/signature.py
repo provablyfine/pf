@@ -1,81 +1,32 @@
-import datetime
 import hashlib
+import hmac
 import time
 import typing
 
+import cryptography.exceptions
+import cryptography.hazmat.primitives.asymmetric.ec
+import cryptography.hazmat.primitives.asymmetric.ed25519
+import cryptography.hazmat.primitives.hashes
 import fastapi.requests
-import http_message_signatures
-import http_message_signatures.http_sfv
+import http_sfv
 
 from .. import jwk
 from . import crypto_policy, model, responses
 from .context import ctx
 
-# Because we import stuff from http_message_signatures
-# that is not explicitely exported.
-# No good idea to fix this short of re-implementing our own
-# pyright: reportPrivateImportUsage=false
+# http_sfv type stubs are incomplete
+# pyright: reportPrivateImportUsage=false, reportUnknownMemberType=false, reportUnknownVariableType=false
 
 
-class CaseInsensitiveDict(dict):
-    def __contains__(self, key):
-        return super().__contains__(key.lower())
-
-    def __getitem__(self, key):
-        return super().__getitem__(key.lower())
-
-
-class RequestMessage:
-    "Wrapper class to become compatible with http-message-signatures library"
-
-    def __init__(self, request: fastapi.requests.Request, label: str, signature: str, signature_input: str):
-        self._request = request
-
-        def _wrap(k, v):
-            match k:
-                case "signature":
-                    return f"{label}={signature}"
-                case "signature-input":
-                    return f"{label}={signature_input}"
-                case _:
-                    return v
-
-        self._headers = {k.lower(): _wrap(k.lower(), v) for k, v in request.headers.items()}
-
-    @property
-    def method(self):
-        return self._request.method
-
-    @property
-    def url(self):
-        return str(self._request.url)
-
-    @property
-    def headers(self):
-        return CaseInsensitiveDict(self._headers)
-
-
-class KeyResolver(http_message_signatures.HTTPSignatureKeyResolver):
-    def __init__(self, private_key, public_key):
-        self._private_key = private_key
-        self._public_key = public_key
-
-    def resolve_public_key(self, key_id: str):
-        return self._public_key
-
-    def resolve_private_key(self, key_id: str):
-        return self._private_key
-
-
-def _parse_signature_input(signature_input):
-    d = http_message_signatures.http_sfv.Dictionary()
+def _parse_signature_input(signature_input: str) -> dict[str, tuple[str, http_sfv.InnerList]]:
+    d = http_sfv.Dictionary()
     try:
         d.parse(signature_input.encode())
     except Exception as e:
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=400, title="Invalid Signature-Input header", detail=str(e))
         )
-    keyid_by_label = {}
+    keyid_by_label: dict[str, tuple[str, http_sfv.InnerList]] = {}
     for label, v in d.items():
         if "keyid" not in v.params:
             raise responses.ProblemHTTPException(
@@ -83,28 +34,46 @@ def _parse_signature_input(signature_input):
                     status_code=400, title="Invalid Signature-Input", detail=f"Missing keyid in {label}"
                 )
             )
-        keyid_by_label[label] = (v.params["keyid"], d[label])
+        keyid_by_label[label] = (str(v.params["keyid"]), v)  # type: ignore[arg-type]
     return keyid_by_label
 
 
-def _parse_signature(signature):
-    d = http_message_signatures.http_sfv.Dictionary()
+def _parse_signature(signature: str) -> dict[str, bytes]:
+    d = http_sfv.Dictionary()
     try:
         d.parse(signature.encode())
     except Exception as e:
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=400, title="Invalid Signature header", detail=str(e))
         )
-    signature_by_label = {}
-    for label, v in d.items():
-        signature_by_label[label] = v
-    return signature_by_label
+    return {label: v.value for label, v in d.items()}  # type: ignore[arg-type]
 
 
-def verify(request: fastapi.requests.Request, key_id: str, key):
-    content_digest = str(
-        http_message_signatures.http_sfv.Dictionary({"sha-256": hashlib.sha256(request.state.body).digest()})
-    )
+def _build_signature_base(
+    request: fastapi.requests.Request,
+    inner: http_sfv.InnerList,
+    sig_params: str,
+) -> bytes:
+    """Build the signature base string per RFC 9421 §2.5."""
+    parts: list[str] = []
+    for item in inner:
+        c: str = item.value
+        match c:
+            case "@method":
+                parts.append(f'"@method": {request.method}')
+            case "@authority":
+                parts.append(f'"@authority": {request.url.netloc}')
+            case "@target-uri":
+                parts.append(f'"@target-uri": {request.url}')
+            case "@signature-params":
+                parts.append(f'"@signature-params": {sig_params}')
+            case _:
+                parts.append(f'"{c}": {request.headers[c]}')
+    return "\n".join(parts).encode()
+
+
+def verify(request: fastapi.requests.Request, key_id: str, key: jwk.Symmetric | jwk.Public) -> None:
+    content_digest = str(http_sfv.Dictionary({"sha-256": hashlib.sha256(request.state.body).digest()}))
     if request.headers["Content-Digest"] != content_digest:
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=400, title="Content hash does not match Content-Digest header")
@@ -122,57 +91,74 @@ def verify(request: fastapi.requests.Request, key_id: str, key):
     keyid_by_label = _parse_signature_input(request.headers["Signature-Input"])
     signature_by_label = _parse_signature(request.headers["Signature"])
 
-    label_by_keyid = {keyid: (label, signature_input) for label, (keyid, signature_input) in keyid_by_label.items()}
+    label_by_keyid = {keyid: (label, inner) for label, (keyid, inner) in keyid_by_label.items()}
     if key_id not in label_by_keyid:
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=400, title="Unable to find keyid in Signature-Input", detail=key_id)
         )
-    label, signature_input = label_by_keyid[key_id]
-    if "nonce" not in signature_input.params:
+    label, inner = label_by_keyid[key_id]
+
+    if "nonce" not in inner.params:
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=400, title="Missing nonce in Signature-Input", detail=key_id)
         )
+    if "created" not in inner.params:
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=400, title="Missing created in Signature-Input", detail=key_id)
+        )
+    created: int = inner.params["created"]
+    if int(time.time()) - created > 5 * 3600:
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=400, title="Signature is too old", detail=key_id)
+        )
+
     if label not in signature_by_label:
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=400, title="Unable to find label in Signature", detail=label)
         )
-    signature = signature_by_label[label]
-    message = RequestMessage(request, label, signature, signature_input)
 
-    match key.type:
-        case jwk.KeyType.SYMMETRIC:
-            algorithm = http_message_signatures.algorithms.HMAC_SHA256
-            resolver = KeyResolver(private_key=key.to_bytes(), public_key=key.to_bytes())
-        case jwk.KeyType.ED25519:
-            algorithm = http_message_signatures.algorithms.ED25519
-            resolver = KeyResolver(private_key=None, public_key=key.to_crypto())
-        case jwk.KeyType.ECDSA_NISTP256:
-            algorithm = http_message_signatures.algorithms.ECDSA_P256_SHA256
-            resolver = KeyResolver(private_key=None, public_key=key.to_crypto())
-        case _:
-            raise responses.ProblemHTTPException(
-                responses.problem_response(status_code=400, title="Unsupported key type", detail=key_id)
-            )
-
-    verifier = http_message_signatures.HTTPMessageVerifier(
-        signature_algorithm=algorithm,
-        key_resolver=resolver,
-    )
+    sig_params = str(inner)
+    sig_base = _build_signature_base(request, inner, sig_params)
+    sig_bytes = signature_by_label[label]
 
     try:
-        verified = verifier.verify(message, max_age=datetime.timedelta(hours=5))  # minutes=5))
-    except http_message_signatures.InvalidSignature:
+        match key.type:
+            case jwk.KeyType.SYMMETRIC:
+                sym_key = typing.cast(jwk.Symmetric, key)
+                expected = hmac.new(sym_key.to_bytes(), sig_base, hashlib.sha256).digest()
+                if not hmac.compare_digest(expected, sig_bytes):
+                    raise cryptography.exceptions.InvalidSignature()
+            case jwk.KeyType.ED25519:
+                pub_key = typing.cast(jwk.Public, key)
+                pub = pub_key.to_crypto()
+                assert isinstance(pub, cryptography.hazmat.primitives.asymmetric.ed25519.Ed25519PublicKey)
+                pub.verify(sig_bytes, sig_base)
+            case jwk.KeyType.ECDSA_NISTP256:
+                pub_key = typing.cast(jwk.Public, key)
+                pub = pub_key.to_crypto()
+                assert isinstance(pub, cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePublicKey)
+                pub.verify(
+                    sig_bytes,
+                    sig_base,
+                    cryptography.hazmat.primitives.asymmetric.ec.ECDSA(cryptography.hazmat.primitives.hashes.SHA256()),
+                )
+            case _:
+                raise responses.ProblemHTTPException(
+                    responses.problem_response(status_code=400, title="Unsupported key type", detail=key_id)
+                )
+    except cryptography.exceptions.InvalidSignature:
         raise responses.ProblemHTTPException(
-            responses.problem_response(status_code=400, title="Invalid signature", detail=f"{key_id}")
+            responses.problem_response(status_code=400, title="Invalid signature", detail=key_id)
         )
-    covered = set(c.strip('"') for c in verified[0].covered_components.keys())
-    expected = set(["@authority", "@method", "@target-uri", "@signature-params", "content-digest"])
-    if covered != expected:
+
+    covered = {item.value for item in inner}
+    expected_covered = {"@authority", "@method", "@target-uri", "@signature-params", "content-digest"}
+    if covered != expected_covered:
         raise responses.ProblemHTTPException(
             responses.problem_response(
                 status_code=400,
                 title="Signature does not cover the expected fields",
-                detail=f"Got: {covered}. Expected: {expected}",
+                detail=f"Got: {covered}. Expected: {expected_covered}",
             )
         )
 

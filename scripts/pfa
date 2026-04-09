@@ -3,7 +3,7 @@
 # dependencies = [
 #   "cryptography>=45.0.0",
 #   "requests",
-#   "http-message-signatures",
+#   "http-sfv",
 #   "tabulate",
 #   "pytest",
 #   "dateparser",
