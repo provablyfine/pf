@@ -9,7 +9,7 @@ import http_message_signatures
 import requests
 
 from .. import base64url, jwk, ssh
-from . import exceptions, ssh_utils
+from . import exceptions, ssh_utils, configuration
 
 # Because we import stuff from http_message_signatures
 # that is not explicitely exported.
@@ -186,7 +186,7 @@ class HttpClient:
         self._timeout = timeout
 
     @property
-    def config(self) -> config.Config:
+    def config(self) -> configuration.Config:
         return self._client.config
 
     @property
