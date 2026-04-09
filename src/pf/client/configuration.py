@@ -12,7 +12,7 @@ class Config:
     directory_url: str
     account_key: str | None = None
     session_key: str | None = None
-    directory: dict | None = None
+    directory: dict[str, str] | None = None
     known_hosts: str | None = None
     auth_name: str | None = None
 
