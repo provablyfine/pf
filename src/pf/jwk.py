@@ -55,7 +55,7 @@ class KeyType(enum.Enum):
         return reverse_mapping[self.value]
 
 
-def rfc7638_thumbprint(data):
+def rfc7638_thumbprint(data: dict[str, str]) -> str:
     needed = {
         # RFC 7638 Section 3.2
         "RSA": ["e", "kty", "n"],
@@ -73,11 +73,11 @@ def rfc7638_thumbprint(data):
 
 
 class Symmetric:
-    def __init__(self, data: dict):
+    def __init__(self, data: dict[str, str]):
         self._data = data
 
     @property
-    def type(self):
+    def type(self) -> KeyType:
         return KeyType.SYMMETRIC
 
     @classmethod
@@ -95,11 +95,11 @@ class Symmetric:
     def from_bytes(cls, data: bytes) -> Symmetric:
         return Symmetric({"k": base64url.encode(data), "kty": "oct"})
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, str]:
         return self._data
 
     @classmethod
-    def from_dict(cls, data: dict) -> Symmetric:
+    def from_dict(cls, data: dict[str, str]) -> Symmetric:
         return Symmetric(data)
 
 
@@ -110,9 +110,18 @@ ec_nist_to_secg = {
     "P-521": cryptography.hazmat.primitives.asymmetric.ec.SECP521R1,
 }
 
+CryptographyPublicKey = \
+    cryptography.hazmat.primitives.asymmetric.ed25519.Ed25519PublicKey | \
+    cryptography.hazmat.primitives.asymmetric.rsa.RSAPublicKey | \
+    cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePublicKey
+
+CryptographyPrivateKey = \
+    cryptography.hazmat.primitives.asymmetric.ed25519.Ed25519PrivateKey | \
+    cryptography.hazmat.primitives.asymmetric.rsa.RSAPrivateKey | \
+    cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePrivateKey
 
 class Public:
-    def __init__(self, key):
+    def __init__(self, key: CryptographyPublicKey):
         self._key = key
 
     @property
@@ -146,7 +155,7 @@ class Public:
     def thumbprint(self) -> str:
         return rfc7638_thumbprint(self.to_dict())
 
-    def match_ssh_fingerprint(self, expected_fingerprint):
+    def match_ssh_fingerprint(self, expected_fingerprint: str) -> bool:
         colon = expected_fingerprint.find(":")
         prefix = expected_fingerprint[:colon]
         if prefix == "MD5":
@@ -162,7 +171,7 @@ class Public:
         fingerprint = base64.b64encode(h).rstrip(b"=").decode("ascii")
         return f"SHA256:{fingerprint}"
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, str]:
         match self._key:
             case cryptography.hazmat.primitives.asymmetric.ed25519.Ed25519PublicKey():
                 # RFC 8037 Section 2
@@ -173,8 +182,10 @@ class Public:
                 public_numbers = self._key.public_numbers()
                 x = base64url.encode_uint(public_numbers.x)
                 y = base64url.encode_uint(public_numbers.y)
-                secg_to_nist = {v.name: k for k, v in ec_nist_to_secg.items()}
-                return {"kty": "EC", "crv": secg_to_nist[public_numbers.curve.name], "x": x, "y": y}
+                for crv, typ in ec_nist_to_secg.items():
+                    if isinstance(public_numbers.curve, typ):
+                        return {"kty": "EC", "crv": crv, "x": x, "y": y}
+                assert False
             case cryptography.hazmat.primitives.asymmetric.rsa.RSAPublicKey():
                 # RFC 7518 Section 6.3.1
                 public_numbers = self._key.public_numbers()
@@ -185,7 +196,7 @@ class Public:
                 assert False
 
     @classmethod
-    def from_dict(cls, data: dict) -> Public:
+    def from_dict(cls, data: dict[str, str]) -> Public:
         match data["kty"]:
             case "OKP":
                 # RFC 8037 Section 2
@@ -212,11 +223,11 @@ class Public:
             case _:
                 assert False
 
-    def to_crypto(self):
+    def to_crypto(self) -> CryptographyPublicKey:
         return self._key
 
     @classmethod
-    def from_crypto(cls, key) -> Public:
+    def from_crypto(cls, key: CryptographyPublicKey) -> Public:
         return Public(key)
 
     def to_pem(self) -> bytes:
@@ -228,6 +239,7 @@ class Public:
     @classmethod
     def from_pem(cls, data: bytes) -> Public:
         key = cryptography.hazmat.primitives.serialization.load_pem_public_key(data)
+        assert isinstance(key, CryptographyPublicKey)
         return Public(key)
 
     def to_openssh(self) -> bytes:
@@ -239,11 +251,12 @@ class Public:
     @classmethod
     def from_openssh(cls, data: bytes) -> Public:
         key = cryptography.hazmat.primitives.serialization.load_ssh_public_key(data)
+        assert isinstance(key, CryptographyPublicKey)
         return Public(key)
 
 
 class Private:
-    def __init__(self, key):
+    def __init__(self, key: CryptographyPrivateKey):
         self._key = key
 
     @property
@@ -304,7 +317,7 @@ class Private:
     def thumbprint(self) -> str:
         return rfc7638_thumbprint(self.to_dict())
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, str]:
         match self._key:
             case cryptography.hazmat.primitives.asymmetric.ed25519.Ed25519PrivateKey():
                 # RFC 8037 Section 2
@@ -319,13 +332,15 @@ class Private:
                 x = base64url.encode_uint(public_numbers.x)
                 y = base64url.encode_uint(public_numbers.y)
                 d = base64url.encode_uint(private_numbers.private_value)
-                secg_to_nist = {v.name: k for k, v in ec_nist_to_secg.items()}
-                return {"kty": "EC", "crv": secg_to_nist[public_numbers.curve.name], "x": x, "y": y, "d": d}
+                for crv, typ in ec_nist_to_secg.items():
+                    if isinstance(public_numbers.curve, typ):
+                        return {"kty": "EC", "crv": crv, "x": x, "y": y, "d": d}
+                assert False
             case _:
                 assert False
 
     @classmethod
-    def from_dict(cls, data: dict) -> Private:
+    def from_dict(cls, data: dict[str, str]) -> Private:
         match data["kty"]:
             case "OKP":
                 # RFC 8037 Section 2
@@ -341,7 +356,7 @@ class Private:
                 y = base64url.decode_uint(data["y"])
                 d = base64url.decode_uint(data["d"])
                 curve = ec_nist_to_secg[data["crv"]]
-                public_numbers = cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePublicNumbers(x, y, curve)
+                public_numbers = cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePublicNumbers(x, y, curve())
                 private_numbers = cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePrivateNumbers(
                     d, public_numbers
                 )
@@ -357,7 +372,7 @@ class Private:
         return self._key
 
     @classmethod
-    def from_crypto(cls, key) -> Private:
+    def from_crypto(cls, key: CryptographyPrivateKey) -> Private:
         return Private(key)
 
     def to_pem(self) -> bytes:
@@ -370,6 +385,7 @@ class Private:
     @classmethod
     def from_pem(cls, data: bytes, password: bytes | None = None) -> Private:
         key = cryptography.hazmat.primitives.serialization.load_pem_private_key(data, password=password)
+        assert isinstance(key, CryptographyPrivateKey)
         return Private(key)
 
     def to_openssh(self) -> bytes:
@@ -382,4 +398,5 @@ class Private:
     @classmethod
     def from_openssh(cls, data: bytes, password: bytes | None = None) -> Private:
         key = cryptography.hazmat.primitives.serialization.load_ssh_private_key(data, password=password)
+        assert isinstance(key, CryptographyPrivateKey)
         return Private(key)
