@@ -2,6 +2,7 @@ import argparse
 import datetime
 import signal
 import socket
+import types
 import urllib.parse
 
 import uvicorn
@@ -38,7 +39,7 @@ def run():
 
     print(f"Starting Uvicorn on {host}:{port} using FD {sock.fileno()}")
 
-    def handler(signum, frame):
+    def handler(signum: int, frame: types.FrameType | None) -> None:
         # We do nothing on purpose: this allows uvicorn.run to return
         # gracefully and this all other handlers run naturally which
         # specifically is good for coverage tracking
