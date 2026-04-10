@@ -11,7 +11,7 @@ router = fastapi.APIRouter()
 def public_oidc_jwks(tenant_name: str) -> schemas.OidcJwksResponse:
     public_keys = model.oidc_key.get_public_keys()
     assert all(k.type == jwk.KeyType.ED25519 for k in public_keys)
-    keys = [schemas.OidcJwk(kid=k.thumbprint(), alg="EdDSA", use="sig", **k.to_dict()) for k in public_keys]
+    keys = [schemas.OidcED25519PublicJwk(kid=k.thumbprint(), x=k.to_dict()["x"]) for k in public_keys]
     return schemas.OidcJwksResponse(keys=keys)
 
 

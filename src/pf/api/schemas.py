@@ -21,41 +21,40 @@ class ProblemDocument(APIBase):
 
 
 class RSAPublicJWK(APIBase):
-    kty: typing.Literal["RSA"]
+    kty: typing.Literal["RSA"] = "RSA"
     e: str
     n: str
 
 
 class ECDSAPublicJWK(APIBase):
-    crv: typing.Literal["P-256"]
-    kty: typing.Literal["EC"]
+    crv: typing.Literal["P-256"] = "P-256"
+    kty: typing.Literal["EC"] = "EC"
     x: str
     y: str
 
 
 class ED25519PublicJWK(APIBase):
-    crv: typing.Literal["Ed25519"]
-    kty: typing.Literal["OKP"]
+    crv: typing.Literal["Ed25519"] = "Ed25519"
+    kty: typing.Literal["OKP"] = "OKP"
     x: str
 
 
 PublicJWK = typing.Annotated[RSAPublicJWK | ECDSAPublicJWK | ED25519PublicJWK, pydantic.Field(discriminator="kty")]
 
 
-class OidcJwk(ED25519PublicJWK):
+class OidcED25519PublicJwk(ED25519PublicJWK):
     kid: str
-    alg: typing.Literal["EdDSA"]
-    use: typing.Literal["sig"]
+    alg: typing.Literal["EdDSA"] = "EdDSA"
+    use: typing.Literal["sig"] = "sig"
 
 
 class OidcJwksResponse(APIBase):
-    keys: list[OidcJwk]
+    keys: list[OidcED25519PublicJwk]
 
 
 class SymmetricJWK(APIBase):
     kty: typing.Literal["oct"]
     k: str  # base64url encoded
-
 
 # --- Grant ---
 

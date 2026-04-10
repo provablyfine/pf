@@ -464,15 +464,11 @@ def _grant_from_schema(converter: GrantConverter, grant: schemas.Grant) -> model
 
 
 def symmetric_to_schema(key: jwk.Symmetric) -> schemas.SymmetricJWK:
-    return schemas.SymmetricJWK(**key.to_dict())
+    return schemas.SymmetricJWK.validate(key.to_dict())
 
 
 def public_from_schema(key: schemas.PublicJWK) -> jwk.Public:
     return jwk.Public.from_dict(key.model_dump())
-
-
-def public_to_schema(key: jwk.Public) -> schemas.PublicJWK:
-    return pydantic.TypeAdapter(schemas.PublicJWK).validate_python(key.to_dict())
 
 
 def cert_to_schema(c: ssh.cert.Cert) -> str:
