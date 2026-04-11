@@ -282,137 +282,75 @@ class AppDb(db.Dao):
 
     @property
     def auth(self) -> db.Table[AuthRow]:
-        if "auth" not in self._tables:
-            self._tables["auth"] = db.Table(self._connection, self._metadata.tables["auth"], AuthRow)
-        return self._tables["auth"]  # type: ignore[return-value]
+        return self._get(auth)
 
     @property
     def public_key_denylist(self) -> db.Table[PublicKeyDenylistRow]:
-        if "public_key_denylist" not in self._tables:
-            self._tables["public_key_denylist"] = db.Table(
-                self._connection, self._metadata.tables["public_key_denylist"], PublicKeyDenylistRow
-            )
-        return self._tables["public_key_denylist"]  # type: ignore[return-value]
+        return self._get(public_key_denylist)
 
     @property
     def identity_account_key(self) -> db.Table[IdentityAccountKeyRow]:
-        if "identity_account_key" not in self._tables:
-            self._tables["identity_account_key"] = db.Table(
-                self._connection, self._metadata.tables["identity_account_key"], IdentityAccountKeyRow
-            )
-        return self._tables["identity_account_key"]  # type: ignore[return-value]
+        return self._get(identity_account_key)
 
     @property
     def identity_session_key(self) -> db.Table[IdentitySessionKeyRow]:
-        if "identity_session_key" not in self._tables:
-            self._tables["identity_session_key"] = db.Table(
-                self._connection, self._metadata.tables["identity_session_key"], IdentitySessionKeyRow
-            )
-        return self._tables["identity_session_key"]  # type: ignore[return-value]
+        return self._get(identity_session_key)
 
     @property
     def identity_invitation_key(self) -> db.Table[IdentityInvitationKeyRow]:
-        if "identity_invitation_key" not in self._tables:
-            self._tables["identity_invitation_key"] = db.Table(
-                self._connection, self._metadata.tables["identity_invitation_key"], IdentityInvitationKeyRow
-            )
-        return self._tables["identity_invitation_key"]  # type: ignore[return-value]
+        return self._get(identity_invitation_key)
 
     @property
     def tag(self) -> db.Table[TagRow]:
-        if "tag" not in self._tables:
-            self._tables["tag"] = db.Table(self._connection, self._metadata.tables["tag"], TagRow)
-        return self._tables["tag"]  # type: ignore[return-value]
+        return self._get(tag)
 
     @property
     def identity(self) -> db.Table[IdentityRow]:
-        if "identity" not in self._tables:
-            self._tables["identity"] = db.Table(
-                self._connection, self._metadata.tables["identity"], IdentityRow
-            )
-        return self._tables["identity"]  # type: ignore[return-value]
+        return self._get(identity)
 
     @property
     def identity_boundary(self) -> db.Table[IdentityBoundaryRow]:
-        if "identity_boundary" not in self._tables:
-            self._tables["identity_boundary"] = db.Table(
-                self._connection, self._metadata.tables["identity_boundary"], IdentityBoundaryRow
-            )
-        return self._tables["identity_boundary"]  # type: ignore[return-value]
+        return self._get(identity_boundary)
 
     @property
     def identity_tag(self) -> db.Table[IdentityTagRow]:
-        if "identity_tag" not in self._tables:
-            self._tables["identity_tag"] = db.Table(
-                self._connection, self._metadata.tables["identity_tag"], IdentityTagRow
-            )
-        return self._tables["identity_tag"]  # type: ignore[return-value]
+        return self._get(identity_tag)
 
     @property
     def role(self) -> db.Table[RoleRow]:
-        if "role" not in self._tables:
-            self._tables["role"] = db.Table(self._connection, self._metadata.tables["role"], RoleRow)
-        return self._tables["role"]  # type: ignore[return-value]
+        return self._get(role)
 
     @property
     def role_member(self) -> db.Table[RoleMemberRow]:
-        if "role_member" not in self._tables:
-            self._tables["role_member"] = db.Table(
-                self._connection, self._metadata.tables["role_member"], RoleMemberRow
-            )
-        return self._tables["role_member"]  # type: ignore[return-value]
+        return self._get(role_member)
 
     @property
     def boundary(self) -> db.Table[BoundaryRow]:
-        if "boundary" not in self._tables:
-            self._tables["boundary"] = db.Table(
-                self._connection, self._metadata.tables["boundary"], BoundaryRow
-            )
-        return self._tables["boundary"]  # type: ignore[return-value]
+        return self._get(boundary)
 
     @property
     def signing_key(self) -> db.Table[SigningKeyRow]:
-        if "signing_key" not in self._tables:
-            self._tables["signing_key"] = db.Table(
-                self._connection, self._metadata.tables["signing_key"], SigningKeyRow
-            )
-        return self._tables["signing_key"]  # type: ignore[return-value]
+        return self._get(signing_key)
 
     @property
     def default(self) -> db.Table[DefaultRow]:
-        if "default" not in self._tables:
-            self._tables["default"] = db.Table(self._connection, self._metadata.tables["default"], DefaultRow)
-        return self._tables["default"]  # type: ignore[return-value]
+        return self._get(default)
 
     @property
     def bastion(self) -> db.Table[BastionRow]:
-        if "bastion" not in self._tables:
-            self._tables["bastion"] = db.Table(self._connection, self._metadata.tables["bastion"], BastionRow)
-        return self._tables["bastion"]  # type: ignore[return-value]
+        return self._get(bastion)
 
     @property
     def audit_log(self) -> db.Table[AuditLogRow]:
-        if "audit_log" not in self._tables:
-            self._tables["audit_log"] = db.Table(
-                self._connection, self._metadata.tables["audit_log"], AuditLogRow
-            )
-        return self._tables["audit_log"]  # type: ignore[return-value]
+        return self._get(audit_log)
 
     @property
     def oauth2_login_request(self) -> db.Table[OAuth2LoginRequestRow]:
-        if "oauth2_login_request" not in self._tables:
-            self._tables["oauth2_login_request"] = db.Table(
-                self._connection, self._metadata.tables["oauth2_login_request"], OAuth2LoginRequestRow
-            )
-        return self._tables["oauth2_login_request"]  # type: ignore[return-value]
+        return self._get(oauth2_login_request)
 
     @property
     def oidc_key(self) -> db.Table[OidcKeyRow]:
-        if "oidc_key" not in self._tables:
-            self._tables["oidc_key"] = db.Table(
-                self._connection, self._metadata.tables["oidc_key"], OidcKeyRow
-            )
-        return self._tables["oidc_key"]  # type: ignore[return-value]
+        return self._get(oidc_key)
 
 
 def create(connection: sqlalchemy.engine.Connection) -> AppDb:
