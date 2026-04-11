@@ -29,7 +29,10 @@ def _initialize_function(args):
     invitation_key = response.json()["key"]["k"]
 
     auth = api.invitation_auth(account=args.key, invitation=invitation_key)
-    response = auth.post(url=auth.directory.accept_invitation, json={"account_public_key": auth.account_public_key.to_dict()})
+    response = auth.post(
+        url=auth.directory.accept_invitation,
+        json={"account_public_key": auth.account_public_key.to_dict()},
+    )
     if response.status_code != 204:
         raise client.exceptions.UI(f"Unable to accept invitation: {response.text}")
 
@@ -54,7 +57,10 @@ def _connect_function(args):
 
     if invitation and args.key:
         auth = api.invitation_auth(account=args.key, invitation=invitation)
-        response = auth.post(url=auth.directory.accept_invitation, json={"account_public_key": auth.account_public_key.to_dict()})
+        response = auth.post(
+            url=auth.directory.accept_invitation,
+            json={"account_public_key": auth.account_public_key.to_dict()},
+        )
         if response.status_code != 204:
             raise client.exceptions.UI(f"Unable to accept invitation: {response.text}")
         c.account_key = args.key

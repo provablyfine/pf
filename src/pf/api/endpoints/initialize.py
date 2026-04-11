@@ -10,7 +10,12 @@ from ..context import ctx
 router = fastapi.APIRouter()
 
 
-def _create_keys(key_type: app_db.SigningKeyType, crypto_key_type: jwk.KeyType, rotation_period: int, staging_period: int):
+def _create_keys(
+    key_type: app_db.SigningKeyType,
+    crypto_key_type: jwk.KeyType,
+    rotation_period: int,
+    staging_period: int,
+):
     now = int(time.time())
 
     current_start = now - staging_period - 10

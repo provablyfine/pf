@@ -8,10 +8,8 @@ import sqlalchemy
 
 logger = logging.getLogger(__name__)
 
-T = typing.TypeVar("T")
 
-
-class Table(typing.Generic[T]):
+class Table[T]:
     def __init__(
         self,
         connection: sqlalchemy.engine.Connection,
