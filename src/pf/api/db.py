@@ -9,6 +9,39 @@ import sqlalchemy
 logger = logging.getLogger(__name__)
 
 
+@dataclasses.dataclass
+class Col:
+    """Column metadata for use in Annotated type hints.
+
+    Carries SQLAlchemy-specific options that can't be inferred from Python types.
+    Used in NamedTuple field annotations to specify primary_key, unique, index, etc.
+
+    Example:
+        class IdentityRow(typing.NamedTuple):
+            id: typing.Annotated[int, Col(primary_key=True)]
+            name: str
+    """
+
+    sa_type: sqlalchemy.types.TypeEngine | None = None
+    primary_key: bool = False
+    nullable: bool = False
+    unique: bool = False
+    index: bool = False
+    server_default: typing.Any = None  # str or sqlalchemy SQL expression
+
+
+@dataclasses.dataclass
+class TableDef[T]:
+    """Metadata for a table definition: the SQLAlchemy table + its NamedTuple row type.
+
+    Returned by make_table() so that typed DAOs can record the name→row_type mapping
+    and use _get() to reduce boilerplate.
+    """
+
+    table: sqlalchemy.Table
+    row_type: type[T]
+
+
 class Table[T]:
     def __init__(
         self,
@@ -89,6 +122,17 @@ class Dao:
         self._metadata = metadata
         self._tables: dict[str, Table] = {}
 
+    def _get[T](self, table_def: TableDef[T]) -> Table[T]:
+        """Get or create a typed Table instance from a TableDef.
+
+        Used by typed DAO subclasses (AppDb, RegistryDb) to lazily instantiate
+        and cache Table[T] instances.
+        """
+        name = table_def.table.name
+        if name not in self._tables:
+            self._tables[name] = Table(self._connection, table_def.table, table_def.row_type)
+        return self._tables[name]  # type: ignore[return-value]
+
     def __getattr__(self, name: str) -> Table:
         table = self._tables.get(name)
         if table is not None:
@@ -102,26 +146,6 @@ class Dao:
 
 def create(connection: sqlalchemy.engine.Connection, metadata: sqlalchemy.MetaData) -> Dao:
     return Dao(connection, metadata)
-
-@dataclasses.dataclass
-class Col:
-    """Column metadata for use in Annotated type hints.
-
-    Carries SQLAlchemy-specific options that can't be inferred from Python types.
-    Used in NamedTuple field annotations to specify primary_key, unique, index, etc.
-
-    Example:
-        class IdentityRow(typing.NamedTuple):
-            id: typing.Annotated[int, Col(primary_key=True)]
-            name: str
-    """
-
-    sa_type: sqlalchemy.types.TypeEngine | None = None
-    primary_key: bool = False
-    nullable: bool = False
-    unique: bool = False
-    index: bool = False
-    server_default: typing.Any = None  # str or sqlalchemy SQL expression
 
 
 def _infer_sa_type(python_type: type) -> sqlalchemy.types.TypeEngine:
@@ -158,13 +182,13 @@ def _is_optional(hint: type) -> bool:
     return False
 
 
-def make_table(
+def make_table[T](
     name: str,
     metadata: sqlalchemy.MetaData,
-    row_cls: type,
+    row_cls: type[T],
     *constraints_and_indexes: typing.Any,
     **table_kwargs: typing.Any,
-) -> sqlalchemy.Table:
+) -> TableDef[T]:
     """Generate a SQLAlchemy Table from a typed NamedTuple class.
 
     The NamedTuple is the single source of truth for column names and Python types.
@@ -179,7 +203,7 @@ def make_table(
         **table_kwargs: Additional table-level options (e.g. sqlite_autoincrement=True)
 
     Returns:
-        A SQLAlchemy Table instance
+        A TableDef[T] instance containing the SQLAlchemy Table and row type
     """
     hints = typing.get_type_hints(row_cls, include_extras=True)
     columns: list[sqlalchemy.Column] = []
@@ -211,4 +235,5 @@ def make_table(
         )
         columns.append(col)
 
-    return sqlalchemy.Table(name, metadata, *columns, *constraints_and_indexes, **table_kwargs)
+    sa_table = sqlalchemy.Table(name, metadata, *columns, *constraints_and_indexes, **table_kwargs)
+    return TableDef(table=sa_table, row_type=row_cls)

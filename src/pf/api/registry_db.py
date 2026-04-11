@@ -49,9 +49,7 @@ class RegistryDb(db.Dao):
 
     @property
     def tenant(self) -> db.Table[TenantRow]:
-        if "tenant" not in self._tables:
-            self._tables["tenant"] = db.Table(self._connection, self._metadata.tables["tenant"], TenantRow)
-        return self._tables["tenant"]  # type: ignore[return-value]
+        return self._get(tenant)
 
 
 def create(connection: sqlalchemy.engine.Connection) -> RegistryDb:

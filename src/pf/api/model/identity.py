@@ -57,8 +57,7 @@ def read_all(**kwargs):
     if "boundary_name" in kwargs:
         boundary_ids = [b.id for b in ctx.app_db.boundary.read_all(name=kwargs["boundary_name"])]
         boundary_identity_ids = [
-            ib.identity_id
-            for ib in ctx.app_db.identity_boundary.read_all(boundary_id=boundary_ids)
+            ib.identity_id for ib in ctx.app_db.identity_boundary.read_all(boundary_id=boundary_ids)
         ]
         id_filter.append(boundary_identity_ids)
     query = {}

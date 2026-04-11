@@ -160,7 +160,7 @@ def _provision(allow_tenant_create: bool):
     responses={204: {"description": "Already initialized"}},
 )
 def initialize_endpoint(
-    reg_db: registry_db.RegistryDb = fastapi.Depends(dependencies.registry)
+    reg_db: registry_db.RegistryDb = fastapi.Depends(dependencies.registry),
 ) -> schemas.InitializeResponse | fastapi.responses.Response:
     tenant_row = reg_db.tenant.read_one(id=ctx.tenant_id)
     assert tenant_row is not None

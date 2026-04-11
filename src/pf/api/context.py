@@ -8,7 +8,7 @@ from . import config as config_module
 
 _kek_var: contextvars.ContextVar[cryptography.fernet.Fernet | None] = contextvars.ContextVar("kek", default=None)
 _config_var: contextvars.ContextVar[config_module.Config | None] = contextvars.ContextVar("config", default=None)
-_app_db_var: contextvars.ContextVar[app_db.AppDb| None] = contextvars.ContextVar("app_db", default=None)
+_app_db_var: contextvars.ContextVar[app_db.AppDb | None] = contextvars.ContextVar("app_db", default=None)
 _identity_id_var: contextvars.ContextVar[int | None] = contextvars.ContextVar("identity_id", default=None)
 _tenant_id_var: contextvars.ContextVar[int | None] = contextvars.ContextVar("tenant_id", default=None)
 _tenant_name_var: contextvars.ContextVar[str | None] = contextvars.ContextVar("tenant_name", default=None)

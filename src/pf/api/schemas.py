@@ -56,6 +56,7 @@ class SymmetricJWK(APIBase):
     kty: typing.Literal["oct"]
     k: str  # base64url encoded
 
+
 # --- Grant ---
 
 
