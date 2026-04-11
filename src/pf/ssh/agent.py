@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+import collections.abc
+import dataclasses
 import getpass
 import os
 import socket
-import dataclasses
-import collections.abc
 
 from .. import jwk
 from . import buffer, cert, exceptions, serde

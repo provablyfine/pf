@@ -6,8 +6,9 @@ row type visible to pyright.
 """
 
 import enum
-import sqlalchemy
 import typing
+
+import sqlalchemy
 
 from . import db
 

@@ -1,8 +1,8 @@
 import collections
+import dataclasses
 import logging
 import types
 import typing
-import dataclasses
 
 import sqlalchemy
 

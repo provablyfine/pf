@@ -4,7 +4,7 @@ import fastapi
 import fastapi.responses
 
 from ... import jwk
-from .. import converters, app_db, registry_db, dependencies, model, schemas
+from .. import app_db, converters, dependencies, model, registry_db, schemas
 from ..context import ctx
 
 router = fastapi.APIRouter()

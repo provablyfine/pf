@@ -6,7 +6,7 @@ import time
 import fastapi
 import fastapi.responses
 
-from .. import app_db, registry_db, dependencies, grant, responses, schemas, signature
+from .. import app_db, dependencies, grant, registry_db, responses, schemas, signature
 from ..context import ctx
 
 router = fastapi.APIRouter(prefix="/tenant", dependencies=[fastapi.Depends(signature.verify_session)])

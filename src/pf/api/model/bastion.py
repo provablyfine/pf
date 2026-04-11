@@ -5,7 +5,7 @@ import jwt
 
 from ... import jwk
 from ..context import ctx
-from . import audit_log, oidc_key, identity
+from . import audit_log, identity, oidc_key
 
 
 @dataclasses.dataclass(frozen=True)

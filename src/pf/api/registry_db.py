@@ -5,11 +5,11 @@ The registry database tracks all tenants. Tables are defined as NamedTuple class
 The RegistryDb typed DAO exposes each table with its row type visible to pyright.
 """
 
-import sqlalchemy
 import typing
 
-from . import db
+import sqlalchemy
 
+from . import db
 
 # Database metadata
 metadata = sqlalchemy.MetaData()

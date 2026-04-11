@@ -1,10 +1,10 @@
 import contextlib
 import contextvars
-import typing
 
 import cryptography.fernet
 
-from . import app_db, config as config_module
+from . import app_db
+from . import config as config_module
 
 _kek_var: contextvars.ContextVar[cryptography.fernet.Fernet | None] = contextvars.ContextVar("kek", default=None)
 _config_var: contextvars.ContextVar[config_module.Config | None] = contextvars.ContextVar("config", default=None)

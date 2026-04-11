@@ -2,8 +2,6 @@ import base64
 import logging
 import typing
 
-import pydantic
-
 from .. import jwk, ssh
 from . import model, oauth2_providers, responses, schemas
 from .context import ctx
