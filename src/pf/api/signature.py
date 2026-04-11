@@ -200,7 +200,7 @@ async def verify_invitation(
 
 async def verify_account(request: fastapi.requests.Request) -> typing.AsyncGenerator[None, None]:
     key_id = _get_keyid(request, "account")
-    account_key = ctx.db.identity_account_key.read_one(id=key_id)
+    account_key = ctx.app_db.identity_account_key.read_one(id=key_id)
     if account_key is None:
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=403, title="Account does not exist")
@@ -220,7 +220,7 @@ async def verify_account(request: fastapi.requests.Request) -> typing.AsyncGener
 
 async def verify_session(request: fastapi.requests.Request) -> typing.AsyncGenerator[None, None]:
     key_id = _get_keyid(request, "session")
-    session_key = ctx.db.identity_session_key.read_one(id=key_id)
+    session_key = ctx.app_db.identity_session_key.read_one(id=key_id)
     if session_key is None:
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=403, title="Session does not exist")

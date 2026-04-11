@@ -5,7 +5,7 @@ import jwt
 
 from ... import jwk
 from ..context import ctx
-from . import audit_log, oidc_key
+from . import audit_log, oidc_key, identity
 
 
 @dataclasses.dataclass(frozen=True)
@@ -26,7 +26,7 @@ def create(
     tag_id_list: list[int] | None = None,
 ) -> int:
     now = int(time.time())
-    bastion_id = ctx.db.bastion.create(
+    bastion_id = ctx.app_db.bastion.create(
         register_url=register_url,
         connect_url=connect_url,
         ssh_proxy_jump=ssh_proxy_jump,
@@ -63,7 +63,7 @@ def read_all(**kwargs):
     if "created_by_id" in kwargs:
         query["created_by_id"] = kwargs["created_by_id"]
 
-    bastions = ctx.db.bastion.read_all(**query)
+    bastions = ctx.app_db.bastion.read_all(**query)
     return [
         Bastion(
             id=b.id,
@@ -101,16 +101,16 @@ def update(
             id=id,
             **update_fields,
         )
-        ctx.db.bastion.update(**update_fields).where(id=id)
+        ctx.app_db.bastion.update(**update_fields).where(id=id)
 
 
 def delete(id: int):
     audit_log.create("bastion-delete", id=id)
-    ctx.db.bastion.delete(id=id)
+    ctx.app_db.bastion.delete(id=id)
 
 
 def read_matching() -> list[Bastion]:
-    caller = ctx.db.identity.read_one(id=ctx.identity_id)
+    caller = identity.read_one(id=ctx.identity_id)
     if caller is None:
         return []
 
@@ -130,17 +130,17 @@ def read_matching() -> list[Bastion]:
 def generate_token() -> str:
     private_key = oidc_key.get_private_key()
     assert private_key.type == jwk.KeyType.ED25519
-    identity = ctx.db.identity.read_one(id=ctx.identity_id)
-    assert identity is not None
+    self_identity = identity.read_one(id=ctx.identity_id)
+    assert self_identity is not None
     iss = f"{ctx.config.base_url}/pf/t/{ctx.tenant_name}/public/oidc"
     now = int(time.time())
     claims = {
-        "sub": str(ctx.identity_id),
+        "sub": str(self_identity.id),
         "iss": iss,
         "aud": "bastion",
         "iat": now,
         "exp": now + 60,
-        "name": identity.name,
+        "name": self_identity.name,
         "tenant_id": ctx.tenant_id,
     }
     return jwt.encode(claims, private_key.to_crypto(), algorithm="EdDSA", headers={"kid": private_key.thumbprint()})

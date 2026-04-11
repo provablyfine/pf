@@ -25,7 +25,7 @@ def create(identity_id: int, expiration_delay_s: int) -> str:
     id = key.thumbprint()
     now = int(time.time())
     expires_at = now + expiration_delay_s
-    ctx.db.identity_invitation_key.create(
+    ctx.app_db.identity_invitation_key.create(
         id=id,
         key=ctx.kek.encrypt(key.to_bytes()),
         identity_id=identity_id,
@@ -42,12 +42,12 @@ def create(identity_id: int, expiration_delay_s: int) -> str:
 
 def accept(id: str, public_key_id):
     now = int(time.time())
-    invitation = ctx.db.identity_invitation_key.read_one(id=id)
+    invitation = ctx.app_db.identity_invitation_key.read_one(id=id)
     assert invitation is not None
     assert not invitation.is_accepted
     assert not invitation.is_revoked
     assert invitation.expires_at > now
-    ctx.db.identity_invitation_key.update(
+    ctx.app_db.identity_invitation_key.update(
         is_accepted=True,
         accepted_at=now,
         accepted_public_key_id=public_key_id,
@@ -56,7 +56,7 @@ def accept(id: str, public_key_id):
 
 
 def read(id: str) -> IdentityInvitationKey | None:
-    invitation = ctx.db.identity_invitation_key.read_one(id=id)
+    invitation = ctx.app_db.identity_invitation_key.read_one(id=id)
     if invitation is None:
         return None
     key = jwk.Symmetric.from_bytes(ctx.kek.decrypt(invitation.key))

@@ -1,228 +1,216 @@
-import enum
+import collections
+import logging
+import types
+import typing
+import dataclasses
 
 import sqlalchemy
 
+logger = logging.getLogger(__name__)
 
-@enum.unique
-class AuditLogLevel(enum.IntEnum):
-    INFO = 1
-    WARNING = 2
+T = typing.TypeVar("T")
 
 
-@enum.unique
-class SigningKeyType(enum.IntEnum):
-    HOST = 1
-    USER = 2
+class Table(typing.Generic[T]):
+    def __init__(
+        self,
+        connection: sqlalchemy.engine.Connection,
+        table: sqlalchemy.Table,
+        row_type: type[T] | None = None,
+    ) -> None:
+        self._connection = connection
+        self._table = table
+        names = [col_name for col_name in table.columns.keys()]
+        # If row_type is provided (typed Dao), use it to construct rows.
+        # Otherwise, fall back to dynamic namedtuple (untyped Dao.__getattr__ path).
+        self._tup: type = row_type if row_type is not None else collections.namedtuple(table.name, names)  # type: ignore[misc]
+        self.columns = types.SimpleNamespace(**dict(table.columns))  # type: ignore[misc]
+
+    @property
+    def column(self) -> types.SimpleNamespace:
+        return self.columns
+
+    def create(self, **kwargs: typing.Any) -> int | None:
+        statement = self._table.insert().values(**kwargs)
+        result = self._connection.execute(statement)
+        primary_key: typing.Any = result.inserted_primary_key
+        if primary_key is None or len(primary_key) == 0:
+            return None
+        if len(primary_key) == 1:
+            return primary_key[0]
+        raise AssertionError("Multiple primary keys not supported")
+
+    def _where(self, statement: typing.Any, *args: typing.Any, **kwargs: typing.Any) -> typing.Any:
+        for arg in args:
+            statement = statement.where(arg)
+        for k, v in kwargs.items():
+            column = self._table.columns[k]
+            if isinstance(v, (list, tuple, set)):
+                statement = statement.where(column.in_(v))  # type: ignore[arg-type]
+            else:
+                statement = statement.where(column == v)
+        return statement
+
+    def read_one(self, *args: typing.Any, **kwargs: typing.Any) -> T | None:
+        statement = self._table.select()
+        statement = self._where(statement, *args, **kwargs)
+        rows = self._connection.execute(statement)
+        for row in rows:
+            return self._tup(*row)  # type: ignore[return-value]
+        return None
+
+    def read_all(self, *args: typing.Any, **kwargs: typing.Any) -> list[T]:
+        statement = self._table.select()
+        statement = self._where(statement, *args, **kwargs)
+        rows = self._connection.execute(statement)
+        return [self._tup(*row) for row in rows]  # type: ignore[misc]
+
+    def update(self, **kwargs: typing.Any) -> "Update":
+        statement = self._table.update().values(**kwargs)
+        return Update(self, statement)
+
+    def delete(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        statement = self._table.delete()
+        statement = self._where(statement, *args, **kwargs)
+        self._connection.execute(statement)
 
 
-# Database table definitions.
-metadata = sqlalchemy.MetaData()
+class Update:
+    def __init__(self, outer: Table, statement: typing.Any) -> None:
+        self._outer = outer
+        self._statement = statement
+
+    def where(self, **kwargs: typing.Any) -> None:
+        statement = self._outer._where(self._statement, **kwargs)  # type: ignore[protected-access]
+        self._outer._connection.execute(statement)  # type: ignore[protected-access]
 
 
-auth = sqlalchemy.Table(
-    "auth",
-    metadata,
-    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
-    sqlalchemy.Column("name", sqlalchemy.String, nullable=False, unique=True, index=True),
-    sqlalchemy.Column("description", sqlalchemy.String, nullable=False, server_default=""),
-    sqlalchemy.Column("tag_id_list", sqlalchemy.JSON, nullable=False),
-    sqlalchemy.Column("created_at", sqlalchemy.Integer, nullable=False),
-    sqlalchemy.Column("is_enabled", sqlalchemy.Boolean, nullable=False),
-    sqlalchemy.Column("type", sqlalchemy.String, nullable=False),
-    sqlalchemy.Column("config", sqlalchemy.LargeBinary, nullable=False),
-)
+class Dao:
+    def __init__(self, connection: sqlalchemy.engine.Connection, metadata: sqlalchemy.MetaData) -> None:
+        self._connection = connection
+        self._metadata = metadata
+        self._tables: dict[str, Table] = {}
 
-public_key_denylist = sqlalchemy.Table(
-    "public_key_denylist",
-    metadata,
-    sqlalchemy.Column("id", sqlalchemy.String, index=True, unique=True, nullable=False),
-    sqlalchemy.Column("key_id", sqlalchemy.String, nullable=False),
-    sqlalchemy.Column("created_at", sqlalchemy.Integer, nullable=False),
-)
-
-identity_account_key = sqlalchemy.Table(
-    "identity_account_key",
-    metadata,
-    sqlalchemy.Column("id", sqlalchemy.String, index=True, unique=True, nullable=False),
-    sqlalchemy.Column("public_key", sqlalchemy.JSON, nullable=False),
-    sqlalchemy.Column("identity_id", sqlalchemy.Integer, index=False, unique=False, nullable=False),
-    sqlalchemy.Column("created_at", sqlalchemy.INTEGER, nullable=False),
-    sqlalchemy.Column("is_revoked", sqlalchemy.Boolean, nullable=False),
-    sqlalchemy.Column("revoked_at", sqlalchemy.INTEGER, nullable=True),
-)
-
-identity_session_key = sqlalchemy.Table(
-    "identity_session_key",
-    metadata,
-    sqlalchemy.Column("id", sqlalchemy.String, index=True, unique=True, nullable=False),
-    sqlalchemy.Column("public_key", sqlalchemy.JSON, nullable=False),
-    sqlalchemy.Column("identity_id", sqlalchemy.Integer, index=False, unique=False, nullable=False),
-    sqlalchemy.Column("created_at", sqlalchemy.INTEGER, nullable=False),
-    sqlalchemy.Column("is_revoked", sqlalchemy.Boolean, nullable=False),
-    sqlalchemy.Column("revoked_at", sqlalchemy.INTEGER, nullable=True),
-    sqlalchemy.Column("expires_at", sqlalchemy.INTEGER, nullable=False),
-    sqlalchemy.Column("login_ip", sqlalchemy.String, nullable=True),
-)
-
-identity_invitation_key = sqlalchemy.Table(
-    "identity_invitation_key",
-    metadata,
-    sqlalchemy.Column("id", sqlalchemy.String, index=True, unique=True, nullable=False),
-    sqlalchemy.Column("key", sqlalchemy.LargeBinary, nullable=False),
-    sqlalchemy.Column("identity_id", sqlalchemy.Integer, index=False, unique=False, nullable=False),
-    sqlalchemy.Column("created_at", sqlalchemy.INTEGER, nullable=False),
-    sqlalchemy.Column("revoked_at", sqlalchemy.INTEGER, nullable=True),
-    sqlalchemy.Column("accepted_at", sqlalchemy.INTEGER, nullable=True),
-    sqlalchemy.Column("expires_at", sqlalchemy.INTEGER, nullable=False),
-    sqlalchemy.Column("is_revoked", sqlalchemy.Boolean, nullable=False),
-    sqlalchemy.Column("is_accepted", sqlalchemy.Boolean, nullable=False),
-    sqlalchemy.Column("accepted_public_key_id", sqlalchemy.String, nullable=True),
-)
-
-tag = sqlalchemy.Table(
-    "tag",
-    metadata,
-    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
-    sqlalchemy.Column("name", sqlalchemy.String, index=True, unique=False, nullable=False),
-    sqlalchemy.Column("value", sqlalchemy.String, index=True, unique=False, nullable=False),
-    sqlalchemy.UniqueConstraint("name", "value", name="uix_name_value"),
-    # We need autoincrement to make sure ids are not recycled EVER.
-    sqlite_autoincrement=True,
-)
-
-identity = sqlalchemy.Table(
-    "identity",
-    metadata,
-    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
-    sqlalchemy.Column("created_by_id", sqlalchemy.Integer, index=False, unique=False, nullable=True),
-    sqlalchemy.Column("created_at", sqlalchemy.Integer, nullable=False),
-    sqlalchemy.Column("name", sqlalchemy.String, index=True, unique=True, nullable=False),
-    # We need autoincrement to make sure ids are not recycled EVER.
-    sqlite_autoincrement=True,
-)
-
-identity_boundary = sqlalchemy.Table(
-    "identity_boundary",
-    metadata,
-    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
-    sqlalchemy.Column("identity_id", sqlalchemy.Integer, index=True, unique=False, nullable=False),
-    sqlalchemy.Column("boundary_id", sqlalchemy.Integer, index=True, unique=False, nullable=False),
-    sqlalchemy.UniqueConstraint("identity_id", "boundary_id", name="uix_identity_id_boundary_id"),
-)
-
-identity_tag = sqlalchemy.Table(
-    "identity_tag",
-    metadata,
-    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
-    sqlalchemy.Column("identity_id", sqlalchemy.Integer, index=True, unique=False, nullable=False),
-    sqlalchemy.Column("tag_id", sqlalchemy.Integer, index=True, unique=False, nullable=False),
-    sqlalchemy.UniqueConstraint("identity_id", "tag_id", name="uix_identity_id_tag_id"),
-)
-
-role = sqlalchemy.Table(
-    "role",
-    metadata,
-    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
-    sqlalchemy.Column("name", sqlalchemy.String, index=True, unique=True, nullable=False),
-    sqlalchemy.Column("description", sqlalchemy.String, index=False, unique=False, nullable=False),
-    sqlalchemy.Column("grant_list", sqlalchemy.JSON, index=False, unique=False, nullable=False),
-    # We need autoincrement to make sure ids are not recycled EVER.
-    sqlite_autoincrement=True,
-)
-
-role_member = sqlalchemy.Table(
-    "role_member",
-    metadata,
-    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
-    sqlalchemy.Column("role_id", sqlalchemy.Integer, index=True, unique=False, nullable=False),
-    sqlalchemy.Column("identity_id", sqlalchemy.Integer, index=True, unique=False, nullable=False),
-)
-
-boundary = sqlalchemy.Table(
-    "boundary",
-    metadata,
-    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
-    sqlalchemy.Column("name", sqlalchemy.String, index=False, unique=True, nullable=False),
-    sqlalchemy.Column("description", sqlalchemy.String, index=False, unique=False, nullable=False),
-    sqlalchemy.Column("ceiling_list", sqlalchemy.JSON, nullable=False),
-    sqlalchemy.Column("denied_list", sqlalchemy.JSON, nullable=False),
-    # We need autoincrement to make sure ids are not recycled EVER.
-    sqlite_autoincrement=True,
-)
-
-signing_key = sqlalchemy.Table(
-    "signing_key",
-    metadata,
-    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
-    sqlalchemy.Column("type", sqlalchemy.Integer, nullable=False),
-    sqlalchemy.Column("key", sqlalchemy.LargeBinary, nullable=False),
-    sqlalchemy.Column("serial_number", sqlalchemy.Integer, nullable=False),
-    sqlalchemy.Column("valid_after", sqlalchemy.Integer, nullable=False),
-    sqlalchemy.Column("valid_before", sqlalchemy.Integer, nullable=False),
-    sqlalchemy.Index("idx_valid_before_valid_after", "valid_before", "valid_after"),
-    # We need autoincrement to make sure ids are not recycled EVER.
-    sqlite_autoincrement=True,
-)
-
-default = sqlalchemy.Table(
-    "default",
-    metadata,
-    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
-)
-
-bastion = sqlalchemy.Table(
-    "bastion",
-    metadata,
-    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
-    sqlalchemy.Column("register_url", sqlalchemy.String, nullable=False),
-    sqlalchemy.Column("connect_url", sqlalchemy.String, nullable=True),
-    sqlalchemy.Column("ssh_proxy_jump", sqlalchemy.String, nullable=True),
-    sqlalchemy.Column("tag_id_list", sqlalchemy.JSON, nullable=False, server_default="[]"),
-    sqlalchemy.Column("created_at", sqlalchemy.Integer, nullable=False),
-    sqlalchemy.Column("created_by_id", sqlalchemy.Integer, nullable=True),
-    sqlite_autoincrement=True,
-)
-
-audit_log = sqlalchemy.Table(
-    "audit_log",
-    metadata,
-    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
-    sqlalchemy.Column("at", sqlalchemy.Integer, nullable=False),
-    sqlalchemy.Column("level", sqlalchemy.Integer, index=True, unique=False, nullable=False),
-    sqlalchemy.Column("type", sqlalchemy.String, index=True, unique=False, nullable=False),
-    sqlalchemy.Column("by_identity_id", sqlalchemy.String, index=True, unique=False, nullable=True),
-    sqlalchemy.Column("details", sqlalchemy.JSON, nullable=False),
-)
+    def __getattr__(self, name: str) -> Table:
+        table = self._tables.get(name)
+        if table is not None:
+            return table
+        if name not in self._metadata.tables:
+            raise AttributeError(f"Table '{name}' not found")
+        table = Table(self._connection, self._metadata.tables[name])
+        self._tables[name] = table
+        return table
 
 
-oauth2_login_request = sqlalchemy.Table(
-    "oauth2_login_request",
-    metadata,
-    sqlalchemy.Column("id", sqlalchemy.String, primary_key=True),
-    sqlalchemy.Column("session_key_thumbprint", sqlalchemy.String, nullable=False),
-    sqlalchemy.Column("session_public_key", sqlalchemy.JSON, nullable=False),
-    sqlalchemy.Column("auth_config_id", sqlalchemy.Integer, nullable=False),
-    sqlalchemy.Column("code_verifier", sqlalchemy.LargeBinary, nullable=False),
-    sqlalchemy.Column("redirect_uri", sqlalchemy.String, nullable=False),
-    sqlalchemy.Column("client_redirect_uri", sqlalchemy.String, nullable=False),
-    sqlalchemy.Column("created_at", sqlalchemy.Integer, nullable=False),
-    sqlalchemy.Column("expires_at", sqlalchemy.Integer, nullable=False),
-)
+def create(connection: sqlalchemy.engine.Connection, metadata: sqlalchemy.MetaData) -> Dao:
+    return Dao(connection, metadata)
 
-oidc_key = sqlalchemy.Table(
-    "oidc_key",
-    metadata,
-    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
-    sqlalchemy.Column("private_key", sqlalchemy.LargeBinary, nullable=False),
-    sqlalchemy.Column("public_key", sqlalchemy.JSON, nullable=False),
-    sqlalchemy.Column("valid_after", sqlalchemy.Integer, nullable=False),
-    sqlalchemy.Column("valid_before", sqlalchemy.Integer, nullable=False),
-    sqlalchemy.Column("created_at", sqlalchemy.Integer, nullable=False),
-    sqlalchemy.Index("idx_oidc_key_valid", "valid_before", "valid_after"),
-    sqlite_autoincrement=True,
-)
+@dataclasses.dataclass
+class Col:
+    """Column metadata for use in Annotated type hints.
+
+    Carries SQLAlchemy-specific options that can't be inferred from Python types.
+    Used in NamedTuple field annotations to specify primary_key, unique, index, etc.
+
+    Example:
+        class IdentityRow(typing.NamedTuple):
+            id: typing.Annotated[int, Col(primary_key=True)]
+            name: str
+    """
+
+    sa_type: sqlalchemy.types.TypeEngine | None = None
+    primary_key: bool = False
+    nullable: bool = False
+    unique: bool = False
+    index: bool = False
+    server_default: typing.Any = None  # str or sqlalchemy SQL expression
 
 
-def create_tables(url: str) -> None:
-    engine = sqlalchemy.create_engine(url)
-    metadata.create_all(engine)
+def _infer_sa_type(python_type: type) -> sqlalchemy.types.TypeEngine:
+    """Infer SQLAlchemy type from a Python type annotation."""
+    # Strip Optional/Union wrappers
+    origin = typing.get_origin(python_type)
+    if origin is typing.Union:
+        args = typing.get_args(python_type)
+        if type(None) in args:
+            # Optional[X] — recurse on the non-None type
+            non_none = next(arg for arg in args if arg is not type(None))
+            return _infer_sa_type(non_none)
+
+    if python_type is int:
+        return sqlalchemy.Integer()
+    elif python_type is str:
+        return sqlalchemy.String()
+    elif python_type is bool:
+        return sqlalchemy.Boolean()
+    elif python_type is bytes:
+        return sqlalchemy.LargeBinary()
+    elif origin in (dict, list):
+        return sqlalchemy.JSON()
+    else:
+        raise ValueError(f"Cannot infer SQLAlchemy type from {python_type}")
+
+
+def _is_optional(hint: type) -> bool:
+    """Check if a type hint is Optional[T] (Union[T, None])."""
+    origin = typing.get_origin(hint)
+    if origin is typing.Union:
+        args = typing.get_args(hint)
+        return type(None) in args
+    return False
+
+
+def make_table(
+    name: str,
+    metadata: sqlalchemy.MetaData,
+    row_cls: type,
+    *constraints_and_indexes: typing.Any,
+    **table_kwargs: typing.Any,
+) -> sqlalchemy.Table:
+    """Generate a SQLAlchemy Table from a typed NamedTuple class.
+
+    The NamedTuple is the single source of truth for column names and Python types.
+    Column order in the generated Table matches field order in the NamedTuple.
+
+    Args:
+        name: Table name
+        metadata: SQLAlchemy MetaData instance
+        row_cls: A NamedTuple class. Fields are columns; Annotated values with Col()
+                 provide SQLAlchemy-specific options.
+        *constraints_and_indexes: Additional Table constraints/indexes (UniqueConstraint, Index)
+        **table_kwargs: Additional table-level options (e.g. sqlite_autoincrement=True)
+
+    Returns:
+        A SQLAlchemy Table instance
+    """
+    hints = typing.get_type_hints(row_cls, include_extras=True)
+    columns: list[sqlalchemy.Column] = []
+
+    for field_name, hint in hints.items():
+        col_spec = Col()
+        python_type = hint
+
+        # Extract Col metadata from Annotated
+        if typing.get_origin(hint) is typing.Annotated:
+            python_type, *extras = typing.get_args(hint)
+            for extra in extras:
+                if isinstance(extra, Col):
+                    col_spec = extra
+                    break
+
+        sa_type = col_spec.sa_type or _infer_sa_type(python_type)
+        nullable = col_spec.nullable or _is_optional(python_type)
+
+        # Construct Column with explicit parameters to satisfy type stubs
+        col = sqlalchemy.Column(
+            field_name,
+            sa_type,
+            primary_key=col_spec.primary_key,
+            nullable=nullable,
+            unique=col_spec.unique or False,
+            index=col_spec.index or False,
+            server_default=col_spec.server_default,
+        )
+        columns.append(col)
+
+    return sqlalchemy.Table(name, metadata, *columns, *constraints_and_indexes, **table_kwargs)

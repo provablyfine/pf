@@ -6,7 +6,7 @@ import time
 import fastapi
 import fastapi.responses
 
-from .. import dao_factory, db, dependencies, grant, responses, schemas, signature
+from .. import app_db, registry_db, dependencies, grant, responses, schemas, signature
 from ..context import ctx
 
 router = fastapi.APIRouter(prefix="/tenant", dependencies=[fastapi.Depends(signature.verify_session)])
@@ -33,9 +33,9 @@ def _ownership_filter(rows, tenant_id: int):
 
 @router.get("", status_code=200)
 def list_endpoint(
-    registry_dao: dao_factory.Dao = fastapi.Depends(dependencies.registry_dao),
+    reg_db: registry_db.RegistryDb = fastapi.Depends(dependencies.registry),
 ) -> schemas.TenantListResponse:
-    all_rows = registry_dao.tenant.read_all()
+    all_rows = reg_db.tenant.read_all()
     rows = _ownership_filter(all_rows, ctx.tenant_id)
     grants = grant.Grants.create()
     output = []
@@ -48,9 +48,9 @@ def list_endpoint(
 @router.get("/{tenant_id:int}", status_code=200, responses={403: responses.PROBLEM, 404: responses.PROBLEM})
 def read_endpoint(
     tenant_id: int,
-    registry_dao: dao_factory.Dao = fastapi.Depends(dependencies.registry_dao),
+    reg_db: registry_db.RegistryDb = fastapi.Depends(dependencies.registry),
 ) -> schemas.TenantReadResponse:
-    row = registry_dao.tenant.read_one(id=tenant_id)
+    row = reg_db.tenant.read_one(id=tenant_id)
 
     if row is None or not _ownership_filter([row], ctx.tenant_id):
         raise responses.ProblemHTTPException(responses.problem_response(status_code=404, title="Tenant not found"))
@@ -67,7 +67,7 @@ def read_endpoint(
 @router.post("", status_code=200, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
 def create_endpoint(
     data: schemas.TenantCreateRequest,
-    registry_dao: dao_factory.Dao = fastapi.Depends(dependencies.registry_dao),
+    reg_db: registry_db.RegistryDb = fastapi.Depends(dependencies.registry),
 ) -> schemas.TenantReadResponse:
     grants = grant.Grants.create()
     if not grants.tenant(None).can_create():
@@ -75,12 +75,11 @@ def create_endpoint(
             responses.problem_response(status_code=403, title="Not allowed to create tenant")
         )
 
+    # new tenant entry
     db_path = os.path.join(ctx.config.tenants_dir, f"{data.name}.db")
     db_url = f"sqlite:///{db_path}"
-    db.create_tables(db_url)
-
     now = int(time.time())
-    new_id = registry_dao.tenant.create(
+    new_id = reg_db.tenant.create(
         name=data.name,
         display_name=data.display_name,
         owner_id=ctx.tenant_id,
@@ -89,8 +88,12 @@ def create_endpoint(
         is_initialized=False,
         created_at=now,
     )
-    row = registry_dao.tenant.read_one(id=new_id)
+    row = reg_db.tenant.read_one(id=new_id)
     assert row is not None
+
+    # new database
+    app_db.create_tables(db_url)
+
     return _row_to_schema(row)
 
 
@@ -102,9 +105,9 @@ def create_endpoint(
 def update_endpoint(
     tenant_id: int,
     data: schemas.TenantUpdateRequest,
-    registry_dao: dao_factory.Dao = fastapi.Depends(dependencies.registry_dao),
+    reg_db: registry_db.RegistryDb = fastapi.Depends(dependencies.registry),
 ) -> fastapi.responses.Response:
-    row = registry_dao.tenant.read_one(id=tenant_id)
+    row = reg_db.tenant.read_one(id=tenant_id)
 
     if row is None or not _ownership_filter([row], ctx.tenant_id):
         raise responses.ProblemHTTPException(responses.problem_response(status_code=404, title="Tenant not found"))
@@ -118,7 +121,7 @@ def update_endpoint(
 
     update_kwargs = {f: getattr(data, f) for f in data.model_fields_set}
     if update_kwargs:
-        registry_dao.tenant.update(**update_kwargs).where(id=tenant_id)
+        reg_db.tenant.update(**update_kwargs).where(id=tenant_id)
 
     return _204
 
@@ -130,9 +133,9 @@ def update_endpoint(
 )
 def delete_endpoint(
     tenant_id: int,
-    registry_dao: dao_factory.Dao = fastapi.Depends(dependencies.registry_dao),
+    reg_db: registry_db.RegistryDb = fastapi.Depends(dependencies.registry),
 ) -> fastapi.responses.Response:
-    row = registry_dao.tenant.read_one(id=tenant_id)
+    row = reg_db.tenant.read_one(id=tenant_id)
 
     if row is None or not _ownership_filter([row], ctx.tenant_id):
         raise responses.ProblemHTTPException(responses.problem_response(status_code=404, title="Tenant not found"))
@@ -143,6 +146,6 @@ def delete_endpoint(
             responses.problem_response(status_code=403, title="Not allowed to delete tenant")
         )
 
-    registry_dao.tenant.update(is_enabled=False, is_deleted=True).where(id=tenant_id)
+    reg_db.tenant.update(is_enabled=False, is_deleted=True).where(id=tenant_id)
 
     return _204

@@ -33,7 +33,7 @@ def _from_db(row) -> AuthConfig:
 
 def create(name: str, description: str, tag_id_list: list[int], type: str, config: dict) -> int:
     now = int(time.time())
-    auth_id = ctx.db.auth.create(
+    auth_id = ctx.app_db.auth.create(
         name=name,
         description=description,
         tag_id_list=tag_id_list,
@@ -48,7 +48,7 @@ def create(name: str, description: str, tag_id_list: list[int], type: str, confi
 
 
 def read_all(**kwargs) -> list[AuthConfig]:
-    rows = ctx.db.auth.read_all(**kwargs)
+    rows = ctx.app_db.auth.read_all(**kwargs)
     return [_from_db(r) for r in rows]
 
 
@@ -66,10 +66,10 @@ def update(id: int, **fields) -> None:
     if "config" in update_fields:
         update_fields["config"] = ctx.kek.encrypt(json.dumps(update_fields["config"]).encode())
     if update_fields:
-        ctx.db.auth.update(**update_fields).where(id=id)
+        ctx.app_db.auth.update(**update_fields).where(id=id)
     audit_log.create("auth-update", id=id, **audit_fields)
 
 
 def delete(id: int) -> None:
-    ctx.db.auth.delete(id=id)
+    ctx.app_db.auth.delete(id=id)
     audit_log.create("auth-delete", id=id)

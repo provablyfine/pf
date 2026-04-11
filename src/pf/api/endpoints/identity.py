@@ -89,7 +89,7 @@ def read_self_token_endpoint(service: str) -> schemas.IdentitySelfTokenResponse:
 def _read_boundary_ids(boundary_id_list: list[int], boundary_name_list: list[str]) -> list[int]:
     # The input schema validator makes sure that the client provides only one non-empty list:
     # either boundary_id_list or boundary_name_list is empty.
-    boundaries = ctx.db.boundary.read_all(name=boundary_name_list)
+    boundaries = ctx.app_db.boundary.read_all(name=boundary_name_list)
     if len(boundaries) != len(boundary_name_list):
         logger.info(f"No boundary found for one of={boundary_name_list}")
         raise responses.ProblemHTTPException(
@@ -101,7 +101,7 @@ def _read_boundary_ids(boundary_id_list: list[int], boundary_name_list: list[str
 def _read_tag_ids(tag_id_list: list[int], tag_name_value_list: list[schemas.IdentityTagNameValue]) -> list[int]:
     id_list = []
     for tag in tag_name_value_list:
-        db_tag = ctx.db.tag.read_one(name=tag.name, value=tag.value)
+        db_tag = ctx.app_db.tag.read_one(name=tag.name, value=tag.value)
         if db_tag is None:
             logger.info(f"No tag found for {tag.name}={tag.value}")
             raise responses.ProblemHTTPException(
@@ -178,7 +178,7 @@ def delete_endpoint(identity_id: int) -> fastapi.responses.Response:
             responses.problem_response(status_code=403, title="Not allowed to delete identity")
         )
 
-    ctx.db.identity.delete(id=identity.id)
+    ctx.app_db.identity.delete(id=identity.id)
     # XXX: delete all rows in other tables that reference this
     return _204
 

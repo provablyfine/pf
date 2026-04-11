@@ -4,21 +4,21 @@ import fastapi
 import fastapi.requests
 import sqlalchemy
 
-from . import dao_factory, db, responses, tenant_db
+from . import app_db, registry_db, responses
 from .context import ctx
 
 
-async def registry_dao(request: fastapi.requests.Request):
+async def registry(request: fastapi.requests.Request):
     with request.app.state.tenant_registry_engine.begin() as registry_conn:
-        yield dao_factory.create(registry_conn, tenant_db.tenant_metadata)
+        yield registry_db.create(registry_conn)
 
 
 async def tenant_context(
     request: fastapi.requests.Request,
     tenant_name: str,
-    reg_dao: dao_factory.Dao = fastapi.Depends(registry_dao),
+    reg_db: registry_db.RegistryDb = fastapi.Depends(registry),
 ):
-    tenant_row = reg_dao.tenant.read_one(name=tenant_name)
+    tenant_row = reg_db.tenant.read_one(name=tenant_name)
 
     if tenant_row is None or not tenant_row.is_enabled:
         raise responses.ProblemHTTPException(responses.problem_response(status_code=404, title="Tenant not found"))
@@ -29,8 +29,8 @@ async def tenant_context(
             tenant_row.database_url, echo=request.app.state.config.debug_sql
         )
     with engines[tenant_name].begin() as conn:
-        dao = dao_factory.create(conn, db.metadata)
+        application_db = app_db.create(conn)
         with ctx.set_tenant_id(tenant_row.id):
             with ctx.set_tenant_name(tenant_name):
-                with ctx.set_db(dao):
+                with ctx.set_app_db(application_db):
                     yield

@@ -4,13 +4,13 @@ import fastapi
 import fastapi.responses
 
 from ... import jwk
-from .. import converters, dao_factory, db, dependencies, model, schemas
+from .. import converters, app_db, registry_db, dependencies, model, schemas
 from ..context import ctx
 
 router = fastapi.APIRouter()
 
 
-def _create_keys(key_type: db.SigningKeyType, crypto_key_type: jwk.KeyType, rotation_period: int, staging_period: int):
+def _create_keys(key_type: app_db.SigningKeyType, crypto_key_type: jwk.KeyType, rotation_period: int, staging_period: int):
     now = int(time.time())
 
     current_start = now - staging_period - 10
@@ -33,13 +33,13 @@ def _create_keys(key_type: db.SigningKeyType, crypto_key_type: jwk.KeyType, rota
 
 def _provision(allow_tenant_create: bool):
     _create_keys(
-        db.SigningKeyType.HOST,
+        app_db.SigningKeyType.HOST,
         jwk.KeyType.from_string(ctx.config.host_key_type),
         ctx.config.host_key_rotation_period,
         ctx.config.host_key_staging_period,
     )
     _create_keys(
-        db.SigningKeyType.USER,
+        app_db.SigningKeyType.USER,
         jwk.KeyType.from_string(ctx.config.user_key_type),
         ctx.config.user_key_rotation_period,
         ctx.config.user_key_staging_period,
@@ -129,7 +129,7 @@ def _provision(allow_tenant_create: bool):
         ),
         grant_list=all_grants,
     )
-    ctx.db.role_member.create(role_id=root_role_id, identity_id=root_id)
+    ctx.app_db.role_member.create(role_id=root_role_id, identity_id=root_id)
 
     model.auth_config.create(
         name="default",
@@ -155,24 +155,24 @@ def _provision(allow_tenant_create: bool):
     responses={204: {"description": "Already initialized"}},
 )
 def initialize_endpoint(
-    registry_dao: dao_factory.Dao = fastapi.Depends(dependencies.registry_dao),
+    reg_db: registry_db.RegistryDb = fastapi.Depends(dependencies.registry)
 ) -> schemas.InitializeResponse | fastapi.responses.Response:
-    tenant_row = registry_dao.tenant.read_one(id=ctx.tenant_id)
+    tenant_row = reg_db.tenant.read_one(id=ctx.tenant_id)
     assert tenant_row is not None
 
     if tenant_row.is_initialized:
         return fastapi.responses.Response(status_code=204)
 
-    identity = ctx.db.identity.read_one(id=1)
+    identity = ctx.app_db.identity.read_one(id=1)
     if identity is None:
         _provision(allow_tenant_create=tenant_row.owner_id is None)
-        identity = ctx.db.identity.read_one(id=1)
+        identity = ctx.app_db.identity.read_one(id=1)
         assert identity is not None
 
     identity_invitation_key_id = model.identity_invitation_key.create(identity_id=identity.id, expiration_delay_s=600)
     identity_invitation = model.identity_invitation_key.read(identity_invitation_key_id)
     assert identity_invitation is not None
 
-    registry_dao.tenant.update(is_initialized=True).where(id=ctx.tenant_id)
+    reg_db.tenant.update(is_initialized=True).where(id=ctx.tenant_id)
 
     return schemas.InitializeResponse(key=converters.symmetric_to_schema(identity_invitation.key))

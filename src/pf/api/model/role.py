@@ -17,7 +17,7 @@ class Role:
 
 def create(name: str, description: str, grant_list: list[grant.Grant]) -> int:
     grants = [grant.serialize(g) for g in grant_list]
-    role_id = ctx.db.role.create(
+    role_id = ctx.app_db.role.create(
         name=name,
         description=description,
         grant_list=grants,
@@ -38,8 +38,8 @@ def _from_db(role, member_id_list: list[int]) -> Role:
 
 
 def read_all(**kwargs) -> list[Role]:
-    roles = ctx.db.role.read_all(**kwargs)
-    members = ctx.db.role_member.read_all(role_id=list(set(r.id for r in roles)))
+    roles = ctx.app_db.role.read_all(**kwargs)
+    members = ctx.app_db.role_member.read_all(role_id=list(set(r.id for r in roles)))
     member_id_list_by_role_id = {
         key: [r.identity_id for r in group] for key, group in utils.group_by(members, key=lambda m: m.role_id)
     }
@@ -87,18 +87,18 @@ def update(
         )
 
     if len(role_fields) > 0:
-        ctx.db.role.update(**role_fields).where(id=id)
+        ctx.app_db.role.update(**role_fields).where(id=id)
 
     if added_member_id_list is not None and len(added_member_id_list) > 0:
         for member_id in added_member_id_list:
-            ctx.db.role_member.create(role_id=id, identity_id=member_id)
+            ctx.app_db.role_member.create(role_id=id, identity_id=member_id)
         audit_log.create(
             "role-add-members",
             id=id,
             added_member_id_list=added_member_id_list,
         )
     if deleted_member_id_list is not None and len(deleted_member_id_list) > 0:
-        ctx.db.role_member.delete(role_id=id, identity_id=deleted_member_id_list)
+        ctx.app_db.role_member.delete(role_id=id, identity_id=deleted_member_id_list)
         audit_log.create(
             "role-delete-members",
             id=id,

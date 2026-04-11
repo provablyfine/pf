@@ -13,7 +13,7 @@ import pydantic
 import sqlalchemy
 
 from .. import base64url, log
-from . import config, dao_factory, db, dependencies, endpoints, middleware, responses, tenant_db
+from . import app_db, config, dependencies, endpoints, middleware, registry_db, responses
 
 logger = logging.getLogger(__name__)
 
@@ -81,11 +81,11 @@ def create(conf: config.Config) -> fastapi.FastAPI:
 
     def _bootstrap_root_tenant(registry_engine: sqlalchemy.Engine):
         root_db_url = f"sqlite:///{os.path.join(conf.tenants_dir, 'root.db')}"
-        db.create_tables(root_db_url)
+        app_db.create_tables(root_db_url)
         now = int(time.time())
         with registry_engine.begin() as registry_conn:
-            registry_dao = dao_factory.create(registry_conn, tenant_db.tenant_metadata)
-            registry_dao.tenant.create(
+            reg_db = registry_db.create(registry_conn)
+            reg_db.tenant.create(
                 name="root",
                 display_name="root",
                 owner_id=None,
@@ -98,7 +98,7 @@ def create(conf: config.Config) -> fastapi.FastAPI:
     @contextlib.asynccontextmanager
     async def lifespan(app: fastapi.FastAPI):
         os.makedirs(conf.tenants_dir, exist_ok=True)
-        tenant_db.create_tables(conf.tenant_registry_url)
+        registry_db.create_tables(conf.tenant_registry_url)
         registry_engine = sqlalchemy.create_engine(conf.tenant_registry_url, echo=conf.debug_sql)
         kek_filename = conf.kek_filename.format(PF_API_KEK_FILENAME=os.getenv("PF_API_KEK_FILENAME"))
         with open(kek_filename, "rb") as f:
@@ -110,8 +110,8 @@ def create(conf: config.Config) -> fastapi.FastAPI:
         app.state.debug_store = _InMemoryDebugStore()
 
         with registry_engine.connect() as registry_conn:
-            registry_dao = dao_factory.create(registry_conn, tenant_db.tenant_metadata)
-            if registry_dao.tenant.read_one() is None:
+            reg_db = registry_db.create(registry_conn)
+            if reg_db.tenant.read_one() is None:
                 _bootstrap_root_tenant(registry_engine)
 
         yield

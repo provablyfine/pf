@@ -4,12 +4,11 @@ import typing
 
 import cryptography.fernet
 
-from . import config as config_module
-from . import dao_factory
+from . import app_db, config as config_module
 
 _kek_var: contextvars.ContextVar[cryptography.fernet.Fernet | None] = contextvars.ContextVar("kek", default=None)
 _config_var: contextvars.ContextVar[config_module.Config | None] = contextvars.ContextVar("config", default=None)
-_db_var: contextvars.ContextVar[typing.Any | None] = contextvars.ContextVar("db", default=None)
+_app_db_var: contextvars.ContextVar[app_db.AppDb| None] = contextvars.ContextVar("app_db", default=None)
 _identity_id_var: contextvars.ContextVar[int | None] = contextvars.ContextVar("identity_id", default=None)
 _tenant_id_var: contextvars.ContextVar[int | None] = contextvars.ContextVar("tenant_id", default=None)
 _tenant_name_var: contextvars.ContextVar[str | None] = contextvars.ContextVar("tenant_name", default=None)
@@ -31,10 +30,10 @@ class RequestContext:
         return key
 
     @property
-    def db(self) -> dao_factory.Dao:
-        dao = _db_var.get()
-        assert dao is not None
-        return dao
+    def app_db(self) -> app_db.AppDb:
+        db = _app_db_var.get()
+        assert db is not None
+        return db
 
     @property
     def identity_id(self) -> int | None:
@@ -59,13 +58,13 @@ class RequestContext:
             _config_var.set(None)
 
     @contextlib.contextmanager
-    def set_db(self, db: dao_factory.Dao):
-        assert _db_var.get() is None
-        _db_var.set(db)
+    def set_app_db(self, app_db: app_db.AppDb):
+        assert _app_db_var.get() is None
+        _app_db_var.set(app_db)
         try:
             yield
         finally:
-            _db_var.set(None)
+            _app_db_var.set(None)
 
     @contextlib.contextmanager
     def set_identity_id(self, identity_id: int):

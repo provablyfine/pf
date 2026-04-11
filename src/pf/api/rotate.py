@@ -6,20 +6,20 @@ import cryptography.fernet
 import sqlalchemy
 
 from .. import base64url, jwk, log
-from . import config, dao_factory, db, model, tenant_db
+from . import app_db, config, model, registry_db
 from .context import ctx
 
 logger = logging.getLogger(__name__)
 
 
-def rotate(key_type: db.SigningKeyType, crypto_key_type: jwk.KeyType, rotation_period: int, staging_period: int):
-    one = ctx.db.identity.read_one()
+def rotate(key_type: app_db.SigningKeyType, crypto_key_type: jwk.KeyType, rotation_period: int, staging_period: int):
+    one = ctx.app_db.identity.read_one()
     if one is None:
         return
     logger.info(f"rotate {key_type.name}")
     now = int(datetime.datetime.now().timestamp())
     keys = model.signing_key.read_all(
-        ctx.db.signing_key.columns.valid_after >= now - rotation_period,
+        ctx.app_db.signing_key.columns.valid_after >= now - rotation_period,
         type=key_type,
     )
     current = [k for k in keys if k.valid_after <= (now - staging_period) and k.valid_before > now]
@@ -57,16 +57,16 @@ def main():
     def _rotate_one(database_url: str):
         engine = sqlalchemy.create_engine(database_url)
         with engine.begin() as connection:
-            dao = dao_factory.create(connection, db.metadata)
-            with ctx.set_db(dao), ctx.set_kek(kek):
+            application_db = app_db.create(connection)
+            with ctx.set_app_db(application_db), ctx.set_kek(kek):
                 rotate(
-                    db.SigningKeyType.HOST,
+                    app_db.SigningKeyType.HOST,
                     jwk.KeyType.from_string(conf.host_key_type),
                     conf.host_key_rotation_period,
                     conf.host_key_staging_period,
                 )
                 rotate(
-                    db.SigningKeyType.USER,
+                    app_db.SigningKeyType.USER,
                     jwk.KeyType.from_string(conf.user_key_type),
                     conf.user_key_rotation_period,
                     conf.user_key_staging_period,
@@ -74,7 +74,7 @@ def main():
 
     registry_engine = sqlalchemy.create_engine(conf.tenant_registry_url)
     with registry_engine.connect() as registry_conn:
-        registry_dao = dao_factory.create(registry_conn, tenant_db.tenant_metadata)
-        for tenant_row in registry_dao.tenant.read_all():
+        reg_db = registry_db.create(registry_conn)
+        for tenant_row in reg_db.tenant.read_all():
             if tenant_row.is_enabled and tenant_row.is_initialized:
                 _rotate_one(tenant_row.database_url)

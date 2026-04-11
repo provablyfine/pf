@@ -376,12 +376,12 @@ class Grants:
 
     @classmethod
     def create(cls) -> Grants:
-        identity = ctx.db.identity.read_one(id=ctx.identity_id)
+        identity = ctx.app_db.identity.read_one(id=ctx.identity_id)
         assert identity is not None
-        identity_boundaries = ctx.db.identity_boundary.read_all(identity_id=identity.id)
+        identity_boundaries = ctx.app_db.identity_boundary.read_all(identity_id=identity.id)
         assert len(identity_boundaries) > 0
         boundaries = model.boundary.read_all(id=[i.boundary_id for i in identity_boundaries])
-        member_of = ctx.db.role_member.read_all(identity_id=identity.id)
+        member_of = ctx.app_db.role_member.read_all(identity_id=identity.id)
         roles = model.role.read_all(id=list(set(member.role_id for member in member_of)))
         return Grants(boundaries, roles)
 

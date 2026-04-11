@@ -152,7 +152,7 @@ def oidc_login_endpoint(
         )
 
     # Look up identity by email
-    identity = ctx.db.identity.read_one(name=email)
+    identity = model.identity.read_one(name=email)
     if identity is None:
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=403, title="No identity for this account")
@@ -167,7 +167,7 @@ def oidc_login_endpoint(
 
     # Create session key record
     now = int(time.time())
-    ctx.db.identity_session_key.create(
+    ctx.app_db.identity_session_key.create(
         id=session_key.thumbprint(),
         public_key=session_key.to_dict(),
         identity_id=identity.id,

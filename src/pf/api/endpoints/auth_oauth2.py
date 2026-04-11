@@ -108,7 +108,7 @@ def oauth2_start_endpoint(
     )
 
     now = int(time.time())
-    ctx.db.oauth2_login_request.create(
+    ctx.app_db.oauth2_login_request.create(
         id=login_id,
         session_key_thumbprint=session_key.thumbprint(),
         session_public_key=session_key.to_dict(),
@@ -138,7 +138,7 @@ def oauth2_callback_endpoint(
             status_code=400,
         )
 
-    row = ctx.db.oauth2_login_request.read_one(id=state)
+    row = ctx.app_db.oauth2_login_request.read_one(id=state)
     now = int(time.time())
     if row is None or now > row.expires_at:
         return fastapi.responses.HTMLResponse(
@@ -147,7 +147,7 @@ def oauth2_callback_endpoint(
         )
 
     client_redirect_uri = row.client_redirect_uri
-    ctx.db.oauth2_login_request.delete(id=state)
+    ctx.app_db.oauth2_login_request.delete(id=state)
 
     ac = model.auth_config.read_one(id=row.auth_config_id)
     if ac is None or not ac.is_enabled:
@@ -173,7 +173,7 @@ def oauth2_callback_endpoint(
 
     identity = None
     for email in emails:
-        identity = ctx.db.identity.read_one(name=email)
+        identity = model.identity.read_one(name=email)
         if identity is not None:
             break
     if identity is None:
@@ -190,7 +190,7 @@ def oauth2_callback_endpoint(
     except Exception as exc:
         return _redirect_error(client_redirect_uri, f"Session key not allowed: {exc}")
 
-    ctx.db.identity_session_key.create(
+    ctx.app_db.identity_session_key.create(
         id=session_key.thumbprint(),
         public_key=session_key.to_dict(),
         identity_id=identity.id,

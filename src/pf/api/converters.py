@@ -55,7 +55,7 @@ class GrantConverter:
     def from_tag_list(self, tag_list: list[schemas.TagNameValue]) -> dict[schemas.TagNameValue, int]:
         retval = {}
         for tag in tag_list:
-            t = ctx.db.tag.read_one(name=tag.name, value=tag.value)
+            t = ctx.app_db.tag.read_one(name=tag.name, value=tag.value)
             if t is None:
                 logger.debug(f"Unable to find tag in database: {tag.name}={tag.value}")
                 raise ValueError
@@ -71,7 +71,7 @@ class GrantConverter:
     @return_none_if_none
     @cache_list
     def from_boundary_list(self, boundary_list: list[str]) -> dict[str, int]:
-        return {t.name: t.id for t in ctx.db.boundary.read_all(name=boundary_list)}
+        return {t.name: t.id for t in ctx.app_db.boundary.read_all(name=boundary_list)}
 
     @return_none_if_none
     def from_boundary(self, boundary: str) -> int:
@@ -82,7 +82,7 @@ class GrantConverter:
     @return_none_if_none
     @cache_list
     def from_role_list(self, role_list: list[str]) -> dict[str, int]:
-        return {r.name: r.id for r in ctx.db.role.read_all(name=role_list)}
+        return {r.name: r.id for r in ctx.app_db.role.read_all(name=role_list)}
 
     @return_none_if_none
     def from_role(self, role: str) -> int:
@@ -93,7 +93,7 @@ class GrantConverter:
     @return_none_if_none
     @cache_list
     def from_identity_list(self, identity_list: list[str]) -> dict[str, int]:
-        return {i.name: i.id for i in ctx.db.identity.read_all(name=identity_list)}
+        return {i.name: i.id for i in ctx.app_db.identity.read_all(name=identity_list)}
 
     @return_none_if_none
     def from_identity(self, identity: str) -> int:
@@ -104,7 +104,7 @@ class GrantConverter:
     @return_none_if_none
     @cache_list
     def to_tag_list(self, tag_id_list: list[int]) -> dict[int, schemas.TagNameValue]:
-        return {t.id: schemas.TagNameValue(name=t.name, value=t.value) for t in ctx.db.tag.read_all(id=tag_id_list)}
+        return {t.id: schemas.TagNameValue(name=t.name, value=t.value) for t in ctx.app_db.tag.read_all(id=tag_id_list)}
 
     @return_none_if_none
     def to_tag(self, tag_id: int) -> schemas.TagNameValue:
@@ -115,7 +115,7 @@ class GrantConverter:
     @return_none_if_none
     @cache_list
     def to_boundary_list(self, boundary_id_list: list[int]) -> dict[int, str]:
-        return {t.id: t.name for t in ctx.db.boundary.read_all(id=boundary_id_list)}
+        return {t.id: t.name for t in ctx.app_db.boundary.read_all(id=boundary_id_list)}
 
     @return_none_if_none
     def to_boundary(self, boundary_id: int) -> str:
@@ -126,7 +126,7 @@ class GrantConverter:
     @return_none_if_none
     @cache_list
     def to_role_list(self, role_id_list: list[int]) -> dict[int, str]:
-        return {r.id: r.name for r in ctx.db.role.read_all(id=role_id_list)}
+        return {r.id: r.name for r in ctx.app_db.role.read_all(id=role_id_list)}
 
     @return_none_if_none
     def to_role(self, role_id: int) -> str:
@@ -137,7 +137,7 @@ class GrantConverter:
     @return_none_if_none
     @cache_list
     def to_identity_list(self, identity_id_list: list[int]) -> dict[int, str]:
-        return {i.id: i.name for i in ctx.db.identity.read_all(id=identity_id_list)}
+        return {i.id: i.name for i in ctx.app_db.identity.read_all(id=identity_id_list)}
 
     @return_none_if_none
     def to_identity(self, identity_id: int) -> str:
@@ -148,7 +148,7 @@ class GrantConverter:
     @return_none_if_none
     @cache_list
     def to_auth_list(self, auth_id_list: list[int]) -> dict[int, str]:
-        return {a.id: a.name for a in ctx.db.auth.read_all(id=auth_id_list)}
+        return {a.id: a.name for a in ctx.app_db.auth.read_all(id=auth_id_list)}
 
     @return_none_if_none
     def to_auth(self, auth_id: int) -> str:
@@ -159,7 +159,7 @@ class GrantConverter:
     @return_none_if_none
     @cache_list
     def from_auth_list(self, name_list: list[str]) -> dict[str, int]:
-        return {a.name: a.id for a in ctx.db.auth.read_all(name=name_list)}
+        return {a.name: a.id for a in ctx.app_db.auth.read_all(name=name_list)}
 
     @return_none_if_none
     def from_auth(self, name: str) -> int:
@@ -492,7 +492,7 @@ def boundary_to_schema(converter: GrantConverter, boundary: model.boundary.Bound
 
 
 def role_to_schema(converter: GrantConverter, role: model.role.Role) -> schemas.Role:
-    members = ctx.db.identity.read_all(id=list(set(role.member_id_list)))
+    members = ctx.app_db.identity.read_all(id=list(set(role.member_id_list)))
     role_members = [schemas.RoleMember(id=m.id, name=m.name) for m in members]
     return schemas.Role(
         id=role.id,
@@ -505,8 +505,8 @@ def role_to_schema(converter: GrantConverter, role: model.role.Role) -> schemas.
 
 def identity_list_to_schema(identities: list[model.identity.Identity]) -> list[schemas.Identity]:
     # read the data we need to format fully the output.
-    tags = ctx.db.tag.read_all(id=list(set(tag_id for i in identities for tag_id in i.tag_id_list)))
-    boundaries = ctx.db.boundary.read_all(
+    tags = ctx.app_db.tag.read_all(id=list(set(tag_id for i in identities for tag_id in i.tag_id_list)))
+    boundaries = ctx.app_db.boundary.read_all(
         id=list(set(boundary_id for i in identities for boundary_id in i.boundary_id_list))
     )
     tag_by_id = {t.id: tag_to_schema(t) for t in tags}

@@ -69,7 +69,7 @@ def delete_endpoint(boundary_id: int) -> fastapi.responses.Response:
     boundary = model.boundary.read_one(id=boundary_id)
     if boundary is None:
         raise responses.ProblemHTTPException(responses.problem_response(status_code=404, title="Boundary not found"))
-    identity = ctx.db.identity_boundary.read_one(boundary_id=boundary.id)
+    identity = ctx.app_db.identity_boundary.read_one(boundary_id=boundary.id)
     if identity is not None:
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=400, title="Boundary is still in use")
@@ -81,7 +81,7 @@ def delete_endpoint(boundary_id: int) -> fastapi.responses.Response:
             responses.problem_response(status_code=403, title="Not allowed to delete boundary")
         )
 
-    ctx.db.boundary.delete(id=boundary.id)
+    ctx.app_db.boundary.delete(id=boundary.id)
     return _204
 
 

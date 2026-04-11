@@ -16,7 +16,7 @@ class Boundary:
 def create(name: str, description: str, ceiling_list: list[grant.Grant] | None, denied_list: list[grant.Grant]) -> int:
     db_ceiling_list = None if ceiling_list is None else [grant.serialize(g) for g in ceiling_list]
     db_denied_list = [grant.serialize(g) for g in denied_list]
-    boundary_id = ctx.db.boundary.create(
+    boundary_id = ctx.app_db.boundary.create(
         name=name,
         description=description,
         ceiling_list=db_ceiling_list,
@@ -45,12 +45,12 @@ def _from_db(b):
 
 
 def read_all(**kwargs):
-    boundaries = ctx.db.boundary.read_all(**kwargs)
+    boundaries = ctx.app_db.boundary.read_all(**kwargs)
     return [_from_db(b) for b in boundaries]
 
 
 def read_one(**kwargs):
-    boundary = ctx.db.boundary.read_one(**kwargs)
+    boundary = ctx.app_db.boundary.read_one(**kwargs)
     if boundary is None:
         return None
     return _from_db(boundary)
@@ -103,4 +103,4 @@ def update(
         )
     if len(update_fields) == 0:
         return
-    ctx.db.boundary.update(**update_fields).where(id=id)
+    ctx.app_db.boundary.update(**update_fields).where(id=id)

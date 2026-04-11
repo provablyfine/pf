@@ -2,20 +2,20 @@ import datetime
 import json
 
 from ... import jwk
-from .. import db
+from .. import app_db
 from ..context import ctx
 from . import audit_log
 
 
-def create(key_type: db.SigningKeyType, crypto_key_type: jwk.KeyType, valid_after: int, valid_before: int):
+def create(key_type: app_db.SigningKeyType, crypto_key_type: jwk.KeyType, valid_after: int, valid_before: int):
     key = jwk.Private.generate(crypto_key_type)
     encrypted_key = ctx.kek.encrypt(json.dumps(key.to_dict()).encode("utf-8"))
-    signing_key_id = ctx.db.signing_key.create(
+    signing_key_id = ctx.app_db.signing_key.create(
         type=key_type, serial_number=1, key=encrypted_key, valid_after=valid_after, valid_before=valid_before
     )
     now = int(datetime.datetime.now().timestamp())
     audit_log.create(
-        level=db.AuditLogLevel.INFO,
+        level=app_db.AuditLogLevel.INFO,
         at=now,
         type="create-signing-key",
         by_identity_id=None,
@@ -31,7 +31,7 @@ def create(key_type: db.SigningKeyType, crypto_key_type: jwk.KeyType, valid_afte
 
 def read_all(*args, **kwargs):
     output = []
-    keys = ctx.db.signing_key.read_all(*args, **kwargs)
+    keys = ctx.app_db.signing_key.read_all(*args, **kwargs)
     for key in keys:
         decrypted_key = ctx.kek.decrypt(key.key)
         key_dict = json.loads(decrypted_key.decode("utf-8"))
@@ -40,4 +40,4 @@ def read_all(*args, **kwargs):
 
 
 def update(id: int, serial_number: int):
-    ctx.db.signing_key.update(serial_number=serial_number).where(id=id)
+    ctx.app_db.signing_key.update(serial_number=serial_number).where(id=id)

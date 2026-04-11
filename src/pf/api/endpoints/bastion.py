@@ -15,7 +15,7 @@ _204 = fastapi.responses.Response(status_code=204)
 def _read_tag_ids(tag_id_list: list[int], tag_name_value_list: list[schemas.IdentityTagNameValue]) -> list[int]:
     id_list = []
     for tag in tag_name_value_list:
-        db_tag = ctx.db.tag.read_one(name=tag.name, value=tag.value)
+        db_tag = ctx.app_db.tag.read_one(name=tag.name, value=tag.value)
         if db_tag is None:
             raise responses.ProblemHTTPException(
                 responses.problem_response(status_code=400, title="Request contains invalid field")

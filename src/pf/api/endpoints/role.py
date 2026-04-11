@@ -70,11 +70,11 @@ def delete_endpoint(role_id: int) -> fastapi.responses.Response:
             responses.problem_response(status_code=403, title="Not allowed to delete role")
         )
 
-    member = ctx.db.role_member.read_one(role_id=role.id)
+    member = ctx.app_db.role_member.read_one(role_id=role.id)
     if member is not None:
         raise responses.ProblemHTTPException(responses.problem_response(status_code=400, title="Role is still in use"))
 
-    ctx.db.role.delete(id=role.id)
+    ctx.app_db.role.delete(id=role.id)
     return _204
 
 
@@ -112,7 +112,7 @@ def update_endpoint(role_id: int, data: schemas.RoleUpdateRequest) -> schemas.Ro
         role_update["grant_list"] = [converters.grant_from_schema(converter, g) for g in data.grant_list]
     if "member_list" in data.model_fields_set:
         assert data.member_list is not None  # pydantic validation guarantees this
-        members = ctx.db.identity.read_all(name=[m.name for m in data.member_list])
+        members = ctx.app_db.identity.read_all(name=[m.name for m in data.member_list])
         member_by_name = {m.name: m for m in members}
         unresolved_members = [m.name for m in data.member_list if m.name not in member_by_name]
         if len(unresolved_members) > 0:

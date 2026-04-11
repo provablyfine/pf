@@ -5,7 +5,7 @@ import fastapi
 import fastapi.responses
 
 from ... import ssh
-from .. import converters, db, grant, model, responses, schemas, signature
+from .. import converters, app_db, grant, model, responses, schemas, signature
 from ..context import ctx
 
 logger = logging.getLogger(__name__)
@@ -13,11 +13,11 @@ logger = logging.getLogger(__name__)
 router = fastapi.APIRouter(prefix="/ssh")
 
 
-def _read_current(type: db.SigningKeyType, staging_period: int):
+def _read_current(type: app_db.SigningKeyType, staging_period: int):
     now = int(time.time())
     return model.signing_key.read_all(
-        ctx.db.signing_key.columns.valid_after <= now - staging_period,
-        ctx.db.signing_key.columns.valid_before > now,
+        ctx.app_db.signing_key.columns.valid_after <= now - staging_period,
+        ctx.app_db.signing_key.columns.valid_before > now,
         type=type,
     )
 
@@ -29,10 +29,10 @@ def _read_current(type: db.SigningKeyType, staging_period: int):
     responses={400: responses.PROBLEM, 403: responses.PROBLEM},
 )
 def sign_host_certificate(data: schemas.SSHHostCertificateRequest) -> schemas.SSHHostCertificateResponse:
-    caller = ctx.db.identity.read_one(id=ctx.identity_id)
+    caller = ctx.app_db.identity.read_one(id=ctx.identity_id)
     assert caller is not None  # because we are authenticated
 
-    signers = _read_current(db.SigningKeyType.HOST, ctx.config.host_key_staging_period)
+    signers = _read_current(app_db.SigningKeyType.HOST, ctx.config.host_key_staging_period)
     signer = signers[0]
     serial_number = signer.serial_number
     now = int(time.time())
@@ -74,7 +74,7 @@ def sign_host_certificate(data: schemas.SSHHostCertificateRequest) -> schemas.SS
     responses={400: responses.PROBLEM, 403: responses.PROBLEM, 404: responses.PROBLEM},
 )
 def sign_user_certificate(data: schemas.SSHUserCertificateRequest) -> schemas.SSHUserCertificateResponse:
-    caller = ctx.db.identity.read_one(id=ctx.identity_id)
+    caller = ctx.app_db.identity.read_one(id=ctx.identity_id)
     assert caller is not None  # because we are authenticated
     host = model.identity.read_one(name=data.hostname)
     if host is None:
@@ -82,7 +82,7 @@ def sign_user_certificate(data: schemas.SSHUserCertificateRequest) -> schemas.SS
 
     ssh_checker = grant.Grants.create().ssh(host.id, host.tag_id_list, host.boundary_id_list)
     public_key = converters.public_from_schema(data.public_key)
-    signers = _read_current(db.SigningKeyType.USER, ctx.config.user_key_staging_period)
+    signers = _read_current(app_db.SigningKeyType.USER, ctx.config.user_key_staging_period)
     signer = signers[0]
     serial_number = signer.serial_number
     now = int(time.time())
@@ -174,7 +174,7 @@ def sign_user_certificate(data: schemas.SSHUserCertificateRequest) -> schemas.SS
     matching_bastions = model.bastion.read_matching()
     bastion_schema_list: list[schemas.Bastion] = []
 
-    sessions = ctx.db.identity_session_key.read_all(
+    sessions = ctx.app_db.identity_session_key.read_all(
         identity_id=ctx.identity_id,
         is_revoked=False,
     )
@@ -220,8 +220,8 @@ def list_hosts() -> schemas.SSHHostsResponse:
 def read_user_trusted_keys() -> fastapi.responses.Response:
     now = int(time.time())
     signing_keys = model.signing_key.read_all(
-        ctx.db.signing_key.columns.valid_before > now,
-        type=db.SigningKeyType.USER,
+        ctx.app_db.signing_key.columns.valid_before > now,
+        type=app_db.SigningKeyType.USER,
     )
     trusted_keys = [signing_key.key.public().to_openssh() for signing_key in signing_keys]
     try:
@@ -241,8 +241,8 @@ def read_user_trusted_keys() -> fastapi.responses.Response:
 def read_host_trusted_keys() -> fastapi.responses.Response:
     now = int(time.time())
     signing_keys = model.signing_key.read_all(
-        ctx.db.signing_key.columns.valid_before > now,
-        type=db.SigningKeyType.HOST,
+        ctx.app_db.signing_key.columns.valid_before > now,
+        type=app_db.SigningKeyType.HOST,
     )
     trusted_keys = [b"@cert-authority * " + signing_key.key.public().to_openssh() for signing_key in signing_keys]
 

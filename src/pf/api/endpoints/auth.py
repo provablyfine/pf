@@ -49,7 +49,7 @@ def accept_invitation_endpoint(
         public_key_id=account_key.thumbprint(),
     )
     now = int(time.time())
-    ctx.db.identity_account_key.create(
+    ctx.app_db.identity_account_key.create(
         id=account_key.thumbprint(),
         public_key=account_key.to_dict(),
         identity_id=ctx.identity_id,
@@ -78,7 +78,7 @@ def login_endpoint(request: fastapi.requests.Request, data: schemas.LoginRequest
     # all verification passed. Bind the public session key with the identity
     # that was configured in the account
     now = int(time.time())
-    ctx.db.identity_session_key.create(
+    ctx.app_db.identity_session_key.create(
         id=session_key.thumbprint(),
         public_key=session_key.to_dict(),
         identity_id=ctx.identity_id,
