@@ -22,7 +22,7 @@ class Col:
             name: str
     """
 
-    sa_type: sqlalchemy.types.TypeEngine | None = None
+    sa_type: sqlalchemy.types.TypeEngine[typing.Any] | None = None
     primary_key: bool = False
     nullable: bool = False
     unique: bool = False
@@ -107,8 +107,8 @@ class Table[T]:
 
 
 class Update:
-    def __init__(self, outer: Table, statement: typing.Any) -> None:
-        self._outer = outer
+    def __init__(self, outer: Table[typing.Any], statement: typing.Any) -> None:
+        self._outer: Table[typing.Any] = outer
         self._statement = statement
 
     def where(self, **kwargs: typing.Any) -> None:
@@ -120,7 +120,7 @@ class Dao:
     def __init__(self, connection: sqlalchemy.engine.Connection, metadata: sqlalchemy.MetaData) -> None:
         self._connection = connection
         self._metadata = metadata
-        self._tables: dict[str, Table] = {}
+        self._tables: dict[str, Table[typing.Any]] = {}
 
     def _get[T](self, table_def: TableDef[T]) -> Table[T]:
         """Get or create a typed Table instance from a TableDef.
@@ -133,13 +133,13 @@ class Dao:
             self._tables[name] = Table(self._connection, table_def.table, table_def.row_type)
         return self._tables[name]  # type: ignore[return-value]
 
-    def __getattr__(self, name: str) -> Table:
+    def __getattr__(self, name: str) -> Table[typing.Any]:
         table = self._tables.get(name)
         if table is not None:
             return table
         if name not in self._metadata.tables:
             raise AttributeError(f"Table '{name}' not found")
-        table = Table(self._connection, self._metadata.tables[name])
+        table = Table[typing.Any](self._connection, self._metadata.tables[name])
         self._tables[name] = table
         return table
 
@@ -148,7 +148,7 @@ def create(connection: sqlalchemy.engine.Connection, metadata: sqlalchemy.MetaDa
     return Dao(connection, metadata)
 
 
-def _infer_sa_type(python_type: type) -> sqlalchemy.types.TypeEngine:
+def _infer_sa_type(python_type: type) -> sqlalchemy.types.TypeEngine[typing.Any]:
     """Infer SQLAlchemy type from a Python type annotation."""
     # Strip Optional/Union wrappers
     origin = typing.get_origin(python_type)
@@ -206,7 +206,7 @@ def make_table[T](
         A TableDef[T] instance containing the SQLAlchemy Table and row type
     """
     hints = typing.get_type_hints(row_cls, include_extras=True)
-    columns: list[sqlalchemy.Column] = []
+    columns: list[sqlalchemy.Column[typing.Any]] = []
 
     for field_name, hint in hints.items():
         col_spec = Col()
@@ -224,7 +224,7 @@ def make_table[T](
         nullable = col_spec.nullable or _is_optional(python_type)
 
         # Construct Column with explicit parameters to satisfy type stubs
-        col = sqlalchemy.Column(
+        col = sqlalchemy.Column[typing.Any](
             field_name,
             sa_type,
             primary_key=col_spec.primary_key,
