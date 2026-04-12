@@ -1,5 +1,6 @@
 import datetime
 import json
+import typing
 
 from ... import jwk
 from .. import app_db
@@ -29,8 +30,8 @@ def create(key_type: app_db.SigningKeyType, crypto_key_type: jwk.KeyType, valid_
     )
 
 
-def read_all(*args, **kwargs):
-    output = []
+def read_all(*args: typing.Any, **kwargs: typing.Any) -> list[typing.Any]:
+    output: list[typing.Any] = []
     keys = ctx.app_db.signing_key.read_all(*args, **kwargs)
     for key in keys:
         decrypted_key = ctx.kek.decrypt(key.key)

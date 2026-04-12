@@ -5,6 +5,9 @@ import typing
 
 import pydantic
 
+from .. import app_db
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -227,9 +230,9 @@ Grant = typing.Annotated[
 ]
 
 
-def deserialize(data: dict) -> Grant:
-    return pydantic.TypeAdapter(Grant).validate_python(data)
+def deserialize(data: app_db.SerializedGrant) -> Grant:
+    return pydantic.TypeAdapter(Grant).validate_python(data)  # type: ignore[return-value]
 
 
-def serialize(grant: Grant) -> dict:
+def serialize(grant: Grant) -> app_db.SerializedGrant:
     return grant.model_dump()

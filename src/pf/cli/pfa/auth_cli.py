@@ -23,7 +23,7 @@ def _auth_list_function(args):
         case "text":
             rows = []
             for a in auths:
-                rows.append([a["id"], a["name"], a["type"], a["is_enabled"], a["description"]])
+                rows.append([a["id"], a["name"], a["config"]["type"], a["is_enabled"], a["description"]])
             if rows:
                 output = tabulate.tabulate(rows, headers=["id", "name", "type", "enabled", "description"])
             else:
@@ -41,7 +41,9 @@ def _auth_create_http_sig_function(args):
     body: dict = {
         "name": args.name,
         "description": args.description or "",
-        "type": "http_sig",
+        "config": {
+            "type": "http_sig",
+        },
         "tags": [{"name": t.split("=", 1)[0], "value": t.split("=", 1)[1]} for t in (args.tag or [])],
     }
     response = auth.post(auth.directory.auth, json=body)
@@ -56,12 +58,15 @@ def _auth_create_oidc_function(args):
     body: dict = {
         "name": args.name,
         "description": args.description or "",
-        "type": "oidc",
         "tags": [{"name": t.split("=", 1)[0], "value": t.split("=", 1)[1]} for t in (args.tag or [])],
-        "oidc_params": {"issuer": args.issuer, "client_id": args.client_id},
+        "config": {
+            "type": "oidc",
+            "issuer": args.issuer,
+            "client_id": args.client_id,
+        },
     }
     if args.client_secret:
-        body["oidc_params"]["client_secret"] = args.client_secret
+        body["config"]["client_secret"] = args.client_secret
     response = auth.post(auth.directory.auth, json=body)
     if response.status_code != 201:
         raise client.exceptions.UI(f"Unable to create auth config. {response.json()['title']}")
@@ -74,9 +79,12 @@ def _auth_create_oauth2_github_function(args):
     body: dict = {
         "name": args.name,
         "description": args.description or "",
-        "type": "oauth2-github",
         "tags": [{"name": t.split("=", 1)[0], "value": t.split("=", 1)[1]} for t in (args.tag or [])],
-        "oauth2_params": {"client_id": args.client_id, "client_secret": args.client_secret},
+        "config": {
+            "type": "oauth2-github",
+            "client_id": args.client_id,
+            "client_secret": args.client_secret,
+        },
     }
     response = auth.post(auth.directory.auth, json=body)
     if response.status_code != 201:
@@ -104,21 +112,21 @@ def _auth_read_function(args):
             rows = [
                 ["id", a["id"]],
                 ["name", a["name"]],
-                ["type", a["type"]],
+                ["type", a["config"]["type"]],
                 ["description", a["description"]],
                 ["enabled", a["is_enabled"]],
                 ["created_at", a["created_at"]],
                 ["tags", " ".join(f"{t['name']}={t['value']}" for t in a.get("tags", []))],
             ]
-            if a["type"] == "oidc":
-                params = a.get("params", {})
+            if a["config"]["type"] == "oidc":
+                params = a.get("config", {})
                 rows.append(["issuer", params.get("issuer", "")])
                 rows.append(["client_id", params.get("client_id", "")])
                 rows.append(["callback_url", params.get("callback_url", "")])
                 if params.get("client_secret"):
                     rows.append(["client_secret", params.get("client_secret", "")])
-            elif a["type"] == "oauth2-github":
-                params = a.get("params", {})
+            elif a["config"]["type"] == "oauth2-github":
+                params = a.get("config", {})
                 rows.append(["authorization_endpoint", params.get("authorization_endpoint", "")])
                 rows.append(["client_id", params.get("client_id", "")])
                 rows.append(["callback_url", params.get("callback_url", "")])
@@ -127,7 +135,7 @@ def _auth_read_function(args):
             assert False, args.format
 
 
-def _auth_update_common_body(args) -> dict:
+def _auth_update_function(args):
     body: dict = {}
     if args.name is not None:
         body["name"] = args.name
@@ -137,10 +145,6 @@ def _auth_update_common_body(args) -> dict:
         body["is_enabled"] = True
     if args.disable:
         body["is_enabled"] = False
-    return body
-
-
-def _auth_update_send(args, body: dict) -> None:
     if not body:
         raise client.exceptions.UI("Nothing to update")
     c = client.Config.load(args.config)
@@ -151,28 +155,6 @@ def _auth_update_send(args, body: dict) -> None:
         raise client.exceptions.UI("Auth config not found")
     if response.status_code != 200:
         raise client.exceptions.UI(f"Unable to update auth config. {response.json().get('title', '')}")
-
-
-def _auth_update_http_sig_function(args):
-    _auth_update_send(args, _auth_update_common_body(args))
-
-
-def _auth_update_oidc_function(args):
-    body = _auth_update_common_body(args)
-    oidc_params: dict = {}
-    if args.issuer is not None:
-        oidc_params["issuer"] = args.issuer
-    if args.client_id is not None:
-        oidc_params["client_id"] = args.client_id
-    if args.client_secret is not None:
-        oidc_params["client_secret"] = args.client_secret
-    if oidc_params:
-        body["oidc_params"] = oidc_params
-    _auth_update_send(args, body)
-
-
-def _auth_update_oauth2_github_function(args):
-    _auth_update_send(args, _auth_update_common_body(args))
 
 
 def _auth_delete_function(args):
@@ -227,30 +209,13 @@ def add_subparser(parser):
     read_parser.set_defaults(func=_auth_read_function)
 
     update_parser = subparsers.add_parser("update", help="Update an auth config")
-    update_type_subparsers = update_parser.add_subparsers(required=True, dest="_cmd3")
-
-    def _add_update_common(p):
-        p.add_argument("-i", "--id", type=int, required=True, help="ID of auth config")
-        p.add_argument("-n", "--name", help="New name")
-        p.add_argument("--description", help="New description")
-        eg = p.add_mutually_exclusive_group()
-        eg.add_argument("--enable", action="store_true", default=False, help="Enable auth config")
-        eg.add_argument("--disable", action="store_true", default=False, help="Disable auth config")
-
-    update_http_sig_parser = update_type_subparsers.add_parser("http_sig", help="HTTP signature auth")
-    _add_update_common(update_http_sig_parser)
-    update_http_sig_parser.set_defaults(func=_auth_update_http_sig_function)
-
-    update_oidc_parser = update_type_subparsers.add_parser("oidc", help="OpenID Connect auth")
-    _add_update_common(update_oidc_parser)
-    update_oidc_parser.add_argument("--issuer", help="New OIDC issuer URL")
-    update_oidc_parser.add_argument("--client-id", help="New OIDC client ID")
-    update_oidc_parser.add_argument("--client-secret", help="New OIDC client secret")
-    update_oidc_parser.set_defaults(func=_auth_update_oidc_function)
-
-    update_oauth2_github_parser = update_type_subparsers.add_parser("oauth2-github", help="GitHub OAuth2 auth")
-    _add_update_common(update_oauth2_github_parser)
-    update_oauth2_github_parser.set_defaults(func=_auth_update_oauth2_github_function)
+    update_parser.add_argument("-i", "--id", type=int, required=True, help="ID of auth config")
+    update_parser.add_argument("-n", "--name", help="New name")
+    update_parser.add_argument("--description", help="New description")
+    eg = update_parser.add_mutually_exclusive_group()
+    eg.add_argument("--enable", action="store_true", default=False, help="Enable auth config")
+    eg.add_argument("--disable", action="store_true", default=False, help="Disable auth config")
+    update_parser.set_defaults(func=_auth_update_function)
 
     delete_parser = subparsers.add_parser("delete", help="Delete an auth config")
     delete_parser.add_argument("-i", "--id", type=int, required=True, help="ID of auth config")

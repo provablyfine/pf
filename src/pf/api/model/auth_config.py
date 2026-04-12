@@ -1,7 +1,9 @@
 import dataclasses
 import json
 import time
+import typing
 
+from .. import app_db
 from ..context import ctx
 from . import audit_log
 
@@ -14,11 +16,11 @@ class AuthConfig:
     tag_id_list: list[int]
     created_at: int
     is_enabled: bool
-    type: str  # "http_sig" | "oidc"
-    config: dict  # type-specific; oidc: {"issuer": "...", "client_id": "..."}
+    type: str
+    config: dict[str, typing.Any]
 
 
-def _from_db(row) -> AuthConfig:
+def _from_db(row: app_db.AuthRow) -> AuthConfig:
     return AuthConfig(
         id=row.id,
         name=row.name,
@@ -31,7 +33,7 @@ def _from_db(row) -> AuthConfig:
     )
 
 
-def create(name: str, description: str, tag_id_list: list[int], type: str, config: dict) -> int:
+def create(name: str, description: str, tag_id_list: list[int], type: str, config: dict[str, typing.Any]) -> int:
     now = int(time.time())
     auth_id = ctx.app_db.auth.create(
         name=name,
@@ -47,19 +49,19 @@ def create(name: str, description: str, tag_id_list: list[int], type: str, confi
     return auth_id
 
 
-def read_all(**kwargs) -> list[AuthConfig]:
+def read_all(**kwargs: typing.Any) -> list[AuthConfig]:
     rows = ctx.app_db.auth.read_all(**kwargs)
     return [_from_db(r) for r in rows]
 
 
-def read_one(**kwargs) -> AuthConfig | None:
+def read_one(**kwargs: typing.Any) -> AuthConfig | None:
     rows = read_all(**kwargs)
     if len(rows) == 0:
         return None
     return rows[0]
 
 
-def update(id: int, **fields) -> None:
+def update(id: int, **fields: typing.Any) -> None:
     allowed = {"name", "description", "tag_id_list", "is_enabled", "config"}
     update_fields = {k: v for k, v in fields.items() if k in allowed and v is not None}
     audit_fields = {k: v for k, v in update_fields.items() if k != "config"}

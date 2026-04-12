@@ -27,7 +27,6 @@ class Col:
     nullable: bool = False
     unique: bool = False
     index: bool = False
-    server_default: typing.Any = None  # str or sqlalchemy SQL expression
 
 
 @dataclasses.dataclass
@@ -231,7 +230,6 @@ def make_table[T](
             nullable=nullable,
             unique=col_spec.unique or False,
             index=col_spec.index or False,
-            server_default=col_spec.server_default,
         )
         columns.append(col)
 

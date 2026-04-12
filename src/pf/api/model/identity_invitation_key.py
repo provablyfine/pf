@@ -40,7 +40,7 @@ def create(identity_id: int, expiration_delay_s: int) -> str:
     return id
 
 
-def accept(id: str, public_key_id):
+def accept(id: str, public_key_id: str):
     now = int(time.time())
     invitation = ctx.app_db.identity_invitation_key.read_one(id=id)
     assert invitation is not None

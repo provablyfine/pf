@@ -23,12 +23,12 @@ metadata = sqlalchemy.MetaData()
 class TenantRow(typing.NamedTuple):
     id: typing.Annotated[int, db.Col(primary_key=True, nullable=False)]
     name: typing.Annotated[str, db.Col(nullable=False, unique=True)]
-    display_name: typing.Annotated[str, db.Col(nullable=False)]
+    display_name: str
     owner_id: int | None
     database_url: str
     is_enabled: bool
     is_initialized: bool
-    is_deleted: typing.Annotated[bool, db.Col(server_default=sqlalchemy.false())]
+    is_deleted: bool
     created_at: int
 
 

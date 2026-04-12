@@ -1,3 +1,5 @@
+import typing
+
 import fastapi
 import fastapi.responses
 import sqlalchemy.exc
@@ -9,18 +11,18 @@ router = fastapi.APIRouter(prefix="/auth", dependencies=[fastapi.Depends(signatu
 _204 = fastapi.responses.Response(status_code=204)
 
 
-def _build_config(data: schemas.AuthCreateRequest) -> dict:
-    if data.type == "oidc":
-        assert data.oidc_params is not None
-        config: dict = {"issuer": data.oidc_params.issuer, "client_id": data.oidc_params.client_id}
-        if data.oidc_params.client_secret is not None:
-            config["client_secret"] = data.oidc_params.client_secret
+def _build_config(data: schemas.AuthCreateRequest) -> dict[str, typing.Any]:
+    if data.config.type == "oidc":
+        assert isinstance(data.config, schemas.OidcCreateConfig)
+        config = {"issuer": data.config.issuer, "client_id": data.config.client_id}
+        if data.config.client_secret is not None:
+            config["client_secret"] = data.config.client_secret
         return config
-    if data.type == "oauth2-github":
-        assert data.oauth2_params is not None
+    if data.config.type == "oauth2-github":
+        assert isinstance(data.config, schemas.OAuth2CreateConfig)
         return {
-            "client_id": data.oauth2_params.client_id,
-            "client_secret": data.oauth2_params.client_secret,
+            "client_id": data.config.client_id,
+            "client_secret": data.config.client_secret,
         }
     return {}
 
@@ -29,7 +31,7 @@ def _build_config(data: schemas.AuthCreateRequest) -> dict:
 def list_endpoint(tenant_name: str) -> schemas.AuthListResponse:
     auths = model.auth_config.read_all()
     grants = grant.Grants.create()
-    output = []
+    output: list[schemas.Auth] = []
     for ac in auths:
         if not grants.auth(ac.id).can_read():
             continue
@@ -58,7 +60,7 @@ def create_endpoint(data: schemas.AuthCreateRequest, tenant_name: str) -> schema
             name=data.name,
             description=data.description,
             tag_id_list=converter.from_tag_list(data.tags) or [],
-            type=data.type,
+            type=data.config.type,
             config=config,
         )
     except sqlalchemy.exc.IntegrityError:
@@ -98,7 +100,7 @@ def update_endpoint(auth_id: int, data: schemas.AuthUpdateRequest, tenant_name: 
         )
 
     grants = grant.Grants.create()
-    fields_to_update: dict = {}
+    fields_to_update: dict[str, typing.Any] = {}
 
     if data.name is not None:
         if not grants.auth(ac.id).can_update("name"):
@@ -131,18 +133,6 @@ def update_endpoint(auth_id: int, data: schemas.AuthUpdateRequest, tenant_name: 
                 responses.problem_response(status_code=403, title="Not allowed to update auth config is_enabled")
             )
         fields_to_update["is_enabled"] = data.is_enabled
-
-    if data.oidc_params is not None:
-        if not grants.auth(ac.id).can_update("config"):
-            raise responses.ProblemHTTPException(
-                responses.problem_response(status_code=403, title="Not allowed to update auth config")
-            )
-        config = dict(ac.config)
-        config["issuer"] = data.oidc_params.issuer
-        config["client_id"] = data.oidc_params.client_id
-        if data.oidc_params.client_secret is not None:
-            config["client_secret"] = data.oidc_params.client_secret
-        fields_to_update["config"] = config
 
     if fields_to_update:
         model.auth_config.update(id=auth_id, **fields_to_update)

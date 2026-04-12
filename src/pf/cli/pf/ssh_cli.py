@@ -28,7 +28,7 @@ def _ssh_function(args):
         if response.status_code != 200:
             raise client.exceptions.UI("Not logged in. Run 'pf login' first.")
         auth_public = response.json()
-        match auth_public["type"]:
+        match auth_public["config"]["type"]:
             case "http_sig":
                 try:
                     ssh_agent = ssh.agent.Client()
@@ -46,7 +46,7 @@ def _ssh_function(args):
                     raise client.exceptions.UI(f"Auto-login failed: {resp.text}")
                 c.save(args.config)
             case _:
-                raise client.exceptions.UI(f"Session expired. Run 'pf login' first (auth type: {auth_public['type']}).")
+                raise client.exceptions.UI(f"Session expired. Run 'pf login' first (auth type: {auth_public['config']['type']}).")
 
     api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)

@@ -1,5 +1,7 @@
 import dataclasses
+import typing
 
+from .. import app_db
 from ..context import ctx
 from . import audit_log, grant
 
@@ -34,7 +36,7 @@ def create(name: str, description: str, ceiling_list: list[grant.Grant] | None, 
     return boundary_id
 
 
-def _from_db(b):
+def _from_db(b: app_db.BoundaryRow) -> Boundary:
     return Boundary(
         id=b.id,
         name=b.name,
@@ -44,12 +46,12 @@ def _from_db(b):
     )
 
 
-def read_all(**kwargs):
+def read_all(**kwargs: typing.Any) -> list[Boundary]:
     boundaries = ctx.app_db.boundary.read_all(**kwargs)
     return [_from_db(b) for b in boundaries]
 
 
-def read_one(**kwargs):
+def read_one(**kwargs: typing.Any) -> Boundary | None:
     boundary = ctx.app_db.boundary.read_one(**kwargs)
     if boundary is None:
         return None
@@ -69,8 +71,8 @@ def update(
     description: str | Unset = _UNSET,
     ceiling_list: list[grant.Grant] | None | Unset = _UNSET,
     denied_list: list[grant.Grant] | Unset = _UNSET,
-):
-    update_fields = {}
+) -> None:
+    update_fields: dict[str, typing.Any] = {}
     if not isinstance(name, Unset):
         update_fields["name"] = name
         audit_log.create(

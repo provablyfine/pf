@@ -3,7 +3,7 @@ import logging
 import typing
 
 from .. import jwk, ssh
-from . import model, oauth2_providers, responses, schemas
+from . import model, oauth2_providers, responses, schemas, app_db
 from .context import ctx
 
 logger = logging.getLogger(__name__)
@@ -51,7 +51,7 @@ class GrantConverter:
     @return_none_if_none
     @cache_list
     def from_tag_list(self, tag_list: list[schemas.TagNameValue]) -> dict[schemas.TagNameValue, int]:
-        retval = {}
+        retval: dict[schemas.TagNameValue, int] = {}
         for tag in tag_list:
             t = ctx.app_db.tag.read_one(name=tag.name, value=tag.value)
             if t is None:
@@ -462,7 +462,7 @@ def _grant_from_schema(converter: GrantConverter, grant: schemas.Grant) -> model
 
 
 def symmetric_to_schema(key: jwk.Symmetric) -> schemas.SymmetricJWK:
-    return schemas.SymmetricJWK.validate(key.to_dict())
+    return schemas.SymmetricJWK.model_validate(key.to_dict())
 
 
 def public_from_schema(key: schemas.PublicJWK) -> jwk.Public:
@@ -473,7 +473,7 @@ def cert_to_schema(c: ssh.cert.Cert) -> str:
     return base64.b64encode(c.to_openssh()).decode("utf-8")
 
 
-def tag_to_schema(tag) -> schemas.Tag:
+def tag_to_schema(tag: app_db.TagRow) -> schemas.Tag:
     return schemas.Tag(id=tag.id, name=tag.name, value=tag.value)
 
 
@@ -527,20 +527,22 @@ def identity_to_schema(identity: model.identity.Identity) -> schemas.Identity:
 
 def auth_config_to_schema(ac: model.auth_config.AuthConfig, tenant_name: str) -> schemas.Auth:
     if ac.type == "oidc":
-        params: schemas.OidcParams | schemas.OAuth2Params | schemas.HttpSigParams = schemas.OidcParams(
+        config = schemas.OidcConfig(
             issuer=ac.config["issuer"],
             client_id=ac.config["client_id"],
             client_secret=ac.config.get("client_secret"),
         )
     elif ac.type in oauth2_providers.PROVIDER_CONFIG:
         callback_url = f"{ctx.config.base_url}/pf/t/{tenant_name}/auth/oauth2/callback"
-        params = schemas.OAuth2Params(
+        config = schemas.OAuth2Config(
             client_id=ac.config["client_id"],
             authorization_endpoint=oauth2_providers.PROVIDER_CONFIG[ac.type]["authorization_endpoint"],
             callback_url=callback_url,
         )
+    elif ac.type == "http_sig":
+        config = schemas.HttpSigConfig()
     else:
-        params = schemas.HttpSigParams()
+        assert False
     converter = GrantConverter()
     return schemas.Auth(
         id=ac.id,
@@ -549,8 +551,7 @@ def auth_config_to_schema(ac: model.auth_config.AuthConfig, tenant_name: str) ->
         tags=converter.to_tag_list(ac.tag_id_list) or [],
         created_at=ac.created_at,
         is_enabled=ac.is_enabled,
-        type=ac.type,  # type: ignore[arg-type]
-        params=params,
+        config=config,
     )
 
 

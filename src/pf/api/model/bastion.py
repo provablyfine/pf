@@ -1,5 +1,6 @@
 import dataclasses
 import time
+import typing
 
 import jwt
 
@@ -8,29 +9,35 @@ from ..context import ctx
 from . import audit_log, identity, oidc_key
 
 
+class Unset:
+    pass
+
+_UNSET = Unset()
+
+
 @dataclasses.dataclass(frozen=True)
 class Bastion:
     id: int
+    tag_id_list: list[int]
     register_url: str
     connect_url: str | None = None
     ssh_proxy_jump: str | None = None
-    tag_id_list: list[int] = dataclasses.field(default_factory=list)
     created_at: int | None = None
     created_by_id: int | None = None
 
 
 def create(
     register_url: str,
-    connect_url: str | None = None,
-    ssh_proxy_jump: str | None = None,
-    tag_id_list: list[int] | None = None,
+    connect_url: str | None | Unset = _UNSET,
+    ssh_proxy_jump: str | None | Unset = _UNSET,
+    tag_id_list: list[int] | None | Unset = _UNSET,
 ) -> int:
     now = int(time.time())
     bastion_id = ctx.app_db.bastion.create(
         register_url=register_url,
-        connect_url=connect_url,
-        ssh_proxy_jump=ssh_proxy_jump,
-        tag_id_list=tag_id_list or [],
+        connect_url=None if connect_url is _UNSET else connect_url,
+        ssh_proxy_jump=None if ssh_proxy_jump is _UNSET else ssh_proxy_jump,
+        tag_id_list=[] if tag_id_list is _UNSET else tag_id_list,
         created_at=now,
         created_by_id=ctx.identity_id,
     )
@@ -41,22 +48,22 @@ def create(
         register_url=register_url,
         connect_url=connect_url,
         ssh_proxy_jump=ssh_proxy_jump,
-        tag_id_list=tag_id_list or [],
+        tag_id_list=tag_id_list,
     )
     return bastion_id
 
 
-def read_one(**kwargs):
+def read_one(**kwargs: typing.Any) -> Bastion | None:
     bastions = read_all(**kwargs)
     if len(bastions) == 0:
         return None
     return bastions[0]
 
 
-def read_all(**kwargs):
-    query = {}
+def read_all(**kwargs: typing.Any) -> list[Bastion]:
+    query: dict[str, typing.Any] = {}
     if "id" in kwargs:
-        ids = kwargs["id"]
+        ids: int | list[int] = kwargs["id"]
         if isinstance(ids, int):
             ids = [ids]
         query["id"] = ids
@@ -84,8 +91,8 @@ def update(
     connect_url: str | None = None,
     ssh_proxy_jump: str | None = None,
     tag_id_list: list[int] | None = None,
-):
-    update_fields = {}
+) -> None:
+    update_fields: dict[str, typing.Any] = {}
     if register_url is not None:
         update_fields["register_url"] = register_url
     if connect_url is not None:
@@ -104,7 +111,7 @@ def update(
         ctx.app_db.bastion.update(**update_fields).where(id=id)
 
 
-def delete(id: int):
+def delete(id: int) -> None:
     audit_log.create("bastion-delete", id=id)
     ctx.app_db.bastion.delete(id=id)
 
@@ -115,7 +122,7 @@ def read_matching() -> list[Bastion]:
         return []
 
     all_bastions = read_all()
-    matching = []
+    matching: list[Bastion] = []
     for bastion in all_bastions:
         if len(bastion.tag_id_list) == 0:
             matching.append(bastion)

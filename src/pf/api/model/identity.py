@@ -1,5 +1,6 @@
 import dataclasses
 import time
+import typing
 
 from ..context import ctx
 from . import audit_log, utils
@@ -27,18 +28,17 @@ def create(name: str, boundary_id_list: list[int], tag_id_list: list[int]) -> in
     return identity_id
 
 
-def read_one(**kwargs):
+def read_one(**kwargs: typing.Any) -> Identity | None:
     identities = read_all(**kwargs)
     if len(identities) == 0:
         return None
     return identities[0]
 
 
-def read_all(**kwargs):
-    # prepare query
-    id_filter = []
+def read_all(**kwargs: typing.Any) -> list[Identity]:
+    id_filter: list[list[int]] = []
     if "id" in kwargs:
-        ids = kwargs["id"]
+        ids: int | list[int] = kwargs["id"]
         if isinstance(ids, int):
             ids = [ids]
         id_filter.append(ids)
@@ -60,9 +60,9 @@ def read_all(**kwargs):
             ib.identity_id for ib in ctx.app_db.identity_boundary.read_all(boundary_id=boundary_ids)
         ]
         id_filter.append(boundary_identity_ids)
-    query = {}
+    query: dict[str, typing.Any] = {}
     if len(id_filter) > 0:
-        id_set = set(id_filter[0])
+        id_set: set[int] = set(id_filter[0])
         remaining_id_filter = id_filter[1:]
         if len(remaining_id_filter) > 0:
             id_set = id_set.intersection(set(i) for i in remaining_id_filter)
@@ -70,20 +70,18 @@ def read_all(**kwargs):
     if "name" in kwargs:
         query["name"] = kwargs["name"]
 
-    # run query
     identities = ctx.app_db.identity.read_all(**query)
 
-    # Now, format output
     identity_ids = [i.id for i in identities]
     identity_tags = ctx.app_db.identity_tag.read_all(identity_id=identity_ids)
-    tag_ids_by_identity_id = {
+    tag_ids_by_identity_id: dict[int, list[int]] = {
         identity_id: [it.tag_id for it in group]
-        for identity_id, group in utils.group_by(identity_tags, key=lambda it: it.identity_id)
+        for identity_id, group in utils.group_by(identity_tags, key=lambda it: it.identity_id)  # type: ignore[arg-type]
     }
     identity_boundaries = ctx.app_db.identity_boundary.read_all(identity_id=identity_ids)
-    boundary_ids_by_identity_id = {
-        boundary_id: [ib.boundary_id for ib in group]
-        for boundary_id, group in utils.group_by(identity_boundaries, key=lambda ib: ib.identity_id)
+    boundary_ids_by_identity_id: dict[int, list[int]] = {
+        identity_id: [ib.boundary_id for ib in group]
+        for identity_id, group in utils.group_by(identity_boundaries, key=lambda ib: ib.identity_id)
     }
 
     output = [
@@ -103,8 +101,8 @@ def update(
     name: str | None = None,
     added_tag_id_list: list[int] | None = None,
     deleted_tag_id_list: list[int] | None = None,
-):
-    update_fields = {}
+) -> None:
+    update_fields: dict[str, typing.Any] = {}
     if name is not None:
         audit_log.create(
             "identity-update-name",

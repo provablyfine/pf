@@ -14,7 +14,7 @@ router = fastapi.APIRouter(prefix="/tenant", dependencies=[fastapi.Depends(signa
 _204 = fastapi.responses.Response(status_code=204)
 
 
-def _row_to_schema(row) -> schemas.TenantReadResponse:
+def _row_to_schema(row: app_db.TenantRow) -> schemas.TenantReadResponse:
     return schemas.TenantReadResponse(
         id=row.id,
         name=row.name,
@@ -86,6 +86,7 @@ def create_endpoint(
         database_url=db_url,
         is_enabled=True,
         is_initialized=False,
+        is_deleted=False,
         created_at=now,
     )
     row = reg_db.tenant.read_one(id=new_id)

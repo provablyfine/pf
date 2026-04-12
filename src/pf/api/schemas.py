@@ -560,30 +560,26 @@ class SSHHostsResponse(APIBase):
 # --- Initialization/login ---
 
 
-class HttpSigParams(APIBase):
-    pass  # no extra params
+class HttpSigConfig(APIBase):
+    type: typing.Literal["http_sig"] = "http_sig"
 
 
-class OidcParams(APIBase):
+class OidcConfig(APIBase):
     issuer: str
     client_id: str
     client_secret: str | None = None
     callback_url: str = "http://127.0.0.1/callback"
+    type: typing.Literal["oidc"] = "oidc"
 
 
-class OAuth2Params(APIBase):
-    """OAuth2 params as returned in API responses — client_secret intentionally omitted."""
-
+class OAuth2Config(APIBase):
     client_id: str
     authorization_endpoint: str
     callback_url: str
+    type: typing.Literal["oauth2-github"] = "oauth2-github"
 
 
-class OAuth2CreateParams(APIBase):
-    """OAuth2 params for create requests — includes client_secret."""
-
-    client_id: str
-    client_secret: str
+AuthConfig = OidcConfig | OAuth2Config | HttpSigConfig
 
 
 class Auth(APIBase):
@@ -593,29 +589,32 @@ class Auth(APIBase):
     tags: list[TagNameValue]
     created_at: int
     is_enabled: bool
-    type: typing.Literal["http_sig", "oidc", "oauth2-github"]
-    params: OidcParams | OAuth2Params | HttpSigParams
+    config: AuthConfig
 
 
 class AuthListResponse(APIBase):
     auths: list[Auth]
 
 
+class OidcCreateConfig(OidcConfig):
+    pass
+
+
+class HttpSigCreateConfig(HttpSigConfig):
+    pass
+
+
+class OAuth2CreateConfig(APIBase):
+    type: typing.Literal["oauth2-github"] = "oauth2-github"
+    client_id: str
+    client_secret: str
+
+
 class AuthCreateRequest(APIBase):
     name: str
     description: str = ""
     tags: list[TagNameValue] = []
-    type: typing.Literal["http_sig", "oidc", "oauth2-github"]
-    oidc_params: OidcParams | None = None
-    oauth2_params: OAuth2CreateParams | None = None
-
-    @pydantic.model_validator(mode="after")
-    def validate_params(self):
-        if self.type == "oidc" and self.oidc_params is None:
-            raise ValueError("oidc_params is required when type is 'oidc'")
-        if self.type == "oauth2-github" and self.oauth2_params is None:
-            raise ValueError("oauth2_params is required when type is 'oauth2-github'")
-        return self
+    config: OidcCreateConfig | OAuth2CreateConfig | HttpSigCreateConfig
 
 
 class AuthUpdateRequest(APIBase):
@@ -623,14 +622,12 @@ class AuthUpdateRequest(APIBase):
     description: str | None = None
     tags: list[TagNameValue] | None = None
     is_enabled: bool | None = None
-    oidc_params: OidcParams | None = None
 
 
 class AuthPublic(APIBase):
     name: str
-    type: typing.Literal["http_sig", "oidc", "oauth2-github"]
     description: str
-    params: OidcParams | OAuth2Params | HttpSigParams
+    config: AuthConfig
 
 
 class OidcLoginRequest(APIBase):

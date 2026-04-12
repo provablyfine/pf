@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import dataclasses
+import typing
 
+from .. import app_db
 from ..context import ctx
 from . import audit_log, grant, utils
 
@@ -27,17 +29,18 @@ def create(name: str, description: str, grant_list: list[grant.Grant]) -> int:
     return role_id
 
 
-def _from_db(role, member_id_list: list[int]) -> Role:
+def _from_db(role: app_db.RoleRow, member_id_list: list[int]) -> Role:
+    grant_list: list[grant.Grant] = [grant.deserialize(g) for g in role.grant_list]
     return Role(
         id=role.id,
         name=role.name,
         description=role.description,
-        grant_list=[grant.deserialize(g) for g in role.grant_list],
+        grant_list=grant_list,
         member_id_list=member_id_list,
     )
 
 
-def read_all(**kwargs) -> list[Role]:
+def read_all(**kwargs: typing.Any) -> list[Role]:
     roles = ctx.app_db.role.read_all(**kwargs)
     members = ctx.app_db.role_member.read_all(role_id=list(set(r.id for r in roles)))
     member_id_list_by_role_id = {
@@ -46,7 +49,7 @@ def read_all(**kwargs) -> list[Role]:
     return [_from_db(r, member_id_list_by_role_id.get(r.id, [])) for r in roles]
 
 
-def read_one(id) -> Role | None:
+def read_one(id: int) -> Role | None:
     roles = read_all(id=id)
     if len(roles) == 0:
         return None
@@ -62,7 +65,7 @@ def update(
     deleted_member_id_list: list[int] | None = None,
 ):
 
-    role_fields = {}
+    role_fields: dict[str, typing.Any] = {}
     if name is not None:
         role_fields["name"] = name
         audit_log.create(

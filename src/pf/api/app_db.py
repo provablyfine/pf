@@ -36,12 +36,14 @@ metadata = sqlalchemy.MetaData()
 # Row Types and Table Definitions
 # ============================================================================
 
+SerializedGrant = dict[str, typing.Any]
+
 
 class AuthRow(typing.NamedTuple):
     id: typing.Annotated[int, db.Col(primary_key=True)]
     name: typing.Annotated[str, db.Col(unique=True, index=True)]
-    description: typing.Annotated[str, db.Col(server_default="")]
-    tag_id_list: dict[str, typing.Any]
+    description: str
+    tag_id_list: list[int]
     created_at: int
     is_enabled: bool
     type: str
@@ -159,7 +161,7 @@ class RoleRow(typing.NamedTuple):
     id: typing.Annotated[int, db.Col(primary_key=True)]
     name: str
     description: str
-    grant_list: dict[str, typing.Any]
+    grant_list: list[SerializedGrant]
 
 
 role = db.make_table("role", metadata, RoleRow, sqlite_autoincrement=True)
@@ -174,12 +176,13 @@ class RoleMemberRow(typing.NamedTuple):
 role_member = db.make_table("role_member", metadata, RoleMemberRow)
 
 
+
 class BoundaryRow(typing.NamedTuple):
     id: typing.Annotated[int, db.Col(primary_key=True)]
     name: str
     description: str
-    ceiling_list: dict[str, typing.Any]
-    denied_list: dict[str, typing.Any]
+    ceiling_list: list[SerializedGrant] | None
+    denied_list: list[SerializedGrant]
 
 
 boundary = db.make_table("boundary", metadata, BoundaryRow, sqlite_autoincrement=True)
@@ -215,7 +218,7 @@ class BastionRow(typing.NamedTuple):
     register_url: str
     connect_url: str | None
     ssh_proxy_jump: str | None
-    tag_id_list: typing.Annotated[list[int], db.Col(server_default="[]")]
+    tag_id_list: list[int]
     created_at: int
     created_by_id: int | None
 

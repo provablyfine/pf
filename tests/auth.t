@@ -75,7 +75,7 @@ Create an oidc auth config without client-id (should fail)
   pfa auth create oidc: error: the following arguments are required: --client-id
 
 Update auth config name
-  $ pfa -c config.json auth update http_sig -i 2 --name corp-http-sig
+  $ pfa -c config.json auth update -i 2 --name corp-http-sig
   $ pfa -c config.json auth read -i 2
   id           2
   name         corp-http-sig
@@ -86,7 +86,7 @@ Update auth config name
   tags
 
 Update auth config description
-  $ pfa -c config.json auth update http_sig -i 2 --description "Corporate HTTP signature auth"
+  $ pfa -c config.json auth update -i 2 --description "Corporate HTTP signature auth"
   $ pfa -c config.json auth read -i 2
   id           2
   name         corp-http-sig
@@ -97,7 +97,7 @@ Update auth config description
   tags
 
 Disable an auth config
-  $ pfa -c config.json auth update http_sig -i 2 --disable
+  $ pfa -c config.json auth update -i 2 --disable
   $ pfa -c config.json auth read -i 2
   id           2
   name         corp-http-sig
@@ -108,7 +108,7 @@ Disable an auth config
   tags
 
 Re-enable an auth config
-  $ pfa -c config.json auth update http_sig -i 2 --enable
+  $ pfa -c config.json auth update -i 2 --enable
   $ pfa -c config.json auth read -i 2
   id           2
   name         corp-http-sig
@@ -118,27 +118,13 @@ Re-enable an auth config
   created_at   .* (re)
   tags
 
-Update oidc params
-  $ pfa -c config.json auth update oidc -i 3 --issuer https://login.microsoftonline.com/common --client-id other-client-id
-  $ pfa -c config.json auth read -i 3
-  id            3
-  name          google
-  type          oidc
-  description
-  enabled       True
-  created_at    .* (re)
-  tags
-  issuer        https://login.microsoftonline.com/common
-  client_id     other-client-id
-  callback_url  http://127.0.0.1/callback
-
 Public discovery endpoint returns correct data for http_sig
-  $ curl -s http://127.0.0.1:$API_PORT/pf/t/root/public/auth/default | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['name'], d['type'], d['params'])"
-  default http_sig {}
+  $ curl -s http://127.0.0.1:$API_PORT/pf/t/root/public/auth/default && echo ""
+  {"name":"default","description":"Default HTTP signature authentication","config":{"type":"http_sig"}}
 
 Public discovery endpoint returns correct data for oidc
-  $ curl -s http://127.0.0.1:$API_PORT/pf/t/root/public/auth/google | python3 -c "import sys,json; d=json.load(sys.stdin); p=d['params']; print(d['name'], d['type'], p['issuer'], p['client_id'], p['callback_url'])"
-  google oidc https://login.microsoftonline.com/common other-client-id http://127.0.0.1/callback
+  $ curl -s http://127.0.0.1:$API_PORT/pf/t/root/public/auth/google && echo ""
+  {"name":"google","description":"","config":{"issuer":"https://accounts.google.com","client_id":"my-client-id","client_secret":null,"callback_url":"http://127.0.0.1/callback","type":"oidc"}}
 
 Create an oauth2-github auth config
   $ pfa -c config.json auth create oauth2-github -n corp-oauth2 --client-id my-app --client-secret s3cr3t
@@ -161,8 +147,11 @@ Create an oauth2-github auth config without client-secret (should fail)
   pfa auth create oauth2-github: error: the following arguments are required: --client-secret
 
 Public discovery endpoint returns oauth2-github data without client_secret
-  $ curl -s http://127.0.0.1:$API_PORT/pf/t/root/public/auth/corp-oauth2 | python3 -c "import sys,json; d=json.load(sys.stdin); p=d['params']; print(d['name'], d['type'], p['authorization_endpoint'], p['client_id'], 'callback' in p['callback_url'])"
-  corp-oauth2 oauth2-github https://github.com/login/oauth/authorize my-app True
+  $ curl -s http://127.0.0.1:$API_PORT/pf/t/root/public/auth/corp-oauth2 | jq -r ".name,.config.client_id,.config.authorization_endpoint,.config.type"
+  corp-oauth2
+  my-app
+  https://github.com/login/oauth/authorize
+  oauth2-github
 
 Delete the oauth2 auth config
   $ pfa -c config.json auth delete -i 4
@@ -172,10 +161,10 @@ Public discovery endpoint returns 404 for unknown name
   404
 
 Public discovery endpoint returns 404 for disabled auth config
-  $ pfa -c config.json auth update oidc -i 3 --disable
+  $ pfa -c config.json auth update -i 3 --disable
   $ curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:$API_PORT/pf/t/root/public/auth/google
   404
-  $ pfa -c config.json auth update oidc -i 3 --enable
+  $ pfa -c config.json auth update -i 3 --enable
 
 Read a non-existent auth config
   $ pfa -c config.json auth read -i 999
@@ -183,7 +172,7 @@ Read a non-existent auth config
   [2]
 
 Update a non-existent auth config
-  $ pfa -c config.json auth update http_sig -i 999 --name whatever
+  $ pfa -c config.json auth update -i 999 --name whatever
   Auth config not found
   [2]
 

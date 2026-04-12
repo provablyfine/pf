@@ -285,7 +285,7 @@ def login(
         raise client.exceptions.UI(f"Unable to read auth config: {response.text}")
     auth_public = response.json()
 
-    match auth_public["type"]:
+    match auth_public["config"]["type"]:
         case "http_sig":
             session_fingerprint = http_sig_login(api, config, config.account_key, session_key_path)
         case "oidc":

@@ -3,7 +3,7 @@ import typing
 
 
 class Sortable(typing.Protocol):
-    def __lt__(self, other: typing.Any) -> bool: ...
+    def __lt__(self, __other: typing.Any) -> bool: ...
 
 
 def group_by[T, K: Sortable](
