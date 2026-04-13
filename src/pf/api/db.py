@@ -1,4 +1,4 @@
-import collections
+from __future__ import annotations
 import dataclasses
 import logging
 import types
@@ -46,14 +46,11 @@ class Table[T]:
         self,
         connection: sqlalchemy.engine.Connection,
         table: sqlalchemy.Table,
-        row_type: type[T] | None = None,
+        row_type: type[T],
     ) -> None:
         self._connection = connection
         self._table = table
-        names = [col_name for col_name in table.columns.keys()]
-        # If row_type is provided (typed Dao), use it to construct rows.
-        # Otherwise, fall back to dynamic namedtuple (untyped Dao.__getattr__ path).
-        self._tup: type = row_type if row_type is not None else collections.namedtuple(table.name, names)  # type: ignore[misc]
+        self._row_type = row_type
         self.columns = types.SimpleNamespace(**dict(table.columns))  # type: ignore[misc]
 
     @property
@@ -86,16 +83,16 @@ class Table[T]:
         statement = self._where(statement, *args, **kwargs)
         rows = self._connection.execute(statement)
         for row in rows:
-            return self._tup(*row)  # type: ignore[return-value]
+            return self._row_type(*row)
         return None
 
     def read_all(self, *args: typing.Any, **kwargs: typing.Any) -> list[T]:
         statement = self._table.select()
         statement = self._where(statement, *args, **kwargs)
         rows = self._connection.execute(statement)
-        return [self._tup(*row) for row in rows]  # type: ignore[misc]
+        return [self._row_type(*row) for row in rows]
 
-    def update(self, **kwargs: typing.Any) -> "Update":
+    def update(self, **kwargs: typing.Any) -> Update:
         statement = self._table.update().values(**kwargs)
         return Update(self, statement)
 
@@ -131,16 +128,6 @@ class Dao:
         if name not in self._tables:
             self._tables[name] = Table(self._connection, table_def.table, table_def.row_type)
         return self._tables[name]  # type: ignore[return-value]
-
-    def __getattr__(self, name: str) -> Table[typing.Any]:
-        table = self._tables.get(name)
-        if table is not None:
-            return table
-        if name not in self._metadata.tables:
-            raise AttributeError(f"Table '{name}' not found")
-        table = Table[typing.Any](self._connection, self._metadata.tables[name])
-        self._tables[name] = table
-        return table
 
 
 def create(connection: sqlalchemy.engine.Connection, metadata: sqlalchemy.MetaData) -> Dao:
