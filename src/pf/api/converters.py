@@ -562,8 +562,7 @@ def auth_config_to_schema(ac: model.auth_config.AuthConfig) -> schemas.Auth:
 
 def auth_config_to_public_schema(ac: model.auth_config.AuthConfig) -> schemas.AuthPublic:
     config = _auth_config_to_config(ac)
-    converter = GrantConverter()
-    return schemas.Auth(
+    return schemas.AuthPublic(
         name=ac.name,
         description=ac.description,
         config=config,

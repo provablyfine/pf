@@ -14,7 +14,7 @@ router = fastapi.APIRouter(prefix="/tenant", dependencies=[fastapi.Depends(signa
 _204 = fastapi.responses.Response(status_code=204)
 
 
-def _row_to_schema(row: app_db.TenantRow) -> schemas.TenantReadResponse:
+def _row_to_schema(row: registry_db.TenantRow) -> schemas.TenantReadResponse:
     return schemas.TenantReadResponse(
         id=row.id,
         name=row.name,
@@ -27,7 +27,7 @@ def _row_to_schema(row: app_db.TenantRow) -> schemas.TenantReadResponse:
     )
 
 
-def _ownership_filter(rows, tenant_id: int):
+def _ownership_filter(rows: list[registry_db.TenantRow], tenant_id: int) -> list[registry_db.TenantRow]:
     return [r for r in rows if r.id == tenant_id or r.owner_id == tenant_id]
 
 
@@ -38,7 +38,7 @@ def list_endpoint(
     all_rows = reg_db.tenant.read_all()
     rows = _ownership_filter(all_rows, ctx.tenant_id)
     grants = grant.Grants.create()
-    output = []
+    output: list[schemas.TenantReadResponse] = []
     for row in rows:
         if grants.tenant(row.id).can_read():
             output.append(_row_to_schema(row))

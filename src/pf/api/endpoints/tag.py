@@ -19,16 +19,11 @@ def list_endpoint(id: int | None = None, name: str | None = None, value: str | N
         query["name"] = name
     if value is not None:
         query["value"] = value
-    tags = ctx.app_db.tag.read_all(**query)
 
     grants = grant.Grants.create()
-    output = []
-    for tag in tags:
-        if not grants.tag(tag.id).can_read():
-            continue
-        output.append(tag)
+    tags = [t for t in ctx.app_db.tag.read_all(**query) if grants.tag(t.id).can_read()]
 
-    return schemas.TagListResponse(tags=[converters.tag_to_schema(tag) for tag in output])
+    return schemas.TagListResponse(tags=[converters.tag_to_schema(tag) for tag in tags])
 
 
 @router.post("", status_code=201, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
@@ -44,6 +39,7 @@ def create_endpoint(data: schemas.TagCreateRequest) -> schemas.Tag:
     except sqlalchemy.exc.IntegrityError:
         raise responses.ProblemHTTPException(responses.problem_response(status_code=400, title="Tag already exists"))
     tag = ctx.app_db.tag.read_one(id=tag_id)
+    assert tag is not None
     return converters.tag_to_schema(tag)
 
 

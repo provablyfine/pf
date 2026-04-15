@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import typing
 
 import fastapi
 import fastapi.responses
@@ -38,16 +39,11 @@ def list_endpoint(
         query["boundary_id"] = boundary_id
     if boundary_name is not None:
         query["boundary_name"] = boundary_name
-    identities = model.identity.read_all(**query)
 
-    output = []
     grants = grant.Grants.create()
-    for identity in identities:
-        if not grants.identity(identity.id, identity.tag_id_list, identity.boundary_id_list).can_read():
-            continue
-        output.append(identity)
-
-    return schemas.IdentityListResponse(identities=converters.identity_list_to_schema(output))
+    identities = model.identity.read_all(**query)
+    identities = [i for i in identities if grants.identity(i.id, i.tag_id_list, i.boundary_id_list).can_read()]
+    return schemas.IdentityListResponse(identities=converters.identity_list_to_schema(identities))
 
 
 @router.get("/self", status_code=200, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
@@ -99,7 +95,7 @@ def _read_boundary_ids(boundary_id_list: list[int], boundary_name_list: list[str
 
 
 def _read_tag_ids(tag_id_list: list[int], tag_name_value_list: list[schemas.IdentityTagNameValue]) -> list[int]:
-    id_list = []
+    id_list: list[int] = []
     for tag in tag_name_value_list:
         db_tag = ctx.app_db.tag.read_one(name=tag.name, value=tag.value)
         if db_tag is None:
@@ -191,7 +187,11 @@ def _403_tag() -> responses.ProblemHTTPException:
     )
 
 
-def _check_set_tags(permission_request, current_tag_id_list, new_tag_ids):
+def _check_set_tags(
+    permission_request: grant.IdentityChecker,
+    current_tag_id_list: list[int],
+    new_tag_ids: set[int],
+) -> tuple[list[int], list[int]]:
     current_tag_ids = set(current_tag_id_list)
     added_tag_id_list = list(new_tag_ids.difference(current_tag_ids))
     deleted_tag_id_list = list(current_tag_ids.difference(new_tag_ids))
@@ -200,13 +200,13 @@ def _check_set_tags(permission_request, current_tag_id_list, new_tag_ids):
     return added_tag_id_list, deleted_tag_id_list
 
 
-def _check_add_tags(permission_request, tag_id_list):
+def _check_add_tags(permission_request: grant.IdentityChecker, tag_id_list: list[int]) -> None:
     for tag_id in tag_id_list:
         if not permission_request.can_add_tag(tag_id):
             raise _403_tag()
 
 
-def _check_del_tags(permission_request, tag_id_list):
+def _check_del_tags(permission_request: grant.IdentityChecker, tag_id_list: list[int]) -> None:
     for tag_id in tag_id_list:
         if not permission_request.can_del_tag(tag_id):
             raise _403_tag()
@@ -231,7 +231,7 @@ def update_endpoint(identity_id: int, data: schemas.IdentityUpdateRequest) -> sc
 
     grants = grant.Grants.create()
     permission_request = grants.identity(identity.id, identity.tag_id_list, identity.boundary_id_list)
-    update_params = {}
+    update_params: dict[str, typing.Any] = {}
     if "name" in data.model_fields_set:
         if not permission_request.can_update("name"):
             raise responses.ProblemHTTPException(

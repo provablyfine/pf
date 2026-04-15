@@ -1,3 +1,5 @@
+import typing
+
 import fastapi
 import fastapi.responses
 import sqlalchemy.exc
@@ -17,17 +19,11 @@ def list_endpoint(name: str | None = None, id: int | None = None) -> schemas.Rol
         query["name"] = name
     if id is not None:
         query["id"] = id
-    roles = model.role.read_all(**query)
 
-    output = []
     grants = grant.Grants.create()
-    for role in roles:
-        if not grants.role(role.id).can_read():
-            continue
-        output.append(role)
-
+    roles = [r for r in model.role.read_all(**query) if grants.role(r.id).can_read()]
     converter = converters.GrantConverter()
-    return schemas.RoleListResponse(roles=[converters.role_to_schema(converter, r) for r in output])
+    return schemas.RoleListResponse(roles=[converters.role_to_schema(converter, r) for r in roles])
 
 
 @router.post("", status_code=201, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
@@ -96,7 +92,7 @@ def update_endpoint(role_id: int, data: schemas.RoleUpdateRequest) -> schemas.Ro
             )
 
     converter = converters.GrantConverter()
-    role_update = {}
+    role_update: dict[str, typing.Any] = {}
     if "name" in data.model_fields_set and data.name != role.name:
         role_update["name"] = data.name
     if "description" in data.model_fields_set and data.description != role.description:

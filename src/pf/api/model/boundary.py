@@ -15,7 +15,7 @@ class Boundary:
     denied_list: list[grant.Grant]
 
 
-def create(name: str, description: str, ceiling_list: list[grant.Grant] | None, denied_list: list[grant.Grant]) -> int:
+def create(name: str, description: str, ceiling_list: typing.Sequence[grant.Grant] | None, denied_list: list[grant.Grant]) -> int:
     db_ceiling_list = None if ceiling_list is None else [grant.serialize(g) for g in ceiling_list]
     db_denied_list = [grant.serialize(g) for g in denied_list]
     boundary_id = ctx.app_db.boundary.create(

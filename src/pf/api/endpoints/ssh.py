@@ -37,7 +37,7 @@ def sign_host_certificate(data: schemas.SSHHostCertificateRequest) -> schemas.SS
     serial_number = signer.serial_number
     now = int(time.time())
 
-    certificates = []
+    certificates: list[ssh.cert.Cert] = []
     for key in data.public_keys:
         public_key = converters.public_from_schema(key)
         cert = ssh.cert.Cert.create_host(

@@ -17,7 +17,7 @@ class Role:
     member_id_list: list[int]
 
 
-def create(name: str, description: str, grant_list: list[grant.Grant]) -> int:
+def create(name: str, description: str, grant_list: typing.Sequence[grant.Grant]) -> int:
     grants = [grant.serialize(g) for g in grant_list]
     role_id = ctx.app_db.role.create(
         name=name,
