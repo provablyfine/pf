@@ -154,18 +154,10 @@ class IdentityPermission(APIBase):
     invite_list: list[str] | None
 
 
-class IdentityFilter(TripletFilter):
-    pass
-
-
 class IdentityGrant(APIBase):
     type: typing.Literal["identity"] = "identity"
-    filter: IdentityFilter
+    filter: TripletFilter
     permission: IdentityPermission
-
-
-class SSHFilter(TripletFilter):
-    pass
 
 
 class SSHShellPermission(APIBase):
@@ -176,7 +168,7 @@ class SSHShellPermission(APIBase):
 
 class SSHShellGrant(APIBase):
     type: typing.Literal["ssh-shell"] = "ssh-shell"
-    filter: SSHFilter
+    filter: TripletFilter
     permission: SSHShellPermission
 
 
@@ -186,7 +178,7 @@ class SSHPortForwardingPermission(APIBase):
 
 class SSHPortForwardingGrant(APIBase):
     type: typing.Literal["ssh-port-forwarding"] = "ssh-port-forwarding"
-    filter: SSHFilter
+    filter: TripletFilter
     permission: SSHPortForwardingPermission
 
 
@@ -197,7 +189,7 @@ class SSHCommandPermission(APIBase):
 
 class SSHCommandGrant(APIBase):
     type: typing.Literal["ssh-command"] = "ssh-command"
-    filter: SSHFilter
+    filter: TripletFilter
     permission: SSHCommandPermission
 
 

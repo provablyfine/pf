@@ -6,13 +6,13 @@ from ..context import ctx
 from . import audit_log
 
 
-def create(key_id: int, **kwargs: typing.Any) -> None:
+def create(key_id: str, **kwargs: typing.Any) -> None:
     now = int(time.time())
     ctx.app_db.public_key_denylist.create(key_id=key_id, created_at=now)
     audit_log.create_warning(type="denylist-add", public_key_id=key_id, **kwargs)
 
 
-def enforce_not_denied(key_id: int) -> None:
+def enforce_not_denied(key_id: str) -> None:
     denylist_entry = ctx.app_db.public_key_denylist.read_one(key_id=key_id)
     if denylist_entry:
         # Purposedly return an error that is not very clear

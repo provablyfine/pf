@@ -244,7 +244,7 @@ def _grant_to_schema(converter: GrantConverter, grant: model.grant.Grant) -> sch
             )
             g = schemas.IdentityGrant(filter=filter, permission=permission)
         case "ssh-shell":
-            filter = schemas.SSHFilter(
+            filter = schemas.TripletFilter(
                 name=converter.to_identity(grant.filter.id),
                 tag_list=converter.to_tag_list(grant.filter.tag_id_list),
                 boundary_list=converter.to_boundary_list(grant.filter.boundary_id_list),
@@ -256,7 +256,7 @@ def _grant_to_schema(converter: GrantConverter, grant: model.grant.Grant) -> sch
             )
             g = schemas.SSHShellGrant(filter=filter, permission=permission)
         case "ssh-port-forwarding":
-            filter = schemas.SSHFilter(
+            filter = schemas.TripletFilter(
                 name=converter.to_identity(grant.filter.id),
                 tag_list=converter.to_tag_list(grant.filter.tag_id_list),
                 boundary_list=converter.to_boundary_list(grant.filter.boundary_id_list),
@@ -266,7 +266,7 @@ def _grant_to_schema(converter: GrantConverter, grant: model.grant.Grant) -> sch
             )
             g = schemas.SSHPortForwardingGrant(filter=filter, permission=permission)
         case "ssh-command":
-            filter = schemas.SSHFilter(
+            filter = schemas.TripletFilter(
                 name=converter.to_identity(grant.filter.id),
                 tag_list=converter.to_tag_list(grant.filter.tag_id_list),
                 boundary_list=converter.to_boundary_list(grant.filter.boundary_id_list),
