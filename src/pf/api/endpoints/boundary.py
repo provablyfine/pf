@@ -1,3 +1,5 @@
+import typing
+
 import fastapi
 import fastapi.responses
 import sqlalchemy.exc
@@ -20,7 +22,7 @@ def list_endpoint(id: int | None = None, name: str | None = None) -> schemas.Bou
     boundaries = model.boundary.read_all(**query)
 
     grants = grant.Grants.create()
-    output = []
+    output: list[model.boundary.Boundary] = []
     for boundary in boundaries:
         if not grants.boundary(boundary.id).can_read():
             continue
@@ -107,7 +109,7 @@ def update_endpoint(boundary_id: int, data: schemas.BoundaryUpdateRequest) -> sc
                 responses.problem_response(status_code=403, title="Not allowed to update boundary field", detail=field)
             )
 
-    update_query = {}
+    update_query: dict[str, typing.Any] = {}
     converter = converters.GrantConverter()
     if "name" in data.model_fields_set:
         update_query["name"] = data.name

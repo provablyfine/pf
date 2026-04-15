@@ -525,7 +525,7 @@ def identity_to_schema(identity: model.identity.Identity) -> schemas.Identity:
     return identity_list_to_schema([identity])[0]
 
 
-def auth_config_to_schema(ac: model.auth_config.AuthConfig, tenant_name: str) -> schemas.Auth:
+def _auth_config_to_config(ac: model.auth_config.AuthConfig) -> schemas.AuthConfig:
     if ac.type == "oidc":
         config = schemas.OidcConfig(
             issuer=ac.config["issuer"],
@@ -533,7 +533,7 @@ def auth_config_to_schema(ac: model.auth_config.AuthConfig, tenant_name: str) ->
             client_secret=ac.config.get("client_secret"),
         )
     elif ac.type in oauth2_providers.PROVIDER_CONFIG:
-        callback_url = f"{ctx.config.base_url}/pf/t/{tenant_name}/auth/oauth2/callback"
+        callback_url = f"{ctx.config.base_url}/pf/t/{ctx.tenant_name}/auth/oauth2/callback"
         config = schemas.OAuth2Config(
             client_id=ac.config["client_id"],
             authorization_endpoint=oauth2_providers.PROVIDER_CONFIG[ac.type]["authorization_endpoint"],
@@ -543,6 +543,11 @@ def auth_config_to_schema(ac: model.auth_config.AuthConfig, tenant_name: str) ->
         config = schemas.HttpSigConfig()
     else:
         assert False
+    return config
+
+
+def auth_config_to_schema(ac: model.auth_config.AuthConfig) -> schemas.Auth:
+    config = _auth_config_to_config(ac)
     converter = GrantConverter()
     return schemas.Auth(
         id=ac.id,
@@ -551,6 +556,16 @@ def auth_config_to_schema(ac: model.auth_config.AuthConfig, tenant_name: str) ->
         tags=converter.to_tag_list(ac.tag_id_list) or [],
         created_at=ac.created_at,
         is_enabled=ac.is_enabled,
+        config=config,
+    )
+
+
+def auth_config_to_public_schema(ac: model.auth_config.AuthConfig) -> schemas.AuthPublic:
+    config = _auth_config_to_config(ac)
+    converter = GrantConverter()
+    return schemas.Auth(
+        name=ac.name,
+        description=ac.description,
         config=config,
     )
 
