@@ -60,7 +60,7 @@ def _provision(allow_tenant_create: bool):
         ),
     )
     identity_grant_all = model.grant.IdentityGrant(
-        filter=model.grant.IdentityFilter(id=None, tag_id_list=None, boundary_id_list=None),
+        filter=model.grant.TripletFilter(id=None, tag_id_list=None, boundary_id_list=None),
         permission=model.grant.IdentityPermission(
             create=model.grant.IdentityCreatePermission(
                 allowed=True, allowed_tag_id_list=None, required_boundary_id_list=None

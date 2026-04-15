@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import typing
 
 from . import model
 from .context import ctx
@@ -8,123 +9,136 @@ from .context import ctx
 logger = logging.getLogger(__name__)
 
 
-class Checker:
-    def __init__(self, boundaries: list[model.boundary.Boundary], roles: list[model.role.Role], filter):
+class Checker[G]:
+    def __init__(self, boundaries: list[model.boundary.Boundary], roles: list[model.role.Role], filter: typing.Callable[[G], bool], cls: type[G]):
         self._boundaries = boundaries
         self._roles = roles
         self._filter = filter
+        self._cls = cls
 
-    def list_can(self, cmp) -> list:
+    def list_can(self, cmp: typing.Callable[[G], bool]) -> list[G]:
         for boundary in self._boundaries:
-            if any(self._filter(denied.filter) and cmp(denied.permission) for denied in boundary.denied_list):
+            if any(isinstance(g, self._cls) and self._filter(g) and cmp(g) for g in boundary.denied_list):
                 logger.info(f"request denied by boundary id={boundary.id}")
                 return []
+
             if boundary.ceiling_list is not None and not any(
-                self._filter(ceiling.filter) and cmp(ceiling.permission) for ceiling in boundary.ceiling_list
+                isinstance(g, self._cls) and self._filter(g) and cmp(g) for g in boundary.ceiling_list
             ):
                 logger.info(f"request above ceiling of boundary id={boundary.id}")
                 return []
-        allowed = []
+        allowed: list[G] = []
         for role in self._roles:
-            for grant in role.grant_list:
-                if self._filter(grant.filter) and cmp(grant.permission):
-                    allowed.append(grant)
+            for g in role.grant_list:
+                if isinstance(g, self._cls) and self._filter(g) and cmp(g):
+                    allowed.append(g)
         if len(allowed) == 0:
             logger.info("request not allowed by any role")
         return allowed
 
-    def can(self, cmp) -> bool:
+    def can(self, cmp: typing.Callable[[G], bool]) -> bool:
         allowed = self.list_can(cmp)
         return len(allowed) > 0
 
 
+
 class TagChecker:
     def __init__(self, boundaries: list[model.boundary.Boundary], roles: list[model.role.Role], tag_id: int | None):
-        def cmp(filter: model.grant.TagFilter) -> bool:
-            if not isinstance(filter, model.grant.TagFilter):
-                return False
-            if filter.id is not None and filter.id != tag_id:
+        def cmp(g: model.grant.TagGrant) -> bool:
+            if g.filter.id is not None and g.filter.id != tag_id:
                 return False
             return True
 
-        self._checker = Checker(boundaries, roles, cmp)
+        self._checker = Checker[model.grant.TagGrant](boundaries, roles, cmp, model.grant.TagGrant)
 
     def can_create(self) -> bool:
-        return self._checker.can(lambda p: p.create)
+        def check(g: model.grant.TagGrant):
+            return g.permission.create
+        return self._checker.can(check)
 
     def can_read(self) -> bool:
-        return self._checker.can(lambda p: p.read)
+        def check(g: model.grant.TagGrant):
+            return g.permission.read
+        return self._checker.can(check)
 
     def can_delete(self) -> bool:
-        return self._checker.can(lambda p: p.delete)
+        def check(g: model.grant.TagGrant):
+            return g.permission.delete
+        return self._checker.can(check)
 
 
 class BoundaryChecker:
     def __init__(
         self, boundaries: list[model.boundary.Boundary], roles: list[model.role.Role], boundary_id: int | None
     ):
-        def cmp(filter: model.grant.BoundaryFilter) -> bool:
-            if not isinstance(filter, model.grant.BoundaryFilter):
-                return False
-            if filter.id is not None and filter.id != boundary_id:
+        def cmp(g: model.grant.BoundaryGrant) -> bool:
+            if g.filter.id is not None and g.filter.id != boundary_id:
                 return False
             return True
 
-        self._checker = Checker(boundaries, roles, cmp)
+        self._checker = Checker[model.grant.BoundaryGrant](boundaries, roles, cmp, model.grant.BoundaryGrant)
 
     def can_create(self) -> bool:
-        return self._checker.can(lambda p: p.create)
+        def check(g: model.grant.BoundaryGrant):
+            return g.permission.create
+        return self._checker.can(check)
 
     def can_read(self) -> bool:
-        return self._checker.can(lambda p: p.read)
+        def check(g: model.grant.BoundaryGrant):
+            return g.permission.read
+        return self._checker.can(check)
 
     def can_update(self, field: str) -> bool:
         assert field in ["name", "description", "denied_list", "ceiling_list"], (
             "You tried to update a field that does not exist"
         )
 
-        def check(p) -> bool:
-            if p.update is None:
+        def check(g: model.grant.BoundaryGrant) -> bool:
+            if g.permission.update is None:
                 return True
-            return getattr(p.update, field)
-
+            return getattr(g.permission.update, field)
         return self._checker.can(check)
 
     def can_delete(self) -> bool:
-        return self._checker.can(lambda p: p.delete)
+        def check(g: model.grant.BoundaryGrant):
+            return g.permission.delete
+        return self._checker.can(check)
 
 
 class RoleChecker:
     def __init__(self, boundaries: list[model.boundary.Boundary], roles: list[model.role.Role], role_id: int | None):
-        def cmp(filter: model.grant.RoleFilter) -> bool:
-            if not isinstance(filter, model.grant.RoleFilter):
-                return False
-            if filter.id is not None and filter.id != role_id:
+        def cmp(g: model.grant.RoleGrant) -> bool:
+            if g.filter.id is not None and g.filter.id != role_id:
                 return False
             return True
 
-        self._checker = Checker(boundaries, roles, cmp)
+        self._checker = Checker[model.grant.RoleGrant](boundaries, roles, cmp, model.grant.RoleGrant)
 
     def can_create(self) -> bool:
-        return self._checker.can(lambda p: p.create)
+        def check(g: model.grant.RoleGrant) -> bool:
+            return g.permission.create
+        return self._checker.can(check)
 
     def can_read(self) -> bool:
-        return self._checker.can(lambda p: p.read)
+        def check(g: model.grant.RoleGrant) -> bool:
+            return g.permission.read
+        return self._checker.can(check)
 
     def can_update(self, field: str) -> bool:
         assert field in ["name", "description", "member_list", "grant_list"], (
             "You tried to update a field that does not exist"
         )
 
-        def check(p) -> bool:
-            if p.update is None:
+        def check(g: model.grant.RoleGrant) -> bool:
+            if g.permission.update is None:
                 return True
-            return getattr(p.update, field)
-
+            return getattr(g.permission.update, field)
         return self._checker.can(check)
 
     def can_delete(self) -> bool:
-        return self._checker.can(lambda p: p.delete)
+        def check(g: model.grant.RoleGrant) -> bool:
+            return g.permission.delete
+        return self._checker.can(check)
 
 
 class IdentityChecker:
@@ -136,35 +150,35 @@ class IdentityChecker:
         tag_id_list: list[int] | None = None,
         boundary_id_list: list[int] | None = None,
     ):
-        def cmp(filter: model.grant.Filter) -> bool:
-            if not isinstance(filter, model.grant.IdentityFilter):
+        def cmp(g: model.grant.IdentityGrant) -> bool:
+            if g.filter.id is not None and g.filter.id != identity_id:
                 return False
-            if filter.id is not None and filter.id != identity_id:
-                return False
-            if filter.tag_id_list is not None:
+            if g.filter.tag_id_list is not None:
                 if tag_id_list is None:
                     return False
-                if not all(tag_id in tag_id_list for tag_id in filter.tag_id_list):
+                if not all(tag_id in tag_id_list for tag_id in g.filter.tag_id_list):
                     return False
-            if filter.boundary_id_list is not None:
+            if g.filter.boundary_id_list is not None:
                 if boundary_id_list is None:
                     return False
-                if not all(boundary_id in boundary_id_list for boundary_id in filter.boundary_id_list):
+                if not all(boundary_id in boundary_id_list for boundary_id in g.filter.boundary_id_list):
                     return False
             return True
 
-        self._checker = Checker(boundaries, roles, cmp)
+        self._checker = Checker[model.grant.IdentityGrant](boundaries, roles, cmp, model.grant.IdentityGrant)
 
     def can_create(self, tag_id_list: list[int], boundary_id_list: list[int]) -> bool:
-        def check(p) -> bool:
-            if not p.create.allowed:
+        def check(g: model.grant.IdentityGrant) -> bool:
+            if g.permission.create is None:
+                return True
+            if not g.permission.create.allowed:
                 return False
-            if p.create.allowed_tag_id_list is not None and not all(
-                tag_id in p.create.allowed_tag_id_list for tag_id in tag_id_list
+            if g.permission.create.allowed_tag_id_list is not None and not all(
+                tag_id in g.permission.create.allowed_tag_id_list for tag_id in tag_id_list
             ):
                 return False
-            if p.create.required_boundary_id_list is not None and not all(
-                boundary_id in boundary_id_list for boundary_id in p.create.required_boundary_id_list
+            if g.permission.create.required_boundary_id_list is not None and not all(
+                boundary_id in boundary_id_list for boundary_id in g.permission.create.required_boundary_id_list
             ):
                 # Note how the semantics of this are oh so very slightly different
                 # from the semantics of allowed_tag_id_list because the above for loop
@@ -189,78 +203,106 @@ class IdentityChecker:
         return self._checker.can(check)
 
     def can_read(self) -> bool:
-        return self._checker.can(lambda p: p.read)
+        def check(g: model.grant.IdentityGrant) -> bool:
+            return g.permission.read
+        return self._checker.can(check)
 
     def can_update(self, field: str) -> bool:
         assert field == "name", "You are not allowed to update any field but the name field."
 
-        def check(p) -> bool:
-            if p.update is None:
+        def check(g: model.grant.IdentityGrant) -> bool:
+            if g.permission.update is None:
                 return True
-            return getattr(p.update, field)
+            return getattr(g.permission.update, field)
 
         return self._checker.can(check)
 
     def can_delete(self) -> bool:
-        return self._checker.can(lambda p: p.delete)
+        def check(g: model.grant.IdentityGrant) -> bool:
+            return g.permission.delete
+        return self._checker.can(check)
 
     def can_add_tag(self, tag_id: int) -> bool:
-        def check(p) -> bool:
-            if p.add_tag_id_list is None:
+        def check(g: model.grant.IdentityGrant) -> bool:
+            if g.permission.add_tag_id_list is None:
                 return True
-            return tag_id in p.add_tag_id_list
-
+            return tag_id in g.permission.add_tag_id_list
         return self._checker.can(check)
 
     def can_del_tag(self, tag_id: int) -> bool:
-        def check(p) -> bool:
-            if p.del_tag_id_list is None:
+        def check(g: model.grant.IdentityGrant) -> bool:
+            if g.permission.del_tag_id_list is None:
                 return True
-            return tag_id in p.del_tag_id_list
+            return tag_id in g.permission.del_tag_id_list
 
         return self._checker.can(check)
 
     def can_invite(self, delivery: str) -> bool:
-        def check(p) -> bool:
-            if p.invite_list is None:
+        def check(g: model.grant.IdentityGrant) -> bool:
+            if g.permission.invite_list is None:
                 return True
-            return delivery in p.invite_list
+            return delivery in g.permission.invite_list
 
         return self._checker.can(check)
 
 
 class TenantChecker:
     def __init__(self, boundaries: list[model.boundary.Boundary], roles: list[model.role.Role], tenant_id: int | None):
-        def cmp(filter: model.grant.Filter) -> bool:
-            if not isinstance(filter, model.grant.TenantFilter):
-                return False
-            if filter.id is not None and filter.id != tenant_id:
+        def cmp(g: model.grant.TenantGrant) -> bool:
+            if g.filter.id is not None and g.filter.id != tenant_id:
                 return False
             return True
-
-        self._checker = Checker(boundaries, roles, cmp)
+        self._checker = Checker[model.grant.TenantGrant](boundaries, roles, cmp, model.grant.TenantGrant)
 
     def can_create(self) -> bool:
-        return self._checker.can(lambda p: p.create)
+        def check(g: model.grant.TenantGrant):
+            return g.permission.create
+        return self._checker.can(check)
 
     def can_read(self) -> bool:
-        return self._checker.can(lambda p: p.read)
+        def check(g: model.grant.TenantGrant):
+            return g.permission.read
+        return self._checker.can(check)
 
     def can_update(self, field: str) -> bool:
         assert field in ["display_name", "is_enabled"]
-
-        def check(p) -> bool:
-            if p.update is None:
+        def check(g: model.grant.TenantGrant):
+            if g.permission.update is None:
                 return True
-            return getattr(p.update, field)
-
+            return getattr(g.permission.update, field)
         return self._checker.can(check)
 
     def can_delete(self) -> bool:
-        return self._checker.can(lambda p: p.delete)
+        def check(g: model.grant.TenantGrant):
+            return g.permission.delete
+        return self._checker.can(check)
 
 
-class SSHChecker:
+class IdentityFilterChecker[G: model.grant.TripletGrant](Checker[G]):
+    def __init__(
+        self,
+        boundaries: list[model.boundary.Boundary],
+        roles: list[model.role.Role],
+        identity_id: int,
+        tag_id_list: list[int],
+        boundary_id_list: list[int],
+        cls: type[G]
+    ):
+        def cmp(g: G) -> bool:
+            if g.filter.id is not None and g.filter.id != identity_id:
+                return False
+            if g.filter.tag_id_list is not None and not all(tag_id in tag_id_list for tag_id in g.filter.tag_id_list):
+                return False
+            if g.filter.boundary_id_list is not None and not all(
+                boundary_id in boundary_id_list for boundary_id in g.filter.boundary_id_list
+            ):
+                return False
+            return True
+
+        super().__init__(boundaries, roles, cmp, cls)
+
+
+class SSHShellChecker:
     def __init__(
         self,
         boundaries: list[model.boundary.Boundary],
@@ -269,29 +311,19 @@ class SSHChecker:
         tag_id_list: list[int],
         boundary_id_list: list[int],
     ):
-        def cmp(filter: model.grant.Filter) -> bool:
-            if not isinstance(filter, model.grant.SSHFilter):
-                return False
-            if filter.id is not None and filter.id != identity_id:
-                return False
-            if filter.tag_id_list is not None and not all(tag_id in tag_id_list for tag_id in filter.tag_id_list):
-                return False
-            if filter.boundary_id_list is not None and not all(
-                boundary_id in boundary_id_list for boundary_id in filter.boundary_id_list
-            ):
-                return False
-            return True
+        self._checker = IdentityFilterChecker[model.grant.SSHShellGrant](
+            boundaries,
+            roles,
+            identity_id,
+            tag_id_list,
+            boundary_id_list,
+            model.grant.SSHShellGrant
+        )
 
-        self._checker = Checker(boundaries, roles, cmp)
-
-    def can_shell(self, username: str) -> model.grant.SSHShellPermission | None:
-        matching = [
-            g
-            for g in self._checker.list_can(
-                lambda p: isinstance(p, model.grant.SSHShellPermission) and username in p.username_list
-            )
-            if isinstance(g, model.grant.SSHShellGrant)
-        ]
+    def can(self, username: str) -> model.grant.SSHShellPermission | None:
+        def check(g: model.grant.SSHShellGrant) -> bool:
+            return username in g.permission.username_list
+        matching = [g for g in self._checker.list_can(check)]
         if not matching:
             return None
         return model.grant.SSHShellPermission(
@@ -300,77 +332,107 @@ class SSHChecker:
             permit_x11_forwarding=any(g.permission.permit_x11_forwarding for g in matching),
         )
 
-    def can_port_forward(self, username: str) -> bool:
-        return self._checker.can(
-            lambda p: isinstance(p, model.grant.SSHPortForwardingPermission) and username in p.username_list
+    def list_can(self) -> list[model.grant.SSHShellGrant]:
+        def check(g: model.grant.SSHShellGrant) -> bool:
+            return True
+        return [g for g in self._checker.list_can(check)]
+
+
+class SSHPortForwardChecker:
+    def __init__(
+        self,
+        boundaries: list[model.boundary.Boundary],
+        roles: list[model.role.Role],
+        identity_id: int,
+        tag_id_list: list[int],
+        boundary_id_list: list[int],
+    ):
+        self._checker = IdentityFilterChecker[model.grant.SSHPortForwardingGrant](
+            boundaries,
+            roles,
+            identity_id,
+            tag_id_list,
+            boundary_id_list,
+            model.grant.SSHPortForwardingGrant
         )
 
-    def can_command(self, username: str, command: str) -> bool:
-        return self._checker.can(
-            lambda p: (
-                isinstance(p, model.grant.SSHCommandPermission)
-                and username in p.username_list
-                and command in p.command_list
-            )
+    def can(self, username: str) -> bool:
+        def check(g: model.grant.SSHPortForwardingGrant) -> bool:
+            return username in g.permission.username_list
+        return self._checker.can(check)
+
+    def list_can(self) -> list[model.grant.SSHPortForwardingGrant]:
+        def check(g: model.grant.SSHPortForwardingGrant) -> bool:
+            return True
+        return self._checker.list_can(check)
+
+
+class SSHCommandChecker:
+    def __init__(
+        self,
+        boundaries: list[model.boundary.Boundary],
+        roles: list[model.role.Role],
+        identity_id: int,
+        tag_id_list: list[int],
+        boundary_id_list: list[int],
+    ):
+        self._checker = IdentityFilterChecker[model.grant.SSHCommandGrant](
+            boundaries,
+            roles,
+            identity_id,
+            tag_id_list,
+            boundary_id_list,
+            model.grant.SSHCommandGrant
         )
 
-    def list_shell_grants(self) -> list[model.grant.SSHShellGrant]:
-        return [
-            g
-            for g in self._checker.list_can(lambda p: isinstance(p, model.grant.SSHShellPermission))
-            if isinstance(g, model.grant.SSHShellGrant)
-        ]
+    def can(self, username: str, command: str) -> bool:
+        def check(g: model.grant.SSHCommandGrant) -> bool:
+            return username in g.permission.username_list and command in g.permission.command_list
+        return self._checker.can(check)
 
-    def list_port_forward_grants(self) -> list[model.grant.SSHPortForwardingGrant]:
-        return [
-            g
-            for g in self._checker.list_can(lambda p: isinstance(p, model.grant.SSHPortForwardingPermission))
-            if isinstance(g, model.grant.SSHPortForwardingGrant)
-        ]
-
-    def list_command_grants(self) -> list[model.grant.SSHCommandGrant]:
-        return [
-            g
-            for g in self._checker.list_can(lambda p: isinstance(p, model.grant.SSHCommandPermission))
-            if isinstance(g, model.grant.SSHCommandGrant)
-        ]
+    def list_can(self) -> list[model.grant.SSHCommandGrant]:
+        def check(g: model.grant.SSHCommandGrant) -> bool:
+            return True
+        return self._checker.list_can(check)
 
 
 class AuthChecker:
     def __init__(self, boundaries: list[model.boundary.Boundary], roles: list[model.role.Role], auth_id: int | None):
-        def cmp(filter: model.grant.Filter) -> bool:
-            if not isinstance(filter, model.grant.AuthFilter):
-                return False
-            if filter.id is not None and filter.id != auth_id:
+        def cmp(g: model.grant.AuthGrant) -> bool:
+            if g.filter.id is not None and g.filter.id != auth_id:
                 return False
             return True
-
-        self._checker = Checker(boundaries, roles, cmp)
+        self._checker = Checker[model.grant.AuthGrant](boundaries, roles, cmp, model.grant.AuthGrant)
 
     def can_create(self) -> bool:
-        return self._checker.can(lambda p: p.create)
+        def check(g: model.grant.AuthGrant) -> bool:
+            return g.permission.create
+        return self._checker.can(check)
 
     def can_read(self) -> bool:
-        return self._checker.can(lambda p: p.read)
+        def check(g: model.grant.AuthGrant) -> bool:
+            return g.permission.read
+        return self._checker.can(check)
 
     def can_update(self, field: str) -> bool:
         assert field in ["name", "description", "is_enabled", "config"], (
             "You tried to update a field that does not exist"
         )
 
-        def check(p) -> bool:
-            if p.update is None:
+        def check(g: model.grant.AuthGrant) -> bool:
+            if g.permission.update is None:
                 return True
-            return getattr(p.update, field)
-
+            return getattr(g.permission.update, field)
         return self._checker.can(check)
 
     def can_delete(self) -> bool:
-        return self._checker.can(lambda p: p.delete)
+        def check(g: model.grant.AuthGrant) -> bool:
+            return g.permission.delete
+        return self._checker.can(check)
 
 
 class Grants:
-    def __init__(self, boundaries, roles):
+    def __init__(self, boundaries: list[model.boundary.Boundary], roles: list[model.role.Role]):
         self._boundaries = boundaries
         self._roles = roles
 
@@ -402,8 +464,14 @@ class Grants:
     ) -> IdentityChecker:
         return IdentityChecker(self._boundaries, self._roles, identity_id, tag_id_list, boundary_id_list)
 
-    def ssh(self, identity_id: int, tag_id_list: list[int], boundary_id_list: list[int]) -> SSHChecker:
-        return SSHChecker(self._boundaries, self._roles, identity_id, tag_id_list, boundary_id_list)
+    def ssh_shell(self, identity_id: int, tag_id_list: list[int], boundary_id_list: list[int]) -> SSHShellChecker:
+        return SSHShellChecker(self._boundaries, self._roles, identity_id, tag_id_list, boundary_id_list)
+
+    def ssh_port_forward(self, identity_id: int, tag_id_list: list[int], boundary_id_list: list[int]) -> SSHPortForwardChecker:
+        return SSHPortForwardChecker(self._boundaries, self._roles, identity_id, tag_id_list, boundary_id_list)
+
+    def ssh_command(self, identity_id: int, tag_id_list: list[int], boundary_id_list: list[int]) -> SSHCommandChecker:
+        return SSHCommandChecker(self._boundaries, self._roles, identity_id, tag_id_list, boundary_id_list)
 
     def tenant(self, tenant_id: int | None) -> TenantChecker:
         return TenantChecker(self._boundaries, self._roles, tenant_id)

@@ -24,6 +24,9 @@ class TripletFilter(Filter):
     tag_id_list: list[int] | None = None
     boundary_id_list: list[int] | None = None
 
+class TripletGrant(DBBase):
+    filter: TripletFilter
+
 
 class CRDPermission(DBBase):
     create: bool
@@ -126,18 +129,9 @@ class IdentityPermission(DBBase):
     invite_list: list[str] | None
 
 
-class IdentityFilter(TripletFilter):
-    pass
-
-
-class IdentityGrant(DBBase):
+class IdentityGrant(TripletGrant):
     type: typing.Literal["identity"] = "identity"
-    filter: IdentityFilter
     permission: IdentityPermission
-
-
-class SSHFilter(TripletFilter):
-    pass
 
 
 class SSHShellPermission(DBBase):
@@ -146,9 +140,8 @@ class SSHShellPermission(DBBase):
     permit_x11_forwarding: bool = False
 
 
-class SSHShellGrant(DBBase):
+class SSHShellGrant(TripletGrant):
     type: typing.Literal["ssh-shell"] = "ssh-shell"
-    filter: SSHFilter
     permission: SSHShellPermission
 
 
@@ -156,9 +149,8 @@ class SSHPortForwardingPermission(DBBase):
     username_list: list[str]
 
 
-class SSHPortForwardingGrant(DBBase):
+class SSHPortForwardingGrant(TripletGrant):
     type: typing.Literal["ssh-port-forwarding"] = "ssh-port-forwarding"
-    filter: SSHFilter
     permission: SSHPortForwardingPermission
 
 
@@ -167,9 +159,8 @@ class SSHCommandPermission(DBBase):
     command_list: list[str]
 
 
-class SSHCommandGrant(DBBase):
+class SSHCommandGrant(TripletGrant):
     type: typing.Literal["ssh-command"] = "ssh-command"
-    filter: SSHFilter
     permission: SSHCommandPermission
 
 

@@ -80,7 +80,9 @@ def sign_user_certificate(data: schemas.SSHUserCertificateRequest) -> schemas.SS
     if host is None:
         raise responses.ProblemHTTPException(responses.problem_response(status_code=404, title="Unknown host"))
 
-    ssh_checker = grant.Grants.create().ssh(host.id, host.tag_id_list, host.boundary_id_list)
+    ssh_shell_checker = grant.Grants.create().ssh_shell(host.id, host.tag_id_list, host.boundary_id_list)
+    ssh_port_forward_checker = grant.Grants.create().ssh_port_forward(host.id, host.tag_id_list, host.boundary_id_list)
+    ssh_command_checker = grant.Grants.create().ssh_command(host.id, host.tag_id_list, host.boundary_id_list)
     public_key = converters.public_from_schema(data.public_key)
     signers = _read_current(app_db.SigningKeyType.USER, ctx.config.user_key_staging_period)
     signer = signers[0]
@@ -89,7 +91,7 @@ def sign_user_certificate(data: schemas.SSHUserCertificateRequest) -> schemas.SS
 
     match data.action:
         case "shell":
-            perm = ssh_checker.can_shell(data.username)
+            perm = ssh_shell_checker.can(data.username)
             if perm is None:
                 raise responses.ProblemHTTPException(responses.problem_response(status_code=403, title="Forbidden"))
             cert = ssh.cert.Cert.create_user(
@@ -110,7 +112,7 @@ def sign_user_certificate(data: schemas.SSHUserCertificateRequest) -> schemas.SS
                 signer=signer.key,
             )
         case "port-forwarding":
-            if not ssh_checker.can_port_forward(data.username):
+            if not ssh_port_forward_checker.can(data.username):
                 raise responses.ProblemHTTPException(responses.problem_response(status_code=403, title="Forbidden"))
             cert = ssh.cert.Cert.create_user(
                 public_key=public_key,
@@ -134,7 +136,7 @@ def sign_user_certificate(data: schemas.SSHUserCertificateRequest) -> schemas.SS
                 raise responses.ProblemHTTPException(
                     responses.problem_response(status_code=400, title="command required for action=command")
                 )
-            if not ssh_checker.can_command(data.username, data.command):
+            if not ssh_command_checker.can(data.username, data.command):
                 raise responses.ProblemHTTPException(responses.problem_response(status_code=403, title="Forbidden"))
             cert = ssh.cert.Cert.create_user(
                 public_key=public_key,
@@ -203,16 +205,20 @@ def list_hosts() -> schemas.SSHHostsResponse:
     grants = grant.Grants.create()
     entries: list[schemas.SSHHostEntry] = []
     for identity in identities:
-        checker = grants.ssh(identity.id, identity.tag_id_list, identity.boundary_id_list)
-        if checker.list_shell_grants():
-            entries.append(schemas.SSHHostEntry(hostname=identity.name, type="shell"))
-        if checker.list_port_forward_grants():
-            entries.append(schemas.SSHHostEntry(hostname=identity.name, type="port"))
-        commands: set[str] = set()
-        for g in checker.list_command_grants():
-            commands.update(g.permission.command_list)
-        for cmd in sorted(commands):
-            entries.append(schemas.SSHHostEntry(hostname=identity.name, type="command", command=cmd))
+        shell_checker = grants.ssh_shell(identity.id, identity.tag_id_list, identity.boundary_id_list)
+        for g in shell_checker.list_can():
+            entries.append(schemas.SSHHostEntry(hostname=identity.name, type="shell", username_list=g.permission.username_list))
+        port_forward_checker = grants.ssh_port_forward(identity.id, identity.tag_id_list, identity.boundary_id_list)
+        for g in port_forward_checker.list_can():
+            entries.append(schemas.SSHHostEntry(hostname=identity.name, type="port", username_list=g.permission.username_list))
+        command_checker = grants.ssh_command(identity.id, identity.tag_id_list, identity.boundary_id_list)
+        for g in command_checker.list_can():
+            entries.append(schemas.SSHHostEntry(
+                hostname=identity.name,
+                type="command",
+                username_list=g.permission.username_list,
+                command_list=g.permission.command_list
+        ))
     return schemas.SSHHostsResponse(hosts=entries)
 
 

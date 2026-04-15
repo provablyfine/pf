@@ -550,7 +550,8 @@ class SSHUserCertificateResponse(SSHCertificateResponse):
 class SSHHostEntry(APIBase):
     hostname: str
     type: typing.Literal["shell", "port", "command"]
-    command: str | None = None
+    username_list: list[str] | None
+    command_list: list[str] | None = None
 
 
 class SSHHostsResponse(APIBase):
