@@ -28,9 +28,13 @@ def _hosts_function(args):
         raise client.exceptions.UI(response.json().get("title", "Failed to list hosts"))
     rows = []
     for entry in response.json().get("hosts", []):
-        rows.append((entry["hostname"], entry["type"], entry.get("command", "")))
+        username_list = entry.get("username_list") or ["*"]
+        command_list = entry.get("command_list") or []
+        details = ", ".join(command_list)
+        for username in username_list:
+            rows.append((entry["hostname"], entry["type"], username, details))
     if len(rows) > 0:
-        output = tabulate.tabulate(rows, headers=("host", "type", "details"))
+        output = tabulate.tabulate(rows, headers=("host", "type", "username", "details"))
         print(output)
 
 

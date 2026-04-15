@@ -56,23 +56,25 @@ User connects to host via pf ssh
   $ pf -c user.json ssh -n -o "Hostname=127.0.0.1" -o "HostKeyAlias=host" -p $SSHD_PORT alice@host "whoami"
   alice
 
-User lists hosts — shell only so far
+User lists hosts - shell only so far
   $ pf -c user.json hosts
-  host    type    details
-  ------  ------  ---------
-  host    shell
+  host    type    username    details
+  ------  ------  ----------  ---------
+  host    shell   root
+  host    shell   alice
 
 Add port-forwarding and command grants
   $ pfa -c config.json grant ssh-port-forwarding --tag id=device --username root | pfa -c config.json role grant -i $ROLE_ID --add
-  $ pfa -c config.json grant ssh-command --tag id=device --username root --command /bin/df --command /bin/ls | pfa -c config.json role grant -i $ROLE_ID --add
+  $ pfa -c config.json grant ssh-command --tag id=device --username root --command /bin/df /bin/ls | pfa -c config.json role grant -i $ROLE_ID --add
 
-User lists hosts — all permission types
+User lists hosts - all permission types
   $ pf -c user.json hosts
-  host    type     details
-  ------  -------  ---------
-  host    shell
-  host    port
-  host    command  /bin/ls
+  host    type     username    details
+  ------  -------  ----------  ----------------
+  host    shell    root
+  host    shell    alice
+  host    port     root
+  host    command  root        /bin/df, /bin/ls
 
 Local port forwarding (-L) succeeds for root (has port-forwarding permission)
   $ pf -c user.json ssh -L 19901:localhost:22 -n -o "Hostname=127.0.0.1" -o "HostKeyAlias=host" -p $SSHD_PORT root@host "echo ok"
