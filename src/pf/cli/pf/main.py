@@ -21,18 +21,15 @@ _DEFAULT_CONFIG = os.path.join(os.path.expanduser("~"), ".config", "pf", "config
 @client.ssh_utils.exception
 def _hosts_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    api = client.Client(c, timeout=args.timeout)
-    auth = api.session_auth(c.session_key)
-    response = auth.get(f"{auth.directory.ssh}/hosts")
-    if response.status_code != 200:
-        raise client.exceptions.UI(response.json().get("title", "Failed to list hosts"))
-    rows = []
-    for entry in response.json().get("hosts", []):
-        username_list = entry.get("username_list") or ["*"]
-        command_list = entry.get("command_list") or []
+    sc = client.sync.Client(c, timeout=args.timeout)
+    data = sc.list_ssh_hosts()
+    rows: list[tuple[str, str, str, str]] = []
+    for entry in data.hosts:
+        username_list = entry.username_list or ["*"]
+        command_list = entry.command_list or []
         details = ", ".join(command_list)
         for username in username_list:
-            rows.append((entry["hostname"], entry["type"], username, details))
+            rows.append((entry.hostname, entry.type, username, details))
     if len(rows) > 0:
         output = tabulate.tabulate(rows, headers=("host", "type", "username", "details"))
         print(output)

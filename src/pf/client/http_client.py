@@ -80,7 +80,7 @@ class FileSigner(PrivateSigner):
         return self._key.thumbprint()
 
     def sign(self, data: bytes) -> bytes:
-        key  = self._key.to_crypto()
+        key = self._key.to_crypto()
         assert isinstance(key, cryptography.hazmat.primitives.asymmetric.ed25519.Ed25519PrivateKey)
         return key.sign(data)
 
@@ -199,7 +199,7 @@ class RequestsAuth:
 
 
 class HttpClient:
-    def __init__(self, client: Client, auth: RequestsAuth|None, timeout: float):
+    def __init__(self, client: Client, auth: RequestsAuth | None, timeout: float):
         self._client = client
         self._auth = auth
         self._session = requests.Session()
@@ -223,9 +223,7 @@ class HttpClient:
         timeout: float | None = None,
         params: dict[str, typing.Any] | None = None,
     ) -> requests.Response:
-        request = requests.Request(
-            method=method, url=url, data=data, json=json, headers=headers, params=params
-        )
+        request = requests.Request(method=method, url=url, data=data, json=json, headers=headers, params=params)
         request = request.prepare()
         if self._auth is not None:
             request = self._auth(request)
@@ -282,8 +280,9 @@ class HttpClient:
     def put(self, url: str, *, json: typing.Any = None) -> requests.Response:
         return self.request("PUT", url, json=json)
 
+
 class InvitationHttpClient(HttpClient):
-    def __init__(self, client: Client, auth: RequestsAuth|None, timeout: float, account_public_key: jwk.Public):
+    def __init__(self, client: Client, auth: RequestsAuth | None, timeout: float, account_public_key: jwk.Public):
         super().__init__(client, auth, timeout)
         self._account_public_key = account_public_key
 
@@ -293,7 +292,7 @@ class InvitationHttpClient(HttpClient):
 
 
 class Client:
-    def __init__(self, config: configuration.Config, timeout: float=1.0):
+    def __init__(self, config: configuration.Config, timeout: float = 1.0):
         self._config = config
         self._directory = None
         self._timeout = timeout
@@ -327,9 +326,9 @@ class Client:
     def invitation_auth(self, account: str | None, invitation: str) -> InvitationHttpClient:
         invitation_signer = hmac_signer("invitation", invitation)
         account_signer = private_key_signer("account", account)
-        signers = [ invitation_signer, account_signer]
+        signers = [invitation_signer, account_signer]
         return InvitationHttpClient(
-            self, 
+            self,
             auth=RequestsAuth(signers),
             timeout=self._timeout,
             account_public_key=account_signer.public_key(),
