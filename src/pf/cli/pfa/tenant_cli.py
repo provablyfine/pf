@@ -1,3 +1,4 @@
+import argparse
 import json
 
 import tabulate
@@ -5,7 +6,7 @@ import tabulate
 from ... import client
 
 
-def _tenants(auth, id: int | None = None):
+def _tenants(auth: object, id: int | None = None) -> object:
     params = {}
     if id is not None:
         params["id"] = id
@@ -21,7 +22,7 @@ _SORT_KEYS = {
 }
 
 
-def _list_function(args):
+def _list_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
@@ -41,7 +42,7 @@ def _list_function(args):
         print(output)
 
 
-def _get_function(args):
+def _get_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
@@ -54,7 +55,7 @@ def _get_function(args):
     print(tabulate.tabulate([t], headers="keys"))
 
 
-def _create_function(args):
+def _create_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
@@ -65,7 +66,7 @@ def _create_function(args):
     print(tabulate.tabulate([t], headers="keys"))
 
 
-def _update_function(args):
+def _update_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
@@ -85,7 +86,7 @@ def _update_function(args):
         raise client.exceptions.UI(f"Unable to update tenant: {response.text}")
 
 
-def _delete_function(args):
+def _delete_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
@@ -96,7 +97,7 @@ def _delete_function(args):
         raise client.exceptions.UI(f"Unable to delete tenant: {response.text}")
 
 
-def add_subparser(parser):
+def add_subparser(parser: argparse.ArgumentParser) -> None:
     subparsers = parser.add_subparsers(required=True, dest="_cmd2")
 
     list_parser = subparsers.add_parser("list", help="List tenants")

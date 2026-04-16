@@ -14,7 +14,7 @@ from . import admin_cli
 _DEFAULT_CONFIG = os.path.join(os.path.expanduser("~"), ".config", "pf", "config.json")
 
 
-def _initialize_function(args):
+def _initialize_function(args: argparse.Namespace) -> None:
     response = requests.get(args.url, timeout=args.timeout)
     if response.status_code != 200:
         raise client.exceptions.UI(f"Unable to read directory: {response.text}")
@@ -41,7 +41,7 @@ def _initialize_function(args):
     c.save(args.config)
 
 
-def _connect_function(args):
+def _connect_function(args: argparse.Namespace) -> None:
     parsed = urllib.parse.urlparse(args.url)
     params = urllib.parse.parse_qs(parsed.query)
     clean_url = urllib.parse.urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, "", parsed.fragment))
@@ -69,14 +69,14 @@ def _connect_function(args):
     c.save(args.config)
 
 
-def _login_function(args):
+def _login_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     api = client.Client(c, timeout=args.timeout)
     auth_name = args.auth or c.auth_name or "default"
     login.login(api, c, auth_name, args.config, session_key_path=args.session_key)
 
 
-def _do_main(args):
+def _do_main(args: argparse.Namespace) -> None:
     log.setup(args.debug, log.filename("pfa", args))
 
     if getattr(args, "auto_login", False):

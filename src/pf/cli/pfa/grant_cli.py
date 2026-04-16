@@ -1,10 +1,11 @@
+import argparse
 import json
 
 from ... import client
 from .. import yaml_utils
 
 
-def _output(args, data):
+def _output(args: argparse.Namespace, data: object) -> None:
     match args.format:
         case "yaml":
             output = yaml_utils.dump(data)
@@ -15,7 +16,7 @@ def _output(args, data):
     print(output)
 
 
-def _tag(t):
+def _tag(t: str) -> dict[str, str]:
     equal = t.find("=")
     if equal == -1:
         raise client.exceptions.UI(f"Tag is invalid. Expected name=value. Got: {t}")
@@ -24,19 +25,19 @@ def _tag(t):
     return {"name": name, "value": value}
 
 
-def _tag_list(tags):
+def _tag_list(tags: list[str] | None) -> list[dict[str, str]] | None:
     if tags is None:
         return None
     return [_tag(t) for t in tags]
 
 
-def _all_or(is_all, default):
+def _all_or(is_all: bool, default: object) -> object | None:
     if is_all:
         return None
     return default
 
 
-def _tag_function(args):
+def _tag_function(args: argparse.Namespace) -> None:
     tag = {
         "type": "tag",
         "filter": {"name_value": None if args.name_value is None else _tag(args.name_value)},
@@ -49,7 +50,7 @@ def _tag_function(args):
     _output(args, tag)
 
 
-def _role_function(args):
+def _role_function(args: argparse.Namespace) -> None:
     role = {
         "type": "role",
         "filter": {"name": args.name},
@@ -71,7 +72,7 @@ def _role_function(args):
     _output(args, role)
 
 
-def _boundary_function(args):
+def _boundary_function(args: argparse.Namespace) -> None:
     boundary = {
         "type": "boundary",
         "filter": {"name": args.name},
@@ -93,7 +94,7 @@ def _boundary_function(args):
     _output(args, boundary)
 
 
-def _identity_function(args):
+def _identity_function(args: argparse.Namespace) -> None:
     identity = {
         "type": "identity",
         "filter": {
@@ -123,7 +124,7 @@ def _identity_function(args):
     _output(args, identity)
 
 
-def _ssh_shell_function(args):
+def _ssh_shell_function(args: argparse.Namespace) -> None:
     grant = {
         "type": "ssh-shell",
         "filter": {
@@ -140,7 +141,7 @@ def _ssh_shell_function(args):
     _output(args, grant)
 
 
-def _ssh_port_forwarding_function(args):
+def _ssh_port_forwarding_function(args: argparse.Namespace) -> None:
     grant = {
         "type": "ssh-port-forwarding",
         "filter": {
@@ -155,7 +156,7 @@ def _ssh_port_forwarding_function(args):
     _output(args, grant)
 
 
-def _ssh_command_function(args):
+def _ssh_command_function(args: argparse.Namespace) -> None:
     grant = {
         "type": "ssh-command",
         "filter": {
@@ -171,7 +172,7 @@ def _ssh_command_function(args):
     _output(args, grant)
 
 
-def add_subparser(parser):
+def add_subparser(parser: argparse.ArgumentParser) -> None:
     subparsers = parser.add_subparsers(required=True, dest="_cmd2")
 
     tag_parser = subparsers.add_parser("tag")

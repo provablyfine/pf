@@ -1,3 +1,4 @@
+import argparse
 import json
 
 import tabulate
@@ -6,7 +7,7 @@ from ... import client
 from .. import grant, yaml_utils
 
 
-def _roles(auth, id=None, name=None):
+def _roles(auth: object, id: int | None = None, name: str | None = None) -> object:
     params = {}
     if id is not None:
         params["id"] = id
@@ -19,7 +20,7 @@ def _roles(auth, id=None, name=None):
     return roles
 
 
-def _role(args, auth):
+def _role(args: argparse.Namespace, auth: object) -> object:
     roles = _roles(auth, id=args.id)
     if len(roles) == 0:
         raise client.exceptions.UI("No role found")
@@ -27,15 +28,15 @@ def _role(args, auth):
     return roles[0]
 
 
-def _sort_by_id(t):
+def _sort_by_id(t: object) -> object:
     return t["id"]
 
 
-def _sort_by_name(t):
+def _sort_by_name(t: object) -> tuple[object, object]:
     return (t["name"], t["id"])
 
 
-def _role_list_function(args):
+def _role_list_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
@@ -68,7 +69,7 @@ def _role_list_function(args):
         print(output)
 
 
-def _role_read_function(args):
+def _role_read_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
@@ -96,7 +97,7 @@ def _role_read_function(args):
     print(output)
 
 
-def _role_delete_function(args):
+def _role_delete_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
@@ -105,7 +106,7 @@ def _role_delete_function(args):
         raise client.exceptions.UI(f"Unable to delete role. {response.json()['title']}")
 
 
-def _role_create_function(args):
+def _role_create_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
@@ -117,7 +118,7 @@ def _role_create_function(args):
         raise client.exceptions.UI(f"Unable to create role. {response.json()['title']}")
 
 
-def _role_update_function(args):
+def _role_update_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
@@ -131,7 +132,7 @@ def _role_update_function(args):
         raise client.exceptions.UI(f"Unable to update role. {response.json()['title']}.")
 
 
-def _role_grant_function(args, action, grant):
+def _role_grant_function(args: argparse.Namespace, action: str, grant: object) -> None:
     c = client.Config.load(args.config)
     api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
@@ -157,15 +158,15 @@ def _role_grant_function(args, action, grant):
         raise client.exceptions.UI(f"Unable to update role. {response.json()['title']}.")
 
 
-def _role_member_function(args):
+def _role_member_function(args: argparse.Namespace) -> None:
 
-    def to_dict(member):
+    def to_dict(member: str) -> dict[str, object]:
         if member.isdigit():
             return {"id": int(member)}
         else:
             return {"name": member}
 
-    def is_equal(a, b):
+    def is_equal(a: object, b: object) -> bool:
         if "id" in a and "id" in b and a["id"] == b["id"]:
             return True
         if "name" in a and "name" in b and a["name"] == b["name"]:
@@ -200,7 +201,7 @@ def _role_member_function(args):
         raise client.exceptions.UI(f"Unable to update role. {response.json()['title']}.")
 
 
-def add_subparser(parser):
+def add_subparser(parser: argparse.ArgumentParser) -> None:
     subparsers = parser.add_subparsers(required=True, dest="_cmd2")
 
     list_parser = subparsers.add_parser("list", help="List roles we have access to")

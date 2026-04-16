@@ -1,3 +1,4 @@
+import argparse
 import json
 
 import tabulate
@@ -5,7 +6,7 @@ import tabulate
 from ... import client
 
 
-def _bastions(auth, id: int | None = None):
+def _bastions(auth: object, id: int | None = None) -> object:
     params = {}
     if id is not None:
         params["id"] = id
@@ -16,7 +17,7 @@ def _bastions(auth, id: int | None = None):
     return bastions
 
 
-def _bastion(args, auth):
+def _bastion(args: argparse.Namespace, auth: object) -> object:
     bastions = _bastions(auth, id=args.id)
     if len(bastions) == 0:
         raise client.exceptions.UI("No bastion found")
@@ -24,7 +25,7 @@ def _bastion(args, auth):
     return bastions[0]
 
 
-def _parse_tag(s):
+def _parse_tag(s: str) -> dict[str, str]:
     equal = s.find("=")
     if equal == -1:
         raise client.exceptions.UI(f"Tag is invalid. Expected format: name=value. Got: {s}")
@@ -33,7 +34,7 @@ def _parse_tag(s):
     return {"name": name, "value": value}
 
 
-def _bastion_list_function(args):
+def _bastion_list_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
@@ -59,7 +60,7 @@ def _bastion_list_function(args):
         print(output)
 
 
-def _bastion_read_function(args):
+def _bastion_read_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
@@ -83,7 +84,7 @@ def _bastion_read_function(args):
     print(output)
 
 
-def _bastion_delete_function(args):
+def _bastion_delete_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
@@ -92,7 +93,7 @@ def _bastion_delete_function(args):
         raise client.exceptions.UI(f"Unable to delete bastion. {response.json()['title']}")
 
 
-def _bastion_create_function(args):
+def _bastion_create_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
@@ -112,7 +113,7 @@ def _bastion_create_function(args):
         raise client.exceptions.UI(f"Unable to create bastion. {response.json()['title']}")
 
 
-def _bastion_update_function(args):
+def _bastion_update_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
@@ -130,7 +131,7 @@ def _bastion_update_function(args):
         raise client.exceptions.UI(f"Unable to update bastion. {response.json()['title']}.")
 
 
-def add_subparser(parser):
+def add_subparser(parser: argparse.ArgumentParser) -> None:
     subparsers = parser.add_subparsers(required=True, dest="_cmd2")
 
     list_parser = subparsers.add_parser("list", help="List bastions")

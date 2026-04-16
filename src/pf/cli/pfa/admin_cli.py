@@ -1,7 +1,9 @@
+import argparse
+
 from . import auth_cli, bastion_cli, boundary_cli, grant_cli, identity_cli, role_cli, tag_cli, tenant_cli
 
 
-def add_subparsers(subparsers):
+def add_subparsers(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     boundary_parser = subparsers.add_parser("boundary", help="View and edit boundaries")
     boundary_cli.add_subparser(boundary_parser)
 

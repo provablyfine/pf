@@ -1,3 +1,4 @@
+import argparse
 import json
 
 import tabulate
@@ -5,7 +6,7 @@ import tabulate
 from ... import client
 
 
-def _tags(args, auth):
+def _tags(args: argparse.Namespace, auth: object) -> object:
     params = {}
     if args.id is not None:
         params["id"] = args.id
@@ -20,19 +21,19 @@ def _tags(args, auth):
     return tags
 
 
-def _sort_by_id(t):
+def _sort_by_id(t: object) -> object:
     return t["id"]
 
 
-def _sort_by_name(t):
+def _sort_by_name(t: object) -> tuple[object, object, object]:
     return (t["name"], t["value"], t["id"])
 
 
-def _sort_by_value(t):
+def _sort_by_value(t: object) -> tuple[object, object, object]:
     return (t["value"], t["name"], t["id"])
 
 
-def tag_list_function(args):
+def tag_list_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
@@ -64,7 +65,7 @@ def tag_list_function(args):
         print(output)
 
 
-def _tag_create_function(args):
+def _tag_create_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
@@ -79,7 +80,7 @@ def _tag_create_function(args):
         raise client.exceptions.UI(f"Unable to create tag. {response.json()['title']}")
 
 
-def _tag_delete_function(args):
+def _tag_delete_function(args: argparse.Namespace) -> None:
     if args.id is None and args.name is None and args.value is None:
         raise client.exceptions.UI("You must specify a filtering criterion")
     c = client.Config.load(args.config)
@@ -90,7 +91,7 @@ def _tag_delete_function(args):
         raise client.exceptions.UI(f"Unable to delete tag. {response.json()['title']}")
 
 
-def add_subparser(parser):
+def add_subparser(parser: argparse.ArgumentParser) -> None:
     subparsers = parser.add_subparsers(required=True, dest="_cmd2")
 
     list_parser = subparsers.add_parser("list", help="List tags we have access to")

@@ -47,7 +47,9 @@ def _ssh_function(args: argparse.Namespace) -> None:
                     raise client.exceptions.UI(f"Auto-login failed: {resp.text}")
                 c.save(args.config)
             case _:
-                raise client.exceptions.UI(f"Session expired. Run 'pf login' first (auth type: {auth_public['config']['type']}).")
+                raise client.exceptions.UI(
+                    f"Session expired. Run 'pf login' first (auth type: {auth_public['config']['type']})."
+                )
 
     api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)

@@ -7,14 +7,14 @@ from ... import client
 
 
 def _identities(
-    auth,
+    auth: object,
     id: int | None = None,
     name: str | None = None,
     tag_id: int | None = None,
     tag_name: str | None = None,
     boundary_id: int | None = None,
     boundary_name: str | None = None,
-):
+) -> object:
     params = {}
     if id is not None:
         params["id"] = id
@@ -35,7 +35,7 @@ def _identities(
     return identities
 
 
-def _identity(args, auth):
+def _identity(args: argparse.Namespace, auth: object) -> object:
     identities = _identities(auth, id=args.id)
     if len(identities) == 0:
         raise client.exceptions.UI("No identity found")
@@ -43,7 +43,7 @@ def _identity(args, auth):
     return identities[0]
 
 
-def _identity_list_function(args):
+def _identity_list_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
@@ -77,7 +77,7 @@ def _identity_list_function(args):
         print(output)
 
 
-def _identity_read_function(args):
+def _identity_read_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
@@ -99,7 +99,7 @@ def _identity_read_function(args):
     print(output)
 
 
-def _identity_delete_function(args):
+def _identity_delete_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
@@ -108,7 +108,7 @@ def _identity_delete_function(args):
         raise client.exceptions.UI(f"Unable to delete identity. {response.json()['title']}")
 
 
-def _parse_tag(s):
+def _parse_tag(s: str) -> dict[str, str]:
     equal = s.find("=")
     if equal == -1:
         raise client.exceptions.UI(f"Tag is invalid. Expected format: name=value. Got: {s}")
@@ -117,7 +117,7 @@ def _parse_tag(s):
     return {"name": name, "value": value}
 
 
-def _identity_create_function(args):
+def _identity_create_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
@@ -139,7 +139,7 @@ def _identity_create_function(args):
         raise client.exceptions.UI(f"Unable to create identity. {response.json()['title']}")
 
 
-def _identity_invite_function(args):
+def _identity_invite_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
@@ -155,7 +155,7 @@ def _identity_invite_function(args):
         raise client.exceptions.UI(f"Unable to invite identity. {response.json()['title']}")
 
 
-def _identity_update_function(args):
+def _identity_update_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
@@ -168,7 +168,13 @@ def _identity_update_function(args):
 
 
 class TagAction(argparse.Action):
-    def __call__(self, parser, namespace, values, option_string=None):
+    def __call__(
+        self,
+        parser: argparse.ArgumentParser,
+        namespace: argparse.Namespace,
+        values: object,
+        option_string: str | None = None,
+    ) -> None:
         # Get the current list or initialize a new one
         items = getattr(namespace, self.dest, [])
         if items is None:
@@ -179,7 +185,7 @@ class TagAction(argparse.Action):
         setattr(namespace, self.dest, items)
 
 
-def _format_tag_op(op, values):
+def _format_tag_op(op: str, values: object) -> list[dict[str, object]]:
     tag_id_list = [int(t) for t in values if t.isdigit()]
     tag_name_value_list = [_parse_tag(t) for t in values if not t.isdigit()]
     output = []
@@ -190,7 +196,7 @@ def _format_tag_op(op, values):
     return output
 
 
-def _identity_tag_function(args):
+def _identity_tag_function(args: argparse.Namespace) -> None:
 
     c = client.Config.load(args.config)
     api = client.Client(c, timeout=args.timeout)
@@ -208,7 +214,7 @@ def _identity_tag_function(args):
         raise client.exceptions.UI(f"Unable to update identity. {response.json()['title']}.")
 
 
-def add_subparser(parser):
+def add_subparser(parser: argparse.ArgumentParser) -> None:
     subparsers = parser.add_subparsers(required=True, dest="_cmd2")
 
     list_parser = subparsers.add_parser("list", help="List identities we have access to")

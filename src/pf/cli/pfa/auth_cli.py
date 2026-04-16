@@ -1,3 +1,4 @@
+import argparse
 import json
 
 import tabulate
@@ -5,7 +6,7 @@ import tabulate
 from ... import client
 
 
-def _auth_list_function(args):
+def _auth_list_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
@@ -34,7 +35,7 @@ def _auth_list_function(args):
         print(output)
 
 
-def _auth_create_http_sig_function(args):
+def _auth_create_http_sig_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
@@ -51,7 +52,7 @@ def _auth_create_http_sig_function(args):
         raise client.exceptions.UI(f"Unable to create auth config. {response.json()['title']}")
 
 
-def _auth_create_oidc_function(args):
+def _auth_create_oidc_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
@@ -72,7 +73,7 @@ def _auth_create_oidc_function(args):
         raise client.exceptions.UI(f"Unable to create auth config. {response.json()['title']}")
 
 
-def _auth_create_oauth2_github_function(args):
+def _auth_create_oauth2_github_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
@@ -91,7 +92,7 @@ def _auth_create_oauth2_github_function(args):
         raise client.exceptions.UI(f"Unable to create auth config. {response.json()['title']}")
 
 
-def _auth_read_function(args):
+def _auth_read_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
@@ -135,7 +136,7 @@ def _auth_read_function(args):
             assert False, args.format
 
 
-def _auth_update_function(args):
+def _auth_update_function(args: argparse.Namespace) -> None:
     body: dict = {}
     if args.name is not None:
         body["name"] = args.name
@@ -157,7 +158,7 @@ def _auth_update_function(args):
         raise client.exceptions.UI(f"Unable to update auth config. {response.json().get('title', '')}")
 
 
-def _auth_delete_function(args):
+def _auth_delete_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
@@ -168,7 +169,7 @@ def _auth_delete_function(args):
         raise client.exceptions.UI(f"Unable to delete auth config. {response.json().get('title', '')}")
 
 
-def add_subparser(parser):
+def add_subparser(parser: argparse.ArgumentParser) -> None:
     subparsers = parser.add_subparsers(required=True, dest="_cmd2")
 
     list_parser = subparsers.add_parser("list", help="List auth configs")

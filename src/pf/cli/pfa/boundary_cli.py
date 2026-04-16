@@ -1,3 +1,4 @@
+import argparse
 import json
 
 import tabulate
@@ -6,7 +7,7 @@ from ... import client
 from .. import grant, yaml_utils
 
 
-def _boundaries(auth, id=None, name=None):
+def _boundaries(auth: object, id: int | None = None, name: str | None = None) -> object:
     params = {}
     if id is not None:
         params["id"] = id
@@ -19,7 +20,7 @@ def _boundaries(auth, id=None, name=None):
     return boundaries
 
 
-def _boundary(auth, id):
+def _boundary(auth: object, id: int) -> object:
     boundaries = _boundaries(auth, id=id)
     if len(boundaries) == 0:
         raise client.exceptions.UI("No boundary found")
@@ -27,15 +28,15 @@ def _boundary(auth, id):
     return boundaries[0]
 
 
-def _sort_by_id(boundary):
+def _sort_by_id(boundary: object) -> object:
     return boundary["id"]
 
 
-def _sort_by_name(boundary):
+def _sort_by_name(boundary: object) -> tuple[object, object]:
     return (boundary["name"], boundary["id"])
 
 
-def _boundary_list_function(args):
+def _boundary_list_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
@@ -68,7 +69,7 @@ def _boundary_list_function(args):
         print(output)
 
 
-def _boundary_read_function(args):
+def _boundary_read_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
@@ -104,7 +105,7 @@ def _boundary_read_function(args):
     print(output)
 
 
-def _boundary_delete_function(args):
+def _boundary_delete_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
@@ -113,7 +114,7 @@ def _boundary_delete_function(args):
         raise client.exceptions.UI(f"Unable to delete boundary. {response.json()['title']}")
 
 
-def _boundary_create_function(args):
+def _boundary_create_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
@@ -125,7 +126,7 @@ def _boundary_create_function(args):
         raise client.exceptions.UI(f"Unable to create boundary. {response.json()['title']}")
 
 
-def _boundary_update_function(args):
+def _boundary_update_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
@@ -139,7 +140,7 @@ def _boundary_update_function(args):
         raise client.exceptions.UI(f"Unable to update boundary. {response.json()['title']}.")
 
 
-def _boundary_grant_function(args, action, grant, field_name):
+def _boundary_grant_function(args: argparse.Namespace, action: str, grant: object, field_name: str) -> None:
     c = client.Config.load(args.config)
     api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
@@ -165,15 +166,15 @@ def _boundary_grant_function(args, action, grant, field_name):
         raise client.exceptions.UI(f"Unable to update boundary. {response.json()['title']}.")
 
 
-def _boundary_denied_function(args, action, grant):
+def _boundary_denied_function(args: argparse.Namespace, action: str, grant: object) -> None:
     _boundary_grant_function(args, action, grant, "denied_list")
 
 
-def _boundary_ceiling_function(args, action, grant):
+def _boundary_ceiling_function(args: argparse.Namespace, action: str, grant: object) -> None:
     _boundary_grant_function(args, action, grant, "ceiling_list")
 
 
-def add_subparser(parser):
+def add_subparser(parser: argparse.ArgumentParser) -> None:
     subparsers = parser.add_subparsers(required=True, dest="_cmd2")
 
     list_parser = subparsers.add_parser("list", help="List boundaries we have access to")

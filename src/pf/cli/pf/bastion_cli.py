@@ -19,6 +19,7 @@ class BastionDict(typing.TypedDict):
     connect_url: str | None
     ssh_proxy_jump: str | None
 
+
 logger = logging.getLogger(__name__)
 
 
