@@ -3,7 +3,7 @@ import logging
 import typing
 
 from .. import jwk, ssh
-from . import model, oauth2_providers, responses, schemas, app_db
+from . import app_db, model, oauth2_providers, responses, schemas
 from .context import ctx
 
 logger = logging.getLogger(__name__)

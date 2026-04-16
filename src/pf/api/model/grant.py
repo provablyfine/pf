@@ -7,7 +7,6 @@ import pydantic
 
 from .. import app_db
 
-
 logger = logging.getLogger(__name__)
 
 

@@ -1,7 +1,7 @@
 import fastapi
 
 from ... import jwk
-from .. import model, responses, schemas, converters
+from .. import converters, model, responses, schemas
 
 router = fastapi.APIRouter()
 
