@@ -36,7 +36,7 @@ class TrustedKey:
 class TrustedKeys:
     def __init__(self, issuer_prefix: str):
         self._issuer_prefix = issuer_prefix
-        self._client_by_iss = {}
+        self._client_by_iss: dict[str, jwt.PyJWKClient] = {}
 
     def lookup(self, token: str) -> TrustedKey | None:
         # we manually decode the token to extract the iss
