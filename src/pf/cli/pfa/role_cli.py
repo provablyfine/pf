@@ -1,5 +1,6 @@
 import argparse
 import json
+import typing
 
 import tabulate
 
@@ -7,7 +8,7 @@ from ... import client
 from .. import grant, yaml_utils
 
 
-def _roles(auth: object, id: int | None = None, name: str | None = None) -> object:
+def _roles(auth: client.HttpClient, id: int | None = None, name: str | None = None) -> list[dict[str, typing.Any]]:
     params = {}
     if id is not None:
         params["id"] = id
@@ -20,7 +21,7 @@ def _roles(auth: object, id: int | None = None, name: str | None = None) -> obje
     return roles
 
 
-def _role(args: argparse.Namespace, auth: object) -> object:
+def _role(args: argparse.Namespace, auth: client.HttpClient) -> dict[str, typing.Any]:
     roles = _roles(auth, id=args.id)
     if len(roles) == 0:
         raise client.exceptions.UI("No role found")
@@ -28,11 +29,11 @@ def _role(args: argparse.Namespace, auth: object) -> object:
     return roles[0]
 
 
-def _sort_by_id(t: object) -> object:
+def _sort_by_id(t: dict[str, typing.Any]) -> int:
     return t["id"]
 
 
-def _sort_by_name(t: object) -> tuple[object, object]:
+def _sort_by_name(t: dict[str, typing.Any]) -> tuple[str, int]:
     return (t["name"], t["id"])
 
 
@@ -132,7 +133,7 @@ def _role_update_function(args: argparse.Namespace) -> None:
         raise client.exceptions.UI(f"Unable to update role. {response.json()['title']}.")
 
 
-def _role_grant_function(args: argparse.Namespace, action: str, grant: object) -> None:
+def _role_grant_function(args: argparse.Namespace, action: str, grant: dict[str, typing.Any]) -> None:
     c = client.Config.load(args.config)
     api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)

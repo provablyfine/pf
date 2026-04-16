@@ -1,5 +1,6 @@
 import argparse
 import json
+import typing
 
 import tabulate
 
@@ -7,14 +8,14 @@ from ... import client
 
 
 def _identities(
-    auth: object,
+    auth: client.HttpClient,
     id: int | None = None,
     name: str | None = None,
     tag_id: int | None = None,
     tag_name: str | None = None,
     boundary_id: int | None = None,
     boundary_name: str | None = None,
-) -> object:
+) -> list[dict[str, typing.Any]]:
     params = {}
     if id is not None:
         params["id"] = id
@@ -35,7 +36,7 @@ def _identities(
     return identities
 
 
-def _identity(args: argparse.Namespace, auth: object) -> object:
+def _identity(args: argparse.Namespace, auth: client.HttpClient) -> dict[str, typing.Any]:
     identities = _identities(auth, id=args.id)
     if len(identities) == 0:
         raise client.exceptions.UI("No identity found")

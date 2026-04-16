@@ -1,12 +1,13 @@
 import argparse
 import json
+import typing
 
 import tabulate
 
 from ... import client
 
 
-def _bastions(auth: object, id: int | None = None) -> object:
+def _bastions(auth: client.HttpClient, id: int | None = None) -> list[dict[str, typing.Any]]:
     params = {}
     if id is not None:
         params["id"] = id
@@ -17,7 +18,7 @@ def _bastions(auth: object, id: int | None = None) -> object:
     return bastions
 
 
-def _bastion(args: argparse.Namespace, auth: object) -> object:
+def _bastion(args: argparse.Namespace, auth: client.HttpClient) -> dict[str, typing.Any]:
     bastions = _bastions(auth, id=args.id)
     if len(bastions) == 0:
         raise client.exceptions.UI("No bastion found")

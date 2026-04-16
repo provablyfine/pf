@@ -1,12 +1,13 @@
 import argparse
 import json
+import typing
 
 import tabulate
 
 from ... import client
 
 
-def _tenants(auth: object, id: int | None = None) -> object:
+def _tenants(auth: client.HttpClient, id: int | None = None) -> list[dict[str, typing.Any]]:
     params = {}
     if id is not None:
         params["id"] = id

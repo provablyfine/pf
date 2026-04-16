@@ -1,12 +1,13 @@
 import argparse
 import json
+import typing
 
 import tabulate
 
 from ... import client
 
 
-def _tags(args: argparse.Namespace, auth: object) -> object:
+def _tags(args: argparse.Namespace, auth: client.HttpClient) -> list[dict[str, typing.Any]]:
     params = {}
     if args.id is not None:
         params["id"] = args.id
@@ -21,15 +22,15 @@ def _tags(args: argparse.Namespace, auth: object) -> object:
     return tags
 
 
-def _sort_by_id(t: object) -> object:
+def _sort_by_id(t: dict[str, typing.Any]) -> int:
     return t["id"]
 
 
-def _sort_by_name(t: object) -> tuple[object, object, object]:
+def _sort_by_name(t: dict[str, typing.Any]) -> tuple[str, str, int]:
     return (t["name"], t["value"], t["id"])
 
 
-def _sort_by_value(t: object) -> tuple[object, object, object]:
+def _sort_by_value(t: dict[str, typing.Any]) -> tuple[str, str, int]:
     return (t["value"], t["name"], t["id"])
 
 

@@ -1,5 +1,6 @@
 import argparse
 import json
+import typing
 
 import tabulate
 
@@ -7,7 +8,7 @@ from ... import client
 from .. import grant, yaml_utils
 
 
-def _boundaries(auth: object, id: int | None = None, name: str | None = None) -> object:
+def _boundaries(auth: client.HttpClient, id: int | None = None, name: str | None = None) -> list[dict[str, typing.Any]]:
     params = {}
     if id is not None:
         params["id"] = id
@@ -20,7 +21,7 @@ def _boundaries(auth: object, id: int | None = None, name: str | None = None) ->
     return boundaries
 
 
-def _boundary(auth: object, id: int) -> object:
+def _boundary(auth: client.HttpClient, id: int) -> dict[str, typing.Any]:
     boundaries = _boundaries(auth, id=id)
     if len(boundaries) == 0:
         raise client.exceptions.UI("No boundary found")
@@ -28,11 +29,11 @@ def _boundary(auth: object, id: int) -> object:
     return boundaries[0]
 
 
-def _sort_by_id(boundary: object) -> object:
+def _sort_by_id(boundary: dict[str, typing.Any]) -> int:
     return boundary["id"]
 
 
-def _sort_by_name(boundary: object) -> tuple[object, object]:
+def _sort_by_name(boundary: dict[str, typing.Any]) -> tuple[str, int]:
     return (boundary["name"], boundary["id"])
 
 
@@ -140,7 +141,9 @@ def _boundary_update_function(args: argparse.Namespace) -> None:
         raise client.exceptions.UI(f"Unable to update boundary. {response.json()['title']}.")
 
 
-def _boundary_grant_function(args: argparse.Namespace, action: str, grant: object, field_name: str) -> None:
+def _boundary_grant_function(
+    args: argparse.Namespace, action: str, grant: dict[str, typing.Any], field_name: str
+) -> None:
     c = client.Config.load(args.config)
     api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
@@ -166,11 +169,11 @@ def _boundary_grant_function(args: argparse.Namespace, action: str, grant: objec
         raise client.exceptions.UI(f"Unable to update boundary. {response.json()['title']}.")
 
 
-def _boundary_denied_function(args: argparse.Namespace, action: str, grant: object) -> None:
+def _boundary_denied_function(args: argparse.Namespace, action: str, grant: dict[str, typing.Any]) -> None:
     _boundary_grant_function(args, action, grant, "denied_list")
 
 
-def _boundary_ceiling_function(args: argparse.Namespace, action: str, grant: object) -> None:
+def _boundary_ceiling_function(args: argparse.Namespace, action: str, grant: dict[str, typing.Any]) -> None:
     _boundary_grant_function(args, action, grant, "ceiling_list")
 
 
