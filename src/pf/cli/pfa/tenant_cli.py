@@ -1,42 +1,38 @@
 import argparse
 import json
-import typing
 
 import tabulate
 
 from ... import client
 
 
-def _tenants(auth: client.HttpClient, id: int | None = None) -> list[dict[str, typing.Any]]:
-    params = {}
-    if id is not None:
-        params["id"] = id
-    response = auth.get(auth.directory.tenant, params=params)
-    if response.status_code != 200:
-        raise client.exceptions.UI(f"Unable to list tenants: {response.text}")
-    return response.json()["tenants"]
+def _sort_by_id(t: client.schemas.Tenant) -> int:
+    return t.id
 
 
-_SORT_KEYS = {
-    "id": lambda t: t["id"],
-    "name": lambda t: (t["name"], t["id"]),
-}
+def _sort_by_name(t: client.schemas.Tenant) -> tuple[str, int]:
+    return (t.name, t.id)
 
 
 def _list_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    api = client.Client(c, timeout=args.timeout)
-    auth = api.session_auth(c.session_key)
-    tenants = sorted(_tenants(auth), key=_SORT_KEYS[args.sort])
+    sc = client.sync.Client(c, timeout=args.timeout)
+    response = sc.list_tenants()
+    tenants = response.tenants
+    sort_functions = {
+        "id": _sort_by_id,
+        "name": _sort_by_name,
+    }
+    tenants = sorted(tenants, key=sort_functions[args.sort])
     if args.quiet:
         args.format = "quiet"
     match args.format:
         case "quiet":
-            output = "\n".join(str(t["id"]) for t in tenants)
+            output = "\n".join(str(t.id) for t in tenants)
         case "json":
-            output = json.dumps(tenants, indent=2)
+            output = json.dumps([t.model_dump() for t in tenants], indent=2)
         case "text":
-            output = tabulate.tabulate(tenants, headers="keys") if tenants else ""
+            output = tabulate.tabulate([t.model_dump() for t in tenants], headers="keys") if tenants else ""
         case _:
             assert False
     if output:
@@ -45,57 +41,33 @@ def _list_function(args: argparse.Namespace) -> None:
 
 def _get_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    api = client.Client(c, timeout=args.timeout)
-    auth = api.session_auth(c.session_key)
-    response = auth.get(f"{auth.directory.tenant}/{args.id}")
-    if response.status_code == 404:
-        raise client.exceptions.UI(f"Tenant {args.id} not found")
-    if response.status_code != 200:
-        raise client.exceptions.UI(f"Unable to get tenant: {response.text}")
-    t = response.json()
-    print(tabulate.tabulate([t], headers="keys"))
+    sc = client.sync.Client(c, timeout=args.timeout)
+    t = sc.get_tenant(args.id)
+    print(tabulate.tabulate([t.model_dump()], headers="keys"))
 
 
 def _create_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    api = client.Client(c, timeout=args.timeout)
-    auth = api.session_auth(c.session_key)
-    response = auth.post(auth.directory.tenant, json={"name": args.name, "display_name": args.display_name})
-    if response.status_code != 200:
-        raise client.exceptions.UI(f"Unable to create tenant: {response.text}")
-    t = response.json()
-    print(tabulate.tabulate([t], headers="keys"))
+    sc = client.sync.Client(c, timeout=args.timeout)
+    t = sc.create_tenant(name=args.name, display_name=args.display_name)
+    print(tabulate.tabulate([t.model_dump()], headers="keys"))
 
 
 def _update_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    api = client.Client(c, timeout=args.timeout)
-    auth = api.session_auth(c.session_key)
-    data = {}
-    if args.display_name is not None:
-        data["display_name"] = args.display_name
+    sc = client.sync.Client(c, timeout=args.timeout)
+    is_enabled = None
     if args.enable:
-        data["is_enabled"] = True
+        is_enabled = True
     elif args.disable:
-        data["is_enabled"] = False
-    if not data:
-        raise client.exceptions.UI("Nothing to update")
-    response = auth.patch(f"{auth.directory.tenant}/{args.id}", json=data)
-    if response.status_code == 404:
-        raise client.exceptions.UI(f"Tenant {args.id} not found")
-    if response.status_code != 204:
-        raise client.exceptions.UI(f"Unable to update tenant: {response.text}")
+        is_enabled = False
+    sc.update_tenant(args.id, display_name=args.display_name, is_enabled=is_enabled)
 
 
 def _delete_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    api = client.Client(c, timeout=args.timeout)
-    auth = api.session_auth(c.session_key)
-    response = auth.delete(f"{auth.directory.tenant}/{args.id}")
-    if response.status_code == 404:
-        raise client.exceptions.UI(f"Tenant {args.id} not found")
-    if response.status_code != 204:
-        raise client.exceptions.UI(f"Unable to delete tenant: {response.text}")
+    sc = client.sync.Client(c, timeout=args.timeout)
+    sc.delete_tenant(args.id)
 
 
 def add_subparser(parser: argparse.ArgumentParser) -> None:

@@ -72,7 +72,7 @@ Check that the tag is gone
 
 Delete a tag that does not exist
   $ pfa -c config.json tag delete -i 15
-  Unable to delete tag. Tag does not exist
+  Tag does not exist
   [2]
 
 Delete all tags (check ids are never reused)

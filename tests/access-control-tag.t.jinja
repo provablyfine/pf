@@ -45,7 +45,7 @@ Check that permission "{{grant}}" is actually enforcing access control
 %}
 Check that permission "{{grant}}" is actually enforcing access control
   $ pfa -c user1.json tag create -n env -v prod
-  Unable to create tag. Not allowed to create tag
+  Not allowed to create tag
   [2]
   $ pfa -c config.json grant tag {{grant}} | pfa -c config.json role grant -i $ROLE_ID --add
   $ pfa -c user1.json tag create -n env -v prod
@@ -62,7 +62,7 @@ Check that permission "{{grant}}" is actually enforcing access control
   $ pfa -c config.json tag create -n env -v prod
   $ TAG_ID=$(pfa -c config.json tag list -n env -v prod -q)
   $ pfa -c user1.json tag delete -i $TAG_ID
-  Unable to delete tag. Not allowed to delete tag
+  Not allowed to delete tag
   [2]
   $ pfa -c config.json grant tag {{grant}} | pfa -c config.json role grant -i $ROLE_ID --add
   $ pfa -c user1.json tag delete -i $TAG_ID
@@ -77,7 +77,7 @@ Check that permission "{{grant}}" is actually enforcing access control
   $ pfa -c config.json tag create -n env -v prod
   $ TAG_ID=$(pfa -c config.json tag list -n env -v prod -q)
   $ pfa -c user1.json tag delete -i $TAG_ID
-  Unable to delete tag. Not allowed to delete tag
+  Not allowed to delete tag
   [2]
   $ pfa -c config.json grant tag {{grant}} | pfa -c config.json role grant -i $ROLE_ID --add
   $ pfa -c user1.json tag delete -i $TAG_ID

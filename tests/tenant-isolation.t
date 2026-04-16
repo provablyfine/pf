@@ -86,7 +86,7 @@ Beta user sees only beta's identities, not acme's
 
 Child tenant (acme) cannot create sub-tenants (ceiling blocks it)
   $ pfa -c acme.json tenant create --name sub-acme --display-name "Sub Acme"
-  Unable to create tenant: .* (re)
+  Not allowed to create tenant
   [2]
 
 Scenario 3: beta credentials rejected by acme's API (cross-auth failure at login)
@@ -108,5 +108,5 @@ Scenario 4: frankenstein config (acme session keys, beta directory) is rejected 
   Unable to find tags.* (re)
   [2]
   $ pfa -c frankenstein.json tenant list
-  Unable to list tenants: .* (re)
+  Session does not exist
   [2]
