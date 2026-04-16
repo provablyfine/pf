@@ -29,7 +29,7 @@ def _get_token(auth: client.HttpClient) -> str:
     return response.json()["token"]
 
 
-async def _handle_channel(ch: bastion.demux.Channel, local_port: int) -> None:
+async def _handle_channel(ch: bastion.mux.Channel, local_port: int) -> None:
     try:
         reader, writer = await asyncio.open_connection("127.0.0.1", local_port)
     except Exception as e:
@@ -55,7 +55,7 @@ async def _handle_channel(ch: bastion.demux.Channel, local_port: int) -> None:
                 data = await ch.receive()
                 writer.write(data)
                 await writer.drain()
-        except (bastion.demux.MuxError, bastion.demux.ChannelError):
+        except (bastion.mux.MuxError, bastion.mux.ChannelError):
             pass
         finally:
             try:
@@ -76,12 +76,12 @@ async def _register_bastion(register_url: str, token: str, local_port: int) -> N
         additional_headers=headers,
         subprotocols=("mux-ssh",),  # type: ignore[arg-type]
     ) as ws:
-        mux_client = bastion.demux.Client(ws)
+        mux_client = bastion.mux.Client(ws)
         try:
             while not mux_client.is_closed:
                 ch = await mux_client.accept_channel()
                 asyncio.create_task(_handle_channel(ch, local_port))  # noqa: RUF006
-        except bastion.demux.MuxError:
+        except bastion.mux.MuxError:
             pass
 
 
@@ -157,7 +157,7 @@ async def _connect_async(url: str, token: str, hostname: str) -> None:
         additional_headers=headers,
         subprotocols=("mux-ssh",),  # type: ignore[arg-type]
     ) as ws:
-        mux_client = bastion.demux.Client(ws)
+        mux_client = bastion.mux.Client(ws)
         ch = await mux_client.accept_channel()
 
         async def forward_stdin() -> None:
@@ -183,7 +183,7 @@ async def _connect_async(url: str, token: str, hostname: str) -> None:
                     logger.debug(f"ch: read={len(data)}")
                     stdout_writer.write(data)
                     logger.debug(f"stdout: write={len(data)}")
-            except (bastion.demux.ChannelError, bastion.demux.MuxError):
+            except (bastion.mux.ChannelError, bastion.mux.MuxError):
                 pass
 
         await asyncio.gather(forward_stdin(), forward_stdout())

@@ -1,7 +1,7 @@
 """
 Tests for mux.Server (h2 client side).
 
-Tests create a connected (mux.Server, demux.Client) pair and verify the
+Tests create a connected (mux.Server, mux.Client) pair and verify the
 server-side behaviour: opening channels, sending/receiving data, close
 semantics, and error handling.
 """
@@ -10,14 +10,14 @@ import asyncio
 
 import pytest
 
-from . import _test_websocket, demux, mux
+from . import _test_websocket, mux
 
 
 @pytest.fixture
 async def pair():
     server_ws, client_ws = await _test_websocket.create_ws_pair()
     srv = mux.Server(server_ws)
-    cli = demux.Client(client_ws)
+    cli = mux.Client(client_ws)
     yield srv, cli
     await srv.close()
     await cli.close()
@@ -119,7 +119,7 @@ async def test_server_closes_channel(pair):
 
     await srv_ch.close()
 
-    with pytest.raises(demux.ChannelError, match="closed by remote"):
+    with pytest.raises(mux.ChannelError, match="closed by remote"):
         await cli_ch.receive()
 
 
@@ -220,5 +220,5 @@ async def test_integration_full_cycle(pair):
     assert await cli_ch.receive() == b"server response"
 
     await srv_ch.close()
-    with pytest.raises(demux.ChannelError, match="closed by remote"):
+    with pytest.raises(mux.ChannelError, match="closed by remote"):
         await cli_ch.receive()
