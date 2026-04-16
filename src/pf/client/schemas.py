@@ -1,6 +1,20 @@
 import pydantic
 
 
+class Tag(pydantic.BaseModel):
+    model_config = pydantic.ConfigDict(extra="ignore")
+
+    id: int
+    name: str
+    value: str
+
+
+class TagsResponse(pydantic.BaseModel):
+    model_config = pydantic.ConfigDict(extra="ignore")
+
+    tags: list[Tag] = []
+
+
 class SshHostEntry(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(extra="ignore")
 

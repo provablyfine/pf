@@ -1,44 +1,28 @@
 import argparse
 import json
-import typing
 
 import tabulate
 
 from ... import client
 
 
-def _tags(args: argparse.Namespace, auth: client.HttpClient) -> list[dict[str, typing.Any]]:
-    params = {}
-    if args.id is not None:
-        params["id"] = args.id
-    if args.name is not None:
-        params["name"] = args.name
-    if args.value is not None:
-        params["value"] = args.value
-    response = auth.get(auth.directory.tag, params=params)
-    if response.status_code != 200:
-        raise client.exceptions.UI(f"Unable to find tags {','.join('='.join(kv) for kv in params.items())}")
-    tags = response.json()["tags"]
-    return tags
+def _sort_by_id(t: client.schemas.Tag) -> int:
+    return t.id
 
 
-def _sort_by_id(t: dict[str, typing.Any]) -> int:
-    return t["id"]
+def _sort_by_name(t: client.schemas.Tag) -> tuple[str, str, int]:
+    return (t.name, t.value, t.id)
 
 
-def _sort_by_name(t: dict[str, typing.Any]) -> tuple[str, str, int]:
-    return (t["name"], t["value"], t["id"])
-
-
-def _sort_by_value(t: dict[str, typing.Any]) -> tuple[str, str, int]:
-    return (t["value"], t["name"], t["id"])
+def _sort_by_value(t: client.schemas.Tag) -> tuple[str, str, int]:
+    return (t.value, t.name, t.id)
 
 
 def tag_list_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    api = client.Client(c, timeout=args.timeout)
-    auth = api.session_auth(c.session_key)
-    tags = _tags(args, auth)
+    sc = client.sync.Client(c, timeout=args.timeout)
+    response = sc.list_tags(id=args.id, name=args.name, value=args.value)
+    tags = response.tags
     sort_functions = {
         "id": _sort_by_id,
         "name": _sort_by_name,
@@ -49,13 +33,13 @@ def tag_list_function(args: argparse.Namespace) -> None:
         args.format = "quiet"
     match args.format:
         case "quiet":
-            output = "\n".join(str(t["id"]) for t in tags)
+            output = "\n".join(str(t.id) for t in tags)
         case "json":
-            output = json.dumps(tags, indent=2)
+            output = json.dumps([t.model_dump() for t in tags], indent=2)
         case "text":
-            rows = []
+            rows: list[list[int | str]] = []
             for tag in tags:
-                rows.append([tag["id"], tag["name"], tag["value"]])
+                rows.append([tag.id, tag.name, tag.value])
             if rows:
                 output = tabulate.tabulate(rows, headers=["id", "name", "value"])
             else:
@@ -68,28 +52,16 @@ def tag_list_function(args: argparse.Namespace) -> None:
 
 def _tag_create_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    api = client.Client(c, timeout=args.timeout)
-    auth = api.session_auth(c.session_key)
-    response = auth.post(
-        api.directory.tag,
-        json={
-            "name": args.name,
-            "value": args.value,
-        },
-    )
-    if response.status_code != 201:
-        raise client.exceptions.UI(f"Unable to create tag. {response.json()['title']}")
+    sc = client.sync.Client(c, timeout=args.timeout)
+    sc.create_tag(name=args.name, value=args.value)
 
 
 def _tag_delete_function(args: argparse.Namespace) -> None:
-    if args.id is None and args.name is None and args.value is None:
-        raise client.exceptions.UI("You must specify a filtering criterion")
+    if args.id is None:
+        raise client.exceptions.UI("You must specify a tag ID to delete")
     c = client.Config.load(args.config)
-    api = client.Client(c, timeout=args.timeout)
-    auth = api.session_auth(c.session_key)
-    response = auth.delete(f"{api.directory.tag}/{args.id}")
-    if response.status_code != 204:
-        raise client.exceptions.UI(f"Unable to delete tag. {response.json()['title']}")
+    sc = client.sync.Client(c, timeout=args.timeout)
+    sc.delete_tag(id=args.id)
 
 
 def add_subparser(parser: argparse.ArgumentParser) -> None:
