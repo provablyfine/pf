@@ -180,9 +180,8 @@ def _ssh_function(args: argparse.Namespace) -> None:
     raise client.exceptions.UI(f"Failed to connect via any bastion or direct IP: {last_error}")
 
 
-def add_subparser(subparsers):
-    ssh_parser = subparsers.add_parser("ssh", help="Login, get certificate, and connect via SSH")
-    ssh_parser.add_argument(
+def add_subparser(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
         "-o",
         dest="ssh_options",
         action="append",
@@ -190,8 +189,8 @@ def add_subparser(subparsers):
         metavar="OPTION",
         help="SSH option passed through to the underlying ssh command",
     )
-    ssh_parser.add_argument("-n", dest="stdin_null", action="store_true", help="Redirect stdin from null")
-    ssh_parser.add_argument(
+    parser.add_argument("-n", dest="stdin_null", action="store_true", help="Redirect stdin from null")
+    parser.add_argument(
         "-L",
         dest="forward_local",
         action="append",
@@ -199,7 +198,7 @@ def add_subparser(subparsers):
         metavar="[bind_address:]port:host:hostport",
         help="Local port forwarding",
     )
-    ssh_parser.add_argument(
+    parser.add_argument(
         "-R",
         dest="forward_remote",
         action="append",
@@ -207,8 +206,8 @@ def add_subparser(subparsers):
         metavar="[bind_address:]port:host:hostport",
         help="Remote port forwarding",
     )
-    ssh_parser.add_argument("-l", dest="login_user", default=None, help="Login username")
-    ssh_parser.add_argument("-p", dest="port", default=None, help="Port to connect to")
-    ssh_parser.add_argument("destination", help="[user@]hostname (pf identity name of the host)")
-    ssh_parser.add_argument("command", nargs="?", default=None, help="Command to execute on the remote host")
-    ssh_parser.set_defaults(func=_ssh_function)
+    parser.add_argument("-l", dest="login_user", default=None, help="Login username")
+    parser.add_argument("-p", dest="port", default=None, help="Port to connect to")
+    parser.add_argument("destination", help="[user@]hostname (pf identity name of the host)")
+    parser.add_argument("command", nargs="?", default=None, help="Command to execute on the remote host")
+    parser.set_defaults(func=_ssh_function)

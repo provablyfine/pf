@@ -3,6 +3,11 @@ import argparse
 from . import auth_cli, bastion_cli, boundary_cli, grant_cli, identity_cli, role_cli, tag_cli, tenant_cli
 
 
+# Note: argparse._SubParsersAction is private but has no public type alias in the standard library.
+# typeshed itself uses it in its stubs. The alternative is to restructure all 8 sub-CLIs to
+# receive their own parser from the pfa dispatcher, which is less convenient than the current
+# pattern where admin_cli distributes them. See pf/bastion_cli.py and pf/ssh_cli.py for how
+# we restructured those to avoid the private type.
 def add_subparsers(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     boundary_parser = subparsers.add_parser("boundary", help="View and edit boundaries")
     boundary_cli.add_subparser(boundary_parser)

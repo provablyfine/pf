@@ -138,9 +138,11 @@ def pf():
     openssh_parser = subparsers.add_parser("openssh", help="OpenSSH integration")
     openssh_cli.add_subparsers(openssh_parser)
 
-    bastion_cli.add_subparser(subparsers)
+    bastion_parser = subparsers.add_parser("bastion", help="Bastion management")
+    bastion_cli.add_subparser(bastion_parser)
 
-    ssh_cli.add_subparser(subparsers)
+    ssh_parser = subparsers.add_parser("ssh", help="Login, get certificate, and connect via SSH")
+    ssh_cli.add_subparser(ssh_parser)
 
     hosts_parser = subparsers.add_parser("hosts", help="List accessible hosts and permissions")
     hosts_parser.set_defaults(func=_hosts_function)

@@ -212,8 +212,7 @@ def _connect_function(args: argparse.Namespace) -> None:
     asyncio.run(_connect_async(args.url, token, args.hostname))
 
 
-def add_subparser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    parser = subparsers.add_parser("bastion", help="Bastion management")
+def add_subparser(parser: argparse.ArgumentParser) -> None:
     sub = parser.add_subparsers(required=True, dest="_cmd2")
 
     register_parser = sub.add_parser("register", help="Register with bastions")
