@@ -1,3 +1,4 @@
+import argparse
 import sys
 
 import tabulate
@@ -6,7 +7,7 @@ from .. import client, jwk, ssh
 
 
 @client.ssh_utils.exception
-def _agent_list_identities_function(args):
+def _agent_list_identities_function(args: argparse.Namespace) -> None:
     ssh_agent = ssh.agent.Client()
     if args.quiet:
         rows = []
@@ -25,7 +26,7 @@ def _agent_list_identities_function(args):
         print(output)
 
 
-def _agent_find_by_fingerprint(ssh_agent, fingerprint):
+def _agent_find_by_fingerprint(ssh_agent: object, fingerprint: str) -> object:
     for identity in ssh_agent.list_identities():
         if identity.public_key.match_ssh_fingerprint(fingerprint):
             return identity
@@ -33,7 +34,7 @@ def _agent_find_by_fingerprint(ssh_agent, fingerprint):
 
 
 @client.ssh_utils.exception
-def _agent_sign_function(args):
+def _agent_sign_function(args: argparse.Namespace) -> None:
     def is_rsa(key):
         return key.type in [
             jwk.KeyType.RSA_3072,
@@ -62,7 +63,7 @@ def _agent_sign_function(args):
 
 
 @client.ssh_utils.exception
-def _agent_add_function(args):
+def _agent_add_function(args: argparse.Namespace) -> None:
     ssh_agent = ssh.agent.Client()
     with open(args.key, "rb") as f:
         data = f.read()
@@ -78,7 +79,7 @@ def _agent_add_function(args):
 
 
 @client.ssh_utils.exception
-def _agent_del_function(args):
+def _agent_del_function(args: argparse.Namespace) -> None:
     ssh_agent = ssh.agent.Client()
     if args.all:
         ssh_agent.remove_all()
@@ -89,7 +90,7 @@ def _agent_del_function(args):
         assert False
 
 
-def add_subparsers(parser):
+def add_subparsers(parser: argparse.ArgumentParser) -> None:
     agent_subparsers = parser.add_subparsers(required=True, dest="_cmd2")
 
     agent_list_identities_parser = agent_subparsers.add_parser("ls")

@@ -7,7 +7,7 @@ class IndentDumper(yaml.Dumper):
         return super().increase_indent(flow, False)
 
 
-def dump(data):
+def dump(data: object) -> str:
     output = yaml.dump(
         data,
         Dumper=IndentDumper,

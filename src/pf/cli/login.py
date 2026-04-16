@@ -1,6 +1,7 @@
 import hashlib
 import http.server
 import secrets
+import typing
 import urllib.parse
 import webbrowser
 
@@ -127,7 +128,7 @@ def oidc_login(api: client.Client, config: client.Config, auth_name: str):
             self.end_headers()
             self.wfile.write(b"Login successful. You may close this tab.")
 
-        def log_message(self, format, *args):
+        def log_message(self, format: str, *args: object) -> None:
             pass  # suppress server log output
 
     server = http.server.HTTPServer(("127.0.0.1", port), CallbackHandler)
@@ -139,7 +140,7 @@ def oidc_login(api: client.Client, config: client.Config, auth_name: str):
     code = code_holder[0]
 
     # Exchange code for id_token
-    token_data: dict = {
+    token_data: dict[str, typing.Any] = {
         "grant_type": "authorization_code",
         "code": code,
         "code_verifier": code_verifier,
@@ -233,7 +234,7 @@ def oauth2_login(api: client.Client, config: client.Config, auth_name: str):
     webbrowser.open(response.json()["auth_url"])
 
     # Wait for server to redirect browser back after completing the exchange
-    result_holder: list[dict] = []
+    result_holder: list[dict[str, str]] = []
 
     class DoneHandler(http.server.BaseHTTPRequestHandler):
         def do_GET(self):
@@ -250,7 +251,7 @@ def oauth2_login(api: client.Client, config: client.Config, auth_name: str):
             else:
                 self.wfile.write(b"Login failed: " + reason.encode() + b". You may close this tab.")
 
-        def log_message(self, format, *args):
+        def log_message(self, format: str, *args: object) -> None:
             pass
 
     http.server.HTTPServer(("127.0.0.1", port), DoneHandler).handle_request()

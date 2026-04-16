@@ -1,9 +1,10 @@
+import argparse
 import sys
 
 from .. import client, jwk
 
 
-def _convert_function(args):
+def _convert_function(args: argparse.Namespace) -> None:
     with open(args.filename, "rb") as f:
         data = f.read()
     try:
@@ -24,7 +25,7 @@ def _convert_function(args):
     sys.stdout.write(output.decode("utf-8"))
 
 
-def _format(key, format):
+def _format(key: object, format: str) -> bytes:
     match format:
         case "openssh":
             return key.to_openssh()
@@ -34,7 +35,7 @@ def _format(key, format):
             assert False
 
 
-def _generate_function(args):
+def _generate_function(args: argparse.Namespace) -> None:
     match args.type:
         case "ed25519":
             key_type = jwk.KeyType.ED25519
@@ -57,7 +58,7 @@ def _generate_function(args):
     sys.stdout.write(output.decode("utf-8"))
 
 
-def _public_function(args):
+def _public_function(args: argparse.Namespace) -> None:
     with open(args.filename, "rb") as f:
         data = f.read()
     key = client.ssh_utils.load_private_key(data)
@@ -65,7 +66,7 @@ def _public_function(args):
     sys.stdout.write(output.decode("utf-8"))
 
 
-def add_subparsers(parser):
+def add_subparsers(parser: argparse.ArgumentParser) -> None:
     # commands for debugging and testing
     subparsers = parser.add_subparsers(required=True, dest="_cmd2")
 

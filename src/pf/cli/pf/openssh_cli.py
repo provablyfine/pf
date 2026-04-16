@@ -1,10 +1,11 @@
+import argparse
 import base64
 import os
 
 from ... import client, jwk, ssh
 
 
-def _user_trusted_keys_function(args):
+def _user_trusted_keys_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     api = client.Client(c, timeout=args.timeout)
     response = api.no_auth.get(f"{api.directory.ssh}/user/trusted-keys")
@@ -13,7 +14,7 @@ def _user_trusted_keys_function(args):
     print(response.text)
 
 
-def _sign_host_function(args):
+def _sign_host_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
@@ -40,7 +41,7 @@ def _sign_host_function(args):
             f.write(openssh_certificate + b"\n")
 
 
-def _authorized_principals(args):
+def _authorized_principals(args: argparse.Namespace) -> None:
     with open(args.host_certificate, "rb") as f:
         data = f.read()
         host_certificate = ssh.cert.Cert.from_openssh(data)
@@ -67,7 +68,7 @@ def _authorized_principals(args):
     print("\n".join(accepted))
 
 
-def add_subparsers(parser):
+def add_subparsers(parser: argparse.ArgumentParser) -> None:
     subparsers = parser.add_subparsers(required=True, dest="_cmd2")
 
     sign_host_parser = subparsers.add_parser("sign-host")

@@ -1,3 +1,4 @@
+import argparse
 import datetime
 
 import dateparser
@@ -6,7 +7,7 @@ import tabulate
 from .. import client, ssh
 
 
-def _parse_timestamp(s: str):
+def _parse_timestamp(s: str) -> int:
     dt = dateparser.parse(s)
     if dt is None:
         raise client.exceptions.UI(f'Unable to parse "{s}"')
@@ -14,7 +15,7 @@ def _parse_timestamp(s: str):
 
 
 @client.ssh_utils.exception
-def _read_function(args):
+def _read_function(args: argparse.Namespace) -> None:
     with open(args.filename, "rb") as f:
         data = f.read()
     cert = ssh.cert.Cert.from_openssh(data)
@@ -69,7 +70,7 @@ def _read_function(args):
     print(tabulate.tabulate(rows))
 
 
-def _sign_host_function(args):
+def _sign_host_function(args: argparse.Namespace) -> None:
     with open(args.key, "rb") as f:
         data = f.read()
     public_key = client.ssh_utils.load_public_key(data)
@@ -102,7 +103,7 @@ def _sign_host_function(args):
     print(certificate.decode("utf-8"))
 
 
-def _sign_user_function(args):
+def _sign_user_function(args: argparse.Namespace) -> None:
     with open(args.key, "rb") as f:
         data = f.read()
     public_key = client.ssh_utils.load_public_key(data)
@@ -151,7 +152,7 @@ def _sign_user_function(args):
     print(certificate.decode("utf-8"))
 
 
-def add_subparsers(parser):
+def add_subparsers(parser: argparse.ArgumentParser) -> None:
     subparsers = parser.add_subparsers(required=True, dest="_cmd2")
 
     read_parser = subparsers.add_parser("read", help="Read certificate")

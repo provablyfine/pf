@@ -1,3 +1,4 @@
+import argparse
 import base64
 import getpass
 import os
@@ -8,7 +9,7 @@ from .. import login
 
 
 @client.ssh_utils.exception
-def _ssh_function(args):
+def _ssh_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
 
     destination = args.destination

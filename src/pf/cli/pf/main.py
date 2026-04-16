@@ -19,7 +19,7 @@ _DEFAULT_CONFIG = os.path.join(os.path.expanduser("~"), ".config", "pf", "config
 
 
 @client.ssh_utils.exception
-def _hosts_function(args):
+def _hosts_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
@@ -38,7 +38,7 @@ def _hosts_function(args):
         print(output)
 
 
-def _config_function(args):
+def _config_function(args: argparse.Namespace) -> None:
     response = requests.get(args.directory, timeout=0.5)
     if response.status_code != 200:
         raise client.exceptions.UI(f"Unable to read directory: {response.text}")
@@ -59,7 +59,7 @@ def _parse_invitation(invitation: str) -> str:
     return invitation
 
 
-def _accept_function(args):
+def _accept_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     api = client.Client(c, timeout=args.timeout)
     invitation_key = _parse_invitation(args.invitation)
@@ -75,14 +75,14 @@ def _accept_function(args):
 
 
 @client.ssh_utils.exception
-def _login_function(args):
+def _login_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     api = client.Client(c, timeout=args.timeout)
     auth_name = args.auth or "default"
     login.login(api, c, auth_name, args.config, session_key_path=args.session_key)
 
 
-def _do_main(args):
+def _do_main(args: argparse.Namespace) -> None:
     log.setup(args.debug, log.filename("pf", args))
 
     try:

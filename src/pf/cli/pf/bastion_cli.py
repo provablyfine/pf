@@ -1,18 +1,28 @@
+import argparse
 import asyncio
 import logging
 import signal
 import ssl
 import sys
+import types
+import typing
 
 import websockets.asyncio.client
 
 from ... import bastion, client
 from .. import login
 
+
+class BastionDict(typing.TypedDict):
+    id: int
+    register_url: str
+    connect_url: str | None
+    ssh_proxy_jump: str | None
+
 logger = logging.getLogger(__name__)
 
 
-def _get_bastions(auth: client.HttpClient) -> list[dict]:
+def _get_bastions(auth: client.HttpClient) -> list[BastionDict]:
     response = auth.get(f"{auth.directory.identity}/self/bastions")
     if response.status_code != 200:
         raise client.exceptions.UI(response.json().get("title", "Failed to get bastions"))
@@ -86,7 +96,7 @@ async def _register_bastion(register_url: str, token: str, local_port: int) -> N
 
 
 @client.ssh_utils.exception
-def _register_function(args):
+def _register_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
 
     if not login.has_valid_session(c):
@@ -95,10 +105,10 @@ def _register_function(args):
     api = client.Client(c, timeout=args.timeout)
     auth = api.session_auth(c.session_key)
 
-    active_tasks: dict[int, asyncio.Task] = {}
+    active_tasks: dict[int, asyncio.Task[None]] = {}
     stop_event = asyncio.Event()
 
-    def signal_handler(sig, frame):
+    def signal_handler(sig: int, frame: types.FrameType | None) -> None:
         stop_event.set()
 
     old_handler = signal.signal(signal.SIGINT, signal_handler)
@@ -189,7 +199,7 @@ async def _connect_async(url: str, token: str, hostname: str) -> None:
         await asyncio.gather(forward_stdin(), forward_stdout())
 
 
-def _connect_function(args):
+def _connect_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
 
     if not login.has_valid_session(c):
@@ -201,7 +211,7 @@ def _connect_function(args):
     asyncio.run(_connect_async(args.url, token, args.hostname))
 
 
-def add_subparser(subparsers):
+def add_subparser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     parser = subparsers.add_parser("bastion", help="Bastion management")
     sub = parser.add_subparsers(required=True, dest="_cmd2")
 

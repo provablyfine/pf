@@ -1,12 +1,14 @@
+import argparse
 import json
 import sys
+import typing
 
 import yaml
 
 from .. import client
 
 
-def add_parser(parser, f):
+def add_parser(parser: argparse.ArgumentParser, f: typing.Callable[..., None]) -> None:
     def _read_grant_stdin():
         data = sys.stdin.read()
         try:
@@ -18,7 +20,7 @@ def add_parser(parser, f):
                 raise client.exceptions.UI("Unable to read grant from stdin")
         return grant
 
-    def _do(args):
+    def _do(args: argparse.Namespace) -> None:
         grant = _read_grant_stdin()
         if args.add:
             f(args, "add", grant)
