@@ -1,13 +1,15 @@
+import base64
 import hashlib
 import http.server
 import secrets
+import socket
 import typing
 import urllib.parse
 import webbrowser
 
 import requests
 
-from .. import base64url, client, jwk, ssh
+from .. import client, jwk, ssh
 
 
 def has_valid_session(c: client.Config) -> bool:
@@ -23,20 +25,8 @@ def has_valid_session(c: client.Config) -> bool:
     return False
 
 
-def http_sig_login(
-    api: client.Client, config: client.Config, account_key: str | None, session_key_path: str | None = None
-):
-    """Perform HTTP signature login.
-
-    Args:
-        api: Client API instance
-        config: Config to update with session key
-        account_key: Account key (filename or fingerprint) for signing
-        session_key_path: Optional path to session key file. If None, generates new one in SSH agent.
-
-    Returns:
-        The session key fingerprint that was stored in config
-    """
+def http_sig_login(c: client.Config, sc: client.sync.Client, session_key_path: str | None = None) -> str:
+    """HTTP signature login. Returns session fingerprint. Caller updates config."""
     if session_key_path is None:
         try:
             ssh_agent = ssh.agent.Client()
@@ -54,35 +44,19 @@ def http_sig_login(
             raise client.exceptions.UI("Unable to parse data either as PEM or SSH format")
         session_fingerprint = session_key_path
 
-    auth = api.login_auth(account=account_key, session=session_fingerprint)
-    response = auth.post(url=auth.directory.login, json={"session_public_key": session_key.public().to_dict()})
-    if response.status_code != 204:
-        raise client.exceptions.UI(f"Unable to login successfully: {response.text}")
-
-    config.session_key = session_fingerprint
+    sc.http_sig_login(session_key.public().to_dict(), session_fingerprint)
     return session_fingerprint
 
 
-def oidc_login(api: client.Client, config: client.Config, auth_name: str):
-    """Perform OIDC login.
-
-    Args:
-        api: Client API instance
-        config: Config to update with session key
-        auth_name: Name of the auth configuration to use
-
-    Returns:
-        The session key fingerprint that was stored in config
-    """
-    # Fetch auth config
-    response = api.no_auth.get(f"{api.directory.public_auth}/{auth_name}")
-    if response.status_code != 200:
-        raise client.exceptions.UI(f"Unable to read auth config: {response.text}")
-    auth_public = response.json()
-    params = auth_public["params"]
+def oidc_login(c: client.Config, sc: client.sync.Client, auth_name: str) -> str:
+    """OIDC login. Returns session fingerprint. Caller updates config."""
+    auth_public = sc.get_public_auth(auth_name)
+    if not isinstance(auth_public.config, client.schemas.OidcConfig):
+        raise client.exceptions.UI(f"Auth '{auth_name}' is not OIDC")
+    oidc_config = auth_public.config
 
     # Fetch OIDC discovery
-    discovery_resp = requests.get(f"{params['issuer']}/.well-known/openid-configuration", timeout=10)
+    discovery_resp = requests.get(f"{oidc_config.issuer}/.well-known/openid-configuration", timeout=10)
     if discovery_resp.status_code != 200:
         raise client.exceptions.UI("Unable to fetch OIDC discovery document")
     discovery = discovery_resp.json()
@@ -90,12 +64,12 @@ def oidc_login(api: client.Client, config: client.Config, auth_name: str):
     token_endpoint = discovery["token_endpoint"]
 
     # Generate PKCE code verifier and challenge
-    code_verifier = base64url.encode(secrets.token_bytes(32))
-    code_challenge = base64url.encode(hashlib.sha256(code_verifier.encode()).digest())
+    code_verifier = base64.urlsafe_b64encode(secrets.token_bytes(32)).decode("utf-8").rstrip("=")
+    code_challenge = (
+        base64.urlsafe_b64encode(hashlib.sha256(code_verifier.encode()).digest()).decode("utf-8").rstrip("=")
+    )
 
     # Bind a free local port for the redirect
-    import socket
-
     sock = socket.socket()
     sock.bind(("127.0.0.1", 0))
     port = sock.getsockname()[1]
@@ -104,7 +78,7 @@ def oidc_login(api: client.Client, config: client.Config, auth_name: str):
     redirect_uri = f"http://127.0.0.1:{port}/callback"
     auth_url = (
         f"{authorization_endpoint}"
-        f"?client_id={urllib.parse.quote(params['client_id'])}"
+        f"?client_id={urllib.parse.quote(oidc_config.client_id)}"
         f"&redirect_uri={urllib.parse.quote(redirect_uri)}"
         f"&response_type=code"
         f"&scope=openid+email"
@@ -119,7 +93,7 @@ def oidc_login(api: client.Client, config: client.Config, auth_name: str):
     code_holder: list[str] = []
 
     class CallbackHandler(http.server.BaseHTTPRequestHandler):
-        def do_GET(self):
+        def do_GET(self) -> None:
             parsed = urllib.parse.urlparse(self.path)
             params = urllib.parse.parse_qs(parsed.query)
             if "code" in params:
@@ -128,7 +102,7 @@ def oidc_login(api: client.Client, config: client.Config, auth_name: str):
             self.end_headers()
             self.wfile.write(b"Login successful. You may close this tab.")
 
-        def log_message(self, format: str, *args: object) -> None:
+        def log_message(self, format: str, *args: typing.Any) -> None:
             pass  # suppress server log output
 
     server = http.server.HTTPServer(("127.0.0.1", port), CallbackHandler)
@@ -145,10 +119,10 @@ def oidc_login(api: client.Client, config: client.Config, auth_name: str):
         "code": code,
         "code_verifier": code_verifier,
         "redirect_uri": redirect_uri,
-        "client_id": params["client_id"],
+        "client_id": oidc_config.client_id,
     }
-    if params.get("client_secret"):
-        token_data["client_secret"] = params["client_secret"]
+    if oidc_config.client_secret:
+        token_data["client_secret"] = oidc_config.client_secret
     token_resp = requests.post(token_endpoint, data=token_data, timeout=10)
     if token_resp.status_code != 200:
         raise client.exceptions.UI(f"Unable to exchange code for token: {token_resp.text}")
@@ -165,41 +139,15 @@ def oidc_login(api: client.Client, config: client.Config, auth_name: str):
     ssh_agent.add(session_key, comment="pf-session", lifetime=1800)
     session_fingerprint = session_key.public().ssh_fingerprint()
 
-    # POST /auth/oidc/login signed with the new session key
-    oidc_auth = api.session_auth(session=session_fingerprint)
-    response = oidc_auth.post(
-        url=oidc_auth.directory.login_oidc,
-        json={
-            "auth_name": auth_public["name"],
-            "id_token": id_token,
-            "session_public_key": session_key.public().to_dict(),
-        },
-    )
-    if response.status_code != 204:
-        raise client.exceptions.UI(f"Unable to login via OIDC: {response.text}")
-
-    config.session_key = session_fingerprint
+    sc.oidc_login(auth_name, id_token, session_key.public().to_dict(), session_fingerprint)
     return session_fingerprint
 
 
-def oauth2_login(api: client.Client, config: client.Config, auth_name: str):
-    """Perform OAuth2 login (e.g., GitHub).
-
-    Args:
-        api: Client API instance
-        config: Config to update with session key
-        auth_name: Name of the auth configuration to use
-
-    Returns:
-        The session key fingerprint that was stored in config
-    """
-    import socket
-
-    # Fetch auth config first
-    response = api.no_auth.get(f"{api.directory.public_auth}/{auth_name}")
-    if response.status_code != 200:
-        raise client.exceptions.UI(f"Unable to read auth config: {response.text}")
-    auth_public = response.json()
+def oauth2_login(c: client.Config, sc: client.sync.Client, auth_name: str) -> str:
+    """OAuth2 login. Returns session fingerprint. Caller updates config."""
+    auth_public = sc.get_public_auth(auth_name)
+    if not isinstance(auth_public.config, client.schemas.OAuth2Config):
+        raise client.exceptions.UI(f"Auth '{auth_name}' is not OAuth2")
 
     # Generate session key and add to SSH agent
     try:
@@ -218,26 +166,18 @@ def oauth2_login(api: client.Client, config: client.Config, auth_name: str):
     client_redirect_uri = f"http://127.0.0.1:{port}/done"
 
     # Start OAuth2 flow on server
-    oauth2_auth = api.session_auth(session=session_fingerprint)
-    response = oauth2_auth.post(
-        url=oauth2_auth.directory.login_oauth2_start,
-        json={
-            "auth_name": auth_public["name"],
-            "session_public_key": session_key.public().to_dict(),
-            "client_redirect_uri": client_redirect_uri,
-        },
+    auth_url = sc.oauth2_login_start(
+        auth_name, session_key.public().to_dict(), session_fingerprint, client_redirect_uri
     )
-    if response.status_code != 200:
-        raise client.exceptions.UI(f"Unable to start OAuth2 login: {response.text}")
 
     print("Opening browser for OAuth2 login...")
-    webbrowser.open(response.json()["auth_url"])
+    webbrowser.open(auth_url)
 
     # Wait for server to redirect browser back after completing the exchange
     result_holder: list[dict[str, str]] = []
 
     class DoneHandler(http.server.BaseHTTPRequestHandler):
-        def do_GET(self):
+        def do_GET(self) -> None:
             parsed = urllib.parse.urlparse(self.path)
             qs = urllib.parse.parse_qs(parsed.query)
             status = qs.get("status", ["error"])[0]
@@ -251,7 +191,7 @@ def oauth2_login(api: client.Client, config: client.Config, auth_name: str):
             else:
                 self.wfile.write(b"Login failed: " + reason.encode() + b". You may close this tab.")
 
-        def log_message(self, format: str, *args: object) -> None:
+        def log_message(self, format: str, *args: typing.Any) -> None:
             pass
 
     http.server.HTTPServer(("127.0.0.1", port), DoneHandler).handle_request()
@@ -259,42 +199,18 @@ def oauth2_login(api: client.Client, config: client.Config, auth_name: str):
     if result_holder[0]["status"] != "ok":
         raise client.exceptions.UI(f"OAuth2 login failed: {result_holder[0]['reason']}")
 
-    config.session_key = session_fingerprint
     return session_fingerprint
 
 
-def login(
-    api: client.Client, config: client.Config, auth_name: str, config_path: str, session_key_path: str | None = None
-):
-    """Perform login based on server auth config.
-
-    Args:
-        api: Client API instance
-        config: Config to update with session key
-        auth_name: Name of the auth configuration to use
-        config_path: Path to save config after login
-        session_key_path: Optional path to session key file (for http_sig only)
-
-    Returns:
-        The session key fingerprint
-    """
-    # Discover auth config type
-    response = api.no_auth.get(f"{api.directory.public_auth}/{auth_name}")
-    if response.status_code == 404:
-        raise client.exceptions.UI(f"Auth config '{auth_name}' not found")
-    if response.status_code != 200:
-        raise client.exceptions.UI(f"Unable to read auth config: {response.text}")
-    auth_public = response.json()
-
-    match auth_public["config"]["type"]:
+def login(c: client.Config, sc: client.sync.Client, auth_name: str, session_key_path: str | None = None) -> str:
+    """Perform login based on server auth config. Returns session fingerprint. Caller updates config."""
+    auth_public = sc.get_public_auth(auth_name)
+    match auth_public.config.type:
         case "http_sig":
-            session_fingerprint = http_sig_login(api, config, config.account_key, session_key_path)
+            return http_sig_login(c, sc, session_key_path)
         case "oidc":
-            session_fingerprint = oidc_login(api, config, auth_name)
+            return oidc_login(c, sc, auth_name)
         case "oauth2-github":
-            session_fingerprint = oauth2_login(api, config, auth_name)
+            return oauth2_login(c, sc, auth_name)
         case _:
-            raise client.exceptions.UI(f"Unsupported auth type: {auth_public['type']}")
-
-    config.save(config_path)
-    return session_fingerprint
+            raise client.exceptions.UI(f"Unsupported auth type: {auth_public.config.type}")

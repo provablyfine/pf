@@ -92,6 +92,12 @@ AuthConfig = typing.Annotated[
 ]
 
 
+class AuthPublic(_Base):
+    name: str
+    description: str
+    config: AuthConfig
+
+
 class Auth(_Base):
     id: int
     name: str

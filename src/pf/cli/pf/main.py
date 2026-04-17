@@ -68,9 +68,10 @@ def _accept_function(args: argparse.Namespace) -> None:
 @client.ssh_utils.exception
 def _login_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    api = client.Client(c, timeout=args.timeout)
+    sc = client.sync.Client(c, timeout=args.timeout)
     auth_name = args.auth or "default"
-    login.login(api, c, auth_name, args.config, session_key_path=args.session_key)
+    c.session_key = login.login(c, sc, auth_name, session_key_path=args.session_key)
+    c.save(args.config)
 
 
 def _do_main(args: argparse.Namespace) -> None:

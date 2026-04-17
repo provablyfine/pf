@@ -24,31 +24,18 @@ def _ssh_function(args: argparse.Namespace) -> None:
 
     # Auto-login for http_sig only; other auth types require pf login first
     if not login.has_valid_session(c):
-        api = client.Client(c, timeout=args.timeout)
-        response = api.no_auth.get(f"{api.directory.public_auth}/default")
-        if response.status_code != 200:
+        sc = client.sync.Client(c, timeout=args.timeout)
+        try:
+            auth_public = sc.get_public_auth("default")
+        except client.exceptions.UI:
             raise client.exceptions.UI("Not logged in. Run 'pf login' first.")
-        auth_public = response.json()
-        match auth_public["config"]["type"]:
+        match auth_public.config.type:
             case "http_sig":
-                try:
-                    ssh_agent = ssh.agent.Client()
-                except Exception:
-                    raise client.exceptions.UI("Unable to connect to user's SSH agent")
-                session_key = jwk.Private.generate_ed25519()
-                ssh_agent.add(session_key, comment="pf-session", lifetime=1800)
-                c.session_key = session_key.public().ssh_fingerprint()
-                login_auth = api.login_auth(account=c.account_key, session=c.session_key)
-                resp = login_auth.post(
-                    url=login_auth.directory.login,
-                    json={"session_public_key": session_key.public().to_dict()},
-                )
-                if resp.status_code != 204:
-                    raise client.exceptions.UI(f"Auto-login failed: {resp.text}")
+                c.session_key = login.http_sig_login(c, sc)
                 c.save(args.config)
             case _:
                 raise client.exceptions.UI(
-                    f"Session expired. Run 'pf login' first (auth type: {auth_public['config']['type']})."
+                    f"Session expired. Run 'pf login' first (auth type: {auth_public.config.type})."
                 )
 
     sc = client.sync.Client(c, timeout=args.timeout)

@@ -50,9 +50,10 @@ def _connect_function(args: argparse.Namespace) -> None:
 
 def _login_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    api = client.Client(c, timeout=args.timeout)
+    sc = client.sync.Client(c, timeout=args.timeout)
     auth_name = args.auth or c.auth_name or "default"
-    login.login(api, c, auth_name, args.config, session_key_path=args.session_key)
+    c.session_key = login.login(c, sc, auth_name, session_key_path=args.session_key)
+    c.save(args.config)
 
 
 def _do_main(args: argparse.Namespace) -> None:
@@ -62,9 +63,9 @@ def _do_main(args: argparse.Namespace) -> None:
         try:
             c = client.Config.load(args.config)
             if not login.has_valid_session(c):
-                api = client.Client(c, timeout=args.timeout)
-                auth_name = c.auth_name or "default"
-                login.login(api, c, auth_name, args.config)
+                sc = client.sync.Client(c, timeout=args.timeout)
+                c.session_key = login.login(c, sc, c.auth_name or "default")
+                c.save(args.config)
         except client.exceptions.UI:
             pass
 

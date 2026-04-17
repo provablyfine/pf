@@ -573,3 +573,60 @@ class Client:
         )
         if response.status_code != 204:
             raise exceptions.UI(f"Unable to accept invitation: {response.text}")
+
+    def get_public_auth(self, auth_name: str) -> schemas.AuthPublic:
+        """Fetch public auth configuration."""
+        http = self._client.no_auth
+        response = http.get(f"{http.directory.public_auth}/{auth_name}")
+        if response.status_code == 404:
+            raise exceptions.UI(f"Auth config '{auth_name}' not found")
+        if response.status_code != 200:
+            raise exceptions.UI(f"Unable to read auth config: {response.text}")
+        return schemas.AuthPublic.model_validate(response.json())
+
+    def http_sig_login(self, session_public_key: dict[str, typing.Any], session_fingerprint: str) -> None:
+        """POST to /login endpoint. Caller manages session key and config updates."""
+        auth = self._client.login_auth(account=self._client.config.account_key, session=session_fingerprint)
+        response = auth.post(url=auth.directory.login, json={"session_public_key": session_public_key})
+        if response.status_code != 204:
+            raise exceptions.UI(f"Unable to login successfully: {response.text}")
+
+    def oidc_login(
+        self, auth_name: str, id_token: str, session_public_key: dict[str, typing.Any], session_fingerprint: str
+    ) -> None:
+        """POST to /auth/oidc/login endpoint. Caller manages OIDC flow, session key, and config updates."""
+        auth = self._client.session_auth(session=session_fingerprint)
+        response = auth.post(
+            url=auth.directory.login_oidc,
+            json={
+                "auth_name": auth_name,
+                "id_token": id_token,
+                "session_public_key": session_public_key,
+            },
+        )
+        if response.status_code != 204:
+            raise exceptions.UI(f"Unable to login via OIDC: {response.text}")
+
+    def oauth2_login_start(
+        self,
+        auth_name: str,
+        session_public_key: dict[str, typing.Any],
+        session_fingerprint: str,
+        client_redirect_uri: str,
+    ) -> str:
+        """POST to /auth/oauth2/start and return auth_url.
+
+        Caller manages session key, browser, callback server, and config updates.
+        """
+        auth = self._client.session_auth(session=session_fingerprint)
+        response = auth.post(
+            url=auth.directory.login_oauth2_start,
+            json={
+                "auth_name": auth_name,
+                "session_public_key": session_public_key,
+                "client_redirect_uri": client_redirect_uri,
+            },
+        )
+        if response.status_code != 200:
+            raise exceptions.UI(f"Unable to start OAuth2 login: {response.text}")
+        return response.json()["auth_url"]
