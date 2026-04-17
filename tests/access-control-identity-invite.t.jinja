@@ -19,7 +19,7 @@ Create temporary user for tests below
 %}
 Check that permission "{{permission}}" is actually enforcing access control
   $ pfa -c user1.json identity invite -i $USER4_ID --manual
-  Unable to invite identity. Not allowed to invite identity
+  Not allowed to invite identity
   [2]
   $ pfa -c config.json grant identity {{grant}} | pfa -c config.json role grant -i $ROLE_ID --add
   $ pfa -c user1.json identity invite -i $USER4_ID --manual

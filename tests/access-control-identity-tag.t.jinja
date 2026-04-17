@@ -17,7 +17,7 @@ Check that grant "{{grant}}" is actually enforcing access control
   $ pfa -c user1.json identity tag -i $USER2_ID -a $PERSON_ID
   $ pfa -c config.json role read -i $ROLE_ID -f json | jq '.grant_list[-1]' | pfa -c config.json role grant -i $ROLE_ID --del
   $ pfa -c user1.json identity tag -i $USER2_ID -a $PERSON_ID
-  Unable to update identity. Not allowed to update tag.
+  Not allowed to update tag
   [2]
   $ pfa -c config.json identity tag -i $USER2_ID -d $PERSON_ID
 {% endfor %}
@@ -32,7 +32,7 @@ Check that grant "{{grant}}" is actually enforcing access control
 Check that grant "{{grant}}" is actually enforcing access control
   $ pfa -c config.json identity tag -i $USER2_ID -a $PERSON_ID
   $ pfa -c user1.json identity tag -i $USER2_ID -d $PERSON_ID
-  Unable to update identity. Not allowed to update tag.
+  Not allowed to update tag
   [2]
   $ pfa -c config.json grant identity {{grant}} | pfa -c config.json role grant -i $ROLE_ID --add
   $ pfa -c user1.json identity tag -i $USER2_ID -d $PERSON_ID

@@ -15,7 +15,7 @@ Initialize server and login
 %}
 Check that grant "{{grant}}" is actually enforcing access control
   $ pfa -c user1.json identity create -n user4 -b boundary -t $PERSON_ID
-  Unable to create identity. Not allowed to create identity
+  Not allowed to create identity
   [2]
   $ pfa -c config.json grant identity {{grant}} | pfa -c config.json role grant -i $ROLE_ID --add
   $ pfa -c user1.json identity create -n user4 -b boundary -t id=person

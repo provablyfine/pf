@@ -137,3 +137,24 @@ class Boundary(_Base):
 
 class BoundariesResponse(_Base):
     boundaries: list[Boundary] = []
+
+
+class IdentityTagOp(_Base):
+    type: str
+    tag_id_list: list[int] | None = None
+    tag_name_value_list: list[TagNameValue] | None = None
+
+
+class IdentityBoundary(_Base):
+    name: str
+
+
+class Identity(_Base):
+    id: int
+    name: str
+    tags: list[TagNameValue] = []
+    boundaries: list[IdentityBoundary] = []
+
+
+class IdentitiesResponse(_Base):
+    identities: list[Identity] = []

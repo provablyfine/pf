@@ -7,49 +7,30 @@ import tabulate
 from ... import client
 
 
-def _identities(
-    auth: client.HttpClient,
-    id: int | None = None,
-    name: str | None = None,
-    tag_id: int | None = None,
-    tag_name: str | None = None,
-    boundary_id: int | None = None,
-    boundary_name: str | None = None,
-) -> list[dict[str, typing.Any]]:
-    params = {}
-    if id is not None:
-        params["id"] = id
-    if name is not None:
-        params["name"] = name
-    if tag_id is not None:
-        params["tag_id"] = tag_id
-    if tag_name is not None:
-        params["tag_name"] = tag_name
-    if boundary_id is not None:
-        params["boundary_id"] = boundary_id
-    if boundary_name is not None:
-        params["boundary_name"] = boundary_name
-    response = auth.get(auth.directory.identity, params=params)
-    if response.status_code != 200:
-        raise client.exceptions.UI(f"Unable to find identity {','.join('='.join(kv) for kv in params.items())}")
-    identities = response.json()["identities"]
-    return identities
+def _parse_tag(s: str) -> dict[str, str]:
+    equal = s.find("=")
+    if equal == -1:
+        raise client.exceptions.UI(f"Tag is invalid. Expected format: name=value. Got: {s}")
+    name = s[:equal]
+    value = s[equal + 1 :]
+    return {"name": name, "value": value}
 
 
-def _identity(args: argparse.Namespace, auth: client.HttpClient) -> dict[str, typing.Any]:
-    identities = _identities(auth, id=args.id)
-    if len(identities) == 0:
-        raise client.exceptions.UI("No identity found")
-    assert len(identities) == 1
-    return identities[0]
+def _format_tag_op(op: str, values: list[str]) -> list[client.schemas.IdentityTagOp]:
+    tag_id_list = [int(t) for t in values if t.isdigit()]
+    tag_name_value_list = [client.schemas.TagNameValue(**_parse_tag(t)) for t in values if not t.isdigit()]
+    output: list[client.schemas.IdentityTagOp] = []
+    if tag_id_list:
+        output.append(client.schemas.IdentityTagOp(type=op, tag_id_list=tag_id_list))
+    if tag_name_value_list:
+        output.append(client.schemas.IdentityTagOp(type=op, tag_name_value_list=tag_name_value_list))
+    return output
 
 
 def _identity_list_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    api = client.Client(c, timeout=args.timeout)
-    auth = api.session_auth(c.session_key)
-    identities = _identities(
-        auth,
+    sc = client.sync.Client(c, timeout=args.timeout)
+    response = sc.list_identities(
         id=args.id,
         name=args.name,
         tag_id=args.tag_id,
@@ -57,17 +38,18 @@ def _identity_list_function(args: argparse.Namespace) -> None:
         boundary_id=args.boundary_id,
         boundary_name=args.boundary_name,
     )
+    identities = response.identities
     if args.quiet:
         args.format = "quiet"
     match args.format:
         case "quiet":
-            output = "\n".join(str(i["id"]) for i in identities)
+            output = "\n".join(str(i.id) for i in identities)
         case "json":
-            output = json.dumps(identities, indent=2)
+            output = json.dumps([i.model_dump() for i in identities], indent=2)
         case "text":
-            rows = []
+            rows: list[list[int | str]] = []
             for identity in identities:
-                rows.append([identity["id"], identity["name"], len(identity["tags"]), len(identity["boundaries"])])
+                rows.append([identity.id, identity.name, len(identity.tags), len(identity.boundaries)])
             if len(rows) == 0:
                 output = ""
             else:
@@ -80,20 +62,19 @@ def _identity_list_function(args: argparse.Namespace) -> None:
 
 def _identity_read_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    api = client.Client(c, timeout=args.timeout)
-    auth = api.session_auth(c.session_key)
-    identity = _identity(args, auth)
+    sc = client.sync.Client(c, timeout=args.timeout)
+    identity = sc.get_identity(args.id)
     match args.format:
         case "json":
-            output = json.dumps(identity, indent=2)
+            output = json.dumps(identity.model_dump(), indent=2)
         case "text":
-            rows = []
-            rows.append(("id", identity["id"]))
-            rows.append(("name", identity["name"]))
-            for t in identity["tags"]:
-                rows.append(("tag", f"{t['name']}={t['value']}"))
-            for b in identity["boundaries"]:
-                rows.append(("boundary", b["name"]))
+            rows: list[tuple[str, int | str]] = []
+            rows.append(("id", identity.id))
+            rows.append(("name", identity.name))
+            for t in identity.tags:
+                rows.append(("tag", f"{t.name}={t.value}"))
+            for b in identity.boundaries:
+                rows.append(("boundary", b.name))
             output = tabulate.tabulate(rows, tablefmt="plain")
         case _:
             assert False
@@ -102,70 +83,33 @@ def _identity_read_function(args: argparse.Namespace) -> None:
 
 def _identity_delete_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    api = client.Client(c, timeout=args.timeout)
-    auth = api.session_auth(c.session_key)
-    response = auth.delete(f"{api.directory.identity}/{args.id}")
-    if response.status_code != 204:
-        raise client.exceptions.UI(f"Unable to delete identity. {response.json()['title']}")
-
-
-def _parse_tag(s: str) -> dict[str, str]:
-    equal = s.find("=")
-    if equal == -1:
-        raise client.exceptions.UI(f"Tag is invalid. Expected format: name=value. Got: {s}")
-    name = s[:equal]
-    value = s[equal + 1 :]
-    return {"name": name, "value": value}
+    sc = client.sync.Client(c, timeout=args.timeout)
+    sc.delete_identity(args.id)
 
 
 def _identity_create_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    api = client.Client(c, timeout=args.timeout)
-    auth = api.session_auth(c.session_key)
+    sc = client.sync.Client(c, timeout=args.timeout)
     boundary_id_list = [int(b) for b in args.boundary if b.isdigit()]
     boundary_name_list = [b for b in args.boundary if not b.isdigit()]
     tag_id_list = [int(t) for t in args.tag if t.isdigit()]
     tag_name_value_list = [_parse_tag(t) for t in args.tag if not t.isdigit()]
-    response = auth.post(
-        api.directory.identity,
-        json={
-            "name": args.name,
-            "boundary_id_list": boundary_id_list,
-            "boundary_name_list": boundary_name_list,
-            "tag_id_list": tag_id_list,
-            "tag_name_value_list": tag_name_value_list,
-        },
-    )
-    if response.status_code != 201:
-        raise client.exceptions.UI(f"Unable to create identity. {response.json()['title']}")
+    sc.create_identity(args.name, boundary_id_list, boundary_name_list, tag_id_list, tag_name_value_list)
 
 
 def _identity_invite_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    api = client.Client(c, timeout=args.timeout)
-    auth = api.session_auth(c.session_key)
-    response = auth.post(f"{api.directory.identity}/{args.id}/invite", json={"delivery": args.delivery})
-    if response.status_code == 204:
-        return
-    elif response.status_code == 200:
-        data = response.json()
-        if args.delivery == "manual":
-            auth_name = args.auth or c.auth_name or "default"
-            print(f"{c.directory_url}?invitation={data['key']['k']}&auth={auth_name}")
-    else:
-        raise client.exceptions.UI(f"Unable to invite identity. {response.json()['title']}")
+    sc = client.sync.Client(c, timeout=args.timeout)
+    key = sc.invite_identity(args.id, args.delivery)
+    if key is not None:
+        auth_name = args.auth or c.auth_name or "default"
+        print(f"{c.directory_url}?invitation={key}&auth={auth_name}")
 
 
 def _identity_update_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    api = client.Client(c, timeout=args.timeout)
-    auth = api.session_auth(c.session_key)
-    query = {}
-    if args.name is not None:
-        query["name"] = args.name
-    response = auth.patch(f"{api.directory.identity}/{args.id}", json=query)
-    if response.status_code != 200:
-        raise client.exceptions.UI(f"Unable to update identity. {response.json()['title']}.")
+    sc = client.sync.Client(c, timeout=args.timeout)
+    sc.update_identity(args.id, name=args.name)
 
 
 class TagAction(argparse.Action):
@@ -176,7 +120,6 @@ class TagAction(argparse.Action):
         values: object,
         option_string: str | None = None,
     ) -> None:
-        # Get the current list or initialize a new one
         items = getattr(namespace, self.dest, [])
         if items is None:
             items = []
@@ -186,33 +129,15 @@ class TagAction(argparse.Action):
         setattr(namespace, self.dest, items)
 
 
-def _format_tag_op(op: str, values: object) -> list[dict[str, object]]:
-    tag_id_list = [int(t) for t in values if t.isdigit()]
-    tag_name_value_list = [_parse_tag(t) for t in values if not t.isdigit()]
-    output = []
-    if len(tag_id_list) > 0:
-        output.append({"type": op, "tag_id_list": tag_id_list})
-    if len(tag_name_value_list) > 0:
-        output.append({"type": op, "tag_name_value_list": tag_name_value_list})
-    return output
-
-
 def _identity_tag_function(args: argparse.Namespace) -> None:
-
     c = client.Config.load(args.config)
-    api = client.Client(c, timeout=args.timeout)
-    auth = api.session_auth(c.session_key)
+    sc = client.sync.Client(c, timeout=args.timeout)
 
-    ops = [op for op_type, values in args.ops for op in _format_tag_op(op_type, values)]
+    ops: list[client.schemas.IdentityTagOp] = []
+    for op_type, values in args.ops:
+        ops.extend(_format_tag_op(op_type, typing.cast(list[str], values or [])))
 
-    response = auth.patch(
-        f"{api.directory.identity}/{args.id}",
-        json={
-            "tags": ops,
-        },
-    )
-    if response.status_code != 200:
-        raise client.exceptions.UI(f"Unable to update identity. {response.json()['title']}.")
+    sc.update_identity(args.id, tags=ops)
 
 
 def add_subparser(parser: argparse.ArgumentParser) -> None:

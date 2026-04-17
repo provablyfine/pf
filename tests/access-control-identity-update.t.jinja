@@ -18,7 +18,7 @@ Check that grant "{{grant}}" is actually enforcing access control
   $ pfa -c user1.json identity update -i $USER2_ID -n user2
   $ pfa -c config.json role read -i $ROLE_ID -f json | jq '.grant_list[-1]' | pfa -c config.json role grant -i $ROLE_ID --del
   $ pfa -c user1.json identity update -i $USER2_ID -n another
-  Unable to update identity. Not allowed to update identity field.
+  Not allowed to update identity field
   [2]
 {% endfor %}
 

@@ -11,7 +11,7 @@ List existing identities (there is one)
   You cannot delete yourself
   [2]
   $ pfa -c config.json identity update -i 1 -n hello
-  Unable to update identity. Not allowed to update self.
+  Not allowed to update self
   [2]
 
 Create a boundary to be able to create an identity with it

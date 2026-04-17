@@ -16,7 +16,7 @@ Check that grant "{{grant}}" is actually enforcing access control
   $ pfa -c config.json identity create -n user4 -b boundary -t $PERSON_ID
   $ USER4_ID=$(pfa -c config.json identity list -n user4 -q)
   $ pfa -c user1.json identity delete -i $USER4_ID
-  Unable to delete identity. Not allowed to delete identity
+  Not allowed to delete identity
   [2]
   $ pfa -c config.json grant identity {{grant}} | pfa -c config.json role grant -i $ROLE_ID --add
   $ pfa -c user1.json identity delete -i $USER4_ID
@@ -32,7 +32,7 @@ and becomes invalid after the identity is deleted
   $ pfa -c config.json identity create -n user4 -b boundary -t $PERSON_ID
   $ USER4_ID=$(pfa -c config.json identity list -n user4 -q)
   $ pfa -c user1.json identity delete -i $USER4_ID
-  Unable to delete identity. Not allowed to delete identity
+  Not allowed to delete identity
   [2]
   $ pfa -c config.json grant identity {{grant}} | pfa -c config.json role grant -i $ROLE_ID --add
   $ pfa -c user1.json identity delete -i $USER4_ID

@@ -396,3 +396,94 @@ class Client:
         response = http.delete(f"{http.directory.boundary}/{id}")
         if response.status_code != 204:
             raise exceptions.UI(_problem_title(response, "Unable to delete boundary"))
+
+    def list_identities(
+        self,
+        id: int | None = None,
+        name: str | None = None,
+        tag_id: list[str] | None = None,
+        tag_name: list[str] | None = None,
+        boundary_id: list[str] | None = None,
+        boundary_name: list[str] | None = None,
+    ) -> schemas.IdentitiesResponse:
+        params: dict[str, typing.Any] = {}
+        if id is not None:
+            params["id"] = id
+        if name is not None:
+            params["name"] = name
+        if tag_id is not None:
+            params["tag_id"] = tag_id
+        if tag_name is not None:
+            params["tag_name"] = tag_name
+        if boundary_id is not None:
+            params["boundary_id"] = boundary_id
+        if boundary_name is not None:
+            params["boundary_name"] = boundary_name
+        http = self._client.session_auth(self._client.config.session_key)
+        response = http.get(http.directory.identity, params=params)
+        if response.status_code != 200:
+            params_str = ",".join(f"{k}={v}" for k, v in params.items())
+            raise exceptions.UI(f"Unable to find identity {params_str}")
+        return schemas.IdentitiesResponse.model_validate(response.json())
+
+    def get_identity(self, id: int) -> schemas.Identity:
+        result = self.list_identities(id=id)
+        if len(result.identities) == 0:
+            raise exceptions.UI("No identity found")
+        assert len(result.identities) == 1
+        return result.identities[0]
+
+    def create_identity(
+        self,
+        name: str | None,
+        boundary_id_list: list[int],
+        boundary_name_list: list[str],
+        tag_id_list: list[int],
+        tag_name_value_list: list[dict[str, str]],
+    ) -> None:
+        http = self._client.session_auth(self._client.config.session_key)
+        response = http.post(
+            http.directory.identity,
+            json={
+                "name": name,
+                "boundary_id_list": boundary_id_list,
+                "boundary_name_list": boundary_name_list,
+                "tag_id_list": tag_id_list,
+                "tag_name_value_list": tag_name_value_list,
+            },
+        )
+        if response.status_code != 201:
+            raise exceptions.UI(_problem_title(response, "Unable to create identity"))
+
+    def invite_identity(self, id: int, delivery: str) -> str | None:
+        http = self._client.session_auth(self._client.config.session_key)
+        response = http.post(f"{http.directory.identity}/{id}/invite", json={"delivery": delivery})
+        if response.status_code == 204:
+            return None
+        if response.status_code == 200:
+            return response.json()["key"]["k"]
+        raise exceptions.UI(_problem_title(response, "Unable to invite identity"))
+
+    def delete_identity(self, id: int) -> None:
+        http = self._client.session_auth(self._client.config.session_key)
+        response = http.delete(f"{http.directory.identity}/{id}")
+        if response.status_code != 204:
+            raise exceptions.UI(_problem_title(response, "Unable to delete identity"))
+
+    def update_identity(
+        self,
+        id: int,
+        name: str | None = None,
+        tags: list[schemas.IdentityTagOp] | None = None,
+    ) -> None:
+        body: dict[str, typing.Any] = {}
+        if name is not None:
+            body["name"] = name
+        if tags is not None:
+            body["tags"] = [op.model_dump(exclude_none=True) for op in tags]
+        if not body:
+            raise exceptions.UI("Nothing to update")
+        http = self._client.session_auth(self._client.config.session_key)
+        response = http.patch(f"{http.directory.identity}/{id}", json=body)
+        if response.status_code != 200:
+            raise exceptions.UI(_problem_title(response, "Unable to update identity"))
