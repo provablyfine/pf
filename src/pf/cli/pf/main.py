@@ -58,15 +58,9 @@ def _parse_invitation(invitation: str) -> str:
 
 def _accept_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    api = client.Client(c, timeout=args.timeout)
+    sc = client.sync.Client(c, timeout=args.timeout)
     invitation_key = _parse_invitation(args.invitation)
-    auth = api.invitation_auth(account=args.key, invitation=invitation_key)
-    response = auth.post(
-        url=auth.directory.accept_invitation,
-        json={"account_public_key": auth.account_public_key.to_dict()},
-    )
-    if response.status_code != 204:
-        raise client.exceptions.UI(f"Unable to accept invitation successfully: {response.text}")
+    sc.connect(invitation_key, args.key)
     c.account_key = args.key
     c.save(args.config)
 
