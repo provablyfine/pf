@@ -125,3 +125,15 @@ class Role(_Base):
 
 class RolesResponse(_Base):
     roles: list[Role] = []
+
+
+class Boundary(_Base):
+    id: int
+    name: str
+    description: str
+    ceiling_list: list[Grant] | None = None
+    denied_list: list[Grant] = []
+
+
+class BoundariesResponse(_Base):
+    boundaries: list[Boundary] = []

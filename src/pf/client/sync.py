@@ -340,3 +340,59 @@ class Client:
         response = http.delete(f"{http.directory.role}/{id}")
         if response.status_code != 204:
             raise exceptions.UI(_problem_title(response, "Unable to delete role"))
+
+    def list_boundaries(self, id: int | None = None, name: str | None = None) -> schemas.BoundariesResponse:
+        params: dict[str, int | str] = {}
+        if id is not None:
+            params["id"] = id
+        if name is not None:
+            params["name"] = name
+        http = self._client.session_auth(self._client.config.session_key)
+        response = http.get(http.directory.boundary, params=params)
+        if response.status_code != 200:
+            params_str = ",".join(f"{k}={v}" for k, v in params.items())
+            raise exceptions.UI(f"Unable to find boundary {params_str}")
+        return schemas.BoundariesResponse.model_validate(response.json())
+
+    def get_boundary(self, id: int) -> schemas.Boundary:
+        result = self.list_boundaries(id=id)
+        if len(result.boundaries) == 0:
+            raise exceptions.UI("No boundary found")
+        assert len(result.boundaries) == 1
+        return result.boundaries[0]
+
+    def create_boundary(self, name: str, description: str) -> None:
+        http = self._client.session_auth(self._client.config.session_key)
+        response = http.post(http.directory.boundary, json={"name": name, "description": description})
+        if response.status_code != 201:
+            raise exceptions.UI(_problem_title(response, "Unable to create boundary"))
+
+    def update_boundary(
+        self,
+        id: int,
+        name: str | None = None,
+        description: str | None = None,
+        ceiling_list: list[schemas.Grant] | None = None,
+        denied_list: list[schemas.Grant] | None = None,
+    ) -> None:
+        body: dict[str, typing.Any] = {}
+        if name is not None:
+            body["name"] = name
+        if description is not None:
+            body["description"] = description
+        if ceiling_list is not None:
+            body["ceiling_list"] = [g.model_dump() for g in ceiling_list]
+        if denied_list is not None:
+            body["denied_list"] = [g.model_dump() for g in denied_list]
+        if not body:
+            raise exceptions.UI("Nothing to update")
+        http = self._client.session_auth(self._client.config.session_key)
+        response = http.patch(f"{http.directory.boundary}/{id}", json=body)
+        if response.status_code != 200:
+            raise exceptions.UI(_problem_title(response, "Unable to update boundary"))
+
+    def delete_boundary(self, id: int) -> None:
+        http = self._client.session_auth(self._client.config.session_key)
+        response = http.delete(f"{http.directory.boundary}/{id}")
+        if response.status_code != 204:
+            raise exceptions.UI(_problem_title(response, "Unable to delete boundary"))

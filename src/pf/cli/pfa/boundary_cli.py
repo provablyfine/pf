@@ -8,40 +8,19 @@ from ... import client
 from .. import grant, yaml_utils
 
 
-def _boundaries(auth: client.HttpClient, id: int | None = None, name: str | None = None) -> list[dict[str, typing.Any]]:
-    params = {}
-    if id is not None:
-        params["id"] = id
-    if name is not None:
-        params["name"] = name
-    response = auth.get(auth.directory.boundary, params=params)
-    if response.status_code != 200:
-        raise client.exceptions.UI(f"Unable to find boundary. {response.json()['title']}")
-    boundaries = response.json()["boundaries"]
-    return boundaries
+def _sort_by_id(b: client.schemas.Boundary) -> int:
+    return b.id
 
 
-def _boundary(auth: client.HttpClient, id: int) -> dict[str, typing.Any]:
-    boundaries = _boundaries(auth, id=id)
-    if len(boundaries) == 0:
-        raise client.exceptions.UI("No boundary found")
-    assert len(boundaries) == 1
-    return boundaries[0]
-
-
-def _sort_by_id(boundary: dict[str, typing.Any]) -> int:
-    return boundary["id"]
-
-
-def _sort_by_name(boundary: dict[str, typing.Any]) -> tuple[str, int]:
-    return (boundary["name"], boundary["id"])
+def _sort_by_name(b: client.schemas.Boundary) -> tuple[str, int]:
+    return (b.name, b.id)
 
 
 def _boundary_list_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    api = client.Client(c, timeout=args.timeout)
-    auth = api.session_auth(c.session_key)
-    boundaries = _boundaries(auth, id=args.id, name=args.name)
+    sc = client.sync.Client(c, timeout=args.timeout)
+    response = sc.list_boundaries(id=args.id, name=args.name)
+    boundaries = response.boundaries
     sort_functions = {
         "id": _sort_by_id,
         "name": _sort_by_name,
@@ -51,15 +30,15 @@ def _boundary_list_function(args: argparse.Namespace) -> None:
         args.format = "quiet"
     match args.format:
         case "quiet":
-            output = "\n".join(str(b["id"]) for b in boundaries)
+            output = "\n".join(str(b.id) for b in boundaries)
         case "json":
-            output = json.dumps(boundaries, indent=2)
+            output = json.dumps([b.model_dump() for b in boundaries], indent=2)
         case "yaml":
-            output = yaml_utils.dump(boundaries)
+            output = yaml_utils.dump([b.model_dump() for b in boundaries])
         case "text":
-            rows = []
+            rows: list[list[int | str]] = []
             for boundary in boundaries:
-                rows.append([boundary["id"], boundary["name"], boundary["description"]])
+                rows.append([boundary.id, boundary.name, boundary.description])
             if len(rows) == 0:
                 output = ""
             else:
@@ -72,34 +51,37 @@ def _boundary_list_function(args: argparse.Namespace) -> None:
 
 def _boundary_read_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    api = client.Client(c, timeout=args.timeout)
-    auth = api.session_auth(c.session_key)
-    boundary = _boundary(auth, args.id)
+    sc = client.sync.Client(c, timeout=args.timeout)
+    boundary = sc.get_boundary(args.id)
     match args.format:
         case "json":
-            output = json.dumps(boundary, indent=2)
+            output = json.dumps(boundary.model_dump(), indent=2)
         case "yaml":
-            output = yaml_utils.dump(boundary)
+            output = yaml_utils.dump(boundary.model_dump())
         case "text":
-            rows = []
-            rows.append(["id", boundary["id"]])
-            rows.append(["name", boundary["name"]])
-            rows.append(["description", boundary["description"]])
-            if boundary["ceiling_list"] is None:
+            rows: list[list[str | int]] = []
+            rows.append(["id", boundary.id])
+            rows.append(["name", boundary.name])
+            rows.append(["description", boundary.description])
+            if boundary.ceiling_list is None:
                 rows.append(["ceiling", "*"])
-            elif len(boundary["ceiling_list"]) == 0:
+            elif len(boundary.ceiling_list) == 0:
                 rows.append(["ceiling", "[]"])
             else:
-                for g in boundary["ceiling_list"]:
-                    type, filter, permission = client.grant.to_text(g)
-                    rows.append(["ceiling", f"type:       {type}"])
-                    rows.append(["", f"filter:     {filter}"])
-                    rows.append(["", f"permission: {permission}"])
-            for g in boundary["denied_list"]:
-                type, filter, permission = client.grant.to_text(g)
-                rows.append(["denied", f"type:       {type}"])
-                rows.append(["", f"filter:     {filter}"])
-                rows.append(["", f"permission: {permission}"])
+                for g in boundary.ceiling_list:
+                    type_text, filter_text, perm_text = client.grant.to_text(
+                        typing.cast(client.grant.GrantDict, g.model_dump())
+                    )
+                    rows.append(["ceiling", f"type:       {type_text}"])
+                    rows.append(["", f"filter:     {filter_text}"])
+                    rows.append(["", f"permission: {perm_text}"])
+            for g in boundary.denied_list:
+                type_text, filter_text, perm_text = client.grant.to_text(
+                    typing.cast(client.grant.GrantDict, g.model_dump())
+                )
+                rows.append(["denied", f"type:       {type_text}"])
+                rows.append(["", f"filter:     {filter_text}"])
+                rows.append(["", f"permission: {perm_text}"])
             output = tabulate.tabulate(rows, tablefmt="plain")
         case _:
             assert False
@@ -108,65 +90,50 @@ def _boundary_read_function(args: argparse.Namespace) -> None:
 
 def _boundary_delete_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    api = client.Client(c, timeout=args.timeout)
-    auth = api.session_auth(c.session_key)
-    response = auth.delete(f"{api.directory.boundary}/{args.id}")
-    if response.status_code != 204:
-        raise client.exceptions.UI(f"Unable to delete boundary. {response.json()['title']}")
+    sc = client.sync.Client(c, timeout=args.timeout)
+    sc.delete_boundary(args.id)
 
 
 def _boundary_create_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    api = client.Client(c, timeout=args.timeout)
-    auth = api.session_auth(c.session_key)
-    response = auth.post(
-        api.directory.boundary,
-        json={"name": args.name, "description": "" if args.description is None else args.description},
-    )
-    if response.status_code != 201:
-        raise client.exceptions.UI(f"Unable to create boundary. {response.json()['title']}")
+    sc = client.sync.Client(c, timeout=args.timeout)
+    sc.create_boundary(args.name, args.description or "")
 
 
 def _boundary_update_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    api = client.Client(c, timeout=args.timeout)
-    auth = api.session_auth(c.session_key)
-    query = {}
-    if args.name is not None:
-        query["name"] = args.name
-    if args.description is not None:
-        query["description"] = args.description
-    response = auth.patch(f"{api.directory.boundary}/{args.id}", json=query)
-    if response.status_code != 200:
-        raise client.exceptions.UI(f"Unable to update boundary. {response.json()['title']}.")
+    sc = client.sync.Client(c, timeout=args.timeout)
+    sc.update_boundary(args.id, name=args.name, description=args.description)
 
 
 def _boundary_grant_function(
-    args: argparse.Namespace, action: str, grant: dict[str, typing.Any], field_name: str
+    args: argparse.Namespace, action: str, grant: dict[str, typing.Any] | list[typing.Any], field_name: str
 ) -> None:
     c = client.Config.load(args.config)
-    api = client.Client(c, timeout=args.timeout)
-    auth = api.session_auth(c.session_key)
-    boundary = _boundary(auth, args.id)
+    sc = client.sync.Client(c, timeout=args.timeout)
+    boundary = sc.get_boundary(args.id)
+
+    current_list = getattr(boundary, field_name)
 
     match action:
         case "add":
-            grant_list = [grant] if boundary[field_name] is None else boundary[field_name] + [grant]
+            grant_obj = client.schemas.Grant.model_validate(grant)
+            grant_list = [grant_obj] if current_list is None else [*current_list, grant_obj]
         case "del":
-            grant_list = [g for g in boundary[field_name] if g != grant]
+            grant_obj = client.schemas.Grant.model_validate(grant)
+            if current_list is None:
+                grant_list = None
+            else:
+                grant_list = [g for g in current_list if g.model_dump() != grant]
         case "set":
-            grant_list = grant
+            grant_list = [client.schemas.Grant.model_validate(g) for g in grant]
         case _:
             assert False
 
-    response = auth.patch(
-        f"{api.directory.boundary}/{boundary['id']}",
-        json={
-            field_name: grant_list,
-        },
-    )
-    if response.status_code != 200:
-        raise client.exceptions.UI(f"Unable to update boundary. {response.json()['title']}.")
+    if field_name == "ceiling_list":
+        sc.update_boundary(boundary.id, ceiling_list=grant_list)
+    else:  # denied_list
+        sc.update_boundary(boundary.id, denied_list=grant_list)
 
 
 def _boundary_denied_function(args: argparse.Namespace, action: str, grant: dict[str, typing.Any]) -> None:

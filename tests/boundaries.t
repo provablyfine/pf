@@ -63,10 +63,10 @@ Update name and description
   >   invite_list: null
   > EOF
   $ cat ./identity-crud.yaml | pfa -c config.json boundary denied -i 1 --add
-  Unable to update boundary. Not allowed to update denied list on boundary that applies to self.
+  Not allowed to update denied list on boundary that applies to self
   [2]
   $ cat ./identity-crud.yaml | pfa -c config.json boundary ceiling -i 1 -a
-  Unable to update boundary. Not allowed to update ceiling list on boundary that applies to self.
+  Not allowed to update ceiling list on boundary that applies to self
   [2]
 
 Create a new boundary
