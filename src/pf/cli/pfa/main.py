@@ -19,23 +19,8 @@ def _initialize_function(args: argparse.Namespace) -> None:
     if response.status_code != 200:
         raise client.exceptions.UI(f"Unable to read directory: {response.text}")
     c = client.Config(directory_url=args.url, directory=response.json())
-    api = client.Client(c, timeout=args.timeout)
-
-    response = api.no_auth.post(api.directory.initialize)
-    if response.status_code == 204:
-        raise client.exceptions.UI("Unable to initialize app: it is already initialized.")
-    if response.status_code != 200:
-        raise client.exceptions.UI(f"Unable to initialize app. Unexpected error: {response.status_code}.")
-    invitation_key = response.json()["key"]["k"]
-
-    auth = api.invitation_auth(account=args.key, invitation=invitation_key)
-    response = auth.post(
-        url=auth.directory.accept_invitation,
-        json={"account_public_key": auth.account_public_key.to_dict()},
-    )
-    if response.status_code != 204:
-        raise client.exceptions.UI(f"Unable to accept invitation: {response.text}")
-
+    sc = client.sync.Client(c, timeout=args.timeout)
+    sc.initialize(args.key)
     c.account_key = args.key
     c.auth_name = "default"
     c.save(args.config)
@@ -53,16 +38,10 @@ def _connect_function(args: argparse.Namespace) -> None:
     if response.status_code != 200:
         raise client.exceptions.UI(f"Unable to read directory: {response.text}")
     c = client.Config(directory_url=clean_url, directory=response.json())
-    api = client.Client(c, timeout=args.timeout)
+    sc = client.sync.Client(c, timeout=args.timeout)
 
     if invitation and args.key:
-        auth = api.invitation_auth(account=args.key, invitation=invitation)
-        response = auth.post(
-            url=auth.directory.accept_invitation,
-            json={"account_public_key": auth.account_public_key.to_dict()},
-        )
-        if response.status_code != 204:
-            raise client.exceptions.UI(f"Unable to accept invitation: {response.text}")
+        sc.connect(invitation, args.key)
         c.account_key = args.key
 
     c.auth_name = auth_name

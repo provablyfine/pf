@@ -2,8 +2,7 @@ import typing
 
 import requests
 
-from . import configuration, exceptions, schemas
-from .http_client import Client as HttpClient
+from . import configuration, exceptions, http_client, schemas
 
 
 def _problem_title(response: requests.Response, default: str) -> str:
@@ -19,7 +18,7 @@ def _problem_title(response: requests.Response, default: str) -> str:
 
 class Client:
     def __init__(self, config: configuration.Config, timeout: float = 1.0) -> None:
-        self._client = HttpClient(config, timeout)
+        self._client = http_client.Client(config, timeout)
 
     def list_ssh_hosts(self) -> schemas.SshHostsResponse:
         http = self._client.session_auth(self._client.config.session_key)
@@ -487,3 +486,29 @@ class Client:
         response = http.patch(f"{http.directory.identity}/{id}", json=body)
         if response.status_code != 200:
             raise exceptions.UI(_problem_title(response, "Unable to update identity"))
+
+    def initialize(self, key: str) -> None:
+        """POST to initialize endpoint, then accept the returned invitation."""
+        response = self._client.no_auth.post(self._client.directory.initialize)
+        if response.status_code == 204:
+            raise exceptions.UI("Unable to initialize app: it is already initialized.")
+        if response.status_code != 200:
+            raise exceptions.UI(f"Unable to initialize app. Unexpected error: {response.status_code}.")
+        invitation_key = response.json()["key"]["k"]
+        auth = self._client.invitation_auth(account=key, invitation=invitation_key)
+        response = auth.post(
+            url=auth.directory.accept_invitation,
+            json={"account_public_key": auth.account_public_key.to_dict()},
+        )
+        if response.status_code != 204:
+            raise exceptions.UI(f"Unable to accept invitation: {response.text}")
+
+    def connect(self, invitation: str, key: str) -> None:
+        """Accept an existing invitation."""
+        auth = self._client.invitation_auth(account=key, invitation=invitation)
+        response = auth.post(
+            url=auth.directory.accept_invitation,
+            json={"account_public_key": auth.account_public_key.to_dict()},
+        )
+        if response.status_code != 204:
+            raise exceptions.UI(f"Unable to accept invitation: {response.text}")
