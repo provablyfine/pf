@@ -10,7 +10,8 @@ import textual.widget
 import textual.widgets
 import textual_autocomplete
 
-from . import async_client, auto_complete, checkbox_input, header
+from .. import client
+from . import auto_complete, checkbox_input, header
 
 
 @dataclasses.dataclass
@@ -185,7 +186,7 @@ class RoleGrantEditWidget(_GrantEditWidget):
     }
     """
 
-    def __init__(self, auth: async_client.AsyncClient, filter: dict, permission: dict):
+    def __init__(self, auth: client.aio.Client, filter: dict, permission: dict):
         super().__init__()
         self._auth = auth
         self._initial_filter = filter
@@ -219,8 +220,8 @@ class RoleGrantEditWidget(_GrantEditWidget):
             )
 
     async def on_mount(self) -> None:
-        roles = await self._auth.list_roles()
-        candidates = [textual_autocomplete.DropdownItem(main=r["name"]) for r in roles]
+        roles = (await self._auth.list_roles()).roles
+        candidates = [textual_autocomplete.DropdownItem(main=r.name) for r in roles]
         self.query_one("#filter-name", checkbox_input.CheckboxInput).set_candidates(candidates)
 
     def get_grant_data(self) -> tuple[dict, dict]:
@@ -256,7 +257,7 @@ class IdentityGrantEditWidget(_GrantEditWidget):
     }
     """
 
-    def __init__(self, auth: async_client.AsyncClient, filter: dict, permission: dict):
+    def __init__(self, auth: client.aio.Client, filter: dict, permission: dict):
         super().__init__()
         self._auth = auth
         self._initial_filter = filter
@@ -343,19 +344,19 @@ class IdentityGrantEditWidget(_GrantEditWidget):
             )
 
     async def on_mount(self) -> None:
-        identities = await self._auth.list_identities()
-        identity_candidates = [textual_autocomplete.DropdownItem(main=i["name"]) for i in identities]
+        identities = (await self._auth.list_identities()).identities
+        identity_candidates = [textual_autocomplete.DropdownItem(main=i.name) for i in identities]
         self.query_one("#filter-name", checkbox_input.CheckboxInput).set_candidates(identity_candidates)
 
-        tags_raw = await self._auth.list_tags()
-        tags = [textual_autocomplete.DropdownItem(main=f"{t['name']}={t['value']}") for t in tags_raw]
+        tags_raw = (await self._auth.list_tags()).tags
+        tags = [textual_autocomplete.DropdownItem(main=f"{t.name}={t.value}") for t in tags_raw]
         self.query_one("#filter-tagged-by", checkbox_input.CheckboxInput).set_candidates(tags)
         self.query_one("#permission-create-allowed-tags", checkbox_input.CheckboxInput).set_candidates(tags)
         self.query_one("#permission-add-tag", checkbox_input.CheckboxInput).set_candidates(tags)
         self.query_one("#permission-del-tag", checkbox_input.CheckboxInput).set_candidates(tags)
 
-        boundaries_raw = await self._auth.list_boundaries()
-        boundaries = [textual_autocomplete.DropdownItem(main=b["name"]) for b in boundaries_raw]
+        boundaries_raw = (await self._auth.list_boundaries()).boundaries
+        boundaries = [textual_autocomplete.DropdownItem(main=b.name) for b in boundaries_raw]
         self.query_one("#filter-bounded-by", checkbox_input.CheckboxInput).set_candidates(boundaries)
         self.query_one("#permission-create-req-boundaries", checkbox_input.CheckboxInput).set_candidates(boundaries)
 
@@ -398,7 +399,7 @@ class TagGrantEditWidget(_GrantEditWidget):
     }
     """
 
-    def __init__(self, auth: async_client.AsyncClient, filter: dict, permission: dict):
+    def __init__(self, auth: client.aio.Client, filter: dict, permission: dict):
         super().__init__()
         self._auth = auth
         self._initial_filter = filter
@@ -428,8 +429,8 @@ class TagGrantEditWidget(_GrantEditWidget):
             )
 
     async def on_mount(self) -> None:
-        tags_raw = await self._auth.list_tags()
-        candidates = [textual_autocomplete.DropdownItem(main=f"{t['name']}={t['value']}") for t in tags_raw]
+        tags_raw = (await self._auth.list_tags()).tags
+        candidates = [textual_autocomplete.DropdownItem(main=f"{t.name}={t.value}") for t in tags_raw]
         self.query_one("#filter-name-value", checkbox_input.CheckboxInput).set_candidates(candidates)
 
     def get_grant_data(self) -> tuple[dict, dict]:
@@ -451,7 +452,7 @@ class BoundaryGrantEditWidget(_GrantEditWidget):
     }
     """
 
-    def __init__(self, auth: async_client.AsyncClient, filter: dict, permission: dict):
+    def __init__(self, auth: client.aio.Client, filter: dict, permission: dict):
         super().__init__()
         self._auth = auth
         self._initial_filter = filter
@@ -485,8 +486,8 @@ class BoundaryGrantEditWidget(_GrantEditWidget):
             )
 
     async def on_mount(self) -> None:
-        boundaries_raw = await self._auth.list_boundaries()
-        candidates = [textual_autocomplete.DropdownItem(main=b["name"]) for b in boundaries_raw]
+        boundaries_raw = (await self._auth.list_boundaries()).boundaries
+        candidates = [textual_autocomplete.DropdownItem(main=b.name) for b in boundaries_raw]
         self.query_one("#filter-name", checkbox_input.CheckboxInput).set_candidates(candidates)
 
     def get_grant_data(self) -> tuple[dict, dict]:
@@ -514,7 +515,7 @@ class TenantGrantEditWidget(_GrantEditWidget):
     }
     """
 
-    def __init__(self, auth: async_client.AsyncClient, filter: dict, permission: dict):
+    def __init__(self, auth: client.aio.Client, filter: dict, permission: dict):
         super().__init__()
         self._auth = auth
         self._initial_filter = filter
@@ -546,8 +547,8 @@ class TenantGrantEditWidget(_GrantEditWidget):
             )
 
     async def on_mount(self) -> None:
-        tenants_raw = await self._auth.list_tenants()
-        candidates = [textual_autocomplete.DropdownItem(main=str(t["id"])) for t in tenants_raw]
+        tenants_raw = (await self._auth.list_tenants()).tenants
+        candidates = [textual_autocomplete.DropdownItem(main=str(t.id)) for t in tenants_raw]
         self.query_one("#filter-id", checkbox_input.CheckboxInput).set_candidates(candidates)
 
     def get_grant_data(self) -> tuple[dict, dict]:
@@ -567,7 +568,7 @@ class TenantGrantEditWidget(_GrantEditWidget):
 
 
 class _SshBaseGrantEditWidget(_GrantEditWidget):
-    def __init__(self, auth: async_client.AsyncClient, filter: dict, permission: dict):
+    def __init__(self, auth: client.aio.Client, filter: dict, permission: dict):
         super().__init__()
         self._auth = auth
         self._initial_filter = filter
@@ -602,16 +603,16 @@ class _SshBaseGrantEditWidget(_GrantEditWidget):
             )
 
     async def _mount_filter_candidates(self) -> None:
-        identities = await self._auth.list_identities()
-        identity_candidates = [textual_autocomplete.DropdownItem(main=i["name"]) for i in identities]
+        identities = (await self._auth.list_identities()).identities
+        identity_candidates = [textual_autocomplete.DropdownItem(main=i.name) for i in identities]
         self.query_one("#filter-name", checkbox_input.CheckboxInput).set_candidates(identity_candidates)
 
-        tags_raw = await self._auth.list_tags()
-        tags = [textual_autocomplete.DropdownItem(main=f"{t['name']}={t['value']}") for t in tags_raw]
+        tags_raw = (await self._auth.list_tags()).tags
+        tags = [textual_autocomplete.DropdownItem(main=f"{t.name}={t.value}") for t in tags_raw]
         self.query_one("#filter-tagged-by", checkbox_input.CheckboxInput).set_candidates(tags)
 
-        boundaries_raw = await self._auth.list_boundaries()
-        boundaries = [textual_autocomplete.DropdownItem(main=b["name"]) for b in boundaries_raw]
+        boundaries_raw = (await self._auth.list_boundaries()).boundaries
+        boundaries = [textual_autocomplete.DropdownItem(main=b.name) for b in boundaries_raw]
         self.query_one("#filter-bounded-by", checkbox_input.CheckboxInput).set_candidates(boundaries)
 
     def _filter_data(self) -> dict:

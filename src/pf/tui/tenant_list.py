@@ -6,7 +6,8 @@ import textual.containers
 import textual.screen
 import textual.widgets
 
-from . import async_client, header
+from .. import client
+from . import header
 
 
 class _TenantCreateScreen(textual.screen.ModalScreen[dict | None]):
@@ -49,10 +50,10 @@ class TenantListScreen(textual.screen.Screen[None]):
         ("escape", "app.pop_screen", "Back"),
     ]
 
-    def __init__(self, auth: async_client.AsyncClient) -> None:
+    def __init__(self, auth: client.aio.Client) -> None:
         super().__init__()
         self._auth = auth
-        self._tenants: list = []
+        self._tenants: list[client.schemas.Tenant] = []
 
     def compose(self) -> textual.app.ComposeResult:
         yield header.AppHeader()
@@ -62,16 +63,16 @@ class TenantListScreen(textual.screen.Screen[None]):
     async def on_mount(self) -> None:
         table = self.query_one(textual.widgets.DataTable)
         table.add_columns("Name", "Display Name", "Enabled")
-        self._tenants = await self._auth.list_tenants()
+        self._tenants = (await self._auth.list_tenants()).tenants
         self._populate_table(table)
 
     def _populate_table(self, table: textual.widgets.DataTable) -> None:
         table.clear(columns=False)
         for tenant in self._tenants:
             table.add_row(
-                tenant["name"],
-                tenant["display_name"],
-                "yes" if tenant["is_enabled"] else "no",
+                tenant.name,
+                tenant.display_name,
+                "yes" if tenant.is_enabled else "no",
             )
 
     @textual.work
@@ -83,7 +84,7 @@ class TenantListScreen(textual.screen.Screen[None]):
         if response.status_code not in (200, 201):
             self.notify(response.json().get("title", "Failed to create tenant"), severity="error")
             return
-        self._tenants = await self._auth.list_tenants()
+        self._tenants = (await self._auth.list_tenants()).tenants
         table = self.query_one(textual.widgets.DataTable)
         self._populate_table(table)
 

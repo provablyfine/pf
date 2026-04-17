@@ -109,7 +109,7 @@ class Client:
             raise exceptions.UI(f"Unable to find tags {params_str}")
         return schemas.TagsResponse.model_validate(response.json())
 
-    def create_tag(self, name: str, value: str) -> None:
+    def create_tag(self, name: str, value: str) -> schemas.Tag:
         http = self._client.session_auth(self._client.config.session_key)
         response = http.post(
             http.directory.tag,
@@ -117,6 +117,7 @@ class Client:
         )
         if response.status_code != 201:
             raise exceptions.UI(_problem_title(response, "Unable to create tag"))
+        return schemas.Tag.model_validate(response.json())
 
     def delete_tag(self, id: int) -> None:
         http = self._client.session_auth(self._client.config.session_key)
@@ -194,7 +195,7 @@ class Client:
             raise exceptions.UI(_problem_title(response, "Unable to read auth config"))
         return schemas.Auth.model_validate(response.json())
 
-    def create_auth_http_sig(self, name: str, description: str, tags: list[dict[str, str]]) -> None:
+    def create_auth_http_sig(self, name: str, description: str, tags: list[dict[str, str]]) -> schemas.Auth:
         http = self._client.session_auth(self._client.config.session_key)
         body = {
             "name": name,
@@ -205,6 +206,7 @@ class Client:
         response = http.post(http.directory.auth, json=body)
         if response.status_code != 201:
             raise exceptions.UI(_problem_title(response, "Unable to create auth config"))
+        return schemas.Auth.model_validate(response.json())
 
     def create_auth_oidc(
         self,
@@ -214,7 +216,7 @@ class Client:
         issuer: str,
         client_id: str,
         client_secret: str | None,
-    ) -> None:
+    ) -> schemas.Auth:
         http = self._client.session_auth(self._client.config.session_key)
         config: dict[str, str] = {
             "type": "oidc",
@@ -227,6 +229,7 @@ class Client:
         response = http.post(http.directory.auth, json=body)
         if response.status_code != 201:
             raise exceptions.UI(_problem_title(response, "Unable to create auth config"))
+        return schemas.Auth.model_validate(response.json())
 
     def create_auth_oauth2_github(
         self,
@@ -235,7 +238,7 @@ class Client:
         tags: list[dict[str, str]],
         client_id: str,
         client_secret: str,
-    ) -> None:
+    ) -> schemas.Auth:
         http = self._client.session_auth(self._client.config.session_key)
         config = {
             "type": "oauth2-github",
@@ -246,6 +249,7 @@ class Client:
         response = http.post(http.directory.auth, json=body)
         if response.status_code != 201:
             raise exceptions.UI(_problem_title(response, "Unable to create auth config"))
+        return schemas.Auth.model_validate(response.json())
 
     def update_auth(
         self,
@@ -303,7 +307,7 @@ class Client:
         ssh_proxy_jump: str | None,
         tag_id_list: list[int],
         tag_name_value_list: list[dict[str, str]],
-    ) -> None:
+    ) -> schemas.Bastion:
         http = self._client.session_auth(self._client.config.session_key)
         response = http.post(
             http.directory.bastion,
@@ -317,6 +321,7 @@ class Client:
         )
         if response.status_code != 201:
             raise exceptions.UI(_problem_title(response, "Unable to create bastion"))
+        return schemas.Bastion.model_validate(response.json())
 
     def update_bastion(
         self,
@@ -324,14 +329,17 @@ class Client:
         register_url: str | None = None,
         connect_url: str | None = None,
         ssh_proxy_jump: str | None = None,
+        tag_id_list: list[int] | None = None,
     ) -> None:
-        query: dict[str, str] = {}
+        query: dict[str, typing.Any] = {}
         if register_url is not None:
             query["register_url"] = register_url
         if connect_url is not None:
             query["connect_url"] = connect_url
         if ssh_proxy_jump is not None:
             query["ssh_proxy_jump"] = ssh_proxy_jump
+        if tag_id_list is not None:
+            query["tag_id_list"] = tag_id_list
         if not query:
             raise exceptions.UI("No fields to update")
         http = self._client.session_auth(self._client.config.session_key)
@@ -365,11 +373,12 @@ class Client:
         assert len(result.roles) == 1
         return result.roles[0]
 
-    def create_role(self, name: str, description: str) -> None:
+    def create_role(self, name: str, description: str) -> schemas.Role:
         http = self._client.session_auth(self._client.config.session_key)
         response = http.post(http.directory.role, json={"name": name, "description": description})
         if response.status_code != 201:
             raise exceptions.UI(_problem_title(response, "Unable to create role"))
+        return schemas.Role.model_validate(response.json())
 
     def update_role(
         self,
@@ -421,11 +430,12 @@ class Client:
         assert len(result.boundaries) == 1
         return result.boundaries[0]
 
-    def create_boundary(self, name: str, description: str) -> None:
+    def create_boundary(self, name: str, description: str) -> schemas.Boundary:
         http = self._client.session_auth(self._client.config.session_key)
         response = http.post(http.directory.boundary, json={"name": name, "description": description})
         if response.status_code != 201:
             raise exceptions.UI(_problem_title(response, "Unable to create boundary"))
+        return schemas.Boundary.model_validate(response.json())
 
     def update_boundary(
         self,
@@ -500,7 +510,7 @@ class Client:
         boundary_name_list: list[str],
         tag_id_list: list[int],
         tag_name_value_list: list[dict[str, str]],
-    ) -> None:
+    ) -> schemas.Identity:
         http = self._client.session_auth(self._client.config.session_key)
         response = http.post(
             http.directory.identity,
@@ -514,6 +524,7 @@ class Client:
         )
         if response.status_code != 201:
             raise exceptions.UI(_problem_title(response, "Unable to create identity"))
+        return schemas.Identity.model_validate(response.json())
 
     def invite_identity(self, id: int, delivery: str) -> str | None:
         http = self._client.session_auth(self._client.config.session_key)

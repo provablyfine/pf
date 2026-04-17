@@ -8,7 +8,7 @@ import textual.screen
 import textual.widgets
 
 from .. import client
-from . import async_client, grant_edit, grant_list, header, member_list
+from . import grant_edit, grant_list, header, member_list
 
 
 class RoleViewScreen(textual.screen.Screen[None]):
@@ -34,26 +34,26 @@ class RoleViewScreen(textual.screen.Screen[None]):
     }
     """
 
-    def __init__(self, auth: async_client.AsyncClient, role: dict) -> None:
+    def __init__(self, auth: client.aio.Client, role: client.schemas.Role) -> None:
         super().__init__()
         self._auth = auth
         self._role = role
-        self._member_list: list = list(role["member_list"])
-        self._grant_list: list = list(role["grant_list"])
-        self._saved_name: str = role["name"]
-        self._saved_description: str = role["description"]
-        self._saved_member_names: set[str] = {m["name"] for m in role["member_list"]}
-        self._saved_grant_list: list = list(role["grant_list"])
+        self._member_names: list[str] = [m.name for m in role.member_list]
+        self._grant_list: list[client.schemas.Grant] = list(role.grant_list)
+        self._saved_name: str = role.name
+        self._saved_description: str = role.description
+        self._saved_member_names: set[str] = {m.name for m in role.member_list}
+        self._saved_grant_list: list[client.schemas.Grant] = list(role.grant_list)
 
     def compose(self) -> textual.app.ComposeResult:
         yield header.AppHeader()
         with textual.containers.Vertical():
             with textual.containers.HorizontalGroup(classes="field") as container:
                 container.border_title = "Name"
-                yield textual.widgets.Input(self._role["name"], id="name", compact=True)
+                yield textual.widgets.Input(self._role.name, id="name", compact=True)
             with textual.containers.Horizontal(classes="field") as container:
                 container.border_title = "Description"
-                yield textual.widgets.Input(self._role["description"], id="description", compact=True)
+                yield textual.widgets.Input(self._role.description, id="description", compact=True)
             with textual.containers.Container(classes="field") as container:
                 container.border_title = "Members"
                 yield textual.widgets.ListView(id="members")
@@ -65,7 +65,7 @@ class RoleViewScreen(textual.screen.Screen[None]):
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
-        self.sub_title = f"Roles > {self._role['name']}"
+        self.sub_title = f"Roles > {self._role.name}"
         self.query_one("#grants", textual.widgets.DataTable).add_columns("Type", "Filter", "Permissions")
         await self._populate_members()
         self._populate_grants()
@@ -85,9 +85,9 @@ class RoleViewScreen(textual.screen.Screen[None]):
     async def _populate_members(self) -> None:
         lv = self.query_one("#members", textual.widgets.ListView)
         await lv.clear()
-        for m in self._member_list:
-            await lv.append(textual.widgets.ListItem(textual.widgets.Label(m["name"])))
-        self.query_one("#members-placeholder").display = not bool(self._member_list)
+        for name in self._member_names:
+            await lv.append(textual.widgets.ListItem(textual.widgets.Label(name)))
+        self.query_one("#members-placeholder").display = not bool(self._member_names)
 
     def _populate_grants(self) -> None:
         table = self.query_one("#grants", textual.widgets.DataTable)
@@ -108,22 +108,23 @@ class RoleViewScreen(textual.screen.Screen[None]):
         if focused is None:
             return
         if focused.id == "members":
-            identities = await self._auth.list_identities()
-            existing = {m["name"] for m in self._member_list}
-            names = [i["name"] for i in identities if i["name"] not in existing]
+            identities = (await self._auth.list_identities()).identities
+            existing = set(self._member_names)
+            names = [i.name for i in identities if i.name not in existing]
             name = await self.app.push_screen_wait(member_list.MemberAddScreen(names))
             if name is None:
                 return
-            self._member_list.append({"name": name})
+            self._member_names.append(name)
             await self._populate_members()
         elif focused.id == "grants":
             grant_type = await self.app.push_screen_wait(grant_list.GrantTypeScreen())
             if grant_type is None:
                 return
             new_grant = grant_edit.new_grant(grant_type)
-            updated_grant = await self.app.push_screen_wait(grant_edit.GrantEditScreen(self._auth, new_grant))
-            if updated_grant is None:
+            updated_grant_dict = await self.app.push_screen_wait(grant_edit.GrantEditScreen(self._auth, new_grant))
+            if updated_grant_dict is None:
                 return
+            updated_grant = client.schemas.validate_grant(updated_grant_dict)
             self._grant_list.append(updated_grant)
             self._populate_grants()
 
@@ -135,9 +136,9 @@ class RoleViewScreen(textual.screen.Screen[None]):
         if focused.id == "members":
             lv = self.query_one("#members", textual.widgets.ListView)
             index = lv.index
-            if index is None or not self._member_list:
+            if index is None or not self._member_names:
                 return
-            self._member_list.pop(index)
+            self._member_names.pop(index)
             await self._populate_members()
         elif focused.id == "grants":
             table = self.query_one("#grants", textual.widgets.DataTable)
@@ -152,10 +153,12 @@ class RoleViewScreen(textual.screen.Screen[None]):
         if not self._grant_list:
             return
         index = table.cursor_row
-        updated_grant = await self.app.push_screen_wait(grant_edit.GrantEditScreen(self._auth, self._grant_list[index]))
-        if updated_grant is None:
+        updated_grant_dict = await self.app.push_screen_wait(
+            grant_edit.GrantEditScreen(self._auth, self._grant_list[index].model_dump())
+        )
+        if updated_grant_dict is None:
             return
-        self._grant_list[index] = updated_grant
+        self._grant_list[index] = client.schemas.validate_grant(updated_grant_dict)
         self._populate_grants()
         self.query_one("#grants").focus()
 
@@ -163,31 +166,28 @@ class RoleViewScreen(textual.screen.Screen[None]):
     async def action_save(self) -> None:
         name = self.query_one("#name", textual.widgets.Input).value
         description = self.query_one("#description", textual.widgets.Input).value
-        current_member_names = {m["name"] for m in self._member_list}
+        current_member_names = set(self._member_names)
 
-        patch: dict = {}
-        if name != self._saved_name:
-            patch["name"] = name
-        if description != self._saved_description:
-            patch["description"] = description
-        if current_member_names != self._saved_member_names:
-            patch["member_list"] = [{"name": m["name"]} for m in self._member_list]
-        if self._grant_list != self._saved_grant_list:
-            patch["grant_list"] = self._grant_list
+        name_changed = name != self._saved_name
+        description_changed = description != self._saved_description
+        members_changed = current_member_names != self._saved_member_names
+        grants_changed = self._grant_list != self._saved_grant_list
 
-        if not patch:
+        if not (name_changed or description_changed or members_changed or grants_changed):
             self.notify("No changes")
             return
 
-        response = await self._auth.patch(
-            f"{self._auth.directory.role}/{self._role['id']}",
-            json=patch,
+        await self._auth.update_role(
+            self._role.id,
+            name=name if name_changed else None,
+            description=description if description_changed else None,
+            grant_list=self._grant_list if grants_changed else None,
+            member_list=[client.schemas.RoleMemberRef(name=name) for name in self._member_names]
+            if members_changed
+            else None,
         )
-        if response.status_code != 200:
-            self.notify(response.json().get("title", "Failed to save"), severity="error")
-        else:
-            self._saved_name = name
-            self._saved_description = description
-            self._saved_member_names = current_member_names
-            self._saved_grant_list = list(self._grant_list)
-            self.notify("Saved")
+        self._saved_name = name
+        self._saved_description = description
+        self._saved_member_names = current_member_names
+        self._saved_grant_list = list(self._grant_list)
+        self.notify("Saved")

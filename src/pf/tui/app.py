@@ -8,7 +8,7 @@ import textual.screen
 import textual.worker
 
 from .. import client, log
-from . import async_client, home, relogin, setup
+from . import home, relogin, setup
 
 _DEFAULT_CONFIG = os.path.join(os.path.expanduser("~"), ".config", "pf", "config.json")
 
@@ -38,7 +38,7 @@ class SetupApp(textual.app.App[None]):
 class TuiApp(textual.app.App[None]):
     TITLE = "Provably Fine"
 
-    def __init__(self, auth):
+    def __init__(self, auth: client.aio.Client) -> None:
         super().__init__()
         self.auth = auth
 
@@ -90,8 +90,7 @@ def pfat() -> None:
             return
 
     try:
-        api = client.Client(cfg)
-        auth = async_client.AsyncClient(api.session_auth(cfg.session_key))
+        auth = client.aio.Client(cfg)
     except client.exceptions.UI as e:
         sys.stderr.write(f"{e}\n")
         sys.exit(2)

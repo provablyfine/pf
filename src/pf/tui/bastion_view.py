@@ -8,7 +8,8 @@ import textual.screen
 import textual.widgets
 import textual_autocomplete
 
-from . import async_client, auto_complete, header
+from .. import client
+from . import auto_complete, header
 
 
 class _TagAddScreen(textual.screen.ModalScreen[dict | None]):
@@ -69,7 +70,7 @@ class BastionViewScreen(textual.screen.Screen[None]):
     }
     """
 
-    def __init__(self, auth: async_client.AsyncClient, bastion: dict) -> None:
+    def __init__(self, auth: client.aio.Client, bastion: dict) -> None:
         super().__init__()
         self._auth = auth
         self._bastion = bastion

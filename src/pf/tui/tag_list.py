@@ -6,7 +6,8 @@ import textual.containers
 import textual.screen
 import textual.widgets
 
-from . import async_client, header
+from .. import client
+from . import header
 
 
 class _TagCreateScreen(textual.screen.ModalScreen[dict | None]):
@@ -49,10 +50,10 @@ class TagListScreen(textual.screen.Screen[None]):
         ("escape", "app.pop_screen", "Back"),
     ]
 
-    def __init__(self, auth: async_client.AsyncClient) -> None:
+    def __init__(self, auth: client.aio.Client) -> None:
         super().__init__()
         self._auth = auth
-        self._tags: list = []
+        self._tags: list[client.schemas.Tag] = []
 
     def compose(self) -> textual.app.ComposeResult:
         yield header.AppHeader()
@@ -62,13 +63,13 @@ class TagListScreen(textual.screen.Screen[None]):
     async def on_mount(self) -> None:
         table = self.query_one(textual.widgets.DataTable)
         table.add_columns("Name", "Value")
-        self._tags = await self._auth.list_tags()
+        self._tags = (await self._auth.list_tags()).tags
         self._populate_table(table)
 
     def _populate_table(self, table: textual.widgets.DataTable) -> None:
         table.clear(columns=False)
         for tag in self._tags:
-            table.add_row(tag["name"], tag["value"])
+            table.add_row(tag.name, tag.value)
 
     @textual.work
     async def action_add_tag(self) -> None:
@@ -79,7 +80,7 @@ class TagListScreen(textual.screen.Screen[None]):
         if response.status_code != 201:
             self.notify(response.json().get("title", "Failed to create tag"), severity="error")
             return
-        self._tags = await self._auth.list_tags()
+        self._tags = (await self._auth.list_tags()).tags
         table = self.query_one(textual.widgets.DataTable)
         self._populate_table(table)
 

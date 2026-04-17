@@ -6,7 +6,8 @@ import textual.containers
 import textual.screen
 import textual.widgets
 
-from . import _utils, async_client, header, role_view
+from .. import client
+from . import _utils, header, role_view
 
 
 class _RoleNameScreen(textual.screen.ModalScreen[str | None]):
@@ -49,10 +50,10 @@ class RoleListScreen(textual.screen.Screen[None]):
         ("escape", "app.pop_screen", "Back"),
     ]
 
-    def __init__(self, auth: async_client.AsyncClient) -> None:
+    def __init__(self, auth: client.aio.Client) -> None:
         super().__init__()
         self._auth = auth
-        self._roles: list = []
+        self._roles: list[client.schemas.Role] = []
 
     def compose(self) -> textual.app.ComposeResult:
         yield header.AppHeader()
@@ -62,22 +63,22 @@ class RoleListScreen(textual.screen.Screen[None]):
     async def on_mount(self) -> None:
         table = self.query_one(textual.widgets.DataTable)
         table.add_columns("Name", "Description", "Members", "Grants")
-        self._roles = await self._auth.list_roles()
+        self._roles = (await self._auth.list_roles()).roles
         self._populate_table(table)
 
     @textual.work
     async def on_screen_resume(self) -> None:
-        self._roles = await self._auth.list_roles()
+        self._roles = (await self._auth.list_roles()).roles
         self._populate_table(self.query_one(textual.widgets.DataTable))
 
     def _populate_table(self, table: textual.widgets.DataTable) -> None:
         table.clear(columns=False)
         for role in self._roles:
             table.add_row(
-                role["name"],
-                _utils.ellipsize(role["description"], 40),
-                str(len(role["member_list"])),
-                str(len(role["grant_list"])),
+                role.name,
+                _utils.ellipsize(role.description, 40),
+                str(len(role.member_list)),
+                str(len(role.grant_list)),
             )
 
     @textual.on(textual.widgets.DataTable.RowSelected)
@@ -96,11 +97,7 @@ class RoleListScreen(textual.screen.Screen[None]):
         name = await self.app.push_screen_wait(_RoleNameScreen())
         if name is None:
             return
-        response = await self._auth.post(self._auth.directory.role, json={"name": name})
-        if response.status_code != 201:
-            self.notify(response.json().get("title", "Failed to create role"), severity="error")
-            return
-        role = response.json()
+        role = await self._auth.create_role(name, "")
         self._roles.append(role)
         table = self.query_one(textual.widgets.DataTable)
         self._populate_table(table)
@@ -114,10 +111,7 @@ class RoleListScreen(textual.screen.Screen[None]):
         table = self.query_one(textual.widgets.DataTable)
         index = table.cursor_row
         role = self._roles[index]
-        response = await self._auth.delete(f"{self._auth.directory.role}/{role['id']}")
-        if response.status_code != 204:
-            self.notify(response.json().get("title", "Failed to delete role"), severity="error")
-            return
+        await self._auth.delete_role(role.id)
         self._roles.pop(index)
         self._populate_table(table)
-        self.notify(f"Role '{role['name']}' deleted")
+        self.notify(f"Role '{role.name}' deleted")

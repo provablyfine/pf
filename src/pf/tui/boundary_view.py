@@ -8,7 +8,8 @@ import textual.screen
 import textual.widgets
 
 from .. import client
-from . import async_client, grant_edit, grant_list, header
+from .. import client
+from . import grant_edit, grant_list, header
 
 
 class BoundaryViewScreen(textual.screen.Screen[None]):
@@ -34,7 +35,7 @@ class BoundaryViewScreen(textual.screen.Screen[None]):
     }
     """
 
-    def __init__(self, auth: async_client.AsyncClient, boundary: dict) -> None:
+    def __init__(self, auth: client.aio.Client, boundary: dict) -> None:
         super().__init__()
         self._auth = auth
         self._boundary = boundary

@@ -6,7 +6,8 @@ import textual.containers
 import textual.screen
 import textual.widgets
 
-from . import async_client, clipboard, header, identity_view
+from .. import client
+from . import clipboard, header, identity_view
 
 
 class _IdentityCreateScreen(textual.screen.ModalScreen[str | None]):
@@ -131,10 +132,10 @@ class IdentityListScreen(textual.screen.Screen[None]):
         ("escape", "app.pop_screen", "Back"),
     ]
 
-    def __init__(self, auth: async_client.AsyncClient) -> None:
+    def __init__(self, auth: client.aio.Client) -> None:
         super().__init__()
         self._auth = auth
-        self._identities: list = []
+        self._identities: list[client.schemas.Identity] = []
 
     def compose(self) -> textual.app.ComposeResult:
         yield header.AppHeader()
@@ -144,12 +145,12 @@ class IdentityListScreen(textual.screen.Screen[None]):
     async def on_mount(self) -> None:
         table = self.query_one(textual.widgets.DataTable)
         table.add_columns("Name", "Tags", "Boundaries")
-        self._identities = await self._auth.list_identities()
+        self._identities = (await self._auth.list_identities()).identities
         self._populate_table(table)
 
     @textual.work
     async def on_screen_resume(self) -> None:
-        self._identities = await self._auth.list_identities()
+        self._identities = (await self._auth.list_identities()).identities
         self._populate_table(self.query_one(textual.widgets.DataTable))
 
     def _populate_table(self, table: textual.widgets.DataTable) -> None:

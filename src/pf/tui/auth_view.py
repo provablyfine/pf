@@ -7,7 +7,8 @@ import textual.screen
 import textual.widgets
 import textual_autocomplete
 
-from . import async_client, auto_complete, header
+from .. import client
+from . import auto_complete, header
 
 
 def _tags_to_str(tags: list[dict]) -> str:
@@ -33,7 +34,7 @@ class AuthViewScreen(textual.screen.Screen[None]):
     }
     """
 
-    def __init__(self, auth: async_client.AsyncClient, a: dict) -> None:
+    def __init__(self, auth: client.aio.Client, a: dict) -> None:
         super().__init__()
         self._auth = auth
         self._a = a

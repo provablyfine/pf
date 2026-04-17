@@ -6,7 +6,8 @@ import textual.containers
 import textual.screen
 import textual.widgets
 
-from . import _utils, async_client, boundary_view, header
+from .. import client
+from . import _utils, boundary_view, header
 
 
 class _BoundaryCreateScreen(textual.screen.ModalScreen[str | None]):
@@ -48,10 +49,10 @@ class BoundaryListScreen(textual.screen.Screen[None]):
         ("escape", "app.pop_screen", "Back"),
     ]
 
-    def __init__(self, auth: async_client.AsyncClient) -> None:
+    def __init__(self, auth: client.aio.Client) -> None:
         super().__init__()
         self._auth = auth
-        self._boundaries: list = []
+        self._boundaries: list[client.schemas.Boundary] = []
 
     def compose(self) -> textual.app.ComposeResult:
         yield header.AppHeader()
@@ -61,12 +62,12 @@ class BoundaryListScreen(textual.screen.Screen[None]):
     async def on_mount(self) -> None:
         table = self.query_one(textual.widgets.DataTable)
         table.add_columns("Name", "Description", "Denied", "Ceiling")
-        self._boundaries = await self._auth.list_boundaries()
+        self._boundaries = (await self._auth.list_boundaries()).boundaries
         self._populate_table(table)
 
     @textual.work
     async def on_screen_resume(self) -> None:
-        self._boundaries = await self._auth.list_boundaries()
+        self._boundaries = (await self._auth.list_boundaries()).boundaries
         self._populate_table(self.query_one(textual.widgets.DataTable))
 
     def _populate_table(self, table: textual.widgets.DataTable) -> None:

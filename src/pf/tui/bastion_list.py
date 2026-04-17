@@ -6,7 +6,8 @@ import textual.containers
 import textual.screen
 import textual.widgets
 
-from . import async_client, bastion_view, header
+from .. import client
+from . import bastion_view, header
 
 
 class _BastionCreateScreen(textual.screen.ModalScreen[dict | None]):
@@ -58,10 +59,10 @@ class BastionListScreen(textual.screen.Screen[None]):
         ("escape", "app.pop_screen", "Back"),
     ]
 
-    def __init__(self, auth: async_client.AsyncClient) -> None:
+    def __init__(self, auth: client.aio.Client) -> None:
         super().__init__()
         self._auth = auth
-        self._bastions: list = []
+        self._bastions: list[client.schemas.Bastion] = []
 
     def compose(self) -> textual.app.ComposeResult:
         yield header.AppHeader()
@@ -71,12 +72,12 @@ class BastionListScreen(textual.screen.Screen[None]):
     async def on_mount(self) -> None:
         table = self.query_one(textual.widgets.DataTable)
         table.add_columns("Register URL", "Connect URL", "Tags")
-        self._bastions = await self._auth.list_bastions()
+        self._bastions = (await self._auth.list_bastions()).bastions
         self._populate_table(table)
 
     @textual.work
     async def on_screen_resume(self) -> None:
-        self._bastions = await self._auth.list_bastions()
+        self._bastions = (await self._auth.list_bastions()).bastions
         self._populate_table(self.query_one(textual.widgets.DataTable))
 
     def _populate_table(self, table: textual.widgets.DataTable) -> None:

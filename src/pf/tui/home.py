@@ -6,8 +6,8 @@ import textual.app
 import textual.screen
 import textual.widgets
 
+from .. import client
 from . import (
-    async_client,
     auth_list,
     bastion_list,
     boundary_list,
@@ -18,7 +18,7 @@ from . import (
     tenant_list,
 )
 
-_RESOURCES: list[tuple[str, collections.abc.Callable[[async_client.AsyncClient], textual.screen.Screen]]] = [
+_RESOURCES: list[tuple[str, collections.abc.Callable[[client.aio.Client], textual.screen.Screen]]] = [
     ("Tenants", tenant_list.TenantListScreen),
     ("Identities", identity_list.IdentityListScreen),
     ("Bastions", bastion_list.BastionListScreen),
@@ -43,7 +43,7 @@ class HomeScreen(textual.screen.Screen[None]):
         ("escape", "app.quit", "Quit"),
     ]
 
-    def __init__(self, auth: async_client.AsyncClient) -> None:
+    def __init__(self, auth: client.aio.Client) -> None:
         super().__init__()
         self._auth = auth
 
