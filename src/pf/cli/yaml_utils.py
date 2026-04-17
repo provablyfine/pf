@@ -2,7 +2,7 @@ import yaml
 
 
 class IndentDumper(yaml.Dumper):
-    def increase_indent(self, flow=False, indentless=False):
+    def increase_indent(self, flow: bool = False, indentless: bool = False) -> None:
         # This forces the list dash to be indented
         return super().increase_indent(flow, False)
 

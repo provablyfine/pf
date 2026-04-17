@@ -15,8 +15,8 @@ def _sign_host_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     sc = client.sync.Client(c, timeout=args.timeout)
 
-    public_keys = []
-    filename_from_fingerprint = {}
+    public_keys: list[dict[str, str]] = []
+    filename_from_fingerprint: dict[str, str] = {}
     for filename in args.public_key:
         with open(filename, "rb") as f:
             key = f.read()
@@ -46,7 +46,7 @@ def _authorized_principals(args: argparse.Namespace) -> None:
 
     certificate = base64.b64decode(args.certificate.encode("ascii"))
     cert = ssh.serde.deserialize_cert(certificate)
-    accepted = []
+    accepted: list[str] = []
     for principal in cert.principals:
         items = principal.split("@")
         if len(items) != 2:

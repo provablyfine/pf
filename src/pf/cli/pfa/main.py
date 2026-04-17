@@ -27,7 +27,7 @@ def _initialize_function(args: argparse.Namespace) -> None:
 
 
 def _connect_function(args: argparse.Namespace) -> None:
-    parsed = urllib.parse.urlparse(args.url)
+    parsed = urllib.parse.urlparse(str(args.url))
     params = urllib.parse.parse_qs(parsed.query)
     clean_url = urllib.parse.urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, "", parsed.fragment))
 
