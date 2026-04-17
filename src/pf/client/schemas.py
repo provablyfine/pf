@@ -2,6 +2,8 @@ import typing
 
 import pydantic
 
+from . import exceptions
+
 
 class _Base(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(extra="ignore")
@@ -128,10 +130,214 @@ class IdentitySelfBastionListResponse(_Base):
     bastions: list[Bastion] = []
 
 
-class Grant(_Base):
-    type: str
-    filter: dict[str, typing.Any] = {}
-    permission: dict[str, typing.Any] = {}
+# --- Grant types ---
+
+
+class TripletFilter(_Base):
+    name: str | None = None
+    tag_list: list[TagNameValue] | None = None
+    boundary_list: list[str] | None = None
+
+
+class BoundaryFilter(_Base):
+    name: str | None
+
+
+class TagFilter(_Base):
+    name_value: TagNameValue | None
+
+
+class RoleFilter(_Base):
+    name: str | None
+
+
+class TenantFilter(_Base):
+    id: int | None
+
+
+class AuthFilter(_Base):
+    name: str | None
+
+
+class TagPermission(_Base):
+    create: bool
+    read: bool
+    delete: bool
+
+
+class BoundaryUpdatePermission(_Base):
+    name: bool
+    description: bool
+    ceiling_list: bool
+    denied_list: bool
+
+
+class BoundaryPermission(_Base):
+    create: bool
+    read: bool
+    delete: bool
+    update: BoundaryUpdatePermission | None
+
+
+class RoleUpdatePermission(_Base):
+    name: bool
+    description: bool
+    grant_list: bool
+    member_list: bool
+
+
+class RolePermission(_Base):
+    create: bool
+    read: bool
+    delete: bool
+    update: RoleUpdatePermission | None
+
+
+class IdentityCreatePermission(_Base):
+    allowed: bool
+    allowed_tag_list: list[TagNameValue] | None
+    required_boundary_list: list[str] | None
+
+
+class IdentityUpdatePermission(_Base):
+    name: bool
+
+
+class IdentityPermission(_Base):
+    create: IdentityCreatePermission | None
+    read: bool
+    update: IdentityUpdatePermission | None
+    delete: bool
+    add_tag_list: list[TagNameValue] | None
+    del_tag_list: list[TagNameValue] | None
+    invite_list: list[str] | None
+
+
+class SSHShellPermission(_Base):
+    username_list: list[str]
+    permit_agent_forwarding: bool = False
+    permit_x11_forwarding: bool = False
+
+
+class SSHPortForwardingPermission(_Base):
+    username_list: list[str]
+
+
+class SSHCommandPermission(_Base):
+    username_list: list[str]
+    command_list: list[str]
+
+
+class TenantUpdatePermission(_Base):
+    display_name: bool
+    is_enabled: bool
+
+
+class TenantPermission(_Base):
+    create: bool
+    read: bool
+    delete: bool
+    update: TenantUpdatePermission | None
+
+
+class AuthUpdatePermission(_Base):
+    name: bool
+    description: bool
+    is_enabled: bool
+    config: bool
+
+
+class AuthPermission(_Base):
+    create: bool
+    read: bool
+    delete: bool
+    update: AuthUpdatePermission | None
+
+
+class TagGrant(_Base):
+    type: typing.Literal["tag"] = "tag"
+    filter: TagFilter
+    permission: TagPermission
+
+
+class BoundaryGrant(_Base):
+    type: typing.Literal["boundary"] = "boundary"
+    filter: BoundaryFilter
+    permission: BoundaryPermission
+
+
+class RoleGrant(_Base):
+    type: typing.Literal["role"] = "role"
+    filter: RoleFilter
+    permission: RolePermission
+
+
+class IdentityGrant(_Base):
+    type: typing.Literal["identity"] = "identity"
+    filter: TripletFilter
+    permission: IdentityPermission
+
+
+class SSHShellGrant(_Base):
+    type: typing.Literal["ssh-shell"] = "ssh-shell"
+    filter: TripletFilter
+    permission: SSHShellPermission
+
+
+class SSHPortForwardingGrant(_Base):
+    type: typing.Literal["ssh-port-forwarding"] = "ssh-port-forwarding"
+    filter: TripletFilter
+    permission: SSHPortForwardingPermission
+
+
+class SSHCommandGrant(_Base):
+    type: typing.Literal["ssh-command"] = "ssh-command"
+    filter: TripletFilter
+    permission: SSHCommandPermission
+
+
+class TenantGrant(_Base):
+    type: typing.Literal["tenant"] = "tenant"
+    filter: TenantFilter
+    permission: TenantPermission
+
+
+class AuthGrant(_Base):
+    type: typing.Literal["auth"] = "auth"
+    filter: AuthFilter
+    permission: AuthPermission
+
+
+class InvalidGrant(_Base):
+    type: typing.Literal["invalid"] = "invalid"
+
+
+Grant = typing.Annotated[
+    TagGrant
+    | BoundaryGrant
+    | RoleGrant
+    | IdentityGrant
+    | SSHShellGrant
+    | SSHPortForwardingGrant
+    | SSHCommandGrant
+    | TenantGrant
+    | AuthGrant
+    | InvalidGrant,
+    pydantic.Field(discriminator="type"),
+]
+
+_grant_adapter: pydantic.TypeAdapter[Grant] = pydantic.TypeAdapter(Grant)
+
+
+def validate_grant(data: typing.Any) -> Grant:
+    try:
+        return _grant_adapter.validate_python(data)
+    except pydantic.ValidationError as e:
+        # Format error similarly to server-side RequestValidationError handler
+        error = e.errors()[0]
+        msg = error["msg"]
+        loc = ".".join(map(str, error["loc"]))
+        raise exceptions.UI(f"Request invalid. {msg}: {loc}")
 
 
 class RoleMember(_Base):

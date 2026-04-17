@@ -68,6 +68,7 @@ exclude = [
 "**/__pycache__",
 "tests/**",
 "**/test_*.py",
+"**/tui",
 ]
 typeCheckingMode = "strict"
 

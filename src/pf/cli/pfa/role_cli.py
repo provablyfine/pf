@@ -66,9 +66,7 @@ def _role_read_function(args: argparse.Namespace) -> None:
             for m in role.member_list:
                 rows.append(["member", m.name])
             for g in role.grant_list:
-                type_text, filter_text, perm_text = client.grant.to_text(
-                    typing.cast(client.grant.GrantDict, g.model_dump())
-                )
+                type_text, filter_text, perm_text = client.grant.to_text(g)
                 rows.append(["grant", f"type:       {type_text}"])
                 rows.append(["", f"filter:     {filter_text}"])
                 rows.append(["", f"permission: {perm_text}"])
@@ -103,13 +101,11 @@ def _role_grant_function(args: argparse.Namespace, action: str, grant: dict[str,
 
     match action:
         case "add":
-            grant_obj = client.schemas.Grant.model_validate(grant)
-            grant_list = [*role.grant_list, grant_obj]
+            grant_list = [*role.grant_list, client.schemas.validate_grant(grant)]
         case "del":
-            grant_obj = client.schemas.Grant.model_validate(grant)
             grant_list = [g for g in role.grant_list if g.model_dump() != grant]
         case "set":
-            grant_list = [client.schemas.Grant.model_validate(g) for g in grant]
+            grant_list = [client.schemas.validate_grant(g) for g in grant]
         case _:
             assert False
 

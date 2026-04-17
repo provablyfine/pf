@@ -69,16 +69,12 @@ def _boundary_read_function(args: argparse.Namespace) -> None:
                 rows.append(["ceiling", "[]"])
             else:
                 for g in boundary.ceiling_list:
-                    type_text, filter_text, perm_text = client.grant.to_text(
-                        typing.cast(client.grant.GrantDict, g.model_dump())
-                    )
+                    type_text, filter_text, perm_text = client.grant.to_text(g)
                     rows.append(["ceiling", f"type:       {type_text}"])
                     rows.append(["", f"filter:     {filter_text}"])
                     rows.append(["", f"permission: {perm_text}"])
             for g in boundary.denied_list:
-                type_text, filter_text, perm_text = client.grant.to_text(
-                    typing.cast(client.grant.GrantDict, g.model_dump())
-                )
+                type_text, filter_text, perm_text = client.grant.to_text(g)
                 rows.append(["denied", f"type:       {type_text}"])
                 rows.append(["", f"filter:     {filter_text}"])
                 rows.append(["", f"permission: {perm_text}"])
@@ -117,16 +113,16 @@ def _boundary_grant_function(
 
     match action:
         case "add":
-            grant_obj = client.schemas.Grant.model_validate(grant)
+            grant_obj = client.schemas.validate_grant(grant)
             grant_list = [grant_obj] if current_list is None else [*current_list, grant_obj]
         case "del":
-            grant_obj = client.schemas.Grant.model_validate(grant)
+            grant_obj = client.schemas.validate_grant(grant)
             if current_list is None:
                 grant_list = None
             else:
                 grant_list = [g for g in current_list if g.model_dump() != grant]
         case "set":
-            grant_list = [client.schemas.Grant.model_validate(g) for g in grant]
+            grant_list = [client.schemas.validate_grant(g) for g in grant]
         case _:
             assert False
 
