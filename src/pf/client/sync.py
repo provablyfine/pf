@@ -74,6 +74,20 @@ class Client:
             raise exceptions.UI(_problem_title(response, "Failed to sign host certificates"))
         return schemas.SshHostCertificateResponse.model_validate(response.json())
 
+    def get_self_bastions(self) -> schemas.IdentitySelfBastionListResponse:
+        http = self._client.session_auth(self._client.config.session_key)
+        response = http.get(f"{http.directory.identity}/self/bastions")
+        if response.status_code != 200:
+            raise exceptions.UI(_problem_title(response, "Failed to get bastions"))
+        return schemas.IdentitySelfBastionListResponse.model_validate(response.json())
+
+    def get_self_token(self, service: str) -> schemas.IdentitySelfTokenResponse:
+        http = self._client.session_auth(self._client.config.session_key)
+        response = http.get(f"{http.directory.identity}/self/token", params={"service": service})
+        if response.status_code != 200:
+            raise exceptions.UI(_problem_title(response, "Failed to get token"))
+        return schemas.IdentitySelfTokenResponse.model_validate(response.json())
+
     def list_tags(
         self,
         id: int | None = None,

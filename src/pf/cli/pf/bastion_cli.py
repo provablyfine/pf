@@ -5,39 +5,13 @@ import signal
 import ssl
 import sys
 import types
-import typing
 
 import websockets.asyncio.client
 
 from ... import bastion, client
 from .. import login
 
-
-class BastionDict(typing.TypedDict):
-    id: int
-    register_url: str
-    connect_url: str | None
-    ssh_proxy_jump: str | None
-
-
 logger = logging.getLogger(__name__)
-
-
-def _get_bastions(auth: client.HttpClient) -> list[BastionDict]:
-    response = auth.get(f"{auth.directory.identity}/self/bastions")
-    if response.status_code != 200:
-        raise client.exceptions.UI(response.json().get("title", "Failed to get bastions"))
-    return response.json().get("bastions", [])
-
-
-def _get_token(auth: client.HttpClient) -> str:
-    response = auth.get(
-        f"{auth.directory.identity}/self/token",
-        params={"service": "bastion"},
-    )
-    if response.status_code != 200:
-        raise client.exceptions.UI(response.json().get("title", "Failed to get token"))
-    return response.json()["token"]
 
 
 async def _handle_channel(ch: bastion.mux.Channel, local_port: int) -> None:
@@ -103,8 +77,7 @@ def _register_function(args: argparse.Namespace) -> None:
     if not login.has_valid_session(c):
         raise client.exceptions.UI("Not logged in. Run 'pf login' first.")
 
-    api = client.Client(c, timeout=args.timeout)
-    auth = api.session_auth(c.session_key)
+    sc = client.sync.Client(c, timeout=args.timeout)
 
     active_tasks: dict[int, asyncio.Task[None]] = {}
     stop_event = asyncio.Event()
@@ -118,9 +91,11 @@ def _register_function(args: argparse.Namespace) -> None:
     async def poll_bastions():
         while not stop_event.is_set():
             try:
-                current_bastions = {b["id"]: b for b in _get_bastions(auth)}
+                bastions_response = sc.get_self_bastions()
+                current_bastions = {b.id: b for b in bastions_response.bastions}
 
-                token = _get_token(auth)
+                token_response = sc.get_self_token("bastion")
+                token = token_response.token
 
                 for bastion_id in list(active_tasks.keys()):
                     if bastion_id in current_bastions:
@@ -132,11 +107,8 @@ def _register_function(args: argparse.Namespace) -> None:
                 for bastion_id, bastion in current_bastions.items():
                     if bastion_id in active_tasks:
                         continue
-                    register_url = bastion.get("register_url")
-                    if register_url is None:
-                        continue
 
-                    task = asyncio.create_task(_register_bastion(register_url, token, args.port))
+                    task = asyncio.create_task(_register_bastion(bastion.register_url, token, args.port))
                     active_tasks[bastion_id] = task
                     print(f"Registered bastion {bastion_id}")
             except Exception as e:
@@ -206,10 +178,9 @@ def _connect_function(args: argparse.Namespace) -> None:
     if not login.has_valid_session(c):
         raise client.exceptions.UI("Not logged in. Run 'pf login' first.")
 
-    api = client.Client(c, timeout=args.timeout)
-    auth = api.session_auth(c.session_key)
-    token = _get_token(auth)
-    asyncio.run(_connect_async(args.url, token, args.hostname))
+    sc = client.sync.Client(c, timeout=args.timeout)
+    token_response = sc.get_self_token("bastion")
+    asyncio.run(_connect_async(args.url, token_response.token, args.hostname))
 
 
 def add_subparser(parser: argparse.ArgumentParser) -> None:

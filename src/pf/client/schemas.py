@@ -43,6 +43,10 @@ class SshHostCertificateResponse(_Base):
     certificates: list[str]
 
 
+class IdentitySelfTokenResponse(_Base):
+    token: str
+
+
 class Tenant(_Base):
     id: int
     name: str
@@ -111,6 +115,10 @@ class Bastion(_Base):
 
 
 class BastionListResponse(_Base):
+    bastions: list[Bastion] = []
+
+
+class IdentitySelfBastionListResponse(_Base):
     bastions: list[Bastion] = []
 
 
