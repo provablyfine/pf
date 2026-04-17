@@ -27,6 +27,37 @@ class Client:
             raise exceptions.UI(_problem_title(response, "Failed to list SSH hosts"))
         return schemas.SshHostsResponse.model_validate(response.json())
 
+    def get_host_trusted_keys(self) -> str:
+        http = self._client.session_auth(self._client.config.session_key)
+        response = http.get(f"{http.directory.ssh}/host/trusted-keys")
+        if response.status_code != 200:
+            raise exceptions.UI(_problem_title(response, "Failed to get host trusted keys"))
+        return response.content.decode("utf-8")
+
+    def get_user_certificate(
+        self,
+        hostname: str,
+        username: str,
+        action: str,
+        public_key: dict[str, typing.Any],
+        command: str | None = None,
+    ) -> schemas.SshUserCertificateResponse:
+        http = self._client.session_auth(self._client.config.session_key)
+        body: dict[str, typing.Any] = {
+            "public_key": public_key,
+            "hostname": hostname,
+            "username": username,
+            "action": action,
+        }
+        if command is not None:
+            body["command"] = command
+        response = http.post(f"{http.directory.ssh}/user/certificate", json=body)
+        if response.status_code == 403:
+            raise exceptions.Forbidden("User is not authorized to connect to host")
+        elif response.status_code != 200:
+            raise exceptions.UI(_problem_title(response, "Failed to get user certificate"))
+        return schemas.SshUserCertificateResponse.model_validate(response.json())
+
     def list_tags(
         self,
         id: int | None = None,

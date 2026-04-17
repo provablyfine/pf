@@ -51,40 +51,38 @@ def _ssh_function(args: argparse.Namespace) -> None:
                     f"Session expired. Run 'pf login' first (auth type: {auth_public['config']['type']})."
                 )
 
-    api = client.Client(c, timeout=args.timeout)
-    auth = api.session_auth(c.session_key)
+    sc = client.sync.Client(c, timeout=args.timeout)
 
     # Fetch and cache host trusted keys in config
-    host_trusted_keys_response = auth.get(f"{auth.directory.ssh}/host/trusted-keys")
-    if host_trusted_keys_response.status_code != 200:
-        raise client.exceptions.UI(host_trusted_keys_response.json()["title"])
-    c.known_hosts = host_trusted_keys_response.content.decode("utf-8")
+    c.known_hosts = sc.get_host_trusted_keys()
     c.save(args.config)
 
     action = "port-forwarding" if (args.forward_local or args.forward_remote) else "shell"
     user_key = jwk.Private.generate_ed25519()
-    cert_request = {
-        "public_key": user_key.public().to_dict(),
-        "hostname": host,
-        "username": user,
-        "action": action,
-    }
-    cert_response = auth.post(f"{auth.directory.ssh}/user/certificate", json=cert_request)
-    if cert_response.status_code == 403 and action == "shell" and args.command:
-        cert_response = auth.post(
-            f"{auth.directory.ssh}/user/certificate",
-            json={**cert_request, "action": "command", "command": args.command},
-        )
-    if cert_response.status_code == 403:
-        raise client.exceptions.UI("User is not authorized to connect to host")
-    elif cert_response.status_code != 200:
-        raise client.exceptions.UI(cert_response.json()["title"])
 
-    cert_data = cert_response.json()
-    certificates = cert_data["certificates"]
+    try:
+        cert_data = sc.get_user_certificate(
+            hostname=host,
+            username=user,
+            action=action,
+            public_key=user_key.public().to_dict(),
+        )
+    except client.exceptions.Forbidden:
+        if action == "shell" and args.command:
+            cert_data = sc.get_user_certificate(
+                hostname=host,
+                username=user,
+                action="command",
+                public_key=user_key.public().to_dict(),
+                command=args.command,
+            )
+        else:
+            raise client.exceptions.UI("User is not authorized to connect to host")
+
+    certificates = cert_data.certificates
     assert len(certificates) == 1
-    bastion_list = cert_data.get("bastion_list", [])
-    ip_address_list = cert_data.get("ip_address_list", [])
+    bastion_list = cert_data.bastion_list
+    ip_address_list = cert_data.ip_address_list
 
     try:
         ssh_agent = ssh.agent.Client()
@@ -153,18 +151,16 @@ def _ssh_function(args: argparse.Namespace) -> None:
     last_error: Exception | None = None
 
     for bastion in bastion_list:
-        if bastion.get("connect_url"):
-            connect_url = bastion["connect_url"]
-            proxy_cmd = f"pf -c {args.config} bastion connect --url={connect_url} --hostname={host}"
+        if bastion.connect_url:
+            proxy_cmd = f"pf -c {args.config} bastion connect --url={bastion.connect_url} --hostname={host}"
             ssh_cmd = build_ssh_cmd(host, proxy_command=proxy_cmd)
             try:
                 os.execvp("/usr/bin/ssh", ssh_cmd)
             except Exception as e:
                 last_error = e
 
-        if bastion.get("ssh_proxy_jump"):
-            proxy_jump = bastion["ssh_proxy_jump"]
-            ssh_cmd = build_ssh_cmd(host, proxy_jump=proxy_jump)
+        if bastion.ssh_proxy_jump:
+            ssh_cmd = build_ssh_cmd(host, proxy_jump=bastion.ssh_proxy_jump)
             try:
                 os.execvp("/usr/bin/ssh", ssh_cmd)
             except Exception as e:

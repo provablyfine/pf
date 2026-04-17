@@ -28,6 +28,17 @@ class SshHostsResponse(_Base):
     hosts: list[SshHostEntry] = []
 
 
+class SshCertBastion(_Base):
+    connect_url: str | None = None
+    ssh_proxy_jump: str | None = None
+
+
+class SshUserCertificateResponse(_Base):
+    certificates: list[str]
+    bastion_list: list[SshCertBastion] = []
+    ip_address_list: list[str] = []
+
+
 class Tenant(_Base):
     id: int
     name: str
