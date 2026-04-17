@@ -7,17 +7,13 @@ from ... import client, jwk, ssh
 
 def _user_trusted_keys_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    api = client.Client(c, timeout=args.timeout)
-    response = api.no_auth.get(f"{api.directory.ssh}/user/trusted-keys")
-    if response.status_code != 200:
-        raise client.exceptions.UI(response.json()["title"])
-    print(response.text)
+    sc = client.sync.Client(c, timeout=args.timeout)
+    print(sc.get_user_trusted_keys_public())
 
 
 def _sign_host_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    api = client.Client(c, timeout=args.timeout)
-    auth = api.session_auth(c.session_key)
+    sc = client.sync.Client(c, timeout=args.timeout)
 
     public_keys = []
     filename_from_fingerprint = {}
@@ -28,10 +24,8 @@ def _sign_host_function(args: argparse.Namespace) -> None:
             public_keys.append(public_key.to_dict())
             filename_from_fingerprint[public_key.ssh_fingerprint()] = filename
 
-    cert_response = auth.post(f"{auth.directory.ssh}/host/certificate", json={"public_keys": public_keys})
-    if cert_response.status_code != 200:
-        raise client.exceptions.UI(cert_response.json()["title"])
-    for certificate in cert_response.json()["certificates"]:
+    cert_response = sc.sign_host_certificates(public_keys)
+    for certificate in cert_response.certificates:
         openssh_certificate = base64.b64decode(certificate)
         cert = ssh.cert.Cert.from_openssh(openssh_certificate)
         public_key_filename = filename_from_fingerprint[cert.public_key.ssh_fingerprint()]

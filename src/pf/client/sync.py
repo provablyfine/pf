@@ -58,6 +58,22 @@ class Client:
             raise exceptions.UI(_problem_title(response, "Failed to get user certificate"))
         return schemas.SshUserCertificateResponse.model_validate(response.json())
 
+    def get_user_trusted_keys_public(self) -> str:
+        """Get user trusted keys without authentication."""
+        http = self._client.no_auth
+        response = http.get(f"{http.directory.ssh}/user/trusted-keys")
+        if response.status_code != 200:
+            raise exceptions.UI(_problem_title(response, "Failed to get user trusted keys"))
+        return response.text
+
+    def sign_host_certificates(self, public_keys: list[dict[str, typing.Any]]) -> schemas.SshHostCertificateResponse:
+        """Sign host certificates."""
+        http = self._client.session_auth(self._client.config.session_key)
+        response = http.post(f"{http.directory.ssh}/host/certificate", json={"public_keys": public_keys})
+        if response.status_code != 200:
+            raise exceptions.UI(_problem_title(response, "Failed to sign host certificates"))
+        return schemas.SshHostCertificateResponse.model_validate(response.json())
+
     def list_tags(
         self,
         id: int | None = None,

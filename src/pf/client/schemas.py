@@ -39,6 +39,10 @@ class SshUserCertificateResponse(_Base):
     ip_address_list: list[str] = []
 
 
+class SshHostCertificateResponse(_Base):
+    certificates: list[str]
+
+
 class Tenant(_Base):
     id: int
     name: str
