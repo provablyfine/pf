@@ -97,3 +97,31 @@ class Bastion(_Base):
 
 class BastionListResponse(_Base):
     bastions: list[Bastion] = []
+
+
+class Grant(_Base):
+    type: str
+    filter: dict[str, typing.Any] = {}
+    permission: dict[str, typing.Any] = {}
+
+
+class RoleMember(_Base):
+    id: int
+    name: str
+
+
+class RoleMemberRef(_Base):
+    id: int | None = None
+    name: str | None = None
+
+
+class Role(_Base):
+    id: int
+    name: str
+    description: str
+    grant_list: list[Grant] = []
+    member_list: list[RoleMember] = []
+
+
+class RolesResponse(_Base):
+    roles: list[Role] = []

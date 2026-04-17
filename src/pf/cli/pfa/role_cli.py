@@ -8,40 +8,19 @@ from ... import client
 from .. import grant, yaml_utils
 
 
-def _roles(auth: client.HttpClient, id: int | None = None, name: str | None = None) -> list[dict[str, typing.Any]]:
-    params = {}
-    if id is not None:
-        params["id"] = id
-    if name is not None:
-        params["name"] = name
-    response = auth.get(auth.directory.role, params=params)
-    if response.status_code != 200:
-        raise client.exceptions.UI(f"Unable to find role {','.join(f'{k}={v}' for k, v in params.items())}")
-    roles = response.json()["roles"]
-    return roles
+def _sort_by_id(t: client.schemas.Role) -> int:
+    return t.id
 
 
-def _role(args: argparse.Namespace, auth: client.HttpClient) -> dict[str, typing.Any]:
-    roles = _roles(auth, id=args.id)
-    if len(roles) == 0:
-        raise client.exceptions.UI("No role found")
-    assert len(roles) == 1
-    return roles[0]
-
-
-def _sort_by_id(t: dict[str, typing.Any]) -> int:
-    return t["id"]
-
-
-def _sort_by_name(t: dict[str, typing.Any]) -> tuple[str, int]:
-    return (t["name"], t["id"])
+def _sort_by_name(t: client.schemas.Role) -> tuple[str, int]:
+    return (t.name, t.id)
 
 
 def _role_list_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    api = client.Client(c, timeout=args.timeout)
-    auth = api.session_auth(c.session_key)
-    roles = _roles(auth, id=args.id, name=args.name)
+    sc = client.sync.Client(c, timeout=args.timeout)
+    response = sc.list_roles(id=args.id, name=args.name)
+    roles = response.roles
     sort_functions = {
         "id": _sort_by_id,
         "name": _sort_by_name,
@@ -51,15 +30,15 @@ def _role_list_function(args: argparse.Namespace) -> None:
         args.format = "quiet"
     match args.format:
         case "quiet":
-            output = "\n".join(str(r["id"]) for r in roles)
+            output = "\n".join(str(r.id) for r in roles)
         case "json":
-            output = json.dumps(roles, indent=2)
+            output = json.dumps([r.model_dump() for r in roles], indent=2)
         case "yaml":
-            output = yaml_utils.dump(roles)
+            output = yaml_utils.dump([r.model_dump() for r in roles])
         case "text":
-            rows = []
+            rows: list[list[int | str]] = []
             for role in roles:
-                rows.append([role["id"], role["name"], role["description"]])
+                rows.append([role.id, role.name, role.description])
             if len(rows) == 0:
                 output = ""
             else:
@@ -72,26 +51,27 @@ def _role_list_function(args: argparse.Namespace) -> None:
 
 def _role_read_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    api = client.Client(c, timeout=args.timeout)
-    auth = api.session_auth(c.session_key)
-    role = _role(args, auth)
+    sc = client.sync.Client(c, timeout=args.timeout)
+    role = sc.get_role(args.id)
     match args.format:
         case "json":
-            output = json.dumps(role, indent=2)
+            output = json.dumps(role.model_dump(), indent=2)
         case "yaml":
-            output = yaml_utils.dump(role)
+            output = yaml_utils.dump(role.model_dump())
         case "text":
-            rows = []
-            rows.append(["id", role["id"]])
-            rows.append(["name", role["name"]])
-            rows.append(["description", role["description"]])
-            for m in role["member_list"]:
-                rows.append(["member", m["name"]])
-            for g in role["grant_list"]:
-                type, filter, permission = client.grant.to_text(g)
-                rows.append(["grant", f"type:       {type}"])
-                rows.append(["", f"filter:     {filter}"])
-                rows.append(["", f"permission: {permission}"])
+            rows: list[list[str | int]] = []
+            rows.append(["id", role.id])
+            rows.append(["name", role.name])
+            rows.append(["description", role.description])
+            for m in role.member_list:
+                rows.append(["member", m.name])
+            for g in role.grant_list:
+                type_text, filter_text, perm_text = client.grant.to_text(
+                    typing.cast(client.grant.GrantDict, g.model_dump())
+                )
+                rows.append(["grant", f"type:       {type_text}"])
+                rows.append(["", f"filter:     {filter_text}"])
+                rows.append(["", f"permission: {perm_text}"])
             output = tabulate.tabulate(rows, tablefmt="plain")
         case _:
             assert False
@@ -100,106 +80,77 @@ def _role_read_function(args: argparse.Namespace) -> None:
 
 def _role_delete_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    api = client.Client(c, timeout=args.timeout)
-    auth = api.session_auth(c.session_key)
-    response = auth.delete(f"{api.directory.role}/{args.id}")
-    if response.status_code != 204:
-        raise client.exceptions.UI(f"Unable to delete role. {response.json()['title']}")
+    sc = client.sync.Client(c, timeout=args.timeout)
+    sc.delete_role(args.id)
 
 
 def _role_create_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    api = client.Client(c, timeout=args.timeout)
-    auth = api.session_auth(c.session_key)
-    response = auth.post(
-        api.directory.role,
-        json={"name": args.name, "description": "" if args.description is None else args.description},
-    )
-    if response.status_code != 201:
-        raise client.exceptions.UI(f"Unable to create role. {response.json()['title']}")
+    sc = client.sync.Client(c, timeout=args.timeout)
+    sc.create_role(args.name, args.description or "")
 
 
 def _role_update_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    api = client.Client(c, timeout=args.timeout)
-    auth = api.session_auth(c.session_key)
-    query = {}
-    if args.name is not None:
-        query["name"] = args.name
-    if args.description is not None:
-        query["description"] = args.description
-    response = auth.patch(f"{api.directory.role}/{args.id}", json=query)
-    if response.status_code != 200:
-        raise client.exceptions.UI(f"Unable to update role. {response.json()['title']}.")
+    sc = client.sync.Client(c, timeout=args.timeout)
+    sc.update_role(args.id, name=args.name, description=args.description)
 
 
 def _role_grant_function(args: argparse.Namespace, action: str, grant: dict[str, typing.Any]) -> None:
     c = client.Config.load(args.config)
-    api = client.Client(c, timeout=args.timeout)
-    auth = api.session_auth(c.session_key)
-    role = _role(args, auth)
+    sc = client.sync.Client(c, timeout=args.timeout)
+    role = sc.get_role(args.id)
 
     match action:
         case "add":
-            grant_list = role["grant_list"] + [grant]
+            grant_obj = client.schemas.Grant.model_validate(grant)
+            grant_list = [*role.grant_list, grant_obj]
         case "del":
-            grant_list = [g for g in role["grant_list"] if g != grant]
+            grant_obj = client.schemas.Grant.model_validate(grant)
+            grant_list = [g for g in role.grant_list if g.model_dump() != grant]
         case "set":
-            grant_list = grant
+            grant_list = [client.schemas.Grant.model_validate(g) for g in grant]
         case _:
             assert False
 
-    response = auth.patch(
-        f"{api.directory.role}/{role['id']}",
-        json={
-            "grant_list": grant_list,
-        },
-    )
-    if response.status_code != 200:
-        raise client.exceptions.UI(f"Unable to update role. {response.json()['title']}.")
+    sc.update_role(role.id, grant_list=grant_list)
 
 
 def _role_member_function(args: argparse.Namespace) -> None:
 
-    def to_dict(member: str) -> dict[str, object]:
+    def to_ref(member: str) -> client.schemas.RoleMemberRef:
         if member.isdigit():
-            return {"id": int(member)}
+            return client.schemas.RoleMemberRef(id=int(member))
         else:
-            return {"name": member}
+            return client.schemas.RoleMemberRef(name=member)
 
-    def is_equal(a: object, b: object) -> bool:
-        if "id" in a and "id" in b and a["id"] == b["id"]:
+    def is_equal(a: client.schemas.RoleMemberRef, b: client.schemas.RoleMemberRef) -> bool:
+        if a.id is not None and b.id is not None and a.id == b.id:
             return True
-        if "name" in a and "name" in b and a["name"] == b["name"]:
+        if a.name is not None and b.name is not None and a.name == b.name:
             return True
         return False
 
     c = client.Config.load(args.config)
-    api = client.Client(c, timeout=args.timeout)
-    auth = api.session_auth(c.session_key)
-    role = _role(args, auth)
-    member_list = role["member_list"]
+    sc = client.sync.Client(c, timeout=args.timeout)
+    role = sc.get_role(args.id)
+    member_list: list[client.schemas.RoleMemberRef] = [
+        client.schemas.RoleMemberRef(id=m.id, name=m.name) for m in role.member_list
+    ]
 
     for added in args.add:
-        member = to_dict(added)
+        member = to_ref(added)
         if not any(is_equal(member, m) for m in member_list):
             member_list.append(member)
 
     for deleted in args.delete:
-        member = to_dict(deleted)
+        member = to_ref(deleted)
         member_list = [m for m in member_list if not is_equal(m, member)]
 
     if args.set is not None:
-        member_list = [to_dict(m) for m in args.set]
+        member_list = [to_ref(m) for m in args.set]
 
-    response = auth.patch(
-        f"{api.directory.role}/{role['id']}",
-        json={
-            "member_list": member_list,
-        },
-    )
-    if response.status_code != 200:
-        raise client.exceptions.UI(f"Unable to update role. {response.json()['title']}.")
+    sc.update_role(role.id, member_list=member_list)
 
 
 def add_subparser(parser: argparse.ArgumentParser) -> None:

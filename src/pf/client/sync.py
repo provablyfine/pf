@@ -1,3 +1,5 @@
+import typing
+
 import requests
 
 from . import configuration, exceptions, schemas
@@ -282,3 +284,59 @@ class Client:
         response = http.delete(f"{http.directory.bastion}/{id}")
         if response.status_code != 204:
             raise exceptions.UI(_problem_title(response, "Unable to delete bastion"))
+
+    def list_roles(self, id: int | None = None, name: str | None = None) -> schemas.RolesResponse:
+        params: dict[str, int | str] = {}
+        if id is not None:
+            params["id"] = id
+        if name is not None:
+            params["name"] = name
+        http = self._client.session_auth(self._client.config.session_key)
+        response = http.get(http.directory.role, params=params)
+        if response.status_code != 200:
+            params_str = ",".join(f"{k}={v}" for k, v in params.items())
+            raise exceptions.UI(f"Unable to find role {params_str}")
+        return schemas.RolesResponse.model_validate(response.json())
+
+    def get_role(self, id: int) -> schemas.Role:
+        result = self.list_roles(id=id)
+        if len(result.roles) == 0:
+            raise exceptions.UI("No role found")
+        assert len(result.roles) == 1
+        return result.roles[0]
+
+    def create_role(self, name: str, description: str) -> None:
+        http = self._client.session_auth(self._client.config.session_key)
+        response = http.post(http.directory.role, json={"name": name, "description": description})
+        if response.status_code != 201:
+            raise exceptions.UI(_problem_title(response, "Unable to create role"))
+
+    def update_role(
+        self,
+        id: int,
+        name: str | None = None,
+        description: str | None = None,
+        grant_list: list[schemas.Grant] | None = None,
+        member_list: list[schemas.RoleMemberRef] | None = None,
+    ) -> None:
+        body: dict[str, typing.Any] = {}
+        if name is not None:
+            body["name"] = name
+        if description is not None:
+            body["description"] = description
+        if grant_list is not None:
+            body["grant_list"] = [g.model_dump() for g in grant_list]
+        if member_list is not None:
+            body["member_list"] = [m.model_dump(exclude_none=True) for m in member_list]
+        if not body:
+            raise exceptions.UI("Nothing to update")
+        http = self._client.session_auth(self._client.config.session_key)
+        response = http.patch(f"{http.directory.role}/{id}", json=body)
+        if response.status_code != 200:
+            raise exceptions.UI(_problem_title(response, "Unable to update role"))
+
+    def delete_role(self, id: int) -> None:
+        http = self._client.session_auth(self._client.config.session_key)
+        response = http.delete(f"{http.directory.role}/{id}")
+        if response.status_code != 204:
+            raise exceptions.UI(_problem_title(response, "Unable to delete role"))
