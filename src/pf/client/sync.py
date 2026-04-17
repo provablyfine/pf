@@ -115,3 +115,170 @@ class Client:
             raise exceptions.UI(f"Tenant {id} not found")
         if response.status_code != 204:
             raise exceptions.UI(_problem_title(response, "Unable to delete tenant"))
+
+    def list_auths(self) -> schemas.AuthListResponse:
+        http = self._client.session_auth(self._client.config.session_key)
+        response = http.get(http.directory.auth)
+        if response.status_code != 200:
+            raise exceptions.UI(_problem_title(response, "Unable to list auth configs"))
+        return schemas.AuthListResponse.model_validate(response.json())
+
+    def get_auth(self, id: int) -> schemas.Auth:
+        http = self._client.session_auth(self._client.config.session_key)
+        response = http.get(f"{http.directory.auth}/{id}")
+        if response.status_code == 404:
+            raise exceptions.UI("Auth config not found")
+        if response.status_code != 200:
+            raise exceptions.UI(_problem_title(response, "Unable to read auth config"))
+        return schemas.Auth.model_validate(response.json())
+
+    def create_auth_http_sig(self, name: str, description: str, tags: list[dict[str, str]]) -> None:
+        http = self._client.session_auth(self._client.config.session_key)
+        body = {
+            "name": name,
+            "description": description,
+            "config": {"type": "http_sig"},
+            "tags": tags,
+        }
+        response = http.post(http.directory.auth, json=body)
+        if response.status_code != 201:
+            raise exceptions.UI(_problem_title(response, "Unable to create auth config"))
+
+    def create_auth_oidc(
+        self,
+        name: str,
+        description: str,
+        tags: list[dict[str, str]],
+        issuer: str,
+        client_id: str,
+        client_secret: str | None,
+    ) -> None:
+        http = self._client.session_auth(self._client.config.session_key)
+        config: dict[str, str] = {
+            "type": "oidc",
+            "issuer": issuer,
+            "client_id": client_id,
+        }
+        if client_secret is not None:
+            config["client_secret"] = client_secret
+        body = {"name": name, "description": description, "config": config, "tags": tags}
+        response = http.post(http.directory.auth, json=body)
+        if response.status_code != 201:
+            raise exceptions.UI(_problem_title(response, "Unable to create auth config"))
+
+    def create_auth_oauth2_github(
+        self,
+        name: str,
+        description: str,
+        tags: list[dict[str, str]],
+        client_id: str,
+        client_secret: str,
+    ) -> None:
+        http = self._client.session_auth(self._client.config.session_key)
+        config = {
+            "type": "oauth2-github",
+            "client_id": client_id,
+            "client_secret": client_secret,
+        }
+        body = {"name": name, "description": description, "config": config, "tags": tags}
+        response = http.post(http.directory.auth, json=body)
+        if response.status_code != 201:
+            raise exceptions.UI(_problem_title(response, "Unable to create auth config"))
+
+    def update_auth(
+        self,
+        id: int,
+        name: str | None = None,
+        description: str | None = None,
+        is_enabled: bool | None = None,
+    ) -> None:
+        body: dict[str, str | bool] = {}
+        if name is not None:
+            body["name"] = name
+        if description is not None:
+            body["description"] = description
+        if is_enabled is not None:
+            body["is_enabled"] = is_enabled
+        if not body:
+            raise exceptions.UI("Nothing to update")
+        http = self._client.session_auth(self._client.config.session_key)
+        response = http.patch(f"{http.directory.auth}/{id}", json=body)
+        if response.status_code == 404:
+            raise exceptions.UI("Auth config not found")
+        if response.status_code != 200:
+            raise exceptions.UI(_problem_title(response, "Unable to update auth config"))
+
+    def delete_auth(self, id: int) -> None:
+        http = self._client.session_auth(self._client.config.session_key)
+        response = http.delete(f"{http.directory.auth}/{id}")
+        if response.status_code == 404:
+            raise exceptions.UI("Auth config not found")
+        if response.status_code != 204:
+            raise exceptions.UI(_problem_title(response, "Unable to delete auth config"))
+
+    def list_bastions(self, id: int | None = None) -> schemas.BastionListResponse:
+        params: dict[str, int] = {}
+        if id is not None:
+            params["id"] = id
+        http = self._client.session_auth(self._client.config.session_key)
+        response = http.get(http.directory.bastion, params=params)
+        if response.status_code != 200:
+            params_str = ",".join(f"{k}={v}" for k, v in params.items())
+            raise exceptions.UI(f"Unable to find bastion {params_str}")
+        return schemas.BastionListResponse.model_validate(response.json())
+
+    def get_bastion(self, id: int) -> schemas.Bastion:
+        result = self.list_bastions(id=id)
+        if len(result.bastions) == 0:
+            raise exceptions.UI("No bastion found")
+        assert len(result.bastions) == 1
+        return result.bastions[0]
+
+    def create_bastion(
+        self,
+        register_url: str,
+        connect_url: str | None,
+        ssh_proxy_jump: str | None,
+        tag_id_list: list[int],
+        tag_name_value_list: list[dict[str, str]],
+    ) -> None:
+        http = self._client.session_auth(self._client.config.session_key)
+        response = http.post(
+            http.directory.bastion,
+            json={
+                "register_url": register_url,
+                "connect_url": connect_url,
+                "ssh_proxy_jump": ssh_proxy_jump,
+                "tag_id_list": tag_id_list,
+                "tag_name_value_list": tag_name_value_list,
+            },
+        )
+        if response.status_code != 201:
+            raise exceptions.UI(_problem_title(response, "Unable to create bastion"))
+
+    def update_bastion(
+        self,
+        id: int,
+        register_url: str | None = None,
+        connect_url: str | None = None,
+        ssh_proxy_jump: str | None = None,
+    ) -> None:
+        query: dict[str, str] = {}
+        if register_url is not None:
+            query["register_url"] = register_url
+        if connect_url is not None:
+            query["connect_url"] = connect_url
+        if ssh_proxy_jump is not None:
+            query["ssh_proxy_jump"] = ssh_proxy_jump
+        if not query:
+            raise exceptions.UI("No fields to update")
+        http = self._client.session_auth(self._client.config.session_key)
+        response = http.patch(f"{http.directory.bastion}/{id}", json=query)
+        if response.status_code != 200:
+            raise exceptions.UI(_problem_title(response, "Unable to update bastion"))
+
+    def delete_bastion(self, id: int) -> None:
+        http = self._client.session_auth(self._client.config.session_key)
+        response = http.delete(f"{http.directory.bastion}/{id}")
+        if response.status_code != 204:
+            raise exceptions.UI(_problem_title(response, "Unable to delete bastion"))

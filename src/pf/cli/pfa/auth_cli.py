@@ -1,5 +1,6 @@
 import argparse
 import json
+import typing
 
 import tabulate
 
@@ -8,23 +9,20 @@ from ... import client
 
 def _auth_list_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    api = client.Client(c, timeout=args.timeout)
-    auth = api.session_auth(c.session_key)
-    response = auth.get(auth.directory.auth)
-    if response.status_code != 200:
-        raise client.exceptions.UI("Unable to list auth configs")
-    auths = response.json()["auths"]
+    sc = client.sync.Client(c, timeout=args.timeout)
+    response = sc.list_auths()
+    auths = response.auths
     if args.quiet:
         args.format = "quiet"
     match args.format:
         case "quiet":
-            output = "\n".join(str(a["id"]) for a in auths)
+            output = "\n".join(str(a.id) for a in auths)
         case "json":
-            output = json.dumps(auths, indent=2)
+            output = json.dumps([a.model_dump() for a in auths], indent=2)
         case "text":
-            rows = []
+            rows: list[list[int | str | bool]] = []
             for a in auths:
-                rows.append([a["id"], a["name"], a["config"]["type"], a["is_enabled"], a["description"]])
+                rows.append([a.id, a.name, a.config.type, a.is_enabled, a.description])
             if rows:
                 output = tabulate.tabulate(rows, headers=["id", "name", "type", "enabled", "description"])
             else:
@@ -37,136 +35,88 @@ def _auth_list_function(args: argparse.Namespace) -> None:
 
 def _auth_create_http_sig_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    api = client.Client(c, timeout=args.timeout)
-    auth = api.session_auth(c.session_key)
-    body: dict = {
-        "name": args.name,
-        "description": args.description or "",
-        "config": {
-            "type": "http_sig",
-        },
-        "tags": [{"name": t.split("=", 1)[0], "value": t.split("=", 1)[1]} for t in (args.tag or [])],
-    }
-    response = auth.post(auth.directory.auth, json=body)
-    if response.status_code != 201:
-        raise client.exceptions.UI(f"Unable to create auth config. {response.json()['title']}")
+    sc = client.sync.Client(c, timeout=args.timeout)
+    tag_list = typing.cast(list[str], args.tag or [])
+    tags: list[dict[str, str]] = []
+    for t in tag_list:
+        parts = t.split("=", 1)
+        tags.append({"name": parts[0], "value": parts[1]})
+    sc.create_auth_http_sig(args.name, args.description or "", tags)
 
 
 def _auth_create_oidc_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    api = client.Client(c, timeout=args.timeout)
-    auth = api.session_auth(c.session_key)
-    body: dict = {
-        "name": args.name,
-        "description": args.description or "",
-        "tags": [{"name": t.split("=", 1)[0], "value": t.split("=", 1)[1]} for t in (args.tag or [])],
-        "config": {
-            "type": "oidc",
-            "issuer": args.issuer,
-            "client_id": args.client_id,
-        },
-    }
-    if args.client_secret:
-        body["config"]["client_secret"] = args.client_secret
-    response = auth.post(auth.directory.auth, json=body)
-    if response.status_code != 201:
-        raise client.exceptions.UI(f"Unable to create auth config. {response.json()['title']}")
+    sc = client.sync.Client(c, timeout=args.timeout)
+    tag_list = typing.cast(list[str], args.tag or [])
+    tags: list[dict[str, str]] = []
+    for t in tag_list:
+        parts = t.split("=", 1)
+        tags.append({"name": parts[0], "value": parts[1]})
+    sc.create_auth_oidc(args.name, args.description or "", tags, args.issuer, args.client_id, args.client_secret)
 
 
 def _auth_create_oauth2_github_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    api = client.Client(c, timeout=args.timeout)
-    auth = api.session_auth(c.session_key)
-    body: dict = {
-        "name": args.name,
-        "description": args.description or "",
-        "tags": [{"name": t.split("=", 1)[0], "value": t.split("=", 1)[1]} for t in (args.tag or [])],
-        "config": {
-            "type": "oauth2-github",
-            "client_id": args.client_id,
-            "client_secret": args.client_secret,
-        },
-    }
-    response = auth.post(auth.directory.auth, json=body)
-    if response.status_code != 201:
-        raise client.exceptions.UI(f"Unable to create auth config. {response.json()['title']}")
+    sc = client.sync.Client(c, timeout=args.timeout)
+    tag_list = typing.cast(list[str], args.tag or [])
+    tags: list[dict[str, str]] = []
+    for t in tag_list:
+        parts = t.split("=", 1)
+        tags.append({"name": parts[0], "value": parts[1]})
+    sc.create_auth_oauth2_github(args.name, args.description or "", tags, args.client_id, args.client_secret)
 
 
 def _auth_read_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    api = client.Client(c, timeout=args.timeout)
-    auth = api.session_auth(c.session_key)
-    response = auth.get(f"{auth.directory.auth}/{args.id}")
-    if response.status_code == 404:
-        raise client.exceptions.UI("Auth config not found")
-    if response.status_code != 200:
-        raise client.exceptions.UI("Unable to read auth config")
-    a = response.json()
+    sc = client.sync.Client(c, timeout=args.timeout)
+    a = sc.get_auth(args.id)
     if args.quiet:
         args.format = "quiet"
     match args.format:
         case "quiet":
-            print(a["id"])
+            print(a.id)
         case "json":
-            print(json.dumps(a, indent=2))
+            print(json.dumps(a.model_dump(), indent=2))
         case "text":
-            rows = [
-                ["id", a["id"]],
-                ["name", a["name"]],
-                ["type", a["config"]["type"]],
-                ["description", a["description"]],
-                ["enabled", a["is_enabled"]],
-                ["created_at", a["created_at"]],
-                ["tags", " ".join(f"{t['name']}={t['value']}" for t in a.get("tags", []))],
+            rows: list[list[int | str | bool]] = [
+                ["id", a.id],
+                ["name", a.name],
+                ["type", a.config.type],
+                ["description", a.description],
+                ["enabled", a.is_enabled],
+                ["created_at", a.created_at],
+                ["tags", " ".join(f"{t.name}={t.value}" for t in a.tags)],
             ]
-            if a["config"]["type"] == "oidc":
-                params = a.get("config", {})
-                rows.append(["issuer", params.get("issuer", "")])
-                rows.append(["client_id", params.get("client_id", "")])
-                rows.append(["callback_url", params.get("callback_url", "")])
-                if params.get("client_secret"):
-                    rows.append(["client_secret", params.get("client_secret", "")])
-            elif a["config"]["type"] == "oauth2-github":
-                params = a.get("config", {})
-                rows.append(["authorization_endpoint", params.get("authorization_endpoint", "")])
-                rows.append(["client_id", params.get("client_id", "")])
-                rows.append(["callback_url", params.get("callback_url", "")])
+            if isinstance(a.config, client.schemas.OidcConfig):
+                rows.append(["issuer", a.config.issuer])
+                rows.append(["client_id", a.config.client_id])
+                rows.append(["callback_url", a.config.callback_url])
+                if a.config.client_secret:
+                    rows.append(["client_secret", a.config.client_secret])
+            elif isinstance(a.config, client.schemas.OAuth2Config):
+                rows.append(["authorization_endpoint", a.config.authorization_endpoint])
+                rows.append(["client_id", a.config.client_id])
+                rows.append(["callback_url", a.config.callback_url])
             print(tabulate.tabulate(rows, tablefmt="plain"))
         case _:
             assert False, args.format
 
 
 def _auth_update_function(args: argparse.Namespace) -> None:
-    body: dict = {}
-    if args.name is not None:
-        body["name"] = args.name
-    if args.description is not None:
-        body["description"] = args.description
-    if args.enable:
-        body["is_enabled"] = True
-    if args.disable:
-        body["is_enabled"] = False
-    if not body:
-        raise client.exceptions.UI("Nothing to update")
     c = client.Config.load(args.config)
-    api = client.Client(c, timeout=args.timeout)
-    auth = api.session_auth(c.session_key)
-    response = auth.patch(f"{auth.directory.auth}/{args.id}", json=body)
-    if response.status_code == 404:
-        raise client.exceptions.UI("Auth config not found")
-    if response.status_code != 200:
-        raise client.exceptions.UI(f"Unable to update auth config. {response.json().get('title', '')}")
+    sc = client.sync.Client(c, timeout=args.timeout)
+    is_enabled = None
+    if args.enable:
+        is_enabled = True
+    elif args.disable:
+        is_enabled = False
+    sc.update_auth(args.id, name=args.name, description=args.description, is_enabled=is_enabled)
 
 
 def _auth_delete_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    api = client.Client(c, timeout=args.timeout)
-    auth = api.session_auth(c.session_key)
-    response = auth.delete(f"{auth.directory.auth}/{args.id}")
-    if response.status_code == 404:
-        raise client.exceptions.UI("Auth config not found")
-    if response.status_code != 204:
-        raise client.exceptions.UI(f"Unable to delete auth config. {response.json().get('title', '')}")
+    sc = client.sync.Client(c, timeout=args.timeout)
+    sc.delete_auth(args.id)
 
 
 def add_subparser(parser: argparse.ArgumentParser) -> None:

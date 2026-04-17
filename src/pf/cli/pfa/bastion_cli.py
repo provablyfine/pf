@@ -1,29 +1,9 @@
 import argparse
 import json
-import typing
 
 import tabulate
 
 from ... import client
-
-
-def _bastions(auth: client.HttpClient, id: int | None = None) -> list[dict[str, typing.Any]]:
-    params = {}
-    if id is not None:
-        params["id"] = id
-    response = auth.get(auth.directory.bastion, params=params)
-    if response.status_code != 200:
-        raise client.exceptions.UI(f"Unable to find bastion {','.join(f'{k}={v}' for k, v in params.items())}")
-    bastions = response.json()["bastions"]
-    return bastions
-
-
-def _bastion(args: argparse.Namespace, auth: client.HttpClient) -> dict[str, typing.Any]:
-    bastions = _bastions(auth, id=args.id)
-    if len(bastions) == 0:
-        raise client.exceptions.UI("No bastion found")
-    assert len(bastions) == 1
-    return bastions[0]
 
 
 def _parse_tag(s: str) -> dict[str, str]:
@@ -37,20 +17,20 @@ def _parse_tag(s: str) -> dict[str, str]:
 
 def _bastion_list_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    api = client.Client(c, timeout=args.timeout)
-    auth = api.session_auth(c.session_key)
-    bastions = _bastions(auth, id=args.id)
+    sc = client.sync.Client(c, timeout=args.timeout)
+    response = sc.list_bastions(id=args.id)
+    bastions = response.bastions
     if args.quiet:
         args.format = "quiet"
     match args.format:
         case "quiet":
-            output = "\n".join(str(b["id"]) for b in bastions)
+            output = "\n".join(str(b.id) for b in bastions)
         case "json":
-            output = json.dumps(bastions, indent=2)
+            output = json.dumps([b.model_dump() for b in bastions], indent=2)
         case "text":
-            rows = []
+            rows: list[list[int | str]] = []
             for bastion in bastions:
-                rows.append([bastion["id"], bastion["register_url"], len(bastion.get("tag_list", []))])
+                rows.append([bastion.id, bastion.register_url, len(bastion.tag_list)])
             if len(rows) == 0:
                 output = ""
             else:
@@ -63,22 +43,21 @@ def _bastion_list_function(args: argparse.Namespace) -> None:
 
 def _bastion_read_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    api = client.Client(c, timeout=args.timeout)
-    auth = api.session_auth(c.session_key)
-    bastion = _bastion(args, auth)
+    sc = client.sync.Client(c, timeout=args.timeout)
+    bastion = sc.get_bastion(args.id)
     match args.format:
         case "json":
-            output = json.dumps(bastion, indent=2)
+            output = json.dumps(bastion.model_dump(), indent=2)
         case "text":
-            rows = []
-            rows.append(["id", bastion["id"]])
-            rows.append(["register_url", bastion["register_url"]])
-            if bastion.get("connect_url"):
-                rows.append(["connect_url", bastion["connect_url"]])
-            if bastion.get("ssh_proxy_jump"):
-                rows.append(["ssh_proxy_jump", bastion["ssh_proxy_jump"]])
-            for tag in bastion.get("tag_list", []):
-                rows.append(["tag", f"{tag['name']}={tag['value']}"])
+            rows: list[list[int | str]] = []
+            rows.append(["id", bastion.id])
+            rows.append(["register_url", bastion.register_url])
+            if bastion.connect_url:
+                rows.append(["connect_url", bastion.connect_url])
+            if bastion.ssh_proxy_jump:
+                rows.append(["ssh_proxy_jump", bastion.ssh_proxy_jump])
+            for tag in bastion.tag_list:
+                rows.append(["tag", f"{tag.name}={tag.value}"])
             output = tabulate.tabulate(rows, tablefmt="plain")
         case _:
             assert False
@@ -87,49 +66,22 @@ def _bastion_read_function(args: argparse.Namespace) -> None:
 
 def _bastion_delete_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    api = client.Client(c, timeout=args.timeout)
-    auth = api.session_auth(c.session_key)
-    response = auth.delete(f"{api.directory.bastion}/{args.id}")
-    if response.status_code != 204:
-        raise client.exceptions.UI(f"Unable to delete bastion. {response.json()['title']}")
+    sc = client.sync.Client(c, timeout=args.timeout)
+    sc.delete_bastion(args.id)
 
 
 def _bastion_create_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    api = client.Client(c, timeout=args.timeout)
-    auth = api.session_auth(c.session_key)
+    sc = client.sync.Client(c, timeout=args.timeout)
     tag_id_list = [int(t) for t in args.tag if t.isdigit()]
     tag_name_value_list = [_parse_tag(t) for t in args.tag if not t.isdigit()]
-    response = auth.post(
-        api.directory.bastion,
-        json={
-            "register_url": args.register_url,
-            "connect_url": args.connect_url,
-            "ssh_proxy_jump": args.ssh_proxy_jump,
-            "tag_id_list": tag_id_list,
-            "tag_name_value_list": tag_name_value_list,
-        },
-    )
-    if response.status_code != 201:
-        raise client.exceptions.UI(f"Unable to create bastion. {response.json()['title']}")
+    sc.create_bastion(args.register_url, args.connect_url, args.ssh_proxy_jump, tag_id_list, tag_name_value_list)
 
 
 def _bastion_update_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    api = client.Client(c, timeout=args.timeout)
-    auth = api.session_auth(c.session_key)
-    query = {}
-    if args.register_url is not None:
-        query["register_url"] = args.register_url
-    if args.connect_url is not None:
-        query["connect_url"] = args.connect_url
-    if args.ssh_proxy_jump is not None:
-        query["ssh_proxy_jump"] = args.ssh_proxy_jump
-    if not query:
-        raise client.exceptions.UI("No fields to update")
-    response = auth.patch(f"{api.directory.bastion}/{args.id}", json=query)
-    if response.status_code != 200:
-        raise client.exceptions.UI(f"Unable to update bastion. {response.json()['title']}.")
+    sc = client.sync.Client(c, timeout=args.timeout)
+    sc.update_bastion(args.id, args.register_url, args.connect_url, args.ssh_proxy_jump)
 
 
 def add_subparser(parser: argparse.ArgumentParser) -> None:
