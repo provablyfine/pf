@@ -159,9 +159,12 @@ class Client:
         connect_url: str | None = None,
         ssh_proxy_jump: str | None = None,
         tag_id_list: list[int] | None = None,
+        tag_name_value_list: list[schemas.TagNameValue] | None = None,
     ) -> None:
         return await self._run(
-            lambda: self._sync.update_bastion(id, register_url, connect_url, ssh_proxy_jump, tag_id_list)
+            lambda: self._sync.update_bastion(
+                id, register_url, connect_url, ssh_proxy_jump, tag_id_list, tag_name_value_list
+            )
         )
 
     async def delete_bastion(self, id: int) -> None:

@@ -330,6 +330,7 @@ class Client:
         connect_url: str | None = None,
         ssh_proxy_jump: str | None = None,
         tag_id_list: list[int] | None = None,
+        tag_name_value_list: list[schemas.TagNameValue] | None = None,
     ) -> None:
         query: dict[str, typing.Any] = {}
         if register_url is not None:
@@ -340,6 +341,8 @@ class Client:
             query["ssh_proxy_jump"] = ssh_proxy_jump
         if tag_id_list is not None:
             query["tag_id_list"] = tag_id_list
+        if tag_name_value_list is not None:
+            query["tag_name_value_list"] = [{"name": t.name, "value": t.value} for t in tag_name_value_list]
         if not query:
             raise exceptions.UI("No fields to update")
         http = self._client.session_auth(self._client.config.session_key)

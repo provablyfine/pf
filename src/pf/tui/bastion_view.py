@@ -9,10 +9,10 @@ import textual.widgets
 import textual_autocomplete
 
 from .. import client
-from . import auto_complete, header
+from . import auto_complete, base, header
 
 
-class _TagAddScreen(textual.screen.ModalScreen[dict | None]):
+class _TagAddScreen(textual.screen.ModalScreen[client.schemas.TagNameValue | None]):
     DEFAULT_CSS = """
     _TagAddScreen {
         align: center middle;
@@ -27,9 +27,9 @@ class _TagAddScreen(textual.screen.ModalScreen[dict | None]):
     """
     BINDINGS: typing.ClassVar = [("escape", "cancel", "Cancel")]
 
-    def __init__(self, tags: list[dict]) -> None:
+    def __init__(self, tags: list[client.schemas.TagNameValue]) -> None:
         super().__init__()
-        self._tags = {f"{t['name']}={t['value']}": t for t in tags}
+        self._tags: dict[str, client.schemas.TagNameValue] = {f"{t.name}={t.value}": t for t in tags}
 
     def compose(self) -> textual.app.ComposeResult:
         candidates = [textual_autocomplete.DropdownItem(main=label) for label in self._tags]
@@ -50,7 +50,7 @@ class _TagAddScreen(textual.screen.ModalScreen[dict | None]):
         self.dismiss(tag)
 
 
-class BastionViewScreen(textual.screen.Screen[None]):
+class BastionViewScreen(base.Screen):
     BINDINGS: typing.ClassVar = [
         ("ctrl+s", "save", "Save"),
         ("escape", "app.pop_screen", "Back"),
@@ -74,11 +74,11 @@ class BastionViewScreen(textual.screen.Screen[None]):
         super().__init__()
         self._auth = auth
         self._bastion = bastion
-        self._tags: list[client.schemas.Tag] = list(bastion.tag_list)
+        self._tags: list[client.schemas.TagNameValue] = list(bastion.tag_list)
         self._saved_register_url: str = bastion.register_url
         self._saved_connect_url: str | None = bastion.connect_url
         self._saved_ssh_proxy_jump: str | None = bastion.ssh_proxy_jump
-        self._saved_tag_ids: list[int] = [t.id for t in bastion.tag_list]
+        self._saved_tags: list[client.schemas.TagNameValue] = list(bastion.tag_list)
 
     def compose(self) -> textual.app.ComposeResult:
         yield header.AppHeader()
@@ -133,15 +133,19 @@ class BastionViewScreen(textual.screen.Screen[None]):
     @textual.work
     async def action_add_tag(self) -> None:
         all_tags = (await self._auth.list_tags()).tags
-        existing_ids = {t.id for t in self._tags}
-        available = [{"id": t.id, "name": t.name, "value": t.value} for t in all_tags if t.id not in existing_ids]
+        existing = {(t.name, t.value) for t in self._tags}
+        available = [
+            client.schemas.TagNameValue(name=t.name, value=t.value)
+            for t in all_tags
+            if (t.name, t.value) not in existing
+        ]
         if not available:
             self.notify("No tag available to add")
             return
         tag = await self.app.push_screen_wait(_TagAddScreen(available))
         if tag is None:
             return
-        self._tags.append(client.schemas.Tag(id=tag["id"], name=tag["name"], value=tag["value"]))
+        self._tags.append(tag)
         await self._populate_tags()
 
     @textual.work
@@ -158,27 +162,20 @@ class BastionViewScreen(textual.screen.Screen[None]):
         register_url = self.query_one("#register_url", textual.widgets.Input).value
         connect_url = self.query_one("#connect_url", textual.widgets.Input).value.strip() or None
         ssh_proxy_jump = self.query_one("#ssh_proxy_jump", textual.widgets.Input).value.strip() or None
-        current_tag_ids = [t.id for t in self._tags]
 
-        patch: dict = {}
+        update_kwargs: dict[str, object] = {}
         if register_url != self._saved_register_url:
-            patch["register_url"] = register_url
+            update_kwargs["register_url"] = register_url
         if connect_url != self._saved_connect_url:
-            patch["connect_url"] = connect_url
+            update_kwargs["connect_url"] = connect_url
         if ssh_proxy_jump != self._saved_ssh_proxy_jump:
-            patch["ssh_proxy_jump"] = ssh_proxy_jump
-        if current_tag_ids != self._saved_tag_ids:
-            patch["tag_id_list"] = current_tag_ids
+            update_kwargs["ssh_proxy_jump"] = ssh_proxy_jump
+        if self._tags != self._saved_tags:
+            update_kwargs["tag_name_value_list"] = self._tags
 
-        if not patch:
+        if not update_kwargs:
             self.notify("No changes")
             return
 
-        await self._auth.update_bastion(
-            self._bastion.id,
-            register_url=patch.get("register_url"),
-            connect_url=patch.get("connect_url"),
-            ssh_proxy_jump=patch.get("ssh_proxy_jump"),
-            tag_id_list=patch.get("tag_id_list"),
-        )
+        await self._auth.update_bastion(self._bastion.id, **update_kwargs)  # type: ignore[arg-type]
         self.app.pop_screen()
