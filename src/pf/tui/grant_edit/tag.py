@@ -10,6 +10,10 @@ from .. import auto_complete, checkbox_input
 from . import base
 
 
+class PermissionSelectionList(textual.widgets.SelectionList[str]):
+    pass
+
+
 class TagGrantEditWidget(base.GrantEditWidget):
     DEFAULT_CSS = """
     TagGrantEditWidget {
@@ -38,7 +42,7 @@ class TagGrantEditWidget(base.GrantEditWidget):
             )
         with textual.containers.VerticalGroup(classes="section"):
             yield textual.widgets.Label("Permissions", classes="label")
-            yield textual.widgets.SelectionList(
+            yield PermissionSelectionList(
                 ("Create", "create", p.create),
                 ("Read", "read", p.read),
                 ("Delete", "delete", p.delete),
@@ -51,7 +55,7 @@ class TagGrantEditWidget(base.GrantEditWidget):
         self.query_one("#filter-name-value", checkbox_input.CheckboxInput).set_candidates(candidates)
 
     def get_grant_data(self) -> schemas.TagGrant:
-        selected = set(self.query_one(textual.widgets.SelectionList).selected)
+        selected = set(self.query_one(PermissionSelectionList).selected)
         return schemas.TagGrant(
             type="tag",
             filter=schemas.TagFilter(name_value=self._read_field("#filter-name-value").tag_name_value_filter()),

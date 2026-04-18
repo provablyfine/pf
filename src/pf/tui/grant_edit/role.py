@@ -10,6 +10,10 @@ from .. import auto_complete, checkbox_input
 from . import base
 
 
+class PermissionSelectionList(textual.widgets.SelectionList[str]):
+    pass
+
+
 class RoleGrantEditWidget(base.GrantEditWidget):
     DEFAULT_CSS = """
     RoleGrantEditWidget {
@@ -38,7 +42,7 @@ class RoleGrantEditWidget(base.GrantEditWidget):
             )
         with textual.containers.VerticalGroup(classes="section"):
             yield textual.widgets.Label("Permissions", classes="label")
-            yield textual.widgets.SelectionList(
+            yield PermissionSelectionList(
                 ("Create", "create", p.create),
                 ("Read", "read", p.read),
                 ("Update name", "update.name", True if update is None else update.name),
@@ -55,7 +59,7 @@ class RoleGrantEditWidget(base.GrantEditWidget):
         self.query_one("#filter-name", checkbox_input.CheckboxInput).set_candidates(candidates)
 
     def get_grant_data(self) -> schemas.RoleGrant:
-        selected = set(self.query_one(textual.widgets.SelectionList).selected)
+        selected = set(self.query_one(PermissionSelectionList).selected)
         update_dict = {
             "name": "update.name" in selected,
             "description": "update.description" in selected,
