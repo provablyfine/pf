@@ -10,7 +10,7 @@ from .. import client
 from . import header
 
 
-class _TenantCreateScreen(textual.screen.ModalScreen[dict | None]):
+class _TenantCreateScreen(textual.screen.ModalScreen[dict[str, str] | None]):
     DEFAULT_CSS = """
     _TenantCreateScreen {
         align: center middle;
@@ -44,6 +44,9 @@ class _TenantCreateScreen(textual.screen.ModalScreen[dict | None]):
 
 
 class TenantListScreen(textual.screen.Screen[None]):
+    class _StrDataTable(textual.widgets.DataTable[str]):
+        pass
+
     BINDINGS: typing.ClassVar = [
         ("a", "add_tenant", "Add"),
         ("d", "delete_tenant", "Delete"),
@@ -57,16 +60,16 @@ class TenantListScreen(textual.screen.Screen[None]):
 
     def compose(self) -> textual.app.ComposeResult:
         yield header.AppHeader()
-        yield textual.widgets.DataTable(cursor_type="row")
+        yield self._StrDataTable(cursor_type="row")
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
-        table = self.query_one(textual.widgets.DataTable)
+        table = self.query_one(self._StrDataTable)
         table.add_columns("Name", "Display Name", "Enabled")
         self._tenants = (await self._auth.list_tenants()).tenants
         self._populate_table(table)
 
-    def _populate_table(self, table: textual.widgets.DataTable) -> None:
+    def _populate_table(self, table: "TenantListScreen._StrDataTable") -> None:
         table.clear(columns=False)
         for tenant in self._tenants:
             table.add_row(
@@ -77,19 +80,19 @@ class TenantListScreen(textual.screen.Screen[None]):
 
     @textual.work
     async def action_add_tenant(self) -> None:
-        data = await self.app.push_screen_wait(_TenantCreateScreen())
+        data = await self.app.push_screen_wait(_TenantCreateScreen())  # pyright: ignore[reportUnknownMemberType]
         if data is None:
             return
         tenant = await self._auth.create_tenant(data["name"], data["display_name"])
         self._tenants.append(tenant)
-        table = self.query_one(textual.widgets.DataTable)
+        table = self.query_one(self._StrDataTable)
         self._populate_table(table)
 
     @textual.work
     async def action_delete_tenant(self) -> None:
         if not self._tenants:
             return
-        table = self.query_one(textual.widgets.DataTable)
+        table = self.query_one(self._StrDataTable)
         index = table.cursor_row
         tenant = self._tenants[index]
         await self._auth.delete_tenant(tenant.id)
