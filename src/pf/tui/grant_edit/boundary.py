@@ -7,10 +7,10 @@ import textual_autocomplete
 from ... import client
 from ...client import schemas
 from .. import auto_complete, checkbox_input
-from .base import _GrantEditWidget
+from . import base
 
 
-class BoundaryGrantEditWidget(_GrantEditWidget):
+class BoundaryGrantEditWidget(base.GrantEditWidget):
     DEFAULT_CSS = """
     BoundaryGrantEditWidget {
         height: auto;

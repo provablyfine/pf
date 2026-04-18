@@ -6,10 +6,10 @@ import textual_autocomplete
 
 from ... import client
 from .. import auto_complete, checkbox_input
-from .base import _GrantEditWidget
+from . import base
 
 
-class TenantGrantEditWidget(_GrantEditWidget):
+class TenantGrantEditWidget(base.GrantEditWidget):
     DEFAULT_CSS = """
     TenantGrantEditWidget {
         height: auto;

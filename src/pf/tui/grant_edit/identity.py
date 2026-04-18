@@ -7,10 +7,10 @@ import textual_autocomplete
 from ... import client
 from ...client import schemas
 from .. import auto_complete, checkbox_input
-from .base import _Field, _GrantEditWidget
+from . import base
 
 
-class IdentityGrantEditWidget(_GrantEditWidget):
+class IdentityGrantEditWidget(base.GrantEditWidget):
     DEFAULT_CSS = """
     IdentityGrantEditWidget {
         height: auto;
@@ -34,13 +34,13 @@ class IdentityGrantEditWidget(_GrantEditWidget):
         f = self._grant.filter
         p = self._grant.permission
         create = p.create
-        tag_list = _Field.from_tag_list(f.tag_list)
-        boundary_list = _Field.from_boundary_list(f.boundary_list)
-        create_tags = _Field.from_tag_list((create.allowed_tag_list or None) if create else None)
-        create_bounds = _Field.from_boundary_list((create.required_boundary_list or None) if create else None)
-        add_tag = _Field.from_tag_list(p.add_tag_list)
-        del_tag = _Field.from_tag_list(p.del_tag_list)
-        invite = _Field.from_invite_list(p.invite_list)
+        tag_list = base.Field.from_tag_list(f.tag_list)
+        boundary_list = base.Field.from_boundary_list(f.boundary_list)
+        create_tags = base.Field.from_tag_list((create.allowed_tag_list or None) if create else None)
+        create_bounds = base.Field.from_boundary_list((create.required_boundary_list or None) if create else None)
+        add_tag = base.Field.from_tag_list(p.add_tag_list)
+        del_tag = base.Field.from_tag_list(p.del_tag_list)
+        invite = base.Field.from_invite_list(p.invite_list)
         with textual.containers.VerticalGroup(classes="section"):
             yield textual.widgets.Label("Filters", classes="label")
             yield checkbox_input.CheckboxInput(

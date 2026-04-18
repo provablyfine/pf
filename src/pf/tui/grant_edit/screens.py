@@ -10,16 +10,7 @@ import textual.widgets
 from ... import client
 from ...client import schemas
 from .. import header
-from .base import _GrantEditWidget
-from .boundary import BoundaryGrantEditWidget
-from .identity import IdentityGrantEditWidget
-from .role import RoleGrantEditWidget
-from .ssh_command import SshCommandGrantEditWidget
-from .ssh_port_forward import SshPortForwardingGrantEditWidget
-from .ssh_shell import SshShellGrantEditWidget
-from .tag import TagGrantEditWidget
-from .tenant import TenantGrantEditWidget
-
+from . import base, boundary, identity, role, ssh_command, ssh_port_forward, ssh_shell, tag, tenant
 
 class GrantEditScreen(textual.screen.Screen[schemas.Grant | None]):
     DEFAULT_CSS = """
@@ -53,21 +44,21 @@ class GrantEditScreen(textual.screen.Screen[schemas.Grant | None]):
         await fields.query("*").remove()
         match value:
             case "role":
-                widget: _GrantEditWidget = RoleGrantEditWidget(self._auth, self._grant)
+                widget = role.RoleGrantEditWidget(self._auth, self._grant)
             case "identity":
-                widget = IdentityGrantEditWidget(self._auth, self._grant)
+                widget = identity.IdentityGrantEditWidget(self._auth, self._grant)
             case "tag":
-                widget = TagGrantEditWidget(self._auth, self._grant)
+                widget = tag.TagGrantEditWidget(self._auth, self._grant)
             case "boundary":
-                widget = BoundaryGrantEditWidget(self._auth, self._grant)
+                widget = boundary.BoundaryGrantEditWidget(self._auth, self._grant)
             case "tenant":
-                widget = TenantGrantEditWidget(self._auth, self._grant)
+                widget = tenant.TenantGrantEditWidget(self._auth, self._grant)
             case "ssh-shell":
-                widget = SshShellGrantEditWidget(self._auth, self._grant)
+                widget = ssh_shell.SshShellGrantEditWidget(self._auth, self._grant)
             case "ssh-port-forwarding":
-                widget = SshPortForwardingGrantEditWidget(self._auth, self._grant)
+                widget = ssh_port_forward.SshPortForwardingGrantEditWidget(self._auth, self._grant)
             case "ssh-command":
-                widget = SshCommandGrantEditWidget(self._auth, self._grant)
+                widget = ssh_command.SshCommandGrantEditWidget(self._auth, self._grant)
             case _:
                 return
         await fields.mount(widget)
@@ -76,7 +67,7 @@ class GrantEditScreen(textual.screen.Screen[schemas.Grant | None]):
         self.dismiss(None)
 
     def action_confirm(self) -> None:
-        widgets = list(self.query_one("#dynamic-grant-fields").query(_GrantEditWidget))
+        widgets = list(self.query_one("#dynamic-grant-fields").query(base.GrantEditWidget))
         if not widgets:
             return
         self.dismiss(widgets[0].get_grant_data())

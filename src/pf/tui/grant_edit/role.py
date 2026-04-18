@@ -7,10 +7,10 @@ import textual_autocomplete
 from ... import client
 from ...client import schemas
 from .. import auto_complete, checkbox_input
-from .base import _GrantEditWidget
+from . import base
 
 
-class RoleGrantEditWidget(_GrantEditWidget):
+class RoleGrantEditWidget(base.GrantEditWidget):
     DEFAULT_CSS = """
     RoleGrantEditWidget {
         height: auto;

@@ -1,13 +1,14 @@
 import textual
 import textual.app
+import textual.containers
 import textual.widgets
 
 from ...client import schemas
 from .. import checkbox_input
-from .base import _Field, _SshBaseGrantEditWidget
+from . import base
 
 
-class SshCommandGrantEditWidget(_SshBaseGrantEditWidget):
+class SshCommandGrantEditWidget(base.SshBaseGrantEditWidget):
     DEFAULT_CSS = """
     SshCommandGrantEditWidget {
         height: auto;
@@ -16,8 +17,8 @@ class SshCommandGrantEditWidget(_SshBaseGrantEditWidget):
 
     def compose(self) -> textual.app.ComposeResult:
         p = self._grant.permission
-        username_field = _Field(active=True, value=" ".join(p.username_list or []))
-        command_field = _Field(active=True, value=" ".join(p.command_list or []))
+        username_field = base.Field(active=True, value=" ".join(p.username_list or []))
+        command_field = base.Field(active=True, value=" ".join(p.command_list or []))
         yield from self._compose_filter()
         with textual.containers.VerticalGroup(classes="section"):
             yield textual.widgets.Label("Permissions", classes="label")

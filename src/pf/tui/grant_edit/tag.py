@@ -7,10 +7,10 @@ import textual_autocomplete
 from ... import client
 from ...client import schemas
 from .. import auto_complete, checkbox_input
-from .base import _GrantEditWidget
+from . import base
 
 
-class TagGrantEditWidget(_GrantEditWidget):
+class TagGrantEditWidget(base.GrantEditWidget):
     DEFAULT_CSS = """
     TagGrantEditWidget {
         height: auto;

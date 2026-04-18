@@ -1,9 +1,12 @@
+from __future__ import annotations
+
 import dataclasses
 
 import textual
 import textual.widget
 import textual.widgets
 import textual.containers
+import textual_autocomplete
 
 from ... import client
 from ...client import schemas
@@ -11,7 +14,7 @@ from .. import checkbox_input, auto_complete
 
 
 @dataclasses.dataclass
-class _Field:
+class Field:
     active: bool
     value: str
 
@@ -60,21 +63,21 @@ class _Field:
         return int(s) if s.isdigit() else None
 
     @classmethod
-    def from_tag_list(cls, tag_list: list[schemas.TagNameValue] | None) -> "_Field":
+    def from_tag_list(cls, tag_list: list[schemas.TagNameValue] | None) -> Field:
         return cls(
             active=tag_list is not None,
             value=" ".join(f"{t.name}={t.value}" for t in (tag_list or [])),
         )
 
     @classmethod
-    def from_boundary_list(cls, boundary_list: list[str] | None) -> "_Field":
+    def from_boundary_list(cls, boundary_list: list[str] | None) -> Field:
         return cls(
             active=boundary_list is not None,
             value=" ".join(boundary_list or []),
         )
 
     @classmethod
-    def from_invite_list(cls, invite_list: list[str] | None) -> "_Field":
+    def from_invite_list(cls, invite_list: list[str] | None) -> Field:
         return cls(
             active=invite_list is not None,
             value=" ".join(invite_list or []),
@@ -168,16 +171,16 @@ def new_grant(grant_type: str) -> schemas.Grant:
             return schemas.InvalidGrant(type="invalid")
 
 
-class _GrantEditWidget(textual.widget.Widget):
+class GrantEditWidget(textual.widget.Widget):
     def get_grant_data(self) -> schemas.Grant:
         raise NotImplementedError
 
-    def _read_field(self, widget_id: str) -> _Field:
+    def _read_field(self, widget_id: str) -> Field:
         w = self.query_one(widget_id, checkbox_input.CheckboxInput)
-        return _Field(w.active, w.value)
+        return Field(w.active, w.value)
 
 
-class _SshBaseGrantEditWidget(_GrantEditWidget):
+class SshBaseGrantEditWidget(GrantEditWidget):
     def __init__(self, auth: client.aio.Client, grant: schemas.Grant):
         super().__init__()
         self._auth = auth
@@ -186,8 +189,8 @@ class _SshBaseGrantEditWidget(_GrantEditWidget):
     def _compose_filter(self):
 
         f = self._grant.filter
-        tag_list = _Field.from_tag_list(f.tag_list)
-        boundary_list = _Field.from_boundary_list(f.boundary_list)
+        tag_list = Field.from_tag_list(f.tag_list)
+        boundary_list = Field.from_boundary_list(f.boundary_list)
         with textual.containers.VerticalGroup(classes="section"):
             yield textual.widgets.Label("Filters", classes="label")
 
@@ -215,8 +218,6 @@ class _SshBaseGrantEditWidget(_GrantEditWidget):
             )
 
     async def _mount_filter_candidates(self) -> None:
-        import textual_autocomplete
-
         identities = (await self._auth.list_identities()).identities
         identity_candidates = [textual_autocomplete.DropdownItem(main=i.name) for i in identities]
         self.query_one("#filter-name", checkbox_input.CheckboxInput).set_candidates(identity_candidates)
