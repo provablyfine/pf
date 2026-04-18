@@ -10,7 +10,13 @@ from .. import client
 from . import base, bastion_view, header
 
 
-class _BastionCreateScreen(textual.screen.ModalScreen[dict | None]):
+class _BastionFormResult(typing.TypedDict):
+    register_url: str
+    connect_url: str | None
+    ssh_proxy_jump: str | None
+
+
+class _BastionCreateScreen(textual.screen.ModalScreen[_BastionFormResult | None]):
     DEFAULT_CSS = """
     _BastionCreateScreen {
         align: center middle;
@@ -59,6 +65,9 @@ class BastionListScreen(base.Screen):
         ("escape", "app.pop_screen", "Back"),
     ]
 
+    class _StrDataTable(textual.widgets.DataTable[str]):
+        pass
+
     def __init__(self, auth: client.aio.Client) -> None:
         super().__init__()
         self._auth = auth
@@ -66,11 +75,11 @@ class BastionListScreen(base.Screen):
 
     def compose(self) -> textual.app.ComposeResult:
         yield header.AppHeader()
-        yield textual.widgets.DataTable(cursor_type="row")
+        yield self._StrDataTable(cursor_type="row")
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
-        table = self.query_one(textual.widgets.DataTable)
+        table = self.query_one(self._StrDataTable)
         table.add_columns("Register URL", "Connect URL", "Tags")
         self._bastions = (await self._auth.list_bastions()).bastions
         self._populate_table(table)
@@ -78,9 +87,9 @@ class BastionListScreen(base.Screen):
     @textual.work
     async def on_screen_resume(self) -> None:
         self._bastions = (await self._auth.list_bastions()).bastions
-        self._populate_table(self.query_one(textual.widgets.DataTable))
+        self._populate_table(self.query_one(self._StrDataTable))
 
-    def _populate_table(self, table: textual.widgets.DataTable) -> None:
+    def _populate_table(self, table: "BastionListScreen._StrDataTable") -> None:
         table.clear(columns=False)
         for bastion in self._bastions:
             table.add_row(
@@ -96,7 +105,7 @@ class BastionListScreen(base.Screen):
     def action_view_bastion(self) -> None:
         if not self._bastions:
             return
-        table = self.query_one(textual.widgets.DataTable)
+        table = self.query_one(self._StrDataTable)
         bastion = self._bastions[table.cursor_row]
         self.app.push_screen(bastion_view.BastionViewScreen(self._auth, bastion))
 
@@ -113,7 +122,7 @@ class BastionListScreen(base.Screen):
             [],
         )
         self._bastions.append(bastion)
-        table = self.query_one(textual.widgets.DataTable)
+        table = self.query_one(self._StrDataTable)
         self._populate_table(table)
         table.move_cursor(row=len(self._bastions) - 1)
         self.app.push_screen(bastion_view.BastionViewScreen(self._auth, bastion))
@@ -122,7 +131,7 @@ class BastionListScreen(base.Screen):
     async def action_delete_bastion(self) -> None:
         if not self._bastions:
             return
-        table = self.query_one(textual.widgets.DataTable)
+        table = self.query_one(self._StrDataTable)
         index = table.cursor_row
         bastion = self._bastions[index]
         await self._auth.delete_bastion(bastion.id)
