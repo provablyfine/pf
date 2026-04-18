@@ -3,12 +3,11 @@ import typing
 import textual
 import textual.app
 import textual.containers
-import textual.screen
 import textual.widgets
 import textual_autocomplete
 
 from .. import client
-from . import auto_complete, header
+from . import auto_complete, base, header
 
 
 def _tags_to_str(tags: list[client.schemas.TagNameValue]) -> str:
@@ -21,7 +20,7 @@ def _str_to_tags(value: str) -> list[client.schemas.TagNameValue]:
     ]
 
 
-class AuthViewScreen(textual.screen.Screen[None]):
+class AuthViewScreen(base.Screen):
     BINDINGS: typing.ClassVar = [
         ("ctrl+s", "save", "Save"),
         ("escape", "app.pop_screen", "Back"),
