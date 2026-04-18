@@ -60,7 +60,7 @@ class BoundaryListScreen(base.Screen):
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
-        table = self.query_one(textual.widgets.DataTable)
+        table = self.query_one(textual.widgets.DataTable[str])
         table.add_columns("Name", "Description", "Denied", "Ceiling")
         self._boundaries = (await self._auth.list_boundaries()).boundaries
         self._populate_table(table)
@@ -68,9 +68,9 @@ class BoundaryListScreen(base.Screen):
     @textual.work
     async def on_screen_resume(self) -> None:
         self._boundaries = (await self._auth.list_boundaries()).boundaries
-        self._populate_table(self.query_one(textual.widgets.DataTable))
+        self._populate_table(self.query_one(textual.widgets.DataTable[str]))
 
-    def _populate_table(self, table: textual.widgets.DataTable) -> None:
+    def _populate_table(self, table: textual.widgets.DataTable[str]) -> None:
         table.clear(columns=False)
         for boundary in self._boundaries:
             ceiling = boundary.ceiling_list
@@ -89,7 +89,7 @@ class BoundaryListScreen(base.Screen):
     def action_view_boundary(self) -> None:
         if not self._boundaries:
             return
-        table = self.query_one(textual.widgets.DataTable)
+        table = self.query_one(textual.widgets.DataTable[str])
         boundary = self._boundaries[table.cursor_row]
         self.app.push_screen(boundary_view.BoundaryViewScreen(self._auth, boundary))
 
@@ -100,7 +100,7 @@ class BoundaryListScreen(base.Screen):
             return
         boundary = await self._auth.create_boundary(name, "")
         self._boundaries.append(boundary)
-        table = self.query_one(textual.widgets.DataTable)
+        table = self.query_one(textual.widgets.DataTable[str])
         self._populate_table(table)
         table.move_cursor(row=len(self._boundaries) - 1)
         self.app.push_screen(boundary_view.BoundaryViewScreen(self._auth, boundary))
@@ -109,7 +109,7 @@ class BoundaryListScreen(base.Screen):
     async def action_delete_boundary(self) -> None:
         if not self._boundaries:
             return
-        table = self.query_one(textual.widgets.DataTable)
+        table = self.query_one(textual.widgets.DataTable[str])
         index = table.cursor_row
         boundary = self._boundaries[index]
         await self._auth.delete_boundary(boundary.id)
