@@ -4,6 +4,7 @@ import textual.containers
 import textual_autocomplete
 
 from ... import client
+from ...client import schemas
 from .. import auto_complete, checkbox_input
 from .base import _GrantEditWidget
 
@@ -15,22 +16,21 @@ class TagGrantEditWidget(_GrantEditWidget):
     }
     """
 
-    def __init__(self, auth: client.aio.Client, filter: dict, permission: dict):
+    def __init__(self, auth: client.aio.Client, grant: schemas.TagGrant):
         super().__init__()
         self._auth = auth
-        self._initial_filter = filter
-        self._initial_permission = permission
+        self._grant = grant
 
     def compose(self) -> textual.app.ComposeResult:
-        f = self._initial_filter
-        p = self._initial_permission
-        nv = f["name_value"]
+        f = self._grant.filter
+        p = self._grant.permission
+        nv = f.name_value
         with textual.containers.VerticalGroup(classes="section"):
             yield textual.widgets.Label("Filters", classes="label")
             yield checkbox_input.CheckboxInput(
                 "Tag",
                 active=nv is not None,
-                value=f"{nv['name']}={nv['value']}" if nv is not None else "",
+                value=f"{nv.name}={nv.value}" if nv is not None else "",
                 placeholder="name=value",
                 id="filter-name-value",
                 autocomplete=auto_complete.MonoAutoComplete,
@@ -38,9 +38,9 @@ class TagGrantEditWidget(_GrantEditWidget):
         with textual.containers.VerticalGroup(classes="section"):
             yield textual.widgets.Label("Permissions", classes="label")
             yield textual.widgets.SelectionList(
-                ("Create", "create", p["create"]),
-                ("Read", "read", p["read"]),
-                ("Delete", "delete", p["delete"]),
+                ("Create", "create", p.create),
+                ("Read", "read", p.read),
+                ("Delete", "delete", p.delete),
                 compact=True,
             )
 
@@ -49,13 +49,14 @@ class TagGrantEditWidget(_GrantEditWidget):
         candidates = [textual_autocomplete.DropdownItem(main=f"{t.name}={t.value}") for t in tags_raw]
         self.query_one("#filter-name-value", checkbox_input.CheckboxInput).set_candidates(candidates)
 
-    def get_grant_data(self) -> tuple[dict, dict]:
+    def get_grant_data(self) -> schemas.TagGrant:
         selected = set(self.query_one(textual.widgets.SelectionList).selected)
-        return (
-            {"name_value": self._read_field("#filter-name-value").tag_name_value_filter()},
-            {
-                "create": "create" in selected,
-                "read": "read" in selected,
-                "delete": "delete" in selected,
-            },
+        return schemas.TagGrant(
+            type="tag",
+            filter=schemas.TagFilter(name_value=self._read_field("#filter-name-value").tag_name_value_filter()),
+            permission=schemas.TagPermission(
+                create="create" in selected,
+                read="read" in selected,
+                delete="delete" in selected,
+            ),
         )

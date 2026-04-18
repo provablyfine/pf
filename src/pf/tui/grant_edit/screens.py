@@ -8,6 +8,7 @@ import textual.screen
 import textual.widgets
 
 from ... import client
+from ...client import schemas
 from .. import header
 from .base import _GrantEditWidget
 from .boundary import BoundaryGrantEditWidget
@@ -20,7 +21,7 @@ from .tag import TagGrantEditWidget
 from .tenant import TenantGrantEditWidget
 
 
-class GrantEditScreen(textual.screen.Screen[dict | None]):
+class GrantEditScreen(textual.screen.Screen[schemas.Grant | None]):
     DEFAULT_CSS = """
     .sections {
         padding: 0 1;
@@ -40,12 +41,11 @@ class GrantEditScreen(textual.screen.Screen[dict | None]):
     ]
     grant_type: textual.reactive.Reactive[str] = textual.reactive.Reactive("")
 
-    def __init__(self, auth: client.aio.Client, grant: dict):
+    def __init__(self, auth: client.aio.Client, grant: schemas.Grant):
         super().__init__(id="grant-edit")
         self._auth = auth
-        self.grant_type = grant["type"]
-        self._filter = grant["filter"]
-        self._permission = grant["permission"]
+        self._grant = grant
+        self.grant_type = grant.type
 
     async def watch_grant_type(self, value: str) -> None:
         self.sub_title = f"Edit {value} grant"
@@ -53,21 +53,21 @@ class GrantEditScreen(textual.screen.Screen[dict | None]):
         await fields.query("*").remove()
         match value:
             case "role":
-                widget: _GrantEditWidget = RoleGrantEditWidget(self._auth, self._filter, self._permission)
+                widget: _GrantEditWidget = RoleGrantEditWidget(self._auth, self._grant)
             case "identity":
-                widget = IdentityGrantEditWidget(self._auth, self._filter, self._permission)
+                widget = IdentityGrantEditWidget(self._auth, self._grant)
             case "tag":
-                widget = TagGrantEditWidget(self._auth, self._filter, self._permission)
+                widget = TagGrantEditWidget(self._auth, self._grant)
             case "boundary":
-                widget = BoundaryGrantEditWidget(self._auth, self._filter, self._permission)
+                widget = BoundaryGrantEditWidget(self._auth, self._grant)
             case "tenant":
-                widget = TenantGrantEditWidget(self._auth, self._filter, self._permission)
+                widget = TenantGrantEditWidget(self._auth, self._grant)
             case "ssh-shell":
-                widget = SshShellGrantEditWidget(self._auth, self._filter, self._permission)
+                widget = SshShellGrantEditWidget(self._auth, self._grant)
             case "ssh-port-forwarding":
-                widget = SshPortForwardingGrantEditWidget(self._auth, self._filter, self._permission)
+                widget = SshPortForwardingGrantEditWidget(self._auth, self._grant)
             case "ssh-command":
-                widget = SshCommandGrantEditWidget(self._auth, self._filter, self._permission)
+                widget = SshCommandGrantEditWidget(self._auth, self._grant)
             case _:
                 return
         await fields.mount(widget)
@@ -79,8 +79,7 @@ class GrantEditScreen(textual.screen.Screen[dict | None]):
         widgets = list(self.query_one("#dynamic-grant-fields").query(_GrantEditWidget))
         if not widgets:
             return
-        filter_dict, permission = widgets[0].get_grant_data()
-        self.dismiss({"type": self.grant_type, "filter": filter_dict, "permission": permission})
+        self.dismiss(widgets[0].get_grant_data())
 
     def compose(self) -> textual.app.ComposeResult:
         yield header.AppHeader()

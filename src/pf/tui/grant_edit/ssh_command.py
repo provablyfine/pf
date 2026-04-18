@@ -1,6 +1,7 @@
 import textual
 import textual.app
 
+from ...client import schemas
 from .. import checkbox_input
 from .base import _Field, _SshBaseGrantEditWidget
 
@@ -13,11 +14,10 @@ class SshCommandGrantEditWidget(_SshBaseGrantEditWidget):
     """
 
     def compose(self) -> textual.app.ComposeResult:
-        f = self._initial_filter
-        p = self._initial_permission
-        username_field = _Field(active=True, value=" ".join(p.get("username_list") or []))
-        command_field = _Field(active=True, value=" ".join(p.get("command_list") or []))
-        yield from self._compose_filter(f)
+        p = self._grant.permission
+        username_field = _Field(active=True, value=" ".join(p.username_list or []))
+        command_field = _Field(active=True, value=" ".join(p.command_list or []))
+        yield from self._compose_filter()
         with textual.containers.VerticalGroup(classes="section"):
             yield textual.widgets.Label("Permissions", classes="label")
             yield checkbox_input.CheckboxInput(
@@ -40,11 +40,12 @@ class SshCommandGrantEditWidget(_SshBaseGrantEditWidget):
         self.query_one("#perm-username-list", checkbox_input.CheckboxInput).set_candidates([])
         self.query_one("#perm-command-list", checkbox_input.CheckboxInput).set_candidates([])
 
-    def get_grant_data(self) -> tuple[dict, dict]:
-        return (
-            self._filter_data(),
-            {
-                "username_list": self._read_field("#perm-username-list").boundary_perm(),
-                "command_list": self._read_field("#perm-command-list").boundary_perm(),
-            },
+    def get_grant_data(self) -> schemas.SSHCommandGrant:
+        return schemas.SSHCommandGrant(
+            type="ssh-command",
+            filter=self._filter_data(),
+            permission=schemas.SSHCommandPermission(
+                username_list=self._read_field("#perm-username-list").boundary_perm(),
+                command_list=self._read_field("#perm-command-list").boundary_perm(),
+            ),
         )

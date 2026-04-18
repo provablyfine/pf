@@ -4,6 +4,7 @@ import textual.containers
 import textual_autocomplete
 
 from ... import client
+from ...client import schemas
 from .. import auto_complete, checkbox_input
 from .base import _GrantEditWidget, _resolve_update_perm
 
@@ -15,22 +16,21 @@ class BoundaryGrantEditWidget(_GrantEditWidget):
     }
     """
 
-    def __init__(self, auth: client.aio.Client, filter: dict, permission: dict):
+    def __init__(self, auth: client.aio.Client, grant: schemas.BoundaryGrant):
         super().__init__()
         self._auth = auth
-        self._initial_filter = filter
-        self._initial_permission = permission
+        self._grant = grant
 
     def compose(self) -> textual.app.ComposeResult:
-        f = self._initial_filter
-        p = self._initial_permission
-        update = p["update"]
+        f = self._grant.filter
+        p = self._grant.permission
+        update = p.update
         with textual.containers.VerticalGroup(classes="section"):
             yield textual.widgets.Label("Filters", classes="label")
             yield checkbox_input.CheckboxInput(
                 "Name",
-                active=f["name"] is not None,
-                value=f["name"] or "",
+                active=f.name is not None,
+                value=f.name or "",
                 placeholder="boundary name",
                 id="filter-name",
                 autocomplete=auto_complete.MonoAutoComplete,
@@ -38,13 +38,13 @@ class BoundaryGrantEditWidget(_GrantEditWidget):
         with textual.containers.VerticalGroup(classes="section"):
             yield textual.widgets.Label("Permissions", classes="label")
             yield textual.widgets.SelectionList(
-                ("Create", "create", p["create"]),
-                ("Read", "read", p["read"]),
-                ("Update name", "update.name", _resolve_update_perm(update, "name")),
-                ("Update description", "update.description", _resolve_update_perm(update, "description")),
-                ("Update ceiling list", "update.ceiling_list", _resolve_update_perm(update, "ceiling_list")),
-                ("Update denied list", "update.denied_list", _resolve_update_perm(update, "denied_list")),
-                ("Delete", "delete", p["delete"]),
+                ("Create", "create", p.create),
+                ("Read", "read", p.read),
+                ("Update name", "update.name", _resolve_update_perm(update.model_dump() if update else None, "name")),
+                ("Update description", "update.description", _resolve_update_perm(update.model_dump() if update else None, "description")),
+                ("Update ceiling list", "update.ceiling_list", _resolve_update_perm(update.model_dump() if update else None, "ceiling_list")),
+                ("Update denied list", "update.denied_list", _resolve_update_perm(update.model_dump() if update else None, "denied_list")),
+                ("Delete", "delete", p.delete),
                 compact=True,
             )
 
@@ -53,19 +53,21 @@ class BoundaryGrantEditWidget(_GrantEditWidget):
         candidates = [textual_autocomplete.DropdownItem(main=b.name) for b in boundaries_raw]
         self.query_one("#filter-name", checkbox_input.CheckboxInput).set_candidates(candidates)
 
-    def get_grant_data(self) -> tuple[dict, dict]:
+    def get_grant_data(self) -> schemas.BoundaryGrant:
         selected = set(self.query_one(textual.widgets.SelectionList).selected)
-        return (
-            {"name": self._read_field("#filter-name").name_filter()},
-            {
-                "create": "create" in selected,
-                "read": "read" in selected,
-                "update": {
-                    "name": "update.name" in selected,
-                    "description": "update.description" in selected,
-                    "ceiling_list": "update.ceiling_list" in selected,
-                    "denied_list": "update.denied_list" in selected,
-                },
-                "delete": "delete" in selected,
-            },
+        update_dict = {
+            "name": "update.name" in selected,
+            "description": "update.description" in selected,
+            "ceiling_list": "update.ceiling_list" in selected,
+            "denied_list": "update.denied_list" in selected,
+        }
+        return schemas.BoundaryGrant(
+            type="boundary",
+            filter=schemas.BoundaryFilter(name=self._read_field("#filter-name").name_filter()),
+            permission=schemas.BoundaryPermission(
+                create="create" in selected,
+                read="read" in selected,
+                update=schemas.BoundaryUpdatePermission(**update_dict),
+                delete="delete" in selected,
+            ),
         )

@@ -4,8 +4,9 @@ import textual.containers
 import textual_autocomplete
 
 from ... import client
+from ...client import schemas
 from .. import auto_complete, checkbox_input
-from .base import _Field, _GrantEditWidget, _resolve_update_perm
+from .base import _Field, _GrantEditWidget
 
 
 class IdentityGrantEditWidget(_GrantEditWidget):
@@ -23,29 +24,28 @@ class IdentityGrantEditWidget(_GrantEditWidget):
     }
     """
 
-    def __init__(self, auth: client.aio.Client, filter: dict, permission: dict):
+    def __init__(self, auth: client.aio.Client, grant: schemas.IdentityGrant):
         super().__init__()
         self._auth = auth
-        self._initial_filter = filter
-        self._initial_permission = permission
+        self._grant = grant
 
     def compose(self) -> textual.app.ComposeResult:
-        f = self._initial_filter
-        p = self._initial_permission
-        create = p["create"]
-        tag_list = _Field.from_tag_list(f.get("tag_list"))
-        boundary_list = _Field.from_boundary_list(f.get("boundary_list"))
-        create_tags = _Field.from_tag_list(create.get("allowed_tag_list") or None)
-        create_bounds = _Field.from_boundary_list(create.get("required_boundary_list"))
-        add_tag = _Field.from_tag_list(p.get("add_tag_list"))
-        del_tag = _Field.from_tag_list(p.get("del_tag_list"))
-        invite = _Field.from_invite_list(p.get("invite_list"))
+        f = self._grant.filter
+        p = self._grant.permission
+        create = p.create
+        tag_list = _Field.from_tag_list(f.tag_list)
+        boundary_list = _Field.from_boundary_list(f.boundary_list)
+        create_tags = _Field.from_tag_list((create.allowed_tag_list or None) if create else None)
+        create_bounds = _Field.from_boundary_list((create.required_boundary_list or None) if create else None)
+        add_tag = _Field.from_tag_list(p.add_tag_list)
+        del_tag = _Field.from_tag_list(p.del_tag_list)
+        invite = _Field.from_invite_list(p.invite_list)
         with textual.containers.VerticalGroup(classes="section"):
             yield textual.widgets.Label("Filters", classes="label")
             yield checkbox_input.CheckboxInput(
                 "Name",
-                active=f["name"] is not None,
-                value=f["name"] or "",
+                active=f.name is not None,
+                value=f.name or "",
                 placeholder="Type an identity name",
                 id="filter-name",
                 autocomplete=auto_complete.MonoAutoComplete,
@@ -66,8 +66,12 @@ class IdentityGrantEditWidget(_GrantEditWidget):
             )
         with textual.containers.VerticalGroup(classes="section"):
             yield textual.widgets.Label("Permissions", classes="label")
-            yield textual.widgets.Checkbox("Create", value=create["allowed"], id="permission-create", compact=True)
-            with textual.containers.Container(id="permission-create-fields", disabled=not create["allowed"]):
+            yield textual.widgets.Checkbox(
+                "Create", value=create.allowed if create else False, id="permission-create", compact=True
+            )
+            with textual.containers.Container(
+                id="permission-create-fields", disabled=not (create.allowed if create else False)
+            ):
                 yield checkbox_input.CheckboxInput(
                     "Create allowed tags",
                     active=create_tags.active,
@@ -82,11 +86,11 @@ class IdentityGrantEditWidget(_GrantEditWidget):
                     placeholder="Type a boundary name",
                     id="permission-create-req-boundaries",
                 )
-            yield textual.widgets.Checkbox("Read", value=p["read"], id="permission-read", compact=True)
+            yield textual.widgets.Checkbox("Read", value=p.read, id="permission-read", compact=True)
             yield textual.widgets.Checkbox(
-                "Update", value=_resolve_update_perm(p["update"], "name"), id="permission-update-name", compact=True
+                "Update", value=p.update.name if p.update else False, id="permission-update-name", compact=True
             )
-            yield textual.widgets.Checkbox("Delete", value=p["delete"], id="permission-delete", compact=True)
+            yield textual.widgets.Checkbox("Delete", value=p.delete, id="permission-delete", compact=True)
             yield checkbox_input.CheckboxInput(
                 "Add tag",
                 active=add_tag.active,
@@ -133,26 +137,28 @@ class IdentityGrantEditWidget(_GrantEditWidget):
     def _on_perm_create_changed(self, event: textual.widgets.Checkbox.Changed) -> None:
         self.query_one("#permission-create-fields").disabled = not event.value
 
-    def get_grant_data(self) -> tuple[dict, dict]:
-        return (
-            {
-                "name": self._read_field("#filter-name").name_filter(),
-                "tag_list": self._read_field("#filter-tagged-by").tag_filter(),
-                "boundary_list": self._read_field("#filter-bounded-by").boundary_filter(),
-            },
-            {
-                "create": {
-                    "allowed": self.query_one("#permission-create", textual.widgets.Checkbox).value,
-                    "allowed_tag_list": self._read_field("#permission-create-allowed-tags").tag_perm(),
-                    "required_boundary_list": self._read_field("#permission-create-req-boundaries").boundary_perm(),
-                },
-                "read": self.query_one("#permission-read", textual.widgets.Checkbox).value,
-                "update": {
-                    "name": self.query_one("#permission-update-name", textual.widgets.Checkbox).value,
-                },
-                "delete": self.query_one("#permission-delete", textual.widgets.Checkbox).value,
-                "add_tag_list": self._read_field("#permission-add-tag").tag_perm(),
-                "del_tag_list": self._read_field("#permission-del-tag").tag_perm(),
-                "invite_list": self._read_field("#permission-invite").invite_perm(),
-            },
+    def get_grant_data(self) -> schemas.IdentityGrant:
+        create_perm = self.query_one("#permission-create", textual.widgets.Checkbox).value
+        return schemas.IdentityGrant(
+            type="identity",
+            filter=schemas.TripletFilter(
+                name=self._read_field("#filter-name").name_filter(),
+                tag_list=self._read_field("#filter-tagged-by").tag_filter(),
+                boundary_list=self._read_field("#filter-bounded-by").boundary_filter(),
+            ),
+            permission=schemas.IdentityPermission(
+                create=schemas.IdentityCreatePermission(
+                    allowed=create_perm,
+                    allowed_tag_list=self._read_field("#permission-create-allowed-tags").tag_perm(),
+                    required_boundary_list=self._read_field("#permission-create-req-boundaries").boundary_perm(),
+                ),
+                read=self.query_one("#permission-read", textual.widgets.Checkbox).value,
+                update=schemas.IdentityUpdatePermission(
+                    name=self.query_one("#permission-update-name", textual.widgets.Checkbox).value,
+                ),
+                delete=self.query_one("#permission-delete", textual.widgets.Checkbox).value,
+                add_tag_list=self._read_field("#permission-add-tag").tag_perm(),
+                del_tag_list=self._read_field("#permission-del-tag").tag_perm(),
+                invite_list=self._read_field("#permission-invite").invite_perm(),
+            ),
         )
