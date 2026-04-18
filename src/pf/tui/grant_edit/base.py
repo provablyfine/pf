@@ -2,10 +2,12 @@ import dataclasses
 
 import textual
 import textual.widget
+import textual.widgets
+import textual.containers
 
 from ... import client
 from ...client import schemas
-from .. import checkbox_input
+from .. import checkbox_input, auto_complete
 
 
 @dataclasses.dataclass
@@ -182,14 +184,12 @@ class _SshBaseGrantEditWidget(_GrantEditWidget):
         self._grant = grant
 
     def _compose_filter(self):
-        import textual.containers
 
         f = self._grant.filter
         tag_list = _Field.from_tag_list(f.tag_list)
         boundary_list = _Field.from_boundary_list(f.boundary_list)
         with textual.containers.VerticalGroup(classes="section"):
             yield textual.widgets.Label("Filters", classes="label")
-            from .. import auto_complete
 
             yield checkbox_input.CheckboxInput(
                 "Name",

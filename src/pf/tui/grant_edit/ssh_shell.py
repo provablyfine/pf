@@ -1,5 +1,6 @@
 import textual
 import textual.app
+import textual.widgets
 
 from ...client import schemas
 from .. import checkbox_input
