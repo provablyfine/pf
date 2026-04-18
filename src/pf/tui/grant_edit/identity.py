@@ -1,16 +1,16 @@
 import textual
 import textual.app
-import textual.widgets
 import textual.containers
+import textual.widgets
 import textual_autocomplete
 
 from ... import client
 from ...client import schemas
-from .. import auto_complete, checkbox_input
+from .. import checkbox_input
 from . import base
 
 
-class IdentityGrantEditWidget(base.GrantEditWidget):
+class IdentityGrantEditWidget(base.TripletFilterGrantEditWidget[schemas.IdentityGrant]):
     DEFAULT_CSS = """
     IdentityGrantEditWidget {
         height: auto;
@@ -26,45 +26,17 @@ class IdentityGrantEditWidget(base.GrantEditWidget):
     """
 
     def __init__(self, auth: client.aio.Client, grant: schemas.IdentityGrant):
-        super().__init__()
-        self._auth = auth
-        self._grant = grant
+        super().__init__(auth=auth, grant=grant)
 
     def compose(self) -> textual.app.ComposeResult:
-        f = self._grant.filter
         p = self._grant.permission
         create = p.create
-        tag_list = base.Field.from_tag_list(f.tag_list)
-        boundary_list = base.Field.from_boundary_list(f.boundary_list)
         create_tags = base.Field.from_tag_list((create.allowed_tag_list or None) if create else None)
         create_bounds = base.Field.from_boundary_list((create.required_boundary_list or None) if create else None)
         add_tag = base.Field.from_tag_list(p.add_tag_list)
         del_tag = base.Field.from_tag_list(p.del_tag_list)
         invite = base.Field.from_invite_list(p.invite_list)
-        with textual.containers.VerticalGroup(classes="section"):
-            yield textual.widgets.Label("Filters", classes="label")
-            yield checkbox_input.CheckboxInput(
-                "Name",
-                active=f.name is not None,
-                value=f.name or "",
-                placeholder="Type an identity name",
-                id="filter-name",
-                autocomplete=auto_complete.MonoAutoComplete,
-            )
-            yield checkbox_input.CheckboxInput(
-                "Tagged by",
-                active=tag_list.active,
-                value=tag_list.value,
-                placeholder="Type a tag name=value",
-                id="filter-tagged-by",
-            )
-            yield checkbox_input.CheckboxInput(
-                "Bounded by",
-                active=boundary_list.active,
-                value=boundary_list.value,
-                placeholder="Type a boundary name",
-                id="filter-bounded-by",
-            )
+        yield from self._compose_filter()
         with textual.containers.VerticalGroup(classes="section"):
             yield textual.widgets.Label("Permissions", classes="label")
             yield textual.widgets.Checkbox(
@@ -115,20 +87,16 @@ class IdentityGrantEditWidget(base.GrantEditWidget):
             )
 
     async def on_mount(self) -> None:
-        identities = (await self._auth.list_identities()).identities
-        identity_candidates = [textual_autocomplete.DropdownItem(main=i.name) for i in identities]
-        self.query_one("#filter-name", checkbox_input.CheckboxInput).set_candidates(identity_candidates)
+        await self._mount_filter_candidates()
 
         tags_raw = (await self._auth.list_tags()).tags
         tags = [textual_autocomplete.DropdownItem(main=f"{t.name}={t.value}") for t in tags_raw]
-        self.query_one("#filter-tagged-by", checkbox_input.CheckboxInput).set_candidates(tags)
         self.query_one("#permission-create-allowed-tags", checkbox_input.CheckboxInput).set_candidates(tags)
         self.query_one("#permission-add-tag", checkbox_input.CheckboxInput).set_candidates(tags)
         self.query_one("#permission-del-tag", checkbox_input.CheckboxInput).set_candidates(tags)
 
         boundaries_raw = (await self._auth.list_boundaries()).boundaries
         boundaries = [textual_autocomplete.DropdownItem(main=b.name) for b in boundaries_raw]
-        self.query_one("#filter-bounded-by", checkbox_input.CheckboxInput).set_candidates(boundaries)
         self.query_one("#permission-create-req-boundaries", checkbox_input.CheckboxInput).set_candidates(boundaries)
 
         invite_methods = [textual_autocomplete.DropdownItem(main=m) for m in ("email", "manual")]
@@ -142,11 +110,7 @@ class IdentityGrantEditWidget(base.GrantEditWidget):
         create_perm = self.query_one("#permission-create", textual.widgets.Checkbox).value
         return schemas.IdentityGrant(
             type="identity",
-            filter=schemas.TripletFilter(
-                name=self._read_field("#filter-name").name_filter(),
-                tag_list=self._read_field("#filter-tagged-by").tag_filter(),
-                boundary_list=self._read_field("#filter-bounded-by").boundary_filter(),
-            ),
+            filter=self._filter_data(),
             permission=schemas.IdentityPermission(
                 create=schemas.IdentityCreatePermission(
                     allowed=create_perm,

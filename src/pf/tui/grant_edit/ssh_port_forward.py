@@ -1,5 +1,6 @@
 import textual
 import textual.app
+import textual.containers
 import textual.widgets
 
 from ...client import schemas
@@ -7,7 +8,7 @@ from .. import checkbox_input
 from . import base
 
 
-class SshPortForwardingGrantEditWidget(base.SshBaseGrantEditWidget):
+class SshPortForwardingGrantEditWidget(base.TripletFilterGrantEditWidget[schemas.SSHPortForwardingGrant]):
     DEFAULT_CSS = """
     SshPortForwardingGrantEditWidget {
         height: auto;

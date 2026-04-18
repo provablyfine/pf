@@ -8,7 +8,7 @@ from .. import checkbox_input
 from . import base
 
 
-class SshCommandGrantEditWidget(base.SshBaseGrantEditWidget):
+class SshCommandGrantEditWidget(base.TripletFilterGrantEditWidget[schemas.SSHCommandGrant]):
     DEFAULT_CSS = """
     SshCommandGrantEditWidget {
         height: auto;

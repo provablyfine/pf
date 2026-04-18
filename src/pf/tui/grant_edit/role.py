@@ -1,7 +1,7 @@
 import textual
 import textual.app
-import textual.widgets
 import textual.containers
+import textual.widgets
 import textual_autocomplete
 
 from ... import client

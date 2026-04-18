@@ -1,16 +1,21 @@
 from __future__ import annotations
 
 import dataclasses
+import typing
 
 import textual
+import textual.containers
 import textual.widget
 import textual.widgets
-import textual.containers
 import textual_autocomplete
 
 from ... import client
 from ...client import schemas
-from .. import checkbox_input, auto_complete
+from .. import auto_complete, checkbox_input
+
+
+class _TripletFilterGrant(typing.Protocol):
+    filter: schemas.TripletFilter
 
 
 @dataclasses.dataclass
@@ -22,16 +27,14 @@ class Field:
         if not self.active:
             return None
         return [
-            schemas.TagNameValue(name=k, value=v)
-            for k, v in (s.split("=", 1) for s in self.value.split() if "=" in s)
+            schemas.TagNameValue(name=k, value=v) for k, v in (s.split("=", 1) for s in self.value.split() if "=" in s)
         ]
 
     def tag_perm(self) -> list[schemas.TagNameValue]:
         if not self.active:
             return []
         return [
-            schemas.TagNameValue(name=k, value=v)
-            for k, v in (s.split("=", 1) for s in self.value.split() if "=" in s)
+            schemas.TagNameValue(name=k, value=v) for k, v in (s.split("=", 1) for s in self.value.split() if "=" in s)
         ]
 
     def boundary_filter(self) -> list[str] | None:
@@ -180,8 +183,8 @@ class GrantEditWidget(textual.widget.Widget):
         return Field(w.active, w.value)
 
 
-class SshBaseGrantEditWidget(GrantEditWidget):
-    def __init__(self, auth: client.aio.Client, grant: schemas.Grant):
+class TripletFilterGrantEditWidget[T: _TripletFilterGrant](GrantEditWidget):
+    def __init__(self, auth: client.aio.Client, grant: T):
         super().__init__()
         self._auth = auth
         self._grant = grant
