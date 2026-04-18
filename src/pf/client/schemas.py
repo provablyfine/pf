@@ -100,6 +100,11 @@ class AuthPublic(_Base):
     config: AuthConfig
 
 
+class AuthPublicSummary(_Base):
+    name: str
+    type: str
+
+
 class Auth(_Base):
     id: int
     name: str

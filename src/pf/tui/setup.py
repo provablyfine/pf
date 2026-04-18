@@ -11,7 +11,7 @@ import textual.screen
 import textual.widgets
 
 from .. import client, ssh
-from . import async_client, base, relogin
+from . import base, relogin
 
 
 def _list_ssh_keys() -> list[tuple[str, str]]:
@@ -73,7 +73,7 @@ class _KeySelectScreen(textual.screen.ModalScreen[str | None]):
         self.dismiss(self._keys[index][1])
 
 
-class _AuthMethodSelectScreen(textual.screen.ModalScreen["dict | None"]):
+class _AuthMethodSelectScreen(textual.screen.ModalScreen[client.schemas.AuthPublicSummary | None]):
     DEFAULT_CSS = """
     _AuthMethodSelectScreen {
         align: center middle;
@@ -91,7 +91,7 @@ class _AuthMethodSelectScreen(textual.screen.ModalScreen["dict | None"]):
     """
     BINDINGS: typing.ClassVar = [("escape", "cancel", "Cancel")]
 
-    def __init__(self, auths: list[dict]) -> None:
+    def __init__(self, auths: list[client.schemas.AuthPublicSummary]) -> None:
         super().__init__()
         self._auths = auths
 
@@ -99,7 +99,7 @@ class _AuthMethodSelectScreen(textual.screen.ModalScreen["dict | None"]):
         with textual.containers.VerticalGroup() as container:
             container.border_title = "Auth Method"
             yield textual.widgets.ListView(
-                *[textual.widgets.ListItem(textual.widgets.Label(a["name"])) for a in self._auths]
+                *[textual.widgets.ListItem(textual.widgets.Label(a.name)) for a in self._auths]
             )
 
     def action_cancel(self) -> None:
@@ -221,21 +221,13 @@ class NewServerSetupScreen(base.Screen):
             api = client.Client(c)
 
             set_status("Initializing...")
-            response = api.no_auth.post(api.directory.initialize)
-            if response.status_code == 204:
-                raise client.exceptions.UI("Server already initialized — use 'Connect to existing server'")
-            if response.status_code != 200:
-                raise client.exceptions.UI(f"Unable to initialize: {response.status_code}")
-            invitation_key = response.json()["key"]["k"]
-
-            set_status("Accepting invitation...")
-            inv_auth = api.invitation_auth(account=account_key, invitation=invitation_key)
-            response = inv_auth.post(
-                url=inv_auth.directory.accept_invitation,
-                json={"account_public_key": inv_auth.account_public_key.to_dict()},
-            )
-            if response.status_code != 204:
-                raise client.exceptions.UI(f"Unable to accept invitation: {response.text}")
+            api_sync = client.sync.Client(c)
+            try:
+                api_sync.initialize(account_key)
+            except client.exceptions.UI as e:
+                if "already initialized" in str(e):
+                    raise client.exceptions.UI("Server already initialized — use 'Connect to existing server'")
+                raise
 
             set_status("Logging in...")
             c.account_key = account_key
@@ -308,6 +300,7 @@ class ConnectScreen(base.Screen):
         directory_data = resp.json()
         c = client.Config(directory_url=clean_url, directory=directory_data)
         api = client.Client(c)
+        aio_client = client.aio.Client(c)
 
         account_key: str | None = None
 
@@ -324,13 +317,7 @@ class ConnectScreen(base.Screen):
 
             status.update("Accepting invitation...")
             try:
-                inv_auth = api.invitation_auth(account=account_key, invitation=invitation)
-                response = await async_client.AsyncClient(inv_auth).post(
-                    inv_auth.directory.accept_invitation,
-                    json={"account_public_key": inv_auth.account_public_key.to_dict()},
-                )
-                if response.status_code != 204:
-                    raise client.exceptions.UI(f"Unable to accept invitation: {response.text}")
+                await aio_client.connect(invitation=invitation, key=account_key)
             except client.exceptions.UI as e:
                 self.notify(str(e), severity="error")
                 status.update("Paste invitation URL or directory URL")
@@ -340,9 +327,7 @@ class ConnectScreen(base.Screen):
         if auth_name is None:
             status.update("Fetching auth methods...")
             try:
-                no_auth = async_client.AsyncClient(api.no_auth)
-                resp = await no_auth.get(api.directory.public_auth)
-                auths = resp.json().get("auths", [])
+                auths = await aio_client.list_public_auths()
             except client.exceptions.UI as e:
                 self.notify(str(e), severity="error")
                 status.update("Paste invitation URL or directory URL")
@@ -355,15 +340,12 @@ class ConnectScreen(base.Screen):
             if selected is None:
                 status.update("Paste invitation URL or directory URL")
                 return
-            auth_name = selected["name"]
-            auth_type = selected["type"]
+            auth_name = selected.name
+            auth_type = selected.type
         else:
             try:
-                no_auth = async_client.AsyncClient(api.no_auth)
-                resp = await no_auth.get(f"{api.directory.public_auth}/{auth_name}")
-                if resp.status_code != 200:
-                    raise client.exceptions.UI(f"Auth config '{auth_name}' not found")
-                auth_type = resp.json()["type"]
+                auth_public = await aio_client.get_public_auth(auth_name)
+                auth_type = auth_public.config.type
             except client.exceptions.UI as e:
                 self.notify(str(e), severity="error")
                 status.update("Paste invitation URL or directory URL")

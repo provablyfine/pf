@@ -272,6 +272,9 @@ class Client:
     async def get_public_auth(self, auth_name: str) -> schemas.AuthPublic:
         return await self._run(lambda: self._sync.get_public_auth(auth_name))
 
+    async def list_public_auths(self) -> list[schemas.AuthPublicSummary]:
+        return await self._run(lambda: self._sync.list_public_auths())
+
     async def http_sig_login(
         self,
         session_public_key: dict[str, typing.Any],

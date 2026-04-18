@@ -601,6 +601,14 @@ class Client:
             raise exceptions.UI(f"Unable to read auth config: {response.text}")
         return schemas.AuthPublic.model_validate(response.json())
 
+    def list_public_auths(self) -> list[schemas.AuthPublicSummary]:
+        """Fetch list of public auth methods."""
+        http = self._client.no_auth
+        response = http.get(http.directory.public_auth)
+        if response.status_code != 200:
+            raise exceptions.UI("Unable to list auth methods")
+        return [schemas.AuthPublicSummary.model_validate(a) for a in response.json().get("auths", [])]
+
     def http_sig_login(self, session_public_key: dict[str, typing.Any], session_fingerprint: str) -> None:
         """POST to /login endpoint. Caller manages session key and config updates."""
         auth = self._client.login_auth(account=self._client.config.account_key, session=session_fingerprint)
