@@ -9,6 +9,10 @@ from .. import auto_complete, checkbox_input
 from . import base
 
 
+class PermissionSelectionList(textual.widgets.SelectionList[str]):
+    pass
+
+
 class TenantGrantEditWidget(base.GrantEditWidget):
     DEFAULT_CSS = """
     TenantGrantEditWidget {
@@ -37,7 +41,7 @@ class TenantGrantEditWidget(base.GrantEditWidget):
             )
         with textual.containers.VerticalGroup(classes="section"):
             yield textual.widgets.Label("Permissions", classes="label")
-            yield textual.widgets.SelectionList(
+            yield PermissionSelectionList(
                 ("Create", "create", p.create),
                 ("Read", "read", p.read),
                 ("Update display name", "update.display_name", True if update is None else update.display_name),
@@ -52,7 +56,7 @@ class TenantGrantEditWidget(base.GrantEditWidget):
         self.query_one("#filter-id", checkbox_input.CheckboxInput).set_candidates(candidates)
 
     def get_grant_data(self) -> client.schemas.TenantGrant:
-        selected = set(self.query_one(textual.widgets.SelectionList).selected)
+        selected = self.query_one(PermissionSelectionList).selected
         update_dict = {
             "display_name": "update.display_name" in selected,
             "is_enabled": "update.is_enabled" in selected,
