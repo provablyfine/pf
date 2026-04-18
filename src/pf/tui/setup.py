@@ -11,7 +11,7 @@ import textual.screen
 import textual.widgets
 
 from .. import client, ssh
-from . import async_client, relogin
+from . import async_client, base, relogin
 
 
 def _list_ssh_keys() -> list[tuple[str, str]]:
@@ -113,7 +113,7 @@ class _AuthMethodSelectScreen(textual.screen.ModalScreen["dict | None"]):
         self.dismiss(self._auths[index])
 
 
-class SetupChoiceScreen(textual.screen.Screen[None]):
+class SetupChoiceScreen(base.Screen):
     BINDINGS: typing.ClassVar = [("escape", "quit", "Quit")]
     DEFAULT_CSS = """
     SetupChoiceScreen ListView {
@@ -149,7 +149,7 @@ class SetupChoiceScreen(textual.screen.Screen[None]):
             self.app.push_screen(ConnectScreen(self._config_path))
 
 
-class NewServerSetupScreen(textual.screen.Screen[None]):
+class NewServerSetupScreen(base.Screen):
     BINDINGS: typing.ClassVar = [("escape", "app.pop_screen", "Back")]
     DEFAULT_CSS = """
     NewServerSetupScreen Input {
@@ -249,7 +249,7 @@ class NewServerSetupScreen(textual.screen.Screen[None]):
             set_status("Enter URL then select account key")
 
 
-class ConnectScreen(textual.screen.Screen[None]):
+class ConnectScreen(base.Screen):
     BINDINGS: typing.ClassVar = [("escape", "app.pop_screen", "Back")]
     DEFAULT_CSS = """
     ConnectScreen Input {

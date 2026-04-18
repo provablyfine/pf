@@ -68,6 +68,9 @@ class GrantListScreen(textual.screen.Screen[None]):
         ("e", "edit_grant", "Edit"),
     ]
 
+    class _StrDataTable(textual.widgets.DataTable[str]):
+        pass
+
     def __init__(self, auth: client.aio.Client, grant_list: list, sub_title: str, role_id: int) -> None:
         super().__init__()
         self._auth = auth
@@ -77,16 +80,16 @@ class GrantListScreen(textual.screen.Screen[None]):
 
     def compose(self) -> textual.app.ComposeResult:
         yield header.AppHeader()
-        yield textual.widgets.DataTable(cursor_type="row")
+        yield self._StrDataTable(cursor_type="row")
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     def on_mount(self) -> None:
         self.sub_title = self._sub_title
-        table = self.query_one(textual.widgets.DataTable)
+        table = self.query_one(self._StrDataTable)
         table.add_columns("Type", "Filter", "Permissions")
         self._populate_table(table)
 
-    def _populate_table(self, table: textual.widgets.DataTable) -> None:
+    def _populate_table(self, table: "GrantListScreen._StrDataTable") -> None:
         table.clear(columns=False)
         for grant in self._grant_list:
             grant_type, filter_str, perm_str = client.grant.to_text(grant)
@@ -112,12 +115,12 @@ class GrantListScreen(textual.screen.Screen[None]):
         if not await self._save_grants():
             self._grant_list.pop()
             return
-        self._populate_table(self.query_one(textual.widgets.DataTable))
+        self._populate_table(self.query_one(self._StrDataTable))
         self.notify("Grant added")
 
     @textual.work
     async def action_delete_grant(self) -> None:
-        table = self.query_one(textual.widgets.DataTable)
+        table = self.query_one(self._StrDataTable)
         if not self._grant_list:
             return
         index = table.cursor_row
@@ -130,7 +133,7 @@ class GrantListScreen(textual.screen.Screen[None]):
 
     @textual.work
     async def action_edit_grant(self) -> None:
-        table = self.query_one(textual.widgets.DataTable)
+        table = self.query_one(self._StrDataTable)
         if not self._grant_list:
             return
         index = table.cursor_row

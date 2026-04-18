@@ -13,7 +13,7 @@ import textual.screen
 import textual.widgets
 
 from .. import base64url, client, jwk, ssh
-from . import async_client
+from . import async_client, base
 
 
 def has_valid_session(config: client.Config) -> bool:
@@ -202,7 +202,7 @@ def browser_login(api: client.Client, auth_name: str, auth_type: str) -> str:
             raise client.exceptions.UI(f"Unsupported browser auth type: {auth_type}")
 
 
-class ReloginScreen(textual.screen.Screen[None]):
+class ReloginScreen(base.Screen):
     BINDINGS: typing.ClassVar = [("escape", "quit", "Cancel")]
     DEFAULT_CSS = """
     ReloginScreen #status {
