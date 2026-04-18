@@ -7,7 +7,7 @@ import textual.screen
 import textual.widgets
 
 from .. import client
-from . import auth_view, header
+from . import auth_view, base, header
 
 
 class _AuthTypeScreen(textual.screen.ModalScreen[str | None]):
@@ -114,7 +114,7 @@ class _AuthParamsScreen(textual.screen.ModalScreen[dict | None]):
         self.dismiss(body)
 
 
-class AuthListScreen(textual.screen.Screen[None]):
+class AuthListScreen(base.Screen):
     BINDINGS: typing.ClassVar = [
         ("enter", "view_auth", "View"),
         ("a", "add_auth", "Add"),

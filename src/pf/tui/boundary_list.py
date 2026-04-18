@@ -7,7 +7,7 @@ import textual.screen
 import textual.widgets
 
 from .. import client
-from . import _utils, boundary_view, header
+from . import _utils, base, boundary_view, header
 
 
 class _BoundaryCreateScreen(textual.screen.ModalScreen[str | None]):
@@ -41,7 +41,7 @@ class _BoundaryCreateScreen(textual.screen.ModalScreen[str | None]):
         self.dismiss(name)
 
 
-class BoundaryListScreen(textual.screen.Screen[None]):
+class BoundaryListScreen(base.Screen):
     BINDINGS: typing.ClassVar = [
         ("enter", "view_boundary", "View"),
         ("a", "add_boundary", "Add"),

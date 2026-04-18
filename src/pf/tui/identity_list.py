@@ -7,7 +7,7 @@ import textual.screen
 import textual.widgets
 
 from .. import client
-from . import clipboard, header, identity_view
+from . import base, clipboard, header, identity_view
 
 
 class _IdentityCreateScreen(textual.screen.ModalScreen[str | None]):
@@ -123,7 +123,7 @@ class _InviteSecretScreen(textual.screen.ModalScreen[None]):
         self.dismiss(None)
 
 
-class IdentityListScreen(textual.screen.Screen[None]):
+class IdentityListScreen(base.Screen):
     BINDINGS: typing.ClassVar = [
         ("enter", "view_identity", "View"),
         ("a", "add_identity", "Add"),

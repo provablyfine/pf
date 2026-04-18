@@ -3,9 +3,9 @@ import textual.content
 import textual.dom
 import textual.events
 import textual.reactive
-import textual.widget
 import textual.widgets
 
+from . import base
 
 class _HeaderTitle(textual.widgets.Static):
     DEFAULT_CSS = """
@@ -18,7 +18,7 @@ class _HeaderTitle(textual.widgets.Static):
     """
 
 
-class AppHeader(textual.widget.Widget):
+class AppHeader(base.Widget):
     """A header widget equivalent to textual's Header, without the command-palette icon."""
 
     DEFAULT_CSS = """

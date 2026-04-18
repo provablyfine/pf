@@ -7,7 +7,7 @@ import textual.screen
 import textual.widgets
 
 from .. import client
-from . import header
+from . import header, base
 
 
 class _TenantCreateScreen(textual.screen.ModalScreen[dict[str, str] | None]):
@@ -43,7 +43,7 @@ class _TenantCreateScreen(textual.screen.ModalScreen[dict[str, str] | None]):
         self.dismiss({"name": name, "display_name": display_name})
 
 
-class TenantListScreen(textual.screen.Screen[None]):
+class TenantListScreen(base.Screen):
     class _StrDataTable(textual.widgets.DataTable[str]):
         pass
 

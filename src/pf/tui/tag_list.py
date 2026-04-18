@@ -7,7 +7,7 @@ import textual.screen
 import textual.widgets
 
 from .. import client
-from . import header
+from . import base, header
 
 
 class _TagCreateScreen(textual.screen.ModalScreen[dict | None]):
@@ -43,7 +43,7 @@ class _TagCreateScreen(textual.screen.ModalScreen[dict | None]):
         self.dismiss({"name": name, "value": value})
 
 
-class TagListScreen(textual.screen.Screen[None]):
+class TagListScreen(base.Screen):
     BINDINGS: typing.ClassVar = [
         ("a", "add_tag", "Add"),
         ("d", "delete_tag", "Delete"),

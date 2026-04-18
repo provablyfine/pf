@@ -7,7 +7,7 @@ import textual.screen
 import textual.widgets
 
 from .. import client
-from . import _utils, header, role_view
+from . import _utils, base, header, role_view
 
 
 class _RoleNameScreen(textual.screen.ModalScreen[str | None]):
@@ -41,7 +41,7 @@ class _RoleNameScreen(textual.screen.ModalScreen[str | None]):
         self.dismiss(name)
 
 
-class RoleListScreen(textual.screen.Screen[None]):
+class RoleListScreen(base.Screen):
     TITLE = "Provably Fine"
     BINDINGS: typing.ClassVar = [
         ("enter", "view_role", "View"),

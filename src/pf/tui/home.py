@@ -3,12 +3,12 @@ import typing
 
 import textual
 import textual.app
-import textual.screen
 import textual.widgets
 
 from .. import client
 from . import (
     auth_list,
+    base,
     bastion_list,
     boundary_list,
     header,
@@ -18,7 +18,7 @@ from . import (
     tenant_list,
 )
 
-_RESOURCES: list[tuple[str, collections.abc.Callable[[client.aio.Client], textual.screen.Screen]]] = [
+_RESOURCES: list[tuple[str, collections.abc.Callable[[client.aio.Client], base.Screen]]] = [
     ("Tenants", tenant_list.TenantListScreen),
     ("Identities", identity_list.IdentityListScreen),
     ("Bastions", bastion_list.BastionListScreen),
@@ -29,7 +29,7 @@ _RESOURCES: list[tuple[str, collections.abc.Callable[[client.aio.Client], textua
 ]
 
 
-class HomeScreen(textual.screen.Screen[None]):
+class HomeScreen(base.Screen):
     DEFAULT_CSS = """
     HomeScreen ListView {
         border: solid $primary;

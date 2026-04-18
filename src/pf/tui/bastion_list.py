@@ -7,7 +7,7 @@ import textual.screen
 import textual.widgets
 
 from .. import client
-from . import bastion_view, header
+from . import base, bastion_view, header
 
 
 class _BastionCreateScreen(textual.screen.ModalScreen[dict | None]):
@@ -51,7 +51,7 @@ class _BastionCreateScreen(textual.screen.ModalScreen[dict | None]):
         )
 
 
-class BastionListScreen(textual.screen.Screen[None]):
+class BastionListScreen(base.Screen):
     BINDINGS: typing.ClassVar = [
         ("enter", "view_bastion", "View"),
         ("a", "add_bastion", "Add"),
