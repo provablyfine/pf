@@ -70,35 +70,36 @@ class BastionViewScreen(textual.screen.Screen[None]):
     }
     """
 
-    def __init__(self, auth: client.aio.Client, bastion: dict) -> None:
+    def __init__(self, auth: client.aio.Client, bastion: client.schemas.Bastion) -> None:
         super().__init__()
         self._auth = auth
         self._bastion = bastion
-        self._tags: list[dict] = list(bastion["tag_list"])
-        self._saved_register_url: str = bastion["register_url"]
-        self._saved_connect_url: str | None = bastion["connect_url"]
-        self._saved_ssh_proxy_jump: str | None = bastion["ssh_proxy_jump"]
-        self._saved_tag_ids: list[int] = [t["id"] for t in bastion["tag_list"]]
+        self._tags: list[client.schemas.Tag] = list(bastion.tag_list)
+        self._saved_register_url: str = bastion.register_url
+        self._saved_connect_url: str | None = bastion.connect_url
+        self._saved_ssh_proxy_jump: str | None = bastion.ssh_proxy_jump
+        self._saved_tag_ids: list[int] = [t.id for t in bastion.tag_list]
 
     def compose(self) -> textual.app.ComposeResult:
         yield header.AppHeader()
         with textual.containers.Vertical():
             with textual.containers.HorizontalGroup(classes="field") as container:
                 container.border_title = "Register URL"
-                yield textual.widgets.Input(self._bastion["register_url"], id="register_url", compact=True)
+                yield textual.widgets.Input(self._bastion.register_url, id="register_url", compact=True)
             with textual.containers.HorizontalGroup(classes="field") as container:
                 container.border_title = "Connect URL"
-                yield textual.widgets.Input(self._bastion["connect_url"] or "", id="connect_url", compact=True)
+                yield textual.widgets.Input(self._bastion.connect_url or "", id="connect_url", compact=True)
             with textual.containers.HorizontalGroup(classes="field") as container:
                 container.border_title = "SSH Proxy Jump"
-                yield textual.widgets.Input(self._bastion["ssh_proxy_jump"] or "", id="ssh_proxy_jump", compact=True)
+                yield textual.widgets.Input(self._bastion.ssh_proxy_jump or "", id="ssh_proxy_jump", compact=True)
             with textual.containers.HorizontalGroup(classes="field") as container:
                 container.border_title = "Token"
-                token = self._bastion.get("token") or "—"
+                token = getattr(self._bastion, "token", None) or "—"
                 yield textual.widgets.Label(token, id="token")
             with textual.containers.HorizontalGroup(classes="field") as container:
                 container.border_title = "IP Addresses"
-                ip_list = ", ".join(self._bastion.get("ip_address_list", [])) or "—"
+                ip_list_attr = getattr(self._bastion, "ip_address_list", None)
+                ip_list = ", ".join(ip_list_attr) if ip_list_attr else "—"
                 yield textual.widgets.Label(ip_list, id="ip_address_list")
             with textual.containers.Container(classes="field") as container:
                 container.border_title = "Tags"
@@ -107,7 +108,7 @@ class BastionViewScreen(textual.screen.Screen[None]):
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
-        self.sub_title = f"Bastions > {self._bastion['register_url']}"
+        self.sub_title = f"Bastions > {self._bastion.register_url}"
         await self._populate_tags()
 
     def on_descendant_focus(self, event: textual.events.DescendantFocus) -> None:
@@ -126,21 +127,21 @@ class BastionViewScreen(textual.screen.Screen[None]):
         lv = self.query_one("#tags", textual.widgets.ListView)
         await lv.clear()
         for tag in self._tags:
-            await lv.append(textual.widgets.ListItem(textual.widgets.Label(f"{tag['name']}={tag['value']}")))
+            await lv.append(textual.widgets.ListItem(textual.widgets.Label(f"{tag.name}={tag.value}")))
         self.query_one("#tags-placeholder").display = not bool(self._tags)
 
     @textual.work
     async def action_add_tag(self) -> None:
-        all_tags = await self._auth.list_tags()
-        existing_ids = {t["id"] for t in self._tags}
-        available = [t for t in all_tags if t["id"] not in existing_ids]
+        all_tags = (await self._auth.list_tags()).tags
+        existing_ids = {t.id for t in self._tags}
+        available = [{"id": t.id, "name": t.name, "value": t.value} for t in all_tags if t.id not in existing_ids]
         if not available:
             self.notify("No tag available to add")
             return
         tag = await self.app.push_screen_wait(_TagAddScreen(available))
         if tag is None:
             return
-        self._tags.append(tag)
+        self._tags.append(client.schemas.Tag(id=tag["id"], name=tag["name"], value=tag["value"]))
         await self._populate_tags()
 
     @textual.work
@@ -157,7 +158,7 @@ class BastionViewScreen(textual.screen.Screen[None]):
         register_url = self.query_one("#register_url", textual.widgets.Input).value
         connect_url = self.query_one("#connect_url", textual.widgets.Input).value.strip() or None
         ssh_proxy_jump = self.query_one("#ssh_proxy_jump", textual.widgets.Input).value.strip() or None
-        current_tag_ids = [t["id"] for t in self._tags]
+        current_tag_ids = [t.id for t in self._tags]
 
         patch: dict = {}
         if register_url != self._saved_register_url:
@@ -173,11 +174,11 @@ class BastionViewScreen(textual.screen.Screen[None]):
             self.notify("No changes")
             return
 
-        response = await self._auth.patch(
-            f"{self._auth.directory.bastion}/{self._bastion['id']}",
-            json=patch,
+        await self._auth.update_bastion(
+            self._bastion.id,
+            register_url=patch.get("register_url"),
+            connect_url=patch.get("connect_url"),
+            ssh_proxy_jump=patch.get("ssh_proxy_jump"),
+            tag_id_list=patch.get("tag_id_list"),
         )
-        if response.status_code != 200:
-            self.notify(response.json().get("title", "Failed to save"), severity="error")
-        else:
-            self.app.pop_screen()
+        self.app.pop_screen()

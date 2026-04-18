@@ -435,7 +435,7 @@ class Client:
         response = http.post(http.directory.boundary, json={"name": name, "description": description})
         if response.status_code != 201:
             raise exceptions.UI(_problem_title(response, "Unable to create boundary"))
-        return schemas.Boundary.model_validate(response.json())
+        return schemas.Boundary.model_validate(response.json()["boundary"])
 
     def update_boundary(
         self,

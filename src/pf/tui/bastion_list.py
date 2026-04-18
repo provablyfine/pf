@@ -84,9 +84,9 @@ class BastionListScreen(textual.screen.Screen[None]):
         table.clear(columns=False)
         for bastion in self._bastions:
             table.add_row(
-                bastion["register_url"],
-                bastion["connect_url"] or "",
-                str(len(bastion["tag_list"])),
+                bastion.register_url,
+                bastion.connect_url or "",
+                str(len(bastion.tag_list)),
             )
 
     @textual.on(textual.widgets.DataTable.RowSelected)
@@ -105,20 +105,13 @@ class BastionListScreen(textual.screen.Screen[None]):
         result = await self.app.push_screen_wait(_BastionCreateScreen())
         if result is None:
             return
-        response = await self._auth.post(
-            self._auth.directory.bastion,
-            json={
-                "register_url": result["register_url"],
-                "connect_url": result["connect_url"],
-                "ssh_proxy_jump": result["ssh_proxy_jump"],
-                "tag_id_list": [],
-                "tag_name_value_list": [],
-            },
+        bastion = await self._auth.create_bastion(
+            result["register_url"],
+            result["connect_url"],
+            result["ssh_proxy_jump"],
+            [],
+            [],
         )
-        if response.status_code != 201:
-            self.notify(response.json().get("title", "Failed to create bastion"), severity="error")
-            return
-        bastion = response.json()
         self._bastions.append(bastion)
         table = self.query_one(textual.widgets.DataTable)
         self._populate_table(table)
@@ -132,10 +125,7 @@ class BastionListScreen(textual.screen.Screen[None]):
         table = self.query_one(textual.widgets.DataTable)
         index = table.cursor_row
         bastion = self._bastions[index]
-        response = await self._auth.delete(f"{self._auth.directory.bastion}/{bastion['id']}")
-        if response.status_code != 204:
-            self.notify(response.json().get("title", "Failed to delete bastion"), severity="error")
-            return
+        await self._auth.delete_bastion(bastion.id)
         self._bastions.pop(index)
         self._populate_table(table)
-        self.notify(f"Bastion '{bastion['register_url']}' deleted")
+        self.notify(f"Bastion '{bastion.register_url}' deleted")

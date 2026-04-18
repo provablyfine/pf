@@ -7,7 +7,7 @@ import textual.screen
 import textual.widgets
 
 from .. import client
-from . import async_client, grant_edit, header
+from . import grant_edit, header
 
 GRANT_TYPES = ["identity", "tag", "role", "boundary", "tenant", "ssh-shell", "ssh-port-forwarding", "ssh-command"]
 
@@ -68,7 +68,7 @@ class GrantListScreen(textual.screen.Screen[None]):
         ("e", "edit_grant", "Edit"),
     ]
 
-    def __init__(self, auth: async_client.AsyncClient, grant_list: list, sub_title: str, role_id: int) -> None:
+    def __init__(self, auth: client.aio.Client, grant_list: list, sub_title: str, role_id: int) -> None:
         super().__init__()
         self._auth = auth
         self._grant_list = grant_list
@@ -93,13 +93,10 @@ class GrantListScreen(textual.screen.Screen[None]):
             table.add_row(grant_type, filter_str, perm_str)
 
     async def _save_grants(self) -> bool:
-        response = await self._auth.patch(
-            f"{self._auth.directory.role}/{self._role_id}",
-            json={"grant_list": self._grant_list},
+        await self._auth.update_role(
+            self._role_id,
+            grant_list=[client.schemas.validate_grant(g) for g in self._grant_list],
         )
-        if response.status_code != 200:
-            self.notify(response.json().get("title", "Failed to save grants"), severity="error")
-            return False
         return True
 
     @textual.work

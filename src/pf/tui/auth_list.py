@@ -146,7 +146,7 @@ class AuthListScreen(textual.screen.Screen[None]):
     def _populate_table(self, table: textual.widgets.DataTable) -> None:
         table.clear(columns=False)
         for a in self._auths:
-            table.add_row(a["name"], a["type"], str(a["is_enabled"]))
+            table.add_row(a.name, a.config.type, str(a.is_enabled))
 
     @textual.on(textual.widgets.DataTable.RowSelected)
     def _on_row_selected(self) -> None:
@@ -167,11 +167,24 @@ class AuthListScreen(textual.screen.Screen[None]):
         body = await self.app.push_screen_wait(_AuthParamsScreen(auth_type))
         if body is None:
             return
-        response = await self._auth.post(self._auth.directory.auth, json=body)
-        if response.status_code != 201:
-            self.notify(response.json().get("title", "Failed to create auth"), severity="error")
-            return
-        a = response.json()
+        match auth_type:
+            case "http_sig":
+                a = await self._auth.create_auth_http_sig(body["name"], "", [])
+            case "oidc":
+                params = body.get("oidc_params", {})
+                a = await self._auth.create_auth_oidc(
+                    body["name"],
+                    "",
+                    [],
+                    params["issuer"],
+                    params["client_id"],
+                    params.get("client_secret"),
+                )
+            case "oauth2-github":
+                params = body.get("oauth2_params", {})
+                a = await self._auth.create_auth_oauth2_github(
+                    body["name"], "", [], params["client_id"], params["client_secret"]
+                )
         self._auths.append(a)
         table = self.query_one(textual.widgets.DataTable)
         self._populate_table(table)
@@ -185,10 +198,7 @@ class AuthListScreen(textual.screen.Screen[None]):
         table = self.query_one(textual.widgets.DataTable)
         index = table.cursor_row
         a = self._auths[index]
-        response = await self._auth.delete(f"{self._auth.directory.auth}/{a['id']}")
-        if response.status_code != 204:
-            self.notify(response.json().get("title", "Failed to delete auth"), severity="error")
-            return
+        await self._auth.delete_auth(a.id)
         self._auths.pop(index)
         self._populate_table(table)
-        self.notify(f"Auth '{a['name']}' deleted")
+        self.notify(f"Auth '{a.name}' deleted")

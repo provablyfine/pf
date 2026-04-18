@@ -70,20 +70,20 @@ class IdentityViewScreen(textual.screen.Screen[None]):
     }
     """
 
-    def __init__(self, auth: client.aio.Client, identity: dict) -> None:
+    def __init__(self, auth: client.aio.Client, identity: client.schemas.Identity) -> None:
         super().__init__()
         self._auth = auth
         self._identity = identity
-        self._tags: list[dict] = list(identity["tags"])
-        self._saved_name: str = identity["name"]
-        self._saved_tag_ids: list[int] = [t["id"] for t in identity["tags"]]
+        self._tags: list[client.schemas.Tag] = list(identity.tags)
+        self._saved_name: str = identity.name
+        self._saved_tag_ids: list[int] = [t.id for t in identity.tags]
 
     def compose(self) -> textual.app.ComposeResult:
         yield header.AppHeader()
         with textual.containers.Vertical():
             with textual.containers.HorizontalGroup(classes="field") as container:
                 container.border_title = "Name"
-                yield textual.widgets.Input(self._identity["name"], id="name", compact=True)
+                yield textual.widgets.Input(self._identity.name, id="name", compact=True)
             with textual.containers.Container(classes="field") as container:
                 container.border_title = "Tags"
                 yield textual.widgets.ListView(id="tags")
@@ -95,7 +95,7 @@ class IdentityViewScreen(textual.screen.Screen[None]):
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
-        self.sub_title = f"Identities > {self._identity['name']}"
+        self.sub_title = f"Identities > {self._identity.name}"
         await self._populate_tags()
         await self._populate_boundaries()
 
@@ -115,28 +115,28 @@ class IdentityViewScreen(textual.screen.Screen[None]):
         lv = self.query_one("#tags", textual.widgets.ListView)
         await lv.clear()
         for tag in self._tags:
-            await lv.append(textual.widgets.ListItem(textual.widgets.Label(f"{tag['name']}={tag['value']}")))
+            await lv.append(textual.widgets.ListItem(textual.widgets.Label(f"{tag.name}={tag.value}")))
         self.query_one("#tags-placeholder").display = not bool(self._tags)
 
     async def _populate_boundaries(self) -> None:
         lv = self.query_one("#boundaries", textual.widgets.ListView)
         await lv.clear()
-        for b in self._identity["boundaries"]:
-            await lv.append(textual.widgets.ListItem(textual.widgets.Label(b["name"])))
-        self.query_one("#boundaries-placeholder").display = not bool(self._identity["boundaries"])
+        for b in self._identity.boundaries:
+            await lv.append(textual.widgets.ListItem(textual.widgets.Label(b.name)))
+        self.query_one("#boundaries-placeholder").display = not bool(self._identity.boundaries)
 
     @textual.work
     async def action_add_tag(self) -> None:
-        all_tags = await self._auth.list_tags()
-        existing_ids = {t["id"] for t in self._tags}
-        available = [t for t in all_tags if t["id"] not in existing_ids]
+        all_tags = (await self._auth.list_tags()).tags
+        existing_ids = {t.id for t in self._tags}
+        available = [{"id": t.id, "name": t.name, "value": t.value} for t in all_tags if t.id not in existing_ids]
         if not available:
             self.notify("No tags available to add")
             return
         tag = await self.app.push_screen_wait(_TagAddScreen(available))
         if tag is None:
             return
-        self._tags.append(tag)
+        self._tags.append(client.schemas.Tag(id=tag["id"], name=tag["name"], value=tag["value"]))
         await self._populate_tags()
 
     @textual.work
@@ -151,7 +151,7 @@ class IdentityViewScreen(textual.screen.Screen[None]):
     @textual.work
     async def action_save(self) -> None:
         name = self.query_one("#name", textual.widgets.Input).value
-        current_tag_ids = [t["id"] for t in self._tags]
+        current_tag_ids = [t.id for t in self._tags]
 
         patch: dict = {}
         if name != self._saved_name:
@@ -163,11 +163,13 @@ class IdentityViewScreen(textual.screen.Screen[None]):
             self.notify("No changes")
             return
 
-        response = await self._auth.patch(
-            f"{self._auth.directory.identity}/{self._identity['id']}",
-            json=patch,
+        tags = None
+        if "tags" in patch:
+            tags = [client.schemas.IdentityTagOp.model_validate(t) for t in patch["tags"]]
+
+        await self._auth.update_identity(
+            self._identity.id,
+            name=patch.get("name"),
+            tags=tags,
         )
-        if response.status_code != 200:
-            self.notify(response.json().get("title", "Failed to save"), severity="error")
-        else:
-            self.app.pop_screen()
+        self.app.pop_screen()

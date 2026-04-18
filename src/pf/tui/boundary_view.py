@@ -8,7 +8,6 @@ import textual.screen
 import textual.widgets
 
 from .. import client
-from .. import client
 from . import grant_edit, grant_list, header
 
 
@@ -35,19 +34,17 @@ class BoundaryViewScreen(textual.screen.Screen[None]):
     }
     """
 
-    def __init__(self, auth: client.aio.Client, boundary: dict) -> None:
+    def __init__(self, auth: client.aio.Client, boundary: client.schemas.Boundary) -> None:
         super().__init__()
         self._auth = auth
         self._boundary = boundary
-        self._denied_list: list = list(boundary["denied_list"])
-        self._ceiling_list: list | None = (
-            list(boundary["ceiling_list"]) if boundary["ceiling_list"] is not None else None
-        )
-        self._saved_name: str = boundary["name"]
-        self._saved_description: str = boundary["description"]
-        self._saved_denied_list: list = list(boundary["denied_list"])
+        self._denied_list: list = list(boundary.denied_list)
+        self._ceiling_list: list | None = list(boundary.ceiling_list) if boundary.ceiling_list is not None else None
+        self._saved_name: str = boundary.name
+        self._saved_description: str = boundary.description
+        self._saved_denied_list: list = list(boundary.denied_list)
         self._saved_ceiling_list: list | None = (
-            list(boundary["ceiling_list"]) if boundary["ceiling_list"] is not None else None
+            list(boundary.ceiling_list) if boundary.ceiling_list is not None else None
         )
 
     def compose(self) -> textual.app.ComposeResult:
@@ -55,10 +52,10 @@ class BoundaryViewScreen(textual.screen.Screen[None]):
         with textual.containers.Vertical():
             with textual.containers.HorizontalGroup(classes="field") as container:
                 container.border_title = "Name"
-                yield textual.widgets.Input(self._boundary["name"], id="name", compact=True)
+                yield textual.widgets.Input(self._boundary.name, id="name", compact=True)
             with textual.containers.Horizontal(classes="field") as container:
                 container.border_title = "Description"
-                yield textual.widgets.Input(self._boundary["description"], id="description", compact=True)
+                yield textual.widgets.Input(self._boundary.description, id="description", compact=True)
             with textual.containers.Container(classes="field") as container:
                 container.border_title = "Denied grants"
                 yield textual.widgets.DataTable(id="denied", cursor_type="row")
@@ -70,7 +67,7 @@ class BoundaryViewScreen(textual.screen.Screen[None]):
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
-        self.sub_title = f"Boundaries > {self._boundary['name']}"
+        self.sub_title = f"Boundaries > {self._boundary.name}"
         self.query_one("#denied", textual.widgets.DataTable).add_columns("Type", "Filter", "Permissions")
         self.query_one("#ceiling", textual.widgets.DataTable).add_columns("Type", "Filter", "Permissions")
         self._populate_denied()
@@ -182,11 +179,11 @@ class BoundaryViewScreen(textual.screen.Screen[None]):
             self.notify("No changes")
             return
 
-        response = await self._auth.patch(
-            f"{self._auth.directory.boundary}/{self._boundary['id']}",
-            json=patch,
+        await self._auth.update_boundary(
+            self._boundary.id,
+            name=patch.get("name"),
+            description=patch.get("description"),
+            denied_list=patch.get("denied_list"),
+            ceiling_list=patch.get("ceiling_list"),
         )
-        if response.status_code != 200:
-            self.notify(response.json().get("title", "Failed to save"), severity="error")
-        else:
-            self.app.pop_screen()
+        self.app.pop_screen()

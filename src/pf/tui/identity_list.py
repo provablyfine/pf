@@ -157,9 +157,9 @@ class IdentityListScreen(textual.screen.Screen[None]):
         table.clear(columns=False)
         for identity in self._identities:
             table.add_row(
-                identity["name"],
-                str(len(identity["tags"])),
-                str(len(identity["boundaries"])),
+                identity.name,
+                str(len(identity.tags)),
+                str(len(identity.boundaries)),
             )
 
     @textual.on(textual.widgets.DataTable.RowSelected)
@@ -178,20 +178,7 @@ class IdentityListScreen(textual.screen.Screen[None]):
         name = await self.app.push_screen_wait(_IdentityCreateScreen())
         if name is None:
             return
-        response = await self._auth.post(
-            self._auth.directory.identity,
-            json={
-                "name": name,
-                "boundary_id_list": [],
-                "boundary_name_list": [],
-                "tag_id_list": [],
-                "tag_name_value_list": [],
-            },
-        )
-        if response.status_code != 201:
-            self.notify(response.json().get("title", "Failed to create identity"), severity="error")
-            return
-        identity = response.json()
+        identity = await self._auth.create_identity(name, [], [], [], [])
         self._identities.append(identity)
         table = self.query_one(textual.widgets.DataTable)
         self._populate_table(table)
@@ -205,13 +192,10 @@ class IdentityListScreen(textual.screen.Screen[None]):
         table = self.query_one(textual.widgets.DataTable)
         index = table.cursor_row
         identity = self._identities[index]
-        response = await self._auth.delete(f"{self._auth.directory.identity}/{identity['id']}")
-        if response.status_code != 204:
-            self.notify(response.json().get("title", "Failed to delete identity"), severity="error")
-            return
+        await self._auth.delete_identity(identity.id)
         self._identities.pop(index)
         self._populate_table(table)
-        self.notify(f"Identity '{identity['name']}' deleted")
+        self.notify(f"Identity '{identity.name}' deleted")
 
     @textual.work
     async def action_invite_identity(self) -> None:
@@ -222,15 +206,8 @@ class IdentityListScreen(textual.screen.Screen[None]):
         method = await self.app.push_screen_wait(_InviteMethodScreen())
         if method is None:
             return
-        response = await self._auth.post(
-            f"{self._auth.directory.identity}/{identity['id']}/invite",
-            json={"delivery": method},
-        )
-        if response.status_code >= 400:
-            self.notify(response.json().get("title", "Failed to invite identity"), severity="error")
-            return
-        if method == "manual":
-            secret = response.json()["key"]["k"]
+        secret = await self._auth.invite_identity(identity.id, method)
+        if method == "manual" and secret is not None:
             await self.app.push_screen_wait(_InviteSecretScreen(secret))
         else:
-            self.notify(f"Invitation sent to '{identity['name']}'")
+            self.notify(f"Invitation sent to '{identity.name}'")

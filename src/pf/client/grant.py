@@ -17,7 +17,7 @@ def _none(f: typing.Callable[[typing.Any], str]) -> typing.Callable[[typing.Any]
 def _get_attr(obj: typing.Any, name: str) -> typing.Any:
     """Get attribute from object or dict."""
     if isinstance(obj, dict):
-        return obj.get(name) # type: ignore
+        return obj.get(name)  # type: ignore
     return getattr(obj, name)
 
 
@@ -222,7 +222,7 @@ def _auth_grant_to_text(grant: typing.Any) -> tuple[str, str, str]:
     )
 
 
-def to_text(grant: typing.Union[schemas.Grant, dict[str, typing.Any]]) -> tuple[str, str, str]:
+def to_text(grant: schemas.Grant | dict[str, typing.Any]) -> tuple[str, str, str]:
     # Handle both Pydantic objects and dicts
     if isinstance(grant, dict):
         grant_type = grant.get("type")

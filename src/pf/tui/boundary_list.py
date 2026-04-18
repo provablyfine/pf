@@ -73,12 +73,12 @@ class BoundaryListScreen(textual.screen.Screen[None]):
     def _populate_table(self, table: textual.widgets.DataTable) -> None:
         table.clear(columns=False)
         for boundary in self._boundaries:
-            ceiling = boundary["ceiling_list"]
+            ceiling = boundary.ceiling_list
             ceiling_count = str(len(ceiling)) if ceiling is not None else "—"
             table.add_row(
-                boundary["name"],
-                _utils.ellipsize(boundary["description"], 40),
-                str(len(boundary["denied_list"])),
+                boundary.name,
+                _utils.ellipsize(boundary.description, 40),
+                str(len(boundary.denied_list)),
                 ceiling_count,
             )
 
@@ -98,11 +98,7 @@ class BoundaryListScreen(textual.screen.Screen[None]):
         name = await self.app.push_screen_wait(_BoundaryCreateScreen())
         if name is None:
             return
-        response = await self._auth.post(self._auth.directory.boundary, json={"name": name})
-        if response.status_code != 201:
-            self.notify(response.json().get("title", "Failed to create boundary"), severity="error")
-            return
-        boundary = response.json()["boundary"]
+        boundary = await self._auth.create_boundary(name, "")
         self._boundaries.append(boundary)
         table = self.query_one(textual.widgets.DataTable)
         self._populate_table(table)
@@ -116,10 +112,7 @@ class BoundaryListScreen(textual.screen.Screen[None]):
         table = self.query_one(textual.widgets.DataTable)
         index = table.cursor_row
         boundary = self._boundaries[index]
-        response = await self._auth.delete(f"{self._auth.directory.boundary}/{boundary['id']}")
-        if response.status_code != 204:
-            self.notify(response.json().get("title", "Failed to delete boundary"), severity="error")
-            return
+        await self._auth.delete_boundary(boundary.id)
         self._boundaries.pop(index)
         self._populate_table(table)
-        self.notify(f"Boundary '{boundary['name']}' deleted")
+        self.notify(f"Boundary '{boundary.name}' deleted")

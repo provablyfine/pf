@@ -80,11 +80,8 @@ class TenantListScreen(textual.screen.Screen[None]):
         data = await self.app.push_screen_wait(_TenantCreateScreen())
         if data is None:
             return
-        response = await self._auth.post(self._auth.directory.tenant, json=data)
-        if response.status_code not in (200, 201):
-            self.notify(response.json().get("title", "Failed to create tenant"), severity="error")
-            return
-        self._tenants = (await self._auth.list_tenants()).tenants
+        tenant = await self._auth.create_tenant(data["name"], data["display_name"])
+        self._tenants.append(tenant)
         table = self.query_one(textual.widgets.DataTable)
         self._populate_table(table)
 
@@ -95,10 +92,7 @@ class TenantListScreen(textual.screen.Screen[None]):
         table = self.query_one(textual.widgets.DataTable)
         index = table.cursor_row
         tenant = self._tenants[index]
-        response = await self._auth.delete(f"{self._auth.directory.tenant}/{tenant['id']}")
-        if response.status_code != 204:
-            self.notify(response.json().get("title", "Failed to delete tenant"), severity="error")
-            return
+        await self._auth.delete_tenant(tenant.id)
         self._tenants.pop(index)
         self._populate_table(table)
-        self.notify(f"Tenant '{tenant['name']}' deleted")
+        self.notify(f"Tenant '{tenant.name}' deleted")

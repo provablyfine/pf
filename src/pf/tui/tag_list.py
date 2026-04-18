@@ -76,11 +76,8 @@ class TagListScreen(textual.screen.Screen[None]):
         data = await self.app.push_screen_wait(_TagCreateScreen())
         if data is None:
             return
-        response = await self._auth.post(self._auth.directory.tag, json=data)
-        if response.status_code != 201:
-            self.notify(response.json().get("title", "Failed to create tag"), severity="error")
-            return
-        self._tags = (await self._auth.list_tags()).tags
+        tag = await self._auth.create_tag(data["name"], data["value"])
+        self._tags.append(tag)
         table = self.query_one(textual.widgets.DataTable)
         self._populate_table(table)
 
@@ -91,10 +88,7 @@ class TagListScreen(textual.screen.Screen[None]):
         table = self.query_one(textual.widgets.DataTable)
         index = table.cursor_row
         tag = self._tags[index]
-        response = await self._auth.delete(f"{self._auth.directory.tag}/{tag['id']}")
-        if response.status_code != 204:
-            self.notify(response.json().get("title", "Failed to delete tag"), severity="error")
-            return
+        await self._auth.delete_tag(tag.id)
         self._tags.pop(index)
         self._populate_table(table)
-        self.notify(f"Tag '{tag['name']}={tag['value']}' deleted")
+        self.notify(f"Tag '{tag.name}={tag.value}' deleted")
