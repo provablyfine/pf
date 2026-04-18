@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import typing
 
 import textual
@@ -8,6 +10,11 @@ import textual.widgets
 
 from .. import client
 from . import base, grant_edit, grant_list, header, member_list
+
+
+class _GrantsTable(textual.widgets.DataTable[str]):
+    class RowSelected(textual.widgets.DataTable.RowSelected):
+        data_table: _GrantsTable
 
 
 class RoleViewScreen(base.Screen):
@@ -59,13 +66,13 @@ class RoleViewScreen(base.Screen):
                 yield textual.widgets.Label("No members — add one with 'a'", id="members-placeholder")
             with textual.containers.Container(classes="field") as container:
                 container.border_title = "Grants"
-                yield textual.widgets.DataTable(id="grants", cursor_type="row")
+                yield _GrantsTable(id="grants", cursor_type="row")
                 yield textual.widgets.Label("No grants — add one with 'a'", id="grants-placeholder")
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
         self.sub_title = f"Roles > {self._role.name}"
-        self.query_one("#grants", textual.widgets.DataTable).add_columns("Type", "Filter", "Permissions")  # type: ignore[arg-type]
+        self.query_one("#grants", _GrantsTable).add_columns("Type", "Filter", "Permissions")
         await self._populate_members()
         self._populate_grants()
 
@@ -89,16 +96,16 @@ class RoleViewScreen(base.Screen):
         self.query_one("#members-placeholder").display = not bool(self._member_names)
 
     def _populate_grants(self) -> None:
-        table = self.query_one("#grants", textual.widgets.DataTable[str])
+        table = self.query_one("#grants", _GrantsTable)
         table.clear(columns=False)
         for g in self._grant_list:
             type_str, filter_str, perm_str = client.grant.to_text(g)
             table.add_row(type_str, filter_str, perm_str)
         self.query_one("#grants-placeholder").display = not bool(self._grant_list)
 
-    @textual.on(textual.widgets.DataTable.RowSelected)
-    def _on_row_selected(self, event: textual.widgets.DataTable.RowSelected) -> None:
-        if event.data_table.id == "grants":  # type: ignore[attr-defined]
+    @textual.on(_GrantsTable.RowSelected)
+    def _on_row_selected(self, event: _GrantsTable.RowSelected) -> None:
+        if event.data_table.id == "grants":
             self.action_edit_grant()
 
     @textual.work
@@ -139,7 +146,7 @@ class RoleViewScreen(base.Screen):
             self._member_names.pop(index)
             await self._populate_members()
         elif focused.id == "grants":
-            table = self.query_one("#grants", textual.widgets.DataTable[str])
+            table = self.query_one("#grants", _GrantsTable)
             if not self._grant_list:
                 return
             self._grant_list.pop(table.cursor_row)
@@ -147,7 +154,7 @@ class RoleViewScreen(base.Screen):
 
     @textual.work
     async def action_edit_grant(self) -> None:
-        table = self.query_one("#grants", textual.widgets.DataTable[str])
+        table = self.query_one("#grants", _GrantsTable)
         if not self._grant_list:
             return
         index = table.cursor_row
