@@ -1,10 +1,12 @@
+from __future__ import annotations
+
 import asyncio
 import os
 import subprocess
 import typing
 
-if typing.TYPE_CHECKING:
-    import textual.app
+
+from . import base
 
 
 def _supports_osc52() -> bool:
@@ -37,7 +39,7 @@ def _copy_via_subprocess(text: str) -> None:
     raise RuntimeError("No clipboard mechanism available")
 
 
-async def copy(app: "textual.app.App[object]", text: str) -> None:
+async def copy(app: base.App, text: str) -> None:
     if _supports_osc52():
         app.copy_to_clipboard(text)
         return

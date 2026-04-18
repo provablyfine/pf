@@ -3,30 +3,15 @@ import os
 import os.path
 import sys
 
-import textual.app
 import textual.screen
-import textual.worker
 
 from .. import client, log
-from . import home, relogin, setup
+from . import base, home, relogin, setup
 
 _DEFAULT_CONFIG = os.path.join(os.path.expanduser("~"), ".config", "pf", "config.json")
 
 
-class TuiAppBase(textual.app.App[None]):
-    def _handle_exception(self, error: Exception) -> None:
-        ui_error: client.exceptions.UI | None = None
-        if isinstance(error, client.exceptions.UI):
-            ui_error = error
-        elif isinstance(error, textual.worker.WorkerFailed) and isinstance(error.error, client.exceptions.UI):
-            ui_error = error.error
-        if ui_error is not None:
-            self.notify(str(ui_error), severity="error")
-            return
-        super()._handle_exception(error)
-
-
-class SetupApp(TuiAppBase):
+class SetupApp(base.App):
     TITLE = "Provably Fine - Setup"
 
     def __init__(self, initial_screen: textual.screen.Screen[None]) -> None:
@@ -37,7 +22,7 @@ class SetupApp(TuiAppBase):
         self.push_screen(self._initial_screen)
 
 
-class TuiApp(TuiAppBase):
+class TuiApp(base.App):
     TITLE = "Provably Fine"
 
     def __init__(self, auth: client.aio.Client) -> None:

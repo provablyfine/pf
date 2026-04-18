@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import typing
 
 import textual
@@ -8,6 +10,11 @@ import textual.widgets
 
 from .. import client
 from . import base, clipboard, header, identity_view
+
+
+class _IdentitiesTable(textual.widgets.DataTable[str]):
+    class RowSelected(textual.widgets.DataTable.RowSelected):
+        data_table: _IdentitiesTable
 
 
 class _IdentityCreateScreen(textual.screen.ModalScreen[str | None]):
@@ -81,7 +88,7 @@ class _InviteMethodScreen(textual.screen.ModalScreen[str | None]):
         self.dismiss(event.item.id)
 
 
-class _InviteSecretScreen(textual.screen.ModalScreen[None]):
+class _InviteSecretScreen(base.ModalScreen[None]):
     DEFAULT_CSS = """
     _InviteSecretScreen {
         align: center middle;
@@ -139,11 +146,11 @@ class IdentityListScreen(base.Screen):
 
     def compose(self) -> textual.app.ComposeResult:
         yield header.AppHeader()
-        yield textual.widgets.DataTable(cursor_type="row")
+        yield _IdentitiesTable(cursor_type="row")
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
-        table = self.query_one(textual.widgets.DataTable)
+        table = self.query_one(_IdentitiesTable)
         table.add_columns("Name", "Tags", "Boundaries")
         self._identities = (await self._auth.list_identities()).identities
         self._populate_table(table)
@@ -151,9 +158,9 @@ class IdentityListScreen(base.Screen):
     @textual.work
     async def on_screen_resume(self) -> None:
         self._identities = (await self._auth.list_identities()).identities
-        self._populate_table(self.query_one(textual.widgets.DataTable))
+        self._populate_table(self.query_one(_IdentitiesTable))
 
-    def _populate_table(self, table: textual.widgets.DataTable) -> None:
+    def _populate_table(self, table: _IdentitiesTable) -> None:
         table.clear(columns=False)
         for identity in self._identities:
             table.add_row(
@@ -162,14 +169,14 @@ class IdentityListScreen(base.Screen):
                 str(len(identity.boundaries)),
             )
 
-    @textual.on(textual.widgets.DataTable.RowSelected)
+    @textual.on(_IdentitiesTable.RowSelected)
     def _on_row_selected(self) -> None:
         self.action_view_identity()
 
     def action_view_identity(self) -> None:
         if not self._identities:
             return
-        table = self.query_one(textual.widgets.DataTable)
+        table = self.query_one(_IdentitiesTable)
         identity = self._identities[table.cursor_row]
         self.app.push_screen(identity_view.IdentityViewScreen(self._auth, identity))
 
@@ -180,7 +187,7 @@ class IdentityListScreen(base.Screen):
             return
         identity = await self._auth.create_identity(name, [], [], [], [])
         self._identities.append(identity)
-        table = self.query_one(textual.widgets.DataTable)
+        table = self.query_one(_IdentitiesTable)
         self._populate_table(table)
         table.move_cursor(row=len(self._identities) - 1)
         self.app.push_screen(identity_view.IdentityViewScreen(self._auth, identity))
@@ -189,7 +196,7 @@ class IdentityListScreen(base.Screen):
     async def action_delete_identity(self) -> None:
         if not self._identities:
             return
-        table = self.query_one(textual.widgets.DataTable)
+        table = self.query_one(_IdentitiesTable)
         index = table.cursor_row
         identity = self._identities[index]
         await self._auth.delete_identity(identity.id)
@@ -201,7 +208,7 @@ class IdentityListScreen(base.Screen):
     async def action_invite_identity(self) -> None:
         if not self._identities:
             return
-        table = self.query_one(textual.widgets.DataTable)
+        table = self.query_one(_IdentitiesTable)
         identity = self._identities[table.cursor_row]
         method = await self.app.push_screen_wait(_InviteMethodScreen())
         if method is None:
