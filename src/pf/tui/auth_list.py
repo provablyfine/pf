@@ -1,3 +1,4 @@
+import dataclasses
 import typing
 
 import textual
@@ -8,6 +9,29 @@ import textual.widgets
 
 from .. import client
 from . import auth_view, base, header
+
+
+@dataclasses.dataclass
+class _HttpSigParams:
+    name: str
+
+
+@dataclasses.dataclass
+class _OidcParams:
+    name: str
+    issuer: str
+    client_id: str
+    client_secret: str | None
+
+
+@dataclasses.dataclass
+class _OAuth2Params:
+    name: str
+    client_id: str
+    client_secret: str
+
+
+_AuthParamsResult = _HttpSigParams | _OidcParams | _OAuth2Params
 
 
 class _AuthTypeScreen(textual.screen.ModalScreen[str | None]):
@@ -51,7 +75,7 @@ class _AuthTypeScreen(textual.screen.ModalScreen[str | None]):
         self.dismiss(event.item.id)
 
 
-class _AuthParamsScreen(textual.screen.ModalScreen[dict | None]):
+class _AuthParamsScreen(textual.screen.ModalScreen[_AuthParamsResult | None]):
     DEFAULT_CSS = """
     _AuthParamsScreen {
         align: center middle;
@@ -94,24 +118,21 @@ class _AuthParamsScreen(textual.screen.ModalScreen[dict | None]):
         name = self.query_one("#name", textual.widgets.Input).value.strip()
         if not name:
             return
-        body: dict = {"name": name, "type": self._type, "tags": []}
         if self._type == "oidc":
             issuer = self.query_one("#issuer", textual.widgets.Input).value.strip()
             client_id = self.query_one("#client_id", textual.widgets.Input).value.strip()
             if not issuer or not client_id:
                 return
-            oidc_params: dict = {"issuer": issuer, "client_id": client_id}
             secret = self.query_one("#client_secret", textual.widgets.Input).value.strip()
-            if secret:
-                oidc_params["client_secret"] = secret
-            body["oidc_params"] = oidc_params
+            self.dismiss(_OidcParams(name=name, issuer=issuer, client_id=client_id, client_secret=secret or None))
         elif self._type == "oauth2-github":
             client_id = self.query_one("#client_id", textual.widgets.Input).value.strip()
             client_secret = self.query_one("#client_secret", textual.widgets.Input).value.strip()
             if not client_id or not client_secret:
                 return
-            body["oauth2_params"] = {"client_id": client_id, "client_secret": client_secret}
-        self.dismiss(body)
+            self.dismiss(_OAuth2Params(name=name, client_id=client_id, client_secret=client_secret))
+        else:
+            self.dismiss(_HttpSigParams(name=name))
 
 
 class AuthListScreen(base.Screen):
@@ -170,23 +191,16 @@ class AuthListScreen(base.Screen):
         body = await self.app.push_screen_wait(_AuthParamsScreen(auth_type))
         if body is None:
             return
-        match auth_type:
-            case "http_sig":
-                a = await self._auth.create_auth_http_sig(body["name"], "", [])
-            case "oidc":
-                params = body.get("oidc_params", {})
+        match body:
+            case _HttpSigParams():
+                a = await self._auth.create_auth_http_sig(body.name, "", [])
+            case _OidcParams():
                 a = await self._auth.create_auth_oidc(
-                    body["name"],
-                    "",
-                    [],
-                    params["issuer"],
-                    params["client_id"],
-                    params.get("client_secret"),
+                    body.name, "", [], body.issuer, body.client_id, body.client_secret
                 )
-            case "oauth2-github":
-                params = body.get("oauth2_params", {})
+            case _OAuth2Params():
                 a = await self._auth.create_auth_oauth2_github(
-                    body["name"], "", [], params["client_id"], params["client_secret"]
+                    body.name, "", [], body.client_id, body.client_secret
                 )
         self._auths.append(a)
         table = self.query_one(self._StrDataTable)
