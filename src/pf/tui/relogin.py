@@ -12,7 +12,7 @@ import textual.app
 import textual.widgets
 
 from .. import base64url, client, jwk, ssh
-from . import async_client, base
+from . import base
 
 
 def has_valid_session(config: client.Config) -> bool:
@@ -55,13 +55,11 @@ def oidc_login(api: client.Client, auth_name: str) -> str:
     agent.add(session_key, comment="pf-session", lifetime=1800)
     fp = session_key.public().ssh_fingerprint()
 
-    response = api.no_auth.get(f"{api.directory.public_auth}/{auth_name}")
-    if response.status_code != 200:
-        raise client.exceptions.UI(f"Unable to read auth config: {response.text}")
-    auth_public = response.json()
-    params = auth_public["params"]
+    sync_client = client.sync.Client(api.config)
+    auth_public = sync_client.get_public_auth(auth_name)
+    assert isinstance(auth_public.config, client.schemas.OidcConfig)
 
-    discovery_resp = requests.get(f"{params['issuer']}/.well-known/openid-configuration", timeout=10)
+    discovery_resp = requests.get(f"{auth_public.config.issuer}/.well-known/openid-configuration", timeout=10)
     if discovery_resp.status_code != 200:
         raise client.exceptions.UI("Unable to fetch OIDC discovery document")
     discovery = discovery_resp.json()
@@ -77,7 +75,7 @@ def oidc_login(api: client.Client, auth_name: str) -> str:
 
     auth_url = (
         f"{discovery['authorization_endpoint']}"
-        f"?client_id={urllib.parse.quote(params['client_id'])}"
+        f"?client_id={urllib.parse.quote(auth_public.config.client_id)}"
         f"&redirect_uri={urllib.parse.quote(redirect_uri)}"
         f"&response_type=code&scope=openid+email"
         f"&code_challenge={urllib.parse.quote(code_challenge)}&code_challenge_method=S256"
@@ -95,22 +93,22 @@ def oidc_login(api: client.Client, auth_name: str) -> str:
             self.end_headers()
             self.wfile.write(b"Login successful. You may close this tab.")
 
-        def log_message(self, format, *args):
+        def log_message(self, format: str, *args: object) -> None:
             pass
 
     http.server.HTTPServer(("127.0.0.1", port), _Handler).handle_request()
     if not code_holder:
         raise client.exceptions.UI("OIDC callback did not receive authorization code")
 
-    token_data: dict = {
+    token_data: dict[str, str] = {
         "grant_type": "authorization_code",
         "code": code_holder[0],
         "code_verifier": code_verifier,
         "redirect_uri": redirect_uri,
-        "client_id": params["client_id"],
+        "client_id": auth_public.config.client_id,
     }
-    if params.get("client_secret"):
-        token_data["client_secret"] = params["client_secret"]
+    if auth_public.config.client_secret:
+        token_data["client_secret"] = auth_public.config.client_secret
     token_resp = requests.post(discovery["token_endpoint"], data=token_data, timeout=10)
     if token_resp.status_code != 200:
         raise client.exceptions.UI(f"Unable to exchange code for token: {token_resp.text}")
@@ -122,7 +120,7 @@ def oidc_login(api: client.Client, auth_name: str) -> str:
     response = session_http.post(
         url=session_http.directory.login_oidc,
         json={
-            "auth_name": auth_public["name"],
+            "auth_name": auth_public.name,
             "id_token": id_token,
             "session_public_key": session_key.public().to_dict(),
         },
@@ -141,10 +139,8 @@ def oauth2_login(api: client.Client, auth_name: str) -> str:
     agent.add(session_key, comment="pf-session", lifetime=1800)
     fp = session_key.public().ssh_fingerprint()
 
-    response = api.no_auth.get(f"{api.directory.public_auth}/{auth_name}")
-    if response.status_code != 200:
-        raise client.exceptions.UI(f"Unable to read auth config: {response.text}")
-    auth_public = response.json()
+    sync_client = client.sync.Client(api.config)
+    auth_public = sync_client.get_public_auth(auth_name)
 
     sock = socket.socket()
     sock.bind(("127.0.0.1", 0))
@@ -156,7 +152,7 @@ def oauth2_login(api: client.Client, auth_name: str) -> str:
     response = session_http.post(
         url=session_http.directory.login_oauth2_start,
         json={
-            "auth_name": auth_public["name"],
+            "auth_name": auth_public.name,
             "session_public_key": session_key.public().to_dict(),
             "client_redirect_uri": client_redirect_uri,
         },
@@ -165,7 +161,7 @@ def oauth2_login(api: client.Client, auth_name: str) -> str:
         raise client.exceptions.UI(f"Unable to start OAuth2 login: {response.text}")
     webbrowser.open(response.json()["auth_url"])
 
-    result: list[dict] = []
+    result: list[dict[str, str]] = []
 
     class _Handler(http.server.BaseHTTPRequestHandler):
         def do_GET(self):
@@ -181,7 +177,7 @@ def oauth2_login(api: client.Client, auth_name: str) -> str:
                 msg = b"Login failed. You may close this tab."
             self.wfile.write(msg)
 
-        def log_message(self, format, *args):
+        def log_message(self, format: str, *args: object) -> None:
             pass
 
     http.server.HTTPServer(("127.0.0.1", port), _Handler).handle_request()
@@ -228,17 +224,13 @@ class ReloginScreen(base.Screen):
         auth_name = self._cfg.auth_name or "default"
         status = self.query_one("#status", textual.widgets.Label)
 
-        no_auth = async_client.AsyncClient(self._api.no_auth)
-        url = f"{self._api.directory.public_auth}/{auth_name}"
+        aio_client = client.aio.Client(self._api.config)
         try:
-            resp = await no_auth.get(url)
+            auth_public = await aio_client.get_public_auth(auth_name)
         except client.exceptions.UI as e:
             self.notify(str(e), severity="error")
             return
-        if resp.status_code != 200:
-            self.notify(f"Auth config '{auth_name}' not found", severity="error")
-            return
-        auth_type = resp.json()["type"]
+        auth_type = auth_public.config.type
 
         if auth_type != "http_sig":
             status.update(f"Opening browser for {auth_name}…")
