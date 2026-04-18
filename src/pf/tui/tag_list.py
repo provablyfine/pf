@@ -10,7 +10,7 @@ from .. import client
 from . import base, header
 
 
-class _TagCreateScreen(textual.screen.ModalScreen[dict | None]):
+class _TagCreateScreen(textual.screen.ModalScreen[client.schemas.TagNameValue | None]):
     DEFAULT_CSS = """
     _TagCreateScreen {
         align: center middle;
@@ -40,7 +40,7 @@ class _TagCreateScreen(textual.screen.ModalScreen[dict | None]):
         value = self.query_one("#value", textual.widgets.Input).value.strip()
         if not name or not value:
             return
-        self.dismiss({"name": name, "value": value})
+        self.dismiss(client.schemas.TagNameValue(name=name, value=value))
 
 
 class TagListScreen(base.Screen):
@@ -61,12 +61,12 @@ class TagListScreen(base.Screen):
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
-        table = self.query_one(textual.widgets.DataTable)
+        table = self.query_one(textual.widgets.DataTable[str])
         table.add_columns("Name", "Value")
         self._tags = (await self._auth.list_tags()).tags
         self._populate_table(table)
 
-    def _populate_table(self, table: textual.widgets.DataTable) -> None:
+    def _populate_table(self, table: textual.widgets.DataTable[str]) -> None:
         table.clear(columns=False)
         for tag in self._tags:
             table.add_row(tag.name, tag.value)
@@ -76,16 +76,16 @@ class TagListScreen(base.Screen):
         data = await self.app.push_screen_wait(_TagCreateScreen())
         if data is None:
             return
-        tag = await self._auth.create_tag(data["name"], data["value"])
+        tag = await self._auth.create_tag(data.name, data.value)
         self._tags.append(tag)
-        table = self.query_one(textual.widgets.DataTable)
+        table = self.query_one(textual.widgets.DataTable[str])
         self._populate_table(table)
 
     @textual.work
     async def action_delete_tag(self) -> None:
         if not self._tags:
             return
-        table = self.query_one(textual.widgets.DataTable)
+        table = self.query_one(textual.widgets.DataTable[str])
         index = table.cursor_row
         tag = self._tags[index]
         await self._auth.delete_tag(tag.id)
