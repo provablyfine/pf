@@ -4,14 +4,13 @@ import textual
 import textual.app
 import textual.containers
 import textual.events
-import textual.screen
 import textual.widgets
 
 from .. import client
-from . import grant_edit, grant_list, header, member_list
+from . import base, grant_edit, grant_list, header, member_list
 
 
-class RoleViewScreen(textual.screen.Screen[None]):
+class RoleViewScreen(base.Screen):
     BINDINGS: typing.ClassVar = [
         ("ctrl+s", "save", "Save"),
         ("escape", "app.pop_screen", "Back"),
@@ -66,7 +65,7 @@ class RoleViewScreen(textual.screen.Screen[None]):
 
     async def on_mount(self) -> None:
         self.sub_title = f"Roles > {self._role.name}"
-        self.query_one("#grants", textual.widgets.DataTable).add_columns("Type", "Filter", "Permissions")
+        self.query_one("#grants", textual.widgets.DataTable).add_columns("Type", "Filter", "Permissions")  # type: ignore[arg-type]
         await self._populate_members()
         self._populate_grants()
 
@@ -90,7 +89,7 @@ class RoleViewScreen(textual.screen.Screen[None]):
         self.query_one("#members-placeholder").display = not bool(self._member_names)
 
     def _populate_grants(self) -> None:
-        table = self.query_one("#grants", textual.widgets.DataTable)
+        table = self.query_one("#grants", textual.widgets.DataTable[str])
         table.clear(columns=False)
         for g in self._grant_list:
             type_str, filter_str, perm_str = client.grant.to_text(g)
@@ -99,7 +98,7 @@ class RoleViewScreen(textual.screen.Screen[None]):
 
     @textual.on(textual.widgets.DataTable.RowSelected)
     def _on_row_selected(self, event: textual.widgets.DataTable.RowSelected) -> None:
-        if event.data_table.id == "grants":
+        if event.data_table.id == "grants":  # type: ignore[attr-defined]
             self.action_edit_grant()
 
     @textual.work
@@ -140,7 +139,7 @@ class RoleViewScreen(textual.screen.Screen[None]):
             self._member_names.pop(index)
             await self._populate_members()
         elif focused.id == "grants":
-            table = self.query_one("#grants", textual.widgets.DataTable)
+            table = self.query_one("#grants", textual.widgets.DataTable[str])
             if not self._grant_list:
                 return
             self._grant_list.pop(table.cursor_row)
@@ -148,7 +147,7 @@ class RoleViewScreen(textual.screen.Screen[None]):
 
     @textual.work
     async def action_edit_grant(self) -> None:
-        table = self.query_one("#grants", textual.widgets.DataTable)
+        table = self.query_one("#grants", textual.widgets.DataTable[str])
         if not self._grant_list:
             return
         index = table.cursor_row

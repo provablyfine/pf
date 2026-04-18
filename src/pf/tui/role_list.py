@@ -61,7 +61,7 @@ class RoleListScreen(base.Screen):
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
-        table = self.query_one(textual.widgets.DataTable)
+        table = self.query_one(textual.widgets.DataTable[str])
         table.add_columns("Name", "Description", "Members", "Grants")
         self._roles = (await self._auth.list_roles()).roles
         self._populate_table(table)
@@ -69,9 +69,9 @@ class RoleListScreen(base.Screen):
     @textual.work
     async def on_screen_resume(self) -> None:
         self._roles = (await self._auth.list_roles()).roles
-        self._populate_table(self.query_one(textual.widgets.DataTable))
+        self._populate_table(self.query_one(textual.widgets.DataTable[str]))
 
-    def _populate_table(self, table: textual.widgets.DataTable) -> None:
+    def _populate_table(self, table: textual.widgets.DataTable[str]) -> None:
         table.clear(columns=False)
         for role in self._roles:
             table.add_row(
@@ -88,7 +88,7 @@ class RoleListScreen(base.Screen):
     def action_view_role(self) -> None:
         if not self._roles:
             return
-        table = self.query_one(textual.widgets.DataTable)
+        table = self.query_one(textual.widgets.DataTable[str])
         role = self._roles[table.cursor_row]
         self.app.push_screen(role_view.RoleViewScreen(self._auth, role))
 
@@ -99,7 +99,7 @@ class RoleListScreen(base.Screen):
             return
         role = await self._auth.create_role(name, "")
         self._roles.append(role)
-        table = self.query_one(textual.widgets.DataTable)
+        table = self.query_one(textual.widgets.DataTable[str])
         self._populate_table(table)
         table.move_cursor(row=len(self._roles) - 1)
         self.app.push_screen(role_view.RoleViewScreen(self._auth, role))
@@ -108,7 +108,7 @@ class RoleListScreen(base.Screen):
     async def action_delete_role(self) -> None:
         if not self._roles:
             return
-        table = self.query_one(textual.widgets.DataTable)
+        table = self.query_one(textual.widgets.DataTable[str])
         index = table.cursor_row
         role = self._roles[index]
         await self._auth.delete_role(role.id)
