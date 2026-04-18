@@ -217,7 +217,7 @@ class _MuxBase(abc.ABC):
         """
         remaining = data
         while True:
-            outdata: bytes = b""
+            outdata = b""
             done = False
 
             async with self._cond:
@@ -263,7 +263,7 @@ class _MuxBase(abc.ABC):
         for ch in list(self._channels.values()):
             await ch.close()
 
-        outdata: bytes = b""
+        outdata = b""
         async with self._cond:
             try:
                 self._h2.close_connection()
