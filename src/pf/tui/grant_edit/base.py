@@ -79,16 +79,6 @@ class _Field:
         )
 
 
-def _resolve_update_perm(update: dict | None, field: str) -> bool:
-    """Return the value of an update permission field.
-
-    When update is None it means all update permissions are granted (wildcard).
-    """
-    if update is None:
-        return True
-    return update[field]
-
-
 def new_grant(grant_type: str) -> schemas.Grant:
     match grant_type:
         case "role":

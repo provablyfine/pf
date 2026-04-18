@@ -6,7 +6,7 @@ import textual_autocomplete
 from ... import client
 from ...client import schemas
 from .. import auto_complete, checkbox_input
-from .base import _GrantEditWidget, _resolve_update_perm
+from .base import _GrantEditWidget
 
 
 class BoundaryGrantEditWidget(_GrantEditWidget):
@@ -40,10 +40,10 @@ class BoundaryGrantEditWidget(_GrantEditWidget):
             yield textual.widgets.SelectionList(
                 ("Create", "create", p.create),
                 ("Read", "read", p.read),
-                ("Update name", "update.name", _resolve_update_perm(update.model_dump() if update else None, "name")),
-                ("Update description", "update.description", _resolve_update_perm(update.model_dump() if update else None, "description")),
-                ("Update ceiling list", "update.ceiling_list", _resolve_update_perm(update.model_dump() if update else None, "ceiling_list")),
-                ("Update denied list", "update.denied_list", _resolve_update_perm(update.model_dump() if update else None, "denied_list")),
+                ("Update name", "update.name", True if update is None else update.name),
+                ("Update description", "update.description", True if update is None else update.description),
+                ("Update ceiling list", "update.ceiling_list", True if update is None else update.ceiling_list),
+                ("Update denied list", "update.denied_list", True if update is None else update.denied_list),
                 ("Delete", "delete", p.delete),
                 compact=True,
             )

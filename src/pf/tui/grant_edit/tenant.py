@@ -1,12 +1,12 @@
 import textual
 import textual.app
+import textual.widgets
 import textual.containers
 import textual_autocomplete
 
 from ... import client
-from ...client import schemas
 from .. import auto_complete, checkbox_input
-from .base import _GrantEditWidget, _resolve_update_perm
+from .base import _GrantEditWidget
 
 
 class TenantGrantEditWidget(_GrantEditWidget):
@@ -16,7 +16,7 @@ class TenantGrantEditWidget(_GrantEditWidget):
     }
     """
 
-    def __init__(self, auth: client.aio.Client, grant: schemas.TenantGrant):
+    def __init__(self, auth: client.aio.Client, grant: client.schemas.TenantGrant):
         super().__init__()
         self._auth = auth
         self._grant = grant
@@ -40,8 +40,8 @@ class TenantGrantEditWidget(_GrantEditWidget):
             yield textual.widgets.SelectionList(
                 ("Create", "create", p.create),
                 ("Read", "read", p.read),
-                ("Update display name", "update.display_name", _resolve_update_perm(update.model_dump() if update else None, "display_name")),
-                ("Update is enabled", "update.is_enabled", _resolve_update_perm(update.model_dump() if update else None, "is_enabled")),
+                ("Update display name", "update.display_name", True if update is None else update.display_name),
+                ("Update is enabled", "update.is_enabled", True if update is None else update.is_enabled),
                 ("Delete", "delete", p.delete),
                 compact=True,
             )
@@ -51,19 +51,19 @@ class TenantGrantEditWidget(_GrantEditWidget):
         candidates = [textual_autocomplete.DropdownItem(main=str(t.id)) for t in tenants_raw]
         self.query_one("#filter-id", checkbox_input.CheckboxInput).set_candidates(candidates)
 
-    def get_grant_data(self) -> schemas.TenantGrant:
+    def get_grant_data(self) -> client.schemas.TenantGrant:
         selected = set(self.query_one(textual.widgets.SelectionList).selected)
         update_dict = {
             "display_name": "update.display_name" in selected,
             "is_enabled": "update.is_enabled" in selected,
         }
-        return schemas.TenantGrant(
+        return client.schemas.TenantGrant(
             type="tenant",
-            filter=schemas.TenantFilter(id=self._read_field("#filter-id").int_filter()),
-            permission=schemas.TenantPermission(
+            filter=client.schemas.TenantFilter(id=self._read_field("#filter-id").int_filter()),
+            permission=client.schemas.TenantPermission(
                 create="create" in selected,
                 read="read" in selected,
-                update=schemas.TenantUpdatePermission(**update_dict),
+                update=client.schemas.TenantUpdatePermission(**update_dict),
                 delete="delete" in selected,
             ),
         )

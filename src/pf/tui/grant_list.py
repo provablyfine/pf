@@ -95,7 +95,7 @@ class GrantListScreen(textual.screen.Screen[None]):
     async def _save_grants(self) -> bool:
         await self._auth.update_role(
             self._role_id,
-            grant_list=[client.schemas.validate_grant(g) for g in self._grant_list],
+            grant_list=self._grant_list,
         )
         return True
 

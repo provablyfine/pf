@@ -121,10 +121,9 @@ class RoleViewScreen(textual.screen.Screen[None]):
             if grant_type is None:
                 return
             new_grant = grant_edit.new_grant(grant_type)
-            updated_grant_dict = await self.app.push_screen_wait(grant_edit.GrantEditScreen(self._auth, new_grant))
-            if updated_grant_dict is None:
+            updated_grant = await self.app.push_screen_wait(grant_edit.GrantEditScreen(self._auth, new_grant))
+            if updated_grant is None:
                 return
-            updated_grant = client.schemas.validate_grant(updated_grant_dict)
             self._grant_list.append(updated_grant)
             self._populate_grants()
 
@@ -153,12 +152,12 @@ class RoleViewScreen(textual.screen.Screen[None]):
         if not self._grant_list:
             return
         index = table.cursor_row
-        updated_grant_dict = await self.app.push_screen_wait(
-            grant_edit.GrantEditScreen(self._auth, self._grant_list[index].model_dump())
+        updated_grant = await self.app.push_screen_wait(
+            grant_edit.GrantEditScreen(self._auth, self._grant_list[index])
         )
-        if updated_grant_dict is None:
+        if updated_grant is None:
             return
-        self._grant_list[index] = client.schemas.validate_grant(updated_grant_dict)
+        self._grant_list[index] = updated_grant
         self._populate_grants()
         self.query_one("#grants").focus()
 

@@ -1,5 +1,5 @@
 # Re-export public API
-from .base import _Field, _GrantEditWidget, _resolve_update_perm, new_grant
+from .base import _Field, _GrantEditWidget, new_grant
 from .boundary import BoundaryGrantEditWidget
 from .identity import IdentityGrantEditWidget
 from .role import RoleGrantEditWidget
@@ -22,6 +22,5 @@ __all__ = [
     "TenantGrantEditWidget",
     "_Field",
     "_GrantEditWidget",
-    "_resolve_update_perm",
     "new_grant",
 ]

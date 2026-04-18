@@ -1,6 +1,7 @@
 import pytest
 
 from . import grant_edit
+from ..client import schemas
 
 _Field = grant_edit._Field
 
@@ -16,8 +17,8 @@ def test_field_tag_filter_inactive() -> None:
 
 def test_field_tag_filter_active() -> None:
     assert _Field(active=True, value="env=prod region=us").tag_filter() == [
-        {"name": "env", "value": "prod"},
-        {"name": "region", "value": "us"},
+        schemas.TagNameValue(name="env", value="prod"),
+        schemas.TagNameValue(name="region", value="us"),
     ]
 
 
@@ -35,7 +36,9 @@ def test_field_tag_perm_inactive() -> None:
 
 
 def test_field_tag_perm_active() -> None:
-    assert _Field(active=True, value="env=prod").tag_perm() == [{"name": "env", "value": "prod"}]
+    assert _Field(active=True, value="env=prod").tag_perm() == [
+        schemas.TagNameValue(name="env", value="prod")
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -108,10 +111,10 @@ def test_field_tag_name_value_filter_inactive() -> None:
 
 
 def test_field_tag_name_value_filter_active() -> None:
-    assert _Field(active=True, value="env=prod").tag_name_value_filter() == {
-        "name": "env",
-        "value": "prod",
-    }
+    assert _Field(active=True, value="env=prod").tag_name_value_filter() == schemas.TagNameValue(
+        name="env",
+        value="prod",
+    )
 
 
 def test_field_tag_name_value_filter_no_equals() -> None:
@@ -119,10 +122,10 @@ def test_field_tag_name_value_filter_no_equals() -> None:
 
 
 def test_field_tag_name_value_filter_multiple_uses_first() -> None:
-    assert _Field(active=True, value="a=1 b=2").tag_name_value_filter() == {
-        "name": "a",
-        "value": "1",
-    }
+    assert _Field(active=True, value="a=1 b=2").tag_name_value_filter() == schemas.TagNameValue(
+        name="a",
+        value="1",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -154,7 +157,9 @@ def test_field_from_tag_list_none() -> None:
 
 
 def test_field_from_tag_list_values() -> None:
-    f = _Field.from_tag_list([{"name": "env", "value": "prod"}, {"name": "region", "value": "us"}])
+    f = _Field.from_tag_list(
+        [schemas.TagNameValue(name="env", value="prod"), schemas.TagNameValue(name="region", value="us")]
+    )
     assert f.active is True
     assert f.value == "env=prod region=us"
 
@@ -193,22 +198,6 @@ def test_field_from_invite_list_values() -> None:
 
 
 # ---------------------------------------------------------------------------
-# _resolve_update_perm
-# ---------------------------------------------------------------------------
-
-
-def test_resolve_update_perm_wildcard() -> None:
-    assert grant_edit._resolve_update_perm(None, "name") is True
-    assert grant_edit._resolve_update_perm(None, "description") is True
-
-
-def test_resolve_update_perm_explicit() -> None:
-    update = {"name": True, "description": False}
-    assert grant_edit._resolve_update_perm(update, "name") is True
-    assert grant_edit._resolve_update_perm(update, "description") is False
-
-
-# ---------------------------------------------------------------------------
 # new_grant
 # ---------------------------------------------------------------------------
 
@@ -219,6 +208,6 @@ def test_resolve_update_perm_explicit() -> None:
 )
 def test_new_grant_structure(grant_type: str) -> None:
     g = grant_edit.new_grant(grant_type)
-    assert g["type"] == grant_type
-    assert "filter" in g
-    assert "permission" in g
+    assert g.type == grant_type
+    assert g.filter is not None
+    assert g.permission is not None
