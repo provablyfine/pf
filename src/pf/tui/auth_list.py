@@ -122,6 +122,9 @@ class AuthListScreen(base.Screen):
         ("escape", "app.pop_screen", "Back"),
     ]
 
+    class _StrDataTable(textual.widgets.DataTable[str]):
+        pass
+
     def __init__(self, auth: client.aio.Client) -> None:
         super().__init__()
         self._auth = auth
@@ -129,11 +132,11 @@ class AuthListScreen(base.Screen):
 
     def compose(self) -> textual.app.ComposeResult:
         yield header.AppHeader()
-        yield textual.widgets.DataTable(cursor_type="row")
+        yield self._StrDataTable(cursor_type="row")
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
-        table = self.query_one(textual.widgets.DataTable)
+        table = self.query_one(self._StrDataTable)
         table.add_columns("Name", "Type", "Enabled")
         self._auths = (await self._auth.list_auths()).auths
         self._populate_table(table)
@@ -141,9 +144,9 @@ class AuthListScreen(base.Screen):
     @textual.work
     async def on_screen_resume(self) -> None:
         self._auths = (await self._auth.list_auths()).auths
-        self._populate_table(self.query_one(textual.widgets.DataTable))
+        self._populate_table(self.query_one(self._StrDataTable))
 
-    def _populate_table(self, table: textual.widgets.DataTable) -> None:
+    def _populate_table(self, table: "AuthListScreen._StrDataTable") -> None:
         table.clear(columns=False)
         for a in self._auths:
             table.add_row(a.name, a.config.type, str(a.is_enabled))
@@ -155,7 +158,7 @@ class AuthListScreen(base.Screen):
     def action_view_auth(self) -> None:
         if not self._auths:
             return
-        table = self.query_one(textual.widgets.DataTable)
+        table = self.query_one(self._StrDataTable)
         a = self._auths[table.cursor_row]
         self.app.push_screen(auth_view.AuthViewScreen(self._auth, a))
 
@@ -186,7 +189,7 @@ class AuthListScreen(base.Screen):
                     body["name"], "", [], params["client_id"], params["client_secret"]
                 )
         self._auths.append(a)
-        table = self.query_one(textual.widgets.DataTable)
+        table = self.query_one(self._StrDataTable)
         self._populate_table(table)
         table.move_cursor(row=len(self._auths) - 1)
         self.app.push_screen(auth_view.AuthViewScreen(self._auth, a))
@@ -195,7 +198,7 @@ class AuthListScreen(base.Screen):
     async def action_delete_auth(self) -> None:
         if not self._auths:
             return
-        table = self.query_one(textual.widgets.DataTable)
+        table = self.query_one(self._StrDataTable)
         index = table.cursor_row
         a = self._auths[index]
         await self._auth.delete_auth(a.id)
