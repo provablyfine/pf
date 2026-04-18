@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import typing
 
 import textual
@@ -7,7 +9,7 @@ import textual.screen
 import textual.widgets
 
 from .. import client
-from . import grant_edit, header
+from . import base, grant_edit, header
 
 GRANT_TYPES = ["identity", "tag", "role", "boundary", "tenant", "ssh-shell", "ssh-port-forwarding", "ssh-command"]
 
@@ -60,7 +62,7 @@ class GrantTypeScreen(textual.screen.ModalScreen[str | None]):
         self.dismiss(event.item.id)
 
 
-class GrantListScreen(textual.screen.Screen[None]):
+class GrantListScreen(base.Screen):
     BINDINGS: typing.ClassVar = [
         ("escape", "app.pop_screen", "Back"),
         ("a", "add_grant", "Add"),
@@ -71,7 +73,13 @@ class GrantListScreen(textual.screen.Screen[None]):
     class _StrDataTable(textual.widgets.DataTable[str]):
         pass
 
-    def __init__(self, auth: client.aio.Client, grant_list: list, sub_title: str, role_id: int) -> None:
+    def __init__(
+        self,
+        auth: client.aio.Client,
+        grant_list: list[client.schemas.Grant],
+        sub_title: str,
+        role_id: int,
+    ) -> None:
         super().__init__()
         self._auth = auth
         self._grant_list = grant_list
@@ -89,7 +97,7 @@ class GrantListScreen(textual.screen.Screen[None]):
         table.add_columns("Type", "Filter", "Permissions")
         self._populate_table(table)
 
-    def _populate_table(self, table: "GrantListScreen._StrDataTable") -> None:
+    def _populate_table(self, table: GrantListScreen._StrDataTable) -> None:
         table.clear(columns=False)
         for grant in self._grant_list:
             grant_type, filter_str, perm_str = client.grant.to_text(grant)
