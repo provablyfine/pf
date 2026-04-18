@@ -125,8 +125,9 @@ class Client:
         name: str | None = None,
         description: str | None = None,
         is_enabled: bool | None = None,
+        tags: list[schemas.TagNameValue] | None = None,
     ) -> None:
-        return await self._run(lambda: self._sync.update_auth(id, name, description, is_enabled))
+        return await self._run(lambda: self._sync.update_auth(id, name, description, is_enabled, tags))
 
     async def delete_auth(self, id: int) -> None:
         return await self._run(lambda: self._sync.delete_auth(id))

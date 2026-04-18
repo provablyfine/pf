@@ -257,14 +257,17 @@ class Client:
         name: str | None = None,
         description: str | None = None,
         is_enabled: bool | None = None,
+        tags: list[schemas.TagNameValue] | None = None,
     ) -> None:
-        body: dict[str, str | bool] = {}
+        body: dict[str, typing.Any] = {}
         if name is not None:
             body["name"] = name
         if description is not None:
             body["description"] = description
         if is_enabled is not None:
             body["is_enabled"] = is_enabled
+        if tags is not None:
+            body["tags"] = [{"name": t.name, "value": t.value} for t in tags]
         if not body:
             raise exceptions.UI("Nothing to update")
         http = self._client.session_auth(self._client.config.session_key)

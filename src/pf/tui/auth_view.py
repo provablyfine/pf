@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import typing
 
 import textual
@@ -95,37 +97,20 @@ class AuthViewScreen(base.Screen):
         is_enabled = self.query_one("#is_enabled", textual.widgets.Checkbox).value
         tags_str = self.query_one("#tags", textual.widgets.Input).value
 
-        patch: dict = {}
-        if name != self._saved_name:
-            patch["name"] = name
-        if description != self._saved_description:
-            patch["description"] = description
-        if is_enabled != self._saved_enabled:
-            patch["is_enabled"] = is_enabled
-        if tags_str != self._saved_tags_str:
-            patch["tags"] = _str_to_tags(tags_str)
+        name_changed = name != self._saved_name
+        description_changed = description != self._saved_description
+        is_enabled_changed = is_enabled != self._saved_enabled
+        tags_changed = tags_str != self._saved_tags_str
 
-        if isinstance(self._a.config, client.schemas.OidcConfig):
-            issuer = self.query_one("#issuer", textual.widgets.Input).value
-            client_id = self.query_one("#client_id", textual.widgets.Input).value
-            client_secret = self.query_one("#client_secret", textual.widgets.Input).value
-            params_changed = issuer != self._a.config.issuer or client_id != self._a.config.client_id or client_secret
-            if params_changed:
-                oidc_params: dict = {"issuer": issuer, "client_id": client_id}
-                if client_secret:
-                    oidc_params["client_secret"] = client_secret
-                patch["oidc_params"] = oidc_params
-
-        if not patch:
+        if not (name_changed or description_changed or is_enabled_changed or tags_changed):
             self.notify("No changes")
             return
 
         await self._auth.update_auth(
             self._a.id,
-            name=patch.get("name"),
-            description=patch.get("description"),
-            is_enabled=patch.get("is_enabled"),
-            tags=patch.get("tags"),
-            oidc_params=patch.get("oidc_params"),
+            name=name if name_changed else None,
+            description=description if description_changed else None,
+            is_enabled=is_enabled if is_enabled_changed else None,
+            tags=_str_to_tags(tags_str) if tags_changed else None,
         )
         self.app.pop_screen()
