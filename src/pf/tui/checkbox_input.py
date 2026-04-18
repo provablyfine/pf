@@ -85,7 +85,7 @@ class CheckboxInput(textual.widget.Widget):
             self._autocomplete.remove()
             self._autocomplete = None
 
-    def set_candidates(self, candidates: list) -> None:
+    def set_candidates(self, candidates: list[textual_autocomplete.DropdownItem]) -> None:
         if self._autocomplete is not None:
             self._autocomplete.candidates = candidates
 
