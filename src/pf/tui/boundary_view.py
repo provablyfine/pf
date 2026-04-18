@@ -1,17 +1,28 @@
+from __future__ import annotations
+
 import typing
 
 import textual
 import textual.app
 import textual.containers
 import textual.events
-import textual.screen
 import textual.widgets
 
 from .. import client
-from . import grant_edit, grant_list, header
+from . import base, grant_edit, grant_list, header
 
 
-class BoundaryViewScreen(textual.screen.Screen[None]):
+class _DeniedTable(textual.widgets.DataTable[str]):
+    class RowSelected(textual.widgets.DataTable.RowSelected):
+        data_table: _DeniedTable
+
+
+class _CeilingTable(textual.widgets.DataTable[str]):
+    class RowSelected(textual.widgets.DataTable.RowSelected):
+        data_table: _CeilingTable
+
+
+class BoundaryViewScreen(base.Screen):
     BINDINGS: typing.ClassVar = [
         ("ctrl+s", "save", "Save"),
         ("escape", "app.pop_screen", "Back"),
@@ -38,14 +49,12 @@ class BoundaryViewScreen(textual.screen.Screen[None]):
         super().__init__()
         self._auth = auth
         self._boundary = boundary
-        self._denied_list: list = list(boundary.denied_list)
-        self._ceiling_list: list | None = list(boundary.ceiling_list) if boundary.ceiling_list is not None else None
+        self._denied_list = list(boundary.denied_list)
+        self._ceiling_list = list(boundary.ceiling_list) if boundary.ceiling_list is not None else None
         self._saved_name: str = boundary.name
         self._saved_description: str = boundary.description
-        self._saved_denied_list: list = list(boundary.denied_list)
-        self._saved_ceiling_list: list | None = (
-            list(boundary.ceiling_list) if boundary.ceiling_list is not None else None
-        )
+        self._saved_denied_list = list(boundary.denied_list)
+        self._saved_ceiling_list = list(boundary.ceiling_list) if boundary.ceiling_list is not None else None
 
     def compose(self) -> textual.app.ComposeResult:
         yield header.AppHeader()
@@ -58,18 +67,18 @@ class BoundaryViewScreen(textual.screen.Screen[None]):
                 yield textual.widgets.Input(self._boundary.description, id="description", compact=True)
             with textual.containers.Container(classes="field") as container:
                 container.border_title = "Denied grants"
-                yield textual.widgets.DataTable(id="denied", cursor_type="row")
+                yield _DeniedTable(id="denied", cursor_type="row")
                 yield textual.widgets.Label("No denied grants — add one with 'a'", id="denied-placeholder")
             with textual.containers.Container(classes="field") as container:
                 container.border_title = "Ceiling grants"
-                yield textual.widgets.DataTable(id="ceiling", cursor_type="row")
+                yield _CeilingTable(id="ceiling", cursor_type="row")
                 yield textual.widgets.Label("No ceiling grants — add one with 'a'", id="ceiling-placeholder")
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
         self.sub_title = f"Boundaries > {self._boundary.name}"
-        self.query_one("#denied", textual.widgets.DataTable).add_columns("Type", "Filter", "Permissions")
-        self.query_one("#ceiling", textual.widgets.DataTable).add_columns("Type", "Filter", "Permissions")
+        self.query_one("#denied", _DeniedTable).add_columns("Type", "Filter", "Permissions")
+        self.query_one("#ceiling", _CeilingTable).add_columns("Type", "Filter", "Permissions")
         self._populate_denied()
         self._populate_ceiling()
 
@@ -80,7 +89,7 @@ class BoundaryViewScreen(textual.screen.Screen[None]):
         self.refresh_bindings()
 
     def _populate_denied(self) -> None:
-        table = self.query_one("#denied", textual.widgets.DataTable)
+        table = self.query_one("#denied", _DeniedTable)
         table.clear(columns=False)
         for g in self._denied_list:
             type_str, filter_str, perm_str = client.grant.to_text(g)
@@ -88,7 +97,7 @@ class BoundaryViewScreen(textual.screen.Screen[None]):
         self.query_one("#denied-placeholder").display = not bool(self._denied_list)
 
     def _populate_ceiling(self) -> None:
-        table = self.query_one("#ceiling", textual.widgets.DataTable)
+        table = self.query_one("#ceiling", _CeilingTable)
         table.clear(columns=False)
         ceiling = self._ceiling_list or []
         for g in ceiling:
@@ -96,12 +105,13 @@ class BoundaryViewScreen(textual.screen.Screen[None]):
             table.add_row(type_str, filter_str, perm_str)
         self.query_one("#ceiling-placeholder").display = not bool(ceiling)
 
-    @textual.on(textual.widgets.DataTable.RowSelected)
-    def _on_row_selected(self, event: textual.widgets.DataTable.RowSelected) -> None:
-        if event.data_table.id == "denied":
-            self._edit_grant_in("denied")
-        elif event.data_table.id == "ceiling":
-            self._edit_grant_in("ceiling")
+    @textual.on(_DeniedTable.RowSelected)
+    def _on_denied_row_selected(self) -> None:
+        self._edit_grant_in("denied")
+
+    @textual.on(_CeilingTable.RowSelected)
+    def _on_ceiling_row_selected(self) -> None:
+        self._edit_grant_in("ceiling")
 
     @textual.work
     async def action_add(self) -> None:
@@ -131,13 +141,13 @@ class BoundaryViewScreen(textual.screen.Screen[None]):
         if focused is None:
             return
         if focused.id == "denied":
-            table = self.query_one("#denied", textual.widgets.DataTable)
+            table = self.query_one("#denied", _DeniedTable)
             if not self._denied_list:
                 return
             self._denied_list.pop(table.cursor_row)
             self._populate_denied()
         elif focused.id == "ceiling":
-            table = self.query_one("#ceiling", textual.widgets.DataTable)
+            table = self.query_one("#ceiling", _CeilingTable)
             if not self._ceiling_list:
                 return
             self._ceiling_list.pop(table.cursor_row)
@@ -145,8 +155,12 @@ class BoundaryViewScreen(textual.screen.Screen[None]):
 
     @textual.work
     async def _edit_grant_in(self, table_id: str) -> None:
-        table = self.query_one(f"#{table_id}", textual.widgets.DataTable)
-        grant_list_ref = self._denied_list if table_id == "denied" else (self._ceiling_list or [])
+        if table_id == "denied":
+            table = self.query_one("#denied", _DeniedTable)
+            grant_list_ref = self._denied_list
+        else:
+            table = self.query_one("#ceiling", _CeilingTable)
+            grant_list_ref = self._ceiling_list or []
         if not grant_list_ref:
             return
         index = table.cursor_row
@@ -165,25 +179,20 @@ class BoundaryViewScreen(textual.screen.Screen[None]):
         name = self.query_one("#name", textual.widgets.Input).value
         description = self.query_one("#description", textual.widgets.Input).value
 
-        patch: dict = {}
-        if name != self._saved_name:
-            patch["name"] = name
-        if description != self._saved_description:
-            patch["description"] = description
-        if self._denied_list != self._saved_denied_list:
-            patch["denied_list"] = self._denied_list
-        if self._ceiling_list != self._saved_ceiling_list:
-            patch["ceiling_list"] = self._ceiling_list
+        name_changed = name != self._saved_name
+        description_changed = description != self._saved_description
+        denied_changed = self._denied_list != self._saved_denied_list
+        ceiling_changed = self._ceiling_list != self._saved_ceiling_list
 
-        if not patch:
+        if not (name_changed or description_changed or denied_changed or ceiling_changed):
             self.notify("No changes")
             return
 
         await self._auth.update_boundary(
             self._boundary.id,
-            name=patch.get("name"),
-            description=patch.get("description"),
-            denied_list=patch.get("denied_list"),
-            ceiling_list=patch.get("ceiling_list"),
+            name=name if name_changed else None,
+            description=description if description_changed else None,
+            denied_list=self._denied_list if denied_changed else None,
+            ceiling_list=self._ceiling_list if ceiling_changed else None,
         )
         self.app.pop_screen()
