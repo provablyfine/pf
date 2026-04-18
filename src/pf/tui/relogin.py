@@ -9,7 +9,6 @@ import webbrowser
 import requests
 import textual
 import textual.app
-import textual.screen
 import textual.widgets
 
 from .. import base64url, client, jwk, ssh
