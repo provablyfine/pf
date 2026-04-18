@@ -14,36 +14,28 @@ def _none(f: typing.Callable[[typing.Any], str]) -> typing.Callable[[typing.Any]
     return wrapper
 
 
-def _get_attr(obj: typing.Any, name: str) -> typing.Any:
-    """Get attribute from object or dict."""
-    if isinstance(obj, dict):
-        return obj.get(name)  # type: ignore
-    return getattr(obj, name)
-
-
 def _get_nested(obj: typing.Any, *names: str) -> typing.Any:
-    """Get nested attribute from object or dict."""
+    """Get nested attribute from object."""
     result = obj
     for name in names:
-        result = _get_attr(result, name)
+        result = getattr(result, name)
         if result is None:
             return None
     return result
 
 
 def _bool(p: typing.Any, name: str) -> list[str]:
-    if not _get_attr(p, name):
+    if not getattr(p, name):
         return []
     return [name]
 
 
 def _update(p: typing.Any) -> list[str]:
-    update = _get_attr(p, "update")
+    update = getattr(p, "update")
     if update is None:
         return ["update.*"]
     output: list[str] = []
-    items = update.model_dump().items() if hasattr(update, "model_dump") else update.items()
-    for k, v in items:
+    for k, v in update.model_dump().items():
         if not v:
             continue
         output.append(f"update.{k}")
@@ -51,20 +43,18 @@ def _update(p: typing.Any) -> list[str]:
 
 
 def _name_value(nv: typing.Any) -> str:
-    if isinstance(nv, dict):
-        return f"{nv['name']}={nv['value']}"
     return f"{nv.name}={nv.value}"
 
 
 def _str(d: typing.Any, name: str) -> list[str]:
-    val = _get_attr(d, name)
+    val = getattr(d, name)
     if val is None:
         return []
     return [f"{name}:{val}"]
 
 
 def _filter_list(d: typing.Any, name: str, f: typing.Callable[[typing.Any], str]) -> list[str]:
-    val = _get_attr(d, name)
+    val = getattr(d, name)
     if val is None:
         return []
     if len(val) == 0:
@@ -73,7 +63,7 @@ def _filter_list(d: typing.Any, name: str, f: typing.Callable[[typing.Any], str]
 
 
 def _permission_list(d: typing.Any, name: str, f: typing.Callable[[typing.Any], str]) -> list[str]:
-    val = _get_attr(d, name)
+    val = getattr(d, name)
     if val is None:
         return [f"{name}:*"]
     if len(val) == 0:
@@ -95,7 +85,7 @@ def _tag_grant_to_text(grant: typing.Any) -> tuple[str, str, str]:
     return (
         "tag",
         _tag_filter_name_value(_get_nested(grant, "filter", "name_value")),
-        _tag_permission(_get_attr(grant, "permission")),
+        _tag_permission(getattr(grant, "permission")),
     )
 
 
@@ -113,7 +103,7 @@ def _role_grant_to_text(grant: typing.Any) -> tuple[str, str, str]:
     return (
         "role",
         _role_filter_name(_get_nested(grant, "filter", "name")),
-        _role_permission(_get_attr(grant, "permission")),
+        _role_permission(getattr(grant, "permission")),
     )
 
 
@@ -131,7 +121,7 @@ def _boundary_grant_to_text(grant: typing.Any) -> tuple[str, str, str]:
     return (
         "boundary",
         _boundary_filter_name(_get_nested(grant, "filter", "name")),
-        _boundary_permission(_get_attr(grant, "permission")),
+        _boundary_permission(getattr(grant, "permission")),
     )
 
 
@@ -157,33 +147,33 @@ def _identity_permission(p: typing.Any) -> str:
 def _identity_grant_to_text(grant: typing.Any) -> tuple[str, str, str]:
     return (
         "identity",
-        _triplet_filter(_get_attr(grant, "filter")),
-        _identity_permission(_get_attr(grant, "permission")),
+        _triplet_filter(getattr(grant, "filter")),
+        _identity_permission(getattr(grant, "permission")),
     )
 
 
 def _ssh_shell_grant_to_text(grant: typing.Any) -> tuple[str, str, str]:
-    p = _get_attr(grant, "permission")
+    p = getattr(grant, "permission")
     output: list[str] = (
         _permission_list(p, "username_list", lambda i: str(i))
         + _bool(p, "permit_agent_forwarding")
         + _bool(p, "permit_x11_forwarding")
     )
-    return "ssh-shell", _triplet_filter(_get_attr(grant, "filter")), " ".join(output)
+    return "ssh-shell", _triplet_filter(getattr(grant, "filter")), " ".join(output)
 
 
 def _ssh_port_forwarding_grant_to_text(grant: typing.Any) -> tuple[str, str, str]:
-    p = _get_attr(grant, "permission")
+    p = getattr(grant, "permission")
     output: list[str] = _permission_list(p, "username_list", lambda i: str(i))
-    return "ssh-port-forwarding", _triplet_filter(_get_attr(grant, "filter")), " ".join(output)
+    return "ssh-port-forwarding", _triplet_filter(getattr(grant, "filter")), " ".join(output)
 
 
 def _ssh_command_grant_to_text(grant: typing.Any) -> tuple[str, str, str]:
-    p = _get_attr(grant, "permission")
+    p = getattr(grant, "permission")
     output: list[str] = _permission_list(p, "username_list", lambda i: str(i)) + _permission_list(
         p, "command_list", lambda i: str(i)
     )
-    return "ssh-command", _triplet_filter(_get_attr(grant, "filter")), " ".join(output)
+    return "ssh-command", _triplet_filter(getattr(grant, "filter")), " ".join(output)
 
 
 @_none
@@ -200,7 +190,7 @@ def _tenant_grant_to_text(grant: typing.Any) -> tuple[str, str, str]:
     return (
         "tenant",
         _tenant_filter_id(_get_nested(grant, "filter", "id")),
-        _tenant_permission(_get_attr(grant, "permission")),
+        _tenant_permission(getattr(grant, "permission")),
     )
 
 
@@ -218,37 +208,29 @@ def _auth_grant_to_text(grant: typing.Any) -> tuple[str, str, str]:
     return (
         "auth",
         _auth_filter_name(_get_nested(grant, "filter", "name")),
-        _auth_permission(_get_attr(grant, "permission")),
+        _auth_permission(getattr(grant, "permission")),
     )
 
 
-def to_text(grant: schemas.Grant | dict[str, typing.Any]) -> tuple[str, str, str]:
-    # Handle both Pydantic objects and dicts
-    if isinstance(grant, dict):
-        grant_type = grant.get("type")
-    else:
-        grant_type = grant.type
-
-    match grant_type:
+def to_text(grant: schemas.Grant) -> tuple[str, str, str]:
+    match grant.type:
         case "tag":
-            return _tag_grant_to_text(grant)  # type: ignore
+            return _tag_grant_to_text(grant)
         case "role":
-            return _role_grant_to_text(grant)  # type: ignore
+            return _role_grant_to_text(grant)
         case "boundary":
-            return _boundary_grant_to_text(grant)  # type: ignore
+            return _boundary_grant_to_text(grant)
         case "identity":
-            return _identity_grant_to_text(grant)  # type: ignore
+            return _identity_grant_to_text(grant)
         case "ssh-shell":
-            return _ssh_shell_grant_to_text(grant)  # type: ignore
+            return _ssh_shell_grant_to_text(grant)
         case "ssh-port-forwarding":
-            return _ssh_port_forwarding_grant_to_text(grant)  # type: ignore
+            return _ssh_port_forwarding_grant_to_text(grant)
         case "ssh-command":
-            return _ssh_command_grant_to_text(grant)  # type: ignore
+            return _ssh_command_grant_to_text(grant)
         case "tenant":
-            return _tenant_grant_to_text(grant)  # type: ignore
+            return _tenant_grant_to_text(grant)
         case "auth":
-            return _auth_grant_to_text(grant)  # type: ignore
+            return _auth_grant_to_text(grant)
         case "invalid":
             return "invalid", "!", "!"
-        case _:
-            raise AssertionError("unreachable")
