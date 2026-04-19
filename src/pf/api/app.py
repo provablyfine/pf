@@ -120,13 +120,15 @@ def create(conf: config.Config) -> fastapi.FastAPI:
     fastapi_app = fastapi.FastAPI(lifespan=lifespan, docs_url="/docs", redoc_url="/redoc")
 
     async def problem_exception_handler(
-        request: fastapi.requests.Request, exc: responses.ProblemHTTPException
+        request: fastapi.requests.Request, exc: Exception
     ) -> fastapi.responses.Response:
+        assert isinstance(exc, responses.ProblemHTTPException)
         return exc.response
 
     async def validation_error_handler(
-        request: fastapi.requests.Request, exc: pydantic.ValidationError
+        request: fastapi.requests.Request, exc: Exception
     ) -> fastapi.responses.Response:
+        assert isinstance(exc, pydantic.ValidationError)
         assert len(exc.errors()) > 0
         error = exc.errors()[0]
         return responses.problem_response(
@@ -136,8 +138,9 @@ def create(conf: config.Config) -> fastapi.FastAPI:
         )
 
     async def request_validation_error_handler(
-        request: fastapi.requests.Request, exc: fastapi.exceptions.RequestValidationError
+        request: fastapi.requests.Request, exc: Exception
     ) -> fastapi.responses.Response:
+        assert isinstance(exc, fastapi.exceptions.RequestValidationError)
         assert len(exc.errors()) > 0
         error = exc.errors()[0]
         return responses.problem_response(
@@ -154,9 +157,9 @@ def create(conf: config.Config) -> fastapi.FastAPI:
         debug_url = request.app.state.config.base_url + debug_path
         return responses.problem_response(status_code=500, title="Internal Server Error", instance=debug_url)
 
-    fastapi_app.add_exception_handler(responses.ProblemHTTPException, problem_exception_handler)  # type: ignore[arg-type]
-    fastapi_app.add_exception_handler(pydantic.ValidationError, validation_error_handler)  # type: ignore[arg-type]
-    fastapi_app.add_exception_handler(fastapi.exceptions.RequestValidationError, request_validation_error_handler)  # type: ignore[arg-type]
+    fastapi_app.add_exception_handler(responses.ProblemHTTPException, problem_exception_handler)
+    fastapi_app.add_exception_handler(pydantic.ValidationError, validation_error_handler)
+    fastapi_app.add_exception_handler(fastapi.exceptions.RequestValidationError, request_validation_error_handler)
     fastapi_app.add_exception_handler(Exception, generic_exception_handler)
 
     # Middleware added in reverse order: last added = outermost
