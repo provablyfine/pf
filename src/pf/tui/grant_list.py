@@ -100,8 +100,8 @@ class GrantListScreen(base.Screen):
     def _populate_table(self, table: GrantListScreen._StrDataTable) -> None:
         table.clear(columns=False)
         for grant in self._grant_list:
-            grant_type, filter_str, perm_str = client.grant.to_text(grant)
-            table.add_row(grant_type, filter_str, perm_str)
+            grant_text = grant.to_text()
+            table.add_row(grant_text.type, grant_text.filter, grant_text.permission)
 
     async def _save_grants(self) -> bool:
         await self._auth.update_role(

@@ -92,8 +92,8 @@ class BoundaryViewScreen(base.Screen):
         table = self.query_one("#denied", _DeniedTable)
         table.clear(columns=False)
         for g in self._denied_list:
-            type_str, filter_str, perm_str = client.grant.to_text(g)
-            table.add_row(type_str, filter_str, perm_str)
+            grant_text = g.to_text()
+            table.add_row(grant_text.type, grant_text.filter, grant_text.permission)
         self.query_one("#denied-placeholder").display = not bool(self._denied_list)
 
     def _populate_ceiling(self) -> None:
@@ -101,8 +101,8 @@ class BoundaryViewScreen(base.Screen):
         table.clear(columns=False)
         ceiling = self._ceiling_list or []
         for g in ceiling:
-            type_str, filter_str, perm_str = client.grant.to_text(g)
-            table.add_row(type_str, filter_str, perm_str)
+            grant_text = g.to_text()
+            table.add_row(grant_text.type, grant_text.filter, grant_text.permission)
         self.query_one("#ceiling-placeholder").display = not bool(ceiling)
 
     @textual.on(_DeniedTable.RowSelected)

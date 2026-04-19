@@ -99,8 +99,8 @@ class RoleViewScreen(base.Screen):
         table = self.query_one("#grants", _GrantsTable)
         table.clear(columns=False)
         for g in self._grant_list:
-            type_str, filter_str, perm_str = client.grant.to_text(g)
-            table.add_row(type_str, filter_str, perm_str)
+            grant_text = g.to_text()
+            table.add_row(grant_text.type, grant_text.filter, grant_text.permission)
         self.query_one("#grants-placeholder").display = not bool(self._grant_list)
 
     @textual.on(_GrantsTable.RowSelected)

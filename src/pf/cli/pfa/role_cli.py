@@ -66,10 +66,10 @@ def _role_read_function(args: argparse.Namespace) -> None:
             for m in role.member_list:
                 rows.append(["member", m.name])
             for g in role.grant_list:
-                type_text, filter_text, perm_text = client.grant.to_text(g)
-                rows.append(["grant", f"type:       {type_text}"])
-                rows.append(["", f"filter:     {filter_text}"])
-                rows.append(["", f"permission: {perm_text}"])
+                grant_text = g.to_text()
+                rows.append(["grant", f"type:       {grant_text.type}"])
+                rows.append(["", f"filter:     {grant_text.filter}"])
+                rows.append(["", f"permission: {grant_text.permission}"])
             output = tabulate.tabulate(rows, tablefmt="plain")
         case _:
             assert False
