@@ -16,6 +16,8 @@ import requests
 
 logger = logging.getLogger(__name__)
 
+pytest_plugins = ["tests.mock_oidc"]
+
 
 class Error(BaseException):
     pass
