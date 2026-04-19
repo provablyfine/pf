@@ -76,7 +76,7 @@ def read_all(**kwargs: typing.Any) -> list[Identity]:
     identity_tags = ctx.app_db.identity_tag.read_all(identity_id=identity_ids)
     tag_ids_by_identity_id: dict[int, list[int]] = {
         identity_id: [it.tag_id for it in group]
-        for identity_id, group in utils.group_by(identity_tags, key=lambda it: it.identity_id)  # type: ignore[arg-type]
+        for identity_id, group in utils.group_by(identity_tags, key=lambda it: it.identity_id)
     }
     identity_boundaries = ctx.app_db.identity_boundary.read_all(identity_id=identity_ids)
     boundary_ids_by_identity_id: dict[int, list[int]] = {
