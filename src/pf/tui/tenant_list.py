@@ -7,7 +7,7 @@ import textual.screen
 import textual.widgets
 
 from .. import client
-from . import header, base
+from . import base, header
 
 
 class _TenantCreateScreen(textual.screen.ModalScreen[dict[str, str] | None]):

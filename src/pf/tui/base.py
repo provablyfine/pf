@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-import textual.widget
-import textual.screen
 import textual.app
+import textual.screen
+import textual.widget
 import textual.worker
 
 from .. import client
+
 
 class App(textual.app.App[None]):
     def _handle_exception(self, error: Exception) -> None:

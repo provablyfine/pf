@@ -2,7 +2,6 @@ import fastapi
 
 from .. import responses
 
-
 router = fastapi.APIRouter(prefix="/debug")
 
 

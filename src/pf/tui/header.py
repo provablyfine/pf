@@ -7,6 +7,7 @@ import textual.widgets
 
 from . import base
 
+
 class _HeaderTitle(textual.widgets.Static):
     DEFAULT_CSS = """
     _HeaderTitle {
