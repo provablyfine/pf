@@ -1,7 +1,7 @@
 # NOT FOR PROD CONSUMPTION
 
-Our ambition is to build a high-quality secure product that can be self-hosted
-without too much pain. The project, in its current state, does not meet our
+Our ambition is to build a high-quality secure product that can be easily
+self-hosted. The project, in its current state, does not meet our
 security and quality bar to be deployed in production.
 
 If you do so, be warned that you will hit both functional limitations and
@@ -46,7 +46,7 @@ TOTAL                                          5167    685    87%
 
 # Licence
 
-`pf` is released under the open-source AGPLv3 licence. To summarize, its spirit, it
+`pf` is released under the open-source AGPLv3 licence. To summarize, it
 allows you to deploy and run this code for any purpose, including to make money as
 a business, provided you release any changes made to this project.
 
