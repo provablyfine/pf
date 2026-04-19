@@ -60,8 +60,9 @@ class SshD:
     container_id: str
 
 
-@pytest.fixture
-def sshd(request):
+@pytest.fixture(scope="session")
+def sshd_image():
+    """Build SSH server container image once per worker session."""
     containerfile = """
 FROM alpine:3.23
 
@@ -135,19 +136,25 @@ EOF
 
 CMD ["/bin/sh", "/run/start.sh"]
     """
-    with tempfile.NamedTemporaryFile(mode="w+") as container_file, tempfile.TemporaryDirectory() as ssh_keys_directory:
+    with tempfile.NamedTemporaryFile(mode="w+") as container_file:
         container_file.write(containerfile)
         container_file.flush()
-
-        # Make sure "nobody" can read this directory
-        fd = os.open(ssh_keys_directory, 0)
-        os.chmod(fd, 0o755)
-        os.close(fd)
 
         stdout = _run(["podman", "build", "--quiet", "--file", container_file.name, tld()])
         image_id = stdout.strip("\n")
         if "\n" in image_id:
             assert False, image_id
+    return image_id
+
+
+@pytest.fixture
+def sshd(request, sshd_image):
+    with tempfile.TemporaryDirectory() as ssh_keys_directory:
+        # Make sure "nobody" can read this directory
+        fd = os.open(ssh_keys_directory, 0)
+        os.chmod(fd, 0o755)
+        os.close(fd)
+
         stdout = _run(
             [
                 "podman",
@@ -157,7 +164,7 @@ CMD ["/bin/sh", "/run/start.sh"]
                 "--publish-all",
                 "--volume",
                 f"{ssh_keys_directory}:/etc/ssh/keys:rw",
-                image_id,
+                sshd_image,
             ]
         )
         container_id = stdout.strip("\n")
