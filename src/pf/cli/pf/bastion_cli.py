@@ -59,7 +59,7 @@ async def _register_bastion(register_url: str, token: str, local_port: int) -> N
     async with websockets.asyncio.client.connect(
         register_url,
         additional_headers=headers,
-        subprotocols=("mux-ssh",),  # type: ignore[arg-type]
+        subprotocols=[websockets.typing.Subprotocol("mux-ssh")],
     ) as ws:
         mux_client = bastion.mux.Client(ws)
         try:
@@ -138,7 +138,7 @@ async def _connect_async(url: str, token: str, hostname: str) -> None:
         connect_url,
         ssl=ssl_context,
         additional_headers=headers,
-        subprotocols=("mux-ssh",),  # type: ignore[arg-type]
+        subprotocols=[websockets.typing.Subprotocol("mux-ssh")],
     ) as ws:
         mux_client = bastion.mux.Client(ws)
         ch = await mux_client.accept_channel()
