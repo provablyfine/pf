@@ -28,13 +28,20 @@ def _parse_signature_input(signature_input: str) -> dict[str, tuple[str, http_sf
         )
     keyid_by_label: dict[str, tuple[str, http_sfv.InnerList]] = {}
     for label, v in d.items():
-        if "keyid" not in v.params:
+        if not isinstance(v, http_sfv.InnerList):
+            raise responses.ProblemHTTPException(
+                responses.problem_response(
+                    status_code=400, title="Invalid Signature-Input", detail=f"Expected inner list for {label}"
+                )
+            )
+        inner: http_sfv.InnerList = v
+        if "keyid" not in inner.params:
             raise responses.ProblemHTTPException(
                 responses.problem_response(
                     status_code=400, title="Invalid Signature-Input", detail=f"Missing keyid in {label}"
                 )
             )
-        keyid_by_label[label] = (str(v.params["keyid"]), v)  # type: ignore[arg-type]
+        keyid_by_label[label] = (str(inner.params["keyid"]), inner)  # type: ignore[arg-type]
     return keyid_by_label
 
 
@@ -46,7 +53,14 @@ def _parse_signature(signature: str) -> dict[str, bytes]:
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=400, title="Invalid Signature header", detail=str(e))
         )
-    return {label: v.value for label, v in d.items()}  # type: ignore[arg-type]
+    for label, v in d.items():
+        if not isinstance(v, http_sfv.Item):
+            raise responses.ProblemHTTPException(
+                responses.problem_response(
+                    status_code=400, title="Invalid Signature header", detail=f"Expected item for {label}"
+                )
+            )
+    return {label: v.value for label, v in d.items()}
 
 
 def _build_signature_base(
