@@ -18,6 +18,7 @@ dependencies = [
   "tabulate>=0.9.0",
   "requests>=2.32.5",
   "pydantic",
+  "textual",
   "textual-autocomplete>=4.0.6",
   "websockets>=13.0",
   "pyjwt>=2.12.1",
