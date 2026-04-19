@@ -91,7 +91,7 @@ def _register_function(args: argparse.Namespace) -> None:
     async def poll_bastions():
         while not stop_event.is_set():
             try:
-                bastions_response = sc.get_self_bastions()
+                bastions_response = sc.list_self_bastions()
                 current_bastions = {b.id: b for b in bastions_response.bastions}
 
                 token_response = sc.get_self_token("bastion")

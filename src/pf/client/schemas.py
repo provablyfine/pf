@@ -39,9 +39,7 @@ def _name_value(nv: typing.Any) -> str:
     return f"{nv.name}={nv.value}"
 
 
-def _filter_list(
-    val: list[typing.Any] | None, name: str, f: typing.Callable[[typing.Any], str]
-) -> list[str]:
+def _filter_list(val: list[typing.Any] | None, name: str, f: typing.Callable[[typing.Any], str]) -> list[str]:
     if val is None:
         return []
     if len(val) == 0:
@@ -49,9 +47,7 @@ def _filter_list(
     return [f"{name}:{','.join(f(i) for i in val)}"]
 
 
-def _permission_list(
-    val: list[typing.Any] | None, name: str, f: typing.Callable[[typing.Any], str]
-) -> list[str]:
+def _permission_list(val: list[typing.Any] | None, name: str, f: typing.Callable[[typing.Any], str]) -> list[str]:
     if val is None:
         return [f"{name}:*"]
     if len(val) == 0:
@@ -319,9 +315,8 @@ class IdentityCreatePermission(_Base):
     required_boundary_list: list[str] | None
 
     def to_text(self) -> str:
-        output: list[str] = (
-            _permission_list(self.allowed_tag_list, "allowed_tag_list", _name_value)
-            + _permission_list(self.required_boundary_list, "required_boundary_list", lambda i: str(i))
+        output: list[str] = _permission_list(self.allowed_tag_list, "allowed_tag_list", _name_value) + _permission_list(
+            self.required_boundary_list, "required_boundary_list", lambda i: str(i)
         )
         return " ".join(output)
 

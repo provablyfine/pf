@@ -42,8 +42,8 @@ class Client:
         return await self._run(lambda: self._sync.sign_host_certificates(public_keys))
 
     # Identity/Self
-    async def get_self_bastions(self) -> schemas.IdentitySelfBastionListResponse:
-        return await self._run(self._sync.get_self_bastions)
+    async def list_self_bastions(self) -> schemas.IdentitySelfBastionListResponse:
+        return await self._run(self._sync.list_self_bastions)
 
     async def get_self_token(self, service: str) -> schemas.IdentitySelfTokenResponse:
         return await self._run(lambda: self._sync.get_self_token(service))
@@ -275,14 +275,14 @@ class Client:
     async def list_public_auths(self) -> list[schemas.AuthPublicSummary]:
         return await self._run(lambda: self._sync.list_public_auths())
 
-    async def http_sig_login(
+    async def login_http_sig(
         self,
         session_public_key: dict[str, typing.Any],
         session_fingerprint: str,
     ) -> None:
-        return await self._run(lambda: self._sync.http_sig_login(session_public_key, session_fingerprint))
+        return await self._run(lambda: self._sync.login_http_sig(session_public_key, session_fingerprint))
 
-    async def oidc_login(
+    async def login_oidc(
         self,
         auth_name: str,
         id_token: str,
@@ -290,10 +290,10 @@ class Client:
         session_fingerprint: str,
     ) -> None:
         return await self._run(
-            lambda: self._sync.oidc_login(auth_name, id_token, session_public_key, session_fingerprint)
+            lambda: self._sync.login_oidc(auth_name, id_token, session_public_key, session_fingerprint)
         )
 
-    async def oauth2_login_start(
+    async def login_oauth2_start(
         self,
         auth_name: str,
         session_public_key: dict[str, typing.Any],
@@ -301,7 +301,7 @@ class Client:
         client_redirect_uri: str,
     ) -> str:
         return await self._run(
-            lambda: self._sync.oauth2_login_start(
+            lambda: self._sync.login_oauth2_start(
                 auth_name, session_public_key, session_fingerprint, client_redirect_uri
             )
         )

@@ -69,7 +69,7 @@ def oidc_env(api, mock_oidc, ssh_agent, tmp_path) -> typing.Iterator[OidcEnv]:
         session_key_file.write_bytes(session_key_obj.to_pem())
         session_fingerprint = str(session_key_file)  # Full path for http_sig_login
 
-        sc.http_sig_login(
+        sc.login_http_sig(
             session_public_key=session_key_obj.public().to_dict(),
             session_fingerprint=session_fingerprint,
         )
@@ -120,7 +120,7 @@ def test_endpoint_rs256(oidc_env: OidcEnv) -> None:
     id_token = oidc_env.mock.issue_token("user@example.com", alg="RS256")
     session_key, session_fingerprint = _create_session_key()
 
-    oidc_env.sc.oidc_login(
+    oidc_env.sc.login_oidc(
         auth_name="oidc-test",
         id_token=id_token,
         session_public_key=session_key.public().to_dict(),
@@ -133,7 +133,7 @@ def test_endpoint_es256(oidc_env: OidcEnv) -> None:
     id_token = oidc_env.mock.issue_token("user@example.com", alg="ES256")
     session_key, session_fingerprint = _create_session_key()
 
-    oidc_env.sc.oidc_login(
+    oidc_env.sc.login_oidc(
         auth_name="oidc-test",
         id_token=id_token,
         session_public_key=session_key.public().to_dict(),
@@ -147,7 +147,7 @@ def test_endpoint_expired(oidc_env: OidcEnv) -> None:
     session_key, session_fingerprint = _create_session_key()
 
     with pytest.raises(pf.client.exceptions.UI):
-        oidc_env.sc.oidc_login(
+        oidc_env.sc.login_oidc(
             auth_name="oidc-test",
             id_token=id_token,
             session_public_key=session_key.public().to_dict(),
@@ -157,13 +157,11 @@ def test_endpoint_expired(oidc_env: OidcEnv) -> None:
 
 def test_endpoint_wrong_issuer(oidc_env: OidcEnv) -> None:
     """Token with wrong issuer is rejected."""
-    id_token = oidc_env.mock.issue_token(
-        "user@example.com", issuer="https://evil.example.com"
-    )
+    id_token = oidc_env.mock.issue_token("user@example.com", issuer="https://evil.example.com")
     session_key, session_fingerprint = _create_session_key()
 
     with pytest.raises(pf.client.exceptions.UI):
-        oidc_env.sc.oidc_login(
+        oidc_env.sc.login_oidc(
             auth_name="oidc-test",
             id_token=id_token,
             session_public_key=session_key.public().to_dict(),
@@ -173,13 +171,11 @@ def test_endpoint_wrong_issuer(oidc_env: OidcEnv) -> None:
 
 def test_endpoint_wrong_audience(oidc_env: OidcEnv) -> None:
     """Token with wrong audience is rejected."""
-    id_token = oidc_env.mock.issue_token(
-        "user@example.com", audience="wrong-client"
-    )
+    id_token = oidc_env.mock.issue_token("user@example.com", audience="wrong-client")
     session_key, session_fingerprint = _create_session_key()
 
     with pytest.raises(pf.client.exceptions.UI):
-        oidc_env.sc.oidc_login(
+        oidc_env.sc.login_oidc(
             auth_name="oidc-test",
             id_token=id_token,
             session_public_key=session_key.public().to_dict(),
@@ -213,7 +209,7 @@ def test_endpoint_missing_email(oidc_env: OidcEnv) -> None:
     session_key, session_fingerprint = _create_session_key()
 
     with pytest.raises(pf.client.exceptions.UI):
-        oidc_env.sc.oidc_login(
+        oidc_env.sc.login_oidc(
             auth_name="oidc-test",
             id_token=id_token,
             session_public_key=session_key.public().to_dict(),
@@ -227,7 +223,7 @@ def test_endpoint_unknown_auth(oidc_env: OidcEnv) -> None:
     session_key, session_fingerprint = _create_session_key()
 
     with pytest.raises(pf.client.exceptions.UI):
-        oidc_env.sc.oidc_login(
+        oidc_env.sc.login_oidc(
             auth_name="no-such-auth",
             id_token=id_token,
             session_public_key=session_key.public().to_dict(),
@@ -251,7 +247,7 @@ def test_endpoint_tag_restriction_pass(oidc_env: OidcEnv) -> None:
     id_token = oidc_env.mock.issue_token("user@example.com")
     session_key, session_fingerprint = _create_session_key()
 
-    oidc_env.sc.oidc_login(
+    oidc_env.sc.login_oidc(
         auth_name="oidc-unrestricted",
         id_token=id_token,
         session_public_key=session_key.public().to_dict(),
@@ -282,7 +278,7 @@ def test_endpoint_tag_restriction_fail(oidc_env: OidcEnv) -> None:
     session_key, session_fingerprint = _create_session_key()
 
     with pytest.raises(pf.client.exceptions.UI):
-        oidc_env.sc.oidc_login(
+        oidc_env.sc.login_oidc(
             auth_name="oidc-restricted",
             id_token=id_token,
             session_public_key=session_key.public().to_dict(),

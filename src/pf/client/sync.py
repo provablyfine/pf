@@ -74,7 +74,7 @@ class Client:
             raise exceptions.UI(_problem_title(response, "Failed to sign host certificates"))
         return schemas.SshHostCertificateResponse.model_validate(response.json())
 
-    def get_self_bastions(self) -> schemas.IdentitySelfBastionListResponse:
+    def list_self_bastions(self) -> schemas.IdentitySelfBastionListResponse:
         http = self._client.session_auth(self._client.config.session_key)
         response = http.get(f"{http.directory.identity}/self/bastions")
         if response.status_code != 200:
@@ -609,14 +609,14 @@ class Client:
             raise exceptions.UI("Unable to list auth methods")
         return [schemas.AuthPublicSummary.model_validate(a) for a in response.json().get("auths", [])]
 
-    def http_sig_login(self, session_public_key: dict[str, typing.Any], session_fingerprint: str) -> None:
+    def login_http_sig(self, session_public_key: dict[str, typing.Any], session_fingerprint: str) -> None:
         """POST to /login endpoint. Caller manages session key and config updates."""
         auth = self._client.login_auth(account=self._client.config.account_key, session=session_fingerprint)
         response = auth.post(url=auth.directory.login, json={"session_public_key": session_public_key})
         if response.status_code != 204:
             raise exceptions.UI(f"Unable to login successfully: {response.text}")
 
-    def oidc_login(
+    def login_oidc(
         self, auth_name: str, id_token: str, session_public_key: dict[str, typing.Any], session_fingerprint: str
     ) -> None:
         """POST to /auth/oidc/login endpoint. Caller manages OIDC flow, session key, and config updates."""
@@ -632,7 +632,7 @@ class Client:
         if response.status_code != 204:
             raise exceptions.UI(f"Unable to login via OIDC: {response.text}")
 
-    def oauth2_login_start(
+    def login_oauth2_start(
         self,
         auth_name: str,
         session_public_key: dict[str, typing.Any],

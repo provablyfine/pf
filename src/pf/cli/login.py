@@ -44,7 +44,7 @@ def http_sig_login(c: client.Config, sc: client.sync.Client, session_key_path: s
             raise client.exceptions.UI("Unable to parse data either as PEM or SSH format")
         session_fingerprint = session_key_path
 
-    sc.http_sig_login(session_key.public().to_dict(), session_fingerprint)
+    sc.login_http_sig(session_key.public().to_dict(), session_fingerprint)
     return session_fingerprint
 
 
@@ -139,7 +139,7 @@ def oidc_login(c: client.Config, sc: client.sync.Client, auth_name: str) -> str:
     ssh_agent.add(session_key, comment="pf-session", lifetime=1800)
     session_fingerprint = session_key.public().ssh_fingerprint()
 
-    sc.oidc_login(auth_name, id_token, session_key.public().to_dict(), session_fingerprint)
+    sc.login_oidc(auth_name, id_token, session_key.public().to_dict(), session_fingerprint)
     return session_fingerprint
 
 
@@ -166,7 +166,7 @@ def oauth2_login(c: client.Config, sc: client.sync.Client, auth_name: str) -> st
     client_redirect_uri = f"http://127.0.0.1:{port}/done"
 
     # Start OAuth2 flow on server
-    auth_url = sc.oauth2_login_start(
+    auth_url = sc.login_oauth2_start(
         auth_name, session_key.public().to_dict(), session_fingerprint, client_redirect_uri
     )
 
