@@ -13,8 +13,7 @@ from . import base, grant_edit, grant_list, header, member_list
 
 
 class _GrantsTable(textual.widgets.DataTable[str]):
-    class RowSelected(textual.widgets.DataTable.RowSelected):
-        data_table: _GrantsTable
+    pass
 
 
 class RoleViewScreen(base.Screen):
@@ -105,8 +104,7 @@ class RoleViewScreen(base.Screen):
 
     @textual.on(_GrantsTable.RowSelected)
     def _on_row_selected(self, event: _GrantsTable.RowSelected) -> None:
-        if event.data_table.id == "grants":
-            self.action_edit_grant()
+        self.action_edit_grant()
 
     @textual.work
     async def action_add(self) -> None:
