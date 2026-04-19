@@ -20,6 +20,19 @@ Install pre-commit hooks locally:
 $ uv run --with pre-commit pre-commit install
 ```
 
+# Coding style
+
+Check any changes with:
+```
+uv run ruff check
+uv run ruff format
+uv run pyright
+```
+
+Most notably, all code is expected to use python type anotations for
+method/function arguments and return values. "type: ignore" is considered
+evil: avoid at all costs.
+
 # Tests
 
 We use python type hints extensively so, the first order of business is to
@@ -34,7 +47,7 @@ Both unit tests and end-to-end tests can be run with pytest:
 $ uv run pytest
 ```
 
-We regularly track code coverage of these tests. We aim for at least 85% but the
+We regularly track test code coverage. We aim for at least 85% but the
 objective is to reach 95% before we declare ourselves production ready:
 ```
 $ make cov
@@ -42,6 +55,18 @@ $ make cov
 $ make cov-report
 ...
 TOTAL                                          5167    685    87%
+```
+
+# Debugging
+
+Start the textual debugging console:
+```
+uv run --with textual-dev textual console
+```
+
+By default, the _dev_ textual app connects to the console:
+```
+./scripts/pfat
 ```
 
 # Licence
