@@ -10,7 +10,7 @@ receives channels via RequestReceived events.
 Transport: h2 binary frames are sent/received as WebSocket messages.
 
 Channel lifecycle:
-  open:  Server calls open_channel() with channel metadata as x-pf-meta header.
+  open:  Server calls open_channel() to create a new stream.
   data:  Both sides exchange DATA frames.
   close: Sender calls close(); receiver gets StreamEnded or ChannelError.
          Either side may trigger reset_stream() for abrupt termination.
@@ -21,7 +21,6 @@ Flow control is handled automatically by h2 (WINDOW_UPDATE frames).
 import abc
 import asyncio
 import dataclasses
-import json
 import logging
 import typing
 
@@ -51,17 +50,6 @@ class MuxError(Exception):
 
 class ChannelError(Exception):
     """A specific logical channel was closed or failed."""
-
-
-def _meta_from_headers(headers: typing.Any) -> dict[str, typing.Any]:
-    """Extract channel metadata from h2 request headers."""
-    for name, value in headers:
-        if name == "x-pf-meta":
-            try:
-                return json.loads(value)  # type: ignore[arg-type]
-            except Exception:
-                return {}
-    return {}
 
 
 class _Ws(abc.ABC):
@@ -122,11 +110,8 @@ class Channel:
     Do not instantiate directly — use Server.open_channel() or Client.accept_channel().
     """
 
-    def __init__(
-        self, stream_id: int, mux: "typing.Any", meta: dict[str, typing.Any] | None = None
-    ) -> None:
+    def __init__(self, stream_id: int, mux: "typing.Any") -> None:
         self.channel_id = str(stream_id)
-        self.meta = meta or {}
         self._stream_id = stream_id
         self._mux = mux
         self._rx: asyncio.Queue[bytes | _Sentinel | object] = asyncio.Queue()
@@ -353,11 +338,9 @@ class Server(_MuxBase):
             asyncio.create_task(self._reader(), name="mux-reader"),
         ]
 
-    async def open_channel(self, meta: dict[str, typing.Any] | None = None) -> Channel:
+    async def open_channel(self) -> Channel:
         """
         Open a new logical channel and notify the remote end.
-
-        Metadata is transmitted as the x-pf-meta HTTP header (JSON-encoded).
 
         Raises MuxError if the WebSocket is already closed.
         """
@@ -375,7 +358,6 @@ class Server(_MuxBase):
                     (":path", "/"),
                     (":scheme", "https"),
                     (":authority", "bastion"),
-                    ("x-pf-meta", json.dumps(meta or {})),
                 ],
             )
             channel = Channel(stream_id, self)
@@ -463,10 +445,9 @@ class Client(_MuxBase):
         """Dispatch a single h2 event. Must be called under self._cond."""
         if isinstance(event, h2.events.RequestReceived):
             stream_id = event.stream_id
-            meta = _meta_from_headers(event.headers)
             # Accept the CONNECT tunnel by sending 200 response headers.
             self._h2.send_headers(stream_id, [(":status", "200")])
-            channel = Channel(stream_id, self, meta)
+            channel = Channel(stream_id, self)
             self._channels[stream_id] = channel
             self._open_queue.put_nowait(channel)
             logger.debug("Demux: accepted channel (stream_id=%d)", stream_id)

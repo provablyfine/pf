@@ -31,11 +31,10 @@ async def pair():
 @pytest.mark.anyio
 async def test_server_open_channel(pair):
     srv, cli = pair
-    srv_ch = await srv.open_channel(meta={"name": "test-channel"})
+    srv_ch = await srv.open_channel()
     cli_ch = await cli.accept_channel()
 
     assert srv_ch.channel_id is not None
-    assert cli_ch.meta == {"name": "test-channel"}
 
 
 @pytest.mark.anyio
@@ -52,7 +51,7 @@ async def test_server_open_channel_empty_meta(pair):
     srv, cli = pair
     await srv.open_channel()
     cli_ch = await cli.accept_channel()
-    assert cli_ch.meta == {}
+    assert cli_ch.channel_id is not None
 
 
 # ---------------------------------------------------------------------------
@@ -85,7 +84,7 @@ async def test_client_sends_data_to_server(pair):
 @pytest.mark.anyio
 async def test_bidirectional_data(pair):
     srv, cli = pair
-    srv_ch = await srv.open_channel(meta={"role": "test"})
+    srv_ch = await srv.open_channel()
     cli_ch = await cli.accept_channel()
 
     await srv_ch.send(b"ping")
@@ -165,8 +164,8 @@ async def test_server_close_idempotent(pair):
 @pytest.mark.anyio
 async def test_multiple_channels(pair):
     srv, cli = pair
-    ch1 = await srv.open_channel(meta={"id": 1})
-    ch2 = await srv.open_channel(meta={"id": 2})
+    ch1 = await srv.open_channel()
+    ch2 = await srv.open_channel()
 
     cli_ch1 = await cli.accept_channel()
     cli_ch2 = await cli.accept_channel()
@@ -204,10 +203,8 @@ async def test_server_fail_on_disconnect(pair):
 @pytest.mark.anyio
 async def test_integration_full_cycle(pair):
     srv, cli = pair
-    srv_ch = await srv.open_channel(meta={"role": "test"})
+    srv_ch = await srv.open_channel()
     cli_ch = await cli.accept_channel()
-
-    assert cli_ch.meta == {"role": "test"}
 
     for i in range(8):
         await cli_ch.send(f"client message {i}".encode())
