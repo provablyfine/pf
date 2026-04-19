@@ -9,7 +9,7 @@ import requests
 
 from ... import client, log
 from .. import login
-from . import auth_cli, bastion_cli, boundary_cli, grant_cli, identity_cli, role_cli, tag_cli, tenant_cli
+from . import audit_log_cli, auth_cli, bastion_cli, boundary_cli, grant_cli, identity_cli, role_cli, tag_cli, tenant_cli
 
 _DEFAULT_CONFIG = os.path.join(os.path.expanduser("~"), ".config", "pf", "config.json")
 
@@ -137,6 +137,9 @@ def pfa():
 
     bastion_parser = subparsers.add_parser("bastion", help="View and edit bastions")
     bastion_cli.add_subparser(bastion_parser)
+
+    audit_log_parser = subparsers.add_parser("audit-log", help="View audit log")
+    audit_log_cli.add_subparser(audit_log_parser)
 
     args = parser.parse_args()
 

@@ -1,4 +1,5 @@
 from . import (
+    audit_log,
     auth_endpoint,
     auth_http_sig,
     auth_oauth2,
@@ -17,6 +18,7 @@ from . import (
 )
 
 __all__ = [
+    "audit_log",
     "auth_endpoint",
     "auth_http_sig",
     "auth_oauth2",

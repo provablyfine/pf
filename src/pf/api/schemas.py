@@ -648,6 +648,19 @@ class AuthPublicListResponse(APIBase):
     auths: list[AuthPublicSummary]
 
 
+class AuditLogEntry(APIBase):
+    id: int
+    at: int
+    level: int
+    type: str
+    by_identity_id: str | None
+    details: dict[str, typing.Any]
+
+
+class AuditLogListResponse(APIBase):
+    entries: list[AuditLogEntry] = []
+
+
 class DirectoryReadResponse(APIBase):
     initialize: str
     accept_invitation: str
@@ -663,6 +676,7 @@ class DirectoryReadResponse(APIBase):
     ssh: str
     bastion: str
     tenant: str
+    audit_log: str
 
 
 class TenantCreateRequest(APIBase):

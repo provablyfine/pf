@@ -24,6 +24,7 @@ from . import utils
         "tenant.t",
         "tenant-isolation.t",
         "auth.t",
+        "audit-log.t",
     ],
 )
 def test_pf_cram(api, filename):

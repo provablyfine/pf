@@ -1,4 +1,3 @@
-import datetime
 import json
 import typing
 
@@ -14,19 +13,13 @@ def create(key_type: app_db.SigningKeyType, crypto_key_type: jwk.KeyType, valid_
     signing_key_id = ctx.app_db.signing_key.create(
         type=key_type, serial_number=1, key=encrypted_key, valid_after=valid_after, valid_before=valid_before
     )
-    now = int(datetime.datetime.now().timestamp())
     audit_log.create(
-        level=app_db.AuditLogLevel.INFO,
-        at=now,
-        type="create-signing-key",
-        by_identity_id=None,
-        details={
-            "key_type": key_type.name,
-            "crypto_key_type": crypto_key_type.name,
-            "valid_after": valid_after,
-            "valid_before": valid_before,
-            "signing_key_id": signing_key_id,
-        },
+        "signing-key-create",
+        key_type=key_type.name,
+        crypto_key_type=crypto_key_type.name,
+        valid_after=valid_after,
+        valid_before=valid_before,
+        signing_key_id=signing_key_id,
     )
 
 
@@ -42,3 +35,4 @@ def read_all(*args: typing.Any, **kwargs: typing.Any) -> list[typing.Any]:
 
 def update(id: int, serial_number: int):
     ctx.app_db.signing_key.update(serial_number=serial_number).where(id=id)
+    audit_log.create("signing-key-update-serial", id=id, serial_number=serial_number)

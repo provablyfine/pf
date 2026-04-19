@@ -655,3 +655,28 @@ class Client:
         if response.status_code != 200:
             raise exceptions.UI(f"Unable to start OAuth2 login: {response.text}")
         return response.json()["auth_url"]
+
+    def list_audit_log(
+        self,
+        level: int | None = None,
+        object_type: str | None = None,
+        by_identity_id: str | None = None,
+        start_time: int | None = None,
+        end_time: int | None = None,
+    ) -> schemas.AuditLogListResponse:
+        params: dict[str, int | str] = {}
+        if level is not None:
+            params["level"] = level
+        if object_type is not None:
+            params["object_type"] = object_type
+        if by_identity_id is not None:
+            params["by_identity_id"] = by_identity_id
+        if start_time is not None:
+            params["start_time"] = start_time
+        if end_time is not None:
+            params["end_time"] = end_time
+        http = self._client.session_auth(self._client.config.session_key)
+        response = http.get(http.directory.audit_log, params=params)
+        if response.status_code != 200:
+            raise exceptions.UI(_problem_title(response, "Unable to list audit log"))
+        return schemas.AuditLogListResponse.model_validate(response.json())

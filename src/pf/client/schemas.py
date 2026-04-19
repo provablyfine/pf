@@ -606,3 +606,16 @@ class Identity(_Base):
 
 class IdentitiesResponse(_Base):
     identities: list[Identity] = []
+
+
+class AuditLogEntry(_Base):
+    id: int
+    at: int
+    level: int
+    type: str
+    by_identity_id: str | None = None
+    details: dict[str, typing.Any] = {}
+
+
+class AuditLogListResponse(_Base):
+    entries: list[AuditLogEntry] = []

@@ -305,3 +305,15 @@ class Client:
                 auth_name, session_public_key, session_fingerprint, client_redirect_uri
             )
         )
+
+    async def list_audit_log(
+        self,
+        level: int | None = None,
+        object_type: str | None = None,
+        by_identity_id: str | None = None,
+        start_time: int | None = None,
+        end_time: int | None = None,
+    ) -> schemas.AuditLogListResponse:
+        return await self._run(
+            lambda: self._sync.list_audit_log(level, object_type, by_identity_id, start_time, end_time)
+        )

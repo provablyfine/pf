@@ -7,6 +7,7 @@ import textual.widgets
 
 from .. import client
 from . import (
+    audit_log_list,
     auth_list,
     base,
     bastion_list,
@@ -26,6 +27,7 @@ _RESOURCES: list[tuple[str, collections.abc.Callable[[client.aio.Client], base.S
     ("Tags", tag_list.TagListScreen),
     ("Roles", role_list.RoleListScreen),
     ("Auths", auth_list.AuthListScreen),
+    ("Audit Log", audit_log_list.AuditLogListScreen),
 ]
 
 

@@ -170,6 +170,7 @@ def create(conf: config.Config) -> fastapi.FastAPI:
     _tenant_dep = fastapi.Depends(dependencies.tenant_context)
     _tenant_prefix = "/pf/t/{tenant_name}"
 
+    fastapi_app.include_router(endpoints.audit_log.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
     fastapi_app.include_router(endpoints.directory.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
     fastapi_app.include_router(endpoints.initialize.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
     fastapi_app.include_router(endpoints.auth_http_sig.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
