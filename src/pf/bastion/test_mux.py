@@ -32,7 +32,7 @@ async def pair():
 async def test_server_open_channel(pair):
     srv, cli = pair
     srv_ch = await srv.open_channel()
-    cli_ch = await cli.accept_channel()
+    await cli.accept_channel()
 
     assert srv_ch.channel_id is not None
 

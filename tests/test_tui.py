@@ -495,7 +495,7 @@ async def test_tui_tenant_grant_edit(api, ssh_agent):
 
             assert not [n for n in app._notifications if n.severity == "error"]
 
-            grant = await _get_grant(auth, role_id)
+            await _get_grant(auth, role_id)
 
 
 ##        assert grant["filter"]["id"] is None
@@ -608,7 +608,7 @@ async def test_tui_tag_delete(api, ssh_agent):
 
             assert not [n for n in app._notifications if n.severity == "error"]
 
-            resp = await auth.list_tags()
+            await auth.list_tags()
 
 
 #        assert not any(t.name == "env" and t.value == "prod" for t in resp.tags)
@@ -638,7 +638,7 @@ async def test_tui_boundary_list(api, ssh_agent):
 
             assert not [n for n in app._notifications if n.severity == "error"]
 
-            resp = await auth.list_boundaries()
+            await auth.list_boundaries()
 
 
 #        assert any(b.name == "zone1" for b in resp.boundaries)
@@ -667,7 +667,7 @@ async def test_tui_boundary_delete(api, ssh_agent):
 
             assert not [n for n in app._notifications if n.severity == "error"]
 
-            resp = await auth.list_boundaries()
+            await auth.list_boundaries()
 
 
 #        assert not any(b.name == "zone1" for b in resp.boundaries)
@@ -701,7 +701,7 @@ async def test_tui_bastion_list(api, ssh_agent):
 
             assert not [n for n in app._notifications if n.severity == "error"]
 
-            resp = await auth.list_bastions()
+            await auth.list_bastions()
 
 
 #        assert any(b.register_url == "https://register.example.com" for b in resp.bastions)
@@ -713,14 +713,13 @@ async def test_tui_bastion_delete(api, ssh_agent):
     with _setup_ssh_auth_sock(ssh_agent):
         with tempfile.TemporaryDirectory() as tmpdir:
             auth = _setup(api, tmpdir, ssh_agent)
-            bastion = await auth.create_bastion(
+            await auth.create_bastion(
                 "https://register.example.com",
                 "ssh://bastion.example.com",
                 "proxy.example.com",
                 [],
                 [],
             )
-            bastion_id = bastion.id
             app = pf.tui.app.TuiApp(auth)
 
             async with app.run_test(size=(200, 50)) as pilot:
@@ -735,7 +734,7 @@ async def test_tui_bastion_delete(api, ssh_agent):
 
             assert not [n for n in app._notifications if n.severity == "error"]
 
-            resp = await auth.list_bastions()
+            await auth.list_bastions()
 
 
 #        assert not any(b.id == bastion_id for b in resp.bastions)
@@ -816,7 +815,7 @@ async def test_tui_identity_list(api, ssh_agent):
 
             assert not [n for n in app._notifications if n.severity == "error"]
 
-            resp = await auth.list_identities()
+            await auth.list_identities()
 
 
 #        assert any(i.name == "alice" for i in resp.identities)
@@ -847,7 +846,7 @@ async def test_tui_tenant_list(api, ssh_agent):
 
             assert not [n for n in app._notifications if n.severity == "error"]
 
-            resp = await auth.list_tenants()
+            await auth.list_tenants()
 
 
 #        assert any(t.name == "acme" and t.display_name == "Acme Corp" for t in resp.tenants)
@@ -876,7 +875,7 @@ async def test_tui_role_delete(api, ssh_agent):
 
             assert not [n for n in app._notifications if n.severity == "error"]
 
-            resp = await auth.list_roles()
+            await auth.list_roles()
 
 
 #        assert not any(r.name == "to-delete" for r in resp.roles)
@@ -905,7 +904,7 @@ async def test_tui_identity_delete(api, ssh_agent):
 
             assert not [n for n in app._notifications if n.severity == "error"]
 
-            resp = await auth.list_identities()
+            await auth.list_identities()
 
 
 #        assert not any(i.name == "alice" for i in resp.identities)
@@ -919,7 +918,7 @@ async def test_tui_tenant_delete(api, ssh_agent):
             auth = _setup(api, tmpdir, ssh_agent)
             await auth.create_tenant("acme", "Acme Corp")
             tenants_before = await auth.list_tenants()
-            tenant_id = next(t.id for t in tenants_before.tenants if t.name == "acme")
+            next(t.id for t in tenants_before.tenants if t.name == "acme")
             app = pf.tui.app.TuiApp(auth)
 
             async with app.run_test(size=(200, 50)) as pilot:
@@ -966,7 +965,7 @@ async def test_tui_boundary_edit_description(api, ssh_agent):
 
             assert not [n for n in app._notifications if n.severity == "error"]
 
-            boundary = await auth.get_boundary(boundary_id)
+            await auth.get_boundary(boundary_id)
 
 
 #        assert boundary.description == "A test boundary"
@@ -1015,7 +1014,7 @@ async def test_tui_identity_add_tag(api, ssh_agent):
 
             assert not [n for n in app._notifications if n.severity == "error"]
 
-            identity = await auth.get_identity(alice_id)
+            await auth.get_identity(alice_id)
 
 
 #        assert any(t.name == "env" and t.value == "prod" for t in identity.tags)
