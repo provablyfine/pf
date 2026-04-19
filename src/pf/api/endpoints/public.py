@@ -18,7 +18,7 @@ def public_oidc_jwks() -> schemas.OidcJwksResponse:
 def public_auth_list() -> schemas.AuthPublicListResponse:
     acs = model.auth_config.read_all(is_enabled=True)
     return schemas.AuthPublicListResponse(
-        auths=[schemas.AuthPublicSummary(name=ac.name, type=ac.type) for ac in acs]  # type: ignore[arg-type]
+            auths=[schemas.AuthPublicSummary.model_validate({"name": ac.name, "type": ac.type}) for ac in acs]
     )
 
 
