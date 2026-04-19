@@ -110,9 +110,7 @@ class _MockOidcHandler(http.server.BaseHTTPRequestHandler):
 
         # Generate authorization code
         code = secrets.token_urlsafe(32)
-        provider._pending_codes[code] = _PendingCode(
-            code_challenge=code_challenge, email="user@example.com"
-        )
+        provider._pending_codes[code] = _PendingCode(code_challenge=code_challenge, email="user@example.com")
 
         redirect = f"{redirect_uri}?code={urllib.parse.quote(code)}"
         self.send_response(302)
@@ -135,9 +133,7 @@ class _MockOidcHandler(http.server.BaseHTTPRequestHandler):
             return
 
         # Verify PKCE: b64url(sha256(verifier)) == challenge
-        computed_challenge = _b64url_encode(
-            hashlib.sha256(code_verifier.encode()).digest()
-        )
+        computed_challenge = _b64url_encode(hashlib.sha256(code_verifier.encode()).digest())
         if computed_challenge != pending.code_challenge:
             self.send_error(400, "PKCE verification failed")
             return
@@ -179,9 +175,7 @@ class MockOidcProvider:
         self.issuer = f"http://127.0.0.1:{self._server.server_port}"
 
         # Start server in background thread
-        self._thread = threading.Thread(
-            target=self._server.serve_forever, daemon=True
-        )
+        self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
         self._thread.start()
 
     def set_authorize_error(self, error: str | None) -> None:
@@ -227,15 +221,11 @@ class MockOidcProvider:
         elif alg == "ES256":
             der_sig = self._ec_key.sign(
                 signing_input,
-                cryptography.hazmat.primitives.asymmetric.ec.ECDSA(
-                    cryptography.hazmat.primitives.hashes.SHA256()
-                ),
+                cryptography.hazmat.primitives.asymmetric.ec.ECDSA(cryptography.hazmat.primitives.hashes.SHA256()),
             )
             # Convert DER signature to (r, s) raw format for JWS
             # DER format: 0x30 [len] 0x02 [r-len] [r-bytes] 0x02 [s-len] [s-bytes]
-            r, s = cryptography.hazmat.primitives.asymmetric.utils.decode_dss_signature(
-                der_sig
-            )
+            r, s = cryptography.hazmat.primitives.asymmetric.utils.decode_dss_signature(der_sig)
             signature = r.to_bytes(32, "big") + s.to_bytes(32, "big")
         else:
             raise ValueError(f"Unsupported algorithm: {alg}")

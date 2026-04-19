@@ -10,7 +10,13 @@ logger = logging.getLogger(__name__)
 
 
 class Checker[G]:
-    def __init__(self, boundaries: list[model.boundary.Boundary], roles: list[model.role.Role], filter: typing.Callable[[G], bool], cls: type[G]):
+    def __init__(
+        self,
+        boundaries: list[model.boundary.Boundary],
+        roles: list[model.role.Role],
+        filter: typing.Callable[[G], bool],
+        cls: type[G],
+    ):
         self._boundaries = boundaries
         self._roles = roles
         self._filter = filter
@@ -41,7 +47,6 @@ class Checker[G]:
         return len(allowed) > 0
 
 
-
 class TagChecker:
     def __init__(self, boundaries: list[model.boundary.Boundary], roles: list[model.role.Role], tag_id: int | None):
         def cmp(g: model.grant.TagGrant) -> bool:
@@ -54,16 +59,19 @@ class TagChecker:
     def can_create(self) -> bool:
         def check(g: model.grant.TagGrant):
             return g.permission.create
+
         return self._checker.can(check)
 
     def can_read(self) -> bool:
         def check(g: model.grant.TagGrant):
             return g.permission.read
+
         return self._checker.can(check)
 
     def can_delete(self) -> bool:
         def check(g: model.grant.TagGrant):
             return g.permission.delete
+
         return self._checker.can(check)
 
 
@@ -81,11 +89,13 @@ class BoundaryChecker:
     def can_create(self) -> bool:
         def check(g: model.grant.BoundaryGrant):
             return g.permission.create
+
         return self._checker.can(check)
 
     def can_read(self) -> bool:
         def check(g: model.grant.BoundaryGrant):
             return g.permission.read
+
         return self._checker.can(check)
 
     def can_update(self, field: str) -> bool:
@@ -97,11 +107,13 @@ class BoundaryChecker:
             if g.permission.update is None:
                 return True
             return getattr(g.permission.update, field)
+
         return self._checker.can(check)
 
     def can_delete(self) -> bool:
         def check(g: model.grant.BoundaryGrant):
             return g.permission.delete
+
         return self._checker.can(check)
 
 
@@ -117,11 +129,13 @@ class RoleChecker:
     def can_create(self) -> bool:
         def check(g: model.grant.RoleGrant) -> bool:
             return g.permission.create
+
         return self._checker.can(check)
 
     def can_read(self) -> bool:
         def check(g: model.grant.RoleGrant) -> bool:
             return g.permission.read
+
         return self._checker.can(check)
 
     def can_update(self, field: str) -> bool:
@@ -133,11 +147,13 @@ class RoleChecker:
             if g.permission.update is None:
                 return True
             return getattr(g.permission.update, field)
+
         return self._checker.can(check)
 
     def can_delete(self) -> bool:
         def check(g: model.grant.RoleGrant) -> bool:
             return g.permission.delete
+
         return self._checker.can(check)
 
 
@@ -205,6 +221,7 @@ class IdentityChecker:
     def can_read(self) -> bool:
         def check(g: model.grant.IdentityGrant) -> bool:
             return g.permission.read
+
         return self._checker.can(check)
 
     def can_update(self, field: str) -> bool:
@@ -220,6 +237,7 @@ class IdentityChecker:
     def can_delete(self) -> bool:
         def check(g: model.grant.IdentityGrant) -> bool:
             return g.permission.delete
+
         return self._checker.can(check)
 
     def can_add_tag(self, tag_id: int) -> bool:
@@ -227,6 +245,7 @@ class IdentityChecker:
             if g.permission.add_tag_id_list is None:
                 return True
             return tag_id in g.permission.add_tag_id_list
+
         return self._checker.can(check)
 
     def can_del_tag(self, tag_id: int) -> bool:
@@ -252,29 +271,35 @@ class TenantChecker:
             if g.filter.id is not None and g.filter.id != tenant_id:
                 return False
             return True
+
         self._checker = Checker[model.grant.TenantGrant](boundaries, roles, cmp, model.grant.TenantGrant)
 
     def can_create(self) -> bool:
         def check(g: model.grant.TenantGrant):
             return g.permission.create
+
         return self._checker.can(check)
 
     def can_read(self) -> bool:
         def check(g: model.grant.TenantGrant):
             return g.permission.read
+
         return self._checker.can(check)
 
     def can_update(self, field: str) -> bool:
         assert field in ["display_name", "is_enabled"]
+
         def check(g: model.grant.TenantGrant):
             if g.permission.update is None:
                 return True
             return getattr(g.permission.update, field)
+
         return self._checker.can(check)
 
     def can_delete(self) -> bool:
         def check(g: model.grant.TenantGrant):
             return g.permission.delete
+
         return self._checker.can(check)
 
 
@@ -286,7 +311,7 @@ class IdentityFilterChecker[G: model.grant.TripletGrant](Checker[G]):
         identity_id: int,
         tag_id_list: list[int],
         boundary_id_list: list[int],
-        cls: type[G]
+        cls: type[G],
     ):
         def cmp(g: G) -> bool:
             if g.filter.id is not None and g.filter.id != identity_id:
@@ -312,17 +337,13 @@ class SSHShellChecker:
         boundary_id_list: list[int],
     ):
         self._checker = IdentityFilterChecker[model.grant.SSHShellGrant](
-            boundaries,
-            roles,
-            identity_id,
-            tag_id_list,
-            boundary_id_list,
-            model.grant.SSHShellGrant
+            boundaries, roles, identity_id, tag_id_list, boundary_id_list, model.grant.SSHShellGrant
         )
 
     def can(self, username: str) -> model.grant.SSHShellPermission | None:
         def check(g: model.grant.SSHShellGrant) -> bool:
             return username in g.permission.username_list
+
         matching = [g for g in self._checker.list_can(check)]
         if not matching:
             return None
@@ -335,6 +356,7 @@ class SSHShellChecker:
     def list_can(self) -> list[model.grant.SSHShellGrant]:
         def check(g: model.grant.SSHShellGrant) -> bool:
             return True
+
         return [g for g in self._checker.list_can(check)]
 
 
@@ -348,22 +370,19 @@ class SSHPortForwardChecker:
         boundary_id_list: list[int],
     ):
         self._checker = IdentityFilterChecker[model.grant.SSHPortForwardingGrant](
-            boundaries,
-            roles,
-            identity_id,
-            tag_id_list,
-            boundary_id_list,
-            model.grant.SSHPortForwardingGrant
+            boundaries, roles, identity_id, tag_id_list, boundary_id_list, model.grant.SSHPortForwardingGrant
         )
 
     def can(self, username: str) -> bool:
         def check(g: model.grant.SSHPortForwardingGrant) -> bool:
             return username in g.permission.username_list
+
         return self._checker.can(check)
 
     def list_can(self) -> list[model.grant.SSHPortForwardingGrant]:
         def check(g: model.grant.SSHPortForwardingGrant) -> bool:
             return True
+
         return self._checker.list_can(check)
 
 
@@ -377,22 +396,19 @@ class SSHCommandChecker:
         boundary_id_list: list[int],
     ):
         self._checker = IdentityFilterChecker[model.grant.SSHCommandGrant](
-            boundaries,
-            roles,
-            identity_id,
-            tag_id_list,
-            boundary_id_list,
-            model.grant.SSHCommandGrant
+            boundaries, roles, identity_id, tag_id_list, boundary_id_list, model.grant.SSHCommandGrant
         )
 
     def can(self, username: str, command: str) -> bool:
         def check(g: model.grant.SSHCommandGrant) -> bool:
             return username in g.permission.username_list and command in g.permission.command_list
+
         return self._checker.can(check)
 
     def list_can(self) -> list[model.grant.SSHCommandGrant]:
         def check(g: model.grant.SSHCommandGrant) -> bool:
             return True
+
         return self._checker.list_can(check)
 
 
@@ -402,16 +418,19 @@ class AuthChecker:
             if g.filter.id is not None and g.filter.id != auth_id:
                 return False
             return True
+
         self._checker = Checker[model.grant.AuthGrant](boundaries, roles, cmp, model.grant.AuthGrant)
 
     def can_create(self) -> bool:
         def check(g: model.grant.AuthGrant) -> bool:
             return g.permission.create
+
         return self._checker.can(check)
 
     def can_read(self) -> bool:
         def check(g: model.grant.AuthGrant) -> bool:
             return g.permission.read
+
         return self._checker.can(check)
 
     def can_update(self, field: str) -> bool:
@@ -423,11 +442,13 @@ class AuthChecker:
             if g.permission.update is None:
                 return True
             return getattr(g.permission.update, field)
+
         return self._checker.can(check)
 
     def can_delete(self) -> bool:
         def check(g: model.grant.AuthGrant) -> bool:
             return g.permission.delete
+
         return self._checker.can(check)
 
 
@@ -467,7 +488,9 @@ class Grants:
     def ssh_shell(self, identity_id: int, tag_id_list: list[int], boundary_id_list: list[int]) -> SSHShellChecker:
         return SSHShellChecker(self._boundaries, self._roles, identity_id, tag_id_list, boundary_id_list)
 
-    def ssh_port_forward(self, identity_id: int, tag_id_list: list[int], boundary_id_list: list[int]) -> SSHPortForwardChecker:
+    def ssh_port_forward(
+        self, identity_id: int, tag_id_list: list[int], boundary_id_list: list[int]
+    ) -> SSHPortForwardChecker:
         return SSHPortForwardChecker(self._boundaries, self._roles, identity_id, tag_id_list, boundary_id_list)
 
     def ssh_command(self, identity_id: int, tag_id_list: list[int], boundary_id_list: list[int]) -> SSHCommandChecker:

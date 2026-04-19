@@ -207,18 +207,24 @@ def list_hosts() -> schemas.SSHHostsResponse:
     for identity in identities:
         shell_checker = grants.ssh_shell(identity.id, identity.tag_id_list, identity.boundary_id_list)
         for g in shell_checker.list_can():
-            entries.append(schemas.SSHHostEntry(hostname=identity.name, type="shell", username_list=g.permission.username_list))
+            entries.append(
+                schemas.SSHHostEntry(hostname=identity.name, type="shell", username_list=g.permission.username_list)
+            )
         port_forward_checker = grants.ssh_port_forward(identity.id, identity.tag_id_list, identity.boundary_id_list)
         for g in port_forward_checker.list_can():
-            entries.append(schemas.SSHHostEntry(hostname=identity.name, type="port", username_list=g.permission.username_list))
+            entries.append(
+                schemas.SSHHostEntry(hostname=identity.name, type="port", username_list=g.permission.username_list)
+            )
         command_checker = grants.ssh_command(identity.id, identity.tag_id_list, identity.boundary_id_list)
         for g in command_checker.list_can():
-            entries.append(schemas.SSHHostEntry(
-                hostname=identity.name,
-                type="command",
-                username_list=g.permission.username_list,
-                command_list=g.permission.command_list
-        ))
+            entries.append(
+                schemas.SSHHostEntry(
+                    hostname=identity.name,
+                    type="command",
+                    username_list=g.permission.username_list,
+                    command_list=g.permission.command_list,
+                )
+            )
     return schemas.SSHHostsResponse(hosts=entries)
 
 

@@ -23,6 +23,7 @@ class TripletFilter(Filter):
     tag_id_list: list[int] | None = None
     boundary_id_list: list[int] | None = None
 
+
 class TripletGrant(DBBase):
     filter: TripletFilter
 

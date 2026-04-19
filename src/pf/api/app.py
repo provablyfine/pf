@@ -125,9 +125,7 @@ def create(conf: config.Config) -> fastapi.FastAPI:
         assert isinstance(exc, responses.ProblemHTTPException)
         return exc.response
 
-    async def validation_error_handler(
-        request: fastapi.requests.Request, exc: Exception
-    ) -> fastapi.responses.Response:
+    async def validation_error_handler(request: fastapi.requests.Request, exc: Exception) -> fastapi.responses.Response:
         assert isinstance(exc, pydantic.ValidationError)
         assert len(exc.errors()) > 0
         error = exc.errors()[0]

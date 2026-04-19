@@ -22,6 +22,7 @@ class Message:
     type: int
     contents: bytes
 
+
 class Client:
     # https://datatracker.ietf.org/doc/html/draft-miller-ssh-agent
     SSH_AGENTC_REQUEST_IDENTITIES = 11

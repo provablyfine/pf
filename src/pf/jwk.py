@@ -110,15 +110,18 @@ ec_nist_to_secg = {
     "P-521": cryptography.hazmat.primitives.asymmetric.ec.SECP521R1,
 }
 
-CryptographyPublicKey = \
-    cryptography.hazmat.primitives.asymmetric.ed25519.Ed25519PublicKey | \
-    cryptography.hazmat.primitives.asymmetric.rsa.RSAPublicKey | \
-    cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePublicKey
+CryptographyPublicKey = (
+    cryptography.hazmat.primitives.asymmetric.ed25519.Ed25519PublicKey
+    | cryptography.hazmat.primitives.asymmetric.rsa.RSAPublicKey
+    | cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePublicKey
+)
 
-CryptographyPrivateKey = \
-    cryptography.hazmat.primitives.asymmetric.ed25519.Ed25519PrivateKey | \
-    cryptography.hazmat.primitives.asymmetric.rsa.RSAPrivateKey | \
-    cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePrivateKey
+CryptographyPrivateKey = (
+    cryptography.hazmat.primitives.asymmetric.ed25519.Ed25519PrivateKey
+    | cryptography.hazmat.primitives.asymmetric.rsa.RSAPrivateKey
+    | cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePrivateKey
+)
+
 
 class Public:
     def __init__(self, key: CryptographyPublicKey):

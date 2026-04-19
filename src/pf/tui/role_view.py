@@ -156,9 +156,7 @@ class RoleViewScreen(base.Screen):
         if not self._grant_list:
             return
         index = table.cursor_row
-        updated_grant = await self.app.push_screen_wait(
-            grant_edit.GrantEditScreen(self._auth, self._grant_list[index])
-        )
+        updated_grant = await self.app.push_screen_wait(grant_edit.GrantEditScreen(self._auth, self._grant_list[index]))
         if updated_grant is None:
             return
         self._grant_list[index] = updated_grant

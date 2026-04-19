@@ -176,7 +176,6 @@ class RoleMemberRow(typing.NamedTuple):
 role_member = db.make_table("role_member", metadata, RoleMemberRow)
 
 
-
 class BoundaryRow(typing.NamedTuple):
     id: typing.Annotated[int, db.Col(primary_key=True)]
     name: str

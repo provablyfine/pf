@@ -199,9 +199,7 @@ class AuthListScreen(base.Screen):
                     body.name, "", [], body.issuer, body.client_id, body.client_secret
                 )
             case _OAuth2Params():
-                a = await self._auth.create_auth_oauth2_github(
-                    body.name, "", [], body.client_id, body.client_secret
-                )
+                a = await self._auth.create_auth_oauth2_github(body.name, "", [], body.client_id, body.client_secret)
         self._auths.append(a)
         table = self.query_one(self._StrDataTable)
         self._populate_table(table)

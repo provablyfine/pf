@@ -24,16 +24,16 @@ class App(textual.app.App[None]):
 class Widget(textual.widget.Widget):
     @property
     def app(self) -> App:
-        return super().app # type: ignore
+        return super().app  # type: ignore
 
 
 class Screen(textual.screen.Screen[None]):
     @property
     def app(self) -> App:
-        return super().app # type: ignore
+        return super().app  # type: ignore
 
 
 class ModalScreen[T](textual.screen.ModalScreen[T]):
     @property
     def app(self) -> App:
-        return super().app # type: ignore
+        return super().app  # type: ignore
