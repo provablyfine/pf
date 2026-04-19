@@ -41,7 +41,14 @@ def _parse_signature_input(signature_input: str) -> dict[str, tuple[str, http_sf
                     status_code=400, title="Invalid Signature-Input", detail=f"Missing keyid in {label}"
                 )
             )
-        keyid_by_label[label] = (str(inner.params["keyid"]), inner)  # type: ignore[arg-type]
+        keyid = inner.params["keyid"]
+        if not isinstance(keyid, str):
+            raise responses.ProblemHTTPException(
+                responses.problem_response(
+                    status_code=400, title="Invalid Signature-Input", detail=f"keyid mistyped in {label}"
+                )
+            )
+        keyid_by_label[label] = (keyid, inner)
     return keyid_by_label
 
 
