@@ -221,7 +221,7 @@ Grant = typing.Annotated[
 
 
 def deserialize(data: app_db.SerializedGrant) -> Grant:
-    return pydantic.TypeAdapter(Grant).validate_python(data)  # type: ignore[return-value]
+    return pydantic.TypeAdapter[Grant](Grant).validate_python(data)
 
 
 def serialize(grant: Grant) -> app_db.SerializedGrant:
