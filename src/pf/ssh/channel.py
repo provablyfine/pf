@@ -93,7 +93,6 @@ class _Mux:
         self._pending_open: asyncio.Queue[Channel] = asyncio.Queue()
         self._open_results: dict[int, asyncio.Future[Channel]] = {}
         self._write_lock = asyncio.Lock()
-        self._buffer = b""
         self._reader_task: asyncio.Task[None] | None = None
 
     async def _start(self) -> None:
@@ -123,29 +122,25 @@ class _Mux:
         except Exception:
             pass
 
+    async def _read_n(self, n: int) -> bytes:
+        buffer: bytes = b""
+        while len(buffer) < n:
+            try:
+                chunk = await self._sock.recv(n-len(buffer))
+            except TimeoutError:
+                continue
+            if not chunk:
+                return b""
+            buffer += chunk
+        return buffer
+
     async def _read_packet(self) -> bytes:
         """Read a framed packet (uint32 length + payload)."""
-        while len(self._buffer) < 4:
-            try:
-                chunk = await self._sock.recv()
-            except TimeoutError:
-                continue
-            if not chunk:
-                return b""
-            self._buffer += chunk
-
-        length = int.from_bytes(self._buffer[:4], byteorder="big")
-        while len(self._buffer) < 4 + length:
-            try:
-                chunk = await self._sock.recv()
-            except TimeoutError:
-                continue
-            if not chunk:
-                return b""
-            self._buffer += chunk
-
-        packet = self._buffer[4 : 4 + length]
-        self._buffer = self._buffer[4 + length :]
+        chunk = await self._read_n(4)
+        if len(chunk) == 0:
+            return b""
+        length = int.from_bytes(chunk, byteorder="big")
+        packet = await self._read_n(length)
         return packet
 
     async def _write_packet(self, packet: bytes) -> None:

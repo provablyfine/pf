@@ -17,9 +17,9 @@ class TcpSocket:
     async def send(self, data: bytes) -> None:
         await asyncio.get_running_loop().sock_sendall(self._sock, data)
 
-    async def recv(self) -> bytes:
+    async def recv(self, n: int) -> bytes:
         try:
-            data = await asyncio.get_running_loop().sock_recv(self._sock, 4096)
+            data = await asyncio.get_running_loop().sock_recv(self._sock, n)
             return data
         except TimeoutError:
             return b""
