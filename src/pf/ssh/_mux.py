@@ -88,8 +88,16 @@ class ChannelImpl:
         await self._recv_queue.put(data)
 
     async def recv_eof(self) -> None:
-        """Mux callback: signal EOF."""
-        await self._recv_queue.put(b"")  # type: ignore[arg-type]
+        """Mux callback: signal EOF from peer (idempotent)."""
+        if not self._read_closed:
+            await self._recv_queue.put(b"")
+
+    async def recv_close(self) -> None:
+        """Mux callback: peer sent CLOSE. Signal EOF, reply with CLOSE if needed."""
+        await self.recv_eof()
+        if not self._close_sent:
+            self._close_sent = True
+            await self._mux.send_channel_close(self._remote_id)
 
     def recv_window_adjust(self, bytes_to_add: int) -> None:
         """Mux callback: increase send window."""
@@ -156,8 +164,15 @@ class Mux:
                 await self._dispatch_packet(packet)
         except asyncio.CancelledError:
             pass
-        except Exception:
-            pass
+        except Exception as e:
+            error = exceptions.Error(f"Channel multiplexer reader failed: {e}")
+            # Signal all pending channel opens
+            for _, (_, future) in list(self._open_results.items()):
+                if not future.done():
+                    future.set_exception(error)
+            # Signal all active channels with EOF
+            for channel in list(self._channels.values()):
+                await channel.recv_eof()
 
     async def _read_n(self, n: int) -> bytes:
         buffer: bytes = b""
@@ -244,6 +259,7 @@ class Mux:
         recipient_channel = reader.read_uint32()
         _ = reader.read_uint32()  # reason
         description = reader.read_string()
+        _ = reader.read_string()  # language_tag
 
         if recipient_channel not in self._open_results:
             return
@@ -290,7 +306,8 @@ class Mux:
         recipient_channel = reader.read_uint32()
 
         if recipient_channel in self._channels:
-            del self._channels[recipient_channel]
+            channel = self._channels.pop(recipient_channel)
+            await channel.recv_close()
 
     async def _send_channel_open_confirmation(
         self, local_id: int, remote_id: int, initial_window: int, max_packet: int
