@@ -132,6 +132,12 @@ class Mux:
             except asyncio.CancelledError:
                 pass
 
+    async def wait_closed(self) -> None:
+        """Wait until reader task exits (remote disconnected or closed)."""
+        await self.start()
+        if self._reader_task is not None:
+            await self._reader_task
+
     def close_socket(self) -> None:
         """Close underlying socket."""
         self._sock.close()

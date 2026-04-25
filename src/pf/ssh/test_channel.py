@@ -347,3 +347,21 @@ async def test_channel_close_after_half_close_idempotent(pair):
         await client.close()
 
     await asyncio.gather(server_task(), client_task())
+
+
+@pytest.mark.anyio
+async def test_client_wait_closed(pair):
+    """wait_closed() returns when server closes connection."""
+    server, client = pair
+
+    async def server_task():
+        ch = await server.accept()
+        await ch.close()
+        await server.close()
+
+    async def client_task():
+        ch = await client.open_channel()
+        await ch.read()  # EOF from server close
+        await client.wait_closed()  # returns once server disconnects
+
+    await asyncio.gather(server_task(), client_task())

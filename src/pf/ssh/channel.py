@@ -63,3 +63,7 @@ class Client:
         """Close client."""
         await self._mux.stop()
         self._mux.close_socket()
+
+    async def wait_closed(self) -> None:
+        """Wait until remote closes the connection."""
+        await self._mux.wait_closed()
