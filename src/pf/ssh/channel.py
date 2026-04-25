@@ -4,9 +4,6 @@ from __future__ import annotations
 
 from . import _mux, tcp
 
-# Re-export constants for backward compatibility
-MAX_PACKET = _mux.MAX_PACKET
-
 
 class Channel:
     """Public SSH channel handle."""

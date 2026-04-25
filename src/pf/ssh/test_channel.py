@@ -3,7 +3,7 @@ import socket
 
 import pytest
 
-from . import channel, tcp
+from . import channel, tcp, _mux
 
 
 @pytest.fixture
@@ -63,7 +63,7 @@ async def test_channel_large_data(pair):
     """Test sending data larger than MAX_PACKET."""
     server, client = pair
 
-    large_data = b"x" * (channel.MAX_PACKET * 3 + 1000)
+    large_data = b"x" * (_mux.MAX_PACKET * 3 + 1000)
 
     async def server_task():
         ch = await server.accept()
