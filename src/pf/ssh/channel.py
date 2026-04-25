@@ -27,8 +27,12 @@ class Channel:
         """Write data to channel, respecting send window."""
         await self._impl.write(data)
 
+    async def close_write(self) -> None:
+        """Half-close write side. Peer receives EOF, but can still send."""
+        await self._impl.close_write()
+
     async def close(self) -> None:
-        """Close channel."""
+        """Fully close channel."""
         await self._impl.close()
 
 

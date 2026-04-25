@@ -30,7 +30,9 @@ class ChannelImpl:
         self._send_window_event = asyncio.Event()
         if initial_window > 0:
             self._send_window_event.set()
-        self._closed = False
+        self._write_closed = False  # EOF sent to remote (close_write or close)
+        self._read_closed = False  # EOF received from remote
+        self._close_sent = False  # CLOSE sent to remote
 
     @property
     def channel_type(self) -> str:
@@ -38,17 +40,17 @@ class ChannelImpl:
 
     async def read(self) -> bytes:
         """Read data from channel. Returns b'' on EOF."""
-        if self._closed:
+        if self._read_closed:
             return b""
         data = await self._recv_queue.get()
         if data == b"":  # EOF sentinel
-            self._closed = True
+            self._read_closed = True
         return data
 
     async def write(self, data: bytes) -> None:
         """Write data to channel, respecting send window."""
-        if self._closed:
-            raise exceptions.Error("Channel closed")
+        if self._write_closed:
+            raise exceptions.Error("Channel write closed")
 
         offset = 0
         while offset < len(data):
@@ -64,12 +66,21 @@ class ChannelImpl:
             self._send_window -= chunk_size
             offset += chunk_size
 
-    async def close(self) -> None:
-        """Close channel."""
-        if self._closed:
+    async def close_write(self) -> None:
+        """Half-close: stop sending, peer will receive EOF. Still readable."""
+        if self._write_closed:
             return
-        self._closed = True
+        self._write_closed = True
         await self._mux.send_channel_eof(self._remote_id)
+
+    async def close(self) -> None:
+        """Close channel fully."""
+        if self._close_sent:
+            return
+        self._close_sent = True
+        if not self._write_closed:
+            self._write_closed = True
+            await self._mux.send_channel_eof(self._remote_id)
         await self._mux.send_channel_close(self._remote_id)
 
     async def recv_data(self, data: bytes) -> None:

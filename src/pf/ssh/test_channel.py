@@ -133,3 +133,90 @@ async def test_channel_empty_data(pair):
         await ch.close()
 
     await asyncio.gather(server_task(), client_task())
+
+
+@pytest.mark.anyio
+async def test_channel_half_close_echo(pair):
+    """Test half-close with echo (client -> server -> client)."""
+    server, client = pair
+
+    async def server_task():
+        ch = await server.accept()
+        # Read from client
+        data = await ch.read()
+        assert data == b"ping"
+        # Read EOF (client half-closed)
+        data = await ch.read()
+        assert data == b""
+        # But we can still write
+        await ch.write(b"pong")
+        # Now close fully
+        await ch.close()
+
+    async def client_task():
+        ch = await client.open_channel("session")
+        # Send data
+        await ch.write(b"ping")
+        # Half-close write side
+        await ch.close_write()
+        # Can still read response
+        data = await ch.read()
+        assert data == b"pong"
+        # Read EOF from server
+        data = await ch.read()
+        assert data == b""
+        # Now close fully
+        await ch.close()
+
+    await asyncio.gather(server_task(), client_task())
+
+
+@pytest.mark.anyio
+async def test_channel_half_close_write_after_error(pair):
+    """Test that writing after half-close raises error."""
+    server, client = pair
+
+    async def server_task():
+        ch = await server.accept()
+        # Just wait for EOF
+        while True:
+            data = await ch.read()
+            if not data:
+                break
+
+    async def client_task():
+        ch = await client.open_channel("session")
+        await ch.close_write()
+
+        # Writing after half-close should fail
+        try:
+            await ch.write(b"fail")
+            assert False, "Should have raised"
+        except BaseException:  # exceptions.Error inherits from BaseException
+            pass
+        await ch.close()
+
+    await asyncio.gather(server_task(), client_task())
+
+
+@pytest.mark.anyio
+async def test_channel_half_close_idempotent(pair):
+    """Test that half-close can be called multiple times."""
+    server, client = pair
+
+    async def server_task():
+        ch = await server.accept()
+        # Just wait for EOF
+        while True:
+            data = await ch.read()
+            if not data:
+                break
+
+    async def client_task():
+        ch = await client.open_channel("session")
+        await ch.close_write()
+        await ch.close_write()  # Should be idempotent
+        await ch.close()
+        await ch.close()  # Should be idempotent
+
+    await asyncio.gather(server_task(), client_task())
