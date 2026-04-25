@@ -55,9 +55,9 @@ class Client:
     def __init__(self, sock: tcp.TcpSocket) -> None:
         self._mux = _mux.Mux(sock)
 
-    async def open_channel(self, channel_type: str) -> Channel:
-        """Open a channel of given type."""
-        return Channel(await self._mux.open_channel(channel_type))
+    async def open_channel(self) -> Channel:
+        """Open a channel."""
+        return Channel(await self._mux.open_channel("session"))
 
     async def close(self) -> None:
         """Close client."""

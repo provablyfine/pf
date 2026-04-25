@@ -41,8 +41,7 @@ async def test_channel_client_server_bidirectional(pair):
 
     async def client_task():
         # Open channel
-        ch = await client.open_channel("session")
-        assert ch.channel_type == "session"
+        ch = await client.open_channel()
 
         # Write to server
         await ch.write(b"hello")
@@ -76,7 +75,7 @@ async def test_channel_large_data(pair):
         assert received == large_data
 
     async def client_task():
-        ch = await client.open_channel("session")
+        ch = await client.open_channel()
         await ch.write(large_data)
         await ch.close()
 
@@ -99,7 +98,7 @@ async def test_channel_multiple_channels(pair):
             await ch.close()
 
     async def send_channel(c, i):
-        ch = await c.open_channel(f"type_{i}")
+        ch = await c.open_channel()
         await ch.write(b"test")
         data = await ch.read()
         assert data == b"test_response"
@@ -112,7 +111,7 @@ async def test_channel_multiple_channels(pair):
         await asyncio.gather(*tasks)
 
     await asyncio.gather(server_task(), client_task())
-    assert sorted(channels_received) == ["type_0", "type_1", "type_2"]
+    assert sorted(channels_received) == ["session", "session", "session"]
 
 
 @pytest.mark.anyio
@@ -128,7 +127,7 @@ async def test_channel_empty_data(pair):
         assert data == b""
 
     async def client_task():
-        ch = await client.open_channel("session")
+        ch = await client.open_channel()
         await ch.write(b"")
         await ch.close()
 
@@ -154,7 +153,7 @@ async def test_channel_half_close_echo(pair):
         await ch.close()
 
     async def client_task():
-        ch = await client.open_channel("session")
+        ch = await client.open_channel()
         # Send data
         await ch.write(b"ping")
         # Half-close write side
@@ -185,7 +184,7 @@ async def test_channel_half_close_write_after_error(pair):
                 break
 
     async def client_task():
-        ch = await client.open_channel("session")
+        ch = await client.open_channel()
         await ch.close_write()
 
         # Writing after half-close should fail
@@ -213,7 +212,7 @@ async def test_channel_half_close_idempotent(pair):
                 break
 
     async def client_task():
-        ch = await client.open_channel("session")
+        ch = await client.open_channel()
         await ch.close_write()
         await ch.close_write()  # Should be idempotent
         await ch.close()
@@ -234,7 +233,7 @@ async def test_channel_close_without_eof(pair):
         await ch.close()  # CLOSE without explicit EOF
 
     async def client_task():
-        ch = await client.open_channel("session")
+        ch = await client.open_channel()
         data = await ch.read()
         assert data == b"hello"
         # Should read EOF due to CLOSE
@@ -259,7 +258,7 @@ async def test_channel_open_failure(pair):
     async def client_task():
         # Note: Our current server implementation always accepts.
         # This test is a placeholder for testing OPEN_FAILURE parsing.
-        ch = await client.open_channel("session")
+        ch = await client.open_channel()
         await ch.close()
 
     await asyncio.gather(server_task(), client_task())
@@ -279,7 +278,7 @@ async def test_channel_send_window_exhaustion(pair):
         assert data == b""
 
     async def client_task():
-        ch = await client.open_channel("session")
+        ch = await client.open_channel()
         # Override window to very small
         ch._impl._send_window = 1
         ch._impl._send_window_event.set()
@@ -313,7 +312,7 @@ async def test_channel_bidirectional_half_close(pair):
         await ch.close()
 
     async def client_task():
-        ch = await client.open_channel("session")
+        ch = await client.open_channel()
         # Client writes then half-closes
         await ch.write(b"cli")
         await ch.close_write()
@@ -342,7 +341,7 @@ async def test_channel_close_after_half_close_idempotent(pair):
         assert data == b""
 
     async def client_task():
-        ch = await client.open_channel("session")
+        ch = await client.open_channel()
         await ch.close_write()  # Sends EOF
         await ch.close()  # Sends CLOSE, EOF already sent so no duplicate
         await client.close()
