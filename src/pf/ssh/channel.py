@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 
 from . import buffer, constants, exceptions, tcp
@@ -14,7 +16,7 @@ class Channel:
         local_id: int,
         remote_id: int,
         channel_type: str,
-        mux: "_Mux",
+        mux: _Mux,
         initial_window: int,
     ) -> None:
         self._local_id = local_id
