@@ -1,12 +1,10 @@
-"""Public SSH channel API."""
-
 from __future__ import annotations
 
 from . import _mux, tcp
 
 
 class Channel:
-    """Public SSH channel handle."""
+    """Public channel handle."""
 
     def __init__(self, impl: _mux.ChannelImpl) -> None:
         self._impl = impl

@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import enum
 
-from .. import ssh
+from . import tcp
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +14,7 @@ class SearchState(enum.Enum):
 
 
 class LineReader:
-    def __init__(self, sock: ssh.tcp.TcpSocket):
+    def __init__(self, sock: tcp.TcpSocket):
         self._sock = sock
         self._buffer: bytes = b""
 

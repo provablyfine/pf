@@ -1,3 +1,3 @@
-from . import mux, server
+from . import channel, server
 
-__all__ = ["mux", "server"]
+__all__ = ["channel", "server"]

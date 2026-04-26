@@ -8,8 +8,8 @@ import json
 
 import jwt
 
-from .. import log, ssh
-from . import http
+from .. import log
+from . import http, tcp, channel, exceptions
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +83,7 @@ class TrustedKeys:
 class Request:
     host: str
     port: int
-    headers: dict[str,str] = {}
+    headers: dict[str,str]
 
 
 @dataclasses.dataclass
@@ -92,7 +92,7 @@ class AppState:
     audience: str
     dev_tenant_id: int | None
     dev_name: str | None
-    clients: dict[tuple[int, str],ssh.channel.Client] = {}
+    clients: dict[tuple[int, str],channel.Client]
 
 
 @dataclasses.dataclass
@@ -109,7 +109,7 @@ class HTTPException(Exception):
         return self._response
 
 
-RouteHandler = typing.Callable[[ssh.tcp.TcpSocket], typing.Awaitable[None]]
+RouteHandler = typing.Callable[[tcp.TcpSocket], typing.Awaitable[None]]
 RouteChecker = typing.Callable[[AppState, Request], typing.Awaitable[RouteHandler]]
 
 
@@ -176,8 +176,8 @@ async def register_checker(state: AppState, request: Request) -> RouteHandler:
     logger.info(f"Registering identity {token.tenant_id}/{token.name}")
     client_key = (token.tenant_id, token.name)
 
-    async def handler(sock: ssh.tcp.TcpSocket) -> None:
-        client = ssh.channel.Client(sock)
+    async def handler(sock: tcp.TcpSocket) -> None:
+        client = channel.Client(sock)
         try:
             state.clients[client_key] = client
             await client.wait_closed()
@@ -201,7 +201,7 @@ async def connect_checker(state: AppState, request: Request) -> RouteHandler:
     if client is None:
         raise HTTPException(_404)
 
-    async def handler(user: ssh.tcp.TcpSocket) -> None:
+    async def handler(user: tcp.TcpSocket) -> None:
         host = await client.open_channel()
 
         async def relay_user_to_host() -> None:
@@ -215,7 +215,7 @@ async def connect_checker(state: AppState, request: Request) -> RouteHandler:
                     logger.debug(f"relay_user_to_host rx={len(data)}")
                     await host.write(data)
                     logger.debug(f"relay_user_to_host tx={len(data)}")
-            except ssh.exceptions.Error:
+            except exceptions.Error:
                 pass
             finally:
                 await host.close_write()
@@ -231,7 +231,7 @@ async def connect_checker(state: AppState, request: Request) -> RouteHandler:
                     logger.debug(f"relay_host_to_user rx={len(data)}")
                     await user.send(data)
                     logger.debug(f"relay_host_to_user tx={len(data)}")
-            except ssh.exceptions.Error:
+            except exceptions.Error:
                 pass
             finally:
                 await user.shutdown(socket.SHUT_WR)
@@ -248,13 +248,14 @@ async def connect_checker(state: AppState, request: Request) -> RouteHandler:
 
 
 class Application:
-    def __init__(self, conf: Config, sock: ssh.tcp.TcpSocket):
+    def __init__(self, conf: Config, sock: tcp.TcpSocket):
         self._config = conf
         self._state = AppState(
             trusted_keys=TrustedKeys(conf.issuer_prefix) if conf.issuer_prefix else None,
             audience="bastion",
             dev_tenant_id=conf.dev_tenant_id,
-            dev_name=conf.dev_name
+            dev_name=conf.dev_name,
+            clients={},
         )
         self._sock = sock
         self._tasks: list[asyncio.Task[None]] = []
@@ -263,7 +264,7 @@ class Application:
     def add_route(self, route: Route):
         self._routes.append(route)
 
-    async def _parse_request(self, sock: ssh.tcp.TcpSocket) -> Request:
+    async def _parse_request(self, sock: tcp.TcpSocket) -> Request:
         # We can read the data via a local buffer because all the data
         # sent is only for the proxy until we send back a 200.
         reader = http.LineReader(sock)
@@ -303,7 +304,7 @@ class Application:
         request = Request(host=host.decode("ascii"), port=int(port), headers=headers)
         return request
 
-    async def _handle_new_client(self, sock: ssh.tcp.TcpSocket) -> None:
+    async def _handle_new_client(self, sock: tcp.TcpSocket) -> None:
         try:
             request = await self._parse_request(sock)
             if "host" not in request.headers:
@@ -363,7 +364,7 @@ class Application:
 
 def create(conf: Config, sock: socket.socket) -> Application:
     log.setup_server("bastion", conf.log_level, conf.log_filename)
-    app = Application(conf, ssh.tcp.TcpSocket(sock))
+    app = Application(conf, tcp.TcpSocket(sock))
     app.add_route(Route(f"connect.{conf.domain_suffix}", connect_checker))
     app.add_route(Route(f"register.{conf.domain_suffix}", register_checker))
     return app
