@@ -1,19 +1,22 @@
 import asyncio
-import contextlib
 import dataclasses
 import logging
+import socket
+import traceback
+import typing
+import json
 
-import fastapi
 import jwt
 
-from .. import log
-from . import mux
+from .. import log, ssh
+from . import http
 
 logger = logging.getLogger(__name__)
 
 
 @dataclasses.dataclass
 class Config:
+    domain_suffix: str
     dev_tenant_id: int | None
     dev_name: str | None
     issuer_prefix: str | None
@@ -64,6 +67,7 @@ class TrustedKeys:
             client = jwt.PyJWKClient(f"{iss}/.well-known/jwks.json")
             self._client_by_iss[iss] = client
         try:
+            # XXX: should use async task ?
             key = client.get_signing_key(kid)
         except jwt.exceptions.PyJWKClientError:
             logger.warning(
@@ -75,14 +79,60 @@ class TrustedKeys:
         return TrustedKey(issuer=iss, key=key)
 
 
-def verify_token(ws: fastapi.websockets.WebSocket) -> Token | None:
-    if ws.app.state.dev_tenant_id is not None and ws.app.state.dev_name is not None:
-        return Token(tenant_id=ws.app.state.dev_tenant_id, name=ws.app.state.dev_name)
+@dataclasses.dataclass
+class Request:
+    host: str
+    port: int
+    headers: dict[str,str] = {}
 
-    if "Authorization" not in ws.headers:
+
+@dataclasses.dataclass
+class AppState:
+    trusted_keys: TrustedKeys | None
+    audience: str
+    dev_tenant_id: int | None
+    dev_name: str | None
+    clients: dict[tuple[int, str],ssh.channel.Client] = {}
+
+
+@dataclasses.dataclass
+class Response:
+    status_code: int
+    title: str | None
+
+
+class HTTPException(Exception):
+    def __init__(self, response: Response):
+        self._response = response
+    @property
+    def response(self) -> Response:
+        return self._response
+
+
+RouteHandler = typing.Callable[[ssh.tcp.TcpSocket], typing.Awaitable[None]]
+RouteChecker = typing.Callable[[AppState, Request], typing.Awaitable[RouteHandler]]
+
+
+@dataclasses.dataclass
+class Route:
+    host: str
+    check: RouteChecker
+
+
+_400 = Response(status_code=400, title="Invalid request")
+_403 = Response(status_code=404, title="Not Authorized")
+_404 = Response(status_code=404, title="Resource not found")
+
+
+def verify_token(state: AppState, request: Request) -> Token | None:
+    if state.dev_tenant_id is not None and state.dev_name is not None:
+        return Token(tenant_id=state.dev_tenant_id, name=state.dev_name)
+    assert state.trusted_keys is not None
+
+    if "Authorization" not in request.headers:
         logger.debug("Missing Authorization header")
         return None
-    authorization = ws.headers["Authorization"]
+    authorization = request.headers["Authorization"]
     space = authorization.find(" ")
     if space == -1:
         logger.debug("Invalid Authorization header")
@@ -92,7 +142,7 @@ def verify_token(ws: fastapi.websockets.WebSocket) -> Token | None:
         return None
     token = authorization[space + 1 :].strip(" ")
 
-    trusted_key = ws.app.state.trusted_keys.lookup(token)
+    trusted_key = state.trusted_keys.lookup(token)
     if trusted_key is None:
         logger.error("Could not find matching trusted key")
         return None
@@ -102,7 +152,7 @@ def verify_token(ws: fastapi.websockets.WebSocket) -> Token | None:
             token,
             trusted_key.key,
             algorithms=["EdDSA"],
-            audience=ws.app.state.audience,
+            audience=state.audience,
             issuer=trusted_key.issuer,
             options={"require": ["sub", "name", "tenant_id"]},
         )
@@ -118,109 +168,202 @@ def verify_token(ws: fastapi.websockets.WebSocket) -> Token | None:
     return Token(name=payload["name"], tenant_id=payload["tenant_id"])
 
 
-router = fastapi.APIRouter()
-
-
-@router.websocket("/register")
-async def register(ws: fastapi.websockets.WebSocket) -> None:
-    token = verify_token(ws)
+async def register_checker(state: AppState, request: Request) -> RouteHandler:
+    token = verify_token(state, request)
     if token is None:
-        await ws.close(code=1008)
-        return
-
-    await ws.accept(subprotocol="mux-ssh")
+        raise HTTPException(_403)
 
     logger.info(f"Registering identity {token.tenant_id}/{token.name}")
     client_key = (token.tenant_id, token.name)
 
-    multiplexer = mux.Server(ws)
-    try:
-        ws.app.state.clients[client_key] = multiplexer
-        await multiplexer.wait_closed()
-    finally:
-        await multiplexer.close()
-        del ws.app.state.clients[client_key]
+    async def handler(sock: ssh.tcp.TcpSocket) -> None:
+        client = ssh.channel.Client(sock)
         try:
-            await ws.close()
-        except Exception:
-            pass
-    return None
+            state.clients[client_key] = client
+            await client.wait_closed()
+        finally:
+            await client.close()
+            del state.clients[client_key]
+            try:
+                sock.close()
+            except Exception:
+                pass
+    return handler
 
 
-@router.websocket("/connect")
-async def connect(ws: fastapi.websockets.WebSocket, hostname: str):
-    token = verify_token(ws)
+async def connect_checker(state: AppState, request: Request) -> RouteHandler:
+    token = verify_token(state, request)
     if token is None:
-        await ws.close(code=1008)
-        return
+        raise HTTPException(_403)
 
-    client_key = (token.tenant_id, hostname)
-    host_mux = ws.app.state.clients.get(client_key)
-    if host_mux is None:
-        await ws.close(code=1008, reason="Hostname is not registered")
-        return
+    client_key = (token.tenant_id, request.host)
+    client = state.clients.get(client_key)
+    if client is None:
+        raise HTTPException(_404)
 
-    await ws.accept(subprotocol="mux-ssh")
+    async def handler(user: ssh.tcp.TcpSocket) -> None:
+        host = await client.open_channel()
 
-    user_mux = mux.Server(ws)
-    user_ch = await user_mux.open_channel()
-    host_ch = await host_mux.open_channel()
+        async def relay_user_to_host() -> None:
+            logger.debug("relay_user_to_host start")
+            try:
+                while True:
+                    data = await user.recv(4096)
+                    if data == b"":
+                        # EOF
+                        break
+                    logger.debug(f"relay_user_to_host rx={len(data)}")
+                    await host.write(data)
+                    logger.debug(f"relay_user_to_host tx={len(data)}")
+            except ssh.exceptions.Error:
+                pass
+            finally:
+                await host.close_write()
 
-    async def relay_user_to_host() -> None:
-        logger.debug("relay_user_to_host start")
+        async def relay_host_to_user() -> None:
+            logger.debug("relay_host_to_user start")
+            try:
+                while True:
+                    data = await host.read()
+                    if data == b"":
+                        # EOF
+                        break
+                    logger.debug(f"relay_host_to_user rx={len(data)}")
+                    await user.send(data)
+                    logger.debug(f"relay_host_to_user tx={len(data)}")
+            except ssh.exceptions.Error:
+                pass
+            finally:
+                await user.shutdown(socket.SHUT_WR)
+
         try:
-            while True:
-                data = await user_ch.receive()
-                logger.debug(f"relay_user_to_host rx={len(data)}")
-                await host_ch.send(data)
-                logger.debug(f"relay_user_to_host tx={len(data)}")
-        except (mux.ChannelError, mux.MuxError):
-            pass
+            await asyncio.gather(
+                relay_user_to_host(),
+                relay_host_to_user(),
+            )
         finally:
-            await host_ch.close()
+            await host.close()
+            user.close()
+    return handler
 
-    async def relay_host_to_user() -> None:
-        logger.debug("relay_host_to_user start")
-        try:
-            while True:
-                data = await host_ch.receive()
-                logger.debug(f"relay_host_to_user rx={len(data)}")
-                await user_ch.send(data)
-                logger.debug(f"relay_host_to_user tx={len(data)}")
-        except (mux.ChannelError, mux.MuxError):
-            pass
-        finally:
-            await user_ch.close()
 
-    try:
-        await asyncio.gather(
-            relay_user_to_host(),
-            relay_host_to_user(),
+class Application:
+    def __init__(self, conf: Config, sock: ssh.tcp.TcpSocket):
+        self._config = conf
+        self._state = AppState(
+            trusted_keys=TrustedKeys(conf.issuer_prefix) if conf.issuer_prefix else None,
+            audience="bastion",
+            dev_tenant_id=conf.dev_tenant_id,
+            dev_name=conf.dev_name
         )
-    except (mux.ChannelError, mux.MuxError):
-        pass
-    finally:
-        await host_ch.close()
-        await user_ch.close()
-        await user_mux.close()
+        self._sock = sock
+        self._tasks: list[asyncio.Task[None]] = []
+        self._routes: list[Route] = []
+
+    def add_route(self, route: Route):
+        self._routes.append(route)
+
+    async def _parse_request(self, sock: ssh.tcp.TcpSocket) -> Request:
+        # We can read the data via a local buffer because all the data
+        # sent is only for the proxy until we send back a 200.
+        reader = http.LineReader(sock)
+        start_line = await reader.read()
+        items = start_line.split(" ".encode("ascii"))
+        if len(items) != 3:
+            logger.error("Invalid request start line")
+            raise HTTPException(_400)
+        method, resource_target, version = items
+        if version != b"HTTP/1.1":
+            logger.error("Invalid request HTTP version")
+            raise HTTPException(_400)
+        if method != b"CONNECT":
+            logger.error("Invalid request HTTP method")
+            raise HTTPException(_400)
+        colon = resource_target.find(b":")
+        if colon == -1:
+            logger.error("Invalid request resource_target: missing colon")
+            raise HTTPException(_400)
+        host = resource_target[:colon]
+        port = resource_target[colon+1:]
+        if not port.isdigit():
+            logger.error("Invalid request resource_target: invalid port")
+            raise HTTPException(_400)
+        headers: dict[str, str] = {}
+        while True:
+            line = await reader.read()
+            if line == b"\r\n":
+                break
+            colon = line.find(b":")
+            if colon == -1:
+                logger.error("Invalid request header: missing colon")
+                raise HTTPException(_400)
+            name = line[:colon].decode("ascii").lower()
+            value = line[colon+1:].rstrip(b"\r\n").decode("ascii").lower()
+            headers[name] = value
+        request = Request(host=host.decode("ascii"), port=int(port), headers=headers)
+        return request
+
+    async def _handle_new_client(self, sock: ssh.tcp.TcpSocket) -> None:
         try:
-            await ws.close()
-        except Exception:
-            pass
+            request = await self._parse_request(sock)
+            if "host" not in request.headers:
+                logger.error("Invalid request header: missing Host")
+                raise HTTPException(_400)
+            for route in self._routes:
+                if request.headers["host"] == route.host:
+                    handler = await route.check(self._state, request)
+                    # Write back ok response
+                    await sock.send("HTTP/1.1 200 OK\r\n".encode("ascii"))
+                    # Take over connection
+                    await handler(sock)
+                    return
+            logger.error(f"Unable to find route for host: {request.headers['host']}")
+            response = _404
+        except HTTPException as e:
+            response = e.response
+        except Exception as e:
+            logger.error(traceback.format_exc())
+            response = Response(status_code=500, title="Internal Server Error")
+        else:
+            assert False
+
+        response_body = json.dumps({"title": response.title}).encode("utf-8")
+        response_headers = [
+            ("Content-Type", "application/json"),
+            ("Content-Length", len(response_body)),
+        ]
+        output: list[bytes] = [
+            "HTTP/1.1 {response.status_code} {response.reason}\r\n".encode("ascii")
+        ]
+        for name, value in response_headers:
+            output.append(f"{name}: {value}\r\n".encode("ascii"))
+        output.append("\r\n".encode("ascii"))
+        output.append(response_body)
+        await sock.send(b"".join(output))
+
+    async def _loop(self):
+        self._sock.listen(10)
+        while self._stop:
+            try:
+                sock, _address = await self._sock.accept()
+                task = asyncio.create_task(self._handle_new_client(sock))
+                self._tasks.append(task)
+            except TimeoutError:
+                pass
+
+    async def run(self):
+        task = asyncio.create_task(self._loop())
+        await task
+        for task in self._tasks:
+            task.cancel()
+
+    def stop(self):
+        self._stop = True
 
 
-def create(conf: Config) -> fastapi.FastAPI:
-    @contextlib.asynccontextmanager
-    async def lifespan(app: fastapi.FastAPI):
-
-        app.state.trusted_keys = TrustedKeys(conf.issuer_prefix) if conf.issuer_prefix else None
-        app.state.audience = "bastion"
-        app.state.clients = {}
-        app.state.dev_tenant_id = conf.dev_tenant_id
-        app.state.dev_name = conf.dev_name
-        yield
-
+def create(conf: Config, sock: socket.socket) -> Application:
     log.setup_server("bastion", conf.log_level, conf.log_filename)
-    fastapi_app = fastapi.FastAPI(lifespan=lifespan)
-    fastapi_app.include_router(router)
-    return fastapi_app
+    app = Application(conf, ssh.tcp.TcpSocket(sock))
+    app.add_route(Route(f"connect.{conf.domain_suffix}", connect_checker))
+    app.add_route(Route(f"register.{conf.domain_suffix}", register_checker))
+    return app

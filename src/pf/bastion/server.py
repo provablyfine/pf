@@ -3,8 +3,7 @@ import datetime
 import signal
 import socket
 import types
-
-import uvicorn
+import asyncio
 
 from . import app
 
@@ -12,6 +11,7 @@ from . import app
 def run():
     parser = argparse.ArgumentParser()
     group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--domain-suffix", help="Domain suffix for all incoming requests. Default: %(default)s", default="bastion.dev")
     group.add_argument("--issuer-prefix", help="OIDC issuer url")
     group.add_argument("--dev", action="store_true")
     parser.add_argument("-p", "--port", type=int, default=0)
@@ -32,41 +32,26 @@ def run():
 
     if args.dev:
         conf = app.Config(
-            dev_tenant_id=1, dev_name="hello", issuer_prefix=None, log_level=args.debug, log_filename=args.log_filename
+            domain_suffix=args.domain_suffix,
+            dev_tenant_id=1, dev_name="hello", issuer_prefix=None, log_level=args.debug, log_filename=args.log_filename,
         )
     else:
         conf = app.Config(
+            domain_suffix=args.domain_suffix,
             dev_tenant_id=None,
             dev_name=None,
             issuer_prefix=args.issuer_prefix,
             log_level=args.debug,
             log_filename=args.log_filename,
         )
-    application = app.create(conf)
+    application = app.create(conf, sock)
 
     print(f"Starting Bastion on {host}:{port} using FD {sock.fileno()}")
 
     def handler(signum: int, frame: types.FrameType | None) -> None:
-        # We do nothing on purpose: this allows uvicorn.run to return
-        # gracefully and this all other handlers run naturally which
-        # specifically is good for coverage tracking
-        # Now, you might want to know why doing nothing here (which
-        # consumes the signal) would result in uvicorn.run returning.
-        # This happens because uvicorn calls signal.set_wakeup_fd so
-        # that the python C code wakes up the file descriptor whenever
-        # a signal is received, regardless of what the corresponding
-        # python handler did.
-        # We do nothing, so, the asyncio main loop runs, uvicorn eventually
-        # reads from this file descriptor, sees that a SIGTERM was received
-        # and just returns from the run() function below.
-        #
-        # OMG. I wish I did not know any of this.
-        pass
+        application.stop()
 
     signal.signal(signal.SIGTERM, handler)
-    try:
-        uvicorn.run(application, fd=sock.fileno(), log_level="info")
-    except SystemExit:
-        pass
+    asyncio.run(application.run())
 
     print("Stopped", datetime.datetime.now())
