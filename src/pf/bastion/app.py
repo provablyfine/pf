@@ -260,6 +260,7 @@ class Application:
         self._sock = sock
         self._tasks: list[asyncio.Task[None]] = []
         self._routes: list[Route] = []
+        self._stop = False
 
     def add_route(self, route: Route):
         self._routes.append(route)
@@ -344,7 +345,7 @@ class Application:
 
     async def _loop(self):
         self._sock.listen(10)
-        while self._stop:
+        while not self._stop:
             try:
                 sock, _address = await self._sock.accept()
                 task = asyncio.create_task(self._handle_new_client(sock))
@@ -364,6 +365,8 @@ class Application:
 
 def create(conf: Config, sock: socket.socket) -> Application:
     log.setup_server("bastion", conf.log_level, conf.log_filename)
+    sock.setblocking(False)
+    sock.settimeout(0.1)
     app = Application(conf, tcp.TcpSocket(sock))
     app.add_route(Route(f"connect.{conf.domain_suffix}", connect_checker))
     app.add_route(Route(f"register.{conf.domain_suffix}", register_checker))

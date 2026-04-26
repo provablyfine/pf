@@ -9,12 +9,12 @@ class TcpSocket:
     """Non-blocking TCP socket for async I/O."""
 
     def __init__(self, sock: socket.socket) -> None:
-        sock.setblocking(False)
         self._sock = sock
 
     async def accept(self) -> tuple[TcpSocket, typing.Any]:
         """Accept incoming connection. Returns (socket, address)."""
         sock, addr = await asyncio.get_running_loop().sock_accept(self._sock)
+        sock.setblocking(False)
         return TcpSocket(sock), addr
 
     async def send(self, data: bytes) -> None:
