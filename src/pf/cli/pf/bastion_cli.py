@@ -5,8 +5,8 @@ import signal
 import ssl
 import sys
 import types
-
-import websockets.asyncio.client
+import urllib.parse
+import socket
 
 from ... import bastion, client
 from .. import login
@@ -14,60 +14,87 @@ from .. import login
 logger = logging.getLogger(__name__)
 
 
-async def _handle_channel(ch: bastion.mux.Channel, local_port: int) -> None:
+async def _http_connect(url: str, prefix: str, hostname: str, token: str) -> bastion.tcp.TcpSocket:
+    u = urllib.parse.urlsplit(url)
+    connect_host = f"{prefix}.{u.hostname}"
+    ssl_context = ssl.create_default_context() if u.scheme == "https" else None
+    scheme_port = 443 if u.scheme == "https" else 80 if u.scheme == "http" else None
+    port = u.port if u.port is not None else scheme_port
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.setblocking(False)
+    await asyncio.sock_connect(sock, (connect_host, port))
+    if u.scheme == "https":
+        ssl_context = ssl.create_default_context()
+        sock.setblocking(True)
+        # The call below is blocking which is "suboptimal"
+        # but the alternatives are not a lot of fun.
+        sock = ssl_context.wrap_socket(sock, server_hostname=connect_host)
+    lines = [
+        f"CONNECT {hostname}:80 HTTP/1.1",
+        f"Host: {connect_host}",
+        f"Proxy-Authorization: Bearer {token}",
+        ""
+    ]
+    sock.setblocking(False)
+    wrapper = bastion.tcp.TcpSocket(sock)
+    wrapper.send(b"\r\n".join(line.encode("ascii") for line in lines))
+    http = bastion.http.LineReader(wrapper)
+    status = http.read()
+    items = status.rstrip(b"\r\n").decode("ascii").split(" ")
+    if len(items) != 3:
+        raise client.exceptions.UI(f"Unable to reach bastion: {status.decode('ascii')}")
+    version, status_code, reason = items
+    if status_code != "200":
+        raise client.exceptions.UI(f"Unable to reach bastion: status_code={status_code}")
+
+    return wrapper
+
+
+async def _handle_channel(remote: bastion.channel.Channel, local_port: int) -> None:
     try:
-        reader, writer = await asyncio.open_connection("127.0.0.1", local_port)
+        local_reader, local_writer = await asyncio.open_connection("127.0.0.1", local_port)
     except Exception as e:
         logger.debug(f"Cannot connect to local port {local_port}: {e}")
-        await ch.close()
+        await remote.close()
         return
 
-    async def tcp_to_ch() -> None:
+    async def local_to_remote() -> None:
         try:
             while True:
-                data = await reader.read(4096)
+                data = await local_reader.read(4096)
                 if not data:
                     break
-                await ch.send(data)
+                await remote.write(data)
         except Exception:
             pass
         finally:
-            await ch.close()
+            await remote.close()
 
-    async def ch_to_tcp() -> None:
+    async def remote_to_local() -> None:
+        while True:
+            data = await remote.read()
+            if data == b"":
+                break
+            local_writer.write(data)
+            await local_writer.drain()
         try:
-            while True:
-                data = await ch.receive()
-                writer.write(data)
-                await writer.drain()
-        except (bastion.mux.MuxError, bastion.mux.ChannelError):
+            local_writer.write_eof()
+        except Exception:
             pass
-        finally:
-            try:
-                writer.write_eof()
-            except Exception:
-                pass
 
     try:
-        await asyncio.gather(tcp_to_ch(), ch_to_tcp())
+        await asyncio.gather(remote_to_local(), local_to_remote())
     finally:
-        writer.close()
+        local_writer.close()
 
 
 async def _register_bastion(register_url: str, token: str, local_port: int) -> None:
-    headers = {"Authorization": f"Bearer {token}"}
-    async with websockets.asyncio.client.connect(
-        register_url,
-        additional_headers=headers,
-        subprotocols=[websockets.typing.Subprotocol("mux-ssh")],
-    ) as ws:
-        mux_client = bastion.mux.Client(ws)
-        try:
-            while not mux_client.is_closed:
-                ch = await mux_client.accept_channel()
-                asyncio.create_task(_handle_channel(ch, local_port))  # noqa: RUF006
-        except bastion.mux.MuxError:
-            pass
+    sock = _http_connect(register_url, "register", "self", token)
+    server = bastion.channel.Server(sock)
+    while True:
+        channel = await server.accept()
+        asyncio.create_task(_handle_channel(channel, local_port))
 
 
 @client.ssh_utils.exception
@@ -123,53 +150,37 @@ def _register_function(args: argparse.Namespace) -> None:
 
 
 async def _connect_async(url: str, token: str, hostname: str) -> None:
-    headers = {"Authorization": f"Bearer {token}"}
-    connect_url = f"{url}?hostname={hostname}"
-    ssl_context = ssl.create_default_context() if url.startswith("wss://") else None
+    sock = _http_connect(url, "connect", hostname, token)
+    remote_reader, remote_writer = asyncio.open_connection(sock=sock)
 
     loop = asyncio.get_running_loop()
 
     stdin_reader = asyncio.StreamReader()
     await loop.connect_read_pipe(lambda: asyncio.StreamReaderProtocol(stdin_reader), sys.stdin.buffer)
-
     stdout_writer, _ = await loop.connect_write_pipe(asyncio.BaseProtocol, sys.stdout.buffer)
 
-    async with websockets.asyncio.client.connect(
-        connect_url,
-        ssl=ssl_context,
-        additional_headers=headers,
-        subprotocols=[websockets.typing.Subprotocol("mux-ssh")],
-    ) as ws:
-        mux_client = bastion.mux.Client(ws)
-        ch = await mux_client.accept_channel()
+    async def forward_stdin() -> None:
+        logger.debug("start forward stdin")
+        while True:
+            data = await stdin_reader.read(4096)
+            if data == b"":
+                break
+            logger.debug(f"stdin: read={len(data)}")
+            await remote_writer.write(data)
+            logger.debug(f"ch: write={len(data)}")
+        await remote_writer.close()
 
-        async def forward_stdin() -> None:
-            logger.debug("start forward stdin")
-            try:
-                while True:
-                    data = await stdin_reader.read(4096)
-                    if not data:
-                        break
-                    logger.debug(f"stdin: read={len(data)}")
-                    await ch.send(data)
-                    logger.debug(f"ch: write={len(data)}")
-            except Exception as e:
-                logger.debug(f"stdin exception={e}")
-            finally:
-                await ch.close()
+    async def forward_stdout() -> None:
+        logger.debug("start forward stdout")
+        while True:
+            data = await remote_reader.read()
+            if data == b"":
+                break
+            logger.debug(f"ch: read={len(data)}")
+            stdout_writer.write(data)
+            logger.debug(f"stdout: write={len(data)}")
 
-        async def forward_stdout() -> None:
-            logger.debug("start forward stdout")
-            try:
-                while True:
-                    data = await ch.receive()
-                    logger.debug(f"ch: read={len(data)}")
-                    stdout_writer.write(data)
-                    logger.debug(f"stdout: write={len(data)}")
-            except (bastion.mux.ChannelError, bastion.mux.MuxError):
-                pass
-
-        await asyncio.gather(forward_stdin(), forward_stdout())
+    await asyncio.gather(forward_stdin(), forward_stdout())
 
 
 def _connect_function(args: argparse.Namespace) -> None:

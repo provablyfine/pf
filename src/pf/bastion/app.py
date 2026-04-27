@@ -129,16 +129,16 @@ def verify_token(state: AppState, request: Request) -> Token | None:
         return Token(tenant_id=state.dev_tenant_id, name=state.dev_name)
     assert state.trusted_keys is not None
 
-    if "Authorization" not in request.headers:
-        logger.debug("Missing Authorization header")
+    if "Proxy-Authorization" not in request.headers:
+        logger.debug("Missing Proxy-Authorization header")
         return None
-    authorization = request.headers["Authorization"]
+    authorization = request.headers["Proxy-Authorization"]
     space = authorization.find(" ")
     if space == -1:
-        logger.debug("Invalid Authorization header")
+        logger.debug("Invalid Proxy-Authorization header")
         return None
     if authorization[:space] != "Bearer":
-        logger.debug("Authorization header must contain a Bearer token")
+        logger.debug("Proxy-Authorization header must contain a Bearer token")
         return None
     token = authorization[space + 1 :].strip(" ")
 
