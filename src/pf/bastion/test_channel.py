@@ -9,6 +9,8 @@ from . import channel, tcp, _mux
 @pytest.fixture
 async def pair():
     server_sock, client_sock = socket.socketpair()
+    server_sock.setblocking(False)
+    client_sock.setblocking(False)
     server_async = tcp.TcpSocket(server_sock)
     client_async = tcp.TcpSocket(client_sock)
 
