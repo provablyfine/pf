@@ -1,15 +1,15 @@
 import asyncio
 import dataclasses
+import json
 import logging
 import socket
 import traceback
 import typing
-import json
 
 import jwt
 
-from .. import log
-from . import http, tcp, channel, exceptions
+from .. import anet, log
+from . import channel, exceptions, http
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +83,7 @@ class TrustedKeys:
 class Request:
     host: str
     port: int
-    headers: dict[str,str]
+    headers: dict[str, str]
 
 
 @dataclasses.dataclass
@@ -92,7 +92,7 @@ class AppState:
     audience: str
     dev_tenant_id: int | None
     dev_name: str | None
-    clients: dict[tuple[int, str],channel.Client]
+    clients: dict[tuple[int, str], channel.Client]
 
 
 @dataclasses.dataclass
@@ -104,12 +104,13 @@ class Response:
 class HTTPException(Exception):
     def __init__(self, response: Response):
         self._response = response
+
     @property
     def response(self) -> Response:
         return self._response
 
 
-RouteHandler = typing.Callable[[tcp.TcpSocket], typing.Awaitable[None]]
+RouteHandler = typing.Callable[[anet.base.Socket], typing.Awaitable[None]]
 RouteChecker = typing.Callable[[AppState, Request], typing.Awaitable[RouteHandler]]
 
 
@@ -176,7 +177,7 @@ async def register_checker(state: AppState, request: Request) -> RouteHandler:
     logger.info(f"Registering identity {token.tenant_id}/{token.name}")
     client_key = (token.tenant_id, token.name)
 
-    async def handler(sock: tcp.TcpSocket) -> None:
+    async def handler(sock: anet.base.Socket) -> None:
         client = channel.Client(sock)
         try:
             state.clients[client_key] = client
@@ -185,9 +186,10 @@ async def register_checker(state: AppState, request: Request) -> RouteHandler:
             await client.close()
             del state.clients[client_key]
             try:
-                sock.close()
+                await sock.close()
             except Exception:
                 pass
+
     return handler
 
 
@@ -201,7 +203,7 @@ async def connect_checker(state: AppState, request: Request) -> RouteHandler:
     if client is None:
         raise HTTPException(_404)
 
-    async def handler(user: tcp.TcpSocket) -> None:
+    async def handler(user: anet.base.Socket) -> None:
         host = await client.open_channel()
 
         async def relay_user_to_host() -> None:
@@ -234,7 +236,7 @@ async def connect_checker(state: AppState, request: Request) -> RouteHandler:
             except exceptions.Error:
                 pass
             finally:
-                await user.shutdown(socket.SHUT_WR)
+                await user.shutdown(anet.base.Shut.WR)
 
         try:
             await asyncio.gather(
@@ -243,12 +245,13 @@ async def connect_checker(state: AppState, request: Request) -> RouteHandler:
             )
         finally:
             await host.close()
-            user.close()
+            await user.close()
+
     return handler
 
 
 class Application:
-    def __init__(self, conf: Config, sock: tcp.TcpSocket):
+    def __init__(self, conf: Config, sock: socket.socket):
         self._config = conf
         self._state = AppState(
             trusted_keys=TrustedKeys(conf.issuer_prefix) if conf.issuer_prefix else None,
@@ -257,15 +260,15 @@ class Application:
             dev_name=conf.dev_name,
             clients={},
         )
-        self._sock = sock
+        self._raw_sock = sock
+        self._sock: anet.base.Socket | None = None
         self._tasks: list[asyncio.Task[None]] = []
         self._routes: list[Route] = []
-        self._stop = False
 
     def add_route(self, route: Route):
         self._routes.append(route)
 
-    async def _parse_request(self, sock: tcp.TcpSocket) -> Request:
+    async def _parse_request(self, sock: anet.base.Socket) -> Request:
         # We can read the data via a local buffer because all the data
         # sent is only for the proxy until we send back a 200.
         reader = http.LineReader(sock)
@@ -286,7 +289,7 @@ class Application:
             logger.error("Invalid request resource_target: missing colon")
             raise HTTPException(_400)
         host = resource_target[:colon]
-        port = resource_target[colon+1:]
+        port = resource_target[colon + 1 :]
         if not port.isdigit():
             logger.error("Invalid request resource_target: invalid port")
             raise HTTPException(_400)
@@ -300,12 +303,12 @@ class Application:
                 logger.error("Invalid request header: missing colon")
                 raise HTTPException(_400)
             name = line[:colon].decode("ascii").lower()
-            value = line[colon+1:].rstrip(b"\r\n").decode("ascii").lower()
+            value = line[colon + 1 :].rstrip(b"\r\n").decode("ascii").lower()
             headers[name] = value
         request = Request(host=host.decode("ascii"), port=int(port), headers=headers)
         return request
 
-    async def _handle_new_client(self, sock: tcp.TcpSocket) -> None:
+    async def _handle_new_client(self, sock: anet.base.Socket) -> None:
         try:
             request = await self._parse_request(sock)
             if "host" not in request.headers:
@@ -323,7 +326,7 @@ class Application:
             response = _404
         except HTTPException as e:
             response = e.response
-        except Exception as e:
+        except Exception:
             logger.error(traceback.format_exc())
             response = Response(status_code=500, title="Internal Server Error")
         else:
@@ -334,24 +337,24 @@ class Application:
             ("Content-Type", "application/json"),
             ("Content-Length", len(response_body)),
         ]
-        output: list[bytes] = [
-            "HTTP/1.1 {response.status_code} {response.reason}\r\n".encode("ascii")
-        ]
+        output: list[bytes] = ["HTTP/1.1 {response.status_code} {response.reason}\r\n".encode("ascii")]
         for name, value in response_headers:
             output.append(f"{name}: {value}\r\n".encode("ascii"))
         output.append("\r\n".encode("ascii"))
         output.append(response_body)
         await sock.send(b"".join(output))
 
-    async def _loop(self):
-        self._sock.listen(10)
-        while not self._stop:
+    async def _loop(self) -> None:
+        self._sock = anet.socket.Socket(self._raw_sock, loop=None)
+        await self._sock.listen(10)
+        while True:
             try:
                 sock, _address = await self._sock.accept()
                 task = asyncio.create_task(self._handle_new_client(sock))
                 self._tasks.append(task)
-            except TimeoutError:
-                pass
+            except OSError:
+                # Socket closed by stop()
+                break
 
     async def run(self):
         task = asyncio.create_task(self._loop())
@@ -359,15 +362,14 @@ class Application:
         for task in self._tasks:
             task.cancel()
 
-    def stop(self):
-        self._stop = True
+    def stop(self) -> None:
+        self._raw_sock.close()
 
 
 def create(conf: Config, sock: socket.socket) -> Application:
     log.setup_server("bastion", conf.log_level, conf.log_filename)
     sock.setblocking(False)
-    sock.settimeout(0.1)
-    app = Application(conf, tcp.TcpSocket(sock))
+    app = Application(conf, sock)
     app.add_route(Route(f"connect.{conf.domain_suffix}", connect_checker))
     app.add_route(Route(f"register.{conf.domain_suffix}", register_checker))
     return app

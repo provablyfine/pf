@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from . import _mux, tcp
+from .. import anet
+from . import _mux
 
 
 class Channel:
@@ -34,7 +35,7 @@ class Channel:
 class Server:
     """SSH channel server — accepts incoming channels."""
 
-    def __init__(self, sock: tcp.TcpSocket) -> None:
+    def __init__(self, sock: anet.base.Socket) -> None:
         self._mux = _mux.Mux(sock)
 
     async def accept(self) -> Channel:
@@ -44,13 +45,13 @@ class Server:
     async def close(self) -> None:
         """Close server."""
         await self._mux.stop()
-        self._mux.close_socket()
+        await self._mux.close_socket()
 
 
 class Client:
     """SSH channel client — opens channels."""
 
-    def __init__(self, sock: tcp.TcpSocket) -> None:
+    def __init__(self, sock: anet.base.Socket) -> None:
         self._mux = _mux.Mux(sock)
 
     async def open_channel(self) -> Channel:
@@ -60,7 +61,7 @@ class Client:
     async def close(self) -> None:
         """Close client."""
         await self._mux.stop()
-        self._mux.close_socket()
+        await self._mux.close_socket()
 
     async def wait_closed(self) -> None:
         """Wait until remote closes the connection."""

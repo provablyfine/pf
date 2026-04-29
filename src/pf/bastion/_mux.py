@@ -5,9 +5,8 @@ from __future__ import annotations
 import asyncio
 import enum
 
-from .. import ssh
-from . import exceptions, tcp
-
+from .. import anet, ssh
+from . import exceptions
 
 INITIAL_WINDOW = 1_048_576
 MAX_PACKET = 32_768
@@ -123,7 +122,7 @@ class ChannelImpl:
 class Mux:
     """SSH channel multiplexer."""
 
-    def __init__(self, sock: tcp.TcpSocket) -> None:
+    def __init__(self, sock: anet.base.Socket) -> None:
         self._sock = sock
         self._channels: dict[int, ChannelImpl] = {}
         self._next_id = 0
@@ -152,9 +151,9 @@ class Mux:
         if self._reader_task is not None:
             await self._reader_task
 
-    def close_socket(self) -> None:
+    async def close_socket(self) -> None:
         """Close underlying socket."""
-        self._sock.close()
+        await self._sock.close()
 
     async def accept(self) -> ChannelImpl:
         """Accept next incoming channel from peer."""
@@ -197,10 +196,7 @@ class Mux:
     async def _read_n(self, n: int) -> bytes:
         buffer: bytes = b""
         while len(buffer) < n:
-            try:
-                chunk = await self._sock.recv(n - len(buffer))
-            except TimeoutError:
-                continue
+            chunk = await self._sock.recv(n - len(buffer))
             if not chunk:
                 return b""
             buffer += chunk

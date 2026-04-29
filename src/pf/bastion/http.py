@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import logging
 import enum
+import logging
 
-from . import tcp
+from .. import anet
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +14,7 @@ class SearchState(enum.Enum):
 
 
 class LineReader:
-    def __init__(self, sock: tcp.TcpSocket):
+    def __init__(self, sock: anet.base.Socket):
         self._sock = sock
         self._buffer: bytes = b""
 
@@ -25,7 +25,7 @@ class LineReader:
             if len(self._buffer) < current:
                 data = await self._sock.recv(4096)
                 self._buffer += data
-            byte = self._buffer[current:current+1]
+            byte = self._buffer[current : current + 1]
             match state:
                 case SearchState.R:
                     if byte == b"\r":

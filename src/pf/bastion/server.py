@@ -1,9 +1,9 @@
 import argparse
+import asyncio
 import datetime
 import signal
 import socket
 import types
-import asyncio
 
 from . import app
 
@@ -11,7 +11,9 @@ from . import app
 def run():
     parser = argparse.ArgumentParser()
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("--domain-suffix", help="Domain suffix for all incoming requests. Default: %(default)s", default="bastion.dev")
+    group.add_argument(
+        "--domain-suffix", help="Domain suffix for all incoming requests. Default: %(default)s", default="bastion.dev"
+    )
     group.add_argument("--issuer-prefix", help="OIDC issuer url")
     group.add_argument("--dev", action="store_true")
     parser.add_argument("-p", "--port", type=int, default=0)
@@ -33,7 +35,11 @@ def run():
     if args.dev:
         conf = app.Config(
             domain_suffix=args.domain_suffix,
-            dev_tenant_id=1, dev_name="hello", issuer_prefix=None, log_level=args.debug, log_filename=args.log_filename,
+            dev_tenant_id=1,
+            dev_name="hello",
+            issuer_prefix=None,
+            log_level=args.debug,
+            log_filename=args.log_filename,
         )
     else:
         conf = app.Config(

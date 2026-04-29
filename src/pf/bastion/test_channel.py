@@ -1,21 +1,17 @@
 import asyncio
-import socket
 
 import pytest
 
-from . import channel, tcp, _mux
+from .. import anet
+from . import _mux, channel
 
 
 @pytest.fixture
 async def pair():
-    server_sock, client_sock = socket.socketpair()
-    server_sock.setblocking(False)
-    client_sock.setblocking(False)
-    server_async = tcp.TcpSocket(server_sock)
-    client_async = tcp.TcpSocket(client_sock)
+    server_sock, client_sock = await anet.socket.socketpair(anet.socket.Family.UNIX, anet.socket.Type.STREAM)
 
-    server = channel.Server(server_async)
-    client = channel.Client(client_async)
+    server = channel.Server(server_sock)
+    client = channel.Client(client_sock)
     yield server, client
     await server.close()
     await client.close()
