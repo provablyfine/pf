@@ -30,11 +30,11 @@ def _bastion_list_function(args: argparse.Namespace) -> None:
         case "text":
             rows: list[list[int | str]] = []
             for bastion in bastions:
-                rows.append([bastion.id, bastion.register_url, len(bastion.tag_list)])
+                rows.append([bastion.id, bastion.url, len(bastion.tag_list)])
             if len(rows) == 0:
                 output = ""
             else:
-                output = tabulate.tabulate(rows, headers=["id", "register_url", "ntags"], maxcolwidths=80)
+                output = tabulate.tabulate(rows, headers=["id", "url", "ntags"], maxcolwidths=80)
         case _:
             assert False
     if output:
@@ -51,9 +51,7 @@ def _bastion_read_function(args: argparse.Namespace) -> None:
         case "text":
             rows: list[list[int | str]] = []
             rows.append(["id", bastion.id])
-            rows.append(["register_url", bastion.register_url])
-            if bastion.connect_url:
-                rows.append(["connect_url", bastion.connect_url])
+            rows.append(["url", bastion.url])
             if bastion.ssh_proxy_jump:
                 rows.append(["ssh_proxy_jump", bastion.ssh_proxy_jump])
             for tag in bastion.tag_list:
@@ -75,13 +73,13 @@ def _bastion_create_function(args: argparse.Namespace) -> None:
     sc = client.sync.Client(c, timeout=args.timeout)
     tag_id_list = [int(t) for t in args.tag if t.isdigit()]
     tag_name_value_list = [_parse_tag(t) for t in args.tag if not t.isdigit()]
-    sc.create_bastion(args.register_url, args.connect_url, args.ssh_proxy_jump, tag_id_list, tag_name_value_list)
+    sc.create_bastion(args.url, args.ssh_proxy_jump, tag_id_list, tag_name_value_list)
 
 
 def _bastion_update_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     sc = client.sync.Client(c, timeout=args.timeout)
-    sc.update_bastion(args.id, args.register_url, args.connect_url, args.ssh_proxy_jump)
+    sc.update_bastion(args.id, args.url, args.ssh_proxy_jump)
 
 
 def add_subparser(parser: argparse.ArgumentParser) -> None:
