@@ -4,7 +4,7 @@ import asyncio
 import datetime
 import ipaddress
 import logging
-import ssl as _ssl
+import os
 
 import pytest
 from cryptography import x509
@@ -17,18 +17,40 @@ import pf.anet.socket as anet_socket
 import pf.anet.ssl as anet_ssl
 import pf.anet.stream as stream
 
-
 logger = logging.getLogger(__name__)
 
+
 def _ipv6_available() -> bool:
-    """Check if IPv6 is available on the system."""
-    import socket as _socket_check
+    """Check if IPv6 is available (sync, for @pytest.mark.skipif at collection time)."""
+    import socket as _socket
     try:
-        s = _socket_check.socket(_socket_check.AF_INET6, _socket_check.SOCK_STREAM)
+        s = _socket.socket(_socket.AF_INET6, _socket.SOCK_STREAM)
         s.close()
         return True
-    except (OSError, TypeError):
+    except OSError:
         return False
+
+
+def _create_server_context(
+    certfile: str | os.PathLike[str],
+    keyfile: str | os.PathLike[str],
+) -> anet_ssl.SSLContext:
+    """Create server-side SSL context from certificate and key files."""
+    ctx = anet_ssl.SSLContext(anet_ssl.ContextProtocol.SERVER)
+    ctx.load_cert_chain(certfile, keyfile)
+    return ctx
+
+
+def _create_client_context(
+    cafile: str | os.PathLike[str],
+    check_hostname: bool = True,
+) -> anet_ssl.SSLContext:
+    """Create client-side SSL context with CA verification."""
+    ctx = anet_ssl.SSLContext(anet_ssl.ContextProtocol.CLIENT)
+    ctx.load_verify_locations(cafile)
+    ctx.check_hostname = check_hostname
+    ctx.verify_mode = anet_ssl.VerifyMode.REQUIRED
+    return ctx
 
 
 @pytest.fixture(scope="session")
@@ -96,20 +118,12 @@ def ssl_contexts(tmp_path_factory: pytest.TempPathFactory) -> tuple[anet_ssl.SSL
         )
     )
 
-    # Create SSL contexts
-    server_ctx = _ssl.SSLContext(_ssl.PROTOCOL_TLS_SERVER)
-    server_ctx.load_cert_chain(str(server_cert_file), str(server_key_file))
-
-    client_ctx = _ssl.SSLContext(_ssl.PROTOCOL_TLS_CLIENT)
-    client_ctx.load_verify_locations(str(ca_cert_file))
-    client_ctx.check_hostname = False
-    client_ctx.verify_mode = _ssl.CERT_REQUIRED
+    # Create SSL contexts using anet factories
+    server_ctx = _create_server_context(server_cert_file, server_key_file)
+    client_ctx = _create_client_context(ca_cert_file, check_hostname=False)
 
     # Wrap in anet.ssl.SSLContext
-    anet_server_ctx = anet_ssl.SSLContext(server_ctx)
-    anet_client_ctx = anet_ssl.SSLContext(client_ctx)
-
-    return anet_server_ctx, anet_client_ctx
+    return server_ctx, client_ctx
 
 
 @pytest.fixture

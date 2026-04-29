@@ -1,9 +1,19 @@
 from __future__ import annotations
 
 import logging
+import enum
 import ssl as _ssl
 
 from . import base, socket
+
+
+class VerifyMode(enum.IntEnum):
+    REQUIRED = _ssl.CERT_REQUIRED
+
+
+class ContextProtocol(enum.IntEnum):
+    SERVER = _ssl.PROTOCOL_TLS_SERVER
+    CLIENT = _ssl.PROTOCOL_TLS_CLIENT
 
 
 logger = logging.getLogger(__name__)
@@ -31,12 +41,12 @@ class Socket(base.Socket):
                 await self._flush_send()
                 try:
                     chunk = await self._read_record()
-                except (EOFError, Exception) as e:
+                except (EOFError, Exception):
                     raise
                 else:
                     if not chunk:
                         raise ConnectionError("Socket closed unexpectedly") from exc
-                    accepted = self._in_bio.write(chunk)
+                    _accepted = self._in_bio.write(chunk)
 
     async def _flush_send(self):
         while self._out_bio.pending:
@@ -69,7 +79,7 @@ class Socket(base.Socket):
     async def _read_data_record(self) -> bytes:
         if self._ssl_object.pending() == 0:
             record = await self._read_record()
-            accepted = self._in_bio.write(record)
+            _accepted = self._in_bio.write(record)
         data = self._ssl_object.read()
         return data
 
@@ -90,7 +100,7 @@ class Socket(base.Socket):
     async def shutdown(self, flag: base.Shut) -> None:
         try:
             self._ssl_object.unwrap()
-        except (_ssl.SSLWantWriteError, _ssl.SSLWantReadError) as exc:
+        except (_ssl.SSLWantWriteError, _ssl.SSLWantReadError):
             # flush 'close_notify' record to remote
             await self._flush_send()
             data = await self._sock.recv(4096)
@@ -108,9 +118,31 @@ class Socket(base.Socket):
         await self._sock.close()
 
 
-class SSLContext:
+class SSLContextBase:
     def __init__(self, ctx: _ssl.SSLContext):
         self._ctx = ctx
+
+    def load_cert_chain(self, certfile: str, keyfile: str):
+        self._ctx.load_cert_chain(certfile, keyfile)
+
+    def load_verify_locations(self, ca_cert_file: str):
+        self._ctx.load_verify_locations(ca_cert_file)
+
+    @property
+    def check_hostname(self) -> bool:
+        return self._ctx.check_hostname
+
+    @check_hostname.setter
+    def check_hostname(self, value: bool):
+        self._ctx.check_hostname = value
+
+    @property
+    def verify_mode(self) -> VerifyMode:
+        return VerifyMode(self._ctx.verify_mode)
+
+    @verify_mode.setter
+    def verify_mode(self, mode: VerifyMode):
+        self._ctx.verify_mode = mode.value
 
     async def wrap_socket(
         self,
@@ -121,6 +153,11 @@ class SSLContext:
         return Socket(sock, self._ctx, server_side=server_side, server_hostname=server_hostname)
 
 
-async def create_default_context():
+class SSLContext(SSLContextBase):
+    def __init__(self, protocol: ContextProtocol):
+        super().__init__(_ssl.SSLContext(protocol.value))
+
+
+async def create_default_context() -> SSLContextBase:
     ctx = _ssl.create_default_context()
-    return SSLContext(ctx)
+    return SSLContextBase(ctx)
