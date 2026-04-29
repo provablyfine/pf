@@ -4,9 +4,20 @@ from __future__ import annotations
 
 import asyncio
 import enum
+import struct
 
-from .. import anet, ssh
+from .. import anet
 from . import exceptions
+
+
+def _unpack_uint32(data: bytes, offset: int) -> tuple[int, int]:
+    (value,) = struct.unpack_from("!I", data, offset)
+    return value, offset + 4
+
+
+def _unpack_string(data: bytes, offset: int) -> tuple[bytes, int]:
+    length, offset = _unpack_uint32(data, offset)
+    return data[offset : offset + length], offset + length
 
 INITIAL_WINDOW = 1_048_576
 MAX_PACKET = 32_768
@@ -222,29 +233,27 @@ class Mux:
         if not packet:
             return
         msg_type = packet[0]
-        reader = ssh.buffer.Reader(packet[1:])
 
         if msg_type == ChannelMsg.OPEN:
-            await self._handle_channel_open(reader)
+            await self._handle_channel_open(packet)
         elif msg_type == ChannelMsg.OPEN_CONFIRMATION:
-            await self._handle_channel_open_confirmation(reader)
+            await self._handle_channel_open_confirmation(packet)
         elif msg_type == ChannelMsg.OPEN_FAILURE:
-            await self._handle_channel_open_failure(reader)
+            await self._handle_channel_open_failure(packet)
         elif msg_type == ChannelMsg.DATA:
-            await self._handle_channel_data(reader)
+            await self._handle_channel_data(packet)
         elif msg_type == ChannelMsg.WINDOW_ADJUST:
-            await self._handle_window_adjust(reader)
+            await self._handle_window_adjust(packet)
         elif msg_type == ChannelMsg.EOF:
-            await self._handle_eof(reader)
+            await self._handle_eof(packet)
         elif msg_type == ChannelMsg.CLOSE:
-            await self._handle_close(reader)
+            await self._handle_close(packet)
 
-    async def _handle_channel_open(self, reader: ssh.buffer.Reader) -> None:
+    async def _handle_channel_open(self, packet: bytes) -> None:
         """Handle SSH_MSG_CHANNEL_OPEN."""
-        channel_type = reader.read_string()
-        sender_channel = reader.read_uint32()
-        initial_window = reader.read_uint32()
-        _ = reader.read_uint32()  # max_packet
+        channel_type, offset = _unpack_string(packet, 1)
+        sender_channel, offset = _unpack_uint32(packet, offset)
+        initial_window, _ = _unpack_uint32(packet, offset)
 
         local_id = self._next_id
         self._next_id += 1
@@ -255,12 +264,11 @@ class Mux:
         await self._send_channel_open_confirmation(local_id, sender_channel, INITIAL_WINDOW, MAX_PACKET)
         await self._pending_open.put(channel)
 
-    async def _handle_channel_open_confirmation(self, reader: ssh.buffer.Reader) -> None:
+    async def _handle_channel_open_confirmation(self, packet: bytes) -> None:
         """Handle SSH_MSG_CHANNEL_OPEN_CONFIRMATION."""
-        recipient_channel = reader.read_uint32()
-        sender_channel = reader.read_uint32()
-        initial_window = reader.read_uint32()
-        _ = reader.read_uint32()  # max_packet
+        recipient_channel, offset = _unpack_uint32(packet, 1)
+        sender_channel, offset = _unpack_uint32(packet, offset)
+        initial_window, _ = _unpack_uint32(packet, offset)
 
         if recipient_channel not in self._open_results:
             return
@@ -270,12 +278,11 @@ class Mux:
         self._channels[recipient_channel] = channel
         future.set_result(channel)
 
-    async def _handle_channel_open_failure(self, reader: ssh.buffer.Reader) -> None:
+    async def _handle_channel_open_failure(self, packet: bytes) -> None:
         """Handle SSH_MSG_CHANNEL_OPEN_FAILURE."""
-        recipient_channel = reader.read_uint32()
-        _ = reader.read_uint32()  # reason
-        description = reader.read_string()
-        _ = reader.read_string()  # language_tag
+        recipient_channel, offset = _unpack_uint32(packet, 1)
+        _, offset = _unpack_uint32(packet, offset)  # reason
+        description, offset = _unpack_string(packet, offset)
 
         if recipient_channel not in self._open_results:
             return
@@ -283,10 +290,10 @@ class Mux:
         _, future = self._open_results.pop(recipient_channel)
         future.set_exception(exceptions.Error(f"Channel open failed: {description.decode()}"))
 
-    async def _handle_channel_data(self, reader: ssh.buffer.Reader) -> None:
+    async def _handle_channel_data(self, packet: bytes) -> None:
         """Handle SSH_MSG_CHANNEL_DATA."""
-        recipient_channel = reader.read_uint32()
-        data = reader.read_string()
+        recipient_channel, offset = _unpack_uint32(packet, 1)
+        data, _ = _unpack_string(packet, offset)
 
         if recipient_channel not in self._channels:
             return
@@ -296,10 +303,10 @@ class Mux:
         # Send window adjust to replenish
         await self._send_window_adjust(recipient_channel, len(data))
 
-    async def _handle_window_adjust(self, reader: ssh.buffer.Reader) -> None:
+    async def _handle_window_adjust(self, packet: bytes) -> None:
         """Handle SSH_MSG_CHANNEL_WINDOW_ADJUST."""
-        recipient_channel = reader.read_uint32()
-        bytes_to_add = reader.read_uint32()
+        recipient_channel, offset = _unpack_uint32(packet, 1)
+        bytes_to_add, _ = _unpack_uint32(packet, offset)
 
         if recipient_channel not in self._channels:
             return
@@ -307,9 +314,9 @@ class Mux:
         channel = self._channels[recipient_channel]
         channel.recv_window_adjust(bytes_to_add)
 
-    async def _handle_eof(self, reader: ssh.buffer.Reader) -> None:
+    async def _handle_eof(self, packet: bytes) -> None:
         """Handle SSH_MSG_CHANNEL_EOF."""
-        recipient_channel = reader.read_uint32()
+        recipient_channel, _ = _unpack_uint32(packet, 1)
 
         if recipient_channel not in self._channels:
             return
@@ -317,9 +324,9 @@ class Mux:
         channel = self._channels[recipient_channel]
         await channel.recv_eof()
 
-    async def _handle_close(self, reader: ssh.buffer.Reader) -> None:
+    async def _handle_close(self, packet: bytes) -> None:
         """Handle SSH_MSG_CHANNEL_CLOSE."""
-        recipient_channel = reader.read_uint32()
+        recipient_channel, _ = _unpack_uint32(packet, 1)
 
         if recipient_channel in self._channels:
             channel = self._channels.pop(recipient_channel)
@@ -329,50 +336,37 @@ class Mux:
         self, local_id: int, remote_id: int, initial_window: int, max_packet: int
     ) -> None:
         """Send SSH_MSG_CHANNEL_OPEN_CONFIRMATION."""
-        w = ssh.buffer.Writer()
-        w.write_byte(ChannelMsg.OPEN_CONFIRMATION)
-        w.write_uint32(remote_id)
-        w.write_uint32(local_id)
-        w.write_uint32(initial_window)
-        w.write_uint32(max_packet)
-        await self._write_packet(w.to_bytes())
+        packet = struct.pack(
+            "!BIIII", ChannelMsg.OPEN_CONFIRMATION, remote_id, local_id, initial_window, max_packet
+        )
+        await self._write_packet(packet)
 
     async def send_channel_data(self, recipient_channel: int, data: bytes) -> None:
         """Send SSH_MSG_CHANNEL_DATA."""
-        w = ssh.buffer.Writer()
-        w.write_byte(ChannelMsg.DATA)
-        w.write_uint32(recipient_channel)
-        w.write_string(data)
-        await self._write_packet(w.to_bytes())
+        packet = struct.pack("!BII", ChannelMsg.DATA, recipient_channel, len(data)) + data
+        await self._write_packet(packet)
 
     async def _send_window_adjust(self, recipient_channel: int, bytes_to_add: int) -> None:
         """Send SSH_MSG_CHANNEL_WINDOW_ADJUST."""
-        w = ssh.buffer.Writer()
-        w.write_byte(ChannelMsg.WINDOW_ADJUST)
-        w.write_uint32(recipient_channel)
-        w.write_uint32(bytes_to_add)
-        await self._write_packet(w.to_bytes())
+        packet = struct.pack("!BII", ChannelMsg.WINDOW_ADJUST, recipient_channel, bytes_to_add)
+        await self._write_packet(packet)
 
     async def send_channel_eof(self, recipient_channel: int) -> None:
         """Send SSH_MSG_CHANNEL_EOF."""
-        w = ssh.buffer.Writer()
-        w.write_byte(ChannelMsg.EOF)
-        w.write_uint32(recipient_channel)
-        await self._write_packet(w.to_bytes())
+        packet = struct.pack("!BI", ChannelMsg.EOF, recipient_channel)
+        await self._write_packet(packet)
 
     async def send_channel_close(self, recipient_channel: int) -> None:
         """Send SSH_MSG_CHANNEL_CLOSE."""
-        w = ssh.buffer.Writer()
-        w.write_byte(ChannelMsg.CLOSE)
-        w.write_uint32(recipient_channel)
-        await self._write_packet(w.to_bytes())
+        packet = struct.pack("!BI", ChannelMsg.CLOSE, recipient_channel)
+        await self._write_packet(packet)
 
     async def _send_channel_open(self, local_id: int, channel_type: str, initial_window: int, max_packet: int) -> None:
         """Send SSH_MSG_CHANNEL_OPEN."""
-        w = ssh.buffer.Writer()
-        w.write_byte(ChannelMsg.OPEN)
-        w.write_string(channel_type.encode())
-        w.write_uint32(local_id)
-        w.write_uint32(initial_window)
-        w.write_uint32(max_packet)
-        await self._write_packet(w.to_bytes())
+        channel_type_bytes = channel_type.encode()
+        packet = (
+            struct.pack("!BI", ChannelMsg.OPEN, len(channel_type_bytes))
+            + channel_type_bytes
+            + struct.pack("!III", local_id, initial_window, max_packet)
+        )
+        await self._write_packet(packet)
