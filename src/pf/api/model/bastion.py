@@ -20,23 +20,20 @@ _UNSET = Unset()
 class Bastion:
     id: int
     tag_id_list: list[int]
-    register_url: str
-    connect_url: str | None = None
+    url: str
     ssh_proxy_jump: str | None = None
     created_at: int | None = None
     created_by_id: int | None = None
 
 
 def create(
-    register_url: str,
-    connect_url: str | None | Unset = _UNSET,
+    url: str,
     ssh_proxy_jump: str | None | Unset = _UNSET,
     tag_id_list: list[int] | None | Unset = _UNSET,
 ) -> int:
     now = int(time.time())
     bastion_id = ctx.app_db.bastion.create(
-        register_url=register_url,
-        connect_url=None if connect_url is _UNSET else connect_url,
+        url=url,
         ssh_proxy_jump=None if ssh_proxy_jump is _UNSET else ssh_proxy_jump,
         tag_id_list=[] if tag_id_list is _UNSET else tag_id_list,
         created_at=now,
@@ -46,8 +43,7 @@ def create(
     audit_log.create(
         "bastion-create",
         id=bastion_id,
-        register_url=register_url,
-        connect_url=connect_url,
+        url=url,
         ssh_proxy_jump=ssh_proxy_jump,
         tag_id_list=tag_id_list,
     )
@@ -75,8 +71,7 @@ def read_all(**kwargs: typing.Any) -> list[Bastion]:
     return [
         Bastion(
             id=b.id,
-            register_url=b.register_url,
-            connect_url=b.connect_url,
+            url=b.url,
             ssh_proxy_jump=b.ssh_proxy_jump,
             tag_id_list=b.tag_id_list,
             created_at=b.created_at,
@@ -88,16 +83,13 @@ def read_all(**kwargs: typing.Any) -> list[Bastion]:
 
 def update(
     id: int,
-    register_url: str | None = None,
-    connect_url: str | None = None,
+    url: str | None = None,
     ssh_proxy_jump: str | None = None,
     tag_id_list: list[int] | None = None,
 ) -> None:
     update_fields: dict[str, typing.Any] = {}
-    if register_url is not None:
-        update_fields["register_url"] = register_url
-    if connect_url is not None:
-        update_fields["connect_url"] = connect_url
+    if url is not None:
+        update_fields["url"] = url
     if ssh_proxy_jump is not None:
         update_fields["ssh_proxy_jump"] = ssh_proxy_jump
     if tag_id_list is not None:

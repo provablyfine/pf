@@ -466,8 +466,7 @@ class IdentitySelfBastionListResponse(APIBase):
 
 class Bastion(APIBase):
     id: int
-    register_url: str
-    connect_url: str | None = None
+    url: str
     ssh_proxy_jump: str | None = None
     tag_list: list[TagNameValue] = []
 
@@ -477,8 +476,7 @@ class BastionListResponse(APIBase):
 
 
 class BastionCreateRequest(APIBase):
-    register_url: str
-    connect_url: str | None = None
+    url: str
     ssh_proxy_jump: str | None = None
     tag_id_list: list[int] = []
     tag_name_value_list: list[IdentityTagNameValue] = []
@@ -491,8 +489,7 @@ class BastionCreateRequest(APIBase):
 
 
 class BastionUpdateRequest(APIBase):
-    register_url: str | None = None
-    connect_url: str | None = None
+    url: str | None = None
     ssh_proxy_jump: str | None = None
     tag_id_list: list[int] | None = None
     tag_name_value_list: list[IdentityTagNameValue] | None = None
@@ -503,10 +500,8 @@ class BastionUpdateRequest(APIBase):
             raise ValueError("Cannot specify both 'tag_id_list' and 'tag_name_value_list'")
         if self.tag_name_value_list is not None or self.tag_id_list is not None:
             return self
-        if self.connect_url is not None or self.ssh_proxy_jump is not None:
-            return self
         raise ValueError(
-            "At least one of 'register_url', 'connect_url', 'ssh_proxy_jump', "
+            "At least one of "
             "'tag_id_list', or 'tag_name_value_list' must be specified"
         )
 

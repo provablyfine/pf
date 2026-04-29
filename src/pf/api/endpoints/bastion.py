@@ -35,8 +35,7 @@ def create_endpoint(data: schemas.BastionCreateRequest) -> schemas.Bastion:
     tag_ids = _read_tag_ids(data.tag_id_list, data.tag_name_value_list)
 
     bastion_id = model.bastion.create(
-        register_url=data.register_url,
-        connect_url=data.connect_url,
+        url=data.url,
         ssh_proxy_jump=data.ssh_proxy_jump,
         tag_id_list=tag_ids,
     )
@@ -62,8 +61,7 @@ def update_endpoint(bastion_id: int, data: schemas.BastionUpdateRequest) -> sche
 
     model.bastion.update(
         id=bastion_id,
-        register_url=data.register_url,
-        connect_url=data.connect_url,
+        url=data.url,
         ssh_proxy_jump=data.ssh_proxy_jump,
         tag_id_list=tag_ids,
     )
