@@ -167,8 +167,7 @@ class AuthListResponse(_Base):
 
 class Bastion(_Base):
     id: int
-    register_url: str
-    connect_url: str | None = None
+    url: str
     ssh_proxy_jump: str | None = None
     tag_list: list[TagNameValue] = []
 

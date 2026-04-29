@@ -305,8 +305,7 @@ class Client:
 
     def create_bastion(
         self,
-        register_url: str,
-        connect_url: str | None,
+        url: str,
         ssh_proxy_jump: str | None,
         tag_id_list: list[int],
         tag_name_value_list: list[dict[str, str]],
@@ -315,8 +314,7 @@ class Client:
         response = http.post(
             http.directory.bastion,
             json={
-                "register_url": register_url,
-                "connect_url": connect_url,
+                "url": url,
                 "ssh_proxy_jump": ssh_proxy_jump,
                 "tag_id_list": tag_id_list,
                 "tag_name_value_list": tag_name_value_list,
@@ -329,17 +327,14 @@ class Client:
     def update_bastion(
         self,
         id: int,
-        register_url: str | None = None,
-        connect_url: str | None = None,
+        url: str | None = None,
         ssh_proxy_jump: str | None = None,
         tag_id_list: list[int] | None = None,
         tag_name_value_list: list[schemas.TagNameValue] | None = None,
     ) -> None:
         query: dict[str, typing.Any] = {}
-        if register_url is not None:
-            query["register_url"] = register_url
-        if connect_url is not None:
-            query["connect_url"] = connect_url
+        if url is not None:
+            query["url"] = url
         if ssh_proxy_jump is not None:
             query["ssh_proxy_jump"] = ssh_proxy_jump
         if tag_id_list is not None:
