@@ -75,8 +75,7 @@ class BastionViewScreen(base.Screen):
         self._auth = auth
         self._bastion = bastion
         self._tags: list[client.schemas.TagNameValue] = list(bastion.tag_list)
-        self._saved_register_url: str = bastion.register_url
-        self._saved_connect_url: str | None = bastion.connect_url
+        self._saved_url: str = bastion.url
         self._saved_ssh_proxy_jump: str | None = bastion.ssh_proxy_jump
         self._saved_tags: list[client.schemas.TagNameValue] = list(bastion.tag_list)
 
@@ -85,10 +84,7 @@ class BastionViewScreen(base.Screen):
         with textual.containers.Vertical():
             with textual.containers.HorizontalGroup(classes="field") as container:
                 container.border_title = "Register URL"
-                yield textual.widgets.Input(self._bastion.register_url, id="register_url", compact=True)
-            with textual.containers.HorizontalGroup(classes="field") as container:
-                container.border_title = "Connect URL"
-                yield textual.widgets.Input(self._bastion.connect_url or "", id="connect_url", compact=True)
+                yield textual.widgets.Input(self._bastion.url, id="url", compact=True)
             with textual.containers.HorizontalGroup(classes="field") as container:
                 container.border_title = "SSH Proxy Jump"
                 yield textual.widgets.Input(self._bastion.ssh_proxy_jump or "", id="ssh_proxy_jump", compact=True)
@@ -108,7 +104,7 @@ class BastionViewScreen(base.Screen):
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
-        self.sub_title = f"Bastions > {self._bastion.register_url}"
+        self.sub_title = f"Bastions > {self._bastion.url}"
         await self._populate_tags()
 
     def on_descendant_focus(self, event: textual.events.DescendantFocus) -> None:
@@ -159,15 +155,12 @@ class BastionViewScreen(base.Screen):
 
     @textual.work
     async def action_save(self) -> None:
-        register_url = self.query_one("#register_url", textual.widgets.Input).value
-        connect_url = self.query_one("#connect_url", textual.widgets.Input).value.strip() or None
+        url = self.query_one("#url", textual.widgets.Input).value
         ssh_proxy_jump = self.query_one("#ssh_proxy_jump", textual.widgets.Input).value.strip() or None
 
         update_kwargs: dict[str, object] = {}
-        if register_url != self._saved_register_url:
-            update_kwargs["register_url"] = register_url
-        if connect_url != self._saved_connect_url:
-            update_kwargs["connect_url"] = connect_url
+        if url != self._saved_url:
+            update_kwargs["url"] = url
         if ssh_proxy_jump != self._saved_ssh_proxy_jump:
             update_kwargs["ssh_proxy_jump"] = ssh_proxy_jump
         if self._tags != self._saved_tags:
