@@ -9,7 +9,7 @@ import typing
 import jwt
 
 from .. import anet, log
-from . import channel, exceptions
+from . import exceptions
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +92,7 @@ class AppState:
     audience: str
     dev_tenant_id: int | None
     dev_name: str | None
-    clients: dict[tuple[int, str], channel.Client]
+    clients: dict[tuple[int, str], anet.channel.Client]
 
 
 @dataclasses.dataclass
@@ -178,7 +178,7 @@ async def register_checker(state: AppState, request: Request) -> RouteHandler:
     client_key = (token.tenant_id, token.name)
 
     async def handler(sock: anet.base.Socket) -> None:
-        client = channel.Client(sock)
+        client = anet.channel.Client(sock)
         try:
             state.clients[client_key] = client
             await client.wait_closed()
@@ -217,7 +217,7 @@ async def connect_checker(state: AppState, request: Request) -> RouteHandler:
                     logger.debug(f"relay_user_to_host rx={len(data)}")
                     await host.write(data)
                     logger.debug(f"relay_user_to_host tx={len(data)}")
-            except exceptions.Error:
+            except anet.exceptions.Error:
                 pass
             finally:
                 await host.close_write()
@@ -233,7 +233,7 @@ async def connect_checker(state: AppState, request: Request) -> RouteHandler:
                     logger.debug(f"relay_host_to_user rx={len(data)}")
                     await user.send(data)
                     logger.debug(f"relay_host_to_user tx={len(data)}")
-            except exceptions.Error:
+            except anet.exceptions.Error:
                 pass
             finally:
                 await user.shutdown(anet.base.Shut.WR)

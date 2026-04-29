@@ -6,8 +6,7 @@ import asyncio
 import enum
 import struct
 
-from .. import anet
-from . import exceptions
+from . import base, exceptions
 
 
 def _unpack_uint32(data: bytes, offset: int) -> tuple[int, int]:
@@ -133,7 +132,7 @@ class ChannelImpl:
 class Mux:
     """SSH channel multiplexer."""
 
-    def __init__(self, sock: anet.base.Socket) -> None:
+    def __init__(self, sock: base.Socket) -> None:
         self._sock = sock
         self._channels: dict[int, ChannelImpl] = {}
         self._next_id = 0
