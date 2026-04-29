@@ -214,8 +214,7 @@ default = db.make_table("default", metadata, DefaultRow)
 
 class BastionRow(typing.NamedTuple):
     id: typing.Annotated[int, db.Col(primary_key=True)]
-    register_url: str
-    connect_url: str | None
+    url: str
     ssh_proxy_jump: str | None
     tag_id_list: list[int]
     created_at: int

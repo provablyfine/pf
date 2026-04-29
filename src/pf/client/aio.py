@@ -141,30 +141,28 @@ class Client:
 
     async def create_bastion(
         self,
-        register_url: str,
-        connect_url: str | None,
+        url: str,
         ssh_proxy_jump: str | None,
         tag_id_list: list[int],
         tag_name_value_list: list[dict[str, str]],
     ) -> schemas.Bastion:
         return await self._run(
             lambda: self._sync.create_bastion(
-                register_url, connect_url, ssh_proxy_jump, tag_id_list, tag_name_value_list
+                url, ssh_proxy_jump, tag_id_list, tag_name_value_list
             )
         )
 
     async def update_bastion(
         self,
         id: int,
-        register_url: str | None = None,
-        connect_url: str | None = None,
+        url: str | None = None,
         ssh_proxy_jump: str | None = None,
         tag_id_list: list[int] | None = None,
         tag_name_value_list: list[schemas.TagNameValue] | None = None,
     ) -> None:
         return await self._run(
             lambda: self._sync.update_bastion(
-                id, register_url, connect_url, ssh_proxy_jump, tag_id_list, tag_name_value_list
+                id, url, ssh_proxy_jump, tag_id_list, tag_name_value_list
             )
         )
 

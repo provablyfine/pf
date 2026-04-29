@@ -691,9 +691,7 @@ async def test_tui_bastion_list(api, ssh_agent):
                 await pilot.press("a")  # open add modal via action_add_bastion worker
                 await pilot.pause()  # screen transition
                 await pilot.pause()  # _BastionCreateScreen.on_mount (no API)
-                await pilot.press(*"https://register.example.com")  # type register_url
-                await pilot.press("tab")  # move to connect_url
-                await pilot.press(*"ssh://bastion.example.com")  # type connect_url
+                await pilot.press(*"https://bastion.example.com")  # type url
                 await pilot.press("tab")  # move to ssh_proxy_jump
                 await pilot.press(*"proxy.example.com")  # type ssh_proxy_jump
                 await pilot.press("enter")  # submit
@@ -701,10 +699,10 @@ async def test_tui_bastion_list(api, ssh_agent):
 
             assert not [n for n in app._notifications if n.severity == "error"]
 
-            await auth.list_bastions()
+            resp = await auth.list_bastions()
 
 
-#        assert any(b.register_url == "https://register.example.com" for b in resp.bastions)
+        assert any(b.url == "https://bastion.example.com" for b in resp.bastions)
 
 
 @pytest.mark.anyio
@@ -713,9 +711,8 @@ async def test_tui_bastion_delete(api, ssh_agent):
     with _setup_ssh_auth_sock(ssh_agent):
         with tempfile.TemporaryDirectory() as tmpdir:
             auth = _setup(api, tmpdir, ssh_agent)
-            await auth.create_bastion(
+            bastion = await auth.create_bastion(
                 "https://register.example.com",
-                "ssh://bastion.example.com",
                 "proxy.example.com",
                 [],
                 [],
@@ -734,10 +731,9 @@ async def test_tui_bastion_delete(api, ssh_agent):
 
             assert not [n for n in app._notifications if n.severity == "error"]
 
-            await auth.list_bastions()
+            resp = await auth.list_bastions()
 
-
-#        assert not any(b.id == bastion_id for b in resp.bastions)
+            assert not any(b.id == bastion.id for b in resp.bastions)
 
 
 @pytest.mark.anyio
@@ -750,7 +746,6 @@ async def test_tui_bastion_add_tag(api, ssh_agent):
 
             bastion = await auth.create_bastion(
                 "https://register.example.com",
-                None,
                 None,
                 [],
                 [],
@@ -770,8 +765,8 @@ async def test_tui_bastion_add_tag(api, ssh_agent):
                 await pilot.pause()  # screen transition
                 await pilot.pause()  # BastionViewScreen.on_mount (no API)
 
-                # BastionViewScreen: Input#register_url is focused; tab to #ssh_proxy_jump, then to #tags
-                await pilot.press("tab", "tab", "tab")
+                # BastionViewScreen: Input#url is focused; tab to #ssh_proxy_jump, then to #tags
+                await pilot.press("tab", "tab")
                 await pilot.press("a")  # action_add_tag → _TagAddScreen opens via worker
                 await pilot.pause()  # screen transition
                 await pilot.pause()  # _TagAddScreen.on_mount calls list_tags()

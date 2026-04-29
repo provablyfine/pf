@@ -47,7 +47,7 @@ class _BastionCreateScreen(textual.screen.ModalScreen[_BastionFormResult | None]
         ssh_proxy_jump = self.query_one("#ssh_proxy_jump", textual.widgets.Input).value.strip() or None
         self.dismiss(
             {
-                "register_url": url,
+                "url": url,
                 "ssh_proxy_jump": ssh_proxy_jump,
             }
         )
