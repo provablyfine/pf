@@ -9,7 +9,6 @@ import typing
 import jwt
 
 from .. import anet, log
-from . import exceptions
 
 logger = logging.getLogger(__name__)
 

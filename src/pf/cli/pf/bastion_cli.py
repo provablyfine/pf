@@ -2,56 +2,56 @@ import argparse
 import asyncio
 import logging
 import signal
-import ssl
 import sys
 import types
 import urllib.parse
-import socket
 
-from ... import bastion, client
+from ... import anet, client
 from .. import login
 
 logger = logging.getLogger(__name__)
 
 
-async def _http_connect(url: str, prefix: str, hostname: str, token: str) -> bastion.tcp.TcpSocket:
+async def _http_connect(url: str, prefix: str, hostname: str, token: str) -> anet.base.Socket:
     u = urllib.parse.urlsplit(url)
     connect_host = f"{prefix}.{u.hostname}"
-    ssl_context = ssl.create_default_context() if u.scheme == "https" else None
     scheme_port = 443 if u.scheme == "https" else 80 if u.scheme == "http" else None
     port = u.port if u.port is not None else scheme_port
 
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.setblocking(False)
-    await asyncio.sock_connect(sock, (connect_host, port))
+    retval: anet.base.Socket
+    sock = await anet.socket.socket(anet.socket.Family.INET, anet.socket.Type.STREAM)
+    await sock.connect((connect_host, port))
     if u.scheme == "https":
-        ssl_context = ssl.create_default_context()
-        sock.setblocking(True)
+        ssl_context = await anet.ssl.create_default_context()
         # The call below is blocking which is "suboptimal"
         # but the alternatives are not a lot of fun.
-        sock = ssl_context.wrap_socket(sock, server_hostname=connect_host)
+        ssl_sock = await ssl_context.wrap_socket(sock, server_hostname=connect_host)
+        await ssl_sock.handshake()
+        stream = anet.stream.Reader(ssl_sock)
+        retval = ssl_sock
+    else:
+        stream = anet.stream.Reader(sock)
+        retval = sock
+
     lines = [
         f"CONNECT {hostname}:80 HTTP/1.1",
         f"Host: {connect_host}",
         f"Proxy-Authorization: Bearer {token}",
         ""
     ]
-    sock.setblocking(False)
-    wrapper = bastion.tcp.TcpSocket(sock)
-    wrapper.send(b"\r\n".join(line.encode("ascii") for line in lines))
-    http = bastion.http.LineReader(wrapper)
-    status = http.read()
+    await sock.send(b"\r\n".join(line.encode("ascii") for line in lines))
+    status = await stream.read_until(b"\r\n")
     items = status.rstrip(b"\r\n").decode("ascii").split(" ")
     if len(items) != 3:
         raise client.exceptions.UI(f"Unable to reach bastion: {status.decode('ascii')}")
-    version, status_code, reason = items
+    _version, status_code, _reason = items
     if status_code != "200":
         raise client.exceptions.UI(f"Unable to reach bastion: status_code={status_code}")
 
-    return wrapper
+    return retval
 
 
-async def _handle_channel(remote: bastion.channel.Channel, local_port: int) -> None:
+async def _handle_channel(remote: anet.channel.Channel, local_port: int) -> None:
     try:
         local_reader, local_writer = await asyncio.open_connection("127.0.0.1", local_port)
     except Exception as e:
@@ -90,8 +90,8 @@ async def _handle_channel(remote: bastion.channel.Channel, local_port: int) -> N
 
 
 async def _register_bastion(register_url: str, token: str, local_port: int) -> None:
-    sock = _http_connect(register_url, "register", "self", token)
-    server = bastion.channel.Server(sock)
+    sock = await _http_connect(register_url, "register", "self", token)
+    server = anet.channel.Server(sock)
     while True:
         channel = await server.accept()
         asyncio.create_task(_handle_channel(channel, local_port))
@@ -150,8 +150,7 @@ def _register_function(args: argparse.Namespace) -> None:
 
 
 async def _connect_async(url: str, token: str, hostname: str) -> None:
-    sock = _http_connect(url, "connect", hostname, token)
-    remote_reader, remote_writer = asyncio.open_connection(sock=sock)
+    sock = await _http_connect(url, "connect", hostname, token)
 
     loop = asyncio.get_running_loop()
 
@@ -166,14 +165,14 @@ async def _connect_async(url: str, token: str, hostname: str) -> None:
             if data == b"":
                 break
             logger.debug(f"stdin: read={len(data)}")
-            await remote_writer.write(data)
+            await sock.send(data)
             logger.debug(f"ch: write={len(data)}")
-        await remote_writer.close()
+        await sock.shutdown(anet.base.Shut.WR)
 
     async def forward_stdout() -> None:
         logger.debug("start forward stdout")
         while True:
-            data = await remote_reader.read()
+            data = await sock.recv(4096)
             if data == b"":
                 break
             logger.debug(f"ch: read={len(data)}")
