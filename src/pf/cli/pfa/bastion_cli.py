@@ -99,8 +99,7 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
     read_parser.set_defaults(func=_bastion_read_function)
 
     create_parser = subparsers.add_parser("create", help="Create a new bastion")
-    create_parser.add_argument("--register-url", type=str, required=True, help="Register URL of the bastion")
-    create_parser.add_argument("--connect-url", type=str, help="Connect URL of the bastion")
+    create_parser.add_argument("--url", type=str, required=True, help="URL of the bastion")
     create_parser.add_argument("--ssh-proxy-jump", type=str, help="SSH ProxyJump string")
     create_parser.add_argument("-t", "--tag", help="Tag to apply on the bastion", nargs="*", default=[])
     create_parser.set_defaults(func=_bastion_create_function)
