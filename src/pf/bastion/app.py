@@ -9,7 +9,7 @@ import typing
 import jwt
 
 from .. import anet, log
-from . import channel, exceptions, http
+from . import channel, exceptions
 
 logger = logging.getLogger(__name__)
 
@@ -271,9 +271,9 @@ class Application:
     async def _parse_request(self, sock: anet.base.Socket) -> Request:
         # We can read the data via a local buffer because all the data
         # sent is only for the proxy until we send back a 200.
-        reader = http.LineReader(sock)
-        start_line = await reader.read()
-        items = start_line.split(" ".encode("ascii"))
+        reader = anet.stream.Reader(sock)
+        start_line = await reader.read_until(b"\r\n")
+        items = start_line.rstrip(b"\r\n").split(b" ")
         if len(items) != 3:
             logger.error("Invalid request start line")
             raise HTTPException(_400)
@@ -295,7 +295,7 @@ class Application:
             raise HTTPException(_400)
         headers: dict[str, str] = {}
         while True:
-            line = await reader.read()
+            line = await reader.read_until(b"\r\n")
             if line == b"\r\n":
                 break
             colon = line.find(b":")
