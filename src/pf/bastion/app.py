@@ -131,7 +131,7 @@ class Response:
             response_body = json.dumps({"title": self.title}).encode("utf-8")
             response_headers = {
                 "Content-Type": "application/json",
-                "Content-Length": len(response_body),
+                "Content-Length": str(len(response_body)),
             }
         else:
             response_headers = {}

@@ -3,10 +3,12 @@ import base64
 import getpass
 import os
 import tempfile
+import logging
 
 from ... import client, jwk, ssh
 from .. import login
 
+logger = logging.getLogger(__name__)
 
 @client.ssh_utils.exception
 def _ssh_function(args: argparse.Namespace) -> None:
@@ -133,13 +135,14 @@ def _ssh_function(args: argparse.Namespace) -> None:
         cmd.append(target)
         if args.command:
             cmd.append(args.command)
+        logger.debug(f"SSH command: \"{' '.join(cmd)}\"")
         return cmd
 
     last_error: Exception | None = None
 
     for bastion in bastion_list:
-        if bastion.connect_url:
-            proxy_cmd = f"pf -c {args.config} bastion connect --url={bastion.connect_url} --hostname={host}"
+        if bastion.url:
+            proxy_cmd = f"pf -c {args.config} bastion connect --url={bastion.url} --hostname={host}"
             ssh_cmd = build_ssh_cmd(host, proxy_command=proxy_cmd)
             try:
                 os.execvp("/usr/bin/ssh", ssh_cmd)

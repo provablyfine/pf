@@ -77,7 +77,7 @@ class SshHostsResponse(_Base):
 
 
 class SshCertBastion(_Base):
-    connect_url: str | None = None
+    url: str
     ssh_proxy_jump: str | None = None
 
 

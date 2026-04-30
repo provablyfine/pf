@@ -11,7 +11,7 @@ Create admin objects
   $ pfa -c config.json grant ssh-shell --tag id=device --username alice | pfa -c config.json role grant -i $ROLE_ID --add
 
 Create bastion resource
-  $ pfa -c config.json bastion create --register-url ws://127.0.0.1:$BASTION_PORT/register --connect-url ws://127.0.0.1:$BASTION_PORT/connect
+  $ pfa -c config.json bastion create --url http://localhost:$BASTION_PORT
 
 Provision new host
   $ pfa -c config.json identity create -n host -t $DEVICE_TAG_ID
@@ -61,5 +61,5 @@ User connects to host via pf ssh through bastion
   [2]
 
 Cleanup
-  $ pkill -P -9 $BASTION_REGISTER_PID
-  $ kill $BASTION_REGISTER_PID
+  $ pkill -P -9 $BASTION_REGISTER_PID 2>/dev/null || true
+  $ kill $BASTION_REGISTER_PID 2>/dev/null || true
