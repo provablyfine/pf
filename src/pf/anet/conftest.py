@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import collections.abc
 import datetime
 import ipaddress
 import os
@@ -17,25 +18,13 @@ import pf.anet.socket as anet_socket
 import pf.anet.ssl as anet_ssl
 
 
-def _ipv6_available() -> bool:
-    """Check if IPv6 is available (sync, for @pytest.mark.skipif at collection time)."""
-    import socket as _socket
-
-    try:
-        s = _socket.socket(_socket.AF_INET6, _socket.SOCK_STREAM)
-        s.close()
-        return True
-    except OSError:
-        return False
-
-
 def _create_server_context(
     certfile: str | os.PathLike[str],
     keyfile: str | os.PathLike[str],
 ) -> anet_ssl.SSLContext:
     """Create server-side SSL context from certificate and key files."""
     ctx = anet_ssl.SSLContext(anet_ssl.ContextProtocol.SERVER)
-    ctx.load_cert_chain(certfile, keyfile)
+    ctx.load_cert_chain(str(certfile), str(keyfile))
     return ctx
 
 
@@ -45,7 +34,7 @@ def _create_client_context(
 ) -> anet_ssl.SSLContext:
     """Create client-side SSL context with CA verification."""
     ctx = anet_ssl.SSLContext(anet_ssl.ContextProtocol.CLIENT)
-    ctx.load_verify_locations(cafile)
+    ctx.load_verify_locations(str(cafile))
     ctx.check_hostname = check_hostname
     ctx.verify_mode = anet_ssl.VerifyMode.REQUIRED
     return ctx
@@ -116,7 +105,7 @@ def ssl_contexts(tmp_path_factory: pytest.TempPathFactory) -> tuple[anet_ssl.SSL
 
 
 @pytest.fixture
-async def anet_socketpair() -> tuple[anet_socket.Socket, anet_socket.Socket]:
+async def anet_socketpair() -> collections.abc.AsyncGenerator[tuple[anet_socket.Socket, anet_socket.Socket], None]:
     """Create a connected AF_UNIX socketpair wrapped in anet.socket.Socket."""
     a, b = await anet_socket.socketpair(anet_socket.Family.UNIX, anet_socket.Type.STREAM)
     yield a, b
@@ -128,7 +117,7 @@ async def anet_socketpair() -> tuple[anet_socket.Socket, anet_socket.Socket]:
 async def tls_socketpair(
     anet_socketpair: tuple[anet_socket.Socket, anet_socket.Socket],
     ssl_contexts: tuple[anet_ssl.SSLContext, anet_ssl.SSLContext],
-) -> tuple[anet_ssl.Socket, anet_ssl.Socket]:
+) -> collections.abc.AsyncGenerator[tuple[anet_ssl.Socket, anet_ssl.Socket], None]:
     """Create a TLS-wrapped socketpair with completed handshake."""
     raw_client, raw_server = anet_socketpair
     server_ctx, client_ctx = ssl_contexts
