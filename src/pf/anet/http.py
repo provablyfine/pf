@@ -28,7 +28,7 @@ class Message:
                 logger.warning(f"Invalid header: {line}")
                 raise exceptions.Error("Invalid header")
             key = line[:colon].lower()
-            value = line[colon+1:]
+            value = line[colon + 1 :].lstrip()
             headers[key] = value
         if "content-length" in headers:
             length = headers["content-length"].strip()
@@ -79,15 +79,18 @@ class Response:
     async def deserialize(cls, sock: base.Socket) -> Response:
         message = await Message.deserialize(sock)
         status_line = message.start_line
-        space = status_line.find(" ")
-        if space == -1:
+        space1 = status_line.find(" ")
+        if space1 == -1:
             raise exceptions.Error(f"Invalid status_line={status_line}")
-        version = status_line[:space]
-        space = status_line[space+1:].find(" ")
-        if space == -1:
+        version = status_line[:space1]
+        remainder = status_line[space1 + 1 :]
+        space2 = remainder.find(" ")
+        if space2 == -1:
             raise exceptions.Error(f"Invalid status_line={status_line}")
-        status_code = status_line[:space]
-        reason = status_line[space+1:]
+        status_code = remainder[:space2]
+        reason = remainder[space2 + 1 :]
         if not status_code.isdigit():
             raise exceptions.Error(f"Invalid status_code={status_code}")
-        return Response(version=version, status_code=int(status_code), reason=reason, headers=message.headers, body=message.body)
+        return Response(
+            version=version, status_code=int(status_code), reason=reason, headers=message.headers, body=message.body
+        )
