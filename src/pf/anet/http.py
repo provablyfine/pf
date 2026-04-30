@@ -41,7 +41,7 @@ class Message:
             body = b""
         return Message(start_line=start_line, headers=headers, body=body)
 
-    async def serialize(self, sock: base.Socket):
+    async def serialize(self, sock: base.Socket) -> None:
         lines = [self.start_line]
         for name, value in self.headers.items():
             lines.append(f"{name}: {value}")
@@ -66,16 +66,23 @@ class Request:
         if space == -1:
             raise exceptions.Error(f"Invalid request start line: {message.start_line}")
         method = start_line[:space]
-        start_line = start_line[space+1:]
+        start_line = start_line[space + 1 :]
         space = start_line.find(" ")
         if space == -1:
             raise exceptions.Error(f"Invalid request start line: {message.start_line}")
         resource_target = start_line[:space]
-        version = start_line[space+1:]
-        return Request(method=method, resource_target=resource_target, version=version, headers=message.headers, body=message.body)
+        version = start_line[space + 1 :]
+        return Request(
+            method=method,
+            resource_target=resource_target,
+            version=version,
+            headers=message.headers,
+            body=message.body,
+        )
 
-    async def serialize(self, sock: base.Socket):
-        message = Message(start_line=f"{self.method} {self.resource_target} {self.version}", headers=self.headers, body=self.body)
+    async def serialize(self, sock: base.Socket) -> None:
+        start = f"{self.method} {self.resource_target} {self.version}"
+        message = Message(start_line=start, headers=self.headers, body=self.body)
         await message.serialize(sock)
 
 
@@ -104,9 +111,14 @@ class Response:
         if not status_code.isdigit():
             raise exceptions.Error(f"Invalid status_code={status_code}")
         return Response(
-            version=version, status_code=int(status_code), reason=reason, headers=message.headers, body=message.body
+            version=version,
+            status_code=int(status_code),
+            reason=reason,
+            headers=message.headers,
+            body=message.body,
         )
 
-    async def serialize(self, sock: base.Socket):
-        message = Message(start_line=f"{self.version} {self.status_code} {self.reason}", headers=self.headers, body=self.body)
+    async def serialize(self, sock: base.Socket) -> None:
+        start = f"{self.version} {self.status_code} {self.reason}"
+        message = Message(start_line=start, headers=self.headers, body=self.body)
         await message.serialize(sock)

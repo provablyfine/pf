@@ -29,7 +29,13 @@ class Response:
             response = await anet.http.Response.deserialize(sock)
         except anet.exceptions.Error as exc:
             raise client.exceptions.UI("Unable to reach bastion") from exc
-        return Response(version=response.version, status_code=response.status_code, reason=response.reason, headers=response.headers, body=response.body)
+        return Response(
+            version=response.version,
+            status_code=response.status_code,
+            reason=response.reason,
+            headers=response.headers,
+            body=response.body,
+        )
 
 
 async def _http_connect(url: str, prefix: str, hostname: str, token: str) -> anet.base.Socket:
@@ -57,10 +63,13 @@ async def _http_connect(url: str, prefix: str, hostname: str, token: str) -> ane
     else:
         assert False
 
-    request = anet.http.Request(method="CONNECT", resource_target=f"{hostname}:80", version="HTTP/1.1", body=b"", headers={
-        "Host": connect_host,
-        "Proxy-Authorization": f"Bearer {token}"
-    })
+    request = anet.http.Request(
+        method="CONNECT",
+        resource_target=f"{hostname}:80",
+        version="HTTP/1.1",
+        body=b"",
+        headers={"Host": connect_host, "Proxy-Authorization": f"Bearer {token}"},
+    )
     await request.serialize(retval)
     response = await Response.deserialize(retval)
     if response.version != "HTTP/1.1":
@@ -111,9 +120,12 @@ async def _handle_channel(remote: anet.channel.Channel, local_port: int) -> None
 async def _register_bastion(url: str, token: str, local_port: int) -> None:
     sock = await _http_connect(url, "register", "self", token)
     server = anet.channel.Server(sock)
+    background_tasks: set[asyncio.Task[None]] = set()
     while True:
         channel = await server.accept()
-        asyncio.create_task(_handle_channel(channel, local_port))
+        task = asyncio.create_task(_handle_channel(channel, local_port))
+        background_tasks.add(task)
+        task.add_done_callback(background_tasks.discard)
 
 
 @client.ssh_utils.exception

@@ -29,7 +29,7 @@ class Reader:
             logger.debug("start read")
             chunk = await self._sock.recv(4096)
             logger.debug(f"end read chunk={chunk}")
-            
+
             if chunk == b"":
                 raise IncompleteReadError()
 

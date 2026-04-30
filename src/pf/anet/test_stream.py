@@ -10,9 +10,12 @@ import pf.anet.socket as anet_socket
 import pf.anet.ssl as anet_ssl
 import pf.anet.stream as stream
 
+SocketPair = tuple[anet_socket.Socket, anet_socket.Socket]
+SSLSocketPair = tuple[anet_ssl.Socket, anet_ssl.Socket]
+
 
 @pytest.mark.anyio
-async def test_stream_read_until_single_recv(anet_socketpair: tuple[anet_socket.Socket, anet_socket.Socket]) -> None:
+async def test_stream_read_until_single_recv(anet_socketpair: SocketPair) -> None:
     """read_until finds delimiter in single recv."""
     client, server = anet_socketpair
     test_line = b"hello\n"
@@ -25,7 +28,7 @@ async def test_stream_read_until_single_recv(anet_socketpair: tuple[anet_socket.
 
 
 @pytest.mark.anyio
-async def test_stream_read_until_spanning_recvs(anet_socketpair: tuple[anet_socket.Socket, anet_socket.Socket]) -> None:
+async def test_stream_read_until_spanning_recvs(anet_socketpair: SocketPair) -> None:
     """read_until finds delimiter spanning multiple recvs."""
     client, server = anet_socketpair
     chunk1 = b"hel"
@@ -46,7 +49,7 @@ async def test_stream_read_until_spanning_recvs(anet_socketpair: tuple[anet_sock
 
 @pytest.mark.anyio
 async def test_stream_read_until_eof_before_delimiter(
-    anet_socketpair: tuple[anet_socket.Socket, anet_socket.Socket],
+    anet_socketpair: SocketPair,
 ) -> None:
     """read_until raises IncompleteReadError if EOF before delimiter."""
     client, server = anet_socketpair
@@ -65,7 +68,7 @@ async def test_stream_read_until_eof_before_delimiter(
 
 @pytest.mark.anyio
 async def test_stream_read_until_multiple_sequential(
-    anet_socketpair: tuple[anet_socket.Socket, anet_socket.Socket],
+    anet_socketpair: SocketPair,
 ) -> None:
     """Multiple sequential read_until calls consume buffer correctly."""
     client, server = anet_socketpair
@@ -88,7 +91,7 @@ async def test_stream_read_until_multiple_sequential(
 
 @pytest.mark.anyio
 async def test_stream_read_until_remainder_buffered(
-    anet_socketpair: tuple[anet_socket.Socket, anet_socket.Socket],
+    anet_socketpair: SocketPair,
 ) -> None:
     """read_until leaves remainder in buffer for next call."""
     client, server = anet_socketpair
@@ -109,7 +112,7 @@ async def test_stream_read_until_remainder_buffered(
 
 
 @pytest.mark.anyio
-async def test_stream_read_until_plain_socket(anet_socketpair: tuple[anet_socket.Socket, anet_socket.Socket]) -> None:
+async def test_stream_read_until_plain_socket(anet_socketpair: SocketPair) -> None:
     """read_until works with plain anet.socket.Socket."""
     client, server = anet_socketpair
     test_line = b"plain socket\n"
@@ -122,7 +125,7 @@ async def test_stream_read_until_plain_socket(anet_socketpair: tuple[anet_socket
 
 
 @pytest.mark.anyio
-async def test_stream_read_until_ssl_socket(tls_socketpair: tuple[anet_ssl.Socket, anet_ssl.Socket]) -> None:
+async def test_stream_read_until_ssl_socket(tls_socketpair: SSLSocketPair) -> None:
     """read_until works with TLS anet.ssl.Socket."""
     client, server = tls_socketpair
     test_line = b"tls data\n"
@@ -138,7 +141,7 @@ async def test_stream_read_until_ssl_socket(tls_socketpair: tuple[anet_ssl.Socke
 
 
 @pytest.mark.anyio
-async def test_stream_read_exact_bytes(anet_socketpair: tuple[anet_socket.Socket, anet_socket.Socket]) -> None:
+async def test_stream_read_exact_bytes(anet_socketpair: SocketPair) -> None:
     """read(n) returns exactly n bytes."""
     client, server = anet_socketpair
     test_data = b"0123456789"
@@ -151,7 +154,7 @@ async def test_stream_read_exact_bytes(anet_socketpair: tuple[anet_socket.Socket
 
 
 @pytest.mark.anyio
-async def test_stream_read_spanning_recvs(anet_socketpair: tuple[anet_socket.Socket, anet_socket.Socket]) -> None:
+async def test_stream_read_spanning_recvs(anet_socketpair: SocketPair) -> None:
     """read(n) assembles data from multiple recvs."""
     client, server = anet_socketpair
 
@@ -169,7 +172,7 @@ async def test_stream_read_spanning_recvs(anet_socketpair: tuple[anet_socket.Soc
 
 
 @pytest.mark.anyio
-async def test_stream_read_leaves_remainder(anet_socketpair: tuple[anet_socket.Socket, anet_socket.Socket]) -> None:
+async def test_stream_read_leaves_remainder(anet_socketpair: SocketPair) -> None:
     """read(n) leaves remainder in buffer for next call."""
     client, server = anet_socketpair
     test_data = b"ABCDEFGHIJ"
@@ -189,7 +192,7 @@ async def test_stream_read_leaves_remainder(anet_socketpair: tuple[anet_socket.S
 
 
 @pytest.mark.anyio
-async def test_stream_read_eof_before_n_bytes(anet_socketpair: tuple[anet_socket.Socket, anet_socket.Socket]) -> None:
+async def test_stream_read_eof_before_n_bytes(anet_socketpair: SocketPair) -> None:
     """read(n) raises IncompleteReadError if EOF before n bytes."""
     client, server = anet_socketpair
 
@@ -206,9 +209,9 @@ async def test_stream_read_eof_before_n_bytes(anet_socketpair: tuple[anet_socket
 
 
 @pytest.mark.anyio
-async def test_stream_read_zero_bytes(anet_socketpair: tuple[anet_socket.Socket, anet_socket.Socket]) -> None:
+async def test_stream_read_zero_bytes(anet_socketpair: SocketPair) -> None:
     """read(0) returns empty bytes immediately."""
-    client, server = anet_socketpair
+    client, _server = anet_socketpair
 
     reader = stream.Reader(client)
     result = await reader.read(0)
@@ -216,7 +219,7 @@ async def test_stream_read_zero_bytes(anet_socketpair: tuple[anet_socket.Socket,
 
 
 @pytest.mark.anyio
-async def test_stream_read_mixed_with_read_until(anet_socketpair: tuple[anet_socket.Socket, anet_socket.Socket]) -> None:
+async def test_stream_read_mixed_with_read_until(anet_socketpair: SocketPair) -> None:
     """read() and read_until() can be mixed."""
     client, server = anet_socketpair
 

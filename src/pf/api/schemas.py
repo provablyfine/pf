@@ -500,10 +500,7 @@ class BastionUpdateRequest(APIBase):
             raise ValueError("Cannot specify both 'tag_id_list' and 'tag_name_value_list'")
         if self.tag_name_value_list is not None or self.tag_id_list is not None:
             return self
-        raise ValueError(
-            "At least one of "
-            "'tag_id_list', or 'tag_name_value_list' must be specified"
-        )
+        raise ValueError("At least one of 'tag_id_list', or 'tag_name_value_list' must be specified")
 
 
 # --- SSH ---

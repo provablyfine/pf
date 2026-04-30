@@ -10,7 +10,6 @@ class Shut(enum.IntEnum):
 
 
 class Socket(abc.ABC):
-
     @abc.abstractmethod
     async def send(self, data: bytes) -> int:
         pass

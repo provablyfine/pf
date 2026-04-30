@@ -10,6 +10,7 @@ from .. import login
 
 logger = logging.getLogger(__name__)
 
+
 @client.ssh_utils.exception
 def _ssh_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
@@ -135,7 +136,7 @@ def _ssh_function(args: argparse.Namespace) -> None:
         cmd.append(target)
         if args.command:
             cmd.append(args.command)
-        logger.debug(f"SSH command: \"{' '.join(cmd)}\"")
+        logger.debug(f'SSH command: "{" ".join(cmd)}"')
         return cmd
 
     last_error: Exception | None = None

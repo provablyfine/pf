@@ -701,7 +701,6 @@ async def test_tui_bastion_list(api, ssh_agent):
 
             resp = await auth.list_bastions()
 
-
         assert any(b.url == "https://bastion.example.com" for b in resp.bastions)
 
 

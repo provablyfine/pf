@@ -18,6 +18,7 @@ def _unpack_string(data: bytes, offset: int) -> tuple[bytes, int]:
     length, offset = _unpack_uint32(data, offset)
     return data[offset : offset + length], offset + length
 
+
 INITIAL_WINDOW = 1_048_576
 MAX_PACKET = 32_768
 
@@ -335,9 +336,7 @@ class Mux:
         self, local_id: int, remote_id: int, initial_window: int, max_packet: int
     ) -> None:
         """Send SSH_MSG_CHANNEL_OPEN_CONFIRMATION."""
-        packet = struct.pack(
-            "!BIIII", ChannelMsg.OPEN_CONFIRMATION, remote_id, local_id, initial_window, max_packet
-        )
+        packet = struct.pack("!BIIII", ChannelMsg.OPEN_CONFIRMATION, remote_id, local_id, initial_window, max_packet)
         await self._write_packet(packet)
 
     async def send_channel_data(self, recipient_channel: int, data: bytes) -> None:

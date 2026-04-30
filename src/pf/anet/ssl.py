@@ -20,15 +20,12 @@ logger = logging.getLogger(__name__)
 
 
 class Socket(base.Socket):
-    def __init__(self, sock: socket.Socket, ctx: _ssl.SSLContext, server_side: bool, server_hostname: str|None):
+    def __init__(self, sock: socket.Socket, ctx: _ssl.SSLContext, server_side: bool, server_hostname: str | None):
         self._sock = sock
         self._in_bio = _ssl.MemoryBIO()
         self._out_bio = _ssl.MemoryBIO()
         self._ssl_object = ctx.wrap_bio(
-            self._in_bio,
-            self._out_bio,
-            server_side=server_side,
-            server_hostname=server_hostname
+            self._in_bio, self._out_bio, server_side=server_side, server_hostname=server_hostname
         )
 
     async def handshake(self):
@@ -66,7 +63,7 @@ class Socket(base.Socket):
             chunk = await self._sock.recv(n - len(buf))
             if chunk == b"":
                 raise EOFError()
-                #raise _ssl.SSLEOFError
+                # raise _ssl.SSLEOFError
             buf.extend(chunk)
         return bytes(buf)
 

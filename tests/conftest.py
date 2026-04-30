@@ -306,7 +306,15 @@ def bastion_server(request, api):
     log_f = open(log_file, "w+")
     issuer_prefix = f"http://127.0.0.1:{api.port}/pf/t"
     popen = subprocess.Popen(
-        ["scripts/pf-bastion", "--issuer-prefix", issuer_prefix, "--port-file", port_file, "--domain-suffix", "localhost"],
+        [
+            "scripts/pf-bastion",
+            "--issuer-prefix",
+            issuer_prefix,
+            "--port-file",
+            port_file,
+            "--domain-suffix",
+            "localhost",
+        ],
         stdout=log_f,
         stderr=subprocess.STDOUT,
         text=True,

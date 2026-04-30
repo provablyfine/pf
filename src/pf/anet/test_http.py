@@ -10,9 +10,11 @@ import pf.anet.exceptions as exceptions
 import pf.anet.http as http
 import pf.anet.socket as anet_socket
 
+SocketPair = tuple[anet_socket.Socket, anet_socket.Socket]
+
 
 @pytest.mark.anyio
-async def test_http_message_deserialize_simple(anet_socketpair: tuple[anet_socket.Socket, anet_socket.Socket]) -> None:
+async def test_http_message_deserialize_simple(anet_socketpair: SocketPair) -> None:
     """Deserialize HTTP message with headers and no body."""
     client, server = anet_socketpair
 
@@ -33,7 +35,7 @@ async def test_http_message_deserialize_simple(anet_socketpair: tuple[anet_socke
 
 
 @pytest.mark.anyio
-async def test_http_message_deserialize_with_body(anet_socketpair: tuple[anet_socket.Socket, anet_socket.Socket]) -> None:
+async def test_http_message_deserialize_with_body(anet_socketpair: SocketPair) -> None:
     """Deserialize HTTP message with body."""
     client, server = anet_socketpair
     body_data = b"Hello, World!"
@@ -54,7 +56,7 @@ async def test_http_message_deserialize_with_body(anet_socketpair: tuple[anet_so
 
 
 @pytest.mark.anyio
-async def test_http_message_multiple_headers(anet_socketpair: tuple[anet_socket.Socket, anet_socket.Socket]) -> None:
+async def test_http_message_multiple_headers(anet_socketpair: SocketPair) -> None:
     """Deserialize message with multiple headers."""
     client, server = anet_socketpair
 
@@ -77,7 +79,7 @@ async def test_http_message_multiple_headers(anet_socketpair: tuple[anet_socket.
 
 
 @pytest.mark.anyio
-async def test_http_request_deserialize(anet_socketpair: tuple[anet_socket.Socket, anet_socket.Socket]) -> None:
+async def test_http_request_deserialize(anet_socketpair: SocketPair) -> None:
     """Deserialize HTTP request."""
     client, server = anet_socketpair
 
@@ -99,7 +101,7 @@ async def test_http_request_deserialize(anet_socketpair: tuple[anet_socket.Socke
 
 
 @pytest.mark.anyio
-async def test_http_request_with_body(anet_socketpair: tuple[anet_socket.Socket, anet_socket.Socket]) -> None:
+async def test_http_request_with_body(anet_socketpair: SocketPair) -> None:
     """Deserialize HTTP request with body."""
     client, server = anet_socketpair
     body = b'{"key": "value"}'
@@ -121,7 +123,7 @@ async def test_http_request_with_body(anet_socketpair: tuple[anet_socket.Socket,
 
 
 @pytest.mark.anyio
-async def test_http_response_deserialize(anet_socketpair: tuple[anet_socket.Socket, anet_socket.Socket]) -> None:
+async def test_http_response_deserialize(anet_socketpair: SocketPair) -> None:
     """Deserialize HTTP response."""
     client, server = anet_socketpair
 
@@ -143,7 +145,7 @@ async def test_http_response_deserialize(anet_socketpair: tuple[anet_socket.Sock
 
 
 @pytest.mark.anyio
-async def test_http_response_with_body(anet_socketpair: tuple[anet_socket.Socket, anet_socket.Socket]) -> None:
+async def test_http_response_with_body(anet_socketpair: SocketPair) -> None:
     """Deserialize HTTP response with body."""
     client, server = anet_socketpair
     body = b"<html><body>Page not found</body></html>"
@@ -165,7 +167,7 @@ async def test_http_response_with_body(anet_socketpair: tuple[anet_socket.Socket
 
 
 @pytest.mark.anyio
-async def test_http_message_invalid_header(anet_socketpair: tuple[anet_socket.Socket, anet_socket.Socket]) -> None:
+async def test_http_message_invalid_header(anet_socketpair: SocketPair) -> None:
     """Reject malformed header (no colon)."""
     client, server = anet_socketpair
 
@@ -181,7 +183,7 @@ async def test_http_message_invalid_header(anet_socketpair: tuple[anet_socket.So
 
 
 @pytest.mark.anyio
-async def test_http_message_invalid_content_length(anet_socketpair: tuple[anet_socket.Socket, anet_socket.Socket]) -> None:
+async def test_http_message_invalid_content_length(anet_socketpair: SocketPair) -> None:
     """Reject non-numeric Content-Length."""
     client, server = anet_socketpair
 
@@ -198,7 +200,7 @@ async def test_http_message_invalid_content_length(anet_socketpair: tuple[anet_s
 
 
 @pytest.mark.anyio
-async def test_http_request_invalid_start_line(anet_socketpair: tuple[anet_socket.Socket, anet_socket.Socket]) -> None:
+async def test_http_request_invalid_start_line(anet_socketpair: SocketPair) -> None:
     """Reject invalid request start line."""
     client, server = anet_socketpair
 
@@ -215,7 +217,7 @@ async def test_http_request_invalid_start_line(anet_socketpair: tuple[anet_socke
 
 
 @pytest.mark.anyio
-async def test_http_response_invalid_status_code(anet_socketpair: tuple[anet_socket.Socket, anet_socket.Socket]) -> None:
+async def test_http_response_invalid_status_code(anet_socketpair: SocketPair) -> None:
     """Reject non-numeric status code."""
     client, server = anet_socketpair
 

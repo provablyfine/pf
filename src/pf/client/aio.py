@@ -146,11 +146,7 @@ class Client:
         tag_id_list: list[int],
         tag_name_value_list: list[dict[str, str]],
     ) -> schemas.Bastion:
-        return await self._run(
-            lambda: self._sync.create_bastion(
-                url, ssh_proxy_jump, tag_id_list, tag_name_value_list
-            )
-        )
+        return await self._run(lambda: self._sync.create_bastion(url, ssh_proxy_jump, tag_id_list, tag_name_value_list))
 
     async def update_bastion(
         self,
@@ -161,9 +157,7 @@ class Client:
         tag_name_value_list: list[schemas.TagNameValue] | None = None,
     ) -> None:
         return await self._run(
-            lambda: self._sync.update_bastion(
-                id, url, ssh_proxy_jump, tag_id_list, tag_name_value_list
-            )
+            lambda: self._sync.update_bastion(id, url, ssh_proxy_jump, tag_id_list, tag_name_value_list)
         )
 
     async def delete_bastion(self, id: int) -> None:

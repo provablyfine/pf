@@ -111,6 +111,7 @@ class Request:
         request = Request(host=host, port=int(port), headers=request.headers)
         return request
 
+
 @dataclasses.dataclass
 class Response:
     status_code: int
@@ -136,7 +137,13 @@ class Response:
         else:
             response_headers = {}
             response_body = b""
-        response = anet.http.Response(status_code=self.status_code, reason=self._reason(), version="HTTP/1.1", headers=response_headers, body=response_body)
+        response = anet.http.Response(
+            status_code=self.status_code,
+            reason=self._reason(),
+            version="HTTP/1.1",
+            headers=response_headers,
+            body=response_body,
+        )
         await response.serialize(sock)
 
 
