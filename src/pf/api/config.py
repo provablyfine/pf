@@ -9,8 +9,7 @@ import yaml
 
 @dataclasses.dataclass
 class DefaultBastion:
-    register_url: str | None = None
-    connect_url: str | None = None
+    url: str | None = None
     ssh_proxy_jump: str | None = None
 
 
