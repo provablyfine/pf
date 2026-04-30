@@ -11,11 +11,11 @@ from . import app
 def run():
     parser = argparse.ArgumentParser()
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument(
-        "--domain-suffix", help="Domain suffix for all incoming requests. Default: %(default)s", default="bastion.dev"
-    )
     group.add_argument("--issuer-prefix", help="OIDC issuer url")
     group.add_argument("--dev", action="store_true")
+    parser.add_argument(
+        "--domain-suffix", help="Domain suffix for all incoming requests. Default: %(default)s", default="localhost"
+    )
     parser.add_argument("-p", "--port", type=int, default=0)
     parser.add_argument("--port-file", default=None)
     parser.add_argument("-d", "--debug", help="Debugging level", action="count", default=0)

@@ -3,7 +3,7 @@ Initialize server and login
   .* (re)
 
 Create bastion resource
-  $ pfa -c config.json bastion create --register-url ws://127.0.0.1:$BASTION_PORT/register --connect-url ws://127.0.0.1:$BASTION_PORT/connect
+  $ pfa -c config.json bastion create --url http://localhost:$BASTION_PORT
 
 Provision new host
   $ pfa -c config.json identity create -n host 
@@ -41,12 +41,12 @@ User accepts invite and logs in
   $ pf -c user.json accept --invitation=$INVITATION --key user-account
   $ pf -c user.json login
   $ sleep 1
-  $ echo "hello" | pf -c user.json bastion connect --url ws://127.0.0.1:$BASTION_PORT/connect --host host
+  $ echo "hello" | timeout 2 pf -c user.json bastion connect --url http://localhost:$BASTION_PORT --host host
   hello
 #  $ cat register.log
 #  $ cat echo-server.log
 
 Cleanup
-  $ pkill -P -9 $BASTION_REGISTER_PID
-  $ kill $BASTION_REGISTER_PID
-  $ kill -TERM $ECHO_PID
+  $ pkill -P -9 $BASTION_REGISTER_PID 2>/dev/null || true
+  $ kill $BASTION_REGISTER_PID 2>/dev/null || true
+  $ kill -TERM $ECHO_PID 2>/dev/null || true

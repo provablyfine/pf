@@ -306,7 +306,7 @@ def bastion_server(request, api):
     log_f = open(log_file, "w+")
     issuer_prefix = f"http://127.0.0.1:{api.port}/pf/t"
     popen = subprocess.Popen(
-        ["scripts/pf-bastion", "--issuer-prefix", issuer_prefix, "--port-file", port_file],
+        ["scripts/pf-bastion", "--issuer-prefix", issuer_prefix, "--port-file", port_file, "--domain-suffix", "localhost"],
         stdout=log_f,
         stderr=subprocess.STDOUT,
         text=True,
@@ -338,7 +338,6 @@ def bastion_server(request, api):
     yield BastionServer(port=port)
 
     popen.terminate()
-    popen.wait()
     log_f.close()
     if hasattr(request.node, "rep_call"):
         if request.node.rep_call.failed:

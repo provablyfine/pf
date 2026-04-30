@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 import asyncio
 import logging
@@ -5,11 +7,29 @@ import signal
 import sys
 import types
 import urllib.parse
+import dataclasses
 
 from ... import anet, client
 from .. import login
 
 logger = logging.getLogger(__name__)
+
+
+@dataclasses.dataclass
+class Response:
+    version: str
+    status_code: int
+    reason: str
+    headers: dict[str, str]
+    body: bytes
+
+    @classmethod
+    async def deserialize(cls, sock: anet.base.Socket) -> Response:
+        try:
+            response = await anet.http.Response.deserialize(sock)
+        except anet.exceptions.Error as exc:
+            raise client.exceptions.UI("Unable to reach bastion") from exc
+        return Response(version=response.version, status_code=response.status_code, reason=response.reason, headers=response.headers, body=response.body)
 
 
 async def _http_connect(url: str, prefix: str, hostname: str, token: str) -> anet.base.Socket:
@@ -18,36 +38,35 @@ async def _http_connect(url: str, prefix: str, hostname: str, token: str) -> ane
     scheme_port = 443 if u.scheme == "https" else 80 if u.scheme == "http" else None
     port = u.port if u.port is not None else scheme_port
 
+    if u.scheme not in ["http", "https"]:
+        raise client.exceptions.UI(f"Unsupported url scheme={u.scheme}")
+
     retval: anet.base.Socket
     sock = await anet.socket.socket(anet.socket.Family.INET, anet.socket.Type.STREAM)
     await sock.connect((connect_host, port))
+
     if u.scheme == "https":
         ssl_context = await anet.ssl.create_default_context()
         # The call below is blocking which is "suboptimal"
         # but the alternatives are not a lot of fun.
         ssl_sock = await ssl_context.wrap_socket(sock, server_hostname=connect_host)
         await ssl_sock.handshake()
-        stream = anet.stream.Reader(ssl_sock)
         retval = ssl_sock
-    else:
-        stream = anet.stream.Reader(sock)
+    elif u.scheme == "http":
         retval = sock
+    else:
+        assert False
 
-    lines = [
-        f"CONNECT {hostname}:80 HTTP/1.1",
-        f"Host: {connect_host}",
-        f"Proxy-Authorization: Bearer {token}",
-        ""
-    ]
-    await sock.send(b"\r\n".join(line.encode("ascii") for line in lines))
-    status = await stream.read_until(b"\r\n")
-    items = status.rstrip(b"\r\n").decode("ascii").split(" ")
-    if len(items) != 3:
-        raise client.exceptions.UI(f"Unable to reach bastion: {status.decode('ascii')}")
-    _version, status_code, _reason = items
-    if status_code != "200":
-        raise client.exceptions.UI(f"Unable to reach bastion: status_code={status_code}")
-
+    request = anet.http.Request(method="CONNECT", resource_target=f"{hostname}:80", version="HTTP/1.1", body=b"", headers={
+        "Host": connect_host,
+        "Proxy-Authorization": f"Bearer {token}"
+    })
+    await request.serialize(retval)
+    response = await Response.deserialize(retval)
+    if response.version != "HTTP/1.1":
+        raise client.exceptions.UI(f"Unable to reach bastion: version={response.version}")
+    if response.status_code != 200:
+        raise client.exceptions.UI(f"Unable to reach bastion: status_code={response.status_code}")
     return retval
 
 
@@ -89,8 +108,8 @@ async def _handle_channel(remote: anet.channel.Channel, local_port: int) -> None
         local_writer.close()
 
 
-async def _register_bastion(register_url: str, token: str, local_port: int) -> None:
-    sock = await _http_connect(register_url, "register", "self", token)
+async def _register_bastion(url: str, token: str, local_port: int) -> None:
+    sock = await _http_connect(url, "register", "self", token)
     server = anet.channel.Server(sock)
     while True:
         channel = await server.accept()
@@ -135,7 +154,7 @@ def _register_function(args: argparse.Namespace) -> None:
                     if bastion_id in active_tasks:
                         continue
 
-                    task = asyncio.create_task(_register_bastion(bastion.register_url, token, args.port))
+                    task = asyncio.create_task(_register_bastion(bastion.url, token, args.port))
                     active_tasks[bastion_id] = task
                     print(f"Registered bastion {bastion_id}")
             except Exception as e:

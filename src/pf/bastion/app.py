@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import dataclasses
 import json
@@ -84,6 +86,59 @@ class Request:
     port: int
     headers: dict[str, str]
 
+    @classmethod
+    async def deserialize(cls, sock: anet.base.Socket) -> Request:
+        try:
+            request = await anet.http.Request.deserialize(sock)
+        except anet.exceptions.Error as exc:
+            raise HTTPException(_400) from exc
+
+        if request.version != "HTTP/1.1":
+            logger.error("Invalid request HTTP version")
+            raise HTTPException(_400)
+        if request.method != "CONNECT":
+            logger.error("Invalid request HTTP method")
+            raise HTTPException(_400)
+        colon = request.resource_target.find(":")
+        if colon == -1:
+            logger.error("Invalid request resource_target: missing colon")
+            raise HTTPException(_400)
+        host = request.resource_target[:colon]
+        port = request.resource_target[colon + 1 :]
+        if not port.isdigit():
+            logger.error("Invalid request resource_target: invalid port")
+            raise HTTPException(_400)
+        request = Request(host=host, port=int(port), headers=request.headers)
+        return request
+
+@dataclasses.dataclass
+class Response:
+    status_code: int
+    title: str | None = None
+
+    def _reason(self) -> str:
+        mapping = {
+            200: "OK",
+            400: "Bad Request",
+            403: "Forbidden",
+            404: "Not Found",
+            500: "Internal Server Error",
+        }
+        return mapping.get(self.status_code, "Unexpected")
+
+    async def serialize(self, sock: anet.base.Socket):
+        if self.title is not None:
+            response_body = json.dumps({"title": self.title}).encode("utf-8")
+            response_headers = {
+                "Content-Type": "application/json",
+                "Content-Length": len(response_body),
+            }
+        else:
+            response_headers = {}
+            response_body = b""
+        response = anet.http.Response(status_code=self.status_code, reason=self._reason(), version="HTTP/1.1", headers=response_headers, body=response_body)
+        await response.serialize(sock)
+
 
 @dataclasses.dataclass
 class AppState:
@@ -92,12 +147,6 @@ class AppState:
     dev_tenant_id: int | None
     dev_name: str | None
     clients: dict[tuple[int, str], anet.channel.Client]
-
-
-@dataclasses.dataclass
-class Response:
-    status_code: int
-    title: str | None
 
 
 class HTTPException(Exception):
@@ -120,7 +169,7 @@ class Route:
 
 
 _400 = Response(status_code=400, title="Invalid request")
-_403 = Response(status_code=404, title="Not Authorized")
+_403 = Response(status_code=403, title="Not Authorized")
 _404 = Response(status_code=404, title="Resource not found")
 
 
@@ -129,10 +178,10 @@ def verify_token(state: AppState, request: Request) -> Token | None:
         return Token(tenant_id=state.dev_tenant_id, name=state.dev_name)
     assert state.trusted_keys is not None
 
-    if "Proxy-Authorization" not in request.headers:
+    if "proxy-authorization" not in request.headers:
         logger.debug("Missing Proxy-Authorization header")
         return None
-    authorization = request.headers["Proxy-Authorization"]
+    authorization = request.headers["proxy-authorization"]
     space = authorization.find(" ")
     if space == -1:
         logger.debug("Invalid Proxy-Authorization header")
@@ -197,6 +246,7 @@ async def connect_checker(state: AppState, request: Request) -> RouteHandler:
     if token is None:
         raise HTTPException(_403)
 
+    logger.info(f"Connect to {token.tenant_id}/{request.host}")
     client_key = (token.tenant_id, request.host)
     client = state.clients.get(client_key)
     if client is None:
@@ -267,49 +317,9 @@ class Application:
     def add_route(self, route: Route):
         self._routes.append(route)
 
-    async def _parse_request(self, sock: anet.base.Socket) -> Request:
-        # We can read the data via a local buffer because all the data
-        # sent is only for the proxy until we send back a 200.
-        reader = anet.stream.Reader(sock)
-        start_line = await reader.read_until(b"\r\n")
-        items = start_line.rstrip(b"\r\n").split(b" ")
-        if len(items) != 3:
-            logger.error("Invalid request start line")
-            raise HTTPException(_400)
-        method, resource_target, version = items
-        if version != b"HTTP/1.1":
-            logger.error("Invalid request HTTP version")
-            raise HTTPException(_400)
-        if method != b"CONNECT":
-            logger.error("Invalid request HTTP method")
-            raise HTTPException(_400)
-        colon = resource_target.find(b":")
-        if colon == -1:
-            logger.error("Invalid request resource_target: missing colon")
-            raise HTTPException(_400)
-        host = resource_target[:colon]
-        port = resource_target[colon + 1 :]
-        if not port.isdigit():
-            logger.error("Invalid request resource_target: invalid port")
-            raise HTTPException(_400)
-        headers: dict[str, str] = {}
-        while True:
-            line = await reader.read_until(b"\r\n")
-            if line == b"\r\n":
-                break
-            colon = line.find(b":")
-            if colon == -1:
-                logger.error("Invalid request header: missing colon")
-                raise HTTPException(_400)
-            name = line[:colon].decode("ascii").lower()
-            value = line[colon + 1 :].rstrip(b"\r\n").decode("ascii").lower()
-            headers[name] = value
-        request = Request(host=host.decode("ascii"), port=int(port), headers=headers)
-        return request
-
     async def _handle_new_client(self, sock: anet.base.Socket) -> None:
         try:
-            request = await self._parse_request(sock)
+            request = await Request.deserialize(sock)
             if "host" not in request.headers:
                 logger.error("Invalid request header: missing Host")
                 raise HTTPException(_400)
@@ -317,7 +327,8 @@ class Application:
                 if request.headers["host"] == route.host:
                     handler = await route.check(self._state, request)
                     # Write back ok response
-                    await sock.send("HTTP/1.1 200 OK\r\n".encode("ascii"))
+                    response = Response(status_code=200)
+                    await response.serialize(sock)
                     # Take over connection
                     await handler(sock)
                     return
@@ -328,20 +339,8 @@ class Application:
         except Exception:
             logger.error(traceback.format_exc())
             response = Response(status_code=500, title="Internal Server Error")
-        else:
-            assert False
 
-        response_body = json.dumps({"title": response.title}).encode("utf-8")
-        response_headers = [
-            ("Content-Type", "application/json"),
-            ("Content-Length", len(response_body)),
-        ]
-        output: list[bytes] = ["HTTP/1.1 {response.status_code} {response.reason}\r\n".encode("ascii")]
-        for name, value in response_headers:
-            output.append(f"{name}: {value}\r\n".encode("ascii"))
-        output.append("\r\n".encode("ascii"))
-        output.append(response_body)
-        await sock.send(b"".join(output))
+        await response.serialize(sock)
 
     async def _loop(self) -> None:
         self._sock = anet.socket.Socket(self._raw_sock, loop=None)
@@ -366,7 +365,7 @@ class Application:
 
 
 def create(conf: Config, sock: socket.socket) -> Application:
-    log.setup_server("bastion", conf.log_level, conf.log_filename)
+    log.setup_server("pf-bastion", conf.log_level, conf.log_filename)
     sock.setblocking(False)
     app = Application(conf, sock)
     app.add_route(Route(f"connect.{conf.domain_suffix}", connect_checker))

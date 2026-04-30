@@ -41,6 +41,14 @@ class Message:
             body = b""
         return Message(start_line=start_line, headers=headers, body=body)
 
+    async def serialize(self, sock: base.Socket):
+        lines = [self.start_line]
+        for name, value in self.headers.items():
+            lines.append(f"{name}: {value}")
+        lines.extend(["", ""])
+        data = b"\r\n".join(line.encode("ascii") for line in lines) + self.body
+        await sock.send(data)
+
 
 @dataclasses.dataclass
 class Request:
@@ -65,6 +73,10 @@ class Request:
         resource_target = start_line[:space]
         version = start_line[space+1:]
         return Request(method=method, resource_target=resource_target, version=version, headers=message.headers, body=message.body)
+
+    async def serialize(self, sock: base.Socket):
+        message = Message(start_line=f"{self.method} {self.resource_target} {self.version}", headers=self.headers, body=self.body)
+        await message.serialize(sock)
 
 
 @dataclasses.dataclass
@@ -94,3 +106,7 @@ class Response:
         return Response(
             version=version, status_code=int(status_code), reason=reason, headers=message.headers, body=message.body
         )
+
+    async def serialize(self, sock: base.Socket):
+        message = Message(start_line=f"{self.version} {self.status_code} {self.reason}", headers=self.headers, body=self.body)
+        await message.serialize(sock)
