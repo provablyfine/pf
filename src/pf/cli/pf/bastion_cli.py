@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import dataclasses
 import logging
 import signal
 import sys
 import types
 import urllib.parse
-import dataclasses
 
 from ... import anet, client
 from .. import login

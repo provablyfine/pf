@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import logging
 import enum
+import logging
 import ssl as _ssl
 
 from . import base, socket

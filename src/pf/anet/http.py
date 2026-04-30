@@ -1,9 +1,9 @@
 from __future__ import annotations
+
 import dataclasses
 import logging
 
 from . import base, exceptions, stream
-
 
 logger = logging.getLogger(__name__)
 

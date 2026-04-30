@@ -6,9 +6,9 @@ import asyncio
 
 import pytest
 
+import pf.anet.exceptions as exceptions
 import pf.anet.http as http
 import pf.anet.socket as anet_socket
-import pf.anet.exceptions as exceptions
 
 
 @pytest.mark.anyio

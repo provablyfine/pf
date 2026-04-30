@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from . import base, _mux
+from . import _mux, base
 
 
 class Channel:

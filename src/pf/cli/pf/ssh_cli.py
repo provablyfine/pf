@@ -1,9 +1,9 @@
 import argparse
 import base64
 import getpass
+import logging
 import os
 import tempfile
-import logging
 
 from ... import client, jwk, ssh
 from .. import login
