@@ -69,27 +69,7 @@ def oidc_login(c: client.Config, sc: client.sync.Client, auth_name: str) -> str:
         base64.urlsafe_b64encode(hashlib.sha256(code_verifier.encode()).digest()).decode("utf-8").rstrip("=")
     )
 
-    # Bind a free local port for the redirect
-    sock = socket.socket()
-    sock.bind(("127.0.0.1", 0))
-    port = sock.getsockname()[1]
-    sock.close()
-
-    redirect_uri = f"http://127.0.0.1:{port}/callback"
-    auth_url = (
-        f"{authorization_endpoint}"
-        f"?client_id={urllib.parse.quote(oidc_config.client_id)}"
-        f"&redirect_uri={urllib.parse.quote(redirect_uri)}"
-        f"&response_type=code"
-        f"&scope=openid+email"
-        f"&code_challenge={urllib.parse.quote(code_challenge)}"
-        f"&code_challenge_method=S256"
-    )
-
-    print("Opening browser for OIDC login...")
-    webbrowser.open(auth_url)
-
-    # Start local HTTP server to capture the authorization code
+    # Start local HTTP server to capture the authorization code (bind first, before opening browser)
     code_holder: list[str] = []
 
     class CallbackHandler(http.server.BaseHTTPRequestHandler):
@@ -105,7 +85,24 @@ def oidc_login(c: client.Config, sc: client.sync.Client, auth_name: str) -> str:
         def log_message(self, format: str, *args: typing.Any) -> None:
             pass  # suppress server log output
 
-    server = http.server.HTTPServer(("127.0.0.1", port), CallbackHandler)
+    server = http.server.HTTPServer(("127.0.0.1", 0), CallbackHandler)
+    server.timeout = 15
+    port = server.server_port
+
+    redirect_uri = f"http://127.0.0.1:{port}/callback"
+    auth_url = (
+        f"{authorization_endpoint}"
+        f"?client_id={urllib.parse.quote(oidc_config.client_id)}"
+        f"&redirect_uri={urllib.parse.quote(redirect_uri)}"
+        f"&response_type=code"
+        f"&scope=openid+email"
+        f"&code_challenge={urllib.parse.quote(code_challenge)}"
+        f"&code_challenge_method=S256"
+    )
+
+    print("Opening browser for OIDC login...")
+    webbrowser.open(auth_url)
+
     server.handle_request()
     server.server_close()
 
