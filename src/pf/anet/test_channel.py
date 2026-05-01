@@ -3,7 +3,7 @@ import asyncio
 import pytest
 
 from .. import anet
-from . import _mux, channel
+from . import _mux, channel, exceptions
 
 
 @pytest.fixture
@@ -363,3 +363,22 @@ async def test_client_wait_closed(pair):
         await client.wait_closed()  # returns once server disconnects
 
     await asyncio.gather(server_task(), client_task())
+
+
+@pytest.mark.anyio
+async def test_server_accept_raises_on_connection_drop():
+    """accept() must raise when remote socket closes, not hang forever."""
+    server_sock, remote_sock = await anet.socket.socketpair(anet.socket.Family.UNIX, anet.socket.Type.STREAM)
+    server = channel.Server(server_sock)
+
+    # Simulate remote TCP server dying — close its socket before any OPEN.
+    # _reader_loop will get EOF but currently doesn't unblock _pending_open.
+    await remote_sock.close()
+
+    # Should raise exceptions.Error, NOT hang forever.
+    # With the bug: TimeoutError from wait_for escapes, pytest.raises fails.
+    # After fix: accept() raises exceptions.Error, test passes.
+    with pytest.raises(exceptions.Error):
+        await asyncio.wait_for(server.accept(), timeout=2.0)
+
+    await server.close()

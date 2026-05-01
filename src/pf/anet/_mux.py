@@ -169,7 +169,24 @@ class Mux:
     async def accept(self) -> ChannelImpl:
         """Accept next incoming channel from peer."""
         await self.start()
-        return await self._pending_open.get()
+
+        # Create a task to get from queue
+        get_task = asyncio.create_task(self._pending_open.get())
+
+        assert self._reader_task is not None
+
+        # Wait for either queue get or reader task to complete
+        done, _ = await asyncio.wait(
+            [get_task, self._reader_task],
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+
+        # If reader task completed first, connection was lost
+        if self._reader_task in done:
+            get_task.cancel()
+            raise exceptions.Error("Multiplexer connection closed")
+
+        return await get_task
 
     async def open_channel(self, channel_type: str) -> ChannelImpl:
         """Open a channel of given type."""
