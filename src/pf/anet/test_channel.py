@@ -25,7 +25,6 @@ async def test_channel_client_server_bidirectional(pair):
     async def server_task():
         # Accept channel
         ch = await server.accept()
-        assert ch.channel_type == "session"
 
         # Read from client
         data = await ch.read()
@@ -85,12 +84,13 @@ async def test_channel_multiple_channels(pair):
     """Test multiple concurrent channels."""
     server, client = pair
 
-    channels_received = []
+    channels_accepted = 0
 
     async def server_task():
+        nonlocal channels_accepted
         for _ in range(3):
             ch = await server.accept()
-            channels_received.append(ch.channel_type)
+            channels_accepted += 1
             data = await ch.read()
             await ch.write(data + b"_response")
             await ch.close()
@@ -109,7 +109,7 @@ async def test_channel_multiple_channels(pair):
         await asyncio.gather(*tasks)
 
     await asyncio.gather(server_task(), client_task())
-    assert sorted(channels_received) == ["session", "session", "session"]
+    assert channels_accepted == 3
 
 
 @pytest.mark.anyio
@@ -278,8 +278,8 @@ async def test_channel_send_window_exhaustion(pair):
     async def client_task():
         ch = await client.open_channel()
         # Override window to very small
-        ch._impl._send_window = 1
-        ch._impl._send_window_event.set()
+        ch._mux._channels[ch._local_id].send_window = 1
+        ch._mux._channels[ch._local_id].send_window_event.set()
 
         # Write 1 byte (fits in window)
         await ch.write(b"x")

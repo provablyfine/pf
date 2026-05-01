@@ -6,29 +6,25 @@ from . import _mux, base
 class Channel:
     """Public channel handle."""
 
-    def __init__(self, impl: _mux.ChannelImpl) -> None:
-        self._impl = impl
-
-    @property
-    def channel_type(self) -> str:
-        """Channel type (e.g., 'session')."""
-        return self._impl.channel_type
+    def __init__(self, local_id: int, mux: _mux.Mux) -> None:
+        self._local_id = local_id
+        self._mux = mux
 
     async def read(self) -> bytes:
         """Read data from channel. Returns b'' on EOF."""
-        return await self._impl.read()
+        return await self._mux.read(self._local_id)
 
     async def write(self, data: bytes) -> None:
         """Write data to channel, respecting send window."""
-        await self._impl.write(data)
+        await self._mux.write(self._local_id, data)
 
     async def close_write(self) -> None:
         """Half-close write side. Peer receives EOF, but can still send."""
-        await self._impl.close_write()
+        await self._mux.close_write(self._local_id)
 
     async def close(self) -> None:
         """Fully close channel."""
-        await self._impl.close()
+        await self._mux.close(self._local_id)
 
 
 class Server:
@@ -39,7 +35,8 @@ class Server:
 
     async def accept(self) -> Channel:
         """Accept next incoming channel."""
-        return Channel(await self._mux.accept())
+        local_id = await self._mux.accept()
+        return Channel(local_id, self._mux)
 
     async def close(self) -> None:
         """Close server."""
@@ -55,7 +52,8 @@ class Client:
 
     async def open_channel(self) -> Channel:
         """Open a channel."""
-        return Channel(await self._mux.open_channel("session"))
+        local_id = await self._mux.open_channel()
+        return Channel(local_id, self._mux)
 
     async def close(self) -> None:
         """Close client."""
