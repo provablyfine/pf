@@ -1,7 +1,6 @@
 """
 Channel multiplexer. The multiplexing protocol is based on RFC 4254.
-The channel_type field has been removed from the byte stream
-because it was unused.
+Removed channel_type field because we did not use it.
 """
 
 from __future__ import annotations
