@@ -1,0 +1,34 @@
+#!/usr/bin/env -S uv run -q --script
+# /// script
+# dependencies = [
+#   "cryptography>=45.0.0",
+#   "requests",
+#   "http-sfv",
+#   "tabulate",
+#   "pytest",
+#   "dateparser",
+#   "coverage",
+#   "pf",
+#   "pydantic",
+# ]
+# [tool.uv.sources]
+# pf = { path = "../", editable = true }
+# ///
+import os
+
+if __name__ == '__main__':
+    cov = None
+    if os.environ.get('COVERAGE_PROCESS_START'):
+        import coverage
+        cov = coverage.Coverage()
+        cov.start()
+
+    import pf.cli.pf.dev_bastion_cli
+    try:
+        pf.cli.pf.dev_bastion_cli.pf()
+    finally:
+        if cov:
+            cov.stop()
+            cov.save()
+    
+

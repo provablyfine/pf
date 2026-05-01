@@ -117,7 +117,7 @@ async def _handle_channel(remote: anet.channel.Channel, local_port: int) -> None
         local_writer.close()
 
 
-async def _register_bastion(url: str, token: str, local_port: int) -> None:
+async def register_async(url: str, token: str, local_port: int) -> None:
     sock = await _http_connect(url, "register", "self", token)
     server = anet.channel.Server(sock)
     background_tasks: set[asyncio.Task[None]] = set()
@@ -166,7 +166,7 @@ def _register_function(args: argparse.Namespace) -> None:
                     if bastion_id in active_tasks:
                         continue
 
-                    task = asyncio.create_task(_register_bastion(bastion.url, token, args.port))
+                    task = asyncio.create_task(register_async(bastion.url, token, args.port))
                     active_tasks[bastion_id] = task
                     print(f"Registered bastion {bastion_id}")
             except Exception as e:
@@ -180,7 +180,7 @@ def _register_function(args: argparse.Namespace) -> None:
     signal.signal(signal.SIGTERM, old_handler)
 
 
-async def _connect_async(url: str, token: str, hostname: str) -> None:
+async def connect_async(url: str, token: str, hostname: str) -> None:
     sock = await _http_connect(url, "connect", hostname, token)
 
     loop = asyncio.get_running_loop()
@@ -221,7 +221,7 @@ def _connect_function(args: argparse.Namespace) -> None:
 
     sc = client.sync.Client(c, timeout=args.timeout)
     token_response = sc.get_self_token("bastion")
-    asyncio.run(_connect_async(args.url, token_response.token, args.hostname))
+    asyncio.run(connect_async(args.url, token_response.token, args.hostname))
 
 
 def add_subparser(parser: argparse.ArgumentParser) -> None:
