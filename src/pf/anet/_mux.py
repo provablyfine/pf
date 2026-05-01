@@ -88,7 +88,7 @@ class Mux:
         """Close underlying socket."""
         await self._sock.close()
 
-    async def accept(self) -> int:
+    async def channel_accept(self) -> int:
         """Accept next incoming channel from peer. Returns local_id."""
 
         get_task = asyncio.create_task(self._pending_open.get())
@@ -106,7 +106,7 @@ class Mux:
 
         return await get_task
 
-    async def open_channel(self) -> int:
+    async def channel_open(self) -> int:
         """Open a channel. Returns local_id."""
         local_id = self._next_id
         self._next_id += 1

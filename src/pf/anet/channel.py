@@ -35,7 +35,7 @@ class Server:
 
     async def accept(self) -> Channel:
         """Accept next incoming channel."""
-        local_id = await self._mux.accept()
+        local_id = await self._mux.channel_accept()
         return Channel(local_id, self._mux)
 
     async def close(self) -> None:
@@ -52,7 +52,7 @@ class Client:
 
     async def open_channel(self) -> Channel:
         """Open a channel."""
-        local_id = await self._mux.open_channel()
+        local_id = await self._mux.channel_open()
         return Channel(local_id, self._mux)
 
     async def close(self) -> None:
