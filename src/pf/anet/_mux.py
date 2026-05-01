@@ -7,6 +7,7 @@ because it was unused.
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import enum
 import struct
 
@@ -38,18 +39,25 @@ class ChannelMsg(enum.IntEnum):
     CLOSE = 97
 
 
-class ChannelImpl:
-    def __init__(self, local_id: int, remote_id: int, initial_window: int) -> None:
-        self.local_id = local_id
-        self.remote_id = remote_id
-        self.recv_queue: asyncio.Queue[bytes] = asyncio.Queue()
-        self.send_window = initial_window
-        self.send_window_event = asyncio.Event()
+@dataclasses.dataclass
+class Channel:
+    local_id: int
+    remote_id: int
+    recv_queue: asyncio.Queue[bytes]
+    send_window: int 
+    send_window_event: asyncio.Event
+    write_closed: bool
+    read_closed: bool
+    close_sent: bool
+
+    @classmethod
+    def create(cls, local_id: int, remote_id: int, initial_window: int) -> Channel:
+        """Create a new channel with given IDs and initial send window."""
+        ch = Channel(local_id, remote_id, recv_queue=asyncio.Queue[bytes](), send_window=0, send_window_event=asyncio.Event(), write_closed=False, read_closed=False, close_sent=False)
+        ch.send_window = initial_window
         if initial_window > 0:
-            self.send_window_event.set()
-        self.write_closed = False  # EOF sent to remote (close_write or close)
-        self.read_closed = False  # EOF received from remote
-        self.close_sent = False  # CLOSE sent to remote
+            ch.send_window_event.set()
+        return ch
 
 
 class Mux:
@@ -57,17 +65,17 @@ class Mux:
 
     def __init__(self, sock: base.Socket) -> None:
         self._sock = sock
-        self._channels: dict[int, ChannelImpl] = {}
+        self._channels: dict[int, Channel] = {}
         self._next_id = 0
         self._pending_open: asyncio.Queue[int] = asyncio.Queue()
         self._open_results: dict[int, asyncio.Future[int]] = {}
         self._write_lock = asyncio.Lock()
         self._reader_task: asyncio.Task[None] | None = None
 
-    async def start(self) -> None:
-        """Start background reader task."""
-        if self._reader_task is None:
+        try:
             self._reader_task = asyncio.create_task(self._reader_loop())
+        except RuntimeError:
+            pass
 
     async def stop(self) -> None:
         """Stop reader task."""
@@ -80,9 +88,9 @@ class Mux:
 
     async def wait_closed(self) -> None:
         """Wait until reader task exits (remote disconnected or closed)."""
-        await self.start()
-        if self._reader_task is not None:
-            await self._reader_task
+        if self._reader_task is None:
+            raise exceptions.Error("Multiplexer not started")
+        await self._reader_task
 
     async def close_socket(self) -> None:
         """Close underlying socket."""
@@ -90,7 +98,8 @@ class Mux:
 
     async def accept(self) -> int:
         """Accept next incoming channel from peer. Returns local_id."""
-        await self.start()
+        if self._reader_task is None:
+            self._reader_task = asyncio.create_task(self._reader_loop())
 
         get_task = asyncio.create_task(self._pending_open.get())
 
@@ -109,7 +118,8 @@ class Mux:
 
     async def open_channel(self) -> int:
         """Open a channel. Returns local_id."""
-        await self.start()
+        if self._reader_task is None:
+            self._reader_task = asyncio.create_task(self._reader_loop())
 
         local_id = self._next_id
         self._next_id += 1
@@ -120,7 +130,7 @@ class Mux:
         await self._send_channel_open(local_id, INITIAL_WINDOW, MAX_PACKET)
         return await future
 
-    async def read(self, local_id: int) -> bytes:
+    async def channel_read(self, local_id: int) -> bytes:
         """Read data from channel. Returns b'' on EOF."""
         ch = self._channels[local_id]
         if ch.read_closed:
@@ -130,7 +140,7 @@ class Mux:
             ch.read_closed = True
         return data
 
-    async def write(self, local_id: int, data: bytes) -> None:
+    async def channel_write(self, local_id: int, data: bytes) -> None:
         """Write data to channel, respecting send window."""
         ch = self._channels[local_id]
         if ch.write_closed:
@@ -148,7 +158,7 @@ class Mux:
             ch.send_window -= chunk_size
             offset += chunk_size
 
-    async def close_write(self, local_id: int) -> None:
+    async def channel_close_write(self, local_id: int) -> None:
         """Half-close write side. Peer receives EOF, but can still send."""
         ch = self._channels[local_id]
         if ch.write_closed:
@@ -156,7 +166,7 @@ class Mux:
         ch.write_closed = True
         await self._send_channel_eof(ch.remote_id)
 
-    async def close(self, local_id: int) -> None:
+    async def channel_close(self, local_id: int) -> None:
         """Close channel fully."""
         ch = self._channels[local_id]
         if ch.close_sent:
@@ -238,7 +248,7 @@ class Mux:
         local_id = self._next_id
         self._next_id += 1
 
-        self._channels[local_id] = ChannelImpl(local_id, sender_channel, initial_window)
+        self._channels[local_id] = Channel.create(local_id, sender_channel, initial_window)
 
         await self._send_channel_open_confirmation(local_id, sender_channel, INITIAL_WINDOW, MAX_PACKET)
         await self._pending_open.put(local_id)
@@ -253,7 +263,7 @@ class Mux:
             return
 
         future = self._open_results.pop(recipient_channel)
-        self._channels[recipient_channel] = ChannelImpl(recipient_channel, sender_channel, initial_window)
+        self._channels[recipient_channel] = Channel.create(recipient_channel, sender_channel, initial_window)
         future.set_result(recipient_channel)
 
     async def _handle_channel_open_failure(self, packet: bytes) -> None:

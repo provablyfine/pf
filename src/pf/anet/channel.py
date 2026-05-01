@@ -12,19 +12,19 @@ class Channel:
 
     async def read(self) -> bytes:
         """Read data from channel. Returns b'' on EOF."""
-        return await self._mux.read(self._local_id)
+        return await self._mux.channel_read(self._local_id)
 
     async def write(self, data: bytes) -> None:
         """Write data to channel, respecting send window."""
-        await self._mux.write(self._local_id, data)
+        await self._mux.channel_write(self._local_id, data)
 
     async def close_write(self) -> None:
         """Half-close write side. Peer receives EOF, but can still send."""
-        await self._mux.close_write(self._local_id)
+        await self._mux.channel_close_write(self._local_id)
 
     async def close(self) -> None:
         """Fully close channel."""
-        await self._mux.close(self._local_id)
+        await self._mux.channel_close(self._local_id)
 
 
 class Server:
