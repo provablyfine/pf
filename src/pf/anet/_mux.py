@@ -70,26 +70,18 @@ class Mux:
         self._pending_open: asyncio.Queue[int] = asyncio.Queue()
         self._open_results: dict[int, asyncio.Future[int]] = {}
         self._write_lock = asyncio.Lock()
-        self._reader_task: asyncio.Task[None] | None = None
-
-        try:
-            self._reader_task = asyncio.create_task(self._reader_loop())
-        except RuntimeError:
-            pass
+        self._reader_task = asyncio.create_task(self._reader_loop())
 
     async def stop(self) -> None:
         """Stop reader task."""
-        if self._reader_task:
-            self._reader_task.cancel()
-            try:
-                await self._reader_task
-            except asyncio.CancelledError:
-                pass
+        self._reader_task.cancel()
+        try:
+            await self._reader_task
+        except asyncio.CancelledError:
+            pass
 
     async def wait_closed(self) -> None:
         """Wait until reader task exits (remote disconnected or closed)."""
-        if self._reader_task is None:
-            raise exceptions.Error("Multiplexer not started")
         await self._reader_task
 
     async def close_socket(self) -> None:
@@ -98,8 +90,6 @@ class Mux:
 
     async def accept(self) -> int:
         """Accept next incoming channel from peer. Returns local_id."""
-        if self._reader_task is None:
-            self._reader_task = asyncio.create_task(self._reader_loop())
 
         get_task = asyncio.create_task(self._pending_open.get())
 
@@ -118,9 +108,6 @@ class Mux:
 
     async def open_channel(self) -> int:
         """Open a channel. Returns local_id."""
-        if self._reader_task is None:
-            self._reader_task = asyncio.create_task(self._reader_loop())
-
         local_id = self._next_id
         self._next_id += 1
 
