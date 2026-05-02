@@ -147,13 +147,93 @@ class Response:
         await response.serialize(sock)
 
 
+class Relay:
+    """Manages a registered bastion client. Owns anet.channel.Client."""
+
+    def __init__(
+        self,
+        socket_name: str,
+        client_key: tuple[int, str],
+        clients: dict[tuple[int, str], Relay],
+    ) -> None:
+        self._socket_name = socket_name
+        self._client_key = client_key
+        self._clients = clients
+        self._client = anet.channel.Client(socket_name)
+
+    async def open_connection(self, socket_name: str) -> RelayConnection:
+        """Open a new connection through this relay."""
+        host = await self._client.open_channel()
+        return RelayConnection(socket_name, host)
+
+    async def run(self) -> None:
+        """Wait for client to close and clean up."""
+        try:
+            await self._client.wait_closed()
+        finally:
+            await self._client.close()
+            del self._clients[self._client_key]
+            anet.sockets.store.remove(self._socket_name)
+
+
+class RelayConnection:
+    """Relays data between user socket and a channel opened through Relay."""
+
+    def __init__(self, socket_name: str, host: anet.channel.Channel) -> None:
+        self._socket_name = socket_name
+        self._host = host
+        sock = anet.sockets.store.get(socket_name)
+        assert sock is not None
+        self._sock = sock
+
+    async def run(self) -> None:
+        """Relay data between socket and channel."""
+
+        async def user_to_host() -> None:
+            logger.debug("relay_user_to_host start")
+            try:
+                while True:
+                    data = await self._sock.recv(4096)
+                    if data == b"":
+                        break
+                    logger.debug(f"relay_user_to_host rx={len(data)}")
+                    await self._host.write(data)
+                    logger.debug(f"relay_user_to_host tx={len(data)}")
+            except anet.exceptions.Error:
+                pass
+            finally:
+                await self._host.close_write()
+
+        async def host_to_user() -> None:
+            logger.debug("relay_host_to_user start")
+            try:
+                while True:
+                    data = await self._host.read()
+                    if data == b"":
+                        break
+                    logger.debug(f"relay_host_to_user rx={len(data)}")
+                    await self._sock.send(data)
+                    logger.debug(f"relay_host_to_user tx={len(data)}")
+            except anet.exceptions.Error:
+                pass
+            finally:
+                await self._sock.shutdown(anet.base.Shut.WR)
+
+        try:
+            await asyncio.gather(user_to_host(), host_to_user())
+        finally:
+            await self._host.close()
+            anet.sockets.store.remove(self._socket_name)
+            await self._sock.close()
+
+
 @dataclasses.dataclass
 class AppState:
     trusted_keys: TrustedKeys | None
     audience: str
     dev_tenant_id: int | None
     dev_name: str | None
-    clients: dict[tuple[int, str], anet.channel.Client]
+    clients: dict[tuple[int, str], Relay]
 
 
 RouteHandler = typing.Callable[[AppState, Request, anet.base.Socket], typing.Awaitable[None]]
@@ -169,6 +249,11 @@ _200 = Response(status_code=200)
 _400 = Response(status_code=400, title="Invalid request")
 _403 = Response(status_code=403, title="Not Authorized")
 _404 = Response(status_code=404, title="Resource not found")
+
+
+def _log_task_error(task: asyncio.Task[None]) -> None:
+    if not task.cancelled() and task.exception() is not None:
+        logger.error("Connection task failed", exc_info=task.exception())
 
 
 def verify_token(state: AppState, request: Request) -> Token | None:
@@ -224,23 +309,13 @@ async def register_handler(state: AppState, request: Request, sock: anet.base.So
 
     logger.info(f"Registering identity {token.tenant_id}/{token.name}")
     client_key = (token.tenant_id, token.name)
-    socket_name = f"bastion-client-{id(sock)}"
+    socket_name = f"relay-register-{id(sock)}"
     anet.sockets.store.add(socket_name, sock)
-    try:
-        await _200.serialize(sock)
-        client = anet.channel.Client(socket_name)
-        try:
-            state.clients[client_key] = client
-            await client.wait_closed()
-        finally:
-            await client.close()
-            del state.clients[client_key]
-    finally:
-        anet.sockets.store.remove(socket_name)
-        try:
-            await sock.close()
-        except Exception:
-            pass
+    relay = Relay(socket_name, client_key, state.clients)
+    state.clients[client_key] = relay
+    await _200.serialize(sock)
+    task = asyncio.create_task(relay.run())
+    task.add_done_callback(_log_task_error)
 
 
 async def connect_handler(state: AppState, request: Request, sock: anet.base.Socket) -> None:
@@ -252,55 +327,18 @@ async def connect_handler(state: AppState, request: Request, sock: anet.base.Soc
 
     logger.info(f"Connect to {token.tenant_id}/{request.host}")
     client_key = (token.tenant_id, request.host)
-    client = state.clients.get(client_key)
-    if client is None:
+    relay = state.clients.get(client_key)
+    if relay is None:
         await _404.serialize(sock)
         await sock.close()
         return
 
+    socket_name = f"relay-connect-{id(sock)}"
+    anet.sockets.store.add(socket_name, sock)
     await _200.serialize(sock)
-    host = await client.open_channel()
-
-    async def relay_user_to_host() -> None:
-        logger.debug("relay_user_to_host start")
-        try:
-            while True:
-                data = await sock.recv(4096)
-                if data == b"":
-                    # EOF
-                    break
-                logger.debug(f"relay_user_to_host rx={len(data)}")
-                await host.write(data)
-                logger.debug(f"relay_user_to_host tx={len(data)}")
-        except anet.exceptions.Error:
-            pass
-        finally:
-            await host.close_write()
-
-    async def relay_host_to_user() -> None:
-        logger.debug("relay_host_to_user start")
-        try:
-            while True:
-                data = await host.read()
-                if data == b"":
-                    # EOF
-                    break
-                logger.debug(f"relay_host_to_user rx={len(data)}")
-                await sock.send(data)
-                logger.debug(f"relay_host_to_user tx={len(data)}")
-        except anet.exceptions.Error:
-            pass
-        finally:
-            await sock.shutdown(anet.base.Shut.WR)
-
-    try:
-        await asyncio.gather(
-            relay_user_to_host(),
-            relay_host_to_user(),
-        )
-    finally:
-        await host.close()
-        await sock.close()
+    connection = await relay.open_connection(socket_name)
+    task = asyncio.create_task(connection.run())
+    task.add_done_callback(_log_task_error)
 
 
 class Application:
