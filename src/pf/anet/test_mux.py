@@ -3,7 +3,7 @@ import asyncio
 import pytest
 
 from .. import anet
-from . import _mux, channel, exceptions, sockets
+from . import exceptions, mux, sockets
 
 
 @pytest.fixture
@@ -13,80 +13,83 @@ async def pair():
     sockets.store.add("test-server", server_sock)
     sockets.store.add("test-client", client_sock)
 
-    server = channel.Server("test-server")
-    client = channel.Client("test-client")
+    server = mux.Mux.create("test-server")
+    client = mux.Mux.create("test-client")
     yield server, client
-    await server.close()
-    await client.close()
+
+    await server.stop()
+    await server.close_socket()
+    await client.stop()
+    await client.close_socket()
 
     sockets.store.remove("test-server")
     sockets.store.remove("test-client")
 
 
 @pytest.mark.anyio
-async def test_channel_client_server_bidirectional(pair):
+async def test_mux_client_server_bidirectional(pair):
     """Test client-server channel communication."""
     server, client = pair
 
     async def server_task():
         # Accept channel
-        ch = await server.accept()
+        local_id = await server.channel_accept()
 
         # Read from client
-        data = await ch.read()
+        data = await server.channel_read(local_id)
         assert data == b"hello"
 
         # Write to client
-        await ch.write(b"world")
+        await server.channel_write(local_id, b"world")
 
         # Close
-        await ch.close()
+        await server.channel_close(local_id)
 
     async def client_task():
         # Open channel
-        ch = await client.open_channel()
+        local_id = await client.channel_open()
 
         # Write to server
-        await ch.write(b"hello")
+        await client.channel_write(local_id, b"hello")
 
         # Read from server
-        data = await ch.read()
+        data = await client.channel_read(local_id)
         assert data == b"world"
 
         # Read EOF
-        data = await ch.read()
+        data = await client.channel_read(local_id)
         assert data == b""
 
     await asyncio.gather(server_task(), client_task())
 
 
 @pytest.mark.anyio
-async def test_channel_large_data(pair):
+async def test_mux_large_data(pair):
     """Test sending data larger than MAX_PACKET."""
     server, client = pair
 
-    large_data = b"x" * (_mux.MAX_PACKET * 3 + 1000)
+    large_data = b"x" * (mux.MAX_PACKET * 3 + 1000)
 
     async def server_task():
-        ch = await server.accept()
+        local_id = await server.channel_accept()
         received = b""
         while True:
-            data = await ch.read()
+            data = await server.channel_read(local_id)
             if not data:
                 break
             received += data
         assert received == large_data
 
     async def client_task():
-        ch = await client.open_channel()
-        await ch.write(large_data)
-        await ch.close()
+        local_id = await client.channel_open()
+        await client.channel_write(local_id, large_data)
+        await client.channel_close(local_id)
 
     await asyncio.gather(server_task(), client_task())
 
 
 @pytest.mark.anyio
-async def test_channel_multiple_channels(pair):
+async def test_mux_multiple_channels(pair):
     """Test multiple concurrent channels."""
     server, client = pair
 
@@ -95,18 +98,18 @@ async def test_channel_multiple_channels(pair):
     async def server_task():
         nonlocal channels_accepted
         for _ in range(3):
-            ch = await server.accept()
+            local_id = await server.channel_accept()
             channels_accepted += 1
-            data = await ch.read()
-            await ch.write(data + b"_response")
-            await ch.close()
+            data = await server.channel_read(local_id)
+            await server.channel_write(local_id, data + b"_response")
+            await server.channel_close(local_id)
 
     async def send_channel(c, i):
-        ch = await c.open_channel()
-        await ch.write(b"test")
-        data = await ch.read()
+        local_id = await c.channel_open()
+        await c.channel_write(local_id, b"test")
+        data = await c.channel_read(local_id)
         assert data == b"test_response"
-        await ch.read()  # EOF
+        await c.channel_read(local_id)  # EOF
 
     async def client_task():
         tasks = []
@@ -119,236 +122,237 @@ async def test_channel_multiple_channels(pair):
 
 
 @pytest.mark.anyio
-async def test_channel_empty_data(pair):
+async def test_mux_empty_data(pair):
     """Test sending empty data."""
     server, client = pair
 
     async def server_task():
-        ch = await server.accept()
-        data = await ch.read()
+        local_id = await server.channel_accept()
+        data = await server.channel_read(local_id)
         assert data == b""
-        data = await ch.read()
+        data = await server.channel_read(local_id)
         assert data == b""
 
     async def client_task():
-        ch = await client.open_channel()
-        await ch.write(b"")
-        await ch.close()
+        local_id = await client.channel_open()
+        await client.channel_write(local_id, b"")
+        await client.channel_close(local_id)
 
     await asyncio.gather(server_task(), client_task())
 
 
 @pytest.mark.anyio
-async def test_channel_half_close_echo(pair):
+async def test_mux_half_close_echo(pair):
     """Test half-close with echo (client -> server -> client)."""
     server, client = pair
 
     async def server_task():
-        ch = await server.accept()
+        local_id = await server.channel_accept()
         # Read from client
-        data = await ch.read()
+        data = await server.channel_read(local_id)
         assert data == b"ping"
         # Read EOF (client half-closed)
-        data = await ch.read()
+        data = await server.channel_read(local_id)
         assert data == b""
         # But we can still write
-        await ch.write(b"pong")
+        await server.channel_write(local_id, b"pong")
         # Now close fully
-        await ch.close()
+        await server.channel_close(local_id)
 
     async def client_task():
-        ch = await client.open_channel()
+        local_id = await client.channel_open()
         # Send data
-        await ch.write(b"ping")
+        await client.channel_write(local_id, b"ping")
         # Half-close write side
-        await ch.close_write()
+        await client.channel_close_write(local_id)
         # Can still read response
-        data = await ch.read()
+        data = await client.channel_read(local_id)
         assert data == b"pong"
         # Read EOF from server
-        data = await ch.read()
+        data = await client.channel_read(local_id)
         assert data == b""
         # Now close fully
-        await ch.close()
+        await client.channel_close(local_id)
 
     await asyncio.gather(server_task(), client_task())
 
 
 @pytest.mark.anyio
-async def test_channel_half_close_write_after_error(pair):
+async def test_mux_half_close_write_after_error(pair):
     """Test that writing after half-close raises error."""
     server, client = pair
 
     async def server_task():
-        ch = await server.accept()
+        local_id = await server.channel_accept()
         # Just wait for EOF
         while True:
-            data = await ch.read()
+            data = await server.channel_read(local_id)
             if not data:
                 break
 
     async def client_task():
-        ch = await client.open_channel()
-        await ch.close_write()
+        local_id = await client.channel_open()
+        await client.channel_close_write(local_id)
 
         # Writing after half-close should fail
         try:
-            await ch.write(b"fail")
+            await client.channel_write(local_id, b"fail")
             assert False, "Should have raised"
         except BaseException:  # exceptions.Error inherits from BaseException
             pass
-        await ch.close()
+        await client.channel_close(local_id)
 
     await asyncio.gather(server_task(), client_task())
 
 
 @pytest.mark.anyio
-async def test_channel_half_close_idempotent(pair):
+async def test_mux_half_close_idempotent(pair):
     """Test that half-close can be called multiple times."""
     server, client = pair
 
     async def server_task():
-        ch = await server.accept()
+        local_id = await server.channel_accept()
         # Just wait for EOF
         while True:
-            data = await ch.read()
+            data = await server.channel_read(local_id)
             if not data:
                 break
 
     async def client_task():
-        ch = await client.open_channel()
-        await ch.close_write()
-        await ch.close_write()  # Should be idempotent
-        await ch.close()
-        await ch.close()  # Should be idempotent
+        local_id = await client.channel_open()
+        await client.channel_close_write(local_id)
+        await client.channel_close_write(local_id)  # Should be idempotent
+        await client.channel_close(local_id)
+        await client.channel_close(local_id)  # Should be idempotent
 
     await asyncio.gather(server_task(), client_task())
 
 
 @pytest.mark.anyio
-async def test_channel_close_without_eof(pair):
+async def test_mux_close_without_eof(pair):
     """Test receiving CLOSE without prior EOF returns EOF."""
     server, client = pair
 
     async def server_task():
-        ch = await server.accept()
+        local_id = await server.channel_accept()
         # Send data but close without EOF
-        await ch.write(b"hello")
-        await ch.close()  # CLOSE without explicit EOF
+        await server.channel_write(local_id, b"hello")
+        await server.channel_close(local_id)  # CLOSE without explicit EOF
 
     async def client_task():
-        ch = await client.open_channel()
-        data = await ch.read()
+        local_id = await client.channel_open()
+        data = await client.channel_read(local_id)
         assert data == b"hello"
         # Should read EOF due to CLOSE
-        data = await ch.read()
+        data = await client.channel_read(local_id)
         assert data == b""
 
     await asyncio.gather(server_task(), client_task())
 
 
 @pytest.mark.anyio
-async def test_channel_open_failure(pair):
+async def test_mux_open_failure(pair):
     """Test OPEN_FAILURE causes exception."""
     server, client = pair
 
     async def server_task():
-        ch = await server.accept()
+        local_id = await server.channel_accept()
         # This test doesn't actually reject, it accepts normally
         # A real server would reject via OPEN_FAILURE
         # For now, just accept to avoid hanging
-        await ch.close()
+        await server.channel_close(local_id)
 
     async def client_task():
         # Note: Our current server implementation always accepts.
         # This test is a placeholder for testing OPEN_FAILURE parsing.
-        ch = await client.open_channel()
-        await ch.close()
+        local_id = await client.channel_open()
+        await client.channel_close(local_id)
 
     await asyncio.gather(server_task(), client_task())
 
 
 @pytest.mark.anyio
-async def test_channel_send_window_exhaustion(pair):
+async def test_mux_send_window_exhaustion(pair):
     """Test send window exhaustion blocks write."""
     server, client = pair
 
     async def server_task():
-        ch = await server.accept()
+        local_id = await server.channel_accept()
         # Read all data slowly
-        data = await ch.read()
+        data = await server.channel_read(local_id)
         assert data == b"x"
-        data = await ch.read()
+        data = await server.channel_read(local_id)
         assert data == b""
 
     async def client_task():
-        ch = await client.open_channel()
+        local_id = await client.channel_open()
         # Override window to very small
-        ch._mux._channels[ch._local_id].send_window = 1
-        ch._mux._channels[ch._local_id].send_window_event.set()
+        client._channels[local_id].send_window = 1
+        client._channels[local_id].send_window_event.set()
 
         # Write 1 byte (fits in window)
-        await ch.write(b"x")
+        await client.channel_write(local_id, b"x")
 
         # Try to write more - will block until window_adjust
         # (but we never send one, so close instead)
-        await ch.close_write()
-        await ch.close()
+        await client.channel_close_write(local_id)
+        await client.channel_close(local_id)
 
     await asyncio.gather(server_task(), client_task())
 
 
 @pytest.mark.anyio
-async def test_channel_bidirectional_half_close(pair):
+async def test_mux_bidirectional_half_close(pair):
     """Test both sides half-close independently."""
     server, client = pair
 
     async def server_task():
-        ch = await server.accept()
+        local_id = await server.channel_accept()
         # Server writes then half-closes
-        await ch.write(b"srv")
-        await ch.close_write()
+        await server.channel_write(local_id, b"srv")
+        await server.channel_close_write(local_id)
         # But can still read
-        data = await ch.read()
+        data = await server.channel_read(local_id)
         assert data == b"cli"
-        data = await ch.read()
+        data = await server.channel_read(local_id)
         assert data == b""
-        await ch.close()
+        await server.channel_close(local_id)
 
     async def client_task():
-        ch = await client.open_channel()
+        local_id = await client.channel_open()
         # Client writes then half-closes
-        await ch.write(b"cli")
-        await ch.close_write()
+        await client.channel_write(local_id, b"cli")
+        await client.channel_close_write(local_id)
         # But can still read
-        data = await ch.read()
+        data = await client.channel_read(local_id)
         assert data == b"srv"
-        data = await ch.read()
+        data = await client.channel_read(local_id)
         assert data == b""
-        await ch.close()
+        await client.channel_close(local_id)
 
     await asyncio.gather(server_task(), client_task())
 
 
 @pytest.mark.anyio
-async def test_channel_close_after_half_close_idempotent(pair):
+async def test_mux_close_after_half_close_idempotent(pair):
     """Test close() after close_write() doesn't send duplicate EOF."""
     server, client = pair
 
     async def server_task():
-        ch = await server.accept()
+        local_id = await server.channel_accept()
         # Receive EOF once (from half-close)
-        data = await ch.read()
+        data = await server.channel_read(local_id)
         assert data == b""
         # Another read should also return EOF
-        data = await ch.read()
+        data = await server.channel_read(local_id)
         assert data == b""
 
     async def client_task():
-        ch = await client.open_channel()
-        await ch.close_write()  # Sends EOF
-        await ch.close()  # Sends CLOSE, EOF already sent so no duplicate
-        await client.close()
+        local_id = await client.channel_open()
+        await client.channel_close_write(local_id)  # Sends EOF
+        await client.channel_close(local_id)  # Sends CLOSE, EOF already sent so no duplicate
+        await client.stop()
+        await client.close_socket()
 
     await asyncio.gather(server_task(), client_task())
 
@@ -359,13 +363,14 @@ async def test_client_wait_closed(pair):
     server, client = pair
 
     async def server_task():
-        ch = await server.accept()
-        await ch.close()
-        await server.close()
+        local_id = await server.channel_accept()
+        await server.channel_close(local_id)
+        await server.stop()
+        await server.close_socket()
 
     async def client_task():
-        ch = await client.open_channel()
-        await ch.read()  # EOF from server close
+        local_id = await client.channel_open()
+        await client.channel_read(local_id)  # EOF from server close
         await client.wait_closed()  # returns once server disconnects
 
     await asyncio.gather(server_task(), client_task())
@@ -378,7 +383,7 @@ async def test_server_accept_raises_on_connection_drop():
 
     sockets.store.add("test-server-drop", server_sock)
 
-    server = channel.Server("test-server-drop")
+    server = mux.Mux.create("test-server-drop")
 
     # Simulate remote TCP server dying — close its socket before any OPEN.
     # _reader_loop will get EOF but currently doesn't unblock _pending_open.
@@ -388,8 +393,9 @@ async def test_server_accept_raises_on_connection_drop():
     # With the bug: TimeoutError from wait_for escapes, pytest.raises fails.
     # After fix: accept() raises exceptions.Error, test passes.
     with pytest.raises(exceptions.Error):
-        await asyncio.wait_for(server.accept(), timeout=2.0)
+        await asyncio.wait_for(server.channel_accept(), timeout=2.0)
 
-    await server.close()
+    await server.stop()
+    await server.close_socket()
 
     sockets.store.remove("test-server-drop")

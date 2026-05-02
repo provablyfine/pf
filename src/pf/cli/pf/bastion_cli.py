@@ -79,12 +79,12 @@ async def _http_connect(url: str, prefix: str, hostname: str, token: str) -> ane
     return retval
 
 
-async def _handle_channel(remote: anet.channel.Channel, local_port: int) -> None:
+async def _handle_channel(mux: anet.mux.Mux, local_id: int, local_port: int) -> None:
     try:
         local_reader, local_writer = await asyncio.open_connection("127.0.0.1", local_port)
     except Exception as e:
         logger.debug(f"Cannot connect to local port {local_port}: {e}")
-        await remote.close()
+        await mux.channel_close(local_id)
         return
 
     async def local_to_remote() -> None:
@@ -93,15 +93,15 @@ async def _handle_channel(remote: anet.channel.Channel, local_port: int) -> None
                 data = await local_reader.read(4096)
                 if not data:
                     break
-                await remote.write(data)
+                await mux.channel_write(local_id, data)
         except Exception:
             pass
         finally:
-            await remote.close()
+            await mux.channel_close(local_id)
 
     async def remote_to_local() -> None:
         while True:
-            data = await remote.read()
+            data = await mux.channel_read(local_id)
             if data == b"":
                 break
             local_writer.write(data)
@@ -122,11 +122,11 @@ async def register_async(url: str, token: str, local_port: int) -> None:
     socket_name = f"bastion-server-{id(sock)}"
     anet.sockets.store.add(socket_name, sock)
     try:
-        server = anet.channel.Server(socket_name)
+        server = anet.mux.Mux.create(socket_name)
         background_tasks: set[asyncio.Task[None]] = set()
         while True:
-            channel = await server.accept()
-            task = asyncio.create_task(_handle_channel(channel, local_port))
+            local_id = await server.channel_accept()
+            task = asyncio.create_task(_handle_channel(server, local_id, local_port))
             background_tasks.add(task)
             task.add_done_callback(background_tasks.discard)
     finally:

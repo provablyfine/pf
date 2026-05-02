@@ -1,5 +1,5 @@
 """Async socket library."""
 
-from . import base, channel, exceptions, http, socket, sockets, ssl, stream
+from . import base, exceptions, http, mux, socket, sockets, ssl, stream
 
-__all__ = ["base", "channel", "exceptions", "http", "socket", "sockets", "ssl", "stream"]
+__all__ = ["base", "exceptions", "http", "mux", "socket", "sockets", "ssl", "stream"]

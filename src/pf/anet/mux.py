@@ -6,9 +6,11 @@ Removed channel_type field because we did not use it.
 from __future__ import annotations
 
 import asyncio
+import base64
 import dataclasses
 import enum
 import struct
+import typing
 
 from . import exceptions, sockets
 
@@ -48,6 +50,31 @@ class ChannelSnapshot:
     read_closed: bool
     close_sent: bool
 
+    def to_dict(self) -> dict[str, object]:
+        """Serialize to dict (recv_queue items as base64)."""
+        return {
+            "local_id": self.local_id,
+            "remote_id": self.remote_id,
+            "recv_queue": [base64.b64encode(b).decode() for b in self.recv_queue],
+            "send_window": self.send_window,
+            "write_closed": self.write_closed,
+            "read_closed": self.read_closed,
+            "close_sent": self.close_sent,
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict[str, typing.Any]) -> ChannelSnapshot:
+        """Deserialize from dict."""
+        return cls(
+            local_id=int(d["local_id"]),
+            remote_id=int(d["remote_id"]),
+            recv_queue=[base64.b64decode(s) for s in d["recv_queue"]],
+            send_window=int(d["send_window"]),
+            write_closed=bool(d["write_closed"]),
+            read_closed=bool(d["read_closed"]),
+            close_sent=bool(d["close_sent"]),
+        )
+
 
 @dataclasses.dataclass
 class MuxSnapshot:
@@ -55,6 +82,25 @@ class MuxSnapshot:
     next_id: int
     channels: list[ChannelSnapshot]
     pending_open: list[int]  # local_ids of channels awaiting channel_accept()
+
+    def to_dict(self) -> dict[str, object]:
+        """Serialize to dict."""
+        return {
+            "socket_name": self.socket_name,
+            "next_id": self.next_id,
+            "channels": [ch.to_dict() for ch in self.channels],
+            "pending_open": self.pending_open,
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict[str, typing.Any]) -> MuxSnapshot:
+        """Deserialize from dict."""
+        return cls(
+            socket_name=str(d["socket_name"]),
+            next_id=int(d["next_id"]),
+            channels=[ChannelSnapshot.from_dict(ch) for ch in d["channels"]],
+            pending_open=list(d["pending_open"]),
+        )
 
 
 @dataclasses.dataclass
