@@ -91,23 +91,23 @@ class Request:
         try:
             request = await anet.http.Request.deserialize(sock)
         except anet.exceptions.Error as exc:
-            raise HTTPException(_400) from exc
+            raise ValueError("Invalid HTTP request") from exc
 
         if request.version != "HTTP/1.1":
             logger.error("Invalid request HTTP version")
-            raise HTTPException(_400)
+            raise ValueError("Invalid HTTP version")
         if request.method != "CONNECT":
             logger.error("Invalid request HTTP method")
-            raise HTTPException(_400)
+            raise ValueError("Invalid HTTP method")
         colon = request.resource_target.find(":")
         if colon == -1:
             logger.error("Invalid request resource_target: missing colon")
-            raise HTTPException(_400)
+            raise ValueError("Invalid resource target: missing colon")
         host = request.resource_target[:colon]
         port = request.resource_target[colon + 1 :]
         if not port.isdigit():
             logger.error("Invalid request resource_target: invalid port")
-            raise HTTPException(_400)
+            raise ValueError("Invalid port")
         request = Request(host=host, port=int(port), headers=request.headers)
         return request
 
@@ -156,25 +156,16 @@ class AppState:
     clients: dict[tuple[int, str], anet.channel.Client]
 
 
-class HTTPException(Exception):
-    def __init__(self, response: Response):
-        self._response = response
-
-    @property
-    def response(self) -> Response:
-        return self._response
-
-
-RouteHandler = typing.Callable[[anet.base.Socket], typing.Awaitable[None]]
-RouteChecker = typing.Callable[[AppState, Request], typing.Awaitable[RouteHandler]]
+RouteHandler = typing.Callable[[AppState, Request, anet.base.Socket], typing.Awaitable[None]]
 
 
 @dataclasses.dataclass
 class Route:
     host: str
-    check: RouteChecker
+    handler: RouteHandler
 
 
+_200 = Response(status_code=200)
 _400 = Response(status_code=400, title="Invalid request")
 _403 = Response(status_code=403, title="Not Authorized")
 _404 = Response(status_code=404, title="Resource not found")
@@ -224,91 +215,92 @@ def verify_token(state: AppState, request: Request) -> Token | None:
     return Token(name=payload["name"], tenant_id=payload["tenant_id"])
 
 
-async def register_checker(state: AppState, request: Request) -> RouteHandler:
+async def register_handler(state: AppState, request: Request, sock: anet.base.Socket) -> None:
     token = verify_token(state, request)
     if token is None:
-        raise HTTPException(_403)
+        await _403.serialize(sock)
+        await sock.close()
+        return
 
     logger.info(f"Registering identity {token.tenant_id}/{token.name}")
     client_key = (token.tenant_id, token.name)
-
-    async def handler(sock: anet.base.Socket) -> None:
-        socket_name = f"bastion-client-{id(sock)}"
-        anet.sockets.store.add(socket_name, sock)
+    socket_name = f"bastion-client-{id(sock)}"
+    anet.sockets.store.add(socket_name, sock)
+    try:
+        await _200.serialize(sock)
+        client = anet.channel.Client(socket_name)
         try:
-            client = anet.channel.Client(socket_name)
-            try:
-                state.clients[client_key] = client
-                await client.wait_closed()
-            finally:
-                await client.close()
-                del state.clients[client_key]
+            state.clients[client_key] = client
+            await client.wait_closed()
         finally:
-            anet.sockets.store.remove(socket_name)
-            try:
-                await sock.close()
-            except Exception:
-                pass
+            await client.close()
+            del state.clients[client_key]
+    finally:
+        anet.sockets.store.remove(socket_name)
+        try:
+            await sock.close()
+        except Exception:
+            pass
 
-    return handler
 
-
-async def connect_checker(state: AppState, request: Request) -> RouteHandler:
+async def connect_handler(state: AppState, request: Request, sock: anet.base.Socket) -> None:
     token = verify_token(state, request)
     if token is None:
-        raise HTTPException(_403)
+        await _403.serialize(sock)
+        await sock.close()
+        return
 
     logger.info(f"Connect to {token.tenant_id}/{request.host}")
     client_key = (token.tenant_id, request.host)
     client = state.clients.get(client_key)
     if client is None:
-        raise HTTPException(_404)
+        await _404.serialize(sock)
+        await sock.close()
+        return
 
-    async def handler(user: anet.base.Socket) -> None:
-        host = await client.open_channel()
+    await _200.serialize(sock)
+    host = await client.open_channel()
 
-        async def relay_user_to_host() -> None:
-            logger.debug("relay_user_to_host start")
-            try:
-                while True:
-                    data = await user.recv(4096)
-                    if data == b"":
-                        # EOF
-                        break
-                    logger.debug(f"relay_user_to_host rx={len(data)}")
-                    await host.write(data)
-                    logger.debug(f"relay_user_to_host tx={len(data)}")
-            except anet.exceptions.Error:
-                pass
-            finally:
-                await host.close_write()
-
-        async def relay_host_to_user() -> None:
-            logger.debug("relay_host_to_user start")
-            try:
-                while True:
-                    data = await host.read()
-                    if data == b"":
-                        # EOF
-                        break
-                    logger.debug(f"relay_host_to_user rx={len(data)}")
-                    await user.send(data)
-                    logger.debug(f"relay_host_to_user tx={len(data)}")
-            except anet.exceptions.Error:
-                pass
-            finally:
-                await user.shutdown(anet.base.Shut.WR)
-
+    async def relay_user_to_host() -> None:
+        logger.debug("relay_user_to_host start")
         try:
-            await asyncio.gather(
-                relay_user_to_host(),
-                relay_host_to_user(),
-            )
+            while True:
+                data = await sock.recv(4096)
+                if data == b"":
+                    # EOF
+                    break
+                logger.debug(f"relay_user_to_host rx={len(data)}")
+                await host.write(data)
+                logger.debug(f"relay_user_to_host tx={len(data)}")
+        except anet.exceptions.Error:
+            pass
         finally:
-            await host.close()
-            await user.close()
+            await host.close_write()
 
-    return handler
+    async def relay_host_to_user() -> None:
+        logger.debug("relay_host_to_user start")
+        try:
+            while True:
+                data = await host.read()
+                if data == b"":
+                    # EOF
+                    break
+                logger.debug(f"relay_host_to_user rx={len(data)}")
+                await sock.send(data)
+                logger.debug(f"relay_host_to_user tx={len(data)}")
+        except anet.exceptions.Error:
+            pass
+        finally:
+            await sock.shutdown(anet.base.Shut.WR)
+
+    try:
+        await asyncio.gather(
+            relay_user_to_host(),
+            relay_host_to_user(),
+        )
+    finally:
+        await host.close()
+        await sock.close()
 
 
 class Application:
@@ -332,27 +324,26 @@ class Application:
     async def _handle_new_client(self, sock: anet.base.Socket) -> None:
         try:
             request = await Request.deserialize(sock)
-            if "host" not in request.headers:
-                logger.error("Invalid request header: missing Host")
-                raise HTTPException(_400)
-            for route in self._routes:
-                if request.headers["host"] == route.host:
-                    handler = await route.check(self._state, request)
-                    # Write back ok response
-                    response = Response(status_code=200)
-                    await response.serialize(sock)
-                    # Take over connection
-                    await handler(sock)
-                    return
-            logger.error(f"Unable to find route for host: {request.headers['host']}")
-            response = _404
-        except HTTPException as e:
-            response = e.response
         except Exception:
             logger.error(traceback.format_exc())
-            response = Response(status_code=500, title="Internal Server Error")
+            await _400.serialize(sock)
+            await sock.close()
+            return
 
-        await response.serialize(sock)
+        if "host" not in request.headers:
+            logger.error("Invalid request header: missing Host")
+            await _400.serialize(sock)
+            await sock.close()
+            return
+
+        for route in self._routes:
+            if request.headers["host"] == route.host:
+                await route.handler(self._state, request, sock)
+                return
+
+        logger.error(f"Unable to find route for host: {request.headers['host']}")
+        await _404.serialize(sock)
+        await sock.close()
 
     async def _loop(self) -> None:
         self._sock = anet.socket.Socket(self._raw_sock, loop=None)
@@ -380,6 +371,6 @@ def create(conf: Config, sock: socket.socket) -> Application:
     log.setup_server("pf-bastion", conf.log_level, conf.log_filename)
     sock.setblocking(False)
     app = Application(conf, sock)
-    app.add_route(Route(f"connect.{conf.domain_suffix}", connect_checker))
-    app.add_route(Route(f"register.{conf.domain_suffix}", register_checker))
+    app.add_route(Route(f"connect.{conf.domain_suffix}", connect_handler))
+    app.add_route(Route(f"register.{conf.domain_suffix}", register_handler))
     return app
