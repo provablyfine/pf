@@ -31,7 +31,7 @@ class Server:
     """SSH channel server — accepts incoming channels."""
 
     def __init__(self, socket_name: str) -> None:
-        self._mux = _mux.Mux(socket_name)
+        self._mux = _mux.Mux.create(socket_name)
 
     async def accept(self) -> Channel:
         """Accept next incoming channel."""
@@ -48,7 +48,7 @@ class Client:
     """SSH channel client — opens channels."""
 
     def __init__(self, socket_name: str) -> None:
-        self._mux = _mux.Mux(socket_name)
+        self._mux = _mux.Mux.create(socket_name)
 
     async def open_channel(self) -> Channel:
         """Open a channel."""

@@ -111,18 +111,29 @@ class Channel:
 
 
 class Mux:
-    def __init__(self, socket_name: str) -> None:
+    def __init__(
+        self,
+        socket_name: str,
+        channels: dict[int, Channel],
+        next_id: int,
+        pending_open: asyncio.Queue[int],
+    ) -> None:
         sock = sockets.store.get(socket_name)
         if sock is None:
             raise exceptions.Error(f"Socket '{socket_name}' not found in store")
         self._socket_name = socket_name
         self._sock = sock
-        self._channels: dict[int, Channel] = {}
-        self._next_id = 0
-        self._pending_open: asyncio.Queue[int] = asyncio.Queue()
+        self._channels = channels
+        self._next_id = next_id
+        self._pending_open = pending_open
         self._open_results: dict[int, asyncio.Future[int]] = {}
         self._write_lock = asyncio.Lock()
         self._reader_task = asyncio.create_task(self._reader_loop())
+
+    @classmethod
+    def create(cls, socket_name: str) -> Mux:
+        """Create a fresh Mux backed by the named socket."""
+        return cls(socket_name, {}, 0, asyncio.Queue[int]())
 
     async def stop(self) -> None:
         """Stop reader task. Waits for any in-progress dispatch to complete."""
@@ -160,21 +171,11 @@ class Mux:
     @classmethod
     def restore(cls, snap: MuxSnapshot) -> Mux:
         """Restore a Mux from a snapshot."""
-        mux: Mux = object.__new__(cls)
-        mux._socket_name = snap.socket_name
-        sock = sockets.store.get(snap.socket_name)
-        if sock is None:
-            raise exceptions.Error(f"Socket '{snap.socket_name}' not found in store")
-        mux._sock = sock
-        mux._next_id = snap.next_id
-        mux._channels = {s.local_id: Channel.from_snapshot(s) for s in snap.channels}
-        mux._pending_open = asyncio.Queue()
+        channels = {s.local_id: Channel.from_snapshot(s) for s in snap.channels}
+        pending_open = asyncio.Queue[int]()
         for local_id in snap.pending_open:
-            mux._pending_open.put_nowait(local_id)
-        mux._open_results = {}
-        mux._write_lock = asyncio.Lock()
-        mux._reader_task = asyncio.create_task(mux._reader_loop())
-        return mux
+            pending_open.put_nowait(local_id)
+        return cls(snap.socket_name, channels, snap.next_id, pending_open)
 
     async def channel_accept(self) -> int:
         """Accept next incoming channel from peer. Returns local_id."""
