@@ -148,12 +148,30 @@ class Response:
 
 
 @dataclasses.dataclass
+class RelayConnectionSnapshot:
+    """Snapshot of a relay connection."""
+
+    socket_name: str
+    channel_id: int
+
+    def to_dict(self) -> dict[str, typing.Any]:
+        """Serialize to dict."""
+        return {"socket_name": self.socket_name, "channel_id": self.channel_id}
+
+    @classmethod
+    def from_dict(cls, d: dict[str, typing.Any]) -> RelayConnectionSnapshot:
+        """Deserialize from dict."""
+        return cls(socket_name=str(d["socket_name"]), channel_id=int(d["channel_id"]))
+
+
+@dataclasses.dataclass
 class RelaySnapshot:
     """Snapshot of a registered relay for persistence."""
 
     client_key: tuple[int, str]
     socket_name: str
     mux_snapshot: anet.mux.MuxSnapshot
+    connections: list[RelayConnectionSnapshot]
 
     def to_dict(self) -> dict[str, typing.Any]:
         """Serialize to dict."""
@@ -161,6 +179,7 @@ class RelaySnapshot:
             "client_key": list(self.client_key),
             "socket_name": self.socket_name,
             "mux_snapshot": self.mux_snapshot.to_dict(),
+            "connections": [c.to_dict() for c in self.connections],
         }
 
     @classmethod
@@ -171,71 +190,69 @@ class RelaySnapshot:
             client_key=(int(ck[0]), str(ck[1])),
             socket_name=str(d["socket_name"]),
             mux_snapshot=anet.mux.MuxSnapshot.from_dict(d["mux_snapshot"]),
+            connections=[RelayConnectionSnapshot.from_dict(c) for c in d["connections"]],
         )
 
 
-class Relay:
-    """Manages a registered bastion client. Owns anet.mux.Mux."""
+@dataclasses.dataclass
+class AppSnapshot:
+    """Snapshot of full application relay state."""
 
-    def __init__(
-        self,
-        socket_name: str,
-        client_key: tuple[int, str],
-        clients: dict[tuple[int, str], Relay],
-    ) -> None:
-        self._socket_name = socket_name
-        self._client_key = client_key
-        self._clients = clients
-        self._mux = anet.mux.Mux.create(socket_name)
+    relays: list[RelaySnapshot]
 
-    async def open_connection(self, socket_name: str) -> RelayConnection:
-        """Open a new connection through this relay."""
-        host_id = await self._mux.channel_open()
-        return RelayConnection(socket_name, self._mux, host_id)
+    def socket_names(self) -> list[str]:
+        """All socket names referenced. Caller must transfer these FDs before restore."""
+        names: list[str] = []
+        for r in self.relays:
+            names.append(r.socket_name)
+            for c in r.connections:
+                names.append(c.socket_name)
+        return names
 
-    async def run(self) -> None:
-        """Wait for client to close and clean up."""
-        try:
-            await self._mux.wait_closed()
-        finally:
-            await self._mux.stop()
-            await self._mux.close_socket()
-            del self._clients[self._client_key]
-            anet.sockets.store.remove(self._socket_name)
-
-    async def snapshot(self) -> RelaySnapshot:
-        """Snapshot the relay (stops mux reader, drains state)."""
-        mux_snapshot = await self._mux.snapshot()
-        return RelaySnapshot(
-            client_key=self._client_key,
-            socket_name=self._socket_name,
-            mux_snapshot=mux_snapshot,
-        )
+    def to_dict(self) -> dict[str, typing.Any]:
+        """Serialize to dict."""
+        return {"relays": [r.to_dict() for r in self.relays]}
 
     @classmethod
-    def restore(cls, snap: RelaySnapshot, clients: dict[tuple[int, str], Relay]) -> Relay:
-        """Restore a Relay from snapshot.
-
-        Caller must have re-added socket to store first.
-        """
-        r = cls.__new__(cls)
-        r._socket_name = snap.socket_name
-        r._client_key = snap.client_key
-        r._clients = clients
-        r._mux = anet.mux.Mux.restore(snap.mux_snapshot)
-        return r
+    def from_dict(cls, d: dict[str, typing.Any]) -> AppSnapshot:
+        """Deserialize from dict."""
+        return cls(relays=[RelaySnapshot.from_dict(r) for r in d["relays"]])
 
 
 class RelayConnection:
     """Relays data between user socket and a channel opened through Relay."""
 
-    def __init__(self, socket_name: str, host_mux: anet.mux.Mux, host_id: int) -> None:
+    def __init__(
+        self,
+        socket_name: str,
+        host_mux: anet.mux.Mux,
+        host_id: int,
+    ) -> None:
         self._socket_name = socket_name
         self._host_mux = host_mux
-        self._host_id = host_id
+        self._channel_id = host_id
         sock = anet.sockets.store.get(socket_name)
         assert sock is not None
         self._sock = sock
+        self._task: asyncio.Task[None] | None = None
+
+    @property
+    def channel_id(self) -> int:
+        """Channel ID for this connection (read-only)."""
+        return self._channel_id
+
+    @classmethod
+    def start(
+        cls,
+        socket_name: str,
+        host_mux: anet.mux.Mux,
+        host_id: int,
+    ) -> RelayConnection:
+        """Start a relay connection. Spawns run() as background task."""
+        conn = cls(socket_name, host_mux, host_id)
+        conn._task = asyncio.create_task(conn.run())
+        conn._task.add_done_callback(_log_task_error)
+        return conn
 
     async def run(self) -> None:
         """Relay data between socket and channel."""
@@ -248,22 +265,34 @@ class RelayConnection:
                     if data == b"":
                         break
                     logger.debug(f"relay_user_to_host rx={len(data)}")
-                    await self._host_mux.channel_write(self._host_id, data)
+                    write_task: asyncio.Task[None] = asyncio.ensure_future(
+                        self._host_mux.channel_write(self._channel_id, data)
+                    )
+                    try:
+                        await asyncio.shield(write_task)
+                    except asyncio.CancelledError:
+                        await write_task
+                        raise
                     logger.debug(f"relay_user_to_host tx={len(data)}")
             except anet.exceptions.Error:
                 pass
             finally:
-                await self._host_mux.channel_close_write(self._host_id)
+                await self._host_mux.channel_close_write(self._channel_id)
 
         async def host_to_user() -> None:
             logger.debug("relay_host_to_user start")
             try:
                 while True:
-                    data = await self._host_mux.channel_read(self._host_id)
+                    data = await self._host_mux.channel_read(self._channel_id)
                     if data == b"":
                         break
                     logger.debug(f"relay_host_to_user rx={len(data)}")
-                    await self._sock.send(data)
+                    send_task: asyncio.Task[int] = asyncio.ensure_future(self._sock.send(data))
+                    try:
+                        await asyncio.shield(send_task)
+                    except asyncio.CancelledError:
+                        await send_task
+                        raise
                     logger.debug(f"relay_host_to_user tx={len(data)}")
             except anet.exceptions.Error:
                 pass
@@ -273,9 +302,97 @@ class RelayConnection:
         try:
             await asyncio.gather(user_to_host(), host_to_user())
         finally:
-            await self._host_mux.channel_close(self._host_id)
+            await self._host_mux.channel_close(self._channel_id)
             anet.sockets.store.remove(self._socket_name)
             await self._sock.close()
+
+    def add_done_callback(self, cb: typing.Callable[[asyncio.Task[None]], None]) -> None:
+        """Register callback for when this connection closes."""
+        assert self._task is not None
+        self._task.add_done_callback(cb)
+
+    async def snapshot(self) -> RelayConnectionSnapshot:
+        """Snapshot this connection (identifiers only; data is in the mux)."""
+        return RelayConnectionSnapshot(socket_name=self._socket_name, channel_id=self._channel_id)
+
+    @classmethod
+    def restore(
+        cls,
+        snap: RelayConnectionSnapshot,
+        host_mux: anet.mux.Mux,
+    ) -> RelayConnection:
+        """Restore from snapshot. Caller must have re-added socket to store."""
+        return cls.start(snap.socket_name, host_mux, snap.channel_id)
+
+
+class Relay:
+    """Manages a registered bastion client. Owns anet.mux.Mux."""
+
+    def __init__(
+        self,
+        socket_name: str,
+        client_key: tuple[int, str],
+    ) -> None:
+        self._socket_name = socket_name
+        self._client_key = client_key
+        self._mux = anet.mux.Mux.create(socket_name)
+        self._connections: dict[str, RelayConnection] = {}
+        self._task: asyncio.Task[None] | None = None
+
+    @classmethod
+    def start(cls, socket_name: str, client_key: tuple[int, str]) -> Relay:
+        """Start a relay. Spawns run() as background task."""
+        r = cls(socket_name, client_key)
+        r._task = asyncio.create_task(r.run())
+        r._task.add_done_callback(_log_task_error)
+        return r
+
+    async def open_connection(self, socket_name: str) -> RelayConnection:
+        """Open a new connection through this relay."""
+        host_id = await self._mux.channel_open()
+        connection = RelayConnection.start(socket_name, self._mux, host_id)
+        self._connections[socket_name] = connection
+        return connection
+
+    async def run(self) -> None:
+        """Wait for client to close and clean up."""
+        try:
+            await self._mux.wait_closed()
+        finally:
+            await self._mux.stop()
+            await self._mux.close_socket()
+            anet.sockets.store.remove(self._socket_name)
+
+    def add_done_callback(self, cb: typing.Callable[[asyncio.Task[None]], None]) -> None:
+        """Register callback for when this relay closes."""
+        assert self._task is not None
+        self._task.add_done_callback(cb)
+
+    async def snapshot(self) -> RelaySnapshot:
+        """Snapshot the relay (stops mux reader, drains state)."""
+        mux_snapshot = await self._mux.snapshot()
+        connections = [await conn.snapshot() for conn in self._connections.values()]
+        return RelaySnapshot(
+            client_key=self._client_key,
+            socket_name=self._socket_name,
+            mux_snapshot=mux_snapshot,
+            connections=connections,
+        )
+
+    @classmethod
+    def restore(cls, snap: RelaySnapshot) -> Relay:
+        """Restore a Relay from snapshot. Spawns run() as background task."""
+        r = cls.__new__(cls)
+        r._socket_name = snap.socket_name
+        r._client_key = snap.client_key
+        r._connections = {}
+        r._mux = anet.mux.Mux.restore(snap.mux_snapshot)
+        for c in snap.connections:
+            connection = RelayConnection.restore(c, r._mux)
+            r._connections[c.socket_name] = connection
+        r._task = asyncio.create_task(r.run())
+        r._task.add_done_callback(_log_task_error)
+        return r
 
 
 @dataclasses.dataclass
@@ -284,7 +401,7 @@ class AppState:
     audience: str
     dev_tenant_id: int | None
     dev_name: str | None
-    clients: dict[tuple[int, str], Relay]
+    relays: dict[tuple[int, str], Relay]
 
 
 RouteHandler = typing.Callable[[AppState, Request, anet.base.Socket], typing.Awaitable[None]]
@@ -362,11 +479,14 @@ async def register_handler(state: AppState, request: Request, sock: anet.base.So
     client_key = (token.tenant_id, token.name)
     socket_name = f"relay-register-{id(sock)}"
     anet.sockets.store.add(socket_name, sock)
-    relay = Relay(socket_name, client_key, state.clients)
-    state.clients[client_key] = relay
     await _200.serialize(sock)
-    task = asyncio.create_task(relay.run())
-    task.add_done_callback(_log_task_error)
+    relay = Relay.start(socket_name, client_key)
+    state.relays[client_key] = relay
+
+    def on_relay_done(_: asyncio.Task[None]) -> None:
+        state.relays.pop(client_key, None)
+
+    relay.add_done_callback(on_relay_done)
 
 
 async def connect_handler(state: AppState, request: Request, sock: anet.base.Socket) -> None:
@@ -378,7 +498,7 @@ async def connect_handler(state: AppState, request: Request, sock: anet.base.Soc
 
     logger.info(f"Connect to {token.tenant_id}/{request.host}")
     client_key = (token.tenant_id, request.host)
-    relay = state.clients.get(client_key)
+    relay = state.relays.get(client_key)
     if relay is None:
         await _404.serialize(sock)
         await sock.close()
@@ -387,9 +507,7 @@ async def connect_handler(state: AppState, request: Request, sock: anet.base.Soc
     socket_name = f"relay-connect-{id(sock)}"
     anet.sockets.store.add(socket_name, sock)
     await _200.serialize(sock)
-    connection = await relay.open_connection(socket_name)
-    task = asyncio.create_task(connection.run())
-    task.add_done_callback(_log_task_error)
+    await relay.open_connection(socket_name)
 
 
 class Application:
@@ -400,7 +518,7 @@ class Application:
             audience="bastion",
             dev_tenant_id=conf.dev_tenant_id,
             dev_name=conf.dev_name,
-            clients={},
+            relays={},
         )
         self._raw_sock = sock
         self._sock: anet.base.Socket | None = None
@@ -454,6 +572,35 @@ class Application:
 
     def stop(self) -> None:
         self._raw_sock.close()
+
+    async def snapshot(self) -> AppSnapshot:
+        """Snapshot all relay state. Stops accepting new connections."""
+        self.stop()
+        relay_snapshots = [await relay.snapshot() for relay in list(self._state.relays.values())]
+        return AppSnapshot(relays=relay_snapshots)
+
+    @classmethod
+    def restore(cls, conf: Config, snap: AppSnapshot, sock: socket.socket) -> Application:
+        """Restore application from snapshot.
+
+        Caller must re-add all sockets from snap.socket_names() to
+        anet.sockets.store before calling this.
+        """
+        log.setup_server("pf-bastion", conf.log_level, conf.log_filename)
+        sock.setblocking(False)
+        app = cls(conf, sock)
+
+        def make_callback(key: tuple[int, str]) -> typing.Callable[[asyncio.Task[None]], None]:
+            def on_relay_done(_: asyncio.Task[None]) -> None:
+                app._state.relays.pop(key, None)
+
+            return on_relay_done
+
+        for relay_snap in snap.relays:
+            relay = Relay.restore(relay_snap)
+            app._state.relays[relay_snap.client_key] = relay
+            relay.add_done_callback(make_callback(relay_snap.client_key))
+        return app
 
 
 def create(conf: Config, sock: socket.socket) -> Application:

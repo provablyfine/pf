@@ -3,7 +3,7 @@ import asyncio
 import sys
 import traceback
 
-from ... import anet, client, log
+from ... import client, log
 from . import bastion_cli
 
 
