@@ -3,18 +3,24 @@ import asyncio
 import pytest
 
 from .. import anet
-from . import _mux, channel, exceptions
+from . import _mux, channel, exceptions, sockets
 
 
 @pytest.fixture
 async def pair():
     server_sock, client_sock = await anet.socket.socketpair(anet.socket.Family.UNIX, anet.socket.Type.STREAM)
 
-    server = channel.Server(server_sock)
-    client = channel.Client(client_sock)
+    sockets.store.add("test-server", server_sock)
+    sockets.store.add("test-client", client_sock)
+
+    server = channel.Server("test-server")
+    client = channel.Client("test-client")
     yield server, client
     await server.close()
     await client.close()
+
+    sockets.store.remove("test-server")
+    sockets.store.remove("test-client")
 
 
 @pytest.mark.anyio
@@ -369,7 +375,10 @@ async def test_client_wait_closed(pair):
 async def test_server_accept_raises_on_connection_drop():
     """accept() must raise when remote socket closes, not hang forever."""
     server_sock, remote_sock = await anet.socket.socketpair(anet.socket.Family.UNIX, anet.socket.Type.STREAM)
-    server = channel.Server(server_sock)
+
+    sockets.store.add("test-server-drop", server_sock)
+
+    server = channel.Server("test-server-drop")
 
     # Simulate remote TCP server dying — close its socket before any OPEN.
     # _reader_loop will get EOF but currently doesn't unblock _pending_open.
@@ -382,3 +391,5 @@ async def test_server_accept_raises_on_connection_drop():
         await asyncio.wait_for(server.accept(), timeout=2.0)
 
     await server.close()
+
+    sockets.store.remove("test-server-drop")

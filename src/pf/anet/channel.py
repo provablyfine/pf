@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from . import _mux, base
+from . import _mux
 
 
 class Channel:
@@ -30,8 +30,8 @@ class Channel:
 class Server:
     """SSH channel server — accepts incoming channels."""
 
-    def __init__(self, sock: base.Socket) -> None:
-        self._mux = _mux.Mux(sock)
+    def __init__(self, socket_name: str) -> None:
+        self._mux = _mux.Mux(socket_name)
 
     async def accept(self) -> Channel:
         """Accept next incoming channel."""
@@ -47,8 +47,8 @@ class Server:
 class Client:
     """SSH channel client — opens channels."""
 
-    def __init__(self, sock: base.Socket) -> None:
-        self._mux = _mux.Mux(sock)
+    def __init__(self, socket_name: str) -> None:
+        self._mux = _mux.Mux(socket_name)
 
     async def open_channel(self) -> Channel:
         """Open a channel."""

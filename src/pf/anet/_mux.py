@@ -10,7 +10,7 @@ import dataclasses
 import enum
 import struct
 
-from . import base, exceptions
+from . import exceptions, sockets
 
 
 def _unpack_uint32(data: bytes, offset: int) -> tuple[int, int]:
@@ -39,11 +39,30 @@ class ChannelMsg(enum.IntEnum):
 
 
 @dataclasses.dataclass
+class ChannelSnapshot:
+    local_id: int
+    remote_id: int
+    recv_queue: list[bytes]  # b"" items are EOF sentinels
+    send_window: int
+    write_closed: bool
+    read_closed: bool
+    close_sent: bool
+
+
+@dataclasses.dataclass
+class MuxSnapshot:
+    socket_name: str
+    next_id: int
+    channels: list[ChannelSnapshot]
+    pending_open: list[int]  # local_ids of channels awaiting channel_accept()
+
+
+@dataclasses.dataclass
 class Channel:
     local_id: int
     remote_id: int
     recv_queue: asyncio.Queue[bytes]
-    send_window: int 
+    send_window: int
     send_window_event: asyncio.Event
     write_closed: bool
     read_closed: bool
@@ -51,15 +70,52 @@ class Channel:
 
     @classmethod
     def create(cls, local_id: int, remote_id: int, initial_window: int) -> Channel:
-        ch = Channel(local_id, remote_id, recv_queue=asyncio.Queue[bytes](), send_window=0, send_window_event=asyncio.Event(), write_closed=False, read_closed=False, close_sent=False)
+        ch = Channel(
+            local_id,
+            remote_id,
+            recv_queue=asyncio.Queue[bytes](),
+            send_window=0,
+            send_window_event=asyncio.Event(),
+            write_closed=False,
+            read_closed=False,
+            close_sent=False,
+        )
         ch.send_window = initial_window
         if initial_window > 0:
             ch.send_window_event.set()
         return ch
 
+    @classmethod
+    def from_snapshot(cls, snap: ChannelSnapshot) -> Channel:
+        ch = cls.create(snap.local_id, snap.remote_id, snap.send_window)
+        for item in snap.recv_queue:
+            ch.recv_queue.put_nowait(item)
+        ch.write_closed = snap.write_closed
+        ch.read_closed = snap.read_closed
+        ch.close_sent = snap.close_sent
+        return ch
+
+    def to_snapshot(self) -> ChannelSnapshot:
+        items: list[bytes] = []
+        while not self.recv_queue.empty():
+            items.append(self.recv_queue.get_nowait())
+        return ChannelSnapshot(
+            local_id=self.local_id,
+            remote_id=self.remote_id,
+            recv_queue=items,
+            send_window=self.send_window,
+            write_closed=self.write_closed,
+            read_closed=self.read_closed,
+            close_sent=self.close_sent,
+        )
+
 
 class Mux:
-    def __init__(self, sock: base.Socket) -> None:
+    def __init__(self, socket_name: str) -> None:
+        sock = sockets.store.get(socket_name)
+        if sock is None:
+            raise exceptions.Error(f"Socket '{socket_name}' not found in store")
+        self._socket_name = socket_name
         self._sock = sock
         self._channels: dict[int, Channel] = {}
         self._next_id = 0
@@ -69,7 +125,7 @@ class Mux:
         self._reader_task = asyncio.create_task(self._reader_loop())
 
     async def stop(self) -> None:
-        """Stop reader task."""
+        """Stop reader task. Waits for any in-progress dispatch to complete."""
         self._reader_task.cancel()
         try:
             await self._reader_task
@@ -83,6 +139,42 @@ class Mux:
     async def close_socket(self) -> None:
         """Close underlying socket."""
         await self._sock.close()
+
+    async def snapshot(self) -> MuxSnapshot:
+        """Stop the reader task and snapshot all mux state."""
+        await self.stop()
+
+        channels = [ch.to_snapshot() for ch in self._channels.values()]
+
+        pending_open: list[int] = []
+        while not self._pending_open.empty():
+            pending_open.append(self._pending_open.get_nowait())
+
+        return MuxSnapshot(
+            socket_name=self._socket_name,
+            next_id=self._next_id,
+            channels=channels,
+            pending_open=pending_open,
+        )
+
+    @classmethod
+    def restore(cls, snap: MuxSnapshot) -> Mux:
+        """Restore a Mux from a snapshot."""
+        mux: Mux = object.__new__(cls)
+        mux._socket_name = snap.socket_name
+        sock = sockets.store.get(snap.socket_name)
+        if sock is None:
+            raise exceptions.Error(f"Socket '{snap.socket_name}' not found in store")
+        mux._sock = sock
+        mux._next_id = snap.next_id
+        mux._channels = {s.local_id: Channel.from_snapshot(s) for s in snap.channels}
+        mux._pending_open = asyncio.Queue()
+        for local_id in snap.pending_open:
+            mux._pending_open.put_nowait(local_id)
+        mux._open_results = {}
+        mux._write_lock = asyncio.Lock()
+        mux._reader_task = asyncio.create_task(mux._reader_loop())
+        return mux
 
     async def channel_accept(self) -> int:
         """Accept next incoming channel from peer. Returns local_id."""
@@ -161,13 +253,24 @@ class Mux:
         await self._send_channel_close(ch.remote_id)
 
     async def _reader_loop(self) -> None:
-        """Background task reading packets from socket."""
+        """Background task reading packets from socket.
+
+        Dispatch is shielded from cancellation: if the task is cancelled while
+        dispatching a packet, the dispatch runs to completion before the
+        CancelledError propagates. This ensures mux state stays coherent for
+        snapshot() regardless of when stop() is called.
+        """
         try:
             while True:
                 packet = await self._read_packet()
                 if not packet:
                     break
-                await self._dispatch_packet(packet)
+                dispatch_task: asyncio.Task[None] = asyncio.ensure_future(self._dispatch_packet(packet))
+                try:
+                    await asyncio.shield(dispatch_task)
+                except asyncio.CancelledError:
+                    await dispatch_task  # let dispatch finish before propagating
+                    raise
         except asyncio.CancelledError:
             pass
         except Exception as e:
