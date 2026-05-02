@@ -332,20 +332,22 @@ class Relay:
         self,
         socket_name: str,
         client_key: tuple[int, str],
+        mux: anet.mux.Mux,
+        connections: dict[str, RelayConnection],
     ) -> None:
         self._socket_name = socket_name
         self._client_key = client_key
-        self._mux = anet.mux.Mux.create(socket_name)
-        self._connections: dict[str, RelayConnection] = {}
-        self._task: asyncio.Task[None] | None = None
+        self._mux = mux
+        self._connections = connections
+        self._task = asyncio.create_task(self.run())
+        self._task.add_done_callback(_log_task_error)
 
     @classmethod
     def start(cls, socket_name: str, client_key: tuple[int, str]) -> Relay:
         """Start a relay. Spawns run() as background task."""
-        r = cls(socket_name, client_key)
-        r._task = asyncio.create_task(r.run())
-        r._task.add_done_callback(_log_task_error)
-        return r
+        mux = anet.mux.Mux.create(socket_name)
+        connections: dict[str, RelayConnection] = {}
+        return Relay(socket_name, client_key, mux, connections)
 
     async def open_connection(self, socket_name: str) -> RelayConnection:
         """Open a new connection through this relay."""
@@ -382,17 +384,9 @@ class Relay:
     @classmethod
     def restore(cls, snap: RelaySnapshot) -> Relay:
         """Restore a Relay from snapshot. Spawns run() as background task."""
-        r = cls.__new__(cls)
-        r._socket_name = snap.socket_name
-        r._client_key = snap.client_key
-        r._connections = {}
-        r._mux = anet.mux.Mux.restore(snap.mux_snapshot)
-        for c in snap.connections:
-            connection = RelayConnection.restore(c, r._mux)
-            r._connections[c.socket_name] = connection
-        r._task = asyncio.create_task(r.run())
-        r._task.add_done_callback(_log_task_error)
-        return r
+        mux = anet.mux.Mux.restore(snap.mux_snapshot)
+        connections = {c.socket_name: RelayConnection.restore(c, mux) for c in snap.connections}
+        return Relay(snap.socket_name, snap.client_key, mux, connections)
 
 
 @dataclasses.dataclass
