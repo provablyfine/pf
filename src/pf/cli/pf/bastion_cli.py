@@ -119,13 +119,18 @@ async def _handle_channel(remote: anet.channel.Channel, local_port: int) -> None
 
 async def register_async(url: str, token: str, local_port: int) -> None:
     sock = await _http_connect(url, "register", "self", token)
-    server = anet.channel.Server(sock)
-    background_tasks: set[asyncio.Task[None]] = set()
-    while True:
-        channel = await server.accept()
-        task = asyncio.create_task(_handle_channel(channel, local_port))
-        background_tasks.add(task)
-        task.add_done_callback(background_tasks.discard)
+    socket_name = f"bastion-server-{id(sock)}"
+    anet.sockets.store.add(socket_name, sock)
+    try:
+        server = anet.channel.Server(socket_name)
+        background_tasks: set[asyncio.Task[None]] = set()
+        while True:
+            channel = await server.accept()
+            task = asyncio.create_task(_handle_channel(channel, local_port))
+            background_tasks.add(task)
+            task.add_done_callback(background_tasks.discard)
+    finally:
+        anet.sockets.store.remove(socket_name)
 
 
 @client.ssh_utils.exception

@@ -233,13 +233,18 @@ async def register_checker(state: AppState, request: Request) -> RouteHandler:
     client_key = (token.tenant_id, token.name)
 
     async def handler(sock: anet.base.Socket) -> None:
-        client = anet.channel.Client(sock)
+        socket_name = f"bastion-client-{id(sock)}"
+        anet.sockets.store.add(socket_name, sock)
         try:
-            state.clients[client_key] = client
-            await client.wait_closed()
+            client = anet.channel.Client(socket_name)
+            try:
+                state.clients[client_key] = client
+                await client.wait_closed()
+            finally:
+                await client.close()
+                del state.clients[client_key]
         finally:
-            await client.close()
-            del state.clients[client_key]
+            anet.sockets.store.remove(socket_name)
             try:
                 await sock.close()
             except Exception:
