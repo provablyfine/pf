@@ -233,7 +233,14 @@ class AuditLogRow(typing.NamedTuple):
     details: dict[str, typing.Any]
 
 
-audit_log = db.make_table("audit_log", metadata, AuditLogRow)
+audit_log = db.make_table(
+    "audit_log",
+    metadata,
+    AuditLogRow,
+    sqlalchemy.Index("idx_audit_log_type", "type"),
+    sqlalchemy.Index("idx_audit_log_by_identity_id", "by_identity_id"),
+    sqlalchemy.Index("idx_audit_log_at", "at"),
+)
 
 
 class OAuth2LoginRequestRow(typing.NamedTuple):
