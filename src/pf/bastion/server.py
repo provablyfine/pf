@@ -4,11 +4,38 @@ import datetime
 import signal
 import socket
 import types
+import logging
+import os
+import os.path
 
-from . import app
+
+from .. import anet
+from . import app, control_app, http
+
+logger = logging.getLogger(__name__)
+
+
+async def _run(
+    conf: app.Config,
+    main_app: http.Application[app.AppState],
+    ctrl_app: http.Application[control_app.AppState],
+) -> None:
+    app_holder = [main_app, ctrl_app]
+
+    def sigterm_handler(signum: int, frame: types.FrameType | None) -> None:
+        for app in app_holder:
+            app.stop()
+
+    signal.signal(signal.SIGTERM, sigterm_handler)
+    main_task = asyncio.create_task(main_app.run())
+    ctrl_task = asyncio.create_task(ctrl_app.run())
+
+    await main_task
+    await ctrl_task
 
 
 def run():
+    default_control_socket = os.path.join(os.getenv("XDG_RUNTIME_DIR", "."), "pf-bastion-control.sock")
     parser = argparse.ArgumentParser()
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--issuer-prefix", help="OIDC issuer url")
@@ -20,6 +47,7 @@ def run():
     parser.add_argument("--port-file", default=None)
     parser.add_argument("-d", "--debug", help="Debugging level", action="count", default=0)
     parser.add_argument("--log-filename", default=None)
+    parser.add_argument("--control-socket", default=default_control_socket, help="Unix socket path for control API")
     args = parser.parse_args()
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -50,14 +78,15 @@ def run():
             log_level=args.debug,
             log_filename=args.log_filename,
         )
-    application = app.create(conf, sock)
 
     print(f"Starting Bastion on {host}:{port} using FD {sock.fileno()}")
+    print(args.control_socket)
 
-    def handler(signum: int, frame: types.FrameType | None) -> None:
-        application.stop()
+    control_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    control_socket.bind(args.control_socket)
 
-    signal.signal(signal.SIGTERM, handler)
-    asyncio.run(application.run())
+    main_app = app.create(conf, anet.socket.Socket(sock))
+    ctrl_app = control_app.create(anet.socket.Socket(control_socket))
+    asyncio.run(_run(conf, main_app, ctrl_app))
 
     print("Stopped", datetime.datetime.now())
