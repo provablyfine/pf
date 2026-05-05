@@ -7,7 +7,7 @@ import typing
 import jwt
 
 from .. import anet, log
-from . import http, relay
+from . import http, relay, trusted_key
 
 logger = logging.getLogger(__name__)
 
@@ -26,55 +26,6 @@ class Config:
 class Token:
     name: str
     tenant_id: int
-
-
-@dataclasses.dataclass
-class TrustedKey:
-    issuer: str
-    key: jwt.PyJWK
-
-
-class TrustedKeys:
-    def __init__(self, issuer_prefix: str):
-        self._issuer_prefix = issuer_prefix
-        self._client_by_iss: dict[str, jwt.PyJWKClient] = {}
-
-    def lookup(self, token: str) -> TrustedKey | None:
-        # we manually decode the token to extract the iss
-        try:
-            unverified = jwt.decode_complete(token, options={"verify_signature": False, "require": ["iss"]})
-        except jwt.exceptions.InvalidTokenError as e:
-            logger.debug(f"Invalid token: {e}")
-            return None
-        header = unverified["header"]
-        payload = unverified["payload"]
-        kid = header.get("kid")
-        if kid is None:
-            logger.debug("Missing kid in header")
-            return None
-        iss = payload["iss"]
-
-        # We manually validate the iss because we want to do a prefix match, not an exact
-        # match because we have multiple tenants !
-        if not iss.startswith(self._issuer_prefix):
-            logger.debug(f"Invalid token: issuer does not match our prefix: {iss}!={self._issuer_prefix}")
-            return None
-
-        client = self._client_by_iss.get(iss)
-        if client is None:
-            client = jwt.PyJWKClient(f"{iss}/.well-known/jwks.json")
-            self._client_by_iss[iss] = client
-        try:
-            # XXX: should use async task ?
-            key = client.get_signing_key(kid)
-        except jwt.exceptions.PyJWKClientError:
-            logger.warning(
-                f"Invalid key iss={iss} kid={kid}. "
-                "Something is wrong with your key rotation or someone is trying to screw you."
-            )
-            return None
-
-        return TrustedKey(issuer=iss, key=key)
 
 
 @dataclasses.dataclass
@@ -103,7 +54,7 @@ class AppSnapshot:
 
 @dataclasses.dataclass
 class AppState:
-    trusted_keys: TrustedKeys | None
+    trusted_keys: trusted_key.TrustedKeys | None
     audience: str
     dev_tenant_id: int | None
     dev_name: str | None
@@ -112,7 +63,7 @@ class AppState:
     @classmethod
     def create(cls, conf: Config, relays: dict[tuple[int, str], relay.Relay]) -> AppState:
         state = AppState(
-            trusted_keys=TrustedKeys(conf.issuer_prefix) if conf.issuer_prefix else None,
+            trusted_keys=trusted_key.TrustedKeys(conf.issuer_prefix) if conf.issuer_prefix else None,
             audience="bastion",
             dev_tenant_id=conf.dev_tenant_id,
             dev_name=conf.dev_name,
