@@ -4,6 +4,7 @@ import asyncio
 import enum
 import socket as _socket
 import typing
+import functools
 
 from . import base
 
@@ -19,11 +20,15 @@ class Type(enum.IntEnum):
 
 
 class Socket(base.Socket):
-    def __init__(self, sock: _socket.socket, loop: asyncio.AbstractEventLoop | None):
+    def __init__(self, sock: _socket.socket):
         sock.setblocking(False)
         self._sock = sock
-        self._loop = loop or asyncio.get_running_loop()
-        assert self._loop is not None
+
+    @functools.cached_property
+    def _loop(self) -> asyncio.AbstractEventLoop:
+        loop = asyncio.get_running_loop()
+        assert loop is not None
+        return loop
 
     async def connect(self, address: typing.Any) -> None:
         await self._loop.sock_connect(self._sock, address)
@@ -36,7 +41,7 @@ class Socket(base.Socket):
 
     async def accept(self) -> tuple[Socket, typing.Any]:
         sock, addr = await self._loop.sock_accept(self._sock)
-        return Socket(sock, self._loop), addr
+        return Socket(sock), addr
 
     async def bind(self, address: typing.Any) -> None:
         self._sock.bind(address)
@@ -61,16 +66,14 @@ async def socket(
     family: Family,
     type: Type,
     fileno: int | None = None,
-    loop: asyncio.AbstractEventLoop | None = None,
 ) -> Socket:
     sock = _socket.socket(family, type, proto=0, fileno=fileno)
-    return Socket(sock, loop=loop)
+    return Socket(sock)
 
 
 async def socketpair(
     family: Family,
     type: Type,
-    loop: asyncio.AbstractEventLoop | None = None,
 ) -> tuple[Socket, Socket]:
     a, b = _socket.socketpair(family, type, 0)
-    return Socket(a, loop=loop), Socket(b, loop=loop)
+    return Socket(a), Socket(b)
