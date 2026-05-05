@@ -7,6 +7,7 @@ import os.path
 import random
 import re
 import signal
+import socket
 import subprocess
 import tempfile
 import time
@@ -174,6 +175,17 @@ def sshd(request, sshd_image):
         except Exception:
             print(f"SSH Server container: {container_id}")
             raise
+        # Wait for sshd to be ready inside container (key generation + daemon startup can take ~10s)
+        start = time.time()
+        while time.time() - start < 30:
+            try:
+                with socket.create_connection(("127.0.0.1", port), timeout=1):
+                    break
+            except OSError:
+                time.sleep(0.1)
+        else:
+            print(f"SSH Server container: {container_id}")
+            raise Exception(f"sshd not ready after 30s in container {container_id}")
         try:
             yield SshD(host_port=port, keys_directory=ssh_keys_directory, container_id=container_id)
         finally:
@@ -248,9 +260,10 @@ def api(request):
         env=env,
     )
 
-    pf_start_timeout = 5
+    pf_start_timeout = 10
     start = time.time()
     api_port = None
+    api_ready = False
     while time.time() - start < pf_start_timeout:
         try:
             with open(api_port_file) as f:
@@ -271,8 +284,9 @@ def api(request):
         if response.status_code != 200:
             time.sleep(0.1)
             continue
+        api_ready = True
         break
-    if api_port is None:
+    if not api_ready:
         raise Exception("Unable to start pf server")
 
     yield Api(api_port)
@@ -294,6 +308,7 @@ def api(request):
 @dataclasses.dataclass(frozen=True)
 class BastionServer:
     port: int
+    control_socket: str
 
 
 @pytest.fixture
@@ -301,6 +316,7 @@ def bastion_server(request, api):
     tmp_dir = tempfile.TemporaryDirectory()
     port_file = os.path.join(tmp_dir.name, "bastion.port")
     log_file = os.path.join(tmp_dir.name, "bastion.log")
+    control_socket = os.path.join(tmp_dir.name, "pf-bastion-control.sock")
 
     env = copy.copy(os.environ)
     log_f = open(log_file, "w+")
@@ -314,6 +330,8 @@ def bastion_server(request, api):
             port_file,
             "--domain-suffix",
             "localhost",
+            "--control-socket",
+            control_socket,
         ],
         stdout=log_f,
         stderr=subprocess.STDOUT,
@@ -323,7 +341,8 @@ def bastion_server(request, api):
 
     start = time.time()
     port = None
-    while time.time() - start < 5:
+    bastion_ready = False
+    while time.time() - start < 10:
         try:
             with open(port_file) as f:
                 data = f.read()
@@ -335,15 +354,22 @@ def bastion_server(request, api):
         except Exception:
             time.sleep(0.1)
             continue
-        break
+        # Verify bastion is actually accepting TCP connections
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=1):
+                bastion_ready = True
+                break
+        except OSError:
+            time.sleep(0.1)
+            continue
 
-    if port is None:
+    if not bastion_ready:
         log_f.flush()
         with open(log_file) as f:
             print(f"Bastion log: {f.read()}")
         raise Exception("Unable to start bastion server")
 
-    yield BastionServer(port=port)
+    yield BastionServer(port=port, control_socket=control_socket)
 
     popen.terminate()
     log_f.close()
