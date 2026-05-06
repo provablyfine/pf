@@ -186,9 +186,8 @@ async def connect_handler(state: AppState, request: anet.http.Request, sock: ane
     await relay.open_connection(socket_name)
 
 
-def create(conf: Config, sock: anet.socket.Socket) -> http.Application[AppState]:
+def create(conf: Config, state: AppState, sock: anet.socket.Socket) -> http.Application[AppState]:
     log.setup_server("pf-bastion", conf.log_level, conf.log_filename)
-    state = AppState.create(conf, {})
     app = http.Application[AppState](state, sock)
     app.add_route(http.Route[AppState](connect_handler, host=f"connect.{conf.domain_suffix}"))
     app.add_route(http.Route[AppState](register_handler, host=f"register.{conf.domain_suffix}"))

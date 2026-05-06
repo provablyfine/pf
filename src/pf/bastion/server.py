@@ -85,8 +85,10 @@ def run():
     control_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     control_socket.bind(args.control_socket)
 
-    main_app = app.create(conf, anet.socket.Socket(sock))
-    ctrl_app = control_app.create(anet.socket.Socket(control_socket))
+    main_state = app.AppState.create(conf, {})
+    main_app = app.create(conf, main_state, anet.socket.Socket(sock))
+    ctrl_state = control_app.AppState(main_state)
+    ctrl_app = control_app.create(ctrl_state, anet.socket.Socket(control_socket))
     asyncio.run(_run(conf, main_app, ctrl_app))
 
     print("Stopped", datetime.datetime.now())
