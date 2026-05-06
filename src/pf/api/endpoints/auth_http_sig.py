@@ -66,7 +66,9 @@ def accept_invitation_endpoint(
     dependencies=[fastapi.Depends(signature.verify_account)],
     responses={400: responses.PROBLEM, 403: responses.PROBLEM},
 )
-def login_endpoint(request: fastapi.requests.Request, data: schemas.directory.LoginRequest) -> fastapi.responses.Response:
+def login_endpoint(
+    request: fastapi.requests.Request, data: schemas.directory.LoginRequest
+) -> fastapi.responses.Response:
     session_key = converters.public_from_schema(data.session_public_key)
     crypto_policy.enforce_key_is_allowed(session_key)
 

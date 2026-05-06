@@ -13,6 +13,7 @@ T = typing.TypeVar("T")
 
 logger = logging.getLogger(__name__)
 
+
 @dataclasses.dataclass
 class Response:
     status_code: int
@@ -64,6 +65,7 @@ class Application[T]:
         self._state = state
         self._sock = sock
         self._tasks: list[asyncio.Task[None]] = []
+        self._close_task: asyncio.Task[None] | None = None
         self._routes: list[Route[T]] = []
 
     def add_route(self, route: Route[T]):
@@ -81,7 +83,6 @@ class Application[T]:
             await Response(status_code=400, title="Invalid HTTP version").serialize(sock)
             await sock.close()
             return
-
 
         for route in self._routes:
             if route.method is not None:
@@ -123,4 +124,6 @@ class Application[T]:
             task.cancel()
 
     def stop(self) -> None:
-        asyncio.create_task(self._sock.close())
+        if self._close_task is not None:
+            return
+        self._close_task = asyncio.create_task(self._sock.close())

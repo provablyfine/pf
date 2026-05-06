@@ -315,5 +315,7 @@ def invite_endpoint(
     assert identity_invitation is not None  # We just created it
 
     if data.delivery == "manual":
-        return schemas.identity.IdentityInviteManualResponse(key=converters.symmetric_to_schema(identity_invitation.key))
+        return schemas.identity.IdentityInviteManualResponse(
+            key=converters.symmetric_to_schema(identity_invitation.key)
+        )
     return fastapi.responses.Response(status_code=204)

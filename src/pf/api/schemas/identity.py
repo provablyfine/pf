@@ -25,10 +25,10 @@ class IdentityListResponse(base.APIBase):
 
 class IdentityCreateRequest(base.APIBase):
     name: str
-    tag_id_list: list[int] = []
-    tag_name_value_list: list[tag.TagNameValue] = []
-    boundary_id_list: list[int] = []
-    boundary_name_list: list[str] = []
+    tag_id_list: list[int] = pydantic.Field(default_factory=list[int])
+    tag_name_value_list: list[tag.TagNameValue] = pydantic.Field(default_factory=list[tag.TagNameValue])
+    boundary_id_list: list[int] = pydantic.Field(default_factory=list[int])
+    boundary_name_list: list[str] = pydantic.Field(default_factory=list[str])
 
     @pydantic.model_validator(mode="after")
     def validate_tags_and_boundaries(self):
@@ -44,8 +44,8 @@ class IdentityCreateResponse(Identity):
 
 
 class IdentityTagListOperation(base.APIBase):
-    tag_id_list: list[int] = []
-    tag_name_value_list: list[tag.TagNameValue] = []
+    tag_id_list: list[int] = pydantic.Field(default_factory=list[int])
+    tag_name_value_list: list[tag.TagNameValue] = pydantic.Field(default_factory=list[tag.TagNameValue])
 
     @pydantic.model_validator(mode="after")
     def validate_tags_and_boundaries(self):

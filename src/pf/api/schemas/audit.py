@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import typing
 
+import pydantic
+
 from . import base
 
 
@@ -15,4 +17,4 @@ class AuditLogEntry(base.APIBase):
 
 
 class AuditLogListResponse(base.APIBase):
-    entries: list[AuditLogEntry] = []
+    entries: list[AuditLogEntry] = pydantic.Field(default_factory=list[AuditLogEntry])

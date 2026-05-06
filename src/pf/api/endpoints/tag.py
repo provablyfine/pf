@@ -12,7 +12,9 @@ _204 = fastapi.responses.Response(status_code=204)
 
 
 @router.get("", status_code=200, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
-def list_endpoint(id: int | None = None, name: str | None = None, value: str | None = None) -> schemas.tag.TagListResponse:
+def list_endpoint(
+    id: int | None = None, name: str | None = None, value: str | None = None
+) -> schemas.tag.TagListResponse:
     query = {}
     if id is not None:
         query["id"] = id

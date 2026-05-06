@@ -29,7 +29,9 @@ def list_endpoint(id: int | None = None, name: str | None = None) -> schemas.bou
         output.append(boundary)
 
     converter = converters.GrantConverter()
-    return schemas.boundary.BoundaryListResponse(boundaries=[converters.boundary_to_schema(converter, b) for b in output])
+    return schemas.boundary.BoundaryListResponse(
+        boundaries=[converters.boundary_to_schema(converter, b) for b in output]
+    )
 
 
 @router.post("", status_code=201, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
@@ -92,7 +94,9 @@ def delete_endpoint(boundary_id: int) -> fastapi.responses.Response:
     status_code=200,
     responses={400: responses.PROBLEM, 403: responses.PROBLEM, 404: responses.PROBLEM},
 )
-def update_endpoint(boundary_id: int, data: schemas.boundary.BoundaryUpdateRequest) -> schemas.boundary.BoundaryUpdateResponse:
+def update_endpoint(
+    boundary_id: int, data: schemas.boundary.BoundaryUpdateRequest
+) -> schemas.boundary.BoundaryUpdateResponse:
     identity = model.identity.read_one(id=ctx.identity_id)
     assert identity is not None
 

@@ -102,7 +102,9 @@ class GrantConverter:
     @return_none_if_none
     @cache_list
     def to_tag_list(self, tag_id_list: list[int]) -> dict[int, schemas.tag.TagNameValue]:
-        return {t.id: schemas.tag.TagNameValue(name=t.name, value=t.value) for t in ctx.app_db.tag.read_all(id=tag_id_list)}
+        return {
+            t.id: schemas.tag.TagNameValue(name=t.name, value=t.value) for t in ctx.app_db.tag.read_all(id=tag_id_list)
+        }
 
     @return_none_if_none
     def to_tag(self, tag_id: int) -> schemas.tag.TagNameValue:

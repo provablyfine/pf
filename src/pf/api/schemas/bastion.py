@@ -9,7 +9,7 @@ class Bastion(base.APIBase):
     id: int
     url: str
     ssh_proxy_jump: str | None = None
-    tag_list: list[tag.TagNameValue] = []
+    tag_list: list[tag.TagNameValue] = pydantic.Field(default_factory=list[tag.TagNameValue])
 
 
 class BastionListResponse(base.APIBase):
@@ -19,8 +19,8 @@ class BastionListResponse(base.APIBase):
 class BastionCreateRequest(base.APIBase):
     url: str
     ssh_proxy_jump: str | None = None
-    tag_id_list: list[int] = []
-    tag_name_value_list: list[tag.TagNameValue] = []
+    tag_id_list: list[int] = pydantic.Field(default_factory=list[int])
+    tag_name_value_list: list[tag.TagNameValue] = pydantic.Field(default_factory=list[tag.TagNameValue])
 
     @pydantic.model_validator(mode="after")
     def validate_tags(self):

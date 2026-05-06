@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import typing
 
+import pydantic
+
 from . import base, bastion, jwk
 
 
@@ -26,8 +28,8 @@ class SSHUserCertificateRequest(base.APIBase):
 
 
 class SSHUserCertificateResponse(SSHCertificateResponse):
-    bastion_list: list[bastion.Bastion] = []
-    ip_address_list: list[str] = []
+    bastion_list: list[bastion.Bastion] = pydantic.Field(default_factory=list[bastion.Bastion])
+    ip_address_list: list[str] = pydantic.Field(default_factory=list[str])
 
 
 class SSHHostEntry(base.APIBase):

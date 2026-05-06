@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import typing
 
+import pydantic
+
 from . import base, jwk, tag
 
 
@@ -58,7 +60,7 @@ class AuthListResponse(base.APIBase):
 class AuthCreateRequest(base.APIBase):
     name: str
     description: str = ""
-    tags: list[tag.TagNameValue] = []
+    tags: list[tag.TagNameValue] = pydantic.Field(default_factory=list[tag.TagNameValue])
     config: OidcCreateConfig | OAuth2CreateConfig | HttpSigCreateConfig
 
 
