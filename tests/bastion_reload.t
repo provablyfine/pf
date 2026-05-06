@@ -4,7 +4,6 @@ Initialize server and login
 
 Create bastion resource
   $ pfa -c config.json bastion create --url http://localhost:$BASTION_PORT
-  $ sleep 1
 
 Reload with no active connections
   $ curl -sf --unix-socket $BASTION_CTRL_SOCK -X POST http://localhost/reload
@@ -35,9 +34,6 @@ Provision user identity
   $ ssh-keygen -t ed25519 -f user-account -N "" > /dev/null
   $ pf -c user.json accept --invitation=$INVITATION --key user-account
   $ pf -c user.json login
-
-Wait for bastion to fully settle
-  $ sleep 3
 
 Verify connection works before reload
   $ echo "hello" | timeout 2 pf -c user.json bastion connect --url http://localhost:$BASTION_PORT --host host
