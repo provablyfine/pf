@@ -78,7 +78,6 @@ def run():
         )
 
     print(f"Starting Bastion on {host}:{port} using FD {sock.fileno()}")
-    print(args.control_socket)
 
     control_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     control_socket.bind(args.control_socket)

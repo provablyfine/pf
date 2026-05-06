@@ -65,7 +65,7 @@ class Application[T]:
         self._state = state
         self._sock = sock
         self._tasks: list[asyncio.Task[None]] = []
-        self._close_task: asyncio.Task[None] | None = None
+        self._accept_task: asyncio.Task[None] | None = None
         self._routes: list[Route[T]] = []
 
     def add_route(self, route: Route[T]):
@@ -113,17 +113,14 @@ class Application[T]:
                 sock, _address = await self._sock.accept()
                 task = asyncio.create_task(self._handle_new_client(sock))
                 self._tasks.append(task)
-            except OSError:
-                # Socket closed by stop()
+            except OSError, asyncio.exceptions.CancelledError:
                 break
 
     async def run(self):
-        task = asyncio.create_task(self._loop())
-        await task
+        self._accept_task = asyncio.create_task(self._loop())
+        await self._accept_task
         for task in self._tasks:
             task.cancel()
 
     def stop(self) -> None:
-        if self._close_task is not None:
-            return
-        self._close_task = asyncio.create_task(self._sock.close())
+        self._accept_task.cancel()
