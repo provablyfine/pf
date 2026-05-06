@@ -6,7 +6,6 @@ import os
 import os.path
 import signal
 import socket
-import types
 
 from .. import anet
 from . import app, control_app, http
@@ -21,7 +20,7 @@ async def _run(
 ) -> None:
     app_holder = [main_app, ctrl_app]
 
-    def sigterm_handler(signum: int, frame: types.FrameType | None) -> None:
+    def sigterm_handler() -> None:
         for app in app_holder:
             app.stop()
 
