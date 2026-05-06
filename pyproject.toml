@@ -39,6 +39,8 @@ dev = [
     "ruff>=0.15.6",
     "pytest-env>=1.6.0",
     "pytest-timeout>=2.4.0",
+    "filelock>=3.29.0",
+    "psutil>=7.2.2",
 ]
 
 [tool.pytest.ini_options]

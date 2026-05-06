@@ -11,9 +11,11 @@ import socket
 import subprocess
 import tempfile
 import time
+import psutil
 
 import pytest
 import requests
+import filelock
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +24,14 @@ pytest_plugins = ["tests.mock_oidc"]
 
 class Error(BaseException):
     pass
+
+
+def pytest_xdist_auto_num_workers(config):
+    # This only runs if '-n auto' is used
+    physical_cores = psutil.cpu_count(logical=False)
+    # The number of physical cores is a better number than the number
+    # of logical cores to run tests.
+    return physical_cores or 1  # Fallback to 1 if detection fails
 
 
 def tld():
@@ -62,7 +72,22 @@ class SshD:
 
 
 @pytest.fixture(scope="session")
-def sshd_image():
+def sshd_image(tmp_path_factory, worker_id):
+    # pattern borrowed from pytest manual
+    if worker_id == "master":
+        return _build_image()
+    root_tmp_dir = tmp_path_factory.getbasetemp().parent
+    fn = root_tmp_dir / "sshd-image.json"
+    with filelock.FileLock(str(fn) + ".lock"):
+        if fn.is_file():
+            data = json.loads(fn.read_text())
+        else:
+            data = _build_image()
+            fn.write_text(json.dumps(data))
+    return data
+
+
+def _build_image():
     """Build SSH server container image once per worker session."""
     containerfile = """
 FROM alpine:3.23
