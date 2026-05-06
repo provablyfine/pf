@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import dataclasses
-import typing
 import asyncio
+import dataclasses
 import logging
-
+import typing
 
 from .. import anet
-
 
 logger = logging.getLogger(__name__)
 

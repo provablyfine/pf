@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import logging
 import dataclasses
+import logging
 
 from .. import anet
 from . import app, http

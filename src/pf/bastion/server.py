@@ -1,13 +1,12 @@
 import argparse
 import asyncio
 import datetime
-import signal
-import socket
-import types
 import logging
 import os
 import os.path
-
+import signal
+import socket
+import types
 
 from .. import anet
 from . import app, control_app, http

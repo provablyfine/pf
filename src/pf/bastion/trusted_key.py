@@ -3,7 +3,6 @@ import logging
 
 import jwt
 
-
 logger = logging.getLogger(__name__)
 
 
