@@ -1,6 +1,6 @@
-class Error(BaseException):
+class Error(Exception):
     pass
 
 
-class InvalidSignature(BaseException):
+class InvalidSignature(Exception):
     pass

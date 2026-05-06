@@ -56,7 +56,7 @@ class Client:
         while remaining > 0:
             partial = self._sock.recv(remaining)
             if len(partial) == 0:
-                raise Exception("Unable to read SSH Agent response")
+                raise exceptions.Error("Unable to read SSH Agent response")
             remaining -= len(partial)
             data.append(partial)
         return b"".join(data)
