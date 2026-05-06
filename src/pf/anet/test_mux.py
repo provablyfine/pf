@@ -195,11 +195,8 @@ async def test_mux_half_close_write_after_error(pair):
         await client.channel_close_write(local_id)
 
         # Writing after half-close should fail
-        try:
+        with pytest.raises(exceptions.Error):
             await client.channel_write(local_id, b"fail")
-            assert False, "Should have raised"
-        except BaseException:  # exceptions.Error inherits from BaseException
-            pass
         await client.channel_close(local_id)
 
     await asyncio.gather(server_task(), client_task())
