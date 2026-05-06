@@ -160,7 +160,7 @@ def create_endpoint(data: schemas.IdentityCreateRequest) -> schemas.Identity:
 def delete_endpoint(identity_id: int) -> fastapi.responses.Response:
     identity = model.identity.read_one(id=identity_id)
     if identity is None:
-        raise responses.ProblemHTTPException(responses.problem_response(status_code=404, title="Boundary not found"))
+        raise responses.ProblemHTTPException(responses.problem_response(status_code=404, title="Identity not found"))
     if ctx.identity_id == identity_id:
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=400, title="You cannot delete yourself")
