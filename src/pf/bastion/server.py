@@ -14,15 +14,14 @@ logger = logging.getLogger(__name__)
 
 
 async def _run(
-    conf: app.Config,
     main_app: http.Application[app.AppState],
     ctrl_app: http.Application[control_app.AppState],
 ) -> None:
     app_holder = [main_app, ctrl_app]
 
     def sigterm_handler() -> None:
-        for app in app_holder:
-            app.stop()
+        for a in app_holder:
+            a.stop()
 
     loop = asyncio.get_running_loop()
     loop.add_signal_handler(signal.SIGTERM, sigterm_handler)
@@ -88,6 +87,6 @@ def run():
     main_app = app.create(conf, main_state, anet.socket.Socket(sock))
     ctrl_state = control_app.AppState(main_state)
     ctrl_app = control_app.create(ctrl_state, anet.socket.Socket(control_socket))
-    asyncio.run(_run(conf, main_app, ctrl_app))
+    asyncio.run(_run(main_app, ctrl_app))
 
     print("Stopped", datetime.datetime.now())
