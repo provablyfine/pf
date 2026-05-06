@@ -113,6 +113,7 @@ class Application[T]:
                 sock, _address = await self._sock.accept()
                 task = asyncio.create_task(self._handle_new_client(sock))
                 self._tasks.append(task)
+                task.add_done_callback(self._tasks.remove)
             except (OSError, asyncio.exceptions.CancelledError):
                 break
 
