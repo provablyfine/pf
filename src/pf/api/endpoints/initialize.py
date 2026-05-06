@@ -155,12 +155,12 @@ def _provision(allow_tenant_create: bool):
 @router.post(
     "/initialize",
     status_code=200,
-    response_model=schemas.InitializeResponse,
+    response_model=schemas.directory.InitializeResponse,
     responses={204: {"description": "Already initialized"}},
 )
 def initialize_endpoint(
     reg_db: registry_db.RegistryDb = fastapi.Depends(dependencies.registry),
-) -> schemas.InitializeResponse | fastapi.responses.Response:
+) -> schemas.directory.InitializeResponse | fastapi.responses.Response:
     tenant_row = reg_db.tenant.read_one(id=ctx.tenant_id)
     assert tenant_row is not None
 
@@ -179,4 +179,4 @@ def initialize_endpoint(
 
     reg_db.tenant.update(is_initialized=True).where(id=ctx.tenant_id)
 
-    return schemas.InitializeResponse(key=converters.symmetric_to_schema(identity_invitation.key))
+    return schemas.directory.InitializeResponse(key=converters.symmetric_to_schema(identity_invitation.key))

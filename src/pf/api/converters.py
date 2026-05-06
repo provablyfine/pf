@@ -50,8 +50,8 @@ class GrantConverter:
 
     @return_none_if_none
     @cache_list
-    def from_tag_list(self, tag_list: list[schemas.TagNameValue]) -> dict[schemas.TagNameValue, int]:
-        retval: dict[schemas.TagNameValue, int] = {}
+    def from_tag_list(self, tag_list: list[schemas.tag.TagNameValue]) -> dict[schemas.tag.TagNameValue, int]:
+        retval: dict[schemas.tag.TagNameValue, int] = {}
         for tag in tag_list:
             t = ctx.app_db.tag.read_one(name=tag.name, value=tag.value)
             if t is None:
@@ -61,7 +61,7 @@ class GrantConverter:
         return retval
 
     @return_none_if_none
-    def from_tag(self, tag: schemas.TagNameValue) -> int:
+    def from_tag(self, tag: schemas.tag.TagNameValue) -> int:
         tag_list = self.from_tag_list([tag])
         assert tag_list is not None and len(tag_list) == 1
         return tag_list[0]
@@ -101,11 +101,11 @@ class GrantConverter:
 
     @return_none_if_none
     @cache_list
-    def to_tag_list(self, tag_id_list: list[int]) -> dict[int, schemas.TagNameValue]:
-        return {t.id: schemas.TagNameValue(name=t.name, value=t.value) for t in ctx.app_db.tag.read_all(id=tag_id_list)}
+    def to_tag_list(self, tag_id_list: list[int]) -> dict[int, schemas.tag.TagNameValue]:
+        return {t.id: schemas.tag.TagNameValue(name=t.name, value=t.value) for t in ctx.app_db.tag.read_all(id=tag_id_list)}
 
     @return_none_if_none
-    def to_tag(self, tag_id: int) -> schemas.TagNameValue:
+    def to_tag(self, tag_id: int) -> schemas.tag.TagNameValue:
         tag_list = self.to_tag_list([tag_id])
         assert tag_list is not None and len(tag_list) == 1
         return tag_list[0]
@@ -166,31 +166,31 @@ class GrantConverter:
         return auth_list[0]
 
 
-def grant_to_schema(converter: GrantConverter, grant: model.grant.Grant) -> schemas.Grant:
+def grant_to_schema(converter: GrantConverter, grant: model.grant.Grant) -> schemas.grant.Grant:
     try:
         return _grant_to_schema(converter, grant)
     except ValueError:
-        return schemas.InvalidGrant()
+        return schemas.grant.InvalidGrant()
 
 
-def _grant_to_schema(converter: GrantConverter, grant: model.grant.Grant) -> schemas.Grant:
+def _grant_to_schema(converter: GrantConverter, grant: model.grant.Grant) -> schemas.grant.Grant:
     match grant.type:
         case "tag":
-            filter = schemas.TagFilter(name_value=converter.to_tag(grant.filter.id))
-            permission = schemas.TagPermission(
+            filter = schemas.grant.TagFilter(name_value=converter.to_tag(grant.filter.id))
+            permission = schemas.grant.TagPermission(
                 create=grant.permission.create,
                 read=grant.permission.read,
                 delete=grant.permission.delete,
             )
-            g = schemas.TagGrant(filter=filter, permission=permission)
+            g = schemas.grant.TagGrant(filter=filter, permission=permission)
         case "boundary":
-            filter = schemas.BoundaryFilter(name=converter.to_boundary(grant.filter.id))
-            permission = schemas.BoundaryPermission(
+            filter = schemas.grant.BoundaryFilter(name=converter.to_boundary(grant.filter.id))
+            permission = schemas.grant.BoundaryPermission(
                 create=grant.permission.create,
                 read=grant.permission.read,
                 update=None
                 if grant.permission.update is None
-                else schemas.BoundaryUpdatePermission(
+                else schemas.grant.BoundaryUpdatePermission(
                     name=grant.permission.update.name,
                     description=grant.permission.update.description,
                     ceiling_list=grant.permission.update.ceiling_list,
@@ -198,15 +198,15 @@ def _grant_to_schema(converter: GrantConverter, grant: model.grant.Grant) -> sch
                 ),
                 delete=grant.permission.delete,
             )
-            g = schemas.BoundaryGrant(filter=filter, permission=permission)
+            g = schemas.grant.BoundaryGrant(filter=filter, permission=permission)
         case "role":
-            filter = schemas.RoleFilter(name=converter.to_role(grant.filter.id))
-            permission = schemas.RolePermission(
+            filter = schemas.grant.RoleFilter(name=converter.to_role(grant.filter.id))
+            permission = schemas.grant.RolePermission(
                 create=grant.permission.create,
                 read=grant.permission.read,
                 update=None
                 if grant.permission.update is None
-                else schemas.RoleUpdatePermission(
+                else schemas.grant.RoleUpdatePermission(
                     name=grant.permission.update.name,
                     description=grant.permission.update.description,
                     grant_list=grant.permission.update.grant_list,
@@ -214,17 +214,17 @@ def _grant_to_schema(converter: GrantConverter, grant: model.grant.Grant) -> sch
                 ),
                 delete=grant.permission.delete,
             )
-            g = schemas.RoleGrant(filter=filter, permission=permission)
+            g = schemas.grant.RoleGrant(filter=filter, permission=permission)
         case "identity":
-            filter = schemas.TripletFilter(
+            filter = schemas.grant.TripletFilter(
                 name=converter.to_identity(grant.filter.id),
                 tag_list=converter.to_tag_list(grant.filter.tag_id_list),
                 boundary_list=converter.to_boundary_list(grant.filter.boundary_id_list),
             )
-            permission = schemas.IdentityPermission(
+            permission = schemas.grant.IdentityPermission(
                 create=None
                 if grant.permission.create is None
-                else schemas.IdentityCreatePermission(
+                else schemas.grant.IdentityCreatePermission(
                     allowed=grant.permission.create.allowed,
                     allowed_tag_list=converter.to_tag_list(grant.permission.create.allowed_tag_id_list),
                     required_boundary_list=converter.to_boundary_list(
@@ -234,7 +234,7 @@ def _grant_to_schema(converter: GrantConverter, grant: model.grant.Grant) -> sch
                 read=grant.permission.read,
                 update=None
                 if grant.permission.update is None
-                else schemas.IdentityUpdatePermission(
+                else schemas.grant.IdentityUpdatePermission(
                     name=grant.permission.update.name,
                 ),
                 delete=grant.permission.delete,
@@ -242,62 +242,62 @@ def _grant_to_schema(converter: GrantConverter, grant: model.grant.Grant) -> sch
                 del_tag_list=converter.to_tag_list(grant.permission.del_tag_id_list),
                 invite_list=grant.permission.invite_list,
             )
-            g = schemas.IdentityGrant(filter=filter, permission=permission)
+            g = schemas.grant.IdentityGrant(filter=filter, permission=permission)
         case "ssh-shell":
-            filter = schemas.TripletFilter(
+            filter = schemas.grant.TripletFilter(
                 name=converter.to_identity(grant.filter.id),
                 tag_list=converter.to_tag_list(grant.filter.tag_id_list),
                 boundary_list=converter.to_boundary_list(grant.filter.boundary_id_list),
             )
-            permission = schemas.SSHShellPermission(
+            permission = schemas.grant.SSHShellPermission(
                 username_list=grant.permission.username_list,
                 permit_agent_forwarding=grant.permission.permit_agent_forwarding,
                 permit_x11_forwarding=grant.permission.permit_x11_forwarding,
             )
-            g = schemas.SSHShellGrant(filter=filter, permission=permission)
+            g = schemas.grant.SSHShellGrant(filter=filter, permission=permission)
         case "ssh-port-forwarding":
-            filter = schemas.TripletFilter(
+            filter = schemas.grant.TripletFilter(
                 name=converter.to_identity(grant.filter.id),
                 tag_list=converter.to_tag_list(grant.filter.tag_id_list),
                 boundary_list=converter.to_boundary_list(grant.filter.boundary_id_list),
             )
-            permission = schemas.SSHPortForwardingPermission(
+            permission = schemas.grant.SSHPortForwardingPermission(
                 username_list=grant.permission.username_list,
             )
-            g = schemas.SSHPortForwardingGrant(filter=filter, permission=permission)
+            g = schemas.grant.SSHPortForwardingGrant(filter=filter, permission=permission)
         case "ssh-command":
-            filter = schemas.TripletFilter(
+            filter = schemas.grant.TripletFilter(
                 name=converter.to_identity(grant.filter.id),
                 tag_list=converter.to_tag_list(grant.filter.tag_id_list),
                 boundary_list=converter.to_boundary_list(grant.filter.boundary_id_list),
             )
-            permission = schemas.SSHCommandPermission(
+            permission = schemas.grant.SSHCommandPermission(
                 username_list=grant.permission.username_list,
                 command_list=grant.permission.command_list,
             )
-            g = schemas.SSHCommandGrant(filter=filter, permission=permission)
+            g = schemas.grant.SSHCommandGrant(filter=filter, permission=permission)
         case "tenant":
-            filter = schemas.TenantFilter(id=grant.filter.id)
-            permission = schemas.TenantPermission(
+            filter = schemas.grant.TenantFilter(id=grant.filter.id)
+            permission = schemas.grant.TenantPermission(
                 create=grant.permission.create,
                 read=grant.permission.read,
                 delete=grant.permission.delete,
                 update=None
                 if grant.permission.update is None
-                else schemas.TenantUpdatePermission(
+                else schemas.grant.TenantUpdatePermission(
                     display_name=grant.permission.update.display_name,
                     is_enabled=grant.permission.update.is_enabled,
                 ),
             )
-            g = schemas.TenantGrant(filter=filter, permission=permission)
+            g = schemas.grant.TenantGrant(filter=filter, permission=permission)
         case "auth":
-            filter = schemas.AuthFilter(name=converter.to_auth(grant.filter.id))
-            permission = schemas.AuthPermission(
+            filter = schemas.grant.AuthFilter(name=converter.to_auth(grant.filter.id))
+            permission = schemas.grant.AuthPermission(
                 create=grant.permission.create,
                 read=grant.permission.read,
                 update=None
                 if grant.permission.update is None
-                else schemas.AuthUpdatePermission(
+                else schemas.grant.AuthUpdatePermission(
                     name=grant.permission.update.name,
                     description=grant.permission.update.description,
                     is_enabled=grant.permission.update.is_enabled,
@@ -305,13 +305,13 @@ def _grant_to_schema(converter: GrantConverter, grant: model.grant.Grant) -> sch
                 ),
                 delete=grant.permission.delete,
             )
-            g = schemas.AuthGrant(filter=filter, permission=permission)
+            g = schemas.grant.AuthGrant(filter=filter, permission=permission)
         case _:
             assert False
     return g
 
 
-def grant_from_schema(converter: GrantConverter, grant: schemas.Grant) -> model.grant.Grant:
+def grant_from_schema(converter: GrantConverter, grant: schemas.grant.Grant) -> model.grant.Grant:
     try:
         return _grant_from_schema(converter, grant)
     except ValueError:
@@ -320,7 +320,7 @@ def grant_from_schema(converter: GrantConverter, grant: schemas.Grant) -> model.
         )
 
 
-def _grant_from_schema(converter: GrantConverter, grant: schemas.Grant) -> model.grant.Grant:
+def _grant_from_schema(converter: GrantConverter, grant: schemas.grant.Grant) -> model.grant.Grant:
     match grant.type:
         case "invalid":
             logger.error("Invalid grants cannot be converted back to grants")
@@ -461,11 +461,11 @@ def _grant_from_schema(converter: GrantConverter, grant: schemas.Grant) -> model
     return g
 
 
-def symmetric_to_schema(key: jwk.Symmetric) -> schemas.SymmetricJWK:
-    return schemas.SymmetricJWK.model_validate(key.to_dict())
+def symmetric_to_schema(key: jwk.Symmetric) -> schemas.jwk.SymmetricJWK:
+    return schemas.jwk.SymmetricJWK.model_validate(key.to_dict())
 
 
-def public_from_schema(key: schemas.PublicJWK) -> jwk.Public:
+def public_from_schema(key: schemas.jwk.PublicJWK) -> jwk.Public:
     return jwk.Public.from_dict(key.model_dump())
 
 
@@ -473,12 +473,12 @@ def cert_to_schema(c: ssh.cert.Cert) -> str:
     return base64.b64encode(c.to_openssh()).decode("utf-8")
 
 
-def tag_to_schema(tag: app_db.TagRow) -> schemas.Tag:
-    return schemas.Tag(id=tag.id, name=tag.name, value=tag.value)
+def tag_to_schema(tag: app_db.TagRow) -> schemas.tag.Tag:
+    return schemas.tag.Tag(id=tag.id, name=tag.name, value=tag.value)
 
 
-def boundary_to_schema(converter: GrantConverter, boundary: model.boundary.Boundary) -> schemas.Boundary:
-    return schemas.Boundary(
+def boundary_to_schema(converter: GrantConverter, boundary: model.boundary.Boundary) -> schemas.boundary.Boundary:
+    return schemas.boundary.Boundary(
         id=boundary.id,
         name=boundary.name,
         description=boundary.description,
@@ -489,10 +489,10 @@ def boundary_to_schema(converter: GrantConverter, boundary: model.boundary.Bound
     )
 
 
-def role_to_schema(converter: GrantConverter, role: model.role.Role) -> schemas.Role:
+def role_to_schema(converter: GrantConverter, role: model.role.Role) -> schemas.role.Role:
     members = ctx.app_db.identity.read_all(id=list(set(role.member_id_list)))
-    role_members = [schemas.RoleMember(id=m.id, name=m.name) for m in members]
-    return schemas.Role(
+    role_members = [schemas.role.RoleMember(id=m.id, name=m.name) for m in members]
+    return schemas.role.Role(
         id=role.id,
         name=role.name,
         description=role.description,
@@ -501,17 +501,17 @@ def role_to_schema(converter: GrantConverter, role: model.role.Role) -> schemas.
     )
 
 
-def identity_list_to_schema(identities: list[model.identity.Identity]) -> list[schemas.Identity]:
+def identity_list_to_schema(identities: list[model.identity.Identity]) -> list[schemas.identity.Identity]:
     # read the data we need to format fully the output.
     tags = ctx.app_db.tag.read_all(id=list(set(tag_id for i in identities for tag_id in i.tag_id_list)))
     boundaries = ctx.app_db.boundary.read_all(
         id=list(set(boundary_id for i in identities for boundary_id in i.boundary_id_list))
     )
     tag_by_id = {t.id: tag_to_schema(t) for t in tags}
-    boundary_by_id = {b.id: schemas.IdentityBoundary(id=b.id, name=b.name) for b in boundaries}
+    boundary_by_id = {b.id: schemas.identity.IdentityBoundary(id=b.id, name=b.name) for b in boundaries}
 
-    def _one(i: model.identity.Identity) -> schemas.Identity:
-        return schemas.Identity(
+    def _one(i: model.identity.Identity) -> schemas.identity.Identity:
+        return schemas.identity.Identity(
             id=i.id,
             name=i.name,
             tags=[tag_by_id[tag_id] for tag_id in i.tag_id_list],
@@ -521,35 +521,35 @@ def identity_list_to_schema(identities: list[model.identity.Identity]) -> list[s
     return [_one(i) for i in identities]
 
 
-def identity_to_schema(identity: model.identity.Identity) -> schemas.Identity:
+def identity_to_schema(identity: model.identity.Identity) -> schemas.identity.Identity:
     return identity_list_to_schema([identity])[0]
 
 
-def _auth_config_to_config(ac: model.auth_config.AuthConfig) -> schemas.AuthConfig:
+def _auth_config_to_config(ac: model.auth_config.AuthConfig) -> schemas.auth.AuthConfig:
     if ac.type == "oidc":
-        config = schemas.OidcConfig(
+        config = schemas.auth.OidcConfig(
             issuer=ac.config["issuer"],
             client_id=ac.config["client_id"],
             client_secret=ac.config.get("client_secret"),
         )
     elif ac.type in oauth2_providers.PROVIDER_CONFIG:
         callback_url = f"{ctx.config.base_url}/pf/t/{ctx.tenant_name}/auth/oauth2/callback"
-        config = schemas.OAuth2Config(
+        config = schemas.auth.OAuth2Config(
             client_id=ac.config["client_id"],
             authorization_endpoint=oauth2_providers.PROVIDER_CONFIG[ac.type]["authorization_endpoint"],
             callback_url=callback_url,
         )
     elif ac.type == "http_sig":
-        config = schemas.HttpSigConfig()
+        config = schemas.auth.HttpSigConfig()
     else:
         assert False
     return config
 
 
-def auth_config_to_schema(ac: model.auth_config.AuthConfig) -> schemas.Auth:
+def auth_config_to_schema(ac: model.auth_config.AuthConfig) -> schemas.auth.Auth:
     config = _auth_config_to_config(ac)
     converter = GrantConverter()
-    return schemas.Auth(
+    return schemas.auth.Auth(
         id=ac.id,
         name=ac.name,
         description=ac.description,
@@ -560,18 +560,18 @@ def auth_config_to_schema(ac: model.auth_config.AuthConfig) -> schemas.Auth:
     )
 
 
-def auth_config_to_public_schema(ac: model.auth_config.AuthConfig) -> schemas.AuthPublic:
+def auth_config_to_public_schema(ac: model.auth_config.AuthConfig) -> schemas.auth.AuthPublic:
     config = _auth_config_to_config(ac)
-    return schemas.AuthPublic(
+    return schemas.auth.AuthPublic(
         name=ac.name,
         description=ac.description,
         config=config,
     )
 
 
-def bastion_to_schema(converter: GrantConverter, bastion: model.bastion.Bastion) -> schemas.Bastion:
+def bastion_to_schema(converter: GrantConverter, bastion: model.bastion.Bastion) -> schemas.bastion.Bastion:
     tag_list = converter.to_tag_list(bastion.tag_id_list)
-    return schemas.Bastion(
+    return schemas.bastion.Bastion(
         id=bastion.id,
         url=bastion.url,
         ssh_proxy_jump=bastion.ssh_proxy_jump,
@@ -579,6 +579,6 @@ def bastion_to_schema(converter: GrantConverter, bastion: model.bastion.Bastion)
     )
 
 
-def bastion_list_to_schema(bastions: list[model.bastion.Bastion]) -> list[schemas.Bastion]:
+def bastion_list_to_schema(bastions: list[model.bastion.Bastion]) -> list[schemas.bastion.Bastion]:
     converter = GrantConverter()
     return [bastion_to_schema(converter, b) for b in bastions]

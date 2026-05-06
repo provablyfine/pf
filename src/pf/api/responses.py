@@ -3,7 +3,7 @@ import fastapi.responses
 from . import schemas
 
 # Reusable OpenAPI response entry for RFC 7807 problem responses.
-PROBLEM: dict[str, object] = {"model": schemas.ProblemDocument}
+PROBLEM: dict[str, object] = {"model": schemas.problem.ProblemDocument}
 
 
 class ProblemHTTPException(Exception):

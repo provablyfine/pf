@@ -7,10 +7,10 @@ router = fastapi.APIRouter()
 
 
 @router.get("/directory", status_code=200)
-def directory_endpoint(tenant_name: str) -> schemas.DirectoryReadResponse:
+def directory_endpoint(tenant_name: str) -> schemas.directory.DirectoryReadResponse:
     base = ctx.config.base_url
     p = f"{base}/pf/t/{tenant_name}"
-    return schemas.DirectoryReadResponse(
+    return schemas.directory.DirectoryReadResponse(
         initialize=f"{p}/initialize",
         accept_invitation=f"{p}/auth/http_sig/accept-invitation",
         login=f"{p}/auth/http_sig/login",

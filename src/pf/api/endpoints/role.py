@@ -13,7 +13,7 @@ _204 = fastapi.responses.Response(status_code=204)
 
 
 @router.get("", status_code=200, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
-def list_endpoint(name: str | None = None, id: int | None = None) -> schemas.RoleListResponse:
+def list_endpoint(name: str | None = None, id: int | None = None) -> schemas.role.RoleListResponse:
     query = {}
     if name is not None:
         query["name"] = name
@@ -23,11 +23,11 @@ def list_endpoint(name: str | None = None, id: int | None = None) -> schemas.Rol
     grants = grant.Grants.create()
     roles = [r for r in model.role.read_all(**query) if grants.role(r.id).can_read()]
     converter = converters.GrantConverter()
-    return schemas.RoleListResponse(roles=[converters.role_to_schema(converter, r) for r in roles])
+    return schemas.role.RoleListResponse(roles=[converters.role_to_schema(converter, r) for r in roles])
 
 
 @router.post("", status_code=201, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
-def create_endpoint(data: schemas.RoleCreateRequest) -> schemas.Role:
+def create_endpoint(data: schemas.role.RoleCreateRequest) -> schemas.role.Role:
     grants = grant.Grants.create()
     if not grants.role(None).can_create():
         raise responses.ProblemHTTPException(
@@ -79,7 +79,7 @@ def delete_endpoint(role_id: int) -> fastapi.responses.Response:
     status_code=200,
     responses={400: responses.PROBLEM, 403: responses.PROBLEM, 404: responses.PROBLEM},
 )
-def update_endpoint(role_id: int, data: schemas.RoleUpdateRequest) -> schemas.Role:
+def update_endpoint(role_id: int, data: schemas.role.RoleUpdateRequest) -> schemas.role.Role:
     role = model.role.read_one(id=role_id)
     if role is None:
         raise responses.ProblemHTTPException(responses.problem_response(status_code=404, title="Role not found"))

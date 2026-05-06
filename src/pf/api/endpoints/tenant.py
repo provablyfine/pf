@@ -14,8 +14,8 @@ router = fastapi.APIRouter(prefix="/tenant", dependencies=[fastapi.Depends(signa
 _204 = fastapi.responses.Response(status_code=204)
 
 
-def _row_to_schema(row: registry_db.TenantRow) -> schemas.TenantReadResponse:
-    return schemas.TenantReadResponse(
+def _row_to_schema(row: registry_db.TenantRow) -> schemas.tenant.TenantReadResponse:
+    return schemas.tenant.TenantReadResponse(
         id=row.id,
         name=row.name,
         display_name=row.display_name,
@@ -34,22 +34,22 @@ def _ownership_filter(rows: list[registry_db.TenantRow], tenant_id: int) -> list
 @router.get("", status_code=200)
 def list_endpoint(
     reg_db: registry_db.RegistryDb = fastapi.Depends(dependencies.registry),
-) -> schemas.TenantListResponse:
+) -> schemas.tenant.TenantListResponse:
     all_rows = reg_db.tenant.read_all()
     rows = _ownership_filter(all_rows, ctx.tenant_id)
     grants = grant.Grants.create()
-    output: list[schemas.TenantReadResponse] = []
+    output: list[schemas.tenant.TenantReadResponse] = []
     for row in rows:
         if grants.tenant(row.id).can_read():
             output.append(_row_to_schema(row))
-    return schemas.TenantListResponse(tenants=output)
+    return schemas.tenant.TenantListResponse(tenants=output)
 
 
 @router.get("/{tenant_id:int}", status_code=200, responses={403: responses.PROBLEM, 404: responses.PROBLEM})
 def read_endpoint(
     tenant_id: int,
     reg_db: registry_db.RegistryDb = fastapi.Depends(dependencies.registry),
-) -> schemas.TenantReadResponse:
+) -> schemas.tenant.TenantReadResponse:
     row = reg_db.tenant.read_one(id=tenant_id)
 
     if row is None or not _ownership_filter([row], ctx.tenant_id):
@@ -66,9 +66,9 @@ def read_endpoint(
 
 @router.post("", status_code=200, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
 def create_endpoint(
-    data: schemas.TenantCreateRequest,
+    data: schemas.tenant.TenantCreateRequest,
     reg_db: registry_db.RegistryDb = fastapi.Depends(dependencies.registry),
-) -> schemas.TenantReadResponse:
+) -> schemas.tenant.TenantReadResponse:
     grants = grant.Grants.create()
     if not grants.tenant(None).can_create():
         raise responses.ProblemHTTPException(
@@ -105,7 +105,7 @@ def create_endpoint(
 )
 def update_endpoint(
     tenant_id: int,
-    data: schemas.TenantUpdateRequest,
+    data: schemas.tenant.TenantUpdateRequest,
     reg_db: registry_db.RegistryDb = fastapi.Depends(dependencies.registry),
 ) -> fastapi.responses.Response:
     row = reg_db.tenant.read_one(id=tenant_id)

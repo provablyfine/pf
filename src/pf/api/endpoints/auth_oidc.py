@@ -119,7 +119,7 @@ def _verify_oidc_token(issuer: str, client_id: str, id_token: str) -> str:
     responses={400: responses.PROBLEM, 403: responses.PROBLEM},
 )
 def oidc_login_endpoint(
-    request: fastapi.requests.Request, data: schemas.OidcLoginRequest
+    request: fastapi.requests.Request, data: schemas.auth.OidcLoginRequest
 ) -> fastapi.responses.Response:
     session_key = converters.public_from_schema(data.session_public_key)
     crypto_policy.enforce_key_is_allowed(session_key)

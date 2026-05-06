@@ -12,7 +12,7 @@ router = fastapi.APIRouter(prefix="/bastion", dependencies=[fastapi.Depends(sign
 _204 = fastapi.responses.Response(status_code=204)
 
 
-def _read_tag_ids(tag_id_list: list[int], tag_name_value_list: list[schemas.TagNameValue]) -> list[int]:
+def _read_tag_ids(tag_id_list: list[int], tag_name_value_list: list[schemas.tag.TagNameValue]) -> list[int]:
     id_list: list[int] = []
     for tag in tag_name_value_list:
         db_tag = ctx.app_db.tag.read_one(name=tag.name, value=tag.value)
@@ -25,13 +25,13 @@ def _read_tag_ids(tag_id_list: list[int], tag_name_value_list: list[schemas.TagN
 
 
 @router.get("", status_code=200, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
-def list_endpoint() -> schemas.BastionListResponse:
+def list_endpoint() -> schemas.bastion.BastionListResponse:
     bastions = model.bastion.read_all()
-    return schemas.BastionListResponse(bastions=converter_module.bastion_list_to_schema(bastions))
+    return schemas.bastion.BastionListResponse(bastions=converter_module.bastion_list_to_schema(bastions))
 
 
 @router.post("", status_code=201, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
-def create_endpoint(data: schemas.BastionCreateRequest) -> schemas.Bastion:
+def create_endpoint(data: schemas.bastion.BastionCreateRequest) -> schemas.bastion.Bastion:
     tag_ids = _read_tag_ids(data.tag_id_list, data.tag_name_value_list)
 
     bastion_id = model.bastion.create(
@@ -50,7 +50,7 @@ def create_endpoint(data: schemas.BastionCreateRequest) -> schemas.Bastion:
     status_code=200,
     responses={400: responses.PROBLEM, 403: responses.PROBLEM, 404: responses.PROBLEM},
 )
-def update_endpoint(bastion_id: int, data: schemas.BastionUpdateRequest) -> schemas.Bastion:
+def update_endpoint(bastion_id: int, data: schemas.bastion.BastionUpdateRequest) -> schemas.bastion.Bastion:
     bastion = model.bastion.read_one(id=bastion_id)
     if bastion is None:
         raise responses.ProblemHTTPException(responses.problem_response(status_code=404, title="Bastion not found"))

@@ -25,7 +25,7 @@ def list_endpoint(
     tag_name: str | None = None,
     boundary_id: int | None = None,
     boundary_name: str | None = None,
-) -> schemas.IdentityListResponse:
+) -> schemas.identity.IdentityListResponse:
     query = {}
     if id is not None:
         query["id"] = id
@@ -43,11 +43,11 @@ def list_endpoint(
     grants = grant.Grants.create()
     identities = model.identity.read_all(**query)
     identities = [i for i in identities if grants.identity(i.id, i.tag_id_list, i.boundary_id_list).can_read()]
-    return schemas.IdentityListResponse(identities=converters.identity_list_to_schema(identities))
+    return schemas.identity.IdentityListResponse(identities=converters.identity_list_to_schema(identities))
 
 
 @router.get("/self", status_code=200, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
-def read_self_endpoint() -> schemas.Identity:
+def read_self_endpoint() -> schemas.identity.Identity:
     identity_id = ctx.identity_id
     assert identity_id is not None
     identity = model.identity.read_one(id=identity_id)
@@ -57,16 +57,16 @@ def read_self_endpoint() -> schemas.Identity:
 
 
 @router.get("/self/bastions", status_code=200, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
-def read_self_bastions_endpoint() -> schemas.IdentitySelfBastionListResponse:
+def read_self_bastions_endpoint() -> schemas.identity.IdentitySelfBastionListResponse:
     matching_bastions = model.bastion.read_matching()
-    bastion_schema_list: list[schemas.Bastion] = []
+    bastion_schema_list: list[schemas.bastion.Bastion] = []
 
     grant_converter = converters.GrantConverter()
     for bastion in matching_bastions:
         bastion_schema = converters.bastion_to_schema(grant_converter, bastion)
         bastion_schema_list.append(bastion_schema)
 
-    return schemas.IdentitySelfBastionListResponse(bastions=bastion_schema_list)
+    return schemas.identity.IdentitySelfBastionListResponse(bastions=bastion_schema_list)
 
 
 @router.get(
@@ -74,12 +74,12 @@ def read_self_bastions_endpoint() -> schemas.IdentitySelfBastionListResponse:
     status_code=200,
     responses={400: responses.PROBLEM, 403: responses.PROBLEM, 404: responses.PROBLEM},
 )
-def read_self_token_endpoint(service: str) -> schemas.IdentitySelfTokenResponse:
+def read_self_token_endpoint(service: str) -> schemas.identity.IdentitySelfTokenResponse:
     if service != "bastion":
         raise responses.ProblemHTTPException(responses.problem_response(status_code=403))
 
     token = model.bastion.generate_token()
-    return schemas.IdentitySelfTokenResponse(token=token)
+    return schemas.identity.IdentitySelfTokenResponse(token=token)
 
 
 def _read_boundary_ids(boundary_id_list: list[int], boundary_name_list: list[str]) -> list[int]:
@@ -94,7 +94,7 @@ def _read_boundary_ids(boundary_id_list: list[int], boundary_name_list: list[str
     return [b.id for b in boundaries] + boundary_id_list
 
 
-def _read_tag_ids(tag_id_list: list[int], tag_name_value_list: list[schemas.TagNameValue]) -> list[int]:
+def _read_tag_ids(tag_id_list: list[int], tag_name_value_list: list[schemas.tag.TagNameValue]) -> list[int]:
     id_list: list[int] = []
     for tag in tag_name_value_list:
         db_tag = ctx.app_db.tag.read_one(name=tag.name, value=tag.value)
@@ -113,7 +113,7 @@ def _read_tag_ids(tag_id_list: list[int], tag_name_value_list: list[schemas.TagN
 
 
 @router.post("", status_code=201, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
-def create_endpoint(data: schemas.IdentityCreateRequest) -> schemas.Identity:
+def create_endpoint(data: schemas.identity.IdentityCreateRequest) -> schemas.identity.Identity:
     additional_boundary_ids = _read_boundary_ids(data.boundary_id_list, data.boundary_name_list)
     tag_ids = _read_tag_ids(data.tag_id_list, data.tag_name_value_list)
 
@@ -217,7 +217,7 @@ def _check_del_tags(permission_request: grant.IdentityChecker, tag_id_list: list
     status_code=200,
     responses={400: responses.PROBLEM, 403: responses.PROBLEM, 404: responses.PROBLEM},
 )
-def update_endpoint(identity_id: int, data: schemas.IdentityUpdateRequest) -> schemas.Identity:
+def update_endpoint(identity_id: int, data: schemas.identity.IdentityUpdateRequest) -> schemas.identity.Identity:
     if identity_id == ctx.identity_id:
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=403, title="Not allowed to update self")
@@ -283,7 +283,7 @@ def update_endpoint(identity_id: int, data: schemas.IdentityUpdateRequest) -> sc
 @router.post(
     "/{identity_id:int}/invite",
     status_code=200,
-    response_model=schemas.IdentityInviteManualResponse,
+    response_model=schemas.identity.IdentityInviteManualResponse,
     responses={
         204: {"description": "Non-manual delivery"},
         400: responses.PROBLEM,
@@ -292,8 +292,8 @@ def update_endpoint(identity_id: int, data: schemas.IdentityUpdateRequest) -> sc
     },
 )
 def invite_endpoint(
-    identity_id: int, data: schemas.IdentityInviteRequest
-) -> schemas.IdentityInviteManualResponse | fastapi.responses.Response:
+    identity_id: int, data: schemas.identity.IdentityInviteRequest
+) -> schemas.identity.IdentityInviteManualResponse | fastapi.responses.Response:
     identity = model.identity.read_one(id=identity_id)
     if identity is None:
         raise responses.ProblemHTTPException(
@@ -315,5 +315,5 @@ def invite_endpoint(
     assert identity_invitation is not None  # We just created it
 
     if data.delivery == "manual":
-        return schemas.IdentityInviteManualResponse(key=converters.symmetric_to_schema(identity_invitation.key))
+        return schemas.identity.IdentityInviteManualResponse(key=converters.symmetric_to_schema(identity_invitation.key))
     return fastapi.responses.Response(status_code=204)

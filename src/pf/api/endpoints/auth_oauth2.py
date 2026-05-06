@@ -71,8 +71,8 @@ def _redirect_error(client_redirect_uri: str, reason: str) -> fastapi.responses.
     responses={403: responses.PROBLEM},
 )
 def oauth2_start_endpoint(
-    request: fastapi.requests.Request, data: schemas.OAuth2StartRequest, tenant_name: str
-) -> schemas.OAuth2StartResponse:
+    request: fastapi.requests.Request, data: schemas.auth.OAuth2StartRequest, tenant_name: str
+) -> schemas.auth.OAuth2StartResponse:
     session_key = converters.public_from_schema(data.session_public_key)
     crypto_policy.enforce_key_is_allowed(session_key)
     model.denylist.enforce_not_denied(session_key.thumbprint())
@@ -120,7 +120,7 @@ def oauth2_start_endpoint(
         expires_at=now + 600,
     )
 
-    return schemas.OAuth2StartResponse(auth_url=auth_url)
+    return schemas.auth.OAuth2StartResponse(auth_url=auth_url)
 
 
 @router.get(

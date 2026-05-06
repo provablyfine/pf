@@ -13,7 +13,7 @@ _204 = fastapi.responses.Response(status_code=204)
 
 
 @router.get("", status_code=200, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
-def list_endpoint(id: int | None = None, name: str | None = None) -> schemas.BoundaryListResponse:
+def list_endpoint(id: int | None = None, name: str | None = None) -> schemas.boundary.BoundaryListResponse:
     query = {}
     if id is not None:
         query["id"] = id
@@ -29,11 +29,11 @@ def list_endpoint(id: int | None = None, name: str | None = None) -> schemas.Bou
         output.append(boundary)
 
     converter = converters.GrantConverter()
-    return schemas.BoundaryListResponse(boundaries=[converters.boundary_to_schema(converter, b) for b in output])
+    return schemas.boundary.BoundaryListResponse(boundaries=[converters.boundary_to_schema(converter, b) for b in output])
 
 
 @router.post("", status_code=201, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
-def create_endpoint(data: schemas.BoundaryCreateRequest) -> schemas.BoundaryCreateResponse:
+def create_endpoint(data: schemas.boundary.BoundaryCreateRequest) -> schemas.boundary.BoundaryCreateResponse:
     grants = grant.Grants.create()
     if not grants.boundary(None).can_create():
         raise responses.ProblemHTTPException(
@@ -59,7 +59,7 @@ def create_endpoint(data: schemas.BoundaryCreateRequest) -> schemas.BoundaryCrea
     boundary = model.boundary.read_one(id=boundary_id)
     assert boundary is not None, "Boundary has just need created"
     converter = converters.GrantConverter()
-    return schemas.BoundaryCreateResponse(boundary=converters.boundary_to_schema(converter, boundary))
+    return schemas.boundary.BoundaryCreateResponse(boundary=converters.boundary_to_schema(converter, boundary))
 
 
 @router.delete(
@@ -92,7 +92,7 @@ def delete_endpoint(boundary_id: int) -> fastapi.responses.Response:
     status_code=200,
     responses={400: responses.PROBLEM, 403: responses.PROBLEM, 404: responses.PROBLEM},
 )
-def update_endpoint(boundary_id: int, data: schemas.BoundaryUpdateRequest) -> schemas.BoundaryUpdateResponse:
+def update_endpoint(boundary_id: int, data: schemas.boundary.BoundaryUpdateRequest) -> schemas.boundary.BoundaryUpdateResponse:
     identity = model.identity.read_one(id=ctx.identity_id)
     assert identity is not None
 
@@ -144,4 +144,4 @@ def update_endpoint(boundary_id: int, data: schemas.BoundaryUpdateRequest) -> sc
 
     boundary = model.boundary.read_one(id=boundary_id)
     assert boundary is not None  # "We re-read what we read before"
-    return schemas.BoundaryUpdateResponse(boundary=converters.boundary_to_schema(converter, boundary))
+    return schemas.boundary.BoundaryUpdateResponse(boundary=converters.boundary_to_schema(converter, boundary))

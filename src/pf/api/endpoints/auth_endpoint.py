@@ -11,15 +11,15 @@ router = fastapi.APIRouter(prefix="/auth", dependencies=[fastapi.Depends(signatu
 _204 = fastapi.responses.Response(status_code=204)
 
 
-def _build_config(data: schemas.AuthCreateRequest) -> dict[str, typing.Any]:
+def _build_config(data: schemas.auth.AuthCreateRequest) -> dict[str, typing.Any]:
     if data.config.type == "oidc":
-        assert isinstance(data.config, schemas.OidcCreateConfig)
+        assert isinstance(data.config, schemas.auth.OidcCreateConfig)
         config = {"issuer": data.config.issuer, "client_id": data.config.client_id}
         if data.config.client_secret is not None:
             config["client_secret"] = data.config.client_secret
         return config
     if data.config.type == "oauth2-github":
-        assert isinstance(data.config, schemas.OAuth2CreateConfig)
+        assert isinstance(data.config, schemas.auth.OAuth2CreateConfig)
         return {
             "client_id": data.config.client_id,
             "client_secret": data.config.client_secret,
@@ -28,19 +28,19 @@ def _build_config(data: schemas.AuthCreateRequest) -> dict[str, typing.Any]:
 
 
 @router.get("", status_code=200, responses={403: responses.PROBLEM})
-def list_endpoint() -> schemas.AuthListResponse:
+def list_endpoint() -> schemas.auth.AuthListResponse:
     auths = model.auth_config.read_all()
     grants = grant.Grants.create()
-    output: list[schemas.Auth] = []
+    output: list[schemas.auth.Auth] = []
     for ac in auths:
         if not grants.auth(ac.id).can_read():
             continue
         output.append(converters.auth_config_to_schema(ac))
-    return schemas.AuthListResponse(auths=output)
+    return schemas.auth.AuthListResponse(auths=output)
 
 
 @router.post("", status_code=201, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
-def create_endpoint(data: schemas.AuthCreateRequest) -> schemas.Auth:
+def create_endpoint(data: schemas.auth.AuthCreateRequest) -> schemas.auth.Auth:
     # Auth config names must not be pure integers to avoid shadowing GET /auth/{id:int}
     if data.name.isdigit():
         raise responses.ProblemHTTPException(
@@ -73,7 +73,7 @@ def create_endpoint(data: schemas.AuthCreateRequest) -> schemas.Auth:
 
 
 @router.get("/{auth_id:int}", status_code=200, responses={403: responses.PROBLEM, 404: responses.PROBLEM})
-def read_endpoint(auth_id: int) -> schemas.Auth:
+def read_endpoint(auth_id: int) -> schemas.auth.Auth:
     ac = model.auth_config.read_one(id=auth_id)
     if ac is None:
         raise responses.ProblemHTTPException(
@@ -92,7 +92,7 @@ def read_endpoint(auth_id: int) -> schemas.Auth:
     status_code=200,
     responses={400: responses.PROBLEM, 403: responses.PROBLEM, 404: responses.PROBLEM},
 )
-def update_endpoint(auth_id: int, data: schemas.AuthUpdateRequest) -> schemas.Auth:
+def update_endpoint(auth_id: int, data: schemas.auth.AuthUpdateRequest) -> schemas.auth.Auth:
     ac = model.auth_config.read_one(id=auth_id)
     if ac is None:
         raise responses.ProblemHTTPException(

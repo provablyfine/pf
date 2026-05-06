@@ -28,7 +28,7 @@ def _read_current(type: app_db.SigningKeyType, staging_period: int):
     dependencies=[fastapi.Depends(signature.verify_session)],
     responses={400: responses.PROBLEM, 403: responses.PROBLEM},
 )
-def sign_host_certificate(data: schemas.SSHHostCertificateRequest) -> schemas.SSHHostCertificateResponse:
+def sign_host_certificate(data: schemas.ssh.SSHHostCertificateRequest) -> schemas.ssh.SSHHostCertificateResponse:
     caller = ctx.app_db.identity.read_one(id=ctx.identity_id)
     assert caller is not None  # because we are authenticated
 
@@ -64,7 +64,7 @@ def sign_host_certificate(data: schemas.SSHHostCertificateRequest) -> schemas.SS
             valid_before=c.valid_before,
         )
 
-    return schemas.SSHHostCertificateResponse(certificates=[converters.cert_to_schema(c) for c in certificates])
+    return schemas.ssh.SSHHostCertificateResponse(certificates=[converters.cert_to_schema(c) for c in certificates])
 
 
 @router.post(
@@ -73,7 +73,7 @@ def sign_host_certificate(data: schemas.SSHHostCertificateRequest) -> schemas.SS
     dependencies=[fastapi.Depends(signature.verify_session)],
     responses={400: responses.PROBLEM, 403: responses.PROBLEM, 404: responses.PROBLEM},
 )
-def sign_user_certificate(data: schemas.SSHUserCertificateRequest) -> schemas.SSHUserCertificateResponse:
+def sign_user_certificate(data: schemas.ssh.SSHUserCertificateRequest) -> schemas.ssh.SSHUserCertificateResponse:
     caller = ctx.app_db.identity.read_one(id=ctx.identity_id)
     assert caller is not None  # because we are authenticated
     host = model.identity.read_one(name=data.hostname)
@@ -174,7 +174,7 @@ def sign_user_certificate(data: schemas.SSHUserCertificateRequest) -> schemas.SS
     logger.info(f"Generated certificate for username={data.username} action={data.action}")
 
     matching_bastions = model.bastion.read_matching()
-    bastion_schema_list: list[schemas.Bastion] = []
+    bastion_schema_list: list[schemas.bastion.Bastion] = []
 
     sessions = ctx.app_db.identity_session_key.read_all(
         identity_id=ctx.identity_id,
@@ -188,7 +188,7 @@ def sign_user_certificate(data: schemas.SSHUserCertificateRequest) -> schemas.SS
             bastion_schema = converters.bastion_to_schema(grant_converter, bastion)
             bastion_schema_list.append(bastion_schema)
 
-    return schemas.SSHUserCertificateResponse(
+    return schemas.ssh.SSHUserCertificateResponse(
         certificates=[converters.cert_to_schema(cert)],
         bastion_list=bastion_schema_list,
         ip_address_list=ip_address_list,
@@ -200,32 +200,32 @@ def sign_user_certificate(data: schemas.SSHUserCertificateRequest) -> schemas.SS
     status_code=200,
     dependencies=[fastapi.Depends(signature.verify_session)],
 )
-def list_hosts() -> schemas.SSHHostsResponse:
+def list_hosts() -> schemas.ssh.SSHHostsResponse:
     identities = model.identity.read_all()
     grants = grant.Grants.create()
-    entries: list[schemas.SSHHostEntry] = []
+    entries: list[schemas.ssh.SSHHostEntry] = []
     for identity in identities:
         shell_checker = grants.ssh_shell(identity.id, identity.tag_id_list, identity.boundary_id_list)
         for g in shell_checker.list_can():
             entries.append(
-                schemas.SSHHostEntry(hostname=identity.name, type="shell", username_list=g.permission.username_list)
+                schemas.ssh.SSHHostEntry(hostname=identity.name, type="shell", username_list=g.permission.username_list)
             )
         port_forward_checker = grants.ssh_port_forward(identity.id, identity.tag_id_list, identity.boundary_id_list)
         for g in port_forward_checker.list_can():
             entries.append(
-                schemas.SSHHostEntry(hostname=identity.name, type="port", username_list=g.permission.username_list)
+                schemas.ssh.SSHHostEntry(hostname=identity.name, type="port", username_list=g.permission.username_list)
             )
         command_checker = grants.ssh_command(identity.id, identity.tag_id_list, identity.boundary_id_list)
         for g in command_checker.list_can():
             entries.append(
-                schemas.SSHHostEntry(
+                schemas.ssh.SSHHostEntry(
                     hostname=identity.name,
                     type="command",
                     username_list=g.permission.username_list,
                     command_list=g.permission.command_list,
                 )
             )
-    return schemas.SSHHostsResponse(hosts=entries)
+    return schemas.ssh.SSHHostsResponse(hosts=entries)
 
 
 @router.get("/user/trusted-keys", status_code=200)

@@ -12,7 +12,7 @@ _204 = fastapi.responses.Response(status_code=204)
 
 
 @router.get("", status_code=200, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
-def list_endpoint(id: int | None = None, name: str | None = None, value: str | None = None) -> schemas.TagListResponse:
+def list_endpoint(id: int | None = None, name: str | None = None, value: str | None = None) -> schemas.tag.TagListResponse:
     query = {}
     if id is not None:
         query["id"] = id
@@ -24,11 +24,11 @@ def list_endpoint(id: int | None = None, name: str | None = None, value: str | N
     grants = grant.Grants.create()
     tags = [t for t in ctx.app_db.tag.read_all(**query) if grants.tag(t.id).can_read()]
 
-    return schemas.TagListResponse(tags=[converters.tag_to_schema(tag) for tag in tags])
+    return schemas.tag.TagListResponse(tags=[converters.tag_to_schema(tag) for tag in tags])
 
 
 @router.post("", status_code=201, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
-def create_endpoint(data: schemas.TagCreateRequest) -> schemas.Tag:
+def create_endpoint(data: schemas.tag.TagCreateRequest) -> schemas.tag.Tag:
     grants = grant.Grants.create()
     if not grants.tag(None).can_create():
         raise responses.ProblemHTTPException(
