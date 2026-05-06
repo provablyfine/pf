@@ -6,7 +6,6 @@
 #   "http-sfv",
 #   "tabulate",
 #   "pytest",
-#   "dateparser",
 #   "coverage",
 #   "pf",
 #   "pydantic",
