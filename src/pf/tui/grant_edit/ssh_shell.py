@@ -3,12 +3,12 @@ import textual.app
 import textual.containers
 import textual.widgets
 
-from ...client import schemas
+from ... import client
 from .. import checkbox_input
 from . import base
 
 
-class SshShellGrantEditWidget(base.TripletFilterGrantEditWidget[schemas.SSHShellGrant]):
+class SshShellGrantEditWidget(base.TripletFilterGrantEditWidget[client.schemas.SSHShellGrant]):
     DEFAULT_CSS = """
     SshShellGrantEditWidget {
         height: auto;
@@ -45,11 +45,11 @@ class SshShellGrantEditWidget(base.TripletFilterGrantEditWidget[schemas.SSHShell
         await self._mount_filter_candidates()
         self.query_one("#perm-username-list", checkbox_input.CheckboxInput).set_candidates([])
 
-    def get_grant_data(self) -> schemas.SSHShellGrant:
-        return schemas.SSHShellGrant(
+    def get_grant_data(self) -> client.schemas.SSHShellGrant:
+        return client.schemas.SSHShellGrant(
             type="ssh-shell",
             filter=self._filter_data(),
-            permission=schemas.SSHShellPermission(
+            permission=client.schemas.SSHShellPermission(
                 username_list=self._read_field("#perm-username-list").boundary_perm(),
                 permit_agent_forwarding=self.query_one("#perm-permit-agent-forwarding", textual.widgets.Checkbox).value,
                 permit_x11_forwarding=self.query_one("#perm-permit-x11-forwarding", textual.widgets.Checkbox).value,

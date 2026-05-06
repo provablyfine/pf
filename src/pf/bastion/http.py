@@ -123,4 +123,5 @@ class Application[T]:
             task.cancel()
 
     def stop(self) -> None:
-        self._accept_task.cancel()
+        if self._accept_task is not None:
+            self._accept_task.cancel()

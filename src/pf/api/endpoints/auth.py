@@ -6,7 +6,6 @@ import fastapi.responses
 
 from .. import converters, crypto_policy, model, responses, schemas, signature
 from ..context import ctx
-from ..model import identity_invitation_key
 
 router = fastapi.APIRouter()
 
@@ -21,7 +20,7 @@ _204 = fastapi.responses.Response(status_code=204)
 def accept_invitation_endpoint(
     request: fastapi.requests.Request,
     data: schemas.directory.AcceptInvitationRequest,
-    invitation: identity_invitation_key.IdentityInvitationKey = fastapi.Depends(signature.verify_invitation),
+    invitation: model.identity_invitation_key.IdentityInvitationKey = fastapi.Depends(signature.verify_invitation),
 ) -> fastapi.responses.Response:
     account_key = converters.public_from_schema(data.account_public_key)
     crypto_policy.enforce_key_is_allowed(account_key)

@@ -10,12 +10,11 @@ import textual.widgets
 import textual_autocomplete
 
 from ... import client
-from ...client import schemas
 from .. import auto_complete, checkbox_input
 
 
 class _TripletFilterGrant(typing.Protocol):
-    filter: schemas.TripletFilter
+    filter: client.schemas.TripletFilter
 
 
 @dataclasses.dataclass
@@ -23,18 +22,20 @@ class Field:
     active: bool
     value: str
 
-    def tag_filter(self) -> list[schemas.TagNameValue] | None:
+    def tag_filter(self) -> list[client.schemas.TagNameValue] | None:
         if not self.active:
             return None
         return [
-            schemas.TagNameValue(name=k, value=v) for k, v in (s.split("=", 1) for s in self.value.split() if "=" in s)
+            client.schemas.TagNameValue(name=k, value=v)
+            for k, v in (s.split("=", 1) for s in self.value.split() if "=" in s)
         ]
 
-    def tag_perm(self) -> list[schemas.TagNameValue]:
+    def tag_perm(self) -> list[client.schemas.TagNameValue]:
         if not self.active:
             return []
         return [
-            schemas.TagNameValue(name=k, value=v) for k, v in (s.split("=", 1) for s in self.value.split() if "=" in s)
+            client.schemas.TagNameValue(name=k, value=v)
+            for k, v in (s.split("=", 1) for s in self.value.split() if "=" in s)
         ]
 
     def boundary_filter(self) -> list[str] | None:
@@ -50,14 +51,14 @@ class Field:
         name = self.value.strip()
         return name if (self.active and name) else None
 
-    def tag_name_value_filter(self) -> schemas.TagNameValue | None:
+    def tag_name_value_filter(self) -> client.schemas.TagNameValue | None:
         if not self.active:
             return None
         items = [s.split("=", 1) for s in self.value.split() if "=" in s]
         if not items:
             return None
         k, v = items[0]
-        return schemas.TagNameValue(name=k, value=v)
+        return client.schemas.TagNameValue(name=k, value=v)
 
     def int_filter(self) -> int | None:
         if not self.active:
@@ -66,7 +67,7 @@ class Field:
         return int(s) if s.isdigit() else None
 
     @classmethod
-    def from_tag_list(cls, tag_list: list[schemas.TagNameValue] | None) -> Field:
+    def from_tag_list(cls, tag_list: list[client.schemas.TagNameValue] | None) -> Field:
         return cls(
             active=tag_list is not None,
             value=" ".join(f"{t.name}={t.value}" for t in (tag_list or [])),
@@ -87,31 +88,31 @@ class Field:
         )
 
 
-def new_grant(grant_type: str) -> schemas.Grant:
+def new_grant(grant_type: str) -> client.schemas.Grant:
     match grant_type:
         case "role":
-            return schemas.RoleGrant(
+            return client.schemas.RoleGrant(
                 type="role",
-                filter=schemas.RoleFilter(name=None),
-                permission=schemas.RolePermission(
+                filter=client.schemas.RoleFilter(name=None),
+                permission=client.schemas.RolePermission(
                     create=False,
                     read=False,
-                    update=schemas.RoleUpdatePermission(
+                    update=client.schemas.RoleUpdatePermission(
                         name=False, description=False, grant_list=False, member_list=False
                     ),
                     delete=False,
                 ),
             )
         case "identity":
-            return schemas.IdentityGrant(
+            return client.schemas.IdentityGrant(
                 type="identity",
-                filter=schemas.TripletFilter(name=None, tag_list=None, boundary_list=None),
-                permission=schemas.IdentityPermission(
-                    create=schemas.IdentityCreatePermission(
+                filter=client.schemas.TripletFilter(name=None, tag_list=None, boundary_list=None),
+                permission=client.schemas.IdentityPermission(
+                    create=client.schemas.IdentityCreatePermission(
                         allowed=False, allowed_tag_list=[], required_boundary_list=None
                     ),
                     read=False,
-                    update=schemas.IdentityUpdatePermission(name=False),
+                    update=client.schemas.IdentityUpdatePermission(name=False),
                     delete=False,
                     add_tag_list=None,
                     del_tag_list=None,
@@ -119,63 +120,63 @@ def new_grant(grant_type: str) -> schemas.Grant:
                 ),
             )
         case "tag":
-            return schemas.TagGrant(
+            return client.schemas.TagGrant(
                 type="tag",
-                filter=schemas.TagFilter(name_value=None),
-                permission=schemas.TagPermission(create=False, read=False, delete=False),
+                filter=client.schemas.TagFilter(name_value=None),
+                permission=client.schemas.TagPermission(create=False, read=False, delete=False),
             )
         case "boundary":
-            return schemas.BoundaryGrant(
+            return client.schemas.BoundaryGrant(
                 type="boundary",
-                filter=schemas.BoundaryFilter(name=None),
-                permission=schemas.BoundaryPermission(
+                filter=client.schemas.BoundaryFilter(name=None),
+                permission=client.schemas.BoundaryPermission(
                     create=False,
                     read=False,
-                    update=schemas.BoundaryUpdatePermission(
+                    update=client.schemas.BoundaryUpdatePermission(
                         name=False, description=False, ceiling_list=False, denied_list=False
                     ),
                     delete=False,
                 ),
             )
         case "tenant":
-            return schemas.TenantGrant(
+            return client.schemas.TenantGrant(
                 type="tenant",
-                filter=schemas.TenantFilter(id=None),
-                permission=schemas.TenantPermission(
+                filter=client.schemas.TenantFilter(id=None),
+                permission=client.schemas.TenantPermission(
                     create=False,
                     read=False,
-                    update=schemas.TenantUpdatePermission(display_name=False, is_enabled=False),
+                    update=client.schemas.TenantUpdatePermission(display_name=False, is_enabled=False),
                     delete=False,
                 ),
             )
         case "ssh-shell":
-            return schemas.SSHShellGrant(
+            return client.schemas.SSHShellGrant(
                 type="ssh-shell",
-                filter=schemas.TripletFilter(name=None, tag_list=None, boundary_list=None),
-                permission=schemas.SSHShellPermission(
+                filter=client.schemas.TripletFilter(name=None, tag_list=None, boundary_list=None),
+                permission=client.schemas.SSHShellPermission(
                     username_list=[],
                     permit_agent_forwarding=False,
                     permit_x11_forwarding=False,
                 ),
             )
         case "ssh-port-forwarding":
-            return schemas.SSHPortForwardingGrant(
+            return client.schemas.SSHPortForwardingGrant(
                 type="ssh-port-forwarding",
-                filter=schemas.TripletFilter(name=None, tag_list=None, boundary_list=None),
-                permission=schemas.SSHPortForwardingPermission(username_list=[]),
+                filter=client.schemas.TripletFilter(name=None, tag_list=None, boundary_list=None),
+                permission=client.schemas.SSHPortForwardingPermission(username_list=[]),
             )
         case "ssh-command":
-            return schemas.SSHCommandGrant(
+            return client.schemas.SSHCommandGrant(
                 type="ssh-command",
-                filter=schemas.TripletFilter(name=None, tag_list=None, boundary_list=None),
-                permission=schemas.SSHCommandPermission(username_list=[], command_list=[]),
+                filter=client.schemas.TripletFilter(name=None, tag_list=None, boundary_list=None),
+                permission=client.schemas.SSHCommandPermission(username_list=[], command_list=[]),
             )
         case _:
-            return schemas.InvalidGrant(type="invalid")
+            return client.schemas.InvalidGrant(type="invalid")
 
 
 class GrantEditWidget(textual.widget.Widget):
-    def get_grant_data(self) -> schemas.Grant:
+    def get_grant_data(self) -> client.schemas.Grant:
         raise NotImplementedError
 
     def _read_field(self, widget_id: str) -> Field:
@@ -233,8 +234,8 @@ class TripletFilterGrantEditWidget[T: _TripletFilterGrant](GrantEditWidget):
         boundaries = [textual_autocomplete.DropdownItem(main=b.name) for b in boundaries_raw]
         self.query_one("#filter-bounded-by", checkbox_input.CheckboxInput).set_candidates(boundaries)
 
-    def _filter_data(self) -> schemas.TripletFilter:
-        return schemas.TripletFilter(
+    def _filter_data(self) -> client.schemas.TripletFilter:
+        return client.schemas.TripletFilter(
             name=self._read_field("#filter-name").name_filter(),
             tag_list=self._read_field("#filter-tagged-by").tag_filter(),
             boundary_list=self._read_field("#filter-bounded-by").boundary_filter(),

@@ -8,12 +8,11 @@ import textual.screen
 import textual.widgets
 
 from ... import client
-from ...client import schemas
 from .. import header
 from . import base, boundary, identity, role, ssh_command, ssh_port_forward, ssh_shell, tag, tenant
 
 
-class GrantEditScreen(textual.screen.Screen[schemas.Grant | None]):
+class GrantEditScreen(textual.screen.Screen[client.schemas.Grant | None]):
     DEFAULT_CSS = """
     .sections {
         padding: 0 1;
@@ -33,7 +32,7 @@ class GrantEditScreen(textual.screen.Screen[schemas.Grant | None]):
     ]
     grant_type: textual.reactive.Reactive[str] = textual.reactive.Reactive("")
 
-    def __init__(self, auth: client.aio.Client, grant: schemas.Grant):
+    def __init__(self, auth: client.aio.Client, grant: client.schemas.Grant):
         super().__init__(id="grant-edit")
         self._auth = auth
         self._grant = grant
@@ -45,24 +44,30 @@ class GrantEditScreen(textual.screen.Screen[schemas.Grant | None]):
         await fields.query("*").remove()
         match value:
             case "role":
-                widget = role.RoleGrantEditWidget(self._auth, typing.cast(schemas.RoleGrant, self._grant))
+                widget = role.RoleGrantEditWidget(self._auth, typing.cast(client.schemas.RoleGrant, self._grant))
             case "identity":
-                widget = identity.IdentityGrantEditWidget(self._auth, typing.cast(schemas.IdentityGrant, self._grant))
+                widget = identity.IdentityGrantEditWidget(
+                    self._auth, typing.cast(client.schemas.IdentityGrant, self._grant)
+                )
             case "tag":
-                widget = tag.TagGrantEditWidget(self._auth, typing.cast(schemas.TagGrant, self._grant))
+                widget = tag.TagGrantEditWidget(self._auth, typing.cast(client.schemas.TagGrant, self._grant))
             case "boundary":
-                widget = boundary.BoundaryGrantEditWidget(self._auth, typing.cast(schemas.BoundaryGrant, self._grant))
+                widget = boundary.BoundaryGrantEditWidget(
+                    self._auth, typing.cast(client.schemas.BoundaryGrant, self._grant)
+                )
             case "tenant":
-                widget = tenant.TenantGrantEditWidget(self._auth, typing.cast(schemas.TenantGrant, self._grant))
+                widget = tenant.TenantGrantEditWidget(self._auth, typing.cast(client.schemas.TenantGrant, self._grant))
             case "ssh-shell":
-                widget = ssh_shell.SshShellGrantEditWidget(self._auth, typing.cast(schemas.SSHShellGrant, self._grant))
+                widget = ssh_shell.SshShellGrantEditWidget(
+                    self._auth, typing.cast(client.schemas.SSHShellGrant, self._grant)
+                )
             case "ssh-port-forwarding":
                 widget = ssh_port_forward.SshPortForwardingGrantEditWidget(
-                    self._auth, typing.cast(schemas.SSHPortForwardingGrant, self._grant)
+                    self._auth, typing.cast(client.schemas.SSHPortForwardingGrant, self._grant)
                 )
             case "ssh-command":
                 widget = ssh_command.SshCommandGrantEditWidget(
-                    self._auth, typing.cast(schemas.SSHCommandGrant, self._grant)
+                    self._auth, typing.cast(client.schemas.SSHCommandGrant, self._grant)
                 )
             case _:
                 return

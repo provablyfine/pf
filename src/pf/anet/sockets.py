@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+import collections.abc
 
 from . import base
 
@@ -25,7 +25,7 @@ class SocketStore:
         """Get socket by name. Returns None if not found."""
         return self._sockets.get(name)
 
-    def __iter__(self) -> Iterator[tuple[str, base.Socket]]:
+    def __iter__(self) -> collections.abc.Iterator[tuple[str, base.Socket]]:
         """Iterate over (name, socket) pairs."""
         return iter(self._sockets.items())
 

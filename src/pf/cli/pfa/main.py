@@ -1,10 +1,10 @@
 import argparse
 import os
 import os.path
+import signal
 import sys
 import traceback
 import urllib.parse
-import signal
 
 import requests
 

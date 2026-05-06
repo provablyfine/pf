@@ -11,11 +11,11 @@ import socket
 import subprocess
 import tempfile
 import time
-import psutil
 
+import filelock
+import psutil
 import pytest
 import requests
-import filelock
 
 logger = logging.getLogger(__name__)
 

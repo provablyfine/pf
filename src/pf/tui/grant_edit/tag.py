@@ -5,7 +5,6 @@ import textual.widgets
 import textual_autocomplete
 
 from ... import client
-from ...client import schemas
 from .. import auto_complete, checkbox_input
 from . import base
 
@@ -21,7 +20,7 @@ class TagGrantEditWidget(base.GrantEditWidget):
     }
     """
 
-    def __init__(self, auth: client.aio.Client, grant: schemas.TagGrant):
+    def __init__(self, auth: client.aio.Client, grant: client.schemas.TagGrant):
         super().__init__()
         self._auth = auth
         self._grant = grant
@@ -54,12 +53,12 @@ class TagGrantEditWidget(base.GrantEditWidget):
         candidates = [textual_autocomplete.DropdownItem(main=f"{t.name}={t.value}") for t in tags_raw]
         self.query_one("#filter-name-value", checkbox_input.CheckboxInput).set_candidates(candidates)
 
-    def get_grant_data(self) -> schemas.TagGrant:
+    def get_grant_data(self) -> client.schemas.TagGrant:
         selected = set(self.query_one(PermissionSelectionList).selected)
-        return schemas.TagGrant(
+        return client.schemas.TagGrant(
             type="tag",
-            filter=schemas.TagFilter(name_value=self._read_field("#filter-name-value").tag_name_value_filter()),
-            permission=schemas.TagPermission(
+            filter=client.schemas.TagFilter(name_value=self._read_field("#filter-name-value").tag_name_value_filter()),
+            permission=client.schemas.TagPermission(
                 create="create" in selected,
                 read="read" in selected,
                 delete="delete" in selected,

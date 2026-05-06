@@ -8,11 +8,13 @@ import datetime
 import ipaddress
 import os
 
+import cryptography
+import cryptography.hazmat.primitives.asymmetric.rsa as crypto_rsa
+import cryptography.hazmat.primitives.hashes as crypto_hashes
+import cryptography.hazmat.primitives.serialization as crypto_serialization
+import cryptography.x509
+import cryptography.x509.oid as crypto_oid
 import pytest
-from cryptography import x509
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.x509.oid import NameOID
 
 import pf.anet.socket as anet_socket
 import pf.anet.ssl as anet_ssl
@@ -46,11 +48,11 @@ def ssl_contexts(tmp_path_factory: pytest.TempPathFactory) -> tuple[anet_ssl.SSL
     tmpdir = tmp_path_factory.mktemp("ssl")
 
     # Generate CA key and cert
-    ca_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    ca_subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Test CA")])
+    ca_key = crypto_rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    ca_subject = cryptography.x509.Name([cryptography.x509.NameAttribute(crypto_oid.NameOID.COMMON_NAME, "Test CA")])
     now = datetime.datetime.now(datetime.UTC)
     ca_cert = (
-        x509.CertificateBuilder()
+        cryptography.x509.CertificateBuilder()
         .subject_name(ca_subject)
         .issuer_name(ca_subject)
         .public_key(ca_key.public_key())
@@ -58,17 +60,19 @@ def ssl_contexts(tmp_path_factory: pytest.TempPathFactory) -> tuple[anet_ssl.SSL
         .not_valid_before(now)
         .not_valid_after(now + datetime.timedelta(days=365))
         .add_extension(
-            x509.BasicConstraints(ca=True, path_length=None),
+            cryptography.x509.BasicConstraints(ca=True, path_length=None),
             critical=True,
         )
-        .sign(ca_key, hashes.SHA256())
+        .sign(ca_key, crypto_hashes.SHA256())
     )
 
     # Generate server key and cert
-    server_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    server_subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "127.0.0.1")])
+    server_key = crypto_rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    server_subject = cryptography.x509.Name(
+        [cryptography.x509.NameAttribute(crypto_oid.NameOID.COMMON_NAME, "127.0.0.1")]
+    )
     server_cert = (
-        x509.CertificateBuilder()
+        cryptography.x509.CertificateBuilder()
         .subject_name(server_subject)
         .issuer_name(ca_subject)
         .public_key(server_key.public_key())
@@ -76,10 +80,10 @@ def ssl_contexts(tmp_path_factory: pytest.TempPathFactory) -> tuple[anet_ssl.SSL
         .not_valid_before(now)
         .not_valid_after(now + datetime.timedelta(days=365))
         .add_extension(
-            x509.SubjectAlternativeName([x509.IPAddress(ipaddress.IPv4Address("127.0.0.1"))]),
+            cryptography.x509.SubjectAlternativeName([cryptography.x509.IPAddress(ipaddress.IPv4Address("127.0.0.1"))]),
             critical=False,
         )
-        .sign(ca_key, hashes.SHA256())
+        .sign(ca_key, crypto_hashes.SHA256())
     )
 
     # Write to temp files
@@ -87,13 +91,13 @@ def ssl_contexts(tmp_path_factory: pytest.TempPathFactory) -> tuple[anet_ssl.SSL
     server_cert_file = tmpdir / "server.pem"
     server_key_file = tmpdir / "server.key"
 
-    ca_cert_file.write_bytes(ca_cert.public_bytes(serialization.Encoding.PEM))
-    server_cert_file.write_bytes(server_cert.public_bytes(serialization.Encoding.PEM))
+    ca_cert_file.write_bytes(ca_cert.public_bytes(crypto_serialization.Encoding.PEM))
+    server_cert_file.write_bytes(server_cert.public_bytes(crypto_serialization.Encoding.PEM))
     server_key_file.write_bytes(
         server_key.private_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.PKCS8,
-            encryption_algorithm=serialization.NoEncryption(),
+            encoding=crypto_serialization.Encoding.PEM,
+            format=crypto_serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=crypto_serialization.NoEncryption(),
         )
     )
 

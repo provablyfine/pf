@@ -5,7 +5,6 @@ import textual.widgets
 import textual_autocomplete
 
 from ... import client
-from ...client import schemas
 from .. import auto_complete, checkbox_input
 from . import base
 
@@ -21,7 +20,7 @@ class RoleGrantEditWidget(base.GrantEditWidget):
     }
     """
 
-    def __init__(self, auth: client.aio.Client, grant: schemas.RoleGrant):
+    def __init__(self, auth: client.aio.Client, grant: client.schemas.RoleGrant):
         super().__init__()
         self._auth = auth
         self._grant = grant
@@ -58,7 +57,7 @@ class RoleGrantEditWidget(base.GrantEditWidget):
         candidates = [textual_autocomplete.DropdownItem(main=r.name) for r in roles]
         self.query_one("#filter-name", checkbox_input.CheckboxInput).set_candidates(candidates)
 
-    def get_grant_data(self) -> schemas.RoleGrant:
+    def get_grant_data(self) -> client.schemas.RoleGrant:
         selected = set(self.query_one(PermissionSelectionList).selected)
         update_dict = {
             "name": "update.name" in selected,
@@ -66,13 +65,13 @@ class RoleGrantEditWidget(base.GrantEditWidget):
             "member_list": "update.member_list" in selected,
             "grant_list": "update.grant_list" in selected,
         }
-        return schemas.RoleGrant(
+        return client.schemas.RoleGrant(
             type="role",
-            filter=schemas.RoleFilter(name=self._read_field("#filter-name").name_filter()),
-            permission=schemas.RolePermission(
+            filter=client.schemas.RoleFilter(name=self._read_field("#filter-name").name_filter()),
+            permission=client.schemas.RolePermission(
                 create="create" in selected,
                 read="read" in selected,
-                update=schemas.RoleUpdatePermission(**update_dict),
+                update=client.schemas.RoleUpdatePermission(**update_dict),
                 delete="delete" in selected,
             ),
         )

@@ -5,7 +5,6 @@ import textual.widgets
 import textual_autocomplete
 
 from ... import client
-from ...client import schemas
 from .. import auto_complete, checkbox_input
 from . import base
 
@@ -21,7 +20,7 @@ class BoundaryGrantEditWidget(base.GrantEditWidget):
     }
     """
 
-    def __init__(self, auth: client.aio.Client, grant: schemas.BoundaryGrant):
+    def __init__(self, auth: client.aio.Client, grant: client.schemas.BoundaryGrant):
         super().__init__()
         self._auth = auth
         self._grant = grant
@@ -58,7 +57,7 @@ class BoundaryGrantEditWidget(base.GrantEditWidget):
         candidates = [textual_autocomplete.DropdownItem(main=b.name) for b in boundaries_raw]
         self.query_one("#filter-name", checkbox_input.CheckboxInput).set_candidates(candidates)
 
-    def get_grant_data(self) -> schemas.BoundaryGrant:
+    def get_grant_data(self) -> client.schemas.BoundaryGrant:
         selected = set(self.query_one(PermissionSelectionList).selected)
         update_dict = {
             "name": "update.name" in selected,
@@ -66,13 +65,13 @@ class BoundaryGrantEditWidget(base.GrantEditWidget):
             "ceiling_list": "update.ceiling_list" in selected,
             "denied_list": "update.denied_list" in selected,
         }
-        return schemas.BoundaryGrant(
+        return client.schemas.BoundaryGrant(
             type="boundary",
-            filter=schemas.BoundaryFilter(name=self._read_field("#filter-name").name_filter()),
-            permission=schemas.BoundaryPermission(
+            filter=client.schemas.BoundaryFilter(name=self._read_field("#filter-name").name_filter()),
+            permission=client.schemas.BoundaryPermission(
                 create="create" in selected,
                 read="read" in selected,
-                update=schemas.BoundaryUpdatePermission(**update_dict),
+                update=client.schemas.BoundaryUpdatePermission(**update_dict),
                 delete="delete" in selected,
             ),
         )
