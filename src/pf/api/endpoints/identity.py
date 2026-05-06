@@ -94,7 +94,7 @@ def _read_boundary_ids(boundary_id_list: list[int], boundary_name_list: list[str
     return [b.id for b in boundaries] + boundary_id_list
 
 
-def _read_tag_ids(tag_id_list: list[int], tag_name_value_list: list[schemas.IdentityTagNameValue]) -> list[int]:
+def _read_tag_ids(tag_id_list: list[int], tag_name_value_list: list[schemas.TagNameValue]) -> list[int]:
     id_list: list[int] = []
     for tag in tag_name_value_list:
         db_tag = ctx.app_db.tag.read_one(name=tag.name, value=tag.value)
