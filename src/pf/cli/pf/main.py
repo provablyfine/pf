@@ -5,6 +5,7 @@ import os.path
 import sys
 import traceback
 import urllib.parse
+import signal
 
 import requests
 import tabulate
@@ -91,6 +92,8 @@ def _do_main(args: argparse.Namespace) -> None:
 
 
 def pf() -> None:
+    if sys.platform != "win32":
+        signal.signal(signal.SIGPIPE, signal.SIG_DFL)
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", "--config", help="configuration file", default=_DEFAULT_CONFIG)
     parser.add_argument("--timeout", default=1.0, help="Timeout for HTTP requests")
