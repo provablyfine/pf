@@ -90,7 +90,7 @@ def _do_main(args: argparse.Namespace) -> None:
     sys.exit(exitcode)
 
 
-def pf():
+def pf() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", "--config", help="configuration file", default=_DEFAULT_CONFIG)
     parser.add_argument("--timeout", default=1.0, help="Timeout for HTTP requests")

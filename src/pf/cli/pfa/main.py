@@ -82,7 +82,7 @@ def _do_main(args: argparse.Namespace) -> None:
     sys.exit(exitcode)
 
 
-def pfa():
+def pfa() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", "--config", help="configuration file", default=_DEFAULT_CONFIG)
     parser.add_argument("--auto-login", action="store_true", default=False)
