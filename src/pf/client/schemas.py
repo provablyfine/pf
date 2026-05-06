@@ -1,3 +1,12 @@
+# Note: These client-side schema classes mirror the definitions in pf.api.schemas,
+# but cannot be shared because:
+#  - Server models use extra="ignore" (tolerates unknown fields from DB/JSON) while
+#    client models use extra="forbid" (strict validation to catch API contract breaks early).
+#  - server models implement to_text() methods for display in the TUI, which the client
+#    side does not need.
+# Keeping them separate avoids coupling and lets each side evolve its constraints
+# independently.
+
 import typing
 
 import pydantic
