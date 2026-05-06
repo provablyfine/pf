@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import enum
+import functools
 import socket as _socket
 import typing
-import functools
 
 from . import base
 
