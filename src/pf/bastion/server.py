@@ -26,7 +26,8 @@ async def _run(
         for app in app_holder:
             app.stop()
 
-    signal.signal(signal.SIGTERM, sigterm_handler)
+    loop = asyncio.get_running_loop()
+    loop.add_signal_handler(signal.SIGTERM, sigterm_handler)
     main_task = asyncio.create_task(main_app.run())
     ctrl_task = asyncio.create_task(ctrl_app.run())
 
