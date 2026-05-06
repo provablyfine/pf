@@ -48,7 +48,7 @@ def main():
 
     conf = config.Config.load(args.config)
 
-    log.setup_server("rotate", args.log_level, args.log_filename)
+    log.setup_server("rotate", args.debug, args.log_filename)
 
     with open(conf.kek_filename, "rb") as f:
         kek_string = base64url.encode(f.read()) + "======"
