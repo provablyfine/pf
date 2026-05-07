@@ -110,7 +110,6 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
 
     update_parser = subparsers.add_parser("update", help="Update a bastion")
     update_parser.add_argument("-i", "--id", type=int, help="Id of bastion", required=True)
-    update_parser.add_argument("--register-url", type=str, help="Register URL of the bastion")
-    update_parser.add_argument("--connect-url", type=str, help="Connect URL of the bastion")
+    update_parser.add_argument("--url", type=str, help="URL of the bastion")
     update_parser.add_argument("--ssh-proxy-jump", type=str, help="SSH ProxyJump string")
     update_parser.set_defaults(func=_bastion_update_function)
