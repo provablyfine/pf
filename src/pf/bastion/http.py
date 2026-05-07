@@ -8,6 +8,7 @@ import traceback
 import typing
 
 from .. import anet
+from . import atomic
 
 T = typing.TypeVar("T")
 
@@ -49,7 +50,7 @@ class Response:
         await response.serialize(sock)
 
 
-RouteHandler = typing.Callable[[T, anet.http.Request, anet.base.Socket], typing.Awaitable[None]]
+RouteHandler = typing.Callable[[T, anet.http.Request, str], typing.Awaitable[Response|None]]
 
 
 @dataclasses.dataclass
@@ -64,25 +65,47 @@ class Application[T]:
     def __init__(self, state: T, sock: anet.socket.Socket):
         self._state = state
         self._sock = sock
-        self._tasks: list[asyncio.Task[None]] = []
+        self._request_tasks: list[asyncio.Task[None]] = []
         self._accept_task: asyncio.Task[None] | None = None
         self._routes: list[Route[T]] = []
+        self._read_request_timeout = 1.0
 
     def add_route(self, route: Route[T]):
         self._routes.append(route)
 
     async def _handle_new_client(self, sock: anet.base.Socket) -> None:
+        request = None
         try:
-            request = await anet.http.Request.deserialize(sock)
+            request = await asyncio.wait_for(anet.http.Request.deserialize(sock), timeout=self._read_request_timeout)
+        except asyncio.exceptions.TimeoutError:
+            logger.info("Read request timeout: client did not send their request on time")
         except anet.exceptions.Error:
-            await Response(status_code=400, title="Invalid HTTP request").serialize(sock)
-            await sock.close()
+            logger.info("Read request: client sent an invalid HTTP request")
+        except asyncio.CancelledError:
+            logger.info("Read request: cancelled")
+        finally:
+            if request is None:
+                # We protect ourselves against badly-behaving clients that are not able to send a valid http request
+                sock.close()
+        if request is None:
             return
 
+        sock_name = f"pf-bastion.{id(sock)}"
+        anet.sockets.store.add(sock_name, sock)
+        try:
+            response = await self._do_handle_new_client(request, sock_name)
+            if response is None:
+                return
+            await response.serialize(sock)
+            anet.sockets.store.remove(sock_name)
+            sock.close()
+        except asyncio.CancelledError:
+            anet.sockets.store.remove(sock_name)
+            sock.close()
+
+    async def _do_handle_new_client(self, request: anet.http.Request, sock_name: str) -> Response | None:
         if request.version != "HTTP/1.1":
-            await Response(status_code=400, title="Invalid HTTP version").serialize(sock)
-            await sock.close()
-            return
+            return Response(status_code=400, title="Invalid HTTP version")
 
         for route in self._routes:
             if route.method is not None:
@@ -95,16 +118,16 @@ class Application[T]:
                 if request.resource_target != route.resource:
                     continue
             try:
-                await route.handler(self._state, request, sock)
+                # We run the application handler in an atomic context with
+                # regard to cancellation.
+                response = await atomic.run(route.handler(self._state, request, sock_name))
             except Exception:
                 logger.error(traceback.format_exc())
-                await Response(status_code=500, title="Error while executing request").serialize(sock)
-                await sock.close()
-            return
+                return Response(status_code=500, title="Error while executing request")
+            return response
 
         logger.error(f"Unable to find route for host: {request.headers['host']}")
-        await Response(status_code=404, title="Unable to find matching route").serialize(sock)
-        await sock.close()
+        return Response(status_code=404, title="Unable to find matching route")
 
     async def _loop(self) -> None:
         await self._sock.listen(10)
@@ -112,16 +135,29 @@ class Application[T]:
             try:
                 sock, _address = await self._sock.accept()
                 task = asyncio.create_task(self._handle_new_client(sock))
-                self._tasks.append(task)
-                task.add_done_callback(self._tasks.remove)
+                self._request_tasks.append(task)
+                task.add_done_callback(self._request_tasks.remove)
             except (OSError, asyncio.exceptions.CancelledError):
                 break
 
     async def run(self):
         self._accept_task = asyncio.create_task(self._loop())
         await self._accept_task
-        for task in self._tasks:
+        # We do a small sleep to give time to self._request_tasks
+        # to empty itself naturally. If we wanted to guarantee
+        # that self._request_tasks is really empty, we would
+        # need to sleep at least self._read_request_timeout
+        await asyncio.sleep(self._read_request_timeout / 10.0)
+        # It could be that are still incoming requests that have
+        # not been fully processed so we could cancel a couple
+        # of incoming requests. It's ok since the clients will
+        # retry shortly later.
+        for task in self._request_tasks:
             task.cancel()
+        for task in self._request_tasks:
+            # we wait to make sure the tasks are really cancelled
+            await task
+        self._request_tasks = []
 
     def stop(self) -> None:
         if self._accept_task is not None:

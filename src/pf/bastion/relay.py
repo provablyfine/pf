@@ -78,7 +78,8 @@ class RelayConnection:
         sock = anet.sockets.store.get(socket_name)
         assert sock is not None
         self._sock = sock
-        self._task: asyncio.Task[None] | None = None
+        self._task = asyncio.create_task(self._run())
+        self._task.add_done_callback(_log_task_error)
 
     @property
     def channel_id(self) -> int:
@@ -93,12 +94,9 @@ class RelayConnection:
         host_id: int,
     ) -> RelayConnection:
         """Start a relay connection. Spawns run() as background task."""
-        conn = cls(socket_name, host_mux, host_id)
-        conn._task = asyncio.create_task(conn.run())
-        conn._task.add_done_callback(_log_task_error)
-        return conn
+        return RelayConnection(socket_name, host_mux, host_id)
 
-    async def run(self) -> None:
+    async def _run(self) -> None:
         """Relay data between socket and channel."""
 
         async def user_to_host() -> None:
@@ -148,7 +146,7 @@ class RelayConnection:
         finally:
             await self._host_mux.channel_close(self._channel_id)
             anet.sockets.store.remove(self._socket_name)
-            await self._sock.close()
+            self._sock.close()
 
     def add_done_callback(self, cb: typing.Callable[[asyncio.Task[None]], None]) -> None:
         """Register callback for when this connection closes."""
@@ -183,7 +181,7 @@ class Relay:
         self._client_key = client_key
         self._mux = mux
         self._connections = connections
-        self._task = asyncio.create_task(self.run())
+        self._task = asyncio.create_task(self._run())
         self._task.add_done_callback(_log_task_error)
 
     @classmethod
@@ -200,13 +198,13 @@ class Relay:
         self._connections[socket_name] = connection
         return connection
 
-    async def run(self) -> None:
+    async def _run(self) -> None:
         """Wait for client to close and clean up."""
         try:
             await self._mux.wait_closed()
         finally:
             await self._mux.stop()
-            await self._mux.close_socket()
+            self._mux.close_socket()
             anet.sockets.store.remove(self._socket_name)
 
     def add_done_callback(self, cb: typing.Callable[[tuple[int,str]], None]) -> None:
