@@ -60,7 +60,7 @@ async def test_socket_eof_on_close(anet_socketpair: tuple[anet_socket.Socket, an
     received = await server.recv(4096)
     assert received == b"ping"
 
-    await client.close()
+    client.close()
     eof = await server.recv(4096)
     assert eof == b""
 
@@ -106,9 +106,9 @@ async def test_socket_ipv4_loopback_echo() -> None:
     assert received == test_data
 
     # Cleanup
-    await client_sock.close()
-    await accepted.close()
-    await server_sock.close()
+    client_sock.close()
+    accepted.close()
+    server_sock.close()
 
 
 def _ipv6_available() -> bool:
@@ -147,6 +147,6 @@ async def test_socket_ipv6_loopback_echo() -> None:
     assert received == test_data
 
     # Cleanup
-    await client_sock.close()
-    await accepted.close()
-    await server_sock.close()
+    client_sock.close()
+    accepted.close()
+    server_sock.close()

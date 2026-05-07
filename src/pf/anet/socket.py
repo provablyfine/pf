@@ -58,7 +58,7 @@ class Socket(base.Socket):
     async def shutdown(self, flag: base.Shut) -> None:
         self._sock.shutdown(flag)
 
-    async def close(self) -> None:
+    def close(self) -> None:
         self._sock.close()
 
 

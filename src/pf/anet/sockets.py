@@ -17,9 +17,9 @@ class SocketStore:
         """Register socket by name."""
         self._sockets[name] = sock
 
-    def remove(self, name: str) -> None:
+    def remove(self, name: str) -> base.Socket | None:
         """Unregister socket by name. Idempotent."""
-        self._sockets.pop(name, None)
+        return self._sockets.pop(name, None)
 
     def get(self, name: str) -> base.Socket | None:
         """Get socket by name. Returns None if not found."""

@@ -105,7 +105,7 @@ async def test_ssl_eof_during_handshake(
     await asyncio.sleep(0)
 
     # Close the raw server socket before handshake completes
-    await raw_server.close()
+    raw_server.close()
 
     # Client handshake should raise ConnectionError
     with pytest.raises(ConnectionError):

@@ -23,5 +23,5 @@ class Socket(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def close(self) -> None:
+    def close(self) -> None:
         pass

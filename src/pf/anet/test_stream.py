@@ -56,7 +56,7 @@ async def test_stream_read_until_eof_before_delimiter(
 
     async def server_close() -> None:
         await server.send(b"no newline here")
-        await server.close()
+        server.close()
 
     async def client_read() -> None:
         reader = stream.Reader(client)
@@ -198,7 +198,7 @@ async def test_stream_read_eof_before_n_bytes(anet_socketpair: SocketPair) -> No
 
     async def server_close() -> None:
         await server.send(b"short")
-        await server.close()
+        server.close()
 
     async def client_read() -> None:
         reader = stream.Reader(client)

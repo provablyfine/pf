@@ -111,8 +111,8 @@ class Socket(base.Socket):
             # TCP shutdown
             await self._sock.shutdown(base.Shut.WR)
 
-    async def close(self):
-        await self._sock.close()
+    def close(self):
+        self._sock.close()
 
 
 class SSLContextBase:

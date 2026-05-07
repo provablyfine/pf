@@ -113,8 +113,8 @@ async def anet_socketpair() -> collections.abc.AsyncGenerator[tuple[anet_socket.
     """Create a connected AF_UNIX socketpair wrapped in anet.socket.Socket."""
     a, b = await anet_socket.socketpair(anet_socket.Family.UNIX, anet_socket.Type.STREAM)
     yield a, b
-    await a.close()
-    await b.close()
+    a.close()
+    b.close()
 
 
 @pytest.fixture
@@ -133,5 +133,5 @@ async def tls_socketpair(
     await asyncio.gather(ssl_server.handshake(), ssl_client.handshake())
 
     yield ssl_client, ssl_server
-    await ssl_client.close()
-    await ssl_server.close()
+    ssl_client.close()
+    ssl_server.close()

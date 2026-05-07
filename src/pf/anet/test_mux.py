@@ -18,9 +18,9 @@ async def pair():
     yield server, client
 
     await server.stop()
-    await server.close_socket()
+    server.close_socket()
     await client.stop()
-    await client.close_socket()
+    client.close_socket()
 
     sockets.store.remove("test-server")
     sockets.store.remove("test-client")
@@ -349,7 +349,7 @@ async def test_mux_close_after_half_close_idempotent(pair):
         await client.channel_close_write(local_id)  # Sends EOF
         await client.channel_close(local_id)  # Sends CLOSE, EOF already sent so no duplicate
         await client.stop()
-        await client.close_socket()
+        client.close_socket()
 
     await asyncio.gather(server_task(), client_task())
 
@@ -363,7 +363,7 @@ async def test_client_wait_closed(pair):
         local_id = await server.channel_accept()
         await server.channel_close(local_id)
         await server.stop()
-        await server.close_socket()
+        server.close_socket()
 
     async def client_task():
         local_id = await client.channel_open()
@@ -384,7 +384,7 @@ async def test_server_accept_raises_on_connection_drop():
 
     # Simulate remote TCP server dying — close its socket before any OPEN.
     # _reader_loop will get EOF but currently doesn't unblock _pending_open.
-    await remote_sock.close()
+    remote_sock.close()
 
     # Should raise exceptions.Error, NOT hang forever.
     # With the bug: TimeoutError from wait_for escapes, pytest.raises fails.
@@ -393,6 +393,6 @@ async def test_server_accept_raises_on_connection_drop():
         await asyncio.wait_for(server.channel_accept(), timeout=2.0)
 
     await server.stop()
-    await server.close_socket()
+    server.close_socket()
 
     sockets.store.remove("test-server-drop")

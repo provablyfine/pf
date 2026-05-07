@@ -193,9 +193,9 @@ class Mux:
         """Wait until reader task exits (remote disconnected or closed)."""
         await self._reader_task
 
-    async def close_socket(self) -> None:
+    def close_socket(self) -> None:
         """Close underlying socket."""
-        await self._sock.close()
+        self._sock.close()
 
     async def snapshot(self) -> MuxSnapshot:
         """Stop the reader task and snapshot all mux state."""
