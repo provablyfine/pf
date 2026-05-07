@@ -144,6 +144,7 @@ class Cert:
             .valid_after(valid_after)
             .key_id(identifier.encode("utf-8"))
             .valid_principals([p.encode("utf-8") for p in principals])
+            .serial(serial_number)
         )
         cert = builder.sign(signer.to_crypto())
         return Cert(cert)
@@ -169,6 +170,7 @@ class Cert:
             .valid_after(valid_after)
             .key_id(identifier.encode("utf-8"))
             .valid_principals([p.encode("utf-8") for p in principals])
+            .serial(serial_number)
         )
         if critical_options.force_command is not None:
             builder = builder.add_critical_option(b"force-command", critical_options.force_command.encode("utf-8"))
