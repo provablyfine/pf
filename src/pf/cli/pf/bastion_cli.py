@@ -48,7 +48,7 @@ async def _http_connect(url: str, prefix: str, hostname: str, token: str) -> ane
         raise client.exceptions.UI(f"Unsupported url scheme={u.scheme}")
 
     retval: anet.base.Socket
-    sock = await anet.socket.socket(anet.socket.Family.INET, anet.socket.Type.STREAM)
+    sock = anet.socket.socket(anet.socket.Family.INET, anet.socket.Type.STREAM)
     await sock.connect((connect_host, port))
 
     if u.scheme == "https":
