@@ -14,22 +14,23 @@ logger = logging.getLogger(__name__)
 
 
 async def _run(
-    main_app: http.Application[app.AppState],
-    ctrl_app: http.Application[control_app.AppState],
+    conf: app.Config,
+    main_sock: anet.socket.Socket,
+    ctrl_sock: anet.socket.Socket,
 ) -> None:
-    app_holder = [main_app, ctrl_app]
+    main_state = app.AppState.create(conf, {})
+    main_app = app.create(conf, main_state, main_sock)
+
+    ctrl_state = control_app.AppState(main_state=main_state, main_app=main_app)
+    ctrl_app = control_app.create(ctrl_state, ctrl_sock)
 
     def sigterm_handler() -> None:
-        for a in app_holder:
-            a.stop()
+        ctrl_app.stop()
 
     loop = asyncio.get_running_loop()
     loop.add_signal_handler(signal.SIGTERM, sigterm_handler)
-    main_task = asyncio.create_task(main_app.run())
-    ctrl_task = asyncio.create_task(ctrl_app.run())
 
-    await main_task
-    await ctrl_task
+    await ctrl_app.wait_stop()
 
 
 def run():
@@ -82,10 +83,6 @@ def run():
     control_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     control_socket.bind(args.control_socket)
 
-    main_state = app.AppState.create(conf, {})
-    main_app = app.create(conf, main_state, anet.socket.Socket(sock))
-    ctrl_state = control_app.AppState(main_state)
-    ctrl_app = control_app.create(ctrl_state, anet.socket.Socket(control_socket))
-    asyncio.run(_run(main_app, ctrl_app))
+    asyncio.run(_run(conf, anet.socket.Socket(sock), anet.socket.Socket(control_socket)))
 
     print("Stopped", datetime.datetime.now())

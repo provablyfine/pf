@@ -62,13 +62,29 @@ class Route[T]:
 
 
 class Application[T]:
+    """
+    This application is built around two sets of asyncio tasks:
+
+    - the accept task's sole purpose is to call accept on the listening socket.
+      Once accept returns, it hands over the socket to a "request task"
+
+    - each request task processes a single incoming request over a single
+      connection/socket. It first reads the request from the socket, writes back
+      an error if needed. If it finds a matching handler, it invokes
+      the handler in an atomic conteext with regard to task cancellation
+      (the handler either does not run at all or runs to completion: if the task
+      is cancelled while the handler runs, cancellation is propagated only when
+      the handler completes)
+
+    """
     def __init__(self, state: T, sock: anet.socket.Socket):
         self._state = state
         self._sock = sock
         self._request_tasks: list[asyncio.Task[None]] = []
-        self._accept_task: asyncio.Task[None] | None = None
+        self._accept_task = asyncio.create_task(self._run())
         self._routes: list[Route[T]] = []
         self._read_request_timeout = 1.0
+        self._is_stopped =  asyncio.Event()
 
     def add_route(self, route: Route[T]):
         self._routes.append(route)
@@ -129,7 +145,7 @@ class Application[T]:
         logger.error(f"Unable to find route for host: {request.headers['host']}")
         return Response(status_code=404, title="Unable to find matching route")
 
-    async def _loop(self) -> None:
+    async def _run(self) -> None:
         await self._sock.listen(10)
         while True:
             try:
@@ -139,10 +155,6 @@ class Application[T]:
                 task.add_done_callback(self._request_tasks.remove)
             except (OSError, asyncio.exceptions.CancelledError):
                 break
-
-    async def run(self):
-        self._accept_task = asyncio.create_task(self._loop())
-        await self._accept_task
         # We do a small sleep to give time to self._request_tasks
         # to empty itself naturally. If we wanted to guarantee
         # that self._request_tasks is really empty, we would
@@ -158,7 +170,15 @@ class Application[T]:
             # we wait to make sure the tasks are really cancelled
             await task
         self._request_tasks = []
+        self._is_stopped.set()
 
     def stop(self) -> None:
-        if self._accept_task is not None:
-            self._accept_task.cancel()
+        self._accept_task.cancel()
+
+    async def wait_stop(self) -> None:
+        """
+        When wait_stop returns, the application is not able to accept new
+        incoming requests: the listening socket is still open while the
+        sockets for the requests that were still in flight are closed.
+        """
+        await self._is_stopped.wait()
