@@ -96,6 +96,9 @@ class RelayConnection:
         """Start a relay connection. Spawns run() as background task."""
         return RelayConnection(socket_name, host_mux, host_id)
 
+    def stop(self):
+        self._task.cancel()
+
     async def _run(self) -> None:
         """Relay data between socket and channel."""
 
@@ -181,8 +184,6 @@ class Relay:
         self._client_key = client_key
         self._mux = mux
         self._connections = connections
-        self._task = asyncio.create_task(self._run())
-        self._task.add_done_callback(_log_task_error)
 
     @classmethod
     def start(cls, socket_name: str, client_key: tuple[int, str]) -> Relay:
@@ -191,6 +192,11 @@ class Relay:
         connections: dict[str, RelayConnection] = {}
         return Relay(socket_name, client_key, mux, connections)
 
+    def stop(self):
+        self._mux.stop()
+        for connection in self._connections.values():
+            connection.stop()
+
     async def open_connection(self, socket_name: str) -> RelayConnection:
         """Open a new connection through this relay."""
         host_id = await self._mux.channel_open()
@@ -198,21 +204,11 @@ class Relay:
         self._connections[socket_name] = connection
         return connection
 
-    async def _run(self) -> None:
-        """Wait for client to close and clean up."""
-        try:
-            await self._mux.wait_closed()
-        finally:
-            await self._mux.stop()
-            self._mux.close_socket()
-            anet.sockets.store.remove(self._socket_name)
-
     def add_done_callback(self, cb: typing.Callable[[tuple[int,str]], None]) -> None:
         """Register callback for when this relay closes."""
-        assert self._task is not None
-        def _on_done(_: asyncio.Task[None]) -> None:
+        def _on_done(_: asyncio.Future[None]) -> None:
             cb(self._client_key)
-        self._task.add_done_callback(_on_done)
+        self._mux.add_rx_done_callback(_on_done)
 
     async def snapshot(self) -> RelaySnapshot:
         """Snapshot the relay (stops mux reader, drains state)."""

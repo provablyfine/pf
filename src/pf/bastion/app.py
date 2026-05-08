@@ -34,15 +34,6 @@ class AppSnapshot:
 
     relays: list[relay.RelaySnapshot]
 
-    def socket_names(self) -> list[str]:
-        """All socket names referenced. Caller must transfer these FDs before restore."""
-        names: list[str] = []
-        for r in self.relays:
-            names.append(r.socket_name)
-            for c in r.connections:
-                names.append(c.socket_name)
-        return names
-
     def to_dict(self) -> dict[str, typing.Any]:
         """Serialize to dict."""
         return {"relays": [r.to_dict() for r in self.relays]}
@@ -70,7 +61,10 @@ class AppState:
             relays=relays,
         )
         return state
-        
+
+    def stop(self):
+        for relay in self.relays.values():
+            relay.stop()
 
     async def snapshot(self) -> AppSnapshot:
         relay_snapshots = [await relay.snapshot() for relay in list(self.relays.values())]
@@ -180,9 +174,9 @@ async def connect_handler(state: AppState, request: anet.http.Request, sock_name
     return None
 
 
-def create(conf: Config, state: AppState, sock: anet.socket.Socket) -> http.Application[AppState]:
+def create(conf: Config, state: AppState, sock_name: str) -> http.Application[AppState]:
     log.setup_server("pf-bastion", conf.log_level, conf.log_filename)
-    app = http.Application[AppState](state, sock)
+    app = http.Application[AppState](state, sock_name)
     app.add_route(http.Route[AppState](connect_handler, host=f"connect.{conf.domain_suffix}"))
     app.add_route(http.Route[AppState](register_handler, host=f"register.{conf.domain_suffix}"))
     return app

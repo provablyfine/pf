@@ -11,27 +11,37 @@ logger = logging.getLogger(__name__)
 
 @dataclasses.dataclass
 class AppState:
+    conf: app.Config
     main_state: app.AppState
     main_app: http.Application[app.AppState]
 
 
-async def reload_handler(state: AppState, request: anet.http.Request, sock: anet.base.Socket) -> None:
-    # 1. cancel accept task (task that does a while loop over the accept call)
-    # 2. cancel request tasks (tasks that process incoming requests after an accept call, and create relaying tasks)
-    # 3. cancel relay tasks (tasks that are relaying data)
-    # 4. snapshot main app state
-    # 5. snapshot sockets
-    # --> delete app and app state
-    # 4. restore sockets from snapshots (3)
-    # 5. restore main app state from snapshot (2)
-    # 6. create http main app from main state
-    # 7. save main app state and main app in control state
-    # 8. start main task(s)
+async def reload_handler(state: AppState, request: anet.http.Request, sock_name: str) -> None:
+    # 1. cancel accept task and request tasks
+    state.main_app.stop()
+    # 2. wait until cancel is complete
+    await state.main_app.wait_stop()
+    # 3. cancel all relay tasks
+    state.main_state.stop()
+    # 4. wait until all relay tasks are done
+    await state.main_state.wait_stop()
+    # 5. snapshot main app state
+    main_snapshot = state.main_state.snapshot()
+    # 6. snapshot sockets
+    sockets_snapshot = anet.sockets.store.snapshot()
+    # 7. restore sockets from snapshot
+    anet.sockets.store = anet.sockets.SocketStore.restore(sockets_snapshot)
+    # 8. restore main app state from snapshot:
+    state.main_state = app.AppState.restore(state.conf, main_snapshot)
+    # 9. create http main app from main state
+    state.main_app = http.Application[app.AppState](state.main_state, "main")
+
+    # Now, we can return success to the client
     await http.Response(status_code=200).serialize(sock)
     sock.close()
 
 
-def create(state: AppState, sock: anet.socket.Socket) -> http.Application[AppState]:
-    app = http.Application[AppState](state, sock)
-    app.add_route(http.Route[AppState](reload_handler, method="POST", resource="/reload"))
-    return app
+def create(state: AppState, sock_name: str) -> http.Application[AppState]:
+    a = http.Application[AppState](state, sock_name)
+    a.add_route(http.Route[AppState](reload_handler, method="POST", resource="/reload"))
+    return a

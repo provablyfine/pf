@@ -8,7 +8,7 @@ import signal
 import socket
 
 from .. import anet
-from . import app, control_app, http
+from . import app, control_app
 
 logger = logging.getLogger(__name__)
 
@@ -18,11 +18,16 @@ async def _run(
     main_sock: anet.socket.Socket,
     ctrl_sock: anet.socket.Socket,
 ) -> None:
-    main_state = app.AppState.create(conf, {})
-    main_app = app.create(conf, main_state, main_sock)
+    main_sock_name = "main"
+    ctrl_sock_name = "ctrl"
+    anet.sockets.store.add(main_sock_name, main_sock)
+    anet.sockets.store.add(ctrl_sock_name, ctrl_sock)
 
-    ctrl_state = control_app.AppState(main_state=main_state, main_app=main_app)
-    ctrl_app = control_app.create(ctrl_state, ctrl_sock)
+    main_state = app.AppState.create(conf, {})
+    main_app = app.create(conf, main_state, main_sock_name)
+
+    ctrl_state = control_app.AppState(conf=conf, main_state=main_state, main_app=main_app)
+    ctrl_app = control_app.create(ctrl_state, ctrl_sock_name)
 
     def sigterm_handler() -> None:
         ctrl_app.stop()

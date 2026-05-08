@@ -77,9 +77,9 @@ class Application[T]:
       the handler completes)
 
     """
-    def __init__(self, state: T, sock: anet.socket.Socket):
+    def __init__(self, state: T, sock_name: str):
         self._state = state
-        self._sock = sock
+        self._sock_name = sock_name
         self._request_tasks: list[asyncio.Task[None]] = []
         self._accept_task = asyncio.create_task(self._run())
         self._routes: list[Route[T]] = []
@@ -146,10 +146,12 @@ class Application[T]:
         return Response(status_code=404, title="Unable to find matching route")
 
     async def _run(self) -> None:
-        await self._sock.listen(10)
+        accept_sock = anet.sockets.store.get(self._sock_name)
+        assert accept_sock is not None
+        await accept_sock.listen(10)
         while True:
             try:
-                sock, _address = await self._sock.accept()
+                sock, _address = await accept_sock.accept()
                 task = asyncio.create_task(self._handle_new_client(sock))
                 self._request_tasks.append(task)
                 task.add_done_callback(self._request_tasks.remove)
