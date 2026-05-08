@@ -25,8 +25,11 @@ def _read_tag_ids(tag_id_list: list[int], tag_name_value_list: list[schemas.tag.
 
 
 @router.get("", status_code=200, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
-def list_endpoint() -> schemas.bastion.BastionListResponse:
-    bastions = model.bastion.read_all()
+def list_endpoint(id: int | None = None) -> schemas.bastion.BastionListResponse:
+    query = {}
+    if id is not None:
+        query['id'] = id
+    bastions = model.bastion.read_all(**query)
     return schemas.bastion.BastionListResponse(bastions=converter_module.bastion_list_to_schema(bastions))
 
 

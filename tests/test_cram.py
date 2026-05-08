@@ -21,6 +21,7 @@ from . import utils
         "access-control-identity-read.t.jinja",
         "validation-error.t",
         "generic-exception-handler.t",
+        "bastion-crud.t",
         "tenant.t",
         "tenant-isolation.t",
         "auth.t",
