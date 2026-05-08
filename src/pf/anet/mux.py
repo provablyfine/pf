@@ -205,7 +205,7 @@ class Mux:
         """Close underlying socket."""
         self._sock.close()
 
-    async def snapshot(self) -> MuxSnapshot:
+    def snapshot(self) -> MuxSnapshot:
         """Snapshot all mux state."""
         assert self._reader_task.done()
         channels = [ch.to_snapshot() for ch in self._channels.values()]

@@ -66,8 +66,12 @@ class AppState:
         for relay in self.relays.values():
             relay.stop()
 
-    async def snapshot(self) -> AppSnapshot:
-        relay_snapshots = [await relay.snapshot() for relay in list(self.relays.values())]
+    async def wait_stop(self):
+        for relay in self.relays.values():
+            await relay.wait_stop()
+
+    def snapshot(self) -> AppSnapshot:
+        relay_snapshots = [relay.snapshot() for relay in list(self.relays.values())]
         return AppSnapshot(relays=relay_snapshots)
 
     @classmethod

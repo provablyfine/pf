@@ -37,6 +37,8 @@ async def reload_handler(state: AppState, request: anet.http.Request, sock_name:
     state.main_app = http.Application[app.AppState](state.main_state, "main")
 
     # Now, we can return success to the client
+    sock = anet.sockets.store.get(sock_name)
+    assert sock is not None
     await http.Response(status_code=200).serialize(sock)
     sock.close()
 

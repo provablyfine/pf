@@ -99,6 +99,9 @@ class RelayConnection:
     def stop(self):
         self._task.cancel()
 
+    async def wait_stop(self):
+        await self._task
+
     async def _run(self) -> None:
         """Relay data between socket and channel."""
 
@@ -156,7 +159,7 @@ class RelayConnection:
         assert self._task is not None
         self._task.add_done_callback(cb)
 
-    async def snapshot(self) -> RelayConnectionSnapshot:
+    def snapshot(self) -> RelayConnectionSnapshot:
         """Snapshot this connection (identifiers only; data is in the mux)."""
         return RelayConnectionSnapshot(socket_name=self._socket_name, channel_id=self._channel_id)
 
@@ -197,6 +200,11 @@ class Relay:
         for connection in self._connections.values():
             connection.stop()
 
+    async def wait_stop(self):
+        await self._mux.wait_stop()
+        for connection in self._connections.values():
+            await connection.wait_stop()
+
     async def open_connection(self, socket_name: str) -> RelayConnection:
         """Open a new connection through this relay."""
         host_id = await self._mux.channel_open()
@@ -210,10 +218,10 @@ class Relay:
             cb(self._client_key)
         self._mux.add_rx_done_callback(_on_done)
 
-    async def snapshot(self) -> RelaySnapshot:
+    def snapshot(self) -> RelaySnapshot:
         """Snapshot the relay (stops mux reader, drains state)."""
-        mux_snapshot = await self._mux.snapshot()
-        connections = [await conn.snapshot() for conn in self._connections.values()]
+        mux_snapshot = self._mux.snapshot()
+        connections = [conn.snapshot() for conn in self._connections.values()]
         return RelaySnapshot(
             client_key=self._client_key,
             socket_name=self._socket_name,
