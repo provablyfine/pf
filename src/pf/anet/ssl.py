@@ -3,6 +3,7 @@ from __future__ import annotations
 import enum
 import logging
 import ssl as _ssl
+import typing
 
 from . import base, socket
 
@@ -22,11 +23,15 @@ logger = logging.getLogger(__name__)
 class Socket(base.Socket):
     def __init__(self, sock: socket.Socket, ctx: _ssl.SSLContext, server_side: bool, server_hostname: str | None):
         self._sock = sock
+        self._ctx = ctx
         self._in_bio = _ssl.MemoryBIO()
         self._out_bio = _ssl.MemoryBIO()
         self._ssl_object = ctx.wrap_bio(
             self._in_bio, self._out_bio, server_side=server_side, server_hostname=server_hostname
         )
+
+    def fileno(self) -> int:
+        return self._sock.fileno()
 
     async def handshake(self):
         while True:
@@ -111,7 +116,21 @@ class Socket(base.Socket):
             # TCP shutdown
             await self._sock.shutdown(base.Shut.WR)
 
-    def close(self):
+    def getsockname(self) -> typing.Any:
+        return self._sock.getsockname()
+
+    async def bind(self, address: typing.Any) -> None:
+        await self._sock.bind(address)
+
+    async def listen(self, n: int) -> None:
+        await self._sock.listen(n)
+
+    async def accept(self) -> tuple[Socket, typing.Any]:
+        inner_sock, addr = await self._sock.accept()
+        ssl_sock = Socket(inner_sock, self._ctx, server_side=True, server_hostname=None)
+        return ssl_sock, addr
+
+    def close(self) -> None:
         self._sock.close()
 
 

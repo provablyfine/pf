@@ -175,21 +175,29 @@ class Mux:
         self._open_results: dict[int, asyncio.Future[int]] = {}
         self._write_lock = asyncio.Lock()
         self._reader_task = asyncio.create_task(self._reader_loop())
+        def _done_cb(fut: asyncio.Future[None]) -> None:
+            if fut.cancelled():
+                # If the process is being killed for good, we do not need to cleanup sockets
+                # If the process is dying to reload, we need to keep sockets around so they
+                # can be restored later.
+                return
+            sockets.store.remove(self._socket_name)
+            self._sock.close()
+        self._reader_task.add_done_callback(_done_cb)
 
     @classmethod
     def create(cls, socket_name: str) -> Mux:
         """Create a fresh Mux backed by the named socket."""
         return cls(socket_name, {}, 0, asyncio.Queue[int]())
 
-    async def stop(self) -> None:
-        """Stop reader task. Waits for any in-progress dispatch to complete."""
-        self._reader_task.cancel()
-        try:
-            await self._reader_task
-        except asyncio.CancelledError:
-            pass
+    def add_rx_done_callback(self, callback: typing.Callable[[asyncio.Future[None]], typing.Any]):
+        self._reader_task.add_done_callback(callback)
 
-    async def wait_closed(self) -> None:
+    def stop(self) -> None:
+        """Stop reader task."""
+        self._reader_task.cancel()
+
+    async def wait_stop(self) -> None:
         """Wait until reader task exits (remote disconnected or closed)."""
         await self._reader_task
 
@@ -198,9 +206,8 @@ class Mux:
         self._sock.close()
 
     async def snapshot(self) -> MuxSnapshot:
-        """Stop the reader task and snapshot all mux state."""
-        await self.stop()
-
+        """Snapshot all mux state."""
+        assert self._reader_task.done()
         channels = [ch.to_snapshot() for ch in self._channels.values()]
 
         pending_open: list[int] = []

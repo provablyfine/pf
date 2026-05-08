@@ -111,7 +111,7 @@ def ssl_contexts(tmp_path_factory: pytest.TempPathFactory) -> tuple[anet_ssl.SSL
 @pytest.fixture
 async def anet_socketpair() -> collections.abc.AsyncGenerator[tuple[anet_socket.Socket, anet_socket.Socket], None]:
     """Create a connected AF_UNIX socketpair wrapped in anet.socket.Socket."""
-    a, b = await anet_socket.socketpair(anet_socket.Family.UNIX, anet_socket.Type.STREAM)
+    a, b = anet_socket.socketpair(anet_socket.Family.UNIX, anet_socket.Type.STREAM)
     yield a, b
     a.close()
     b.close()

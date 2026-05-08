@@ -1,6 +1,7 @@
 import abc
 import enum
 import socket as _socket
+import typing
 
 
 class Shut(enum.IntEnum):
@@ -10,6 +11,10 @@ class Shut(enum.IntEnum):
 
 
 class Socket(abc.ABC):
+    @abc.abstractmethod
+    def fileno(self) -> int:
+        pass
+
     @abc.abstractmethod
     async def send(self, data: bytes) -> int:
         pass
@@ -24,4 +29,20 @@ class Socket(abc.ABC):
 
     @abc.abstractmethod
     def close(self) -> None:
+        pass
+
+    @abc.abstractmethod
+    def getsockname(self) -> typing.Any:
+        pass
+
+    @abc.abstractmethod
+    async def bind(self, address: typing.Any) -> None:
+        pass
+
+    @abc.abstractmethod
+    async def listen(self, n: int) -> None:
+        pass
+
+    @abc.abstractmethod
+    async def accept(self) -> tuple["Socket", typing.Any]:
         pass

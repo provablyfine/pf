@@ -30,6 +30,9 @@ class Socket(base.Socket):
         assert loop is not None
         return loop
 
+    def fileno(self) -> int:
+        return self._sock.fileno()
+
     async def connect(self, address: typing.Any) -> None:
         await self._loop.sock_connect(self._sock, address)
 
@@ -62,7 +65,7 @@ class Socket(base.Socket):
         self._sock.close()
 
 
-async def socket(
+def socket(
     family: Family,
     type: Type,
     fileno: int | None = None,
@@ -71,7 +74,7 @@ async def socket(
     return Socket(sock)
 
 
-async def socketpair(
+def socketpair(
     family: Family,
     type: Type,
 ) -> tuple[Socket, Socket]:

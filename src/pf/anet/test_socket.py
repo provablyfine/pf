@@ -87,13 +87,13 @@ async def test_socket_shutdown_wr_causes_eof(anet_socketpair: tuple[anet_socket.
 async def test_socket_ipv4_loopback_echo() -> None:
     """Real TCP on 127.0.0.1 with listen/accept/connect."""
     # Server: create socket, bind, listen
-    server_sock = await anet_socket.socket(anet_socket.Family.INET, anet_socket.Type.STREAM)
+    server_sock = anet_socket.socket(anet_socket.Family.INET, anet_socket.Type.STREAM)
     await server_sock.bind(("127.0.0.1", 0))
     await server_sock.listen(1)
     server_addr = server_sock.getsockname()
 
     # Client: create socket, connect
-    client_sock = await anet_socket.socket(anet_socket.Family.INET, anet_socket.Type.STREAM)
+    client_sock = anet_socket.socket(anet_socket.Family.INET, anet_socket.Type.STREAM)
     await client_sock.connect(server_addr)
 
     # Server: accept connection
@@ -128,13 +128,13 @@ def _ipv6_available() -> bool:
 async def test_socket_ipv6_loopback_echo() -> None:
     """Real TCP on ::1 with listen/accept/connect."""
     # Server: create socket, bind, listen
-    server_sock = await anet_socket.socket(anet_socket.Family.INET6, anet_socket.Type.STREAM)
+    server_sock = anet_socket.socket(anet_socket.Family.INET6, anet_socket.Type.STREAM)
     await server_sock.bind(("::1", 0, 0, 0))
     await server_sock.listen(1)
     server_addr = server_sock.getsockname()
 
     # Client: create socket, connect
-    client_sock = await anet_socket.socket(anet_socket.Family.INET6, anet_socket.Type.STREAM)
+    client_sock = anet_socket.socket(anet_socket.Family.INET6, anet_socket.Type.STREAM)
     await client_sock.connect(server_addr)
 
     # Server: accept connection

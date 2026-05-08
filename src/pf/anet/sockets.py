@@ -3,15 +3,20 @@
 from __future__ import annotations
 
 import collections.abc
+import dataclasses
 
-from . import base
+from . import base, socket
+
+@dataclasses.dataclass
+class SocketStoreSnapshot:
+    sockets: dict[str,int]
 
 
 class SocketStore:
     """Global singleton store for named sockets."""
 
-    def __init__(self) -> None:
-        self._sockets: dict[str, base.Socket] = {}
+    def __init__(self, sockets: dict[str, base.Socket] | None = None) -> None:
+        self._sockets: dict[str, base.Socket] = {} if sockets is None else sockets
 
     def add(self, name: str, sock: base.Socket) -> None:
         """Register socket by name."""
@@ -32,6 +37,13 @@ class SocketStore:
     def __len__(self) -> int:
         """Number of registered sockets."""
         return len(self._sockets)
+
+    def snapshot(self) -> SocketStoreSnapshot:
+        return SocketStoreSnapshot(sockets={name: s.fileno() for name, s in self._sockets.items()})
+
+    @classmethod
+    def restore(cls, snapshot: SocketStoreSnapshot) -> SocketStore:
+        return SocketStore(sockets={name: socket.socket(socket.Family.INET, socket.Type.STREAM, fileno=fd) for name, fd in snapshot.sockets.items()})
 
 
 store: SocketStore = SocketStore()

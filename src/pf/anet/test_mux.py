@@ -8,7 +8,7 @@ from . import exceptions, mux, sockets
 
 @pytest.fixture
 async def pair():
-    server_sock, client_sock = await anet.socket.socketpair(anet.socket.Family.UNIX, anet.socket.Type.STREAM)
+    server_sock, client_sock = anet.socket.socketpair(anet.socket.Family.UNIX, anet.socket.Type.STREAM)
 
     sockets.store.add("test-server", server_sock)
     sockets.store.add("test-client", client_sock)
@@ -17,9 +17,11 @@ async def pair():
     client = mux.Mux.create("test-client")
     yield server, client
 
-    await server.stop()
+    server.stop()
+    await server.wait_stop()
     server.close_socket()
-    await client.stop()
+    client.stop()
+    await client.wait_stop()
     client.close_socket()
 
     sockets.store.remove("test-server")
@@ -348,7 +350,8 @@ async def test_mux_close_after_half_close_idempotent(pair):
         local_id = await client.channel_open()
         await client.channel_close_write(local_id)  # Sends EOF
         await client.channel_close(local_id)  # Sends CLOSE, EOF already sent so no duplicate
-        await client.stop()
+        client.stop()
+        await client.wait_stop()
         client.close_socket()
 
     await asyncio.gather(server_task(), client_task())
@@ -362,13 +365,14 @@ async def test_client_wait_closed(pair):
     async def server_task():
         local_id = await server.channel_accept()
         await server.channel_close(local_id)
-        await server.stop()
+        server.stop()
+        await server.wait_stop()
         server.close_socket()
 
     async def client_task():
         local_id = await client.channel_open()
         await client.channel_read(local_id)  # EOF from server close
-        await client.wait_closed()  # returns once server disconnects
+        await client.wait_stop()  # returns once server disconnects
 
     await asyncio.gather(server_task(), client_task())
 
@@ -376,7 +380,7 @@ async def test_client_wait_closed(pair):
 @pytest.mark.anyio
 async def test_server_accept_raises_on_connection_drop():
     """accept() must raise when remote socket closes, not hang forever."""
-    server_sock, remote_sock = await anet.socket.socketpair(anet.socket.Family.UNIX, anet.socket.Type.STREAM)
+    server_sock, remote_sock = anet.socket.socketpair(anet.socket.Family.UNIX, anet.socket.Type.STREAM)
 
     sockets.store.add("test-server-drop", server_sock)
 
@@ -392,7 +396,8 @@ async def test_server_accept_raises_on_connection_drop():
     with pytest.raises(exceptions.Error):
         await asyncio.wait_for(server.channel_accept(), timeout=2.0)
 
-    await server.stop()
+    server.stop()
+    await server.wait_stop()
     server.close_socket()
 
     sockets.store.remove("test-server-drop")

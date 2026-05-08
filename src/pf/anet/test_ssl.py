@@ -12,6 +12,44 @@ import pf.anet.ssl as anet_ssl
 
 
 @pytest.mark.anyio
+async def test_ssl_listen_accept_handshake(
+    ssl_contexts: tuple[anet_ssl.SSLContext, anet_ssl.SSLContext],
+) -> None:
+    """Full lifecycle: bind, listen, accept, handshake, exchange data."""
+    server_ctx, client_ctx = ssl_contexts
+
+    # Create raw listening socket, bind, and listen via SSL wrapper
+    server_sock = anet_socket.socket(anet_socket.Family.INET, anet_socket.Type.STREAM)
+    ssl_server: anet_ssl.Socket = await server_ctx.wrap_socket(server_sock, server_side=True)
+    await ssl_server.bind(("127.0.0.1", 0))
+    server_addr: tuple[str, int] = ssl_server.getsockname()
+    await ssl_server.listen(1)
+
+    # Client connect
+    client_sock = anet_socket.socket(anet_socket.Family.INET, anet_socket.Type.STREAM)
+    await client_sock.connect(server_addr)
+    ssl_client: anet_ssl.Socket = await client_ctx.wrap_socket(client_sock, server_side=False, server_hostname=None)
+
+    # Server accept returns a new SSL socket
+    accepted_sock, _addr = await ssl_server.accept()
+    assert isinstance(accepted_sock, anet_ssl.Socket)
+
+    # Both sides perform handshake
+    await asyncio.gather(accepted_sock.handshake(), ssl_client.handshake())
+
+    # Exchange data
+    test_data: bytes = b"listen-accept-test"
+    await ssl_client.send(test_data)
+    received = await accepted_sock.recv(65536)
+    assert received == test_data
+
+    # Cleanup
+    ssl_client.close()
+    accepted_sock.close()
+    ssl_server.close()
+
+
+@pytest.mark.anyio
 async def test_ssl_handshake_bidirectional_echo(tls_socketpair: tuple[anet_ssl.Socket, anet_ssl.Socket]) -> None:
     """After handshake, exchange data over TLS."""
     client, server = tls_socketpair
