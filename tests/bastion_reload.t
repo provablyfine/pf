@@ -5,8 +5,26 @@ Initialize server and login
 Create bastion resource
   $ pfa -c config.json bastion create --url http://localhost:$BASTION_PORT
 
+Check bastion is alive before first reload
+  $ curl -si --unix-socket $BASTION_CTRL_SOCK -X POST http://localhost/ping
+  HTTP/1.1 200 OK\r (esc)
+  \r (esc)
+
+No active connections
+  $ curl -s --unix-socket $BASTION_CTRL_SOCK http://localhost/registered
+  {"clients": []} (no-eol)
+
 Reload with no active connections
   $ curl -sf --unix-socket $BASTION_CTRL_SOCK -X POST http://localhost/reload
+
+Check bastion is still alive
+  $ curl -si --unix-socket $BASTION_CTRL_SOCK -X POST http://localhost/ping
+  HTTP/1.1 200 OK\r (esc)
+  \r (esc)
+
+Still no active connections
+  $ curl -s --unix-socket $BASTION_CTRL_SOCK http://localhost/registered
+  {"clients": []} (no-eol)
 
 Provision host identity
   $ pfa -c config.json identity create -n host
@@ -25,6 +43,16 @@ Start echo server and register with bastion
   $ BASTION_REGISTER_PID=$!
   $ sleep 1
 
+Check bastion is still alive
+  $ curl -si --unix-socket $BASTION_CTRL_SOCK -X POST http://localhost/ping
+  HTTP/1.1 200 OK\r (esc)
+  \r (esc)
+
+List registered connection
+  $ curl -s --unix-socket $BASTION_CTRL_SOCK http://localhost/registered
+  {"clients": [{"tenant_id": 1, "name": "host", "nconnections": 0}]} (no-eol)
+
+
 Provision user identity
   $ pfa -c config.json identity create -n user
   $ USER_ID=$(pfa -c config.json identity list -n user -q)
@@ -34,19 +62,36 @@ Provision user identity
   $ pf -c user.json accept --invitation=$INVITATION --key user-account
   $ pf -c user.json login
 
-#Verify connection works before reload
-#  $ echo "hello" | timeout 2 pf -c user.json bastion connect --url http://localhost:$BASTION_PORT --host host
-#  hello
-#
-#Reload with live registered connection
-#  $ curl -sf --unix-socket $BASTION_CTRL_SOCK -X POST http://localhost/reload
-#  {"status":"ok"} (no-eol)
-#
-#Verify connection still works after reload
-#  $ echo "hello" | timeout 2 pf -c user.json bastion connect --url http://localhost:$BASTION_PORT --host host
-#  hello
-#
-#Cleanup
-#  $ pkill -P -9 $BASTION_REGISTER_PID 2>/dev/null || true
-#  $ kill $BASTION_REGISTER_PID 2>/dev/null || true
-#  $ kill -TERM $ECHO_PID 2>/dev/null || true
+Verify connection works before reload
+  $ echo "hello" | timeout 2 pf -c user.json bastion connect --url http://localhost:$BASTION_PORT --host host
+  hello
+
+Check bastion is still alive
+  $ curl -si --unix-socket $BASTION_CTRL_SOCK -X POST http://localhost/ping
+  HTTP/1.1 200 OK\r (esc)
+  \r (esc)
+
+Check that registered connection is still here after connecting to it
+  $ curl -s --unix-socket $BASTION_CTRL_SOCK http://localhost/registered
+  {"clients": [{"tenant_id": 1, "name": "host", "nconnections": 0}]} (no-eol)
+
+Reload with live registered connection
+  $ curl -sf --unix-socket $BASTION_CTRL_SOCK -X POST http://localhost/reload
+
+Check bastion is still alive
+  $ curl -si --unix-socket $BASTION_CTRL_SOCK -X POST http://localhost/ping
+  HTTP/1.1 200 OK\r (esc)
+  \r (esc)
+
+Verify registered connection is still here after reload
+  $ curl -s --unix-socket $BASTION_CTRL_SOCK http://localhost/registered
+  {"clients": [{"tenant_id": 1, "name": "host", "nconnections": 0}]} (no-eol)
+
+Verify connection still works after reload
+  $ echo "hello" | timeout 2 pf -c user.json bastion connect --url http://localhost:$BASTION_PORT --host host
+  hello
+
+Cleanup
+  $ pkill -P -9 $BASTION_REGISTER_PID 2>/dev/null || true
+  $ kill $BASTION_REGISTER_PID 2>/dev/null || true
+  $ kill -TERM $ECHO_PID 2>/dev/null || true
