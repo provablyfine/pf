@@ -4,6 +4,7 @@ import typing
 
 T = typing.TypeVar("T")
 
+
 async def run(coro: typing.Awaitable[T]) -> T:
     """
     Await coro with deferred cancellation.

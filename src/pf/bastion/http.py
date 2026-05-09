@@ -15,7 +15,7 @@ T = typing.TypeVar("T")
 logger = logging.getLogger(__name__)
 
 
-def response(status_code: int, headers: dict[str,str]|None=None, body: bytes=b"") -> anet.http.Response:
+def response(status_code: int, headers: dict[str, str] | None = None, body: bytes = b"") -> anet.http.Response:
     mapping = {
         200: "OK",
         400: "Bad Request",
@@ -24,7 +24,7 @@ def response(status_code: int, headers: dict[str,str]|None=None, body: bytes=b""
         500: "Internal Server Error",
     }
     reason = mapping.get(status_code, "Unexpected")
-    response_headers: dict[str,str] = {}
+    response_headers: dict[str, str] = {}
     if len(body) > 0:
         response_headers["Content-Length"] = str(len(body))
     if headers is None:
@@ -55,7 +55,7 @@ def problem_response(status_code: int, title: str) -> anet.http.Response:
     return json_response(status_code=status_code, json={"title": title})
 
 
-RouteHandler = typing.Callable[[T, anet.http.Request, str], typing.Awaitable[anet.http.Response|None]]
+RouteHandler = typing.Callable[[T, anet.http.Request, str], typing.Awaitable[anet.http.Response | None]]
 
 
 @dataclasses.dataclass
@@ -82,6 +82,7 @@ class Application[T]:
       the handler completes)
 
     """
+
     def __init__(self, state: T, sock: anet.base.Socket):
         self._state = state
         self._accept_sock = sock
@@ -89,7 +90,7 @@ class Application[T]:
         self._accept_task = asyncio.create_task(self._run())
         self._routes: list[Route[T]] = []
         self._read_request_timeout = 1.0
-        self._is_stopped =  asyncio.Event()
+        self._is_stopped = asyncio.Event()
 
     @property
     def accept_socket(self) -> anet.base.Socket:

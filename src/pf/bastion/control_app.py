@@ -3,7 +3,7 @@ from __future__ import annotations
 import dataclasses
 import logging
 
-from .. import anet, log
+from .. import anet
 from . import app, http
 
 logger = logging.getLogger(__name__)
@@ -43,12 +43,17 @@ async def ping_handler(state: AppState, request: anet.http.Request, sock_name: s
     return http.response(status_code=200)
 
 
-async def list_registered_handler(state: AppState, request: anet.http.Request, sock_name: str) -> anet.http.Response | None:
-    client_keys = [{
-        "tenant_id": tenant_id,
-        "name": name,
-        "nconnections": relay.nconnections,
-    } for (tenant_id, name), relay in state.main_state.relays.items()]
+async def list_registered_handler(
+    state: AppState, request: anet.http.Request, sock_name: str
+) -> anet.http.Response | None:
+    client_keys = [
+        {
+            "tenant_id": tenant_id,
+            "name": name,
+            "nconnections": relay.nconnections,
+        }
+        for (tenant_id, name), relay in state.main_state.relays.items()
+    ]
     return http.json_response(status_code=200, json={"clients": client_keys})
 
 

@@ -7,9 +7,10 @@ import dataclasses
 
 from . import base, socket
 
+
 @dataclasses.dataclass
 class SocketStoreSnapshot:
-    sockets: dict[str,int]
+    sockets: dict[str, int]
 
 
 class SocketStore:
@@ -45,7 +46,12 @@ class SocketStore:
 
     @classmethod
     def restore(cls, snapshot: SocketStoreSnapshot) -> SocketStore:
-        return SocketStore(sockets={name: socket.socket(socket.Family.INET, socket.Type.STREAM, fileno=fd) for name, fd in snapshot.sockets.items()})
+        return SocketStore(
+            sockets={
+                name: socket.socket(socket.Family.INET, socket.Type.STREAM, fileno=fd)
+                for name, fd in snapshot.sockets.items()
+            }
+        )
 
 
 store: SocketStore = SocketStore()

@@ -3,9 +3,9 @@ from __future__ import annotations
 import asyncio
 import enum
 import functools
+import logging
 import socket as _socket
 import typing
-import logging
 
 from . import base
 

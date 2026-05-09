@@ -1,61 +1,30 @@
 from __future__ import annotations
 
 import asyncio
-import dataclasses
 import logging
 import typing
 
-from .. import anet, log
+import pydantic
+
+from .. import anet
 
 logger = logging.getLogger(__name__)
 
 
-@dataclasses.dataclass
-class RelayConnectionSnapshot:
+class RelayConnectionSnapshot(pydantic.BaseModel):
     """Snapshot of a relay connection."""
 
     socket_name: str
     channel_id: int
 
-    def to_dict(self) -> dict[str, typing.Any]:
-        """Serialize to dict."""
-        return {"socket_name": self.socket_name, "channel_id": self.channel_id}
 
-    @classmethod
-    def from_dict(cls, d: dict[str, typing.Any]) -> RelayConnectionSnapshot:
-        """Deserialize from dict."""
-        return cls(socket_name=str(d["socket_name"]), channel_id=int(d["channel_id"]))
-
-
-@dataclasses.dataclass
-class RelaySnapshot:
+class RelaySnapshot(pydantic.BaseModel):
     """Snapshot of a registered relay for persistence."""
 
     client_key: tuple[int, str]
     socket_name: str
     mux_snapshot: anet.mux.MuxSnapshot
     connections: list[RelayConnectionSnapshot]
-
-    def to_dict(self) -> dict[str, typing.Any]:
-        """Serialize to dict."""
-        return {
-            "client_key": list(self.client_key),
-            "socket_name": self.socket_name,
-            "mux_snapshot": self.mux_snapshot.to_dict(),
-            "connections": [c.to_dict() for c in self.connections],
-        }
-
-    @classmethod
-    def from_dict(cls, d: dict[str, typing.Any]) -> RelaySnapshot:
-        """Deserialize from dict."""
-        ck = d["client_key"]
-        return cls(
-            client_key=(int(ck[0]), str(ck[1])),
-            socket_name=str(d["socket_name"]),
-            mux_snapshot=anet.mux.MuxSnapshot.from_dict(d["mux_snapshot"]),
-            connections=[RelayConnectionSnapshot.from_dict(c) for c in d["connections"]],
-        )
-
 
 
 class RelayConnection:
@@ -75,6 +44,7 @@ class RelayConnection:
         assert sock is not None
         self._sock = sock
         self._task = asyncio.create_task(self._run())
+
         def _done_cb(fut: asyncio.Future[None]) -> None:
             if fut.cancelled():
                 # If the process is being killed for good, we do not need to cleanup sockets
@@ -83,6 +53,7 @@ class RelayConnection:
                 return
             anet.sockets.store.remove(self._socket_name)
             self._sock.close()
+
         self._task.add_done_callback(_done_cb)
 
     @property
@@ -219,6 +190,7 @@ class Relay:
         """Open a new connection through this relay."""
         host_id = await self._mux.channel_open()
         connection = RelayConnection.start(socket_name, self._mux, host_id)
+
         def _on_done(fut: asyncio.Future[None]) -> None:
             if fut.cancelled():
                 return
@@ -231,12 +203,14 @@ class Relay:
         self._connections[socket_name] = connection
         return connection
 
-    def add_done_callback(self, cb: typing.Callable[[tuple[int,str]], None]) -> None:
+    def add_done_callback(self, cb: typing.Callable[[tuple[int, str]], None]) -> None:
         """Register callback for when this relay closes."""
+
         def _on_done(future: asyncio.Future[None]) -> None:
             if future.cancelled():
                 return
             cb(self._client_key)
+
         self._mux.add_rx_done_callback(_on_done)
 
     def snapshot(self) -> RelaySnapshot:

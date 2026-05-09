@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import dataclasses
 import logging
-import typing
 
 import jwt
+import pydantic
 
 from .. import anet
 from . import http, relay, trusted_key
@@ -28,20 +28,11 @@ class Token:
     tenant_id: int
 
 
-@dataclasses.dataclass
-class AppSnapshot:
+class AppSnapshot(pydantic.BaseModel):
     """Snapshot of full application relay state."""
 
     relays: list[relay.RelaySnapshot]
 
-    def to_dict(self) -> dict[str, typing.Any]:
-        """Serialize to dict."""
-        return {"relays": [r.to_dict() for r in self.relays]}
-
-    @classmethod
-    def from_dict(cls, d: dict[str, typing.Any]) -> AppSnapshot:
-        """Deserialize from dict."""
-        return cls(relays=[relay.RelaySnapshot.from_dict(r) for r in d["relays"]])
 
 @dataclasses.dataclass
 class AppState:
@@ -77,8 +68,10 @@ class AppState:
     @classmethod
     def restore(cls, conf: Config, snap: AppSnapshot) -> AppState:
         relays = {r.client_key: relay.Relay.restore(r) for r in snap.relays}
+
         def _on_relay_done(client_key: tuple[int, str]) -> None:
             relays.pop(client_key, None)
+
         for r in relays.values():
             r.add_done_callback(_on_relay_done)
         return AppState.create(conf, relays)
@@ -144,6 +137,7 @@ async def register_handler(state: AppState, request: anet.http.Request, sock_nam
 
     def _on_relay_done(client_key: tuple[int, str]) -> None:
         state.relays.pop(client_key, None)
+
     r.add_done_callback(_on_relay_done)
     return None
 

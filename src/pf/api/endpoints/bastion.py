@@ -28,7 +28,7 @@ def _read_tag_ids(tag_id_list: list[int], tag_name_value_list: list[schemas.tag.
 def list_endpoint(id: int | None = None) -> schemas.bastion.BastionListResponse:
     query = {}
     if id is not None:
-        query['id'] = id
+        query["id"] = id
     bastions = model.bastion.read_all(**query)
     return schemas.bastion.BastionListResponse(bastions=converter_module.bastion_list_to_schema(bastions))
 
