@@ -77,14 +77,18 @@ class Application[T]:
       the handler completes)
 
     """
-    def __init__(self, state: T, sock_name: str):
+    def __init__(self, state: T, sock: anet.base.Socket):
         self._state = state
-        self._sock_name = sock_name
+        self._accept_sock = sock
         self._request_tasks: list[asyncio.Task[None]] = []
         self._accept_task = asyncio.create_task(self._run())
         self._routes: list[Route[T]] = []
         self._read_request_timeout = 1.0
         self._is_stopped =  asyncio.Event()
+
+    @property
+    def accept_socket(self) -> anet.base.Socket:
+        return self._accept_sock
 
     def add_route(self, route: Route[T]):
         self._routes.append(route)
@@ -102,6 +106,7 @@ class Application[T]:
         finally:
             if request is None:
                 # We protect ourselves against badly-behaving clients that are not able to send a valid http request
+                logger.info("Close socket: unable to parse request")
                 sock.close()
         if request is None:
             return
@@ -112,12 +117,14 @@ class Application[T]:
             response = await self._do_handle_new_client(request, sock_name)
             if response is None:
                 return
-            await response.serialize(sock)
-            anet.sockets.store.remove(sock_name)
-            sock.close()
+            request_sock = anet.sockets.store.remove(sock_name)
+            assert request_sock is not None
+            await response.serialize(request_sock)
+            request_sock.close()
         except asyncio.CancelledError:
-            anet.sockets.store.remove(sock_name)
-            sock.close()
+            request_sock = anet.sockets.store.remove(sock_name)
+            assert request_sock is not None
+            request_sock.close()
 
     async def _do_handle_new_client(self, request: anet.http.Request, sock_name: str) -> Response | None:
         if request.version != "HTTP/1.1":
@@ -146,12 +153,11 @@ class Application[T]:
         return Response(status_code=404, title="Unable to find matching route")
 
     async def _run(self) -> None:
-        accept_sock = anet.sockets.store.get(self._sock_name)
-        assert accept_sock is not None
-        await accept_sock.listen(10)
+        await self._accept_sock.listen(10)
         while True:
             try:
-                sock, _address = await accept_sock.accept()
+                sock, _address = await self._accept_sock.accept()
+                logger.error(f"accepted: {sock} on {self._accept_sock}")
                 task = asyncio.create_task(self._handle_new_client(sock))
                 self._request_tasks.append(task)
                 task.add_done_callback(self._request_tasks.remove)

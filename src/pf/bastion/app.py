@@ -6,7 +6,7 @@ import typing
 
 import jwt
 
-from .. import anet, log
+from .. import anet
 from . import http, relay, trusted_key
 
 logger = logging.getLogger(__name__)
@@ -178,8 +178,8 @@ async def connect_handler(state: AppState, request: anet.http.Request, sock_name
     return None
 
 
-def create(conf: Config, state: AppState, sock_name: str) -> http.Application[AppState]:
-    app = http.Application[AppState](state, sock_name)
+def create(conf: Config, state: AppState, sock: anet.base.Socket) -> http.Application[AppState]:
+    app = http.Application[AppState](state, sock)
     app.add_route(http.Route[AppState](connect_handler, host=f"connect.{conf.domain_suffix}"))
     app.add_route(http.Route[AppState](register_handler, host=f"register.{conf.domain_suffix}"))
     return app

@@ -16,7 +16,7 @@ class AppState:
     main_app: http.Application[app.AppState]
 
 
-async def reload_handler(state: AppState, request: anet.http.Request, sock_name: str) -> None:
+async def reload_handler(state: AppState, request: anet.http.Request, sock_name: str) -> http.Response | None:
     # 1. cancel accept task and request tasks
     state.main_app.stop()
     # 2. wait until cancel is complete
@@ -34,16 +34,17 @@ async def reload_handler(state: AppState, request: anet.http.Request, sock_name:
     # 8. restore main app state from snapshot:
     state.main_state = app.AppState.restore(state.conf, main_snapshot)
     # 9. create http main app from main state
-    state.main_app = http.Application[app.AppState](state.main_state, "main")
+    state.main_app = app.create(state.conf, state.main_state, state.main_app.accept_socket)
 
-    # Now, we can return success to the client
-    sock = anet.sockets.store.get(sock_name)
-    assert sock is not None
-    await http.Response(status_code=200).serialize(sock)
-    sock.close()
+    return http.Response(status_code=200)
 
 
-def create(state: AppState, sock_name: str) -> http.Application[AppState]:
-    a = http.Application[AppState](state, sock_name)
+async def ping_handler(state: AppState, request: anet.http.Request, sock_name: str) -> http.Response | None:
+    return http.Response(status_code=200)
+
+
+def create(state: AppState, sock: anet.base.Socket) -> http.Application[AppState]:
+    a = http.Application[AppState](state, sock)
     a.add_route(http.Route[AppState](reload_handler, method="POST", resource="/reload"))
+    a.add_route(http.Route[AppState](ping_handler, method="POST", resource="/ping"))
     return a
