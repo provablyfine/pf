@@ -67,8 +67,7 @@ class AppState:
             relay.stop()
 
     async def wait_stop(self):
-        while len(self.relays) > 0:
-            _client_key, relay = self.relays.popitem()
+        for relay in self.relays.values():
             await relay.wait_stop()
 
     def snapshot(self) -> AppSnapshot:
