@@ -17,10 +17,16 @@ class Message:
     @classmethod
     async def deserialize(cls, sock: base.Socket) -> Message:
         reader = stream.Reader(sock)
-        start_line = (await reader.read_until(b"\r\n"))[:-2].decode("ascii")
+        try:
+            start_line = (await reader.read_until(b"\r\n"))[:-2].decode("ascii")
+        except EOFError:
+            raise exceptions.Error("Unable to read start line before connection was closed")
         headers: dict[str, str] = {}
         while True:
-            line = (await reader.read_until(b"\r\n"))[:-2].decode("ascii")
+            try:
+                line = (await reader.read_until(b"\r\n"))[:-2].decode("ascii")
+            except EOFError:
+                raise exceptions.Error("Unable to last line before connection was closed")
             if line == "":
                 break
             colon = line.find(":")

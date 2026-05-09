@@ -5,8 +5,11 @@ import enum
 import functools
 import socket as _socket
 import typing
+import logging
 
 from . import base
+
+logger = logging.getLogger(__name__)
 
 
 class Family(enum.IntEnum):
