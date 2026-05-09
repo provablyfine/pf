@@ -67,7 +67,8 @@ class AppState:
             relay.stop()
 
     async def wait_stop(self):
-        for relay in self.relays.values():
+        while len(self.relays) > 0:
+            _client_key, relay = self.relays.popitem()
             await relay.wait_stop()
 
     def snapshot(self) -> AppSnapshot:
@@ -128,14 +129,14 @@ def verify_token(state: AppState, request: anet.http.Request) -> Token | None:
     return Token(name=payload["name"], tenant_id=payload["tenant_id"])
 
 
-async def register_handler(state: AppState, request: anet.http.Request, sock_name: str) -> http.Response | None:
+async def register_handler(state: AppState, request: anet.http.Request, sock_name: str) -> anet.http.Response | None:
     token = verify_token(state, request)
     if token is None:
-        return http.Response(status_code=403)
+        return http.response(status_code=403)
 
     sock = anet.sockets.store.get(sock_name)
     assert sock is not None
-    await http.Response(status_code=200).serialize(sock)
+    await http.response(status_code=200).serialize(sock)
 
     logger.info(f"Registering identity {token.tenant_id}/{token.name}")
     client_key = (token.tenant_id, token.name)
@@ -148,31 +149,31 @@ async def register_handler(state: AppState, request: anet.http.Request, sock_nam
     return None
 
 
-async def connect_handler(state: AppState, request: anet.http.Request, sock_name: str) -> http.Response | None:
+async def connect_handler(state: AppState, request: anet.http.Request, sock_name: str) -> anet.http.Response | None:
     token = verify_token(state, request)
     if token is None:
-        return http.Response(status_code=403)
+        return http.response(status_code=403)
 
     colon = request.resource_target.find(":")
     if colon == -1:
         logger.error("Invalid request resource_target: missing colon")
-        return http.Response(status_code=400)
+        return http.response(status_code=400)
 
     host = request.resource_target[:colon]
     port = request.resource_target[colon + 1 :]
     if not port.isdigit():
         logger.error("Invalid request resource_target: invalid port")
-        return http.Response(status_code=400)
+        return http.response(status_code=400)
 
     logger.info(f"Connect to {token.tenant_id}/{host}")
     client_key = (token.tenant_id, host)
     relay = state.relays.get(client_key)
     if relay is None:
-        return http.Response(status_code=404, title="No relay found")
+        return http.problem_response(status_code=404, title="No relay found")
 
     sock = anet.sockets.store.get(sock_name)
     assert sock is not None
-    await http.Response(status_code=200).serialize(sock)
+    await http.response(status_code=200).serialize(sock)
 
     await relay.open_connection(sock_name)
     return None

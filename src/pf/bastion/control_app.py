@@ -16,7 +16,7 @@ class AppState:
     main_app: http.Application[app.AppState]
 
 
-async def reload_handler(state: AppState, request: anet.http.Request, sock_name: str) -> http.Response | None:
+async def reload_handler(state: AppState, request: anet.http.Request, sock_name: str) -> anet.http.Response | None:
     # 1. cancel accept task and request tasks
     state.main_app.stop()
     # 2. wait until cancel is complete
@@ -36,15 +36,21 @@ async def reload_handler(state: AppState, request: anet.http.Request, sock_name:
     # 9. create http main app from main state
     state.main_app = app.create(state.conf, state.main_state, state.main_app.accept_socket)
 
-    return http.Response(status_code=200)
+    return http.response(status_code=200)
 
 
-async def ping_handler(state: AppState, request: anet.http.Request, sock_name: str) -> http.Response | None:
-    return http.Response(status_code=200)
+async def ping_handler(state: AppState, request: anet.http.Request, sock_name: str) -> anet.http.Response | None:
+    return http.response(status_code=200)
+
+
+async def list_registered_handler(state: AppState, request: anet.http.Request, sock_name: str) -> anet.http.Response | None:
+    client_keys = [{"tenant_id": tenant_id, "name": name} for tenant_id, name in state.main_state.relays.keys()]
+    return http.json_response(status_code=200, json={"clients": client_keys})
 
 
 def create(state: AppState, sock: anet.base.Socket) -> http.Application[AppState]:
     a = http.Application[AppState](state, sock)
     a.add_route(http.Route[AppState](reload_handler, method="POST", resource="/reload"))
     a.add_route(http.Route[AppState](ping_handler, method="POST", resource="/ping"))
+    a.add_route(http.Route[AppState](list_registered_handler, method="GET", resource="/registered"))
     return a

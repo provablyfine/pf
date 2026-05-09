@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
-import json
+import json as _json
 import logging
 import traceback
 import typing
@@ -15,42 +15,47 @@ T = typing.TypeVar("T")
 logger = logging.getLogger(__name__)
 
 
-@dataclasses.dataclass
-class Response:
-    status_code: int
-    title: str | None = None
-
-    def _reason(self) -> str:
-        mapping = {
-            200: "OK",
-            400: "Bad Request",
-            403: "Forbidden",
-            404: "Not Found",
-            500: "Internal Server Error",
-        }
-        return mapping.get(self.status_code, "Unexpected")
-
-    async def serialize(self, sock: anet.base.Socket):
-        if self.title is not None:
-            response_body = json.dumps({"title": self.title}).encode("utf-8")
-            response_headers = {
-                "Content-Type": "application/json",
-                "Content-Length": str(len(response_body)),
-            }
-        else:
-            response_headers = {}
-            response_body = b""
-        response = anet.http.Response(
-            status_code=self.status_code,
-            reason=self._reason(),
-            version="HTTP/1.1",
-            headers=response_headers,
-            body=response_body,
-        )
-        await response.serialize(sock)
+def response(status_code: int, headers: dict[str,str]|None=None, body: bytes=b"") -> anet.http.Response:
+    mapping = {
+        200: "OK",
+        400: "Bad Request",
+        403: "Forbidden",
+        404: "Not Found",
+        500: "Internal Server Error",
+    }
+    reason = mapping.get(status_code, "Unexpected")
+    response_headers: dict[str,str] = {}
+    if len(body) > 0:
+        response_headers["Content-Length"] = str(len(body))
+    if headers is None:
+        headers = {}
+    for k, v in headers.items():
+        response_headers[k] = v
+    response = anet.http.Response(
+        status_code=status_code,
+        reason=reason,
+        version="HTTP/1.1",
+        headers=response_headers,
+        body=body,
+    )
+    return response
 
 
-RouteHandler = typing.Callable[[T, anet.http.Request, str], typing.Awaitable[Response|None]]
+def json_response(status_code: int, json: typing.Any) -> anet.http.Response:
+    return response(
+        status_code=status_code,
+        headers={
+            "Content-Type": "application/json",
+        },
+        body=_json.dumps(json).encode("utf-8"),
+    )
+
+
+def problem_response(status_code: int, title: str) -> anet.http.Response:
+    return json_response(status_code=status_code, json={"title": title})
+
+
+RouteHandler = typing.Callable[[T, anet.http.Request, str], typing.Awaitable[anet.http.Response|None]]
 
 
 @dataclasses.dataclass
@@ -126,9 +131,9 @@ class Application[T]:
             assert request_sock is not None
             request_sock.close()
 
-    async def _do_handle_new_client(self, request: anet.http.Request, sock_name: str) -> Response | None:
+    async def _do_handle_new_client(self, request: anet.http.Request, sock_name: str) -> anet.http.Response | None:
         if request.version != "HTTP/1.1":
-            return Response(status_code=400, title="Invalid HTTP version")
+            return problem_response(status_code=400, title="Invalid HTTP version")
 
         for route in self._routes:
             if route.method is not None:
@@ -146,11 +151,11 @@ class Application[T]:
                 response = await atomic.run(route.handler(self._state, request, sock_name))
             except Exception:
                 logger.error(traceback.format_exc())
-                return Response(status_code=500, title="Error while executing request")
+                return problem_response(status_code=500, title="Error while executing request")
             return response
 
         logger.error(f"Unable to find route for host: {request.headers['host']}")
-        return Response(status_code=404, title="Unable to find matching route")
+        return problem_response(status_code=404, title="Unable to find matching route")
 
     async def _run(self) -> None:
         await self._accept_sock.listen(10)
