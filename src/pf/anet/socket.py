@@ -36,6 +36,9 @@ class Socket(base.Socket):
     def fileno(self) -> int:
         return self._sock.fileno()
 
+    def detach(self) -> int:
+        return self._sock.detach()
+
     async def connect(self, address: typing.Any) -> None:
         await self._loop.sock_connect(self._sock, address)
 

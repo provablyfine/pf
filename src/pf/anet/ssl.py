@@ -33,6 +33,9 @@ class Socket(base.Socket):
     def fileno(self) -> int:
         return self._sock.fileno()
 
+    def detach(self) -> int:
+        return self._sock.detach()
+
     async def handshake(self):
         while True:
             try:

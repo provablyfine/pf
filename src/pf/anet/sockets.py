@@ -39,7 +39,9 @@ class SocketStore:
         return len(self._sockets)
 
     def snapshot(self) -> SocketStoreSnapshot:
-        return SocketStoreSnapshot(sockets={name: s.fileno() for name, s in self._sockets.items()})
+        # We use detach() instead of fileno() below to make sure the socket will not close the associated
+        # file descriptor if it is garbage collected later.
+        return SocketStoreSnapshot(sockets={name: s.detach() for name, s in self._sockets.items()})
 
     @classmethod
     def restore(cls, snapshot: SocketStoreSnapshot) -> SocketStore:

@@ -16,6 +16,10 @@ class Socket(abc.ABC):
         pass
 
     @abc.abstractmethod
+    def detach(self) -> int:
+        pass
+
+    @abc.abstractmethod
     async def send(self, data: bytes) -> int:
         pass
 
