@@ -12,6 +12,7 @@ import enum
 import struct
 import typing
 
+from .. import log
 from . import exceptions, sockets
 
 
@@ -199,7 +200,11 @@ class Mux:
 
     async def wait_stop(self) -> None:
         """Wait until reader task exits (remote disconnected or closed)."""
-        await self._reader_task
+        try:
+            await self._reader_task
+        except asyncio.CancelledError:
+            # task already cancelled
+            pass
 
     def close_socket(self) -> None:
         """Close underlying socket."""
@@ -228,7 +233,7 @@ class Mux:
         pending_open = asyncio.Queue[int]()
         for local_id in snap.pending_open:
             pending_open.put_nowait(local_id)
-        return cls(snap.socket_name, channels, snap.next_id, pending_open)
+        return Mux(snap.socket_name, channels, snap.next_id, pending_open)
 
     async def channel_accept(self) -> int:
         """Accept next incoming channel from peer. Returns local_id."""
@@ -325,8 +330,6 @@ class Mux:
                 except asyncio.CancelledError:
                     await dispatch_task  # let dispatch finish before propagating
                     raise
-        except asyncio.CancelledError:
-            pass
         except Exception as e:
             error = exceptions.Error(f"Channel multiplexer reader failed: {e}")
             for _, future in list(self._open_results.items()):
