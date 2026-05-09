@@ -7,7 +7,7 @@ import os.path
 import signal
 import socket
 
-from .. import anet
+from .. import anet, log
 from . import app, control_app
 
 logger = logging.getLogger(__name__)
@@ -82,12 +82,17 @@ def run():
             log_level=args.debug,
             log_filename=args.log_filename,
         )
+    log.setup_server("pf-bastion", conf.log_level, conf.log_filename)
 
     print(f"Starting Bastion on {host}:{port} using FD {sock.fileno()}")
 
     control_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     control_socket.bind(args.control_socket)
 
-    asyncio.run(_run(conf, anet.socket.Socket(sock), anet.socket.Socket(control_socket)))
+    asyncio.run(_run(
+        conf=conf,
+        main_sock=anet.socket.Socket(sock),
+        ctrl_sock=anet.socket.Socket(control_socket),
+    ))
 
     print("Stopped", datetime.datetime.now())

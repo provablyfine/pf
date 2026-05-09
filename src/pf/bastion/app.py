@@ -179,7 +179,6 @@ async def connect_handler(state: AppState, request: anet.http.Request, sock_name
 
 
 def create(conf: Config, state: AppState, sock_name: str) -> http.Application[AppState]:
-    log.setup_server("pf-bastion", conf.log_level, conf.log_filename)
     app = http.Application[AppState](state, sock_name)
     app.add_route(http.Route[AppState](connect_handler, host=f"connect.{conf.domain_suffix}"))
     app.add_route(http.Route[AppState](register_handler, host=f"register.{conf.domain_suffix}"))
