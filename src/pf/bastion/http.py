@@ -91,6 +91,7 @@ class Application[T]:
         self._routes: list[Route[T]] = []
         self._read_request_timeout = 1.0
         self._is_stopped = asyncio.Event()
+        self._started = asyncio.Event()
 
     @property
     def accept_socket(self) -> anet.base.Socket:
@@ -160,6 +161,7 @@ class Application[T]:
 
     async def _run(self) -> None:
         await self._accept_sock.listen(10)
+        self._started.set()
         while True:
             try:
                 sock, _address = await self._accept_sock.accept()
@@ -196,3 +198,7 @@ class Application[T]:
         sockets for the requests that were still in flight are closed.
         """
         await self._is_stopped.wait()
+
+    async def wait_started(self) -> None:
+        """Wait until the application is listening on its socket."""
+        await self._started.wait()

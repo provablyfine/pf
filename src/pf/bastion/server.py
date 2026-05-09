@@ -8,7 +8,7 @@ import signal
 import socket
 
 from .. import anet, log
-from . import app, control_app
+from . import app, control_app, systemd
 
 logger = logging.getLogger(__name__)
 
@@ -24,11 +24,16 @@ async def _run(
     ctrl_state = control_app.AppState(conf=conf, main_state=main_state, main_app=main_app)
     ctrl_app = control_app.create(ctrl_state, ctrl_sock)
 
+    loop = asyncio.get_running_loop()
+
     def sigterm_handler() -> None:
         ctrl_app.stop()
 
-    loop = asyncio.get_running_loop()
     loop.add_signal_handler(signal.SIGTERM, sigterm_handler)
+
+    # Wait for both apps to start listening, then notify systemd
+    await asyncio.gather(main_app.wait_started(), ctrl_app.wait_started())
+    systemd.notify("READY=1")
 
     await ctrl_app.wait_stop()
 
@@ -49,9 +54,21 @@ def run():
     parser.add_argument("--control-socket", default=default_control_socket, help="Unix socket path for control API")
     args = parser.parse_args()
 
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    sock.bind(("127.0.0.1", args.port))
+    # Try to get sockets from systemd socket activation
+    activated = systemd.listen_fds()
+    if activated:
+        sock = activated[0]
+        if len(activated) >= 2:
+            control_socket = activated[1]
+        else:
+            control_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            control_socket.bind(args.control_socket)
+    else:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind(("127.0.0.1", args.port))
+        control_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        control_socket.bind(args.control_socket)
 
     host, port = sock.getsockname()
 
@@ -80,9 +97,6 @@ def run():
     log.setup_server("pf-bastion", conf.log_level, conf.log_filename)
 
     print(f"Starting Bastion on {host}:{port} using FD {sock.fileno()}")
-
-    control_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    control_socket.bind(args.control_socket)
 
     asyncio.run(
         _run(

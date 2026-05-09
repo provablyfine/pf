@@ -25,8 +25,9 @@ async def reload_handler(state: AppState, request: anet.http.Request, sock_name:
     state.main_state.stop()
     # 4. wait until all relay tasks are done
     await state.main_state.wait_stop()
-    # 5. snapshot main app state (serialize/deserialize to verify round-trip integrity)
+    # 5. snapshot main app state
     main_snapshot = state.main_state.snapshot()
+    # serialize/deserialize to verify round-trip integrity
     main_snapshot_dump = main_snapshot.model_dump_json()
     main_snapshot_undump = app.AppSnapshot.model_validate_json(main_snapshot_dump)
     # 6. snapshot sockets
