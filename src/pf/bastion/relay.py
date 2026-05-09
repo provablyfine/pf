@@ -5,14 +5,9 @@ import dataclasses
 import logging
 import typing
 
-from .. import anet
+from .. import anet, log
 
 logger = logging.getLogger(__name__)
-
-
-def _log_task_error(task: asyncio.Task[None]) -> None:
-    if not task.cancelled() and task.exception() is not None:
-        logger.error("Connection task failed", exc_info=task.exception())
 
 
 @dataclasses.dataclass
@@ -76,10 +71,19 @@ class RelayConnection:
         self._host_mux = host_mux
         self._channel_id = host_id
         sock = anet.sockets.store.get(socket_name)
+        logger.info(f"sock_name={socket_name}")
         assert sock is not None
         self._sock = sock
         self._task = asyncio.create_task(self._run())
-        self._task.add_done_callback(_log_task_error)
+        def _done_cb(fut: asyncio.Future[None]) -> None:
+            if fut.cancelled():
+                # If the process is being killed for good, we do not need to cleanup sockets
+                # If the process is dying to reload, we need to keep sockets around so they
+                # can be restored later.
+                return
+            anet.sockets.store.remove(self._socket_name)
+            self._sock.close()
+        self._task.add_done_callback(_done_cb)
 
     @property
     def channel_id(self) -> int:
@@ -100,7 +104,11 @@ class RelayConnection:
         self._task.cancel()
 
     async def wait_stop(self):
-        await self._task
+        try:
+            await self._task
+        except asyncio.CancelledError:
+            # await a cancelled task raises
+            pass
 
     async def _run(self) -> None:
         """Relay data between socket and channel."""
@@ -151,8 +159,6 @@ class RelayConnection:
             await asyncio.gather(user_to_host(), host_to_user())
         finally:
             await self._host_mux.channel_close(self._channel_id)
-            anet.sockets.store.remove(self._socket_name)
-            self._sock.close()
 
     def add_done_callback(self, cb: typing.Callable[[asyncio.Task[None]], None]) -> None:
         """Register callback for when this connection closes."""
@@ -188,6 +194,10 @@ class Relay:
         self._mux = mux
         self._connections = connections
 
+    @property
+    def nconnections(self):
+        return len(self._connections)
+
     @classmethod
     def start(cls, socket_name: str, client_key: tuple[int, str]) -> Relay:
         """Start a relay. Spawns run() as background task."""
@@ -209,12 +219,23 @@ class Relay:
         """Open a new connection through this relay."""
         host_id = await self._mux.channel_open()
         connection = RelayConnection.start(socket_name, self._mux, host_id)
+        def _on_done(fut: asyncio.Future[None]) -> None:
+            if fut.cancelled():
+                return
+            connection = self._connections.get(socket_name)
+            if connection is None:
+                return
+            del self._connections[socket_name]
+
+        connection.add_done_callback(_on_done)
         self._connections[socket_name] = connection
         return connection
 
     def add_done_callback(self, cb: typing.Callable[[tuple[int,str]], None]) -> None:
         """Register callback for when this relay closes."""
-        def _on_done(_: asyncio.Future[None]) -> None:
+        def _on_done(future: asyncio.Future[None]) -> None:
+            if future.cancelled():
+                return
             cb(self._client_key)
         self._mux.add_rx_done_callback(_on_done)
 
