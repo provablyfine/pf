@@ -92,6 +92,5 @@ Verify connection still works after reload
   hello
 
 Cleanup
-  $ pkill -P -9 $BASTION_REGISTER_PID 2>/dev/null || true
   $ kill $BASTION_REGISTER_PID 2>/dev/null || true
   $ kill -TERM $ECHO_PID 2>/dev/null || true

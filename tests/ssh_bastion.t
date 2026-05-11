@@ -61,5 +61,4 @@ User connects to host via pf ssh through bastion
   [2]
 
 Cleanup
-  $ pkill -P -9 $BASTION_REGISTER_PID 2>/dev/null || true
   $ kill $BASTION_REGISTER_PID 2>/dev/null || true

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import dataclasses
+import functools
 import logging
 import signal
 import sys
@@ -133,6 +134,8 @@ async def register_async(socket_path: str|None, url: str, token: str, local_port
             task = asyncio.create_task(_handle_channel(server, local_id, local_port))
             background_tasks.add(task)
             task.add_done_callback(background_tasks.discard)
+    except Exception:
+        pass
     finally:
         anet.sockets.store.remove(socket_name)
 
@@ -144,18 +147,23 @@ def _register_function(args: argparse.Namespace) -> None:
     if not login.has_valid_session(c):
         raise client.exceptions.UI("Not logged in. Run 'pf login' first.")
 
-    sc = client.sync.Client(c, timeout=args.timeout)
+    async def _run():
+        loop = asyncio.get_running_loop()
 
-    active_tasks: dict[int, asyncio.Task[None]] = {}
-    stop_event = asyncio.Event()
+        sc = client.sync.Client(c, timeout=args.timeout)
 
-    def signal_handler(sig: int, frame: types.FrameType | None) -> None:
-        stop_event.set()
+        active_tasks: dict[int, asyncio.Task[None]] = {}
+        stop_event = asyncio.Event()
 
-    old_handler = signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
+        def done_callback(bastion_id: int, task: asyncio.Task[None]) -> None:
+            active_tasks.pop(bastion_id, None)
 
-    async def poll_bastions():
+        def signal_handler() -> None:
+            stop_event.set()
+
+        loop.add_signal_handler(signal.SIGTERM, signal_handler)
+        loop.add_signal_handler(signal.SIGINT, signal_handler)
+
         while not stop_event.is_set():
             try:
                 bastions_response = sc.list_self_bastions()
@@ -177,16 +185,17 @@ def _register_function(args: argparse.Namespace) -> None:
 
                     task = asyncio.create_task(register_async(args.socket_path, bastion.url, token, args.port))
                     active_tasks[bastion_id] = task
+                    task.add_done_callback(functools.partial(done_callback, bastion_id))
                     print(f"Registered bastion {bastion_id}")
             except Exception as e:
                 logger.debug(f"Poll error: {e}")
 
-            await asyncio.sleep(args.poll_interval)
+            try:
+                await asyncio.wait_for(stop_event.wait(), timeout=args.poll_interval)
+            except asyncio.TimeoutError:
+                pass
 
-    asyncio.run(poll_bastions())
-
-    signal.signal(signal.SIGINT, old_handler)
-    signal.signal(signal.SIGTERM, old_handler)
+    asyncio.run(_run())
 
 
 async def connect_async(socket_path: str|None, url: str, token: str, hostname: str) -> None:
@@ -219,8 +228,14 @@ async def connect_async(socket_path: str|None, url: str, token: str, hostname: s
             stdout_writer.write(data)
             logger.debug(f"stdout: write={len(data)}")
 
-    await asyncio.gather(forward_stdin(), forward_stdout())
+    task = asyncio.gather(forward_stdin(), forward_stdout())
 
+    def signal_handler() -> None:
+        task.cancel()
+
+    loop.add_signal_handler(signal.SIGTERM, signal_handler)
+    loop.add_signal_handler(signal.SIGINT, signal_handler)
+    await task
 
 def _connect_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
