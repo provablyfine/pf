@@ -11,6 +11,7 @@ import socket
 import subprocess
 import tempfile
 import time
+import typing
 
 import filelock
 import psutil
@@ -173,6 +174,81 @@ CMD ["/bin/sh", "/run/start.sh"]
     return image_id
 
 
+def _build_bastion_image() -> str:
+    pf_bastion_control_socket = """[Unit]
+Description=PF Bastion Control Socket
+
+[Socket]
+ListenStream=/run/pf/bastion-control.sock
+SocketMode=0666
+FileDescriptorName=pf-bastion-control
+Service=pf-bastion.service
+
+[Install]
+WantedBy=sockets.target
+"""
+    pf_bastion_socket = """[Unit]
+Description=PF Bastion Socket
+
+[Socket]
+ListenStream=/run/pf/bastion.sock
+SocketMode=0666
+FileDescriptorName=pf-bastion-main
+Service=pf-bastion.service
+
+[Install]
+WantedBy=sockets.target pf-bastion-control.socket
+"""
+
+    pf_bastion_service = """[Unit]
+Description=PF Bastion
+After=network.target
+
+[Service]
+Type=notify
+NotifyAccess=all
+PassEnvironment=ISSUER_PREFIX
+ExecStart=/bin/sh -c "exec pf-bastion -ddd --log-filename=/run/pf/pf-bastion.log --issuer-prefix \\"${ISSUER_PREFIX}\\" --port-file /run/pf/bastion.port --domain-suffix localhost --control-socket /run/pf/bastion-control.sock"
+FileDescriptorStoreMax=128
+"""
+
+    containerfile = f"""FROM fedora:latest
+RUN dnf install -y python3 uv systemd && dnf clean all
+RUN systemctl mask systemd-resolved systemd-oomd
+
+COPY . /tmp/pf/
+RUN uv pip install --system --break-system-packages /tmp/pf
+
+RUN mkdir -p /etc/systemd/system
+
+RUN cat <<'EOF' > /etc/systemd/system/pf-bastion-control.socket
+{pf_bastion_control_socket}
+EOF
+
+RUN cat <<'EOF' > /etc/systemd/system/pf-bastion.socket
+{pf_bastion_socket}
+EOF
+
+RUN cat <<'EOF' > /etc/systemd/system/pf-bastion.service
+{pf_bastion_service}
+EOF
+
+RUN systemctl enable pf-bastion.socket pf-bastion-control.socket
+
+CMD ["/sbin/init"]
+"""
+
+    with tempfile.NamedTemporaryFile(mode="w+", suffix=".Containerfile") as container_file:
+        container_file.write(containerfile)
+        container_file.flush()
+
+        stdout = _run(["podman", "build", "--quiet", "--file", container_file.name, tld()])
+        image_id = stdout.strip("\n")
+        if "\n" in image_id:
+            assert False, image_id
+    return image_id
+
+
 @pytest.fixture
 def sshd(request, sshd_image):
     with tempfile.TemporaryDirectory() as ssh_keys_directory:
@@ -312,6 +388,13 @@ def api(request):
         api_ready = True
         break
     if not api_ready:
+        api_log_file.flush()
+        with open(api_log) as f:
+            log_content = f.read()
+        print(f"\n=== API Server Startup Failed ===")
+        print(f"Config: {api_config}")
+        print(f"Port file: {api_port_file}")
+        print(f"Log:\n{log_content}")
         raise Exception("Unable to start pf server")
 
     yield Api(api_port)
@@ -336,6 +419,48 @@ class BastionServer:
     control_socket: str
 
 
+def _start_bastion_process(
+    api_port: int,
+    port_file: str,
+    log_file: str,
+    control_socket: str,
+    port: int = 0,
+    env: dict | None = None,
+    pass_fds: tuple = (),
+    preexec_fn=None,
+) -> tuple[subprocess.Popen, typing.IO]:
+    """Helper to start a bastion process. Returns (popen, log_file_handle)."""
+    if env is None:
+        env = copy.copy(os.environ)
+
+    log_f = open(log_file, "a" if os.path.exists(log_file) else "w")
+    issuer_prefix = f"http://127.0.0.1:{api_port}/pf/t"
+    args = [
+        "scripts/pf-bastion",
+        "--issuer-prefix",
+        issuer_prefix,
+        "--port-file",
+        port_file,
+        "--domain-suffix",
+        "localhost",
+        "--control-socket",
+        control_socket,
+    ]
+    if port > 0:
+        args.extend(["-p", str(port)])
+
+    popen = subprocess.Popen(
+        args,
+        stdout=log_f,
+        stderr=subprocess.STDOUT,
+        text=True,
+        env=env,
+        pass_fds=pass_fds,
+        preexec_fn=preexec_fn,
+    )
+    return popen, log_f
+
+
 @pytest.fixture
 def bastion_server(request, api):
     tmp_dir = tempfile.TemporaryDirectory()
@@ -343,26 +468,7 @@ def bastion_server(request, api):
     log_file = os.path.join(tmp_dir.name, "bastion.log")
     control_socket = os.path.join(tmp_dir.name, "pf-bastion-control.sock")
 
-    env = copy.copy(os.environ)
-    log_f = open(log_file, "w+")
-    issuer_prefix = f"http://127.0.0.1:{api.port}/pf/t"
-    popen = subprocess.Popen(
-        [
-            "scripts/pf-bastion",
-            "--issuer-prefix",
-            issuer_prefix,
-            "--port-file",
-            port_file,
-            "--domain-suffix",
-            "localhost",
-            "--control-socket",
-            control_socket,
-        ],
-        stdout=log_f,
-        stderr=subprocess.STDOUT,
-        text=True,
-        env=env,
-    )
+    popen, log_f = _start_bastion_process(api.port, port_file, log_file, control_socket)
 
     start = time.time()
     port = None
@@ -405,6 +511,58 @@ def bastion_server(request, api):
             return
     tmp_dir.cleanup()
 
+
+@dataclasses.dataclass(frozen=True)
+class BastionContainer:
+    """Bastion server running in podman under real systemd."""
+
+    main_socket: str
+    control_socket: str
+    container_id: str
+
+
+@pytest.fixture
+def bastion_container(request, api, tmp_path):
+    """Start bastion under real systemd in a podman container."""
+    bastion_image = _build_bastion_image()
+
+    # Create shared directories
+    shared_dir = tmp_path / "run-pf"
+    shared_dir.mkdir()
+    logs_dir = tmp_path / "journal"
+    logs_dir.mkdir()
+
+    # Run bastion container with port forwarding
+    command = [
+        "podman",
+        "run",
+        "--detach",
+        "--systemd=always",
+        "--network=host",
+        "--volume",
+        f"{shared_dir}:/run/pf:rw",
+        "--volume",
+        f"{logs_dir}:/var/log/journal:rw",
+        "--env",
+        f"ISSUER_PREFIX=http://127.0.0.1:{api.port}/pf/t",
+        bastion_image,
+    ]
+    container_id = subprocess.check_output(command).decode().strip()
+
+
+    control_socket = str(shared_dir / "bastion-control.sock")
+    main_socket = str(shared_dir / "bastion.sock")
+
+    print(f"main={main_socket} control={control_socket}")
+    yield BastionContainer(main_socket=main_socket, control_socket=control_socket, container_id=container_id)
+
+    subprocess.run(["podman", "stop", "-t", "5", container_id])
+
+    if hasattr(request.node, "rep_call"):
+        if request.node.rep_call.failed:
+            print(f"Bastion container ID: {container_id}")
+            print(f"Systemd journal logs: {logs_dir}")
+            print(f"Control socket and port file: {shared_dir}")
 
 @pytest.fixture(autouse=True)
 def pf_log_directory(tmp_path, request):

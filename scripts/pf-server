@@ -10,6 +10,7 @@
 #   "coverage",
 #   "pydantic",
 #   "pyjwt",
+#   "PyYAML",
 #   "pf",
 # ]
 # [tool.uv.sources]

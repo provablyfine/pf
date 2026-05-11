@@ -8,7 +8,7 @@ import signal
 import socket
 
 from .. import anet, log
-from . import app, control_app, systemd
+from . import app, control_app, fdstore, systemd
 
 logger = logging.getLogger(__name__)
 
@@ -17,8 +17,12 @@ async def _run(
     conf: app.Config,
     main_sock: anet.socket.Socket,
     ctrl_sock: anet.socket.Socket,
+    app_snapshot: app.AppSnapshot | None,
 ) -> None:
-    main_state = app.AppState.create(conf, {})
+    if app_snapshot is not None:
+        main_state = app.AppState.restore(conf, app_snapshot)
+    else:
+        main_state = app.AppState.create(conf, {})
     main_app = app.create(conf, main_state, main_sock)
 
     ctrl_state = control_app.AppState(conf=conf, main_state=main_state, main_app=main_app)
@@ -26,8 +30,20 @@ async def _run(
 
     loop = asyncio.get_running_loop()
 
-    def sigterm_handler() -> None:
+    async def _sigterm_handler() -> None:
+        # Save state to fdstore BEFORE notifying STOPPING=1
+        # (fdstore_receiver closes the socket when it sees STOPPING=1)
+        ctrl_state.main_app.stop()
+        await ctrl_state.main_app.wait_stop()
+        ctrl_state.main_state.stop()
+        await ctrl_state.main_state.wait_stop()
+        await fdstore.save(ctrl_state)
+        # Now notify systemd that we're stopping
+        systemd.notify("STOPPING=1")
         ctrl_app.stop()
+
+    def sigterm_handler() -> None:
+        loop.create_task(_sigterm_handler())  # noqa: RUF006
 
     loop.add_signal_handler(signal.SIGTERM, sigterm_handler)
 
@@ -54,28 +70,6 @@ def run():
     parser.add_argument("--control-socket", default=default_control_socket, help="Unix socket path for control API")
     args = parser.parse_args()
 
-    # Try to get sockets from systemd socket activation
-    activated = systemd.listen_fds()
-    if activated:
-        sock = activated[0]
-        if len(activated) >= 2:
-            control_socket = activated[1]
-        else:
-            control_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            control_socket.bind(args.control_socket)
-    else:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sock.bind(("127.0.0.1", args.port))
-        control_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        control_socket.bind(args.control_socket)
-
-    host, port = sock.getsockname()
-
-    if args.port_file is not None:
-        with open(args.port_file, "w+") as f:
-            f.write(str(port))
-
     if args.dev:
         conf = app.Config(
             domain_suffix=args.domain_suffix,
@@ -96,13 +90,45 @@ def run():
         )
     log.setup_server("pf-bastion", conf.log_level, conf.log_filename)
 
+    # Get FDs from systemd (socket activation + fdstore)
+    named = systemd.listen_fds_named()
+    logger.debug(f"name sockets={named}")
+
+    if "pf-bastion-main" in named:
+        sock = socket.socket(fileno=os.dup(named["pf-bastion-main"]))
+    else:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind(("127.0.0.1", args.port))
+
+    if "pf-bastion-control" in named:
+        control_socket = socket.socket(fileno=os.dup(named["pf-bastion-control"]))
+    else:
+        control_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        control_socket.bind(args.control_socket)
+
+    sockname = sock.getsockname()
+    host, port = sockname[0], sockname[1]
+
+    if args.port_file is not None:
+        with open(args.port_file, "w+") as f:
+            f.write(str(port))
+
     print(f"Starting Bastion on {host}:{port} using FD {sock.fileno()}")
+
+    restored = fdstore.load(named)
+    if restored:
+        app_snapshot, sockets_snapshot = restored
+        anet.sockets.store = anet.sockets.SocketStore.restore(sockets_snapshot)
+    else:
+        app_snapshot = None
 
     asyncio.run(
         _run(
             conf=conf,
             main_sock=anet.socket.Socket(sock),
             ctrl_sock=anet.socket.Socket(control_socket),
+            app_snapshot=app_snapshot,
         )
     )
 
