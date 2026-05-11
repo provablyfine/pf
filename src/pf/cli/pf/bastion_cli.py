@@ -38,7 +38,7 @@ class Response:
         )
 
 
-async def _http_connect(url: str, prefix: str, hostname: str, token: str) -> anet.base.Socket:
+async def _http_connect(socket_path: str|None, url: str, prefix: str, hostname: str, token: str) -> anet.base.Socket:
     u = urllib.parse.urlsplit(url)
     connect_host = f"{prefix}.{u.hostname}"
     scheme_port = 443 if u.scheme == "https" else 80 if u.scheme == "http" else None
@@ -48,8 +48,12 @@ async def _http_connect(url: str, prefix: str, hostname: str, token: str) -> ane
         raise client.exceptions.UI(f"Unsupported url scheme={u.scheme}")
 
     retval: anet.base.Socket
-    sock = anet.socket.socket(anet.socket.Family.INET, anet.socket.Type.STREAM)
-    await sock.connect((connect_host, port))
+    if socket_path is not None:
+        sock = anet.socket.socket(anet.socket.Family.UNIX, anet.socket.Type.STREAM)
+        await sock.connect(socket_path)
+    else:
+        sock = anet.socket.socket(anet.socket.Family.INET, anet.socket.Type.STREAM)
+        await sock.connect((connect_host, port))
 
     if u.scheme == "https":
         ssl_context = await anet.ssl.create_default_context()
@@ -117,8 +121,8 @@ async def _handle_channel(mux: anet.mux.Mux, local_id: int, local_port: int) -> 
         local_writer.close()
 
 
-async def register_async(url: str, token: str, local_port: int) -> None:
-    sock = await _http_connect(url, "register", "self", token)
+async def register_async(socket_path: str|None, url: str, token: str, local_port: int) -> None:
+    sock = await _http_connect(socket_path, url, "register", "self", token)
     socket_name = f"bastion-server-{id(sock)}"
     anet.sockets.store.add(socket_name, sock)
     try:
@@ -171,7 +175,7 @@ def _register_function(args: argparse.Namespace) -> None:
                     if bastion_id in active_tasks:
                         continue
 
-                    task = asyncio.create_task(register_async(bastion.url, token, args.port))
+                    task = asyncio.create_task(register_async(args.socket_path, bastion.url, token, args.port))
                     active_tasks[bastion_id] = task
                     print(f"Registered bastion {bastion_id}")
             except Exception as e:
@@ -185,8 +189,8 @@ def _register_function(args: argparse.Namespace) -> None:
     signal.signal(signal.SIGTERM, old_handler)
 
 
-async def connect_async(url: str, token: str, hostname: str) -> None:
-    sock = await _http_connect(url, "connect", hostname, token)
+async def connect_async(socket_path: str|None, url: str, token: str, hostname: str) -> None:
+    sock = await _http_connect(socket_path, url, "connect", hostname, token)
 
     loop = asyncio.get_running_loop()
 
@@ -226,7 +230,7 @@ def _connect_function(args: argparse.Namespace) -> None:
 
     sc = client.sync.Client(c, timeout=args.timeout)
     token_response = sc.get_self_token("bastion")
-    asyncio.run(connect_async(args.url, token_response.token, args.hostname))
+    asyncio.run(connect_async(args.socket_path, args.url, token_response.token, args.hostname))
 
 
 def add_subparser(parser: argparse.ArgumentParser) -> None:
@@ -241,9 +245,11 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
         default=30,
         help="Interval in seconds to poll for bastions",
     )
+    register_parser.add_argument("--socket-path", default=None, help="Path to a UNIX socket to connect to the bastion. Used only for testing")
     register_parser.set_defaults(func=_register_function)
 
     connect_parser = sub.add_parser("connect", help="Connect via bastion")
     connect_parser.add_argument("--url", required=True, help="Bastion connect URL")
     connect_parser.add_argument("--hostname", required=True, help="Target hostname")
+    connect_parser.add_argument("--socket-path", default=None, help="Path to a UNIX socket to connect to the bastion. Used only for testing")
     connect_parser.set_defaults(func=_connect_function)
