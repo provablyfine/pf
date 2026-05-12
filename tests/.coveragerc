@@ -2,6 +2,10 @@
 parallel = True
 patch = subprocess, _exit
 
+[paths]
+source =
+    ./src/pf
+    /usr/local/lib/python3.14/site-packages/pf
 #[report]
 #exclude_lines = 
 #    pragma: no cover

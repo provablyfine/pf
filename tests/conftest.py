@@ -7,6 +7,7 @@ import os.path
 import random
 import re
 import signal
+import shutil
 import socket
 import subprocess
 import tempfile
@@ -208,12 +209,13 @@ After=network.target
 Type=notify
 NotifyAccess=all
 PassEnvironment=ISSUER_PREFIX
-ExecStart=/bin/sh -c "exec pf-bastion -ddd --log-filename=/run/pf/pf-bastion.log --issuer-prefix \\"${ISSUER_PREFIX}\\" --port-file /run/pf/bastion.port --domain-suffix localhost --control-socket /run/pf/bastion-control.sock"
+WorkingDirectory=/run/pf
+ExecStart=/usr/bin/python -m coverage run --source=/usr/local/lib/python3.14/site-packages/pf -p /usr/local/bin/pf-bastion -ddd --log-filename=/run/pf/pf-bastion.${INVOCATION_ID}.log --issuer-prefix "${ISSUER_PREFIX}" --port-file /run/pf/bastion.port --domain-suffix localhost --control-socket /run/pf/bastion-control.sock
 FileDescriptorStoreMax=128
 """
 
     containerfile = f"""FROM fedora:latest
-RUN dnf install -y python3 uv systemd && dnf clean all
+RUN dnf install -y python3 uv systemd python3-coverage && dnf clean all
 RUN systemctl mask systemd-resolved systemd-oomd
 
 COPY . /tmp/pf/
@@ -533,6 +535,7 @@ def bastion_container(request, api, tmp_path):
     logs_dir.mkdir()
 
     # Run bastion container with port forwarding
+
     command = [
         "podman",
         "run",
@@ -557,6 +560,10 @@ def bastion_container(request, api, tmp_path):
     yield BastionContainer(main_socket=main_socket, control_socket=control_socket, container_id=container_id)
 
     subprocess.run(["podman", "stop", "-t", "5", container_id])
+
+    filenames = [filename for filename in os.listdir(shared_dir) if filename.startswith(".coverage")]
+    for filename in filenames:
+        shutil.copy(os.path.join(shared_dir, filename), filename)
 
     if hasattr(request.node, "rep_call"):
         if request.node.rep_call.failed:
