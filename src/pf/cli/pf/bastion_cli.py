@@ -7,7 +7,6 @@ import functools
 import logging
 import signal
 import sys
-import types
 import urllib.parse
 
 from ... import anet, client
@@ -39,7 +38,7 @@ class Response:
         )
 
 
-async def _http_connect(socket_path: str|None, url: str, prefix: str, hostname: str, token: str) -> anet.base.Socket:
+async def _http_connect(socket_path: str | None, url: str, prefix: str, hostname: str, token: str) -> anet.base.Socket:
     u = urllib.parse.urlsplit(url)
     connect_host = f"{prefix}.{u.hostname}"
     scheme_port = 443 if u.scheme == "https" else 80 if u.scheme == "http" else None
@@ -122,7 +121,7 @@ async def _handle_channel(mux: anet.mux.Mux, local_id: int, local_port: int) -> 
         local_writer.close()
 
 
-async def register_async(socket_path: str|None, url: str, token: str, local_port: int) -> None:
+async def register_async(socket_path: str | None, url: str, token: str, local_port: int) -> None:
     sock = await _http_connect(socket_path, url, "register", "self", token)
     socket_name = f"bastion-server-{id(sock)}"
     anet.sockets.store.add(socket_name, sock)
@@ -192,13 +191,13 @@ def _register_function(args: argparse.Namespace) -> None:
 
             try:
                 await asyncio.wait_for(stop_event.wait(), timeout=args.poll_interval)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pass
 
     asyncio.run(_run())
 
 
-async def connect_async(socket_path: str|None, url: str, token: str, hostname: str) -> None:
+async def connect_async(socket_path: str | None, url: str, token: str, hostname: str) -> None:
     sock = await _http_connect(socket_path, url, "connect", hostname, token)
 
     loop = asyncio.get_running_loop()
@@ -237,6 +236,7 @@ async def connect_async(socket_path: str|None, url: str, token: str, hostname: s
     loop.add_signal_handler(signal.SIGINT, signal_handler)
     await task
 
+
 def _connect_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
 
@@ -260,11 +260,15 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
         default=30,
         help="Interval in seconds to poll for bastions",
     )
-    register_parser.add_argument("--socket-path", default=None, help="Path to a UNIX socket to connect to the bastion. Used only for testing")
+    register_parser.add_argument(
+        "--socket-path", default=None, help="Path to a UNIX socket to connect to the bastion. Used only for testing"
+    )
     register_parser.set_defaults(func=_register_function)
 
     connect_parser = sub.add_parser("connect", help="Connect via bastion")
     connect_parser.add_argument("--url", required=True, help="Bastion connect URL")
     connect_parser.add_argument("--hostname", required=True, help="Target hostname")
-    connect_parser.add_argument("--socket-path", default=None, help="Path to a UNIX socket to connect to the bastion. Used only for testing")
+    connect_parser.add_argument(
+        "--socket-path", default=None, help="Path to a UNIX socket to connect to the bastion. Used only for testing"
+    )
     connect_parser.set_defaults(func=_connect_function)
