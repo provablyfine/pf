@@ -1,8 +1,8 @@
 import hashlib
+import logging
 import secrets
 import time
 import urllib.parse
-import logging
 
 import fastapi
 import fastapi.requests
@@ -173,7 +173,7 @@ def oauth2_callback_endpoint(
         )
     except Exception as exc:
         logger.info(f"Code exchange failed: {exc}")
-        return _redirect_error(client_redirect_uri, f"Code exchange failed")
+        return _redirect_error(client_redirect_uri, "Code exchange failed")
 
     identity = None
     for email in emails:
@@ -192,7 +192,7 @@ def oauth2_callback_endpoint(
         crypto_policy.enforce_key_is_allowed(session_key)
         model.denylist.enforce_not_denied(session_key.thumbprint())
     except Exception:
-        return _redirect_error(client_redirect_uri, f"Session key not allowed")
+        return _redirect_error(client_redirect_uri, "Session key not allowed")
 
     ctx.app_db.identity_session_key.create(
         id=session_key.thumbprint(),
