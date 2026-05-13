@@ -68,6 +68,45 @@ def _redirect_error(client_redirect_uri: str, reason: str) -> fastapi.responses.
     return fastapi.responses.RedirectResponse(url, status_code=302)
 
 
+def _validate_client_redirect_uri(client_redirect_uri: str) -> None:
+    client_url = urllib.parse.urlparse(client_redirect_uri)
+
+    if client_url.scheme not in ("http", "https"):
+        raise ValueError(f"Invalid redirect URI scheme: {client_url.scheme}")
+
+    if client_url.hostname in ("localhost", "127.0.0.1", "::1"):
+        # localhost (with any port) is always allowed
+        return
+
+    base_url = urllib.parse.urlparse(ctx.config.base_url)
+    if not base_url.hostname:
+        raise ValueError("Cannot validate redirect URI: API server hostname not available")
+
+    if not client_url.hostname:
+        raise ValueError("Redirect URI has no hostname")
+
+    if client_url.hostname == base_url.hostname:
+        # Exact matches on the base_url hostname are allowed (we are redirecting to ourselves)
+        return
+
+    if client_url.hostname.endswith("." + base_url.hostname):
+        # We allow redirect to subdomains of ourselves
+        return
+
+    base_parts = base_url.hostname.split(".")
+    client_parts = client_url.hostname.split(".")
+    if len(base_parts) > 1 and len(client_parts) > 1:
+        base_parent = ".".join(base_parts[1:])
+        client_parent = ".".join(client_parts[1:])
+        if base_parent == client_parent:
+            # We allow redirect to siblings of the parent domain subdomain
+            return
+
+    raise ValueError(
+        f"Redirect URI hostname {client_url.hostname} does not match API server {base_url.hostname}, its subdomains, or its siblings"
+    )
+
+
 @router.post(
     "/auth/oauth2/start",
     status_code=200,
@@ -76,6 +115,13 @@ def _redirect_error(client_redirect_uri: str, reason: str) -> fastapi.responses.
 def oauth2_start_endpoint(
     request: fastapi.requests.Request, data: schemas.auth.OAuth2StartRequest, tenant_name: str
 ) -> schemas.auth.OAuth2StartResponse:
+    try:
+        _validate_client_redirect_uri(data.client_redirect_uri)
+    except ValueError as e:
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=400, title=f"Invalid client_redirect_uri: {e}")
+        )
+
     session_key = converters.public_from_schema(data.session_public_key)
     crypto_policy.enforce_key_is_allowed(session_key)
     model.denylist.enforce_not_denied(session_key.thumbprint())
