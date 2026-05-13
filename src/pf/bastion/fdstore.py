@@ -31,7 +31,6 @@ async def save(ctrl_state: control_app.AppState) -> None:
     # Create a temporary file for the state (instead of memfd)
     # Using /dev/shm or /tmp for in-memory storage
     import tempfile
-    import shutil
 
     # Try to use /dev/shm (tmpfs in-memory) if available
     if os.path.isdir("/dev/shm"):

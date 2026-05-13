@@ -31,9 +31,7 @@ def store_fd(fd: int, name: str) -> None:
     addr = "\0" + notify_socket[1:] if notify_socket.startswith("@") else notify_socket
     msg = f"FDSTORE=1\nFDNAME={name}\n".encode()
     with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as sock:
-        sock.sendmsg(
-            [msg], [(socket.SOL_SOCKET, socket.SCM_RIGHTS, struct.pack("i", fd))], 0, addr
-        )
+        sock.sendmsg([msg], [(socket.SOL_SOCKET, socket.SCM_RIGHTS, struct.pack("i", fd))], 0, addr)
 
 
 def listen_fds_named() -> dict[str, int]:
