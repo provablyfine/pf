@@ -6,8 +6,8 @@ import os
 import os.path
 import random
 import re
-import signal
 import shutil
+import signal
 import socket
 import subprocess
 import tempfile
@@ -393,7 +393,7 @@ def api(request):
         api_log_file.flush()
         with open(api_log) as f:
             log_content = f.read()
-        print(f"\n=== API Server Startup Failed ===")
+        print("\n=== API Server Startup Failed ===")
         print(f"Config: {api_config}")
         print(f"Port file: {api_port_file}")
         print(f"Log:\n{log_content}")
@@ -552,7 +552,6 @@ def bastion_container(request, api, tmp_path):
     ]
     container_id = subprocess.check_output(command).decode().strip()
 
-
     control_socket = str(shared_dir / "bastion-control.sock")
     main_socket = str(shared_dir / "bastion.sock")
 
@@ -570,6 +569,7 @@ def bastion_container(request, api, tmp_path):
             print(f"Bastion container ID: {container_id}")
             print(f"Systemd journal logs: {logs_dir}")
             print(f"Control socket and port file: {shared_dir}")
+
 
 @pytest.fixture(autouse=True)
 def pf_log_directory(tmp_path, request):
