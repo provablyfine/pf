@@ -1,0 +1,11 @@
+site_name: Your infrastructure, Provably Fine
+theme: material
+nav:
+  - Home: home.md
+  - Getting Started:
+      - Installation: installation.md
+      - Configuration: config.md
+  - User Guide:
+      - Basic Usage: guide/basics.md
+      - Advanced Features: guide/advanced.md
+  - About: about.md
