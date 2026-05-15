@@ -8,11 +8,11 @@ from . import bastion_cli
 
 
 def _register_function(args: argparse.Namespace) -> None:
-    asyncio.run(bastion_cli.register_async(args.url, "dev", args.port))
+    asyncio.run(bastion_cli.register_async(args.socket_path, args.url, "dev", args.port))
 
 
 def _connect_function(args: argparse.Namespace) -> None:
-    asyncio.run(bastion_cli.connect_async(args.url, "dev", args.hostname))
+    asyncio.run(bastion_cli.connect_async(args.socket_path, args.url, "dev", args.hostname))
 
 
 def _do_main(args: argparse.Namespace) -> None:
@@ -39,11 +39,17 @@ def pf():
     register_parser.add_argument("--url", required=True, help="Bastion register URL")
     register_parser.add_argument("--hostname", default="hello", help="Target hostname")
     register_parser.add_argument("-p", "--port", type=int, default=2222, help="Local port to listen on")
+    register_parser.add_argument(
+        "--socket-path", default=None, help="Path to a UNIX socket to connect to the bastion"
+    )
     register_parser.set_defaults(func=_register_function)
 
     connect_parser = sub.add_parser("connect", help="Connect via bastion")
     connect_parser.add_argument("--url", required=True, help="Bastion connect URL")
     connect_parser.add_argument("--hostname", default="hello", help="Target hostname")
+    connect_parser.add_argument(
+        "--socket-path", default=None, help="Path to a UNIX socket to connect to the bastion. Used only for testing"
+    )
     connect_parser.set_defaults(func=_connect_function)
 
     args = parser.parse_args()
