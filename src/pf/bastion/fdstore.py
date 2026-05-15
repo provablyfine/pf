@@ -28,32 +28,16 @@ async def save(ctrl_state: control_app.AppState) -> None:
     state = BastionState(app=app_snapshot, socket_names=fdname_map)
     json_bytes = state.model_dump_json().encode()
 
-    # Create a temporary file for the state (instead of memfd)
-    # Using /dev/shm or /tmp for in-memory storage
-    import tempfile
-
-    # Try to use /dev/shm (tmpfs in-memory) if available
-    if os.path.isdir("/dev/shm"):
-        tmpdir = "/dev/shm"
-    else:
-        tmpdir = "/tmp"
-
-    # Create a temporary file that won't be auto-deleted
-    # We'll remove it ourselves after bastion exits
-    fd_tuple = tempfile.mkstemp(prefix="pf-bastion-state-", dir=tmpdir, text=False)
-    state_fd = fd_tuple[0]
-    state_file = fd_tuple[1]
+    state_fd = os.memfd_create("pf-bastion-state")
 
     try:
         os.write(state_fd, json_bytes)
         os.lseek(state_fd, 0, os.SEEK_SET)
-
         # Donate the FD to systemd fdstore
         systemd.store_fd(state_fd, "pf-bastion-state")
         os.close(state_fd)
     except Exception:
         os.close(state_fd)
-        os.unlink(state_file)
         raise
 
     for i, (_, raw_fd) in enumerate(socket_items):

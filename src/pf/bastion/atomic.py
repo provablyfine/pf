@@ -1,11 +1,8 @@
 import asyncio
-import sys
 import typing
 
-T = typing.TypeVar("T")
 
-
-async def run(coro: typing.Awaitable[T]) -> T:
+async def run[T](coro: typing.Awaitable[T]) -> T:
     """
     Await coro with deferred cancellation.
 
@@ -14,6 +11,7 @@ async def run(coro: typing.Awaitable[T]) -> T:
     task after cancelling it will block until the atomic block is done.
     """
     task = asyncio.current_task()
+    assert task is not None
     fut: asyncio.Future[T] = asyncio.ensure_future(coro)
     deferred = 0
 
@@ -22,11 +20,7 @@ async def run(coro: typing.Awaitable[T]) -> T:
             await asyncio.shield(fut)
         except asyncio.CancelledError:
             deferred += 1
-            # 3.11+: tell the task we absorbed this cancellation ourselves;
-            # without this the task's internal cancel counter stays incremented
-            # and the next await after we return will immediately re-fire.
-            if sys.version_info >= (3, 11):
-                task.uncancel()  # type: ignore[union-attr]
+            task.uncancel()
 
     if deferred:
         raise asyncio.CancelledError()

@@ -210,7 +210,10 @@ Type=notify
 NotifyAccess=all
 PassEnvironment=ISSUER_PREFIX
 WorkingDirectory=/run/pf
-ExecStart=/usr/bin/python -m coverage run --source=/usr/local/lib/python3.14/site-packages/pf -p /usr/local/bin/pf-bastion -ddd --log-filename=/run/pf/pf-bastion.${INVOCATION_ID}.log --issuer-prefix "${ISSUER_PREFIX}" --port-file /run/pf/bastion.port --domain-suffix localhost --control-socket /run/pf/bastion-control.sock
+ExecStart=/usr/bin/python -m coverage run --source=/usr/local/lib/python3.14/site-packages/pf \
+    -p /usr/local/bin/pf-bastion -ddd --log-filename=/run/pf/pf-bastion.${INVOCATION_ID}.log \
+    --issuer-prefix "${ISSUER_PREFIX}" --port-file /run/pf/bastion.port --domain-suffix localhost \
+    --control-socket /run/pf/bastion-control.sock
 FileDescriptorStoreMax=128
 """
 

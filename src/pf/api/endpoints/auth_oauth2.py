@@ -103,7 +103,8 @@ def _validate_client_redirect_uri(client_redirect_uri: str) -> None:
             return
 
     raise ValueError(
-        f"Redirect URI hostname {client_url.hostname} does not match API server {base_url.hostname}, its subdomains, or its siblings"
+        f"Redirect URI hostname {client_url.hostname} does not match API server {base_url.hostname}"
+        ", its subdomains, or its siblings"
     )
 
 
