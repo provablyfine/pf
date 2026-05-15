@@ -39,9 +39,7 @@ def pf():
     register_parser.add_argument("--url", required=True, help="Bastion register URL")
     register_parser.add_argument("--hostname", default="hello", help="Target hostname")
     register_parser.add_argument("-p", "--port", type=int, default=2222, help="Local port to listen on")
-    register_parser.add_argument(
-        "--socket-path", default=None, help="Path to a UNIX socket to connect to the bastion"
-    )
+    register_parser.add_argument("--socket-path", default=None, help="Path to a UNIX socket to connect to the bastion")
     register_parser.set_defaults(func=_register_function)
 
     connect_parser = sub.add_parser("connect", help="Connect via bastion")
