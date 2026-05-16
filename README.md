@@ -9,9 +9,18 @@ major security issues.
 
 # Documentation
 
-All our [user documentation](https://doc.provablyfine.net) lives outside of this repository.
-User documentation is often written before we implement the corresponding features
-as a way to keep us on track towards building a tool that is usable.
+All our [documentation](https://docs.provablyfine.net) lives in the `docs/` directory.
+
+To rebuild it and store the static html, js, and css to the `site/` directory:
+```console
+uv run mkdocs build
+```
+
+`mkdocs serve` is more convenient if you intend to work on the documentation content
+itself:
+```console
+uv run mkdocs serve
+```
 
 # Development environment
 
@@ -47,8 +56,7 @@ Both unit tests and end-to-end tests can be run with pytest:
 $ uv run pytest
 ```
 
-We regularly track test code coverage. We aim for at least 85% but the
-objective is to reach 95% before we declare ourselves production ready:
+We regularly track test code coverage. We aim for at least 85%:
 ```
 $ make cov
 ...

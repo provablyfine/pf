@@ -1,0 +1,43 @@
+site_name: Your infrastructure, Provably Fine
+theme:
+  name: material
+  features:
+    - content.code.copy
+
+extra_javascript:
+  - js/clipboard.js
+
+markdown_extensions:
+  - admonition
+  - pymdownx.highlight
+  - pymdownx.superfences
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+#  - Reference:
+#      - Overview: reference/index.md
+#      - CLI - pf: reference/cli-pf.md
+#      - CLI - pfa: reference/cli-pfa.md
+#      - CLI - pfat: reference/cli-pfat.md
+#      - CLI - pf-bastion: reference/cli-pf-bastion.md
+#      - API: reference/api.md
+#      - Server Config: reference/config-server.md
+#      - Client Config: reference/config-client.md
+#      - Grant Types: reference/grant-types.md
+#  - Design:
+#      - Overview: design/index.md
+#      - Architecture: design/architecture.md
+#      - Auth Flows: design/auth-flows.md
+#      - SSH Cert Flow: design/ssh-cert-flow.md
+#      - Permission Model: design/permission-model.md
+#      - Bastion Protocol: design/bastion-protocol.md
+#      - Multi-Tenancy: design/multi-tenancy.md
+#      - Signing Key Rotation: design/signing-key-rotation.md
+#      - Crypto Policy: design/crypto-policy.md
+#  - Security:
+#      - Overview: security/index.md
+#      - Threat Model: security/threat-model.md
+#      - Known Limitations: security/known-limitations.md
+#      - Access Control Invariants: security/access-control-invariants.md
+#      - Vulnerability Disclosure: security/vulnerability-disclosure.md

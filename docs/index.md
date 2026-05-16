@@ -1,5 +1,9 @@
 # SSH Access Control
 
+!!! warning
+    Release early, release often. This is what we do. Now is early. We do not recommend you
+    to use `pf` in production. YOU HAVE BEEN WARNED.
+
 `pf` provides a collection of tools to implement centralized access control for your SSH servers to:
 
   - maintain a centralized database of users, hosts and access grants
