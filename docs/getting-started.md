@@ -87,20 +87,23 @@ tenant url and your *account* key fingerprint.
 ## Register a new host
 
 It is possible to [register manually](XXX) existing openSSH servers as new identities with pf
-but we provide all-in-one images that bundle the latest OpensSH server with all the supporting
+but we provide all-in-one images that bundle the latest OpenSSH server with all the supporting
 integration as portablectl images.
 
 ### Download all-in-one image
 
-First, download the image for your pf release:
+Download the image for your pf release:
 ```console
-$ pf host download
+$ curl $(pf host print-download-url)
 XXX
 ```
 
-Or, if you want to see what you are downloading:
+### Create a new identity
+
 ```console
-$ curl $(pf host print-download-url)
+$ pfa identity create -n my-new-hostname
+$ IDENTITY_ID=$(pfa identity list -n my-new-hostname -q)
+$ pfa identity invite --manual -i $IDENTITY_ID
 XXX
 ```
 
@@ -108,7 +111,7 @@ XXX
 
 The one-liner is quite straightforward:
 ```console
-$ sudo pf host setup ./pf-all-in-one.raw
+$ sudo pf host setup --raw-image=./pf-all-in-one.raw --invitation-key=INVITATION_KEY
 ```
 
 Alternatively, if you feel uncomfortable running a pf command as root via sudo, you
@@ -124,4 +127,18 @@ $ systemctl status pf-sshd
 
 ## Connect to your new host
 
+The `pf ssh` command is compatible with the OpenSSH `ssh` binary:
+```console
+$ pf ssh root@my-new-hostname echo hello
+hello
+```
 
+
+## Next steps
+
+The setup we have completed is pretty basic. A more realistic setup would
+require a clear mapping of your security policy (who can access which hosts)
+to a set of [identities](XXX), [tags](XXX), [roles](XXX), and [boundaries](XXX).
+
+Realistically, most administrators also would setup an external [OIDC SSO](XXX) to 
+authenticate users.
