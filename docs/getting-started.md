@@ -15,18 +15,6 @@ $ pf --version
 XXX
 ```
 
-## Create your first tenant
-
-The fastest way to create your first tenant is to use the free tier of our
-[managed instance](https://pf.provablyfine.net/). After you login,
-choose a tenant name that is available, and wait for the email that contains
-the initialization url for your tenant.
-
-!!! note
-    If you are using your own internal pf deployment, ask your pf administrator
-    to create the tenant for you, and share with you the associated initialization url.
-
-
 ## Create your private key
 
 By default, a new tenant is configured to authenticate users via private/public keys:
@@ -71,6 +59,17 @@ root account, we recommend you apply the usual security recommendations with SSH
 - do not use an empty passphrase
 - pick a strong passphrase
 
+## Create your first tenant
+
+The fastest way to create your first tenant is to use the free tier of our
+[managed instance](https://pf.provablyfine.net/). After you login,
+choose a tenant name that is available, and wait for the email that contains
+the initialization url for your tenant.
+
+!!! note
+    If you are using your own internal pf deployment, ask your pf administrator
+    to create the tenant and share with you the associated initialization url.
+
 ## Initialize your tenant
 
 Given your tenant url, `pfa`, the *administration* pf cli can initialize your tenant:
@@ -86,6 +85,42 @@ provided to the `--key` argument. This command also saves in `~/.config/pf/confi
 tenant url and your *account* key fingerprint.
 
 ## Register a new host
+
+It is possible to [register manually](XXX) existing openSSH servers as new identities with pf
+but we provide all-in-one images that bundle the latest OpensSH server with all the supporting
+integration as portablectl images.
+
+### Download all-in-one image
+
+First, download the image for your pf release:
+```console
+$ pf host download
+XXX
+```
+
+Or, if you want to see what you are downloading:
+```console
+$ curl $(pf host print-download-url)
+XXX
+```
+
+### Install all-in-one image
+
+The one-liner is quite straightforward:
+```console
+$ sudo pf host setup ./pf-all-in-one.raw
+```
+
+Alternatively, if you feel uncomfortable running a pf command as root via sudo, you
+can also ask pf to generate a shell script and audit it before running it:
+```console
+$ pf host setup --print-bash
+```
+
+You can check that our new OpenSSH service is running:
+```console
+$ systemctl status pf-sshd
+```
 
 ## Connect to your new host
 
