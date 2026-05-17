@@ -22,6 +22,10 @@ nav:
   - General administration:
       - Auditing: admin/audit.md
       - Tenants: admin/tenants.md
+  - Self-hosting:
+      - API Server: self-hosting/api-server.md
+      - Bastion: self-hosting/bastion.md
+
 #  - Reference:
 #      - Overview: reference/index.md
 #      - CLI - pf: reference/cli-pf.md
