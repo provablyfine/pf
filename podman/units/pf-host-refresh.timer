@@ -1,0 +1,10 @@
+[Unit]
+Description=PF Host SSHD Key Refresh Timer
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=12h
+Unit=pf-host-refresh.service
+
+[Install]
+WantedBy=timers.target

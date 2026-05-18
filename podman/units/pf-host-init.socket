@@ -1,0 +1,10 @@
+[Unit]
+Description=PF Host Init Socket
+
+[Socket]
+ListenStream=/run/pf/init.sock
+SocketMode=0600
+Accept=no
+
+[Install]
+WantedBy=sockets.target

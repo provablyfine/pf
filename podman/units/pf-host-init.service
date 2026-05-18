@@ -1,0 +1,17 @@
+[Unit]
+Description=PF Host SSHD Integration Init
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=!/var/lib/pf/account.cred
+
+[Service]
+Type=notify
+ExecStart=/usr/bin/pf openssh host-init-daemon \
+    --sshd-config-drop-in=/etc/ssh/sshd_config.d/20-pf.conf \
+    --host-keys-dir=/etc/ssh
+
+BindPaths=/etc/ssh/sshd_config.d /etc/ssh /var/lib/pf /run/pf \
+          /run/dbus/system_bus_socket
+
+User=root
+RuntimeDirectory=pf

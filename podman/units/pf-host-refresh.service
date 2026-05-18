@@ -1,0 +1,15 @@
+[Unit]
+Description=PF Host SSHD Key Refresh
+After=network-online.target
+ConditionPathExists=/var/lib/pf/account.cred
+
+[Service]
+Type=oneshot
+LoadCredentialEncrypted=account:/var/lib/pf/account.cred
+ExecStart=/usr/bin/pf openssh host-refresh \
+    --config=/var/lib/pf/config.json \
+    --host-keys-dir=/etc/ssh \
+    --ca-pub-path=/etc/ssh/pf-user-ca.pub
+
+BindPaths=/etc/ssh /var/lib/pf /run/dbus/system_bus_socket
+User=root
