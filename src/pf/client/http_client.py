@@ -350,6 +350,15 @@ class Client:
         ]
         return HttpClient(self, auth=RequestsAuth(signers), timeout=self._timeout)
 
+    def login_auth_with_keys(self, account: jwk.Private, session: jwk.Private) -> HttpClient:
+        """login_auth variant accepting in-memory account and session keys."""
+        signers = [FileSigner("account", account), FileSigner("session", session)]
+        return HttpClient(self, auth=RequestsAuth(signers), timeout=self._timeout)
+
     def session_auth(self, session: str | None) -> HttpClient:
         signers = [private_key_signer("session", session)]
         return HttpClient(self, auth=RequestsAuth(signers), timeout=self._timeout)
+
+    def session_auth_with_key(self, session: jwk.Private) -> HttpClient:
+        """session_auth variant for in-memory session key."""
+        return HttpClient(self, auth=RequestsAuth([FileSigner("session", session)]), timeout=self._timeout)

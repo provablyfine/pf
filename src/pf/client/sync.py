@@ -2,6 +2,7 @@ import typing
 
 import requests
 
+from .. import jwk
 from . import configuration, exceptions, http_client, schemas
 
 
@@ -608,6 +609,16 @@ class Client:
         """POST to /login endpoint. Caller manages session key and config updates."""
         auth = self._client.login_auth(account=self._client.config.account_key, session=session_fingerprint)
         response = auth.post(url=auth.directory.login, json={"session_public_key": session_public_key})
+        if response.status_code != 204:
+            raise exceptions.UI(f"Unable to login successfully: {response.text}")
+
+    def login_http_sig_with_keys(self, account: jwk.Private, session: jwk.Private) -> None:
+        """login_http_sig variant for fully in-memory keys (no SSH agent, no file)."""
+        auth = self._client.login_auth_with_keys(account, session)
+        response = auth.post(
+            url=auth.directory.login,
+            json={"session_public_key": session.public().to_dict()},
+        )
         if response.status_code != 204:
             raise exceptions.UI(f"Unable to login successfully: {response.text}")
 
