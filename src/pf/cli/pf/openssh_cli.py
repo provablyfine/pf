@@ -3,6 +3,7 @@ import base64
 import os
 
 from ... import client, jwk, ssh
+from . import openssh_host_init
 
 
 def _user_trusted_keys_function(args: argparse.Namespace) -> None:
@@ -79,3 +80,16 @@ def add_subparsers(parser: argparse.ArgumentParser) -> None:
     authorized_principals_parser.add_argument("--username", required=True)
     authorized_principals_parser.add_argument("--certificate", help="base64 user certificate to parse", required=True)
     authorized_principals_parser.set_defaults(func=_authorized_principals)
+
+    host_init_parser = subparsers.add_parser("host-init-daemon")
+    host_init_parser.add_argument(
+        "--sshd-config-drop-in", required=True, help="Path to sshd_config.d drop-in file"
+    )
+    host_init_parser.add_argument("--host-keys-dir", required=True, help="Directory containing host SSH keys")
+    host_init_parser.set_defaults(func=openssh_host_init.host_init_daemon_function)
+
+    host_refresh_parser = subparsers.add_parser("host-refresh")
+    host_refresh_parser.add_argument("--config", required=True, help="Path to pf config.json")
+    host_refresh_parser.add_argument("--host-keys-dir", required=True, help="Directory containing host SSH keys")
+    host_refresh_parser.add_argument("--ca-pub-path", required=True, help="Path to CA public key file")
+    host_refresh_parser.set_defaults(func=openssh_host_init.host_refresh_function)
