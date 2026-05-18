@@ -182,10 +182,15 @@ class RequestsAuth:
 
     def __call__(self, request: requests.PreparedRequest) -> requests.PreparedRequest:
         if "Content-Digest" not in request.headers:
-            body = b"" if request.body is None else request.body
+            body = request.body or b""
             if isinstance(body, str):
-                body = body.encode()
-            request.headers["Content-Digest"] = str(http_sfv.Dictionary({"sha-256": hashlib.sha256(body).digest()}))
+                body_bytes = body.encode()
+            else:
+                body_bytes = body if isinstance(body, bytes) else b""
+            digest = hashlib.sha256(body_bytes).digest()
+            request.headers["Content-Digest"] = str(
+                http_sfv.Dictionary({"sha-256": digest})
+            )
         covered = ("@method", "@authority", "@target-uri", "content-digest", "@signature-params")
         signatures_input: list[str] = []
         signatures: list[str] = []
