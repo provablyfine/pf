@@ -323,9 +323,18 @@ class Client:
     def no_auth(self) -> HttpClient:
         return HttpClient(self, auth=None, timeout=self._timeout)
 
+    def invitation_auth_with_key(
+        self, account: jwk.Private, invitation: str
+    ) -> InvitationHttpClient:
+        account_signer = FileSigner("account", account)
+        return self._invitation_auth(account_signer, invitation)
+
     def invitation_auth(self, account: str | None, invitation: str) -> InvitationHttpClient:
-        invitation_signer = hmac_signer("invitation", invitation)
         account_signer = private_key_signer("account", account)
+        return self._invitation_auth(account_signer, invitation)
+
+    def _invitation_auth(self, account_signer: PrivateSigner, invitation: str) -> InvitationHttpClient:
+        invitation_signer = hmac_signer("invitation", invitation)
         signers = [invitation_signer, account_signer]
         return InvitationHttpClient(
             self,
