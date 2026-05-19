@@ -1,6 +1,11 @@
+import shutil
+
+import pytest
+
 from . import utils
 
 
+@pytest.mark.skipif(not shutil.which("ssh"), reason="ssh not found")
 def test_ssh(sshd, api, ssh_agent):
     utils.run_cram(
         "tests/ssh.t",

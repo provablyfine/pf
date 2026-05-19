@@ -75,6 +75,8 @@ class SshD:
 
 @pytest.fixture(scope="session")
 def sshd_image(tmp_path_factory, worker_id):
+    if not shutil.which("podman"):
+        pytest.skip("podman not found")
     # pattern borrowed from pytest manual
     if worker_id == "master":
         return _build_image()
@@ -308,6 +310,8 @@ class SshAgent:
 
 @pytest.fixture
 def ssh_agent(request):
+    if not shutil.which("ssh-agent"):
+        pytest.skip("ssh-agent not found")
     completed = subprocess.run(["ssh-agent", "-s"], capture_output=True)
     assert completed.returncode == 0
     pid = None
@@ -529,6 +533,8 @@ class BastionContainer:
 @pytest.fixture
 def bastion_container(request, api, tmp_path):
     """Start bastion under real systemd in a podman container."""
+    if not shutil.which("podman"):
+        pytest.skip("podman not found")
     bastion_image = _build_bastion_image()
 
     # Create shared directories

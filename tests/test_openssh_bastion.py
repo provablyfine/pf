@@ -1,6 +1,12 @@
+import shutil
+
+import pytest
+
 from . import utils
 
 
+@pytest.mark.skipif(not shutil.which("ssh"), reason="ssh not found")
+@pytest.mark.skipif(not shutil.which("socat"), reason="socat not found")
 def test_ssh_bastion(sshd, api, ssh_agent, bastion_server):
     utils.run_cram(
         "tests/ssh_bastion.t",
