@@ -13,13 +13,13 @@ All our [documentation](https://docs.provablyfine.net) lives in the `docs/` dire
 
 To rebuild it and store the static html, js, and css to the `site/` directory:
 ```console
-uv run mkdocs build
+uv run zensical build
 ```
 
-`mkdocs serve` is more convenient if you intend to work on the documentation content
+`zensical serve` is more convenient if you intend to work on the documentation content
 itself:
 ```console
-uv run mkdocs serve
+uv run zensical serve
 ```
 
 # Development environment
