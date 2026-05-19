@@ -73,7 +73,7 @@ class Table[T]:
             statement = statement.where(arg)
         for k, v in kwargs.items():
             column = self._table.columns[k]
-            if isinstance(v, (list, tuple, set)):
+            if isinstance(v, list | tuple | set):
                 statement = statement.where(column.in_(v))  # type: ignore[arg-type]
             else:
                 statement = statement.where(column == v)
@@ -139,7 +139,7 @@ def _infer_sa_type(python_type: type) -> sqlalchemy.types.TypeEngine[typing.Any]
     """Infer SQLAlchemy type from a Python type annotation."""
     # Strip Optional/Union wrappers
     origin = typing.get_origin(python_type)
-    if origin is typing.Union:
+    if origin in [typing.Union, types.UnionType]:
         args = typing.get_args(python_type)
         if type(None) in args:
             # Optional[X] — recurse on the non-None type
@@ -163,7 +163,7 @@ def _infer_sa_type(python_type: type) -> sqlalchemy.types.TypeEngine[typing.Any]
 def _is_optional(hint: type) -> bool:
     """Check if a type hint is Optional[T] (Union[T, None])."""
     origin = typing.get_origin(hint)
-    if origin is typing.Union:
+    if origin in [typing.Union, types.UnionType]:
         args = typing.get_args(hint)
         return type(None) in args
     return False

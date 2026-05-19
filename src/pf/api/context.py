@@ -3,12 +3,12 @@ import contextvars
 
 import cryptography.fernet
 
-from . import app_db
+from . import app_db as app_db_module
 from . import config as config_module
 
 _kek_var: contextvars.ContextVar[cryptography.fernet.Fernet | None] = contextvars.ContextVar("kek", default=None)
 _config_var: contextvars.ContextVar[config_module.Config | None] = contextvars.ContextVar("config", default=None)
-_app_db_var: contextvars.ContextVar[app_db.AppDb | None] = contextvars.ContextVar("app_db", default=None)
+_app_db_var: contextvars.ContextVar[app_db_module.AppDb | None] = contextvars.ContextVar("app_db", default=None)
 _identity_id_var: contextvars.ContextVar[int | None] = contextvars.ContextVar("identity_id", default=None)
 _tenant_id_var: contextvars.ContextVar[int | None] = contextvars.ContextVar("tenant_id", default=None)
 _tenant_name_var: contextvars.ContextVar[str | None] = contextvars.ContextVar("tenant_name", default=None)
@@ -30,7 +30,7 @@ class RequestContext:
         return key
 
     @property
-    def app_db(self) -> app_db.AppDb:
+    def app_db(self) -> app_db_module.AppDb:
         db = _app_db_var.get()
         assert db is not None
         return db
@@ -58,7 +58,7 @@ class RequestContext:
             _config_var.set(None)
 
     @contextlib.contextmanager
-    def set_app_db(self, app_db: app_db.AppDb):
+    def set_app_db(self, app_db: app_db_module.AppDb):
         assert _app_db_var.get() is None
         _app_db_var.set(app_db)
         try:
