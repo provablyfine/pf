@@ -26,7 +26,7 @@ uv run mkdocs serve
 
 Install pre-commit hooks locally:
 ```console
-$ uv run --with pre-commit pre-commit install
+$ uv run pre-commit install
 ```
 
 # Coding style
