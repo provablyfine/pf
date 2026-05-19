@@ -45,6 +45,7 @@ dev = [
     "zensical>=0.0.42",
     "mkdocs-material>=9.7.6",
     "pre-commit>=4.6.0",
+    "cram>=0.7",
 ]
 
 [tool.pytest.ini_options]
