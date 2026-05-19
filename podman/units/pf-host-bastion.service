@@ -1,0 +1,22 @@
+[Unit]
+Description=PF Host Bastion Registration
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/var/lib/pf/account.cred
+
+[Service]
+Type=simple
+ExecStartPre=/usr/lib/pf/scripts/detect-sshd-port.sh
+EnvironmentFile=/run/pf/sshd-port.env
+LoadCredentialEncrypted=account:/var/lib/pf/account.cred
+ExecStart=/usr/bin/pf \
+    --config /var/lib/pf/config.json \
+    bastion register \
+    --port ${SSH_PORT}
+
+BindPaths=/etc/ssh /var/lib/pf /run/pf /run/dbus/system_bus_socket
+User=root
+RuntimeDirectory=pf
+
+Restart=on-failure
+RestartSec=30s
