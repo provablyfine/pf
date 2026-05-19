@@ -11,3 +11,5 @@
 **/*.swo
 .coverage*
 uv.lock
+site
+.idea

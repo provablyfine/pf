@@ -43,6 +43,8 @@ dev = [
     "filelock>=3.29.0",
     "psutil>=7.2.2",
     "zensical>=0.0.42",
+    "mkdocs-material>=9.7.6",
+    "pre-commit>=4.6.0",
 ]
 
 [tool.pytest.ini_options]
