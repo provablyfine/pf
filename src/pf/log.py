@@ -68,7 +68,16 @@ def trace_lines(func: typing.Callable[..., typing.Any]) -> typing.Callable[..., 
 
 
 def setup(debug: int, log_filename: str) -> None:
-    debug = int(os.getenv("PF_LOG_LEVEL", str(debug)))
+    log_level = os.getenv("PF_LOG_LEVEL")
+    match log_level:
+        case "DEBUG":
+            debug = 3
+        case "INFO":
+            debug = 2
+        case "WARNING":
+            debug = 1
+        case _:
+            pass
     if debug == 0:
         return
     match debug:

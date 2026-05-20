@@ -3,6 +3,9 @@ theme:
   name: material
   features:
     - content.code.copy
+extra:
+  version:
+    provider: mike
 
 extra_javascript:
   - js/clipboard.js
