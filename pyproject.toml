@@ -48,6 +48,7 @@ dev = [
     "tox>=4.54.0",
     "tox-uv>=1.35.2",
     "licensecheck>=2025.1.0",
+    "mike",
 ]
 
 [tool.tox]
@@ -99,3 +100,6 @@ select = ["E", "F", "I", "UP", "RUF", "S"]
 
 [tool.mypy]
 strict = true
+
+[tool.uv.sources]
+mike = { git = "https://github.com/squidfunk/mike.git" }
