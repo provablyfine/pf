@@ -5,6 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "pf"
 version = "0.1"
+license = "AGPL-3.0-or-later"
 requires-python = ">=3.12"
 dependencies = [
   "cryptography>=45.0.0",
@@ -46,6 +47,7 @@ dev = [
     "cram>=0.7",
     "tox>=4.54.0",
     "tox-uv>=1.35.2",
+    "licensecheck>=2025.1.0",
 ]
 
 [tool.tox]
