@@ -139,7 +139,7 @@ def _infer_sa_type(python_type: type) -> sqlalchemy.types.TypeEngine[typing.Any]
     """Infer SQLAlchemy type from a Python type annotation."""
     # Strip Optional/Union wrappers
     origin = typing.get_origin(python_type)
-    if origin in [typing.Union, types.UnionType]:
+    if origin in (typing.Union, types.UnionType):
         args = typing.get_args(python_type)
         if type(None) in args:
             # Optional[X] — recurse on the non-None type
