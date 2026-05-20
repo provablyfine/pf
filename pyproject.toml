@@ -17,7 +17,6 @@ dependencies = [
   "pydantic",
   "textual",
   "textual-autocomplete>=4.0.6",
-  "websockets>=13.0",
   "pyjwt>=2.12.1",
   "PyYAML>=6.0",
 ]
