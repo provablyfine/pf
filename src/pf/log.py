@@ -77,7 +77,10 @@ def setup(debug: int, log_filename: str) -> None:
         case "WARNING":
             debug = 1
         case _:
-            pass
+            try:
+                debug = int(log_level)
+            except:
+                pass
     if debug == 0:
         return
     match debug:
