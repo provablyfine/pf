@@ -45,7 +45,18 @@ dev = [
     "zensical>=0.0.42",
     "pre-commit>=4.6.0",
     "cram>=0.7",
+    "tox>=4.54.0",
+    "tox-uv>=1.35.2",
 ]
+
+[tool.tox]
+legacy_tox_ini = """
+[tox]
+env_list = py312, py313, py314
+[testenv]
+runner = uv-venv-lock-runner
+commands = pytest {posargs}
+"""
 
 [tool.pytest.ini_options]
 minversion = "6.0"

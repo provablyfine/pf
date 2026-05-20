@@ -56,6 +56,11 @@ Both unit tests and end-to-end tests can be run with pytest:
 $ uv run pytest
 ```
 
+The pre-release test process requires a test across multiple python versions:
+```console
+$ uv run tox
+```
+
 We regularly track test code coverage. We aim for at least 85%:
 ```
 $ make cov
