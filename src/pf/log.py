@@ -90,7 +90,10 @@ def setup(debug: int, log_filename: str) -> None:
             level = logging.INFO
         case _:
             level = logging.DEBUG
-    f = open(log_filename, "a", buffering=1)
+    try:
+        f = open(log_filename, "a", buffering=1)
+    except Exception:
+        f = sys.stdout
     logging.basicConfig(stream=f, level=level, format=FORMAT, datefmt=DATEFMT)
 
 
@@ -102,17 +105,13 @@ def setup_server(prog: str, level: int, log_filename: str | None = None) -> None
     2. PF_LOG_DIRECTORY/<prog>.<pid>.log if PF_LOG_DIRECTORY is set
     3. /dev/stdout
     """
-    level = int(os.getenv("PF_LOG_LEVEL", str(level)))
-    if level == 0:
-        return
     if log_filename is None:
         log_dir = os.environ.get("PF_LOG_DIRECTORY")
         if log_dir:
             log_filename = os.path.join(log_dir, f"{prog}.{os.getpid()}.log")
         else:
             log_filename = "/dev/stdout"
-    f = open(log_filename, "a", buffering=1)
-    logging.basicConfig(stream=f, level=level, format=FORMAT, datefmt=DATEFMT)
+    setup(level, log_filename)
 
 
 def filename(prog: str, args: object) -> str:
