@@ -2,7 +2,7 @@ FROM fedora:latest
 
 RUN dnf install -y python3 uv openssh-clients systemd && dnf clean all
 
-COPY pyproject.toml /tmp/pf/
+COPY pyproject.toml README.md LICENSE.md /tmp/pf/
 COPY src /tmp/pf/src/
 RUN uv pip install --system --break-system-packages /tmp/pf && rm -rf /tmp/pf
 
