@@ -21,7 +21,7 @@ $ uv run licensecheck
 
 Update version number in pyproject.toml
 ```console
-$ uv run version --bump minor
+$ uv version --bump minor
 ```
 
 Build documentation for this VERSION, commit it to 
