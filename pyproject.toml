@@ -4,8 +4,33 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pf"
-version = "0.1"
+authors = [
+  {name = "Mathieu Lacage", email = "mathieu.lacage@cutebugs.net"},
+]
+maintainers = [
+  {name = "Mathieu Lacage", email = "mathieu.lacage@cutebugs.net"},
+]
+description = "Centralized Access-Control for SSH"
+readme = "README.md"
+version = "0.1.0"
 license = "AGPL-3.0-or-later"
+license-files = ["LICENSE.md"]
+keywords = ["SSH", "access-control", "bastion"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Framework :: Pydantic",
+  "Framework :: Pytest",
+  "Framework :: tox",
+  "Intended Audience :: System Administrators",
+  "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+  "Natural Language :: English",
+  "Topic :: Software Development :: Build Tools",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Typing :: Typed",
+]
 requires-python = ">=3.12"
 dependencies = [
   "cryptography>=45.0.0",
@@ -21,6 +46,11 @@ dependencies = [
   "pyjwt>=2.12.1",
   "PyYAML>=6.0",
 ]
+
+[project.urls]
+Documentation = "https://docs.provablyfine.net"
+Repository = "https://github.com/provablyfine/pf.git"
+Issues = "https://github.com/provablyfine/pf/issues"
 
 [project.scripts]
 pf = "pf.cli.pf.main:pf"
