@@ -1,4 +1,6 @@
-# How to create a new release
+# Release process
+
+## How to create a new release
 
 Run all tests for all combinations of python versions we support
 ```console
@@ -34,7 +36,28 @@ Build release
 $ uv build
 ```
 
-Push release to pip
+Push release to pypi
 ```console
-$ uv publish --username __token__ --keyring-provider subprocess
+UV_PUBLISH_TOKEN=$(age -d -i  ~/.age-identity.yubikey ~/.pypi-pf-token.age) uv publish
+```
+
+Build pf-host image
+```console
+```
+
+Push pf-host image to github
+```console
+```
+
+## How to setup yubikey ?
+
+```console
+$ age-plugin-yubikey --generate
+...
+$ cat > ~/.age-identity.yubikey <<EOF
+> AGE-PLUGIN-YUBIKEY-XXXX
+> EOF
+$ age -r RECIPIENT_KEY -o ~/.pypi-pf-token.age <<EOF
+> PYPI_TOKEN
+> EOF
 ```
