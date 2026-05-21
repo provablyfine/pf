@@ -6,9 +6,9 @@ import asyncio
 
 import pytest
 
-import pf.anet.socket as anet_socket
-import pf.anet.ssl as anet_ssl
-import pf.anet.stream as stream
+from . import socket as anet_socket
+from . import ssl as anet_ssl
+from . import stream
 
 SocketPair = tuple[anet_socket.Socket, anet_socket.Socket]
 SSLSocketPair = tuple[anet_ssl.Socket, anet_ssl.Socket]

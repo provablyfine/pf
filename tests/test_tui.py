@@ -6,9 +6,9 @@ import pytest
 import textual.widgets
 import textual.worker
 
-import pf.client
-import pf.tui.app
-import pf.tui.grant_edit
+import provablyfine.client
+import provablyfine.tui.app
+import provablyfine.tui.grant_edit
 
 
 async def _wait(pilot, app=None):
@@ -63,8 +63,8 @@ def _setup(api, tmpdir, ssh_agent):
     _run(["ssh-keygen", "-t", "ed25519", "-f", session_key, "-N", ""], env)
     _run(["pfa", "-c", config_file, "login", f"--session-key={session_key}"], env)
 
-    cfg = pf.client.Config.load(config_file)
-    return pf.client.aio.Client(cfg)
+    cfg = provablyfine.client.Config.load(config_file)
+    return provablyfine.client.aio.Client(cfg)
 
 
 @pytest.mark.anyio
@@ -77,7 +77,7 @@ async def test_tui_grant_edit_identity_fails(api, ssh_agent):
     """
     with tempfile.TemporaryDirectory() as tmpdir:
         auth = _setup(api, tmpdir, ssh_agent)
-        app = pf.tui.app.TuiApp(auth)
+        app = provablyfine.tui.app.TuiApp(auth)
 
         async with app.run_test(size=(200, 50)) as pilot:
             await pilot.pause()  # app startup (no HTTP)
@@ -120,14 +120,14 @@ async def test_tui_grant_edit_identity_fails(api, ssh_agent):
         assert error_notifications, "Expected an error notification after saving identity grant"
 
 
-async def _setup_role_with_grant(auth: pf.client.aio.Client, grant_dict: dict) -> int:
+async def _setup_role_with_grant(auth: provablyfine.client.aio.Client, grant_dict: dict) -> int:
     role = await auth.create_role("test-role", "")
-    grant = pf.client.schemas.validate_grant(grant_dict)
+    grant = provablyfine.client.schemas.validate_grant(grant_dict)
     await auth.update_role(role.id, grant_list=[grant])
     return role.id
 
 
-async def _get_grant(auth: pf.client.aio.Client, role_id: int) -> dict:
+async def _get_grant(auth: provablyfine.client.aio.Client, role_id: int) -> dict:
     role = await auth.get_role(role_id)
     return role.grant_list[0].model_dump()
 
@@ -146,9 +146,9 @@ async def test_tui_role_grant_edit(api, ssh_agent):
 
             # Create test role with a role grant.
             # Role list order: root=row0, aaa=row1, test-role=row2.
-            role_id = await _setup_role_with_grant(auth, pf.tui.grant_edit.new_grant("role"))
+            role_id = await _setup_role_with_grant(auth, provablyfine.tui.grant_edit.new_grant("role"))
 
-            app = pf.tui.app.TuiApp(auth)
+            app = provablyfine.tui.app.TuiApp(auth)
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup
                 await pilot.press("down", "down", "down", "down", "down")  # navigate to Roles
@@ -210,9 +210,9 @@ async def test_tui_identity_grant_edit_filters(api, ssh_agent):
 
             # Create test role with an identity grant.
             # Role list order: root=row0, test-role=row1.
-            role_id = await _setup_role_with_grant(auth, pf.tui.grant_edit.new_grant("identity"))
+            role_id = await _setup_role_with_grant(auth, provablyfine.tui.grant_edit.new_grant("identity"))
 
-            app = pf.tui.app.TuiApp(auth)
+            app = provablyfine.tui.app.TuiApp(auth)
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup
                 await pilot.press("down", "down", "down", "down", "down")  # navigate to Roles
@@ -271,9 +271,9 @@ async def test_tui_identity_grant_edit_permissions(api, ssh_agent):
 
             # Create test role with an identity grant.
             # Role list order: root=row0, test-role=row1.
-            role_id = await _setup_role_with_grant(auth, pf.tui.grant_edit.new_grant("identity"))
+            role_id = await _setup_role_with_grant(auth, provablyfine.tui.grant_edit.new_grant("identity"))
 
-            app = pf.tui.app.TuiApp(auth)
+            app = provablyfine.tui.app.TuiApp(auth)
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup
                 await pilot.press("down", "down", "down", "down", "down")  # navigate to Roles
@@ -359,9 +359,9 @@ async def test_tui_tag_grant_edit(api, ssh_agent):
             auth = _setup(api, tmpdir, ssh_agent)
 
             await auth.create_tag("env", "prod")
-            role_id = await _setup_role_with_grant(auth, pf.tui.grant_edit.new_grant("tag"))
+            role_id = await _setup_role_with_grant(auth, provablyfine.tui.grant_edit.new_grant("tag"))
 
-            app = pf.tui.app.TuiApp(auth)
+            app = provablyfine.tui.app.TuiApp(auth)
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup
                 await pilot.press("down", "down", "down", "down", "down")  # navigate to Roles
@@ -410,9 +410,9 @@ async def test_tui_boundary_grant_edit(api, ssh_agent):
             auth = _setup(api, tmpdir, ssh_agent)
 
             await auth.create_boundary("zone1", "")
-            role_id = await _setup_role_with_grant(auth, pf.tui.grant_edit.new_grant("boundary"))
+            role_id = await _setup_role_with_grant(auth, provablyfine.tui.grant_edit.new_grant("boundary"))
 
-            app = pf.tui.app.TuiApp(auth)
+            app = provablyfine.tui.app.TuiApp(auth)
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup
                 await pilot.press("down", "down", "down", "down", "down")  # navigate to Roles
@@ -464,9 +464,9 @@ async def test_tui_tenant_grant_edit(api, ssh_agent):
         with tempfile.TemporaryDirectory() as tmpdir:
             auth = _setup(api, tmpdir, ssh_agent)
 
-            role_id = await _setup_role_with_grant(auth, pf.tui.grant_edit.new_grant("tenant"))
+            role_id = await _setup_role_with_grant(auth, provablyfine.tui.grant_edit.new_grant("tenant"))
 
-            app = pf.tui.app.TuiApp(auth)
+            app = provablyfine.tui.app.TuiApp(auth)
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup
                 await pilot.press("down", "down", "down", "down", "down")  # navigate to Roles
@@ -512,9 +512,9 @@ async def test_tui_ssh_grant_edit(api, ssh_agent):
 
             await auth.create_tag("env", "prod")
             await auth.create_boundary("zone1", "")
-            role_id = await _setup_role_with_grant(auth, pf.tui.grant_edit.new_grant("ssh-shell"))
+            role_id = await _setup_role_with_grant(auth, provablyfine.tui.grant_edit.new_grant("ssh-shell"))
 
-            app = pf.tui.app.TuiApp(auth)
+            app = provablyfine.tui.app.TuiApp(auth)
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup
                 await pilot.press("down", "down", "down", "down", "down")  # navigate to Roles
@@ -563,7 +563,7 @@ async def test_tui_tag_list(api, ssh_agent):
     with _setup_ssh_auth_sock(ssh_agent):
         with tempfile.TemporaryDirectory() as tmpdir:
             auth = _setup(api, tmpdir, ssh_agent)
-            app = pf.tui.app.TuiApp(auth)
+            app = provablyfine.tui.app.TuiApp(auth)
 
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup
@@ -594,7 +594,7 @@ async def test_tui_tag_delete(api, ssh_agent):
         with tempfile.TemporaryDirectory() as tmpdir:
             auth = _setup(api, tmpdir, ssh_agent)
             await auth.create_tag("env", "prod")
-            app = pf.tui.app.TuiApp(auth)
+            app = provablyfine.tui.app.TuiApp(auth)
 
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup
@@ -620,7 +620,7 @@ async def test_tui_boundary_list(api, ssh_agent):
     with _setup_ssh_auth_sock(ssh_agent):
         with tempfile.TemporaryDirectory() as tmpdir:
             auth = _setup(api, tmpdir, ssh_agent)
-            app = pf.tui.app.TuiApp(auth)
+            app = provablyfine.tui.app.TuiApp(auth)
 
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup
@@ -651,7 +651,7 @@ async def test_tui_boundary_delete(api, ssh_agent):
         with tempfile.TemporaryDirectory() as tmpdir:
             auth = _setup(api, tmpdir, ssh_agent)
             await auth.create_boundary("zone1", "")
-            app = pf.tui.app.TuiApp(auth)
+            app = provablyfine.tui.app.TuiApp(auth)
 
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup
@@ -679,7 +679,7 @@ async def test_tui_bastion_list(api, ssh_agent):
     with _setup_ssh_auth_sock(ssh_agent):
         with tempfile.TemporaryDirectory() as tmpdir:
             auth = _setup(api, tmpdir, ssh_agent)
-            app = pf.tui.app.TuiApp(auth)
+            app = provablyfine.tui.app.TuiApp(auth)
 
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup
@@ -716,7 +716,7 @@ async def test_tui_bastion_delete(api, ssh_agent):
                 [],
                 [],
             )
-            app = pf.tui.app.TuiApp(auth)
+            app = provablyfine.tui.app.TuiApp(auth)
 
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup
@@ -751,7 +751,7 @@ async def test_tui_bastion_add_tag(api, ssh_agent):
             )
             bastion_id = bastion.id
 
-            app = pf.tui.app.TuiApp(auth)
+            app = provablyfine.tui.app.TuiApp(auth)
 
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup
@@ -791,7 +791,7 @@ async def test_tui_identity_list(api, ssh_agent):
     with _setup_ssh_auth_sock(ssh_agent):
         with tempfile.TemporaryDirectory() as tmpdir:
             auth = _setup(api, tmpdir, ssh_agent)
-            app = pf.tui.app.TuiApp(auth)
+            app = provablyfine.tui.app.TuiApp(auth)
 
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup
@@ -821,7 +821,7 @@ async def test_tui_tenant_list(api, ssh_agent):
     with _setup_ssh_auth_sock(ssh_agent):
         with tempfile.TemporaryDirectory() as tmpdir:
             auth = _setup(api, tmpdir, ssh_agent)
-            app = pf.tui.app.TuiApp(auth)
+            app = provablyfine.tui.app.TuiApp(auth)
 
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup
@@ -853,7 +853,7 @@ async def test_tui_role_delete(api, ssh_agent):
         with tempfile.TemporaryDirectory() as tmpdir:
             auth = _setup(api, tmpdir, ssh_agent)
             await auth.create_role("to-delete", "")
-            app = pf.tui.app.TuiApp(auth)
+            app = provablyfine.tui.app.TuiApp(auth)
 
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup
@@ -882,7 +882,7 @@ async def test_tui_identity_delete(api, ssh_agent):
         with tempfile.TemporaryDirectory() as tmpdir:
             auth = _setup(api, tmpdir, ssh_agent)
             await auth.create_identity("alice", [], [], [], [])
-            app = pf.tui.app.TuiApp(auth)
+            app = provablyfine.tui.app.TuiApp(auth)
 
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup
@@ -913,7 +913,7 @@ async def test_tui_tenant_delete(api, ssh_agent):
             await auth.create_tenant("acme", "Acme Corp")
             tenants_before = await auth.list_tenants()
             next(t.id for t in tenants_before.tenants if t.name == "acme")
-            app = pf.tui.app.TuiApp(auth)
+            app = provablyfine.tui.app.TuiApp(auth)
 
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup
@@ -935,7 +935,7 @@ async def test_tui_boundary_edit_description(api, ssh_agent):
             auth = _setup(api, tmpdir, ssh_agent)
             b = await auth.create_boundary("zone1", "")
             boundary_id = b.id
-            app = pf.tui.app.TuiApp(auth)
+            app = provablyfine.tui.app.TuiApp(auth)
 
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup
@@ -977,7 +977,7 @@ async def test_tui_identity_add_tag(api, ssh_agent):
             alice = await auth.create_identity("alice", [], [], [], [])
             alice_id = alice.id
 
-            app = pf.tui.app.TuiApp(auth)
+            app = provablyfine.tui.app.TuiApp(auth)
 
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup

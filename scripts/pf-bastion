@@ -21,9 +21,9 @@ if __name__ == '__main__':
         cov = coverage.Coverage()
         cov.start()
 
-    import pf.bastion.server
+    import provablyfine.bastion.server
     try:
-        pf.bastion.server.run()
+        provablyfine.bastion.server.run()
     finally:
         if cov:
             cov.stop()

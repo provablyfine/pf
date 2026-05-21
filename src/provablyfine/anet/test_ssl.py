@@ -6,9 +6,9 @@ import asyncio
 
 import pytest
 
-import pf.anet.base as base
-import pf.anet.socket as anet_socket
-import pf.anet.ssl as anet_ssl
+from . import base
+from . import socket as anet_socket
+from . import ssl as anet_ssl
 
 
 @pytest.mark.anyio

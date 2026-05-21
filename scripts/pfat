@@ -22,9 +22,9 @@ if __name__ == '__main__':
         cov.start()
     os.environ['TEXTUAL'] = 'devtools'
 
-    import pf.tui.app
+    import provablyfine.tui.app
     try:
-        pf.tui.app.pfat()
+        provablyfine.tui.app.pfat()
     finally:
         if cov:
             cov.stop()

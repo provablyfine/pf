@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-import pf.anet.base as base
-import pf.anet.socket as anet_socket
+from . import base
+from . import socket as anet_socket
 
 
 @pytest.mark.anyio

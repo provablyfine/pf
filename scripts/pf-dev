@@ -22,9 +22,9 @@ if __name__ == '__main__':
         cov = coverage.Coverage()
         cov.start()
 
-    import pf.cli.pf.dev_bastion_cli
+    import provablyfine.cli.pf.dev_bastion_cli
     try:
-        pf.cli.pf.dev_bastion_cli.pf()
+        provablyfine.cli.pf.dev_bastion_cli.pf()
     finally:
         if cov:
             cov.stop()

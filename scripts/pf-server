@@ -25,9 +25,9 @@ if __name__ == '__main__':
         cov = coverage.Coverage()
         cov.start()
 
-    import pf.api.server
+    import provablyfine.api.server
     try:
-        pf.api.server.run()
+        provablyfine.api.server.run()
     finally:
         if cov:
             cov.stop()

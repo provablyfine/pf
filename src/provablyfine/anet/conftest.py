@@ -16,8 +16,8 @@ import cryptography.x509
 import cryptography.x509.oid as crypto_oid
 import pytest
 
-import pf.anet.socket as anet_socket
-import pf.anet.ssl as anet_ssl
+from . import socket as anet_socket
+from . import ssl as anet_ssl
 
 
 def _create_server_context(

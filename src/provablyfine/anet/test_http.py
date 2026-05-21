@@ -6,9 +6,8 @@ import asyncio
 
 import pytest
 
-import pf.anet.exceptions as exceptions
-import pf.anet.http as http
-import pf.anet.socket as anet_socket
+from . import exceptions, http
+from . import socket as anet_socket
 
 SocketPair = tuple[anet_socket.Socket, anet_socket.Socket]
 

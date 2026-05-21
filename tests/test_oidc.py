@@ -12,20 +12,20 @@ import cryptography.hazmat.primitives.hashes
 import pytest
 import requests
 
-import pf.cli.login as login
-import pf.client
-import pf.client.exceptions
-import pf.client.sync
-import pf.jwk as jwk
-import pf.ssh.agent as ssh_agent_module
+import provablyfine.cli.login
+import provablyfine.client
+import provablyfine.client.exceptions
+import provablyfine.client.sync
+import provablyfine.jwk
+import provablyfine.ssh.agent
 
 from . import mock_oidc
 
 
-def _create_session_key() -> tuple[jwk.Private, str]:
+def _create_session_key() -> tuple[provablyfine.jwk.Private, str]:
     """Create a session key, add to SSH agent, return (key, fingerprint)."""
-    session_key = jwk.Private.generate_ed25519()
-    ssh_agent = ssh_agent_module.Client()
+    session_key = provablyfine.jwk.Private.generate_ed25519()
+    ssh_agent = provablyfine.ssh.agent.Client()
     ssh_agent.add(session_key, comment="test-session", lifetime=300)
     session_fingerprint = session_key.public().ssh_fingerprint()
     return session_key, session_fingerprint
@@ -35,8 +35,8 @@ def _create_session_key() -> tuple[jwk.Private, str]:
 class OidcEnv:
     """Test environment with OIDC setup."""
 
-    config: pf.client.Config
-    sc: pf.client.sync.Client
+    config: provablyfine.client.Config
+    sc: provablyfine.client.sync.Client
     mock: mock_oidc.MockOidcProvider
 
 
@@ -49,22 +49,22 @@ def oidc_env(api, mock_oidc, ssh_agent, tmp_path) -> typing.Iterator[OidcEnv]:
 
     try:
         # Write temporary account key file
-        account_key_obj = jwk.Private.generate_ed25519()
+        account_key_obj = provablyfine.jwk.Private.generate_ed25519()
         account_key_file = tmp_path / "account_key"
         account_key_file.write_bytes(account_key_obj.to_pem())
 
         # Initialize Config pointing to the API (no session key yet)
-        config = pf.client.Config(
+        config = provablyfine.client.Config(
             directory_url=f"http://127.0.0.1:{api.port}/pf/t/root/directory",
             account_key=str(account_key_file),
         )
 
         # Create sync client and initialize tenant
-        sc = pf.client.sync.Client(config)
+        sc = provablyfine.client.sync.Client(config)
         sc.initialize(str(account_key_file))
 
         # Generate session key and login via http_sig
-        session_key_obj = jwk.Private.generate_ed25519()
+        session_key_obj = provablyfine.jwk.Private.generate_ed25519()
         session_key_file = tmp_path / "session_key"
         session_key_file.write_bytes(session_key_obj.to_pem())
         session_fingerprint = str(session_key_file)  # Full path for http_sig_login
@@ -75,12 +75,12 @@ def oidc_env(api, mock_oidc, ssh_agent, tmp_path) -> typing.Iterator[OidcEnv]:
         )
 
         # Update config to include session key so subsequent calls work
-        config = pf.client.Config(
+        config = provablyfine.client.Config(
             directory_url=config.directory_url,
             account_key=config.account_key,
             session_key=str(session_key_file),
         )
-        sc = pf.client.sync.Client(config)
+        sc = provablyfine.client.sync.Client(config)
 
         # Create OIDC auth config pointing to mock OIDC provider
         sc.create_auth_oidc(
@@ -146,7 +146,7 @@ def test_endpoint_expired(oidc_env: OidcEnv) -> None:
     id_token = oidc_env.mock.issue_token("user@example.com", expired=True)
     session_key, session_fingerprint = _create_session_key()
 
-    with pytest.raises(pf.client.exceptions.UI):
+    with pytest.raises(provablyfine.client.exceptions.UI):
         oidc_env.sc.login_oidc(
             auth_name="oidc-test",
             id_token=id_token,
@@ -160,7 +160,7 @@ def test_endpoint_wrong_issuer(oidc_env: OidcEnv) -> None:
     id_token = oidc_env.mock.issue_token("user@example.com", issuer="https://evil.example.com")
     session_key, session_fingerprint = _create_session_key()
 
-    with pytest.raises(pf.client.exceptions.UI):
+    with pytest.raises(provablyfine.client.exceptions.UI):
         oidc_env.sc.login_oidc(
             auth_name="oidc-test",
             id_token=id_token,
@@ -174,7 +174,7 @@ def test_endpoint_wrong_audience(oidc_env: OidcEnv) -> None:
     id_token = oidc_env.mock.issue_token("user@example.com", audience="wrong-client")
     session_key, session_fingerprint = _create_session_key()
 
-    with pytest.raises(pf.client.exceptions.UI):
+    with pytest.raises(provablyfine.client.exceptions.UI):
         oidc_env.sc.login_oidc(
             auth_name="oidc-test",
             id_token=id_token,
@@ -208,7 +208,7 @@ def test_endpoint_missing_email(oidc_env: OidcEnv) -> None:
 
     session_key, session_fingerprint = _create_session_key()
 
-    with pytest.raises(pf.client.exceptions.UI):
+    with pytest.raises(provablyfine.client.exceptions.UI):
         oidc_env.sc.login_oidc(
             auth_name="oidc-test",
             id_token=id_token,
@@ -222,7 +222,7 @@ def test_endpoint_unknown_auth(oidc_env: OidcEnv) -> None:
     id_token = oidc_env.mock.issue_token("user@example.com")
     session_key, session_fingerprint = _create_session_key()
 
-    with pytest.raises(pf.client.exceptions.UI):
+    with pytest.raises(provablyfine.client.exceptions.UI):
         oidc_env.sc.login_oidc(
             auth_name="no-such-auth",
             id_token=id_token,
@@ -277,7 +277,7 @@ def test_endpoint_tag_restriction_fail(oidc_env: OidcEnv) -> None:
     id_token = oidc_env.mock.issue_token("user@example.com")
     session_key, session_fingerprint = _create_session_key()
 
-    with pytest.raises(pf.client.exceptions.UI):
+    with pytest.raises(provablyfine.client.exceptions.UI):
         oidc_env.sc.login_oidc(
             auth_name="oidc-restricted",
             id_token=id_token,
@@ -305,10 +305,10 @@ def test_full_oidc_login_flow(oidc_env: OidcEnv, monkeypatch) -> None:
 
         threading.Thread(target=_fetch, daemon=True).start()
 
-    monkeypatch.setattr("pf.cli.login.webbrowser.open", fake_browser)
+    monkeypatch.setattr("provablyfine.cli.login.webbrowser.open", fake_browser)
 
     # Call the full OIDC login flow
-    fingerprint = login.oidc_login(oidc_env.config, oidc_env.sc, "oidc-test")
+    fingerprint = provablyfine.cli.login.oidc_login(oidc_env.config, oidc_env.sc, "oidc-test")
     assert fingerprint  # Should return a session fingerprint
     # The fingerprint is an SSH key fingerprint; it can be used to look up the key in SSH agent
     # In a real CLI, this would be saved to the config file after successful login
@@ -329,8 +329,8 @@ def test_full_oidc_login_flow_callback_error(oidc_env: OidcEnv, monkeypatch) -> 
 
         threading.Thread(target=_fetch, daemon=True).start()
 
-    monkeypatch.setattr("pf.cli.login.webbrowser.open", fake_browser)
+    monkeypatch.setattr("provablyfine.cli.login.webbrowser.open", fake_browser)
 
     # Should raise because callback never receives a code
-    with pytest.raises(pf.client.exceptions.UI, match="did not receive an authorization code"):
-        login.oidc_login(oidc_env.config, oidc_env.sc, "oidc-test")
+    with pytest.raises(provablyfine.client.exceptions.UI, match="did not receive an authorization code"):
+        provablyfine.cli.login.oidc_login(oidc_env.config, oidc_env.sc, "oidc-test")
