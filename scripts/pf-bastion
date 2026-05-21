@@ -7,10 +7,10 @@
 #   "pytest",
 #   "coverage",
 #   "pyjwt",
-#   "pf",
+#   "provablyfine",
 # ]
 # [tool.uv.sources]
-# pf = { path = "../", editable = true }
+# provablyfine = { path = "../", editable = true }
 # ///
 import os
 

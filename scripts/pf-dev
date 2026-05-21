@@ -7,11 +7,11 @@
 #   "tabulate",
 #   "pytest",
 #   "coverage",
-#   "pf",
+#   "provablyfine",
 #   "pydantic",
 # ]
 # [tool.uv.sources]
-# pf = { path = "../", editable = true }
+# provablyfine = { path = "../", editable = true }
 # ///
 import os
 

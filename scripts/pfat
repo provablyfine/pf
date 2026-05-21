@@ -6,11 +6,11 @@
 #   "http-sfv",
 #   "textual>=0.86",
 #   "textual-autocomplete",
-#   "pf",
+#   "provablyfine",
 #   "pydantic",
 # ]
 # [tool.uv.sources]
-# pf = { path = "../", editable = true }
+# provablyfine = { path = "../", editable = true }
 # ///
 import os
 
