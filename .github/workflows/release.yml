@@ -1,0 +1,142 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - name: Check tag matches pyproject.toml version
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          PKG_VERSION=$(uv version --short)
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match pyproject.toml version $PKG_VERSION"
+            exit 1
+          fi
+
+  lint:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - name: Run pyright
+        run: uv run pyright
+      - name: Run ruff check
+        run: uv run ruff check
+      - name: Run ruff format
+        run: uv run ruff format --check
+      - name: Check imports
+        run: ./scripts/check-imports
+      - name: Check license compatibility
+        run: uv run licensecheck
+
+  test:
+    needs: validate
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install podman
+        run: sudo apt-get update && sudo apt-get install -y podman
+      - name: Run tests
+        run: uv run pytest
+
+  docs:
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: astral-sh/setup-uv@v4
+      - name: Configure git for mike
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+      - name: Deploy docs
+        run: |
+          VERSION=$(uv version --short)
+          uv run mike deploy --push --update-aliases "$VERSION" latest
+
+  build:
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - name: Build distribution
+        run: uv build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish-pypi:
+    needs: [build, docs]
+    runs-on: ubuntu-latest
+    environment: pypi
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+  build-squashfs:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install podman and squashfs-tools
+        run: sudo apt-get update && sudo apt-get install -y podman squashfs-tools
+      - name: Build squashfs
+        run: |
+          VERSION=$(uv version --short)
+          mkdir -p rootfs
+          podman build -f podman/pf-host.Containerfile -t pf-host-build .
+          CONTAINER=$(podman create pf-host-build)
+          podman export "$CONTAINER" | tar -x -C rootfs/
+          podman rm "$CONTAINER"
+          mksquashfs rootfs/ "pf-host_${VERSION}.raw" -comp zstd -noappend
+      - uses: actions/upload-artifact@v4
+        with:
+          name: squashfs
+          path: "pf-host_*.raw"
+
+  github-release:
+    needs: [publish-pypi, build-squashfs]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: actions/download-artifact@v4
+        with:
+          name: squashfs
+          path: squashfs/
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*
+            squashfs/*
+          generate_release_notes: true

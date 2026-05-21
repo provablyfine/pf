@@ -2,62 +2,40 @@
 
 ## How to create a new release
 
-Run all tests for all combinations of python versions we support
-```console
-$ uv run tox
-```
+The release process is fully automated via GitHub Actions. The workflow is triggered by tagging a commit with a version tag (`v*`).
 
-Other checks
-```console
-$ uv run pyright
-$ uv run ruff check
-$ uv run ruff format
-```
+### Manual steps
 
-Check license compatibility
-```console
-$ uv run licensecheck
-```
-
-Update version number in pyproject.toml
+1. Bump the version in `pyproject.toml`:
 ```console
 $ uv version --bump minor
 ```
 
-Build documentation for this VERSION, commit it to 
-`gh-pages` branch, update the `latest` alias to point to
-this version, and push the branch.
+2. Commit the version bump:
 ```console
-uv run mike deploy --push -u $(uv version --short) latest
+$ git add pyproject.toml
+$ git commit -m "release: $(uv version --short)"
 ```
 
-Build release
+3. Create a version tag (must match the version in `pyproject.toml`):
 ```console
-$ uv build
+$ git tag v$(uv version --short)
 ```
 
-Push release to pypi
+4. Push to GitHub (triggers the release workflow):
 ```console
-UV_PUBLISH_TOKEN=$(age -d -i  ~/.age-identity.yubikey ~/.pypi-pf-token.age) uv publish
+$ git push github main --tags
 ```
 
-Build pf-host image
-```console
-```
+### What happens next (automated)
 
-Push pf-host image to github
-```console
-```
+The `.github/workflows/release.yml` workflow automatically:
 
-## How to setup yubikey ?
-
-```console
-$ age-plugin-yubikey --generate
-...
-$ cat > ~/.age-identity.yubikey <<EOF
-> AGE-PLUGIN-YUBIKEY-XXXX
-> EOF
-$ age -r RECIPIENT_KEY -o ~/.pypi-pf-token.age <<EOF
-> PYPI_TOKEN
-> EOF
-```
+1. **Validates** the tag matches the version in `pyproject.toml`
+2. **Tests** across Python 3.12, 3.13, 3.14 (includes podman for container tests)
+3. **Lints** the code (pyright, ruff, license check)
+4. **Deploys docs** to the versioned docs site (via mike)
+5. **Builds** the Python distribution (wheel + sdist)
+6. **Publishes to PyPI** (via OIDC Trusted Publisher, no token needed)
+7. **Builds the container image** as a squashfs for portablectl
+8. **Creates a GitHub Release** with both the Python dist and the squashfs artifact
