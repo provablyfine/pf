@@ -188,9 +188,7 @@ class RequestsAuth:
             else:
                 body_bytes = body if isinstance(body, bytes) else b""
             digest = hashlib.sha256(body_bytes).digest()
-            request.headers["Content-Digest"] = str(
-                http_sfv.Dictionary({"sha-256": digest})
-            )
+            request.headers["Content-Digest"] = str(http_sfv.Dictionary({"sha-256": digest}))
         covered = ("@method", "@authority", "@target-uri", "content-digest", "@signature-params")
         signatures_input: list[str] = []
         signatures: list[str] = []
@@ -328,9 +326,7 @@ class Client:
     def no_auth(self) -> HttpClient:
         return HttpClient(self, auth=None, timeout=self._timeout)
 
-    def invitation_auth_with_key(
-        self, account: jwk.Private, invitation: str
-    ) -> InvitationHttpClient:
+    def invitation_auth_with_key(self, account: jwk.Private, invitation: str) -> InvitationHttpClient:
         account_signer = FileSigner("account", account)
         return self._invitation_auth(account_signer, invitation)
 

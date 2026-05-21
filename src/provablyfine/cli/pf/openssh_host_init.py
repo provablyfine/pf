@@ -34,7 +34,7 @@ def _preflight_check(sshd_config_dir: str, sshd_config_file: str) -> None:
 
 
 def _check_file_for_directives(filepath: str, directives: list[str]) -> list[str]:
-    conflicts: list[str]  = []
+    conflicts: list[str] = []
     try:
         with open(filepath) as f:
             for line in f:
@@ -66,9 +66,7 @@ def _write_file_atomic(filepath: str, content: bytes | str, mode: str = "wb") ->
         raise
 
 
-def _write_sshd_drop_in(
-    drop_in_path: str, host_keys_dir: str, ca_pub_path: str, auth_user: str
-) -> None:
+def _write_sshd_drop_in(drop_in_path: str, host_keys_dir: str, ca_pub_path: str, auth_user: str) -> None:
     drop_in_content = [f"TrustedUserCAKeys {ca_pub_path}"]
     for key_type in ["ed25519", "ecdsa", "rsa"]:
         cert_path = os.path.join(host_keys_dir, f"ssh_host_{key_type}_key.cert")
@@ -86,9 +84,7 @@ def _write_sshd_drop_in(
     _write_file_atomic(drop_in_path, "".join(f"{line}\n" for line in drop_in_content), mode="w")
 
 
-def _sign_host_certificates_with_auth(
-    auth_http: client.http_client.HttpClient, host_keys_dir: str
-) -> None:
+def _sign_host_certificates_with_auth(auth_http: client.http_client.HttpClient, host_keys_dir: str) -> None:
     public_keys: list[dict[str, str]] = []
     filename_from_fingerprint: dict[str, str] = {}
 
@@ -140,7 +136,6 @@ def _do_refresh(
 
     ca_pubkey = sc.get_user_trusted_keys_public()
     _write_file_atomic(ca_pub_path, ca_pubkey, mode="w")
-
 
 
 def _read_json_from_socket(sock: socket.socket) -> dict[str, str]:
