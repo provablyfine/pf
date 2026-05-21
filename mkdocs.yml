@@ -14,6 +14,7 @@ plugins:
 
 extra_javascript:
   - js/clipboard.js
+  - javascripts/version-banner.js
 
 markdown_extensions:
   - admonition
