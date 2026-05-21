@@ -6,6 +6,11 @@ theme:
 extra:
   version:
     provider: mike
+    alias: true
+
+plugins:
+  - mike:
+      canonical_version: latest
 
 extra_javascript:
   - js/clipboard.js
