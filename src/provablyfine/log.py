@@ -76,10 +76,12 @@ def setup(debug: int, log_filename: str) -> None:
             debug = 2
         case "WARNING":
             debug = 1
+        case None:
+            pass
         case _:
             try:
                 debug = int(log_level)
-            except:
+            except ValueError:
                 pass
     if debug == 0:
         return
