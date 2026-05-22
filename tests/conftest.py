@@ -41,10 +41,11 @@ def tld():
 
 def _run(args, log_dir):
     logger.info(f"RUN: {' '.join(args)}")
-    fd, stdout = tempfile.mkstemp(dir=log_dir)
-    popen = subprocess.run(args, stdin=subprocess.DEVNULL, stdout=fd, stderr=fd)
+    stdout_fd, stdout = tempfile.mkstemp(dir=log_dir)
+    stderr_fd, stderr = tempfile.mkstemp(dir=log_dir)
+    popen = subprocess.run(args, stdin=subprocess.DEVNULL, stdout=stdout_fd, stderr=stderr_fd)
     if popen.returncode != 0:
-        raise Error(f'Unable to run returncode={popen.returncode}, stdout+stderr={stdout}. args="{" ".join(args)}"')
+        raise Error(f'Unable to run returncode={popen.returncode}, stdout={stdout} stderr={stderr} args="{" ".join(args)}"')
     with open(stdout) as f:
         return f.read()
 
