@@ -55,7 +55,13 @@ jobs:
       - name: Install podman
         run: sudo apt-get update && sudo apt-get install -y podman
       - name: Run tests
-        run: uv run pytest
+        run: uv run pytest --basetemp=/tmp/pf-test-logs
+      - name: Upload test logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs-${{ matrix.python-version }}
+          path: /tmp/pf-test-logs/
 
   docs:
     needs: [lint, test]
