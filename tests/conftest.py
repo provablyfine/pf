@@ -148,7 +148,7 @@ EOF
 CMD ["/bin/sh", "/run/start.sh"]
     """
     tmp_path = tmp_path_factory.getbasetemp().parent
-    with tempfile.NamedTemporaryFile(mode="w+", dir=tmp_path) as container_file:
+    with tempfile.NamedTemporaryFile(mode="w+", dir=tmp_path, delete=False) as container_file:
         container_file.write(containerfile)
         container_file.flush()
 
@@ -227,7 +227,7 @@ RUN systemctl enable pf-bastion.socket pf-bastion-control.socket
 CMD ["/sbin/init"]
 """
 
-    with tempfile.NamedTemporaryFile(mode="w+", suffix=".Containerfile", dir=tmp_path) as container_file:
+    with tempfile.NamedTemporaryFile(mode="w+", suffix=".Containerfile", dir=tmp_path, delete=False) as container_file:
         container_file.write(containerfile)
         container_file.flush()
 
