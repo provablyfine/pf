@@ -7,8 +7,8 @@ def test_bastion_reload(api, ssh_agent, bastion_server):
         "tests/bastion_reload.t",
         {
             "API_PORT": str(api.port),
-            "SSH_AUTH_SOCK": ssh_agent.socket,
+            "SSH_AUTH_SOCK": str(ssh_agent.socket),
             "BASTION_PORT": str(bastion_server.port),
-            "BASTION_CTRL_SOCK": bastion_server.control_socket,
+            "BASTION_CTRL_SOCK": str(bastion_server.control_socket),
         },
     )

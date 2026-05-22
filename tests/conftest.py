@@ -14,7 +14,6 @@ import tempfile
 import time
 import typing
 
-import filelock
 import psutil
 import pytest
 import requests
@@ -324,8 +323,7 @@ class Api:
 
 @pytest.fixture
 def api(request, tmp_path):
-    print(tmp_path)
-    tmp_dir = tmp_path.absolute()
+    tmp_path = tmp_path.absolute()
     api_kek_file = tmp_path / "kek_file.key"
     api_config = tmp_path / "config.json"
     api_port_file = tmp_path / "api.port"
@@ -336,7 +334,7 @@ def api(request, tmp_path):
         f.write(
             json.dumps(
                 {
-                    "tenant_registry_url": f"sqlite:///{str(tmp_path / 'tenants.db')}",
+                    "tenant_registry_url": f"sqlite:///{tmp_path / 'tenants.db'!s}",
                     "tenants_dir": str(tmp_path),
                     "debug": True,
                     "log_level": "DEBUG",
@@ -455,11 +453,11 @@ def _start_bastion_process(
 
 
 @pytest.fixture
-def bastion_server(request, api):
-    tmp_dir = tempfile.TemporaryDirectory()
-    port_file = os.path.join(tmp_dir.name, "bastion.port")
-    log_file = os.path.join(tmp_dir.name, "bastion.log")
-    control_socket = os.path.join(tmp_dir.name, "pf-bastion-control.sock")
+def bastion_server(request, api, tmp_path):
+    tmp_path = tmp_path.absolute()
+    port_file = tmp_path / "bastion.port"
+    log_file = tmp_path / "bastion.log"
+    control_socket = tmp_path / "pf-bastion-control.sock"
 
     popen, log_f = _start_bastion_process(api.port, port_file, log_file, control_socket)
 
@@ -502,7 +500,6 @@ def bastion_server(request, api):
             with open(log_file) as f:
                 print(f"Bastion log:\n{f.read()}")
             return
-    tmp_dir.cleanup()
 
 
 @dataclasses.dataclass(frozen=True)
