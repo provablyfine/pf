@@ -40,15 +40,14 @@ def tld():
     return os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 
-def _run(args):
+def _run(args, log_dir):
     logger.info(f"RUN: {' '.join(args)}")
-    popen = subprocess.run(args, capture_output=True, text=True)
+    fd, stdout = tempfile.mkstemp(dir=log_dir)
+    popen = subprocess.run(args, stdin=subprocess.DEVNULL, stdout=fd, stderr=subprocess.PIPE)
     if popen.returncode != 0:
-        with tempfile.NamedTemporaryFile(delete=False, delete_on_close=False, mode="w+") as f:
-            f.write(popen.stdout)
-            f.flush()
-            raise Error(f'Unable to run returncode={popen.returncode}, stdout={f.name}. args="{" ".join(args)}"')
-    return popen.stdout
+        raise Error(f'Unable to run returncode={popen.returncode}, stdout+stderr={stdout}. args="{" ".join(args)}"')
+    with open(stdout) as f:
+        return f.read()
 
 
 def _parse_port_mapping(s):
@@ -74,24 +73,7 @@ class SshD:
 
 
 @pytest.fixture(scope="session")
-def sshd_image(tmp_path_factory, worker_id):
-    if not shutil.which("podman"):
-        pytest.skip("podman not found")
-    # pattern borrowed from pytest manual
-    if worker_id == "master":
-        return _build_image()
-    root_tmp_dir = tmp_path_factory.getbasetemp().parent
-    fn = root_tmp_dir / "sshd-image.json"
-    with filelock.FileLock(str(fn) + ".lock"):
-        if fn.is_file():
-            data = json.loads(fn.read_text())
-        else:
-            data = _build_image()
-            fn.write_text(json.dumps(data))
-    return data
-
-
-def _build_image():
+def sshd_image(tmp_path_factory):
     """Build SSH server container image once per worker session."""
     containerfile = """
 FROM alpine:3.23
@@ -166,18 +148,19 @@ EOF
 
 CMD ["/bin/sh", "/run/start.sh"]
     """
-    with tempfile.NamedTemporaryFile(mode="w+") as container_file:
+    tmp_path = tmp_path_factory.getbasetemp().parent
+    with tempfile.NamedTemporaryFile(mode="w+", dir=tmp_path) as container_file:
         container_file.write(containerfile)
         container_file.flush()
 
-        stdout = _run(["podman", "build", "--quiet", "--file", container_file.name, tld()])
+        stdout = _run(["podman", "build", "--quiet", "--file", container_file.name, tld()], tmp_path)
         image_id = stdout.strip("\n")
         if "\n" in image_id:
             assert False, image_id
     return image_id
 
 
-def _build_bastion_image() -> str:
+def _build_bastion_image(tmp_path) -> str:
     pf_bastion_control_socket = """[Unit]
 Description=PF Bastion Control Socket
 
@@ -245,11 +228,11 @@ RUN systemctl enable pf-bastion.socket pf-bastion-control.socket
 CMD ["/sbin/init"]
 """
 
-    with tempfile.NamedTemporaryFile(mode="w+", suffix=".Containerfile") as container_file:
+    with tempfile.NamedTemporaryFile(mode="w+", suffix=".Containerfile", dir=tmp_path) as container_file:
         container_file.write(containerfile)
         container_file.flush()
 
-        stdout = _run(["podman", "build", "--quiet", "--file", container_file.name, tld()])
+        stdout = _run(["podman", "build", "--quiet", "--file", container_file.name, tld()], tmp_path)
         image_id = stdout.strip("\n")
         if "\n" in image_id:
             assert False, image_id
@@ -257,7 +240,7 @@ CMD ["/sbin/init"]
 
 
 @pytest.fixture
-def sshd(request, sshd_image):
+def sshd(request, sshd_image, tmp_path):
     with tempfile.TemporaryDirectory() as ssh_keys_directory:
         # Make sure "nobody" can read this directory
         fd = os.open(ssh_keys_directory, 0)
@@ -274,10 +257,11 @@ def sshd(request, sshd_image):
                 "--volume",
                 f"{ssh_keys_directory}:/etc/ssh/keys:rw",
                 sshd_image,
-            ]
+            ],
+            tmp_path,
         )
         container_id = stdout.strip("\n")
-        stdout = _run(["podman", "port", container_id])
+        stdout = _run(["podman", "port", container_id], tmp_path)
         try:
             port = _parse_port_mapping(stdout)
         except Exception:
@@ -300,7 +284,7 @@ def sshd(request, sshd_image):
             if hasattr(request.node, "rep_call"):
                 if request.node.rep_call.failed:
                     print(f"SSH Server container: {container_id}")
-            _run(["podman", "container", "stop", "-t", "0", container_id])
+            _run(["podman", "container", "stop", "-t", "0", container_id], tmp_path)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -339,23 +323,24 @@ class Api:
 
 
 @pytest.fixture
-def api(request):
-    tmp_dir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True, delete=False)
-    api_kek_file = os.path.join(tmp_dir.name, "kek_file.key")
-    api_config = os.path.join(tmp_dir.name, "config.json")
-    api_port_file = os.path.join(tmp_dir.name, "api.port")
-    api_log = os.path.join(tmp_dir.name, "api.log")
+def api(request, tmp_path):
+    print(tmp_path)
+    tmp_dir = tmp_path.absolute()
+    api_kek_file = tmp_path / "kek_file.key"
+    api_config = tmp_path / "config.json"
+    api_port_file = tmp_path / "api.port"
+    api_log = tmp_path / "api.log"
     with open(api_kek_file, "wb+") as f:
         f.write(random.randbytes(32))
     with open(api_config, "w+") as f:
         f.write(
             json.dumps(
                 {
-                    "tenant_registry_url": f"sqlite:///{os.path.join(tmp_dir.name, 'tenants.db')}",
-                    "tenants_dir": tmp_dir.name,
+                    "tenant_registry_url": f"sqlite:///{str(tmp_path / 'tenants.db')}",
+                    "tenants_dir": str(tmp_path),
                     "debug": True,
                     "log_level": "DEBUG",
-                    "kek_filename": api_kek_file,
+                    "kek_filename": str(api_kek_file),
                     #'debug_sql': True,
                 }
             )
@@ -419,7 +404,6 @@ def api(request):
             print(f"API portfile: {api_port_file}")
             print(f"API kek: {api_kek_file}")
             return
-    tmp_dir.cleanup()
 
 
 @dataclasses.dataclass(frozen=True)
@@ -535,7 +519,7 @@ def bastion_container(request, api, tmp_path):
     """Start bastion under real systemd in a podman container."""
     if not shutil.which("podman"):
         pytest.skip("podman not found")
-    bastion_image = _build_bastion_image()
+    bastion_image = _build_bastion_image(tmp_path)
 
     # Create shared directories
     shared_dir = tmp_path / "run-pf"
