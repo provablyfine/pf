@@ -45,7 +45,9 @@ def _run(args, log_dir):
     stderr_fd, stderr = tempfile.mkstemp(dir=log_dir)
     popen = subprocess.run(args, stdin=subprocess.DEVNULL, stdout=stdout_fd, stderr=stderr_fd)
     if popen.returncode != 0:
-        raise Error(f'Unable to run returncode={popen.returncode}, stdout={stdout} stderr={stderr} args="{" ".join(args)}"')
+        raise Error(
+            f'Unable to run returncode={popen.returncode}, stdout={stdout} stderr={stderr} args="{" ".join(args)}"'
+        )
     with open(stdout) as f:
         return f.read()
 
@@ -153,7 +155,9 @@ CMD ["/bin/sh", "/run/start.sh"]
         container_file.write(containerfile)
         container_file.flush()
 
-        stdout = _run(["podman", "build", "--format", "docker", "--quiet", "--file", container_file.name, tld()], tmp_path)
+        stdout = _run(
+            ["podman", "build", "--format", "docker", "--quiet", "--file", container_file.name, tld()], tmp_path
+        )
         image_id = stdout.strip("\n")
         if "\n" in image_id:
             assert False, image_id
@@ -232,7 +236,9 @@ CMD ["/sbin/init"]
         container_file.write(containerfile)
         container_file.flush()
 
-        stdout = _run(["podman", "build", "--format", "docker", "--quiet", "--file", container_file.name, tld()], tmp_path)
+        stdout = _run(
+            ["podman", "build", "--format", "docker", "--quiet", "--file", container_file.name, tld()], tmp_path
+        )
         image_id = stdout.strip("\n")
         if "\n" in image_id:
             assert False, image_id
