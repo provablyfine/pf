@@ -101,7 +101,12 @@ StrictModes yes
 MaxAuthTries 10
 MaxSessions 10
 
-AuthorizedPrincipalsCommand /usr/bin/pf openssh authorized-principals --host-certificate=/etc/ssh/keys/ssh_host_ed25519_key.cert --username=%u --certificate=%k
+AuthorizedPrincipalsCommand /usr/bin/pf \
+    openssh \
+    authorized-principals \
+    --host-certificate=/etc/ssh/keys/ssh_host_ed25519_key.cert \
+    --username=%u \
+    --certificate=%k
 AuthorizedPrincipalsCommandUser nobody
 
 PubkeyAuthentication yes
