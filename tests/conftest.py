@@ -77,28 +77,7 @@ class SshD:
 @pytest.fixture(scope="session")
 def sshd_image(tmp_path_factory):
     """Build SSH server container image once per worker session."""
-    containerfile = """
-FROM alpine:3.23
-
-RUN apk add --no-cache openssh-server openssh-keygen python3 uv
-
-COPY pyproject.toml README.md LICENCE.md /tmp/pf/
-COPY src /tmp/pf/src/
-RUN --mount=type=cache,target=/root/.cache/uv uv pip install \
-    --quiet --link-mode=copy --system --break-system-packages /tmp/pf && \
-    rm -rf /tmp/pf
-
-RUN mkdir -p /run/sshd && \
-    adduser -D alice && \
-    adduser -D bob && \
-    adduser -D charlie
-
-# unlock accounts
-RUN passwd -u alice && \
-    passwd -u bob && \
-    passwd -u charlie
-
-RUN cat <<EOF >/etc/ssh/sshd_config
+    sshd_config = """\
 Port 22
 ListenAddress 0.0.0.0
 AddressFamily any
@@ -115,7 +94,6 @@ RekeyLimit default none
 
 SyslogFacility AUTH
 LogLevel INFO
-#LogLevel DEBUG
 
 LoginGraceTime 2m
 PermitRootLogin yes
@@ -123,30 +101,51 @@ StrictModes yes
 MaxAuthTries 10
 MaxSessions 10
 
-AuthorizedPrincipalsCommand /usr/bin/pf openssh authorized-principals \
-        --host-certificate=/etc/ssh/keys/ssh_host_ed25519_key.cert \
-        --username=%u --certificate=%k
+AuthorizedPrincipalsCommand /usr/bin/pf openssh authorized-principals --host-certificate=/etc/ssh/keys/ssh_host_ed25519_key.cert --username=%u --certificate=%k
 AuthorizedPrincipalsCommandUser nobody
 
 PubkeyAuthentication yes
-AuthorizedKeysFile	none
+AuthorizedKeysFile none
 HostbasedAuthentication no
 PasswordAuthentication no
 PermitEmptyPasswords no
 KbdInteractiveAuthentication no
 
-Subsystem	sftp	/usr/libexec/openssh/sftp-server
+Subsystem sftp /usr/libexec/openssh/sftp-server
 TrustedUserCAKeys /etc/ssh/keys/user-ca.pub
-EOF
-
-EXPOSE 22
-
-RUN cat <<EOF > /run/start.sh
+"""
+    start_sh = """\
 ssh-keygen -t ed25519 -f /etc/ssh/keys/ssh_host_ed25519_key -N "" > /dev/null
 ssh-keygen -t ecdsa -f /etc/ssh/keys/ssh_host_ecdsa_key -N "" > /dev/null
 ssh-keygen -t rsa -f /etc/ssh/keys/ssh_host_rsa_key -N "" > /dev/null
 /usr/sbin/sshd -D -e
-EOF
+"""
+    containerfile = f"""
+FROM alpine:3.23
+
+RUN apk add --no-cache openssh-server openssh-keygen python3 uv
+
+COPY pyproject.toml README.md LICENCE.md /tmp/pf/
+COPY src /tmp/pf/src/
+RUN --mount=type=cache,target=/root/.cache/uv uv pip install \\
+    --quiet --link-mode=copy --system --break-system-packages /tmp/pf && \\
+    rm -rf /tmp/pf
+
+RUN mkdir -p /run/sshd && \\
+    adduser -D alice && \\
+    adduser -D bob && \\
+    adduser -D charlie
+
+# unlock accounts
+RUN passwd -u alice && \\
+    passwd -u bob && \\
+    passwd -u charlie
+
+RUN printf '%b' '{sshd_config.replace("\n", "\\n")}' > /etc/ssh/sshd_config
+
+EXPOSE 22
+
+RUN printf '%b' '{start_sh.replace("\n", "\\n")}' > /run/start.sh
 
 CMD ["/bin/sh", "/run/start.sh"]
     """
@@ -206,7 +205,8 @@ ExecStart=/usr/bin/python -m coverage run --source=/usr/local/lib/python3.14/sit
 FileDescriptorStoreMax=128
 """
 
-    containerfile = f"""FROM fedora:latest
+    containerfile = f"""
+FROM fedora:latest
 RUN dnf install -y python3 uv systemd python3-coverage && dnf clean all
 RUN systemctl mask systemd-resolved systemd-oomd
 
@@ -215,17 +215,9 @@ RUN uv pip install --system --break-system-packages /tmp/pf
 
 RUN mkdir -p /etc/systemd/system
 
-RUN cat <<'EOF' > /etc/systemd/system/pf-bastion-control.socket
-{pf_bastion_control_socket}
-EOF
-
-RUN cat <<'EOF' > /etc/systemd/system/pf-bastion.socket
-{pf_bastion_socket}
-EOF
-
-RUN cat <<'EOF' > /etc/systemd/system/pf-bastion.service
-{pf_bastion_service}
-EOF
+RUN printf '%b' '{pf_bastion_control_socket.replace("\n", "\\n")}' > /etc/systemd/system/pf-bastion-control.socket
+RUN printf '%b' '{pf_bastion_socket.replace("\n", "\\n")}' > /etc/systemd/system/pf-bastion.socket
+RUN printf '%b' '{pf_bastion_service.replace("\n", "\\n")}' > /etc/systemd/system/pf-bastion.service
 
 RUN systemctl enable pf-bastion.socket pf-bastion-control.socket
 
@@ -235,7 +227,6 @@ CMD ["/sbin/init"]
     with tempfile.NamedTemporaryFile(mode="w+", suffix=".Containerfile", dir=tmp_path, delete=False) as container_file:
         container_file.write(containerfile)
         container_file.flush()
-
         stdout = _run(
             ["podman", "build", "--format", "docker", "--quiet", "--file", container_file.name, tld()], tmp_path
         )
