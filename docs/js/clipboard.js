@@ -10,4 +10,4 @@
         if (lines) { e.stopPropagation(); navigator.clipboard.writeText(lines) }
       }, true)
     })
-  })  
+  })

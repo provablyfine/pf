@@ -191,7 +191,6 @@ class TripletFilterGrantEditWidget[T: _TripletFilterGrant](GrantEditWidget):
         self._grant = grant
 
     def _compose_filter(self):
-
         f = self._grant.filter
         tag_list = Field.from_tag_list(f.tag_list)
         boundary_list = Field.from_boundary_list(f.boundary_list)
