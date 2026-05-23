@@ -8,7 +8,7 @@ import urllib.parse
 
 import requests
 
-from ... import client, log
+from ... import __version__, client, log
 from .. import login
 from . import audit_log_cli, auth_cli, bastion_cli, boundary_cli, grant_cli, identity_cli, role_cli, tag_cli, tenant_cli
 
@@ -57,6 +57,10 @@ def _login_function(args: argparse.Namespace) -> None:
     c.save(args.config)
 
 
+def _version_function(args: argparse.Namespace) -> None:
+    print(__version__)
+
+
 def _do_main(args: argparse.Namespace) -> None:
     log.setup(args.debug, log.filename("pfa", args))
 
@@ -95,6 +99,9 @@ def pfa() -> None:
     )
     parser.add_argument("--log-filename", help="Filename where logs will be written", default=None)
     subparsers = parser.add_subparsers(required=True, dest="command", metavar="command")
+
+    version_parser = subparsers.add_parser("version", help="Print current version number")
+    version_parser.set_defaults(func=_version_function)
 
     initialize_parser = subparsers.add_parser("initialize", help="Initialize a new server and register account key")
     initialize_parser.add_argument("url", help="Directory URL of the server")

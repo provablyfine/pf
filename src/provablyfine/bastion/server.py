@@ -7,7 +7,7 @@ import os.path
 import signal
 import socket
 
-from .. import anet, log
+from .. import __version__, anet, log
 from . import app, control_app, fdstore, systemd
 
 logger = logging.getLogger(__name__)
@@ -60,6 +60,7 @@ def run():
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--issuer-prefix", help="OIDC issuer url")
     group.add_argument("--dev", action="store_true")
+    group.add_argument("--version", action="store_true", help="Print version number and exit")
     parser.add_argument(
         "--domain-suffix", help="Domain suffix for all incoming requests. Default: %(default)s", default="localhost"
     )
@@ -69,6 +70,10 @@ def run():
     parser.add_argument("--log-filename", default=None)
     parser.add_argument("--control-socket", default=default_control_socket, help="Unix socket path for control API")
     args = parser.parse_args()
+
+    if args.version:
+        print(__version__)
+        return
 
     if args.dev:
         conf = app.Config(

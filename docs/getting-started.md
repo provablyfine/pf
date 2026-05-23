@@ -11,8 +11,8 @@ XXX
 
 And then, check that it has been installed successfully:
 ```console
-$ pf --version
-XXX
+$ pf version
+0.2.0
 ```
 
 ## Create your private key

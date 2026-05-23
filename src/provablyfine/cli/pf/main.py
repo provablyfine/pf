@@ -10,7 +10,7 @@ import urllib.parse
 import requests
 import tabulate
 
-from ... import client, log
+from ... import __version__, client, log
 from .. import login
 from . import bastion_cli, openssh_cli, ssh_cli
 
@@ -78,6 +78,10 @@ def _login_function(args: argparse.Namespace) -> None:
     c.save(args.config)
 
 
+def _version_function(args: argparse.Namespace) -> None:
+    print(__version__)
+
+
 def _do_main(args: argparse.Namespace) -> None:
     log.setup(args.debug, log.filename("pf", args))
 
@@ -103,6 +107,9 @@ def pf() -> None:
     parser.add_argument("-d", "--debug", help="Debugging level", action="count", default=0)
     parser.add_argument("--log-filename", help="Filename where logs will be written", default=None)
     subparsers = parser.add_subparsers(required=True, dest="command", metavar="command")
+
+    version_parser = subparsers.add_parser("version", help="Print current version number")
+    version_parser.set_defaults(func=_version_function)
 
     config_parser = subparsers.add_parser("config", help="Create a configuration file")
     config_parser.add_argument(
