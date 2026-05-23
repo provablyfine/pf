@@ -16,7 +16,7 @@ maintainers = [
 ]
 description = "Centralized Access-Control for SSH"
 readme = "README.md"
-version = "0.1.0"
+version = "0.2.0"
 license = "AGPL-3.0-or-later"
 license-files = ["LICENSE.md"]
 keywords = ["SSH", "access-control", "bastion"]
