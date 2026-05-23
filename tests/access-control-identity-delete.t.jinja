@@ -46,5 +46,3 @@ and becomes invalid after the identity is deleted
                permission: !
   $ pfa -c config.json role read -i $ROLE_ID -f json | jq '.grant_list[-1]' | pfa -c config.json role grant -i $ROLE_ID --del
 {% endfor %}
-
-

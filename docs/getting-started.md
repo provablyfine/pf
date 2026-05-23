@@ -32,9 +32,9 @@ Create a new *account* key. Keep track of your passphase and the key fingerprint
 ```console
 $ ssh-keygen -t ed25519
 Generating public/private ed25519 key pair.
-Enter file in which to save the key (/home/mathieu/.ssh/id_ed25519): /home/mathieu/.ssh/pf-root   
-Enter passphrase for "/home/mathieu/.ssh/pf-root" (empty for no passphrase): 
-Enter same passphrase again: 
+Enter file in which to save the key (/home/mathieu/.ssh/id_ed25519): /home/mathieu/.ssh/pf-root
+Enter passphrase for "/home/mathieu/.ssh/pf-root" (empty for no passphrase):
+Enter same passphrase again:
 [...]
 The key fingerprint is:
 SHA256:lSW6nwnEz+dxa2WMI8+xBdCccNAOSmJikRABI3xPYuY mathieu@Host-001
@@ -43,9 +43,9 @@ SHA256:lSW6nwnEz+dxa2WMI8+xBdCccNAOSmJikRABI3xPYuY mathieu@Host-001
 
 ## Initialize your tenant
 
-Now, you need to establish your *account* private key as the sole identity 
-trusted to bootstrap your tenant's configuration, until you configure other 
-authentication methods later. 
+Now, you need to establish your *account* private key as the sole identity
+trusted to bootstrap your tenant's configuration, until you configure other
+authentication methods later.
 
 ```console
 $ pfa initialize  https://api.provablyfine.net/pf/t/root --key SHA256:lSW6nwnEz+dxa2WMI8+xBdCccNAOSmJikRABI3xPYuY
@@ -61,7 +61,7 @@ tenant url and your *account* key fingerprint.
 ## Register a new host
 
 If you have a recent-enough (XXX) OpenSSH server installed on your host, you can register
-it within your tenant. 
+it within your tenant.
 
 ### Create a new identity
 
@@ -114,5 +114,5 @@ The setup we have completed is pretty basic. A more realistic setup would
 require a clear mapping of your security policy (who can access which hosts)
 to a set of [identities](XXX), [tags](XXX), [roles](XXX), and [boundaries](XXX).
 
-Realistically, most administrators also would setup an external [OIDC SSO](XXX) to 
+Realistically, most administrators also would setup an external [OIDC SSO](XXX) to
 authenticate users.

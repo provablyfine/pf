@@ -29,4 +29,3 @@ if __name__ == '__main__':
         if cov:
             cov.stop()
             cov.save()
-    

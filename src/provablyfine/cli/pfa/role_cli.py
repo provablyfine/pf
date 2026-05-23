@@ -113,7 +113,6 @@ def _role_grant_function(args: argparse.Namespace, action: str, grant: dict[str,
 
 
 def _role_member_function(args: argparse.Namespace) -> None:
-
     def to_ref(member: str) -> client.schemas.RoleMemberRef:
         if member.isdigit():
             return client.schemas.RoleMemberRef(id=int(member))

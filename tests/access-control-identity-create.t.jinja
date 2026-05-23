@@ -23,4 +23,3 @@ Check that grant "{{grant}}" is actually enforcing access control
   $ USER4_ID=$(pfa -c config.json identity list -n user4 -q)
   $ pfa -c config.json identity delete -i $USER4_ID
 {% endfor %}
-

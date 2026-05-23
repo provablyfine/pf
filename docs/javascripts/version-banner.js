@@ -8,10 +8,10 @@ document.addEventListener("DOMContentLoaded", function () {
       if (!latestObj) return;
 
       const latestVersion = latestObj.version;
-      
+
       // 3. Extract the current version from the URL path (e.g., /0.1/index.html -> 0.1)
       const pathSegments = window.location.pathname.split('/').filter(Boolean);
-      const currentVersion = pathSegments[0]; 
+      const currentVersion = pathSegments[0];
 
       // 4. If the user is on an older version, inject a warning banner
       if (currentVersion && currentVersion !== latestVersion && currentVersion !== 'latest') {

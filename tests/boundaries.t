@@ -77,7 +77,7 @@ Make sure important permissions are denied from these users
   $ pfa -c config.json grant role --create |pfa -c config.json boundary denied -i $BOUNDARY_ID --add
   $ pfa -c config.json grant role --update grant_list | pfa -c config.json boundary denied -i $BOUNDARY_ID --add
   $ pfa -c config.json grant tag -crd | pfa -c config.json boundary denied -i $BOUNDARY_ID --add
-  $ pfa -c config.json grant boundary -crd --update denied_list | pfa -c config.json boundary denied -i $BOUNDARY_ID --add 
+  $ pfa -c config.json grant boundary -crd --update denied_list | pfa -c config.json boundary denied -i $BOUNDARY_ID --add
 
 Check that boundary has been created
   $ pfa -c config.json boundary read -i $BOUNDARY_ID
@@ -99,7 +99,7 @@ Check that boundary has been created
                permission: create read update.denied_list delete
 
 We can remove and add permissions from the boundary denied list
-  $ pfa -c config.json boundary read -i $BOUNDARY_ID -f json | jq '.denied_list[0]' | pfa -c config.json boundary denied -i $BOUNDARY_ID --del 
+  $ pfa -c config.json boundary read -i $BOUNDARY_ID -f json | jq '.denied_list[0]' | pfa -c config.json boundary denied -i $BOUNDARY_ID --del
   $ pfa -c config.json boundary read -i 2
   id           2
   name         non-admin

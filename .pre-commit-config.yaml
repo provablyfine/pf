@@ -1,14 +1,43 @@
 repos:
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.9.0
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
     hooks:
-      - id: ruff          # linter
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [ --maxkb=1000 ]
+      - id: debug-statements
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.14
+    hooks:
+      - id: ruff
         args: [--fix]
-      - id: ruff-format   # formatter
+      - id: ruff-format
   - repo: local
     hooks:
       - id: check-from-imports
         name: Ban from-imports for everything except relative imports
         entry: scripts/check-imports
-        language: python
+        language: system
         types: [python]
+      - id: pyright
+        name: Type checking for python
+        entry: uv run pyright
+        language: system
+        types: [ python ]
+        pass_filenames: false
+      - id: licensecheck
+        name: License compatibility
+        entry: uv run licensecheck
+        language: system
+        pass_filenames: false
+        stages: [ pre-push ]
+      - id: uv-audit
+        name: Vulnerability scan (uv audit)
+        entry: uv audit
+        language: system
+        pass_filenames: false
+        stages: [ pre-push ]

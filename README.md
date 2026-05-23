@@ -25,8 +25,8 @@ We track our readiness status for 1.0 in our [Roadmap](./ROADMAP.md)
 
 ## Contributing
 
-Contributions are welcome! If you want to set up a local development environment, 
-run the test suite, or contribute code, please check out our 
+Contributions are welcome! If you want to set up a local development environment,
+run the test suite, or contribute code, please check out our
 [Development & Contributing Guide](CONTRIBUTING.md).
 
 ## Licence

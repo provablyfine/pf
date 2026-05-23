@@ -6,7 +6,7 @@ Create bastion resource
   $ pfa -c config.json bastion create --url http://localhost:$BASTION_PORT
 
 Provision new host
-  $ pfa -c config.json identity create -n host 
+  $ pfa -c config.json identity create -n host
   $ HOST_ID=$(pfa -c config.json identity list -n host -q)
   $ INVITATION=$(pfa -c config.json identity invite --manual -i $HOST_ID)
   $ echo $INVITATION

@@ -64,7 +64,6 @@ def update(
     added_member_id_list: list[int] | None = None,
     deleted_member_id_list: list[int] | None = None,
 ):
-
     role_fields: dict[str, typing.Any] = {}
     if name is not None:
         role_fields["name"] = name

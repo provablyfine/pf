@@ -13,13 +13,13 @@
 
 ## Open Source
 
-`pf` is open source, released under the [AGPL](https://www.gnu.org/licenses/agpl-3.0.en.html): 
-this software is free to download and use, for both personal and commercial use, provided any 
+`pf` is open source, released under the [AGPL](https://www.gnu.org/licenses/agpl-3.0.en.html):
+this software is free to download and use, for both personal and commercial use, provided any
 changes you make are redistributed to your users.
 
 ## Goals
 
-Our long-term objective is to build high-quality, production-ready, battle tested, 
+Our long-term objective is to build high-quality, production-ready, battle tested,
 software to manage infrastructure on-prem or on-cloud.
 
 Our short-term objective is to start with SSH access control because existing solutions
@@ -28,7 +28,7 @@ for use in ways that we are not comfortable with.
 
 ## We are still young
 
-Our long-term objective is ambitious. We are not quite there yet but we believe `pf` is 
+Our long-term objective is ambitious. We are not quite there yet but we believe `pf` is
 already quite usable for small-scale lab-style deployments. Production deployments
 on large-scale systems where the security stakes are high are not encouraged.
 
