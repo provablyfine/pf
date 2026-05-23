@@ -39,7 +39,7 @@ cov-report:
 	coverage html -d cov --rcfile $(shell pwd)/tests/.coveragerc
 	coverage report
 
-check: tests check-imports format
+check: tests check-imports pyright format
 
 check-imports:
 	./scripts/check-imports
@@ -47,5 +47,8 @@ check-imports:
 format:
 	uv run ruff format
 	uv run ruff check
+
+pyright:
+	uv run pyright
 
 .PHONY: tests cov cov-report check-imports format check
