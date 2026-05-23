@@ -21,6 +21,8 @@ security and quality bar to be deployed in production.
 If you do so, be warned that you will hit both functional limitations and
 major security issues.
 
+We track our readiness status for 1.0 in our [Roadmap](./ROADMAP.md)
+
 ## Contributing
 
 Contributions are welcome! If you want to set up a local development environment, 
