@@ -1,8 +1,8 @@
 import shutil
 
-from . import utils
-
 import pytest
+
+from . import utils
 
 
 @pytest.mark.skipif(not shutil.which("socat"), reason="socat not found")
