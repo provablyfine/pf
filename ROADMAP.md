@@ -15,10 +15,15 @@ We want to complete the following items before we release 1.0:
   - client-side filtering+pagination in `pfa` and `pfat`
 - [ ] Managed cloud-based free tier for demos
   - create tenant after user provides valid email
+- [ ] Prometheus metrics in pf-api
+- [ ] Request id logging in pf-api and pf-bastion
+- [ ] Custom metrics in pf-bastion
 
 ## Documentation
 
-- [ ] Full user and admin documentation
+- [ ] Getting started
+- [ ] Admin auth
+- [ ] Admin permissions
 - [ ] Basic self-hosting documentation
 - [ ] Reference documentation for CLI tools
 - [ ] Reference OpenAPI API description
