@@ -20,7 +20,7 @@ def check_file(path: pathlib.Path) -> list[str]:
 if __name__ == "__main__":
     errors = []
     for path in pathlib.Path(".").rglob("*.py"):
-        if 'venv' in str(path):
+        if 'venv' in str(path) or str(path).startswith(".tox"):
             continue
         errors.extend(check_file(path))
 
