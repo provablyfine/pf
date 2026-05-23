@@ -37,7 +37,10 @@ def _hosts_function(args: argparse.Namespace) -> None:
 
 
 def _config_function(args: argparse.Namespace) -> None:
-    response = requests.get(args.directory, timeout=0.5)
+    try:
+        response = requests.get(args.directory, timeout=0.5)
+    except requests.exceptions.ConnectionError:
+        raise client.exceptions.UI(f"Unable to connect to {args.directory}")
     if response.status_code != 200:
         raise client.exceptions.UI(f"Unable to read directory: {response.text}")
     c = client.Config(
@@ -99,7 +102,7 @@ def pf() -> None:
     parser.add_argument("--timeout", default=1.0, help="Timeout for HTTP requests")
     parser.add_argument("-d", "--debug", help="Debugging level", action="count", default=0)
     parser.add_argument("--log-filename", help="Filename where logs will be written", default=None)
-    subparsers = parser.add_subparsers(required=True, dest="_cmd1")
+    subparsers = parser.add_subparsers(required=True, dest="command", metavar="command")
 
     config_parser = subparsers.add_parser("config", help="Create a configuration file")
     config_parser.add_argument(

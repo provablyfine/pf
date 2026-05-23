@@ -58,13 +58,13 @@ def _ssh_function(args: argparse.Namespace) -> None:
             public_key=user_key.public().to_dict(),
         )
     except client.exceptions.Forbidden:
-        if action == "shell" and args.command:
+        if action == "shell" and args.cmd:
             cert_data = sc.get_user_certificate(
                 hostname=host,
                 username=user,
                 action="command",
                 public_key=user_key.public().to_dict(),
-                command=args.command,
+                command=args.cmd,
             )
         else:
             raise client.exceptions.UI("User is not authorized to connect to host")
@@ -134,8 +134,8 @@ def _ssh_function(args: argparse.Namespace) -> None:
             cmd += ["-o", f"Hostname={ip_address}", "-o", f"HostKeyAlias={host}"]
         target = f"{user}@{target_host}"
         cmd.append(target)
-        if args.command:
-            cmd.append(args.command)
+        if args.cmd:
+            cmd.append(args.cmd)
         logger.debug(f'SSH command: "{" ".join(cmd)}"')
         return cmd
 
@@ -196,5 +196,5 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("-l", dest="login_user", default=None, help="Login username")
     parser.add_argument("-p", dest="port", default=None, help="Port to connect to")
     parser.add_argument("destination", help="[user@]hostname (pf identity name of the host)")
-    parser.add_argument("command", nargs="?", default=None, help="Command to execute on the remote host")
+    parser.add_argument("cmd", nargs="?", default=None, help="Command to execute on the remote host")
     parser.set_defaults(func=_ssh_function)

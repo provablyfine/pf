@@ -120,7 +120,7 @@ def _auth_delete_function(args: argparse.Namespace) -> None:
 
 
 def add_subparser(parser: argparse.ArgumentParser) -> None:
-    subparsers = parser.add_subparsers(required=True, dest="_cmd2")
+    subparsers = parser.add_subparsers(required=True, dest="subcommand", metavar="subcommand")
 
     list_parser = subparsers.add_parser("list", help="List auth configs")
     list_parser.add_argument("-q", "--quiet", help="Equivalent to -f quiet", action="store_true")
@@ -128,7 +128,7 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
     list_parser.set_defaults(func=_auth_list_function)
 
     create_parser = subparsers.add_parser("create", help="Create an auth config")
-    create_type_subparsers = create_parser.add_subparsers(required=True, dest="_cmd3")
+    create_type_subparsers = create_parser.add_subparsers(required=True, dest="subsubcommand", metavar="subsubcommand")
 
     create_http_sig_parser = create_type_subparsers.add_parser("http_sig", help="HTTP signature auth")
     create_http_sig_parser.add_argument("-n", "--name", required=True, help="Name of auth config")

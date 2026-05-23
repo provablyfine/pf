@@ -141,7 +141,7 @@ def _boundary_ceiling_function(args: argparse.Namespace, action: str, grant: dic
 
 
 def add_subparser(parser: argparse.ArgumentParser) -> None:
-    subparsers = parser.add_subparsers(required=True, dest="_cmd2")
+    subparsers = parser.add_subparsers(required=True, dest="subcommand", metavar="subcommand")
 
     list_parser = subparsers.add_parser("list", help="List boundaries we have access to")
     group = list_parser.add_argument_group(title="Filter criteria")

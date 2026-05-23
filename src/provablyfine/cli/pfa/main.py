@@ -94,7 +94,7 @@ def pfa() -> None:
         "-d", "--debug", help="Increase debugging level", action="count", default=int(os.environ.get("PF_DEBUG") or "0")
     )
     parser.add_argument("--log-filename", help="Filename where logs will be written", default=None)
-    subparsers = parser.add_subparsers(required=True, dest="_cmd1")
+    subparsers = parser.add_subparsers(required=True, dest="command", metavar="command")
 
     initialize_parser = subparsers.add_parser("initialize", help="Initialize a new server and register account key")
     initialize_parser.add_argument("url", help="Directory URL of the server")

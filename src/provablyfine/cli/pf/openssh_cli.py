@@ -64,7 +64,7 @@ def _authorized_principals(args: argparse.Namespace) -> None:
 
 
 def add_subparsers(parser: argparse.ArgumentParser) -> None:
-    subparsers = parser.add_subparsers(required=True, dest="_cmd2")
+    subparsers = parser.add_subparsers(required=True, dest="subcommand", metavar="subcommand")
 
     sign_host_parser = subparsers.add_parser("sign-host")
     sign_host_parser.add_argument("--public-key", action="append", default=[], help="Public key to sign")

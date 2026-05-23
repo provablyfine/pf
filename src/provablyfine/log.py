@@ -130,7 +130,7 @@ def filename(prog: str, args: object) -> str:
     log_dir = os.environ.get("PF_LOG_DIRECTORY")
     if log_dir:
         parts = [prog]
-        for attr in ("_cmd1", "_cmd2", "_cmd3"):
+        for attr in ("command", "subcommand", "subsubcommand"):
             val = getattr(args, attr, None)
             if val:
                 parts.append(val)

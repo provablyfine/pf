@@ -33,7 +33,7 @@ def _do_main(args: argparse.Namespace) -> None:
 
 def pf():
     parser = argparse.ArgumentParser()
-    sub = parser.add_subparsers(required=True, dest="_cmd1")
+    sub = parser.add_subparsers(required=True, dest="command", metavar="command")
 
     register_parser = sub.add_parser("register", help="Register with bastions")
     register_parser.add_argument("--url", required=True, help="Bastion register URL")

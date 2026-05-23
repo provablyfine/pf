@@ -65,7 +65,7 @@ def _tag_delete_function(args: argparse.Namespace) -> None:
 
 
 def add_subparser(parser: argparse.ArgumentParser) -> None:
-    subparsers = parser.add_subparsers(required=True, dest="_cmd2")
+    subparsers = parser.add_subparsers(required=True, dest="subcommand", metavar="subcommand")
 
     list_parser = subparsers.add_parser("list", help="List tags we have access to")
     group = list_parser.add_argument_group(title="Filter criteria")

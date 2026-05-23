@@ -65,7 +65,7 @@ User lists hosts - shell only so far
 
 Add port-forwarding and command grants
   $ pfa -c config.json grant ssh-port-forwarding --tag id=device --username root | pfa -c config.json role grant -i $ROLE_ID --add
-  $ pfa -c config.json grant ssh-command --tag id=device --username root --command /bin/df /bin/ls | pfa -c config.json role grant -i $ROLE_ID --add
+  $ pfa -c config.json grant ssh-command --tag id=device --username root --cmd /bin/df /bin/ls | pfa -c config.json role grant -i $ROLE_ID --add
 
 User lists hosts - all permission types
   $ pf -c user.json hosts
@@ -90,7 +90,7 @@ Remote port forwarding (-R) succeeds for root
   ok
 
 Add command-only grant for charlie
-  $ pfa -c config.json grant ssh-command --tag id=device --username charlie --command /bin/true | pfa -c config.json role grant -i $ROLE_ID --add
+  $ pfa -c config.json grant ssh-command --tag id=device --username charlie --cmd /bin/true | pfa -c config.json role grant -i $ROLE_ID --add
 
 Command fallback: charlie has command(/bin/true) but not shell — shell cert rejected, command cert accepted
   $ pf -c user.json ssh -n -o "Hostname=127.0.0.1" -o "HostKeyAlias=host" -p $SSHD_PORT charlie@host "/bin/true"

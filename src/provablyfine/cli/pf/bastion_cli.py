@@ -249,7 +249,7 @@ def _connect_function(args: argparse.Namespace) -> None:
 
 
 def add_subparser(parser: argparse.ArgumentParser) -> None:
-    sub = parser.add_subparsers(required=True, dest="_cmd2")
+    sub = parser.add_subparsers(required=True, dest="subcommand", metavar="subcommand")
 
     register_parser = sub.add_parser("register", help="Register with bastions")
     register_parser.add_argument("-p", "--port", type=int, default=2222, help="Local port to listen on")

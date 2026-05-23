@@ -166,14 +166,14 @@ def _ssh_command_function(args: argparse.Namespace) -> None:
         },
         "permission": {
             "username_list": args.username,
-            "command_list": args.command,
+            "command_list": args.cmd,
         },
     }
     _output(args, grant)
 
 
 def add_subparser(parser: argparse.ArgumentParser) -> None:
-    subparsers = parser.add_subparsers(required=True, dest="_cmd2")
+    subparsers = parser.add_subparsers(required=True, dest="subcommand", metavar="subcommand")
 
     tag_parser = subparsers.add_parser("tag")
     tag_parser.add_argument("-f", "--format", choices=["yaml", "json"], default="yaml")
@@ -274,5 +274,5 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
     group.add_argument("--boundary", default=None, nargs="*")
     group = ssh_command_parser.add_argument_group("permission")
     group.add_argument("--username", nargs="*", default=[])
-    group.add_argument("--command", nargs="*", default=[])
+    group.add_argument("--cmd", nargs="*", default=[])
     ssh_command_parser.set_defaults(func=_ssh_command_function)
