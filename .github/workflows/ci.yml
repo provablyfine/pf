@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - mathieu
   pull_request:
     branches:
       - main
