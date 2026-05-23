@@ -37,7 +37,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install podman
-        run: sudo apt-get update && sudo apt-get install -y podman openssh-client
+        run: sudo apt-get update && sudo apt-get install -y podman openssh-client socat
       - name: Run tests
         run: uv run pytest --basetemp=/tmp/pf-test-logs
       - name: Upload test logs

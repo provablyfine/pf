@@ -125,7 +125,7 @@ ssh-keygen -t ecdsa -f /etc/ssh/keys/ssh_host_ecdsa_key -N "" > /dev/null
 ssh-keygen -t rsa -f /etc/ssh/keys/ssh_host_rsa_key -N "" > /dev/null
 /usr/sbin/sshd -D -e
 """
-    containerfile = f"""
+    containerfile = f"""\
 FROM alpine:3.23
 
 RUN apk add --no-cache openssh-server openssh-keygen python3 uv
@@ -210,7 +210,7 @@ ExecStart=/usr/bin/python -m coverage run --source=/usr/local/lib/python3.14/sit
 FileDescriptorStoreMax=128
 """
 
-    containerfile = f"""
+    containerfile = f"""\
 FROM fedora:latest
 RUN dnf install -y python3 uv systemd python3-coverage && dnf clean all
 RUN systemctl mask systemd-resolved systemd-oomd
