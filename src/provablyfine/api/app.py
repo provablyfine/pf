@@ -9,6 +9,7 @@ import fastapi
 import fastapi.exceptions
 import fastapi.requests
 import fastapi.responses
+import prometheus_client
 import pydantic
 import sqlalchemy
 
@@ -164,6 +165,7 @@ def create(conf: config.Config) -> fastapi.FastAPI:
     fastapi_app.add_middleware(middleware.ConfigContextMiddleware)
     fastapi_app.add_middleware(middleware.KekContextMiddleware)
     fastapi_app.add_middleware(middleware.BodyReaderMiddleware)
+    fastapi_app.add_middleware(middleware.PrometheusMiddleware)
 
     fastapi_app.include_router(endpoints.debug.router, tags=["debug"])
 
@@ -185,5 +187,12 @@ def create(conf: config.Config) -> fastapi.FastAPI:
     fastapi_app.include_router(endpoints.ssh.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
     fastapi_app.include_router(endpoints.bastion.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
     fastapi_app.include_router(endpoints.tenant.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
+
+    @fastapi_app.get("/metrics", include_in_schema=False)
+    async def metrics() -> fastapi.responses.Response:  # type: ignore[reportUnusedFunction]
+        return fastapi.responses.Response(
+            content=prometheus_client.generate_latest(),
+            media_type=prometheus_client.CONTENT_TYPE_LATEST,
+        )
 
     return fastapi_app

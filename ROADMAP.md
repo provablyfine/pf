@@ -15,7 +15,7 @@ We want to complete the following items before we release 1.0:
   - client-side filtering+pagination in `pfa` and `pfat`
 - [ ] Managed cloud-based free tier for demos
   - create tenant after user provides valid email
-- [ ] Prometheus metrics in pf-api
+- [x] Prometheus metrics in pf-api
 - [ ] Request id logging in pf-api and pf-bastion
 - [ ] Custom metrics in pf-bastion
 
@@ -30,7 +30,7 @@ We want to complete the following items before we release 1.0:
 
 ## Developer workflow
 
-- [ ] Tag-based Release workflow
+- [x] Automated Tag-based Release workflow
 
 ## Look
 
