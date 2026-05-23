@@ -130,7 +130,7 @@ FROM alpine:3.23
 
 RUN apk add --no-cache openssh-server openssh-keygen python3 uv
 
-COPY pyproject.toml README.md LICENCE.md /tmp/pf/
+COPY pyproject.toml README.md LICENSE.md /tmp/pf/
 COPY src /tmp/pf/src/
 RUN --mount=type=cache,target=/root/.cache/uv uv pip install \\
     --quiet --link-mode=copy --system --break-system-packages /tmp/pf && \\
