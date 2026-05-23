@@ -159,9 +159,7 @@ CMD ["/bin/sh", "/run/start.sh"]
         container_file.write(containerfile)
         container_file.flush()
 
-        stdout = _run(
-            ["podman", "build", "--quiet", "--file", container_file.name, tld()], tmp_path
-        )
+        stdout = _run(["podman", "build", "--quiet", "--file", container_file.name, tld()], tmp_path)
         image_id = stdout.strip("\n")
         if "\n" in image_id:
             assert False, image_id
@@ -232,9 +230,7 @@ CMD ["/sbin/init"]
     with tempfile.NamedTemporaryFile(mode="w+", suffix=".Containerfile", dir=tmp_path, delete=False) as container_file:
         container_file.write(containerfile)
         container_file.flush()
-        stdout = _run(
-            ["podman", "build", "--quiet", "--file", container_file.name, tld()], tmp_path
-        )
+        stdout = _run(["podman", "build", "--quiet", "--file", container_file.name, tld()], tmp_path)
         image_id = stdout.strip("\n")
         if "\n" in image_id:
             assert False, image_id
