@@ -2,8 +2,8 @@ Initialize server and login
   $ bash $TESTDIR/fixture.sh
   .* (re)
   $ ROOT_ID=$(pfa -c config.json identity list -n root -q)
-  $ ssh-keygen --help
   $ source $TESTDIR/access-control-identity-fixture.sh
+  .* (re)
 
 Create temporary user for tests below
   $ pfa -c config.json identity create -n user4 -b boundary -t $PERSON_ID
