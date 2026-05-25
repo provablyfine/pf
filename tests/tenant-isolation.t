@@ -89,9 +89,9 @@ Child tenant (acme) cannot create sub-tenants (ceiling blocks it)
   Not allowed to create tenant
   [2]
 
-Scenario 3: beta credentials rejected by acme's API (cross-auth failure at login)
+Scenario 3: beta credentials rejected by acme API (cross-auth failure at login)
 
-  $ pf -c cross.json config --directory http://127.0.0.1:$API_PORT/pf/t/acme/directory
+  $ pf -c cross.json config http://127.0.0.1:$API_PORT/pf/t/acme/directory
   $ jq --arg ak "beta-account" '. + {"account_key": $ak}' cross.json > cross2.json
   $ pf -c cross2.json login --session-key beta-session
   Unable to login successfully: .* (re)
@@ -99,7 +99,7 @@ Scenario 3: beta credentials rejected by acme's API (cross-auth failure at login
 
 Scenario 4: frankenstein config (acme session keys, beta directory) is rejected by beta
 
-  $ pf -c beta-dir.json config --directory http://127.0.0.1:$API_PORT/pf/t/beta/directory
+  $ pf -c beta-dir.json config http://127.0.0.1:$API_PORT/pf/t/beta/directory
   $ jq -s '.[0] + {"directory_url": .[1].directory_url, "directory": .[1].directory}' acme.json beta-dir.json > frankenstein.json
   $ pfa -c frankenstein.json identity list
   Unable to find identity .* (re)

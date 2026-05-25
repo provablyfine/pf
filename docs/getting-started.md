@@ -48,7 +48,7 @@ trusted to bootstrap your tenant's configuration, until you configure other
 authentication methods later.
 
 ```console
-$ pfa initialize  https://api.provablyfine.net/pf/t/root --key SHA256:lSW6nwnEz+dxa2WMI8+xBdCccNAOSmJikRABI3xPYuY
+$ pfa initialize  https://api.provablyfine.net/pf/t/your-tenant --key SHA256:lSW6nwnEz+dxa2WMI8+xBdCccNAOSmJikRABI3xPYuY
 XXX
 ```
 
@@ -73,19 +73,11 @@ $ pfa identity invite --manual -i $IDENTITY_ID
 XXX
 ```
 
-### Download all-in-one image
-
-Download the image for your pf release:
-```console
-$ curl $(pf host print-download-url)
-XXX
-```
-
 ### Install all-in-one image
 
 Start the image with your invitation key:
 ```console
-$ sudo pf host setup --raw-image=./pf-all-in-one.raw --invitation-key=INVITATION_KEY
+$ sudo pf host setup --invitation-key=INVITATION_KEY
 ```
 
 Alternatively, if you feel uncomfortable running a pf command as root via sudo, you

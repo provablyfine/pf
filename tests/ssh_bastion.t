@@ -22,7 +22,7 @@ Provision new host
 
 New host starts
   $ DIRECTORY_URL=http://127.0.0.1:$API_PORT/pf/t/root/directory
-  $ pf -c host.json config --directory $DIRECTORY_URL
+  $ pf -c host.json config $DIRECTORY_URL
   $ ssh-keygen -t ed25519 -f host-account -N "" > /dev/null
   $ pf -c host.json accept --invitation=$INVITATION  --key host-account
   $ pf -c host.json login
@@ -46,7 +46,7 @@ Provision new user
 
 User accepts invite and logs in
   $ DIRECTORY_URL=http://127.0.0.1:$API_PORT/pf/t/root/directory
-  $ pf -c user.json config --directory $DIRECTORY_URL
+  $ pf -c user.json config $DIRECTORY_URL
   $ ssh-keygen -t ed25519 -f user-account -N "" > /dev/null
   $ pf -c user.json accept --invitation=$INVITATION --key user-account
   $ pf -c user.json login

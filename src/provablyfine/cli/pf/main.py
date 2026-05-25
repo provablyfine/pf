@@ -113,9 +113,8 @@ def pf() -> None:
 
     config_parser = subparsers.add_parser("config", help="Create a configuration file")
     config_parser.add_argument(
-        "--directory",
-        default=os.getenv("PF_DIRECTORY_URL", "https://pf.provablyfine.net/pf/directory"),
-        help="Directory to connect to. Default: %(default)s",
+        "directory",
+        help="Directory to connect to.",
     )
     config_parser.set_defaults(func=_config_function)
 
