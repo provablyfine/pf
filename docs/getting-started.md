@@ -41,6 +41,14 @@ SHA256:lSW6nwnEz+dxa2WMI8+xBdCccNAOSmJikRABI3xPYuY mathieu@Host-001
 [...]
 ```
 
+You can cache your key in memory for up to ten minutes or wait
+for `pf` and `pfa` to ask for your passphrase when needed:
+```console
+$ ssh-add -t 600 /home/mathieu/.ssh/pf-root
+Enter passphrase for /home/mathieu/.ssh/pf-root:
+Identity added: /home/mathieu/.ssh/pf-root (mathieu@Host-001)
+
+
 ## Initialize your tenant
 
 Now, you need to establish your *account* private key as the sole identity
@@ -48,8 +56,7 @@ trusted to bootstrap your tenant's configuration, until you configure other
 authentication methods later.
 
 ```console
-$ pfa initialize  https://api.provablyfine.net/pf/t/your-tenant --key SHA256:lSW6nwnEz+dxa2WMI8+xBdCccNAOSmJikRABI3xPYuY
-XXX
+$ pfa initialize https://api.provablyfine.net/pf/t/your-tenant --key SHA256:lSW6nwnEz+dxa2WMI8+xBdCccNAOSmJikRABI3xPYuY
 ```
 
 Initialization is strictly a one-time operation: if you lose access to your
@@ -67,28 +74,18 @@ it within your tenant.
 
 First, create an identity associated with this OpenSSH server instance:
 ```console
-$ pfa identity create -n my-new-hostname
-$ IDENTITY_ID=$(pfa identity list -n my-new-hostname -q)
-$ pfa identity invite --manual -i $IDENTITY_ID
-XXX
+$ pfa login
+$ pfa identity create -n demo
+$ pfa identity invite --manual -i $(pfa identity list -n demo -q)
+https://api.provablyfine.net/pf/t/your-tenant/directory?invitation=R1_fe_2G60SE9neYHFJojuwHMKKDsdPEMiO_Hzw&auth=default
 ```
 
-### Install all-in-one image
+### Setup the host
 
-Start the image with your invitation key:
+Then, make your local OpenSSH daemon know about the new centralized
+authentication system:
 ```console
-$ sudo pf host setup --invitation-key=INVITATION_KEY
-```
-
-Alternatively, if you feel uncomfortable running a pf command as root via sudo, you
-can also ask pf to generate a shell script and audit it before running it:
-```console
-$ pf host setup --print-bash
-```
-
-You can check that our new OpenSSH service is running:
-```console
-$ systemctl status pf-host
+$ pf openssh host-init --invitation-key=INVITATION_KEY | sudo bash -s
 ```
 
 ## Connect to your new host

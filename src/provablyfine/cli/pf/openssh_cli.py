@@ -73,7 +73,9 @@ def add_subparsers(parser: argparse.ArgumentParser) -> None:
     user_trusted_keys_parser = subparsers.add_parser("user-trusted-keys")
     user_trusted_keys_parser.set_defaults(func=_user_trusted_keys_function)
 
-    authorized_principals_parser = subparsers.add_parser("authorized-principals")
+    authorized_principals_parser = subparsers.add_parser(
+        "auth-principals", help="Command to use for AuthorizedPrincipalsCommand"
+    )
     authorized_principals_parser.add_argument(
         "--host-certificate", help="One of the signed host certificates", default="/etc/sshd/ssh_host_ed25519_key.cert"
     )
@@ -81,7 +83,7 @@ def add_subparsers(parser: argparse.ArgumentParser) -> None:
     authorized_principals_parser.add_argument("--certificate", help="base64 user certificate to parse", required=True)
     authorized_principals_parser.set_defaults(func=_authorized_principals)
 
-    host_init_parser = subparsers.add_parser("host-init-daemon")
+    host_init_parser = subparsers.add_parser("host-init", help="Initialize configuration of local SSH daemon")
     host_init_parser.add_argument("--invitation", required=True, help="Invitation key")
     host_init_parser.add_argument("--tenant-url", default=None, help="API directory URL")
     host_init_parser.add_argument("--auth-user", default="nobody", help="User for AuthorizedPrincipalsCommandUser")
@@ -92,7 +94,7 @@ def add_subparsers(parser: argparse.ArgumentParser) -> None:
     host_init_parser.add_argument("--ca-pub-path", default="/etc/ssh/pf_ca.pub", help="Path to CA public key file")
     host_init_parser.set_defaults(func=openssh_host_init.host_init_daemon_function)
 
-    host_refresh_parser = subparsers.add_parser("host-refresh")
+    host_refresh_parser = subparsers.add_parser("host-refresh", help="Refresh configuration of local SSH daemon")
     host_refresh_parser.add_argument("--config", required=True, help="Path to pf config.json")
     host_refresh_parser.add_argument("--host-keys-dir", required=True, help="Directory containing host SSH keys")
     host_refresh_parser.add_argument("--ca-pub-path", required=True, help="Path to CA public key file")

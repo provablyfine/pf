@@ -185,7 +185,7 @@ def _print_init_script(
         f"  for cert in {host_keys_dir}/ssh_host_*_key.cert; do",
         '    [ -f "$cert" ] && echo "HostCertificate $cert"',
         "  done",
-        f"  echo 'AuthorizedPrincipalsCommand /usr/bin/pf openssh authorized-principals"
+        f"  echo 'AuthorizedPrincipalsCommand /usr/bin/pf openssh auth-principals"
         f" --host-certificate={host_keys_dir}/ssh_host_ed25519_key.cert --username=%u --certificate=%k'",
         f"  echo 'AuthorizedPrincipalsCommandUser {auth_user}'",
         "  echo 'PubkeyAuthentication yes'",

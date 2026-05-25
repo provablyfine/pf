@@ -103,7 +103,7 @@ MaxSessions 10
 
 AuthorizedPrincipalsCommand /usr/bin/pf \
     openssh \
-    authorized-principals \
+    auth-principals \
     --host-certificate=/etc/ssh/keys/ssh_host_ed25519_key.cert \
     --username=%u \
     --certificate=%k
