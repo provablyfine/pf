@@ -336,7 +336,7 @@ def api(request, tmp_path):
                     "tenant_registry_url": f"sqlite:///{tmp_path / 'tenants.db'!s}",
                     "tenants_dir": str(tmp_path),
                     "debug": True,
-                    "log_level": "DEBUG",
+                    "log_level": 3,
                     "kek_filename": str(api_kek_file),
                     #'debug_sql': True,
                 }

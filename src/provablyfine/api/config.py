@@ -1,20 +1,22 @@
 from __future__ import annotations
 
-import dataclasses
 import json
 import os.path
 
+import pydantic
 import yaml
 
 
-@dataclasses.dataclass
-class DefaultBastion:
+class DefaultBastion(pydantic.BaseModel):
+    model_config = pydantic.ConfigDict(extra="forbid")
+
     url: str | None = None
     ssh_proxy_jump: str | None = None
 
 
-@dataclasses.dataclass
-class Config:
+class Config(pydantic.BaseModel):
+    model_config = pydantic.ConfigDict(extra="forbid")
+
     debug: bool = False
     debug_sql: bool = False
     log_level: int = 0
@@ -41,14 +43,10 @@ class Config:
 
     default_bastion: DefaultBastion | None = None
 
-    def __post_init__(self):
-        if isinstance(self.default_bastion, dict):
-            self.default_bastion = DefaultBastion(**self.default_bastion)  # type: ignore[arg-type]
-
     @staticmethod
     def load(filename: str | None = None) -> Config:
         if filename is None:
-            data = {}
+            data: dict[str, object] = {}
         else:
             if not os.path.exists(filename):
                 data = {}
@@ -60,5 +58,4 @@ class Config:
                     data = yaml.safe_load(f)
             else:
                 assert False
-        config = Config(**data)  # type: ignore[arg-type]
-        return config
+        return Config.model_validate(data)
