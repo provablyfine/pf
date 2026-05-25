@@ -9,7 +9,7 @@ import urllib.parse
 import requests
 
 from ... import __version__, client, log
-from .. import login
+from .. import key_utils, login
 from . import audit_log_cli, auth_cli, bastion_cli, boundary_cli, grant_cli, identity_cli, role_cli, tag_cli, tenant_cli
 
 _DEFAULT_CONFIG = os.path.join(os.path.expanduser("~"), ".config", "provablyfine", "config.json")
@@ -21,8 +21,12 @@ def _initialize_function(args: argparse.Namespace) -> None:
         raise client.exceptions.UI(f"Unable to read directory: {response.text}")
     c = client.Config(directory_url=args.url, directory=response.json())
     sc = client.sync.Client(c, timeout=args.timeout)
-    sc.initialize(args.key)
-    c.account_key = args.key
+    if args.key is None:
+        _, account_key_id = key_utils.generate_and_save_key()
+    else:
+        account_key_id = args.key
+    sc.initialize(account_key_id)
+    c.account_key = account_key_id
     c.auth_name = "default"
     c.save(args.config)
 
@@ -103,7 +107,7 @@ def pfa() -> None:
 
     initialize_parser = subparsers.add_parser("initialize", help="Initialize a new server and register account key")
     initialize_parser.add_argument("url", help="Directory URL of the server")
-    initialize_parser.add_argument("--key", required=True, help="Account key (filename or fingerprint)")
+    initialize_parser.add_argument("--key", default=None, help="Account key (filename or fingerprint)")
     initialize_parser.set_defaults(func=_initialize_function)
 
     connect_parser = subparsers.add_parser("connect", help="Connect to an existing server")

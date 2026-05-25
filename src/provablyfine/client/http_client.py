@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import abc
+import getpass
 import hashlib
 import hmac
 import logging
@@ -133,7 +134,16 @@ def private_key_signer(prefix: str, filename: str | None) -> PrivateSigner:
             data = f.read()
         try:
             key = ssh_utils.load_private_key(data, password=None)
-        except ValueError:
+        except TypeError:
+            passphrase = getpass.getpass(f"Passphrase for {filename}: ").encode()
+            key = ssh_utils.load_private_key(data, password=passphrase)
+            lifetime = 60 if prefix == "account" else 1800
+            try:
+                ssh_agent = ssh.agent.Client()
+                ssh_agent.add(key, comment=f"pf-{prefix}", lifetime=lifetime)
+            except Exception:
+                pass
+        except exceptions.UI:
             raise exceptions.UI("Unable to parse data either as PEM or SSH format")
         if key.type != jwk.KeyType.ED25519:
             raise exceptions.UI(f"Unsupported: {key.type}")

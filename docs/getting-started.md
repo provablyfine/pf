@@ -26,41 +26,18 @@ the initialization url for your tenant.
     If you are using your own internal pf deployment, ask your pf administrator
     to create the tenant and share with you the associated initialization url.
 
-## Create your private key
-
-Create a new *account* key. Keep track of your passphase and the key fingerprint:
-```console
-$ ssh-keygen -t ed25519
-Generating public/private ed25519 key pair.
-Enter file in which to save the key (/home/mathieu/.ssh/id_ed25519): /home/mathieu/.ssh/pf-root
-Enter passphrase for "/home/mathieu/.ssh/pf-root" (empty for no passphrase):
-Enter same passphrase again:
-[...]
-The key fingerprint is:
-SHA256:lSW6nwnEz+dxa2WMI8+xBdCccNAOSmJikRABI3xPYuY mathieu@Host-001
-[...]
-```
-
-You can cache your key in memory for up to ten minutes or wait
-for `pf` and `pfa` to ask for your passphrase when needed:
-```console
-$ ssh-add -t 600 /home/mathieu/.ssh/pf-root
-Enter passphrase for /home/mathieu/.ssh/pf-root:
-Identity added: /home/mathieu/.ssh/pf-root (mathieu@Host-001)
-
-
 ## Initialize your tenant
 
-Now, you need to establish your *account* private key as the sole identity
-trusted to bootstrap your tenant's configuration, until you configure other
-authentication methods later.
 
+If you have an `ssh-agent` already running, you just need:
 ```console
-$ pfa initialize https://api.provablyfine.net/pf/t/your-tenant --key SHA256:lSW6nwnEz+dxa2WMI8+xBdCccNAOSmJikRABI3xPYuY
+$ pfa initialize https://api.provablyfine.net/pf/t/your-tenant
+XXX
 ```
 
-Initialization is strictly a one-time operation: if you lose access to your
-*account* key, you will need to create a new tenant from scratch.
+This one-time operation creates an account key, asks for a passphrase to
+encrypt it at rest in SSH format in your `~/.ssh/` directory, and associates this
+key with your tenant's root identity.
 
 After the tenant is initialized, this command also saves in `~/.config/pf/config.json` your
 tenant url and your *account* key fingerprint.
@@ -70,7 +47,7 @@ tenant url and your *account* key fingerprint.
 If you have a recent-enough (XXX) OpenSSH server installed on your host, you can register
 it within your tenant.
 
-### Create a new identity
+### Create a new host identity
 
 First, create an identity associated with this OpenSSH server instance:
 ```console
@@ -85,17 +62,61 @@ https://api.provablyfine.net/pf/t/your-tenant/directory?invitation=R1_fe_2G60SE9
 Then, make your local OpenSSH daemon know about the new centralized
 authentication system:
 ```console
-$ pf openssh host-init --invitation-key=INVITATION_KEY | sudo bash -s
+$ pf -c demo.json openssh host-init https://api.provablyfine.net/pf/t/your-tenant/directory?invitation=R1_fe_2G60SE9neYHFJojuwHMKKDsdPEMiO_Hzw&auth=default | sudo bash -s
 ```
 
 ## Connect to your new host
 
 The `pf ssh` command is compatible with the OpenSSH `ssh` binary:
 ```console
-$ pf ssh root@my-new-hostname echo hello
+$ pf ssh root@demo echo hello
 hello
 ```
 
+## Onboard new users via email
+
+While you can onboard new users via private/public key authentication, like you
+you authenticated the `root` user during tenant initialization,
+it is often more convenient to authenticate via one of our builtin SSOs (google,
+gitlab, XXX).
+
+### Create a new user identity
+
+```console
+$ pfa identity create -n julie.chloe@gmail.com
+```
+
+### Grant permissions to the new user
+
+We are going to make this new user a member of the builtin `root` role
+for convenience:
+```console
+$ pfa role -i $(pfa role list -n root -q) -a julie.chloe@gmail.com
+```
+
+### Invite the user
+
+Create an invitation, and send it to this user via email:
+```console
+$ pfa identity invite --email -i $(pfa identity list -n julie.chloe@gmail.com -q)
+```
+
+### Accept the invitation
+
+After you share the invitation with your new user, she receives an email
+that describes how to connect via the SSO. `accept` asks the user to
+select which SSO to use, and completes login via a browser popin
+before coming back to the terminal:
+```console
+$ pf accept https://api.provablyfine.net/pf/t/your-tenant/directory
+XXX
+```
+
+She can then look at which hosts she is allowed to access:
+```console
+$ pf hosts
+XXX
+```
 
 ## Next steps
 
@@ -103,5 +124,8 @@ The setup we have completed is pretty basic. A more realistic setup would
 require a clear mapping of your security policy (who can access which hosts)
 to a set of [identities](XXX), [tags](XXX), [roles](XXX), and [boundaries](XXX).
 
-Realistically, most administrators also would setup an external [OIDC SSO](XXX) to
-authenticate users.
+Realistically, most administrators probably want to authenticate users via
+their own [OIDC SSO](XXX).
+
+You also need to prepare a strategy to automate [host enrollment](XXX) in your
+tenant, ideally so that it happens when hosts are provisionned.

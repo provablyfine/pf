@@ -391,11 +391,16 @@ class Private:
         assert isinstance(key, CryptographyPrivateKey)
         return Private(key)
 
-    def to_openssh(self) -> bytes:
+    def to_openssh(self, passphrase: bytes | None = None) -> bytes:
+        encryption: cryptography.hazmat.primitives.serialization.KeySerializationEncryption = (
+            cryptography.hazmat.primitives.serialization.BestAvailableEncryption(passphrase)
+            if passphrase
+            else cryptography.hazmat.primitives.serialization.NoEncryption()
+        )
         return self._key.private_bytes(
             encoding=cryptography.hazmat.primitives.serialization.Encoding.PEM,
             format=cryptography.hazmat.primitives.serialization.PrivateFormat.OpenSSH,
-            encryption_algorithm=cryptography.hazmat.primitives.serialization.NoEncryption(),
+            encryption_algorithm=encryption,
         )
 
     @classmethod

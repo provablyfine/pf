@@ -11,7 +11,7 @@ import requests
 import tabulate
 
 from ... import __version__, client, log
-from .. import login
+from .. import key_utils, login
 from . import bastion_cli, openssh_cli, ssh_cli
 
 logger = logging.getLogger(__name__)
@@ -64,8 +64,12 @@ def _accept_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     sc = client.sync.Client(c, timeout=args.timeout)
     invitation_key = _parse_invitation(args.invitation)
-    sc.connect(invitation_key, args.key)
-    c.account_key = args.key
+    if args.key is None:
+        _, account_key_id = key_utils.generate_and_save_key()
+    else:
+        account_key_id = args.key
+    sc.connect(invitation_key, account_key_id)
+    c.account_key = account_key_id
     c.save(args.config)
 
 
@@ -119,7 +123,7 @@ def pf() -> None:
     config_parser.set_defaults(func=_config_function)
 
     register_parser = subparsers.add_parser("accept", help="Accept an invitation")
-    register_parser.add_argument("--key", help="Private key to register", required=True)
+    register_parser.add_argument("--key", help="Private key to register", default=None)
     register_parser.add_argument("--invitation", help="Invitation you were given", required=True)
     register_parser.set_defaults(func=_accept_function)
 
