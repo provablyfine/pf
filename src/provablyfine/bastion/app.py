@@ -7,7 +7,7 @@ import jwt
 import pydantic
 
 from .. import anet
-from . import http, relay, trusted_key
+from . import http, metrics, relay, trusted_key
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +71,7 @@ class AppState:
 
         def _on_relay_done(client_key: tuple[int, str]) -> None:
             relays.pop(client_key, None)
+            metrics.CONNECTIONS_ACTIVE.labels("register").dec()
 
         for r in relays.values():
             r.add_done_callback(_on_relay_done)
@@ -137,6 +138,7 @@ async def register_handler(state: AppState, request: anet.http.Request, sock_nam
 
     def _on_relay_done(client_key: tuple[int, str]) -> None:
         state.relays.pop(client_key, None)
+        metrics.CONNECTIONS_ACTIVE.labels("register").dec()
 
     r.add_done_callback(_on_relay_done)
     return None

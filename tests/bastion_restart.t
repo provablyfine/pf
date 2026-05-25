@@ -37,8 +37,21 @@ Check bastion is still alive
   \r (esc)
 
 List registered connection
-  $ curl -s --unix-socket $BASTION_CTRL_SOCK http://localhost/registered
-  {"clients": [{"tenant_id": 1, "name": "host", "nconnections": 0}]} (no-eol)
+  $ curl -s --unix-socket $BASTION_CTRL_SOCK http://localhost/registered | jq
+  {
+    "clients": [
+      {
+        "tenant_id": 1,
+        "name": "host",
+        "connected_since": [^,]+, (re)
+        "duration_seconds": [^,]+, (re)
+        "bytes_rx": 0,
+        "bytes_tx": 0,
+        "nconnections": 0,
+        "connections": []
+      }
+    ]
+  }
 
 Provision user identity
   $ pfa -c config.json identity create -n user
@@ -59,16 +72,42 @@ Check bastion is still alive
   \r (esc)
 
 Check that registered connection is still here
-  $ curl -s --unix-socket $BASTION_CTRL_SOCK http://localhost/registered
-  {"clients": [{"tenant_id": 1, "name": "host", "nconnections": 0}]} (no-eol)
+  $ curl -s --unix-socket $BASTION_CTRL_SOCK http://localhost/registered | jq
+  {
+    "clients": [
+      {
+        "tenant_id": 1,
+        "name": "host",
+        "connected_since": [^,]+, (re)
+        "duration_seconds": [^,]+, (re)
+        "bytes_rx": 6,
+        "bytes_tx": 6,
+        "nconnections": 0,
+        "connections": []
+      }
+    ]
+  }
 
 Restart bastion via systemctl — systemd handles fdstore donation + recovery
   $ podman exec $CONTAINER_ID systemctl restart pf-bastion
   $ sleep 1
 
 Verify registered connection still here after restart
-  $ curl -s --unix-socket $BASTION_CTRL_SOCK http://localhost/registered
-  {"clients": [{"tenant_id": 1, "name": "host", "nconnections": 0}]} (no-eol)
+  $ curl -s --unix-socket $BASTION_CTRL_SOCK http://localhost/registered | jq
+  {
+    "clients": [
+      {
+        "tenant_id": 1,
+        "name": "host",
+        "connected_since": [^,]+, (re)
+        "duration_seconds": [^,]+, (re)
+        "bytes_rx": 6,
+        "bytes_tx": 6,
+        "nconnections": 0,
+        "connections": []
+      }
+    ]
+  }
 
 Verify connection still works across exec boundary
   $ echo "hello" | timeout 2 pf -c user.json bastion connect --socket-path $BASTION_MAIN_SOCK --url $BASTION_URL --host host

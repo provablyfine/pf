@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 import typing
 
 import pydantic
 
 from .. import anet
+from . import metrics
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +18,9 @@ class RelayConnectionSnapshot(pydantic.BaseModel):
 
     socket_name: str
     channel_id: int
+    connected_at: float = 0.0
+    bytes_rx: int = 0
+    bytes_tx: int = 0
 
 
 class RelaySnapshot(pydantic.BaseModel):
@@ -25,6 +30,9 @@ class RelaySnapshot(pydantic.BaseModel):
     socket_name: str
     mux_snapshot: anet.mux.MuxSnapshot
     connections: list[RelayConnectionSnapshot]
+    connected_at: float = 0.0
+    bytes_rx: int = 0
+    bytes_tx: int = 0
 
 
 class RelayConnection:
@@ -43,6 +51,9 @@ class RelayConnection:
         logger.info(f"sock_name={socket_name}")
         assert sock is not None
         self._sock = sock
+        self.connected_at = time.time()
+        self.bytes_rx = 0
+        self.bytes_tx = 0
         self._task = asyncio.create_task(self._run())
 
         def _done_cb(fut: asyncio.Future[None]) -> None:
@@ -84,6 +95,8 @@ class RelayConnection:
     async def _run(self) -> None:
         """Relay data between socket and channel."""
 
+        metrics.CONNECTIONS_ACTIVE.labels("connect").inc()
+
         async def user_to_host() -> None:
             logger.debug("relay_user_to_host start")
             try:
@@ -91,6 +104,8 @@ class RelayConnection:
                     data = await self._sock.recv(4096)
                     if data == b"":
                         break
+                    self.bytes_rx += len(data)
+                    metrics.BYTES_FORWARDED.labels("rx").inc(len(data))
                     logger.debug(f"relay_user_to_host rx={len(data)}")
                     write_task: asyncio.Task[None] = asyncio.ensure_future(
                         self._host_mux.channel_write(self._channel_id, data)
@@ -113,6 +128,8 @@ class RelayConnection:
                     data = await self._host_mux.channel_read(self._channel_id)
                     if data == b"":
                         break
+                    self.bytes_tx += len(data)
+                    metrics.BYTES_FORWARDED.labels("tx").inc(len(data))
                     logger.debug(f"relay_host_to_user rx={len(data)}")
                     send_task: asyncio.Task[int] = asyncio.ensure_future(self._sock.send(data))
                     try:
@@ -129,6 +146,7 @@ class RelayConnection:
         try:
             await asyncio.gather(user_to_host(), host_to_user())
         finally:
+            metrics.CONNECTIONS_ACTIVE.labels("connect").dec()
             await self._host_mux.channel_close(self._channel_id)
 
     def add_done_callback(self, cb: typing.Callable[[asyncio.Task[None]], None]) -> None:
@@ -138,7 +156,13 @@ class RelayConnection:
 
     def snapshot(self) -> RelayConnectionSnapshot:
         """Snapshot this connection (identifiers only; data is in the mux)."""
-        return RelayConnectionSnapshot(socket_name=self._socket_name, channel_id=self._channel_id)
+        return RelayConnectionSnapshot(
+            socket_name=self._socket_name,
+            channel_id=self._channel_id,
+            connected_at=self.connected_at,
+            bytes_rx=self.bytes_rx,
+            bytes_tx=self.bytes_tx,
+        )
 
     @classmethod
     def restore(
@@ -147,7 +171,11 @@ class RelayConnection:
         host_mux: anet.mux.Mux,
     ) -> RelayConnection:
         """Restore from snapshot. Caller must have re-added socket to store."""
-        return cls.start(snap.socket_name, host_mux, snap.channel_id)
+        conn = cls.start(snap.socket_name, host_mux, snap.channel_id)
+        conn.connected_at = snap.connected_at
+        conn.bytes_rx = snap.bytes_rx
+        conn.bytes_tx = snap.bytes_tx
+        return conn
 
 
 class Relay:
@@ -164,6 +192,9 @@ class Relay:
         self._client_key = client_key
         self._mux = mux
         self._connections = connections
+        self.connected_at = time.time()
+        self.bytes_rx = 0
+        self.bytes_tx = 0
 
     @property
     def nconnections(self):
@@ -174,7 +205,10 @@ class Relay:
         """Start a relay. Spawns run() as background task."""
         mux = anet.mux.Mux.create(socket_name)
         connections: dict[str, RelayConnection] = {}
-        return Relay(socket_name, client_key, mux, connections)
+        relay = Relay(socket_name, client_key, mux, connections)
+        metrics.CONNECTIONS_ACTIVE.labels("register").inc()
+        metrics.CONNECTIONS_TOTAL.labels("register").inc()
+        return relay
 
     def stop(self):
         self._mux.stop()
@@ -190,13 +224,16 @@ class Relay:
         """Open a new connection through this relay."""
         host_id = await self._mux.channel_open()
         connection = RelayConnection.start(socket_name, self._mux, host_id)
+        metrics.CONNECTIONS_TOTAL.labels("connect").inc()
 
         def _on_done(fut: asyncio.Future[None]) -> None:
             if fut.cancelled():
                 return
-            connection = self._connections.get(socket_name)
-            if connection is None:
+            conn = self._connections.get(socket_name)
+            if conn is None:
                 return
+            self.bytes_rx += conn.bytes_rx
+            self.bytes_tx += conn.bytes_tx
             del self._connections[socket_name]
 
         connection.add_done_callback(_on_done)
@@ -213,6 +250,19 @@ class Relay:
 
         self._mux.add_rx_done_callback(_on_done)
 
+    def get_connections_snapshot(self) -> list[dict[str, float | int]]:
+        """Get snapshots of all active connections with their metrics."""
+        now = time.time()
+        return [
+            {
+                "connected_since": conn.connected_at,
+                "duration_seconds": now - conn.connected_at,
+                "bytes_rx": conn.bytes_rx,
+                "bytes_tx": conn.bytes_tx,
+            }
+            for conn in self._connections.values()
+        ]
+
     def snapshot(self) -> RelaySnapshot:
         """Snapshot the relay (stops mux reader, drains state)."""
         mux_snapshot = self._mux.snapshot()
@@ -222,6 +272,9 @@ class Relay:
             socket_name=self._socket_name,
             mux_snapshot=mux_snapshot,
             connections=connections,
+            connected_at=self.connected_at,
+            bytes_rx=self.bytes_rx,
+            bytes_tx=self.bytes_tx,
         )
 
     @classmethod
@@ -229,4 +282,11 @@ class Relay:
         """Restore a Relay from snapshot. Spawns run() as background task."""
         mux = anet.mux.Mux.restore(snap.mux_snapshot)
         connections = {c.socket_name: RelayConnection.restore(c, mux) for c in snap.connections}
-        return Relay(snap.socket_name, snap.client_key, mux, connections)
+        relay = Relay(snap.socket_name, snap.client_key, mux, connections)
+        relay.connected_at = snap.connected_at
+        relay.bytes_rx = snap.bytes_rx
+        relay.bytes_tx = snap.bytes_tx
+        metrics.CONNECTIONS_ACTIVE.labels("register").inc()
+        for _ in connections.values():
+            metrics.CONNECTIONS_ACTIVE.labels("connect").inc()
+        return relay

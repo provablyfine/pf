@@ -6,6 +6,7 @@ from . import utils
 
 
 @pytest.mark.skipif(not shutil.which("socat"), reason="socat not found")
+@pytest.mark.skipif(not shutil.which("jq"), reason="jq not found")
 def test_bastion_reload(api, ssh_agent, bastion_server):
     """Test bastion snapshot/restore cycle via control socket."""
     utils.run_cram(

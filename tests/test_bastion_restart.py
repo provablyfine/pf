@@ -8,6 +8,7 @@ from . import utils
 
 
 @pytest.mark.skipif(not shutil.which("socat"), reason="socat not found")
+@pytest.mark.skipif(not shutil.which("jq"), reason="jq not found")
 def test_bastion_fdstore_restart(api, ssh_agent, bastion_container):
     """Test bastion restart via systemctl with fdstore fd donation + recovery."""
     utils.run_cram(

@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import dataclasses
 import logging
+import time
+
+import prometheus_client
 
 from .. import anet
 from . import app, http
@@ -46,18 +49,32 @@ async def ping_handler(state: AppState, request: anet.http.Request, sock_name: s
     return http.response(status_code=200)
 
 
+async def metrics_handler(state: AppState, request: anet.http.Request, sock_name: str) -> anet.http.Response | None:
+    return http.response(
+        status_code=200,
+        headers={"Content-Type": prometheus_client.CONTENT_TYPE_LATEST},
+        body=prometheus_client.generate_latest(),
+    )
+
+
 async def list_registered_handler(
     state: AppState, request: anet.http.Request, sock_name: str
 ) -> anet.http.Response | None:
-    client_keys = [
+    now = time.time()
+    clients = [
         {
             "tenant_id": tenant_id,
             "name": name,
+            "connected_since": relay.connected_at,
+            "duration_seconds": now - relay.connected_at,
+            "bytes_rx": relay.bytes_rx,
+            "bytes_tx": relay.bytes_tx,
             "nconnections": relay.nconnections,
+            "connections": relay.get_connections_snapshot(),
         }
         for (tenant_id, name), relay in state.main_state.relays.items()
     ]
-    return http.json_response(status_code=200, json={"clients": client_keys})
+    return http.json_response(status_code=200, json={"clients": clients})
 
 
 def create(state: AppState, sock: anet.base.Socket) -> http.Application[AppState]:
@@ -65,4 +82,5 @@ def create(state: AppState, sock: anet.base.Socket) -> http.Application[AppState
     a.add_route(http.Route[AppState](reload_handler, method="POST", resource="/reload"))
     a.add_route(http.Route[AppState](ping_handler, method="POST", resource="/ping"))
     a.add_route(http.Route[AppState](list_registered_handler, method="GET", resource="/registered"))
+    a.add_route(http.Route[AppState](metrics_handler, method="GET", resource="/metrics"))
     return a

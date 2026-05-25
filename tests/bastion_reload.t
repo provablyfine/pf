@@ -49,9 +49,21 @@ Check bastion is still alive
   \r (esc)
 
 List registered connection
-  $ curl -s --unix-socket $BASTION_CTRL_SOCK http://localhost/registered
-  {"clients": [{"tenant_id": 1, "name": "host", "nconnections": 0}]} (no-eol)
-
+  $ curl -s --unix-socket $BASTION_CTRL_SOCK http://localhost/registered |jq
+  {
+    "clients": [
+      {
+        "tenant_id": 1,
+        "name": "host",
+        "connected_since": [^,]+, (re)
+        "duration_seconds": [^,]+, (re)
+        "bytes_rx": 0,
+        "bytes_tx": 0,
+        "nconnections": 0,
+        "connections": []
+      }
+    ]
+  }
 
 Provision user identity
   $ pfa -c config.json identity create -n user
@@ -72,8 +84,21 @@ Check bastion is still alive
   \r (esc)
 
 Check that registered connection is still here after connecting to it
-  $ curl -s --unix-socket $BASTION_CTRL_SOCK http://localhost/registered
-  {"clients": [{"tenant_id": 1, "name": "host", "nconnections": 0}]} (no-eol)
+  $ curl -s --unix-socket $BASTION_CTRL_SOCK http://localhost/registered | jq
+  {
+    "clients": [
+      {
+        "tenant_id": 1,
+        "name": "host",
+        "connected_since": [^,]+, (re)
+        "duration_seconds": [^,]+, (re)
+        "bytes_rx": 6,
+        "bytes_tx": 6,
+        "nconnections": 0,
+        "connections": []
+      }
+    ]
+  }
 
 Reload with live registered connection
   $ curl -sf --unix-socket $BASTION_CTRL_SOCK -X POST http://localhost/reload
@@ -84,8 +109,21 @@ Check bastion is still alive
   \r (esc)
 
 Verify registered connection is still here after reload
-  $ curl -s --unix-socket $BASTION_CTRL_SOCK http://localhost/registered
-  {"clients": [{"tenant_id": 1, "name": "host", "nconnections": 0}]} (no-eol)
+  $ curl -s --unix-socket $BASTION_CTRL_SOCK http://localhost/registered | jq
+  {
+    "clients": [
+      {
+        "tenant_id": 1,
+        "name": "host",
+        "connected_since": [^,]+, (re)
+        "duration_seconds": [^,]+, (re)
+        "bytes_rx": 6,
+        "bytes_tx": 6,
+        "nconnections": 0,
+        "connections": []
+      }
+    ]
+  }
 
 Verify connection still works after reload
   $ echo "hello" | timeout 2 pf -c user.json bastion connect --url http://localhost:$BASTION_PORT --host host
