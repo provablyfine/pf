@@ -9,45 +9,6 @@ import tempfile
 from ... import client, jwk, ssh
 
 
-def _preflight_check(sshd_config_dir: str, sshd_config_file: str) -> None:
-    """Raise RuntimeError if conflicting sshd directives are found."""
-    conflicts: list[str] = []
-    conflicting_directives = ["TrustedUserCAKeys", "AuthorizedPrincipalsCommand"]
-
-    for config_path in [sshd_config_dir, sshd_config_file]:
-        if not os.path.exists(config_path):
-            continue
-        if os.path.isdir(config_path):
-            for filename in os.listdir(config_path):
-                filepath = os.path.join(config_path, filename)
-                if os.path.isfile(filepath):
-                    conflicts += _check_file_for_directives(filepath, conflicting_directives)
-        else:
-            conflicts += _check_file_for_directives(config_path, conflicting_directives)
-
-    if conflicts:
-        raise RuntimeError(
-            "Conflicting sshd directives found; remove them before initializing pf:\n"
-            + "\n".join(f"  {c}" for c in conflicts)
-        )
-
-
-def _check_file_for_directives(filepath: str, directives: list[str]) -> list[str]:
-    conflicts: list[str] = []
-    try:
-        with open(filepath) as f:
-            for line in f:
-                line = line.strip()
-                if line.startswith("#"):
-                    continue
-                for directive in directives:
-                    if line.startswith(directive):
-                        conflicts.append(f"'{directive}' in {filepath}")
-    except Exception:
-        pass
-    return conflicts
-
-
 def _write_file_atomic(filepath: str, content: bytes | str, mode: str = "wb") -> None:
     dirname = os.path.dirname(filepath) or "."
     os.makedirs(dirname, exist_ok=True)
@@ -169,6 +130,13 @@ def _print_init_script(
         "#!/bin/sh",
         "set -eu",
         "",
+        "for _pf_d in TrustedUserCAKeys AuthorizedPrincipalsCommand; do",
+        f'  if grep -rqE "^${{_pf_d}}" /etc/ssh/sshd_config {sshd_drop_in_dir}/ 2>/dev/null; then',
+        "    echo \"conflicting sshd directive '$_pf_d' found; remove before initializing pf\" >&2",
+        "    exit 1",
+        "  fi",
+        "done",
+        "",
         "install -d -m 700 /var/lib/pf",
         f"printf '%s' '{account_key_b64}' | base64 -d | systemd-creds encrypt - /var/lib/pf/account.cred",
         "",
@@ -210,8 +178,6 @@ def host_init_daemon_function(args: argparse.Namespace) -> None:
     """Accept invitation and print a shell script to stdout that sets up pf on this host."""
 
     directory_url = args.tenant_url or "https://pf.provablyfine.net/pf/directory"
-
-    _preflight_check(os.path.dirname(args.sshd_config_drop_in), "/etc/ssh/sshd_config")
 
     account_key = jwk.Private.generate_ed25519()
 

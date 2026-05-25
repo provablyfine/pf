@@ -85,7 +85,6 @@ def add_subparsers(parser: argparse.ArgumentParser) -> None:
 
     host_init_parser = subparsers.add_parser("host-init", help="Initialize configuration of local SSH daemon")
     host_init_parser.add_argument("--invitation", required=True, help="Invitation key")
-    host_init_parser.add_argument("--tenant-url", default=None, help="API directory URL")
     host_init_parser.add_argument("--auth-user", default="nobody", help="User for AuthorizedPrincipalsCommandUser")
     host_init_parser.add_argument(
         "--sshd-config-drop-in", default="/etc/ssh/sshd_config.d/10-pf.conf", help="Path to sshd_config.d drop-in file"
