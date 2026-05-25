@@ -39,16 +39,7 @@ cov-report:
 	coverage html -d cov --rcfile $(shell pwd)/tests/.coveragerc
 	coverage report
 
-check: tests check-imports pyright format
+check: tests
+	uv run pre-commit run -a
 
-check-imports:
-	./scripts/check-imports
-
-format:
-	uv run ruff format
-	uv run ruff check
-
-pyright:
-	uv run pyright
-
-.PHONY: tests cov cov-report check-imports format check
+.PHONY: tests cov cov-report check
