@@ -39,7 +39,9 @@ cov-report:
 	coverage html -d cov --rcfile $(shell pwd)/tests/.coveragerc
 	coverage report
 
-check: tests
+lint:
 	uv run pre-commit run -a
 
-.PHONY: tests cov cov-report check
+check: lint tests
+
+.PHONY: tests cov cov-report lint check

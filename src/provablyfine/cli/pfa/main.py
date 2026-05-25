@@ -12,7 +12,7 @@ from ... import __version__, client, log
 from .. import login
 from . import audit_log_cli, auth_cli, bastion_cli, boundary_cli, grant_cli, identity_cli, role_cli, tag_cli, tenant_cli
 
-_DEFAULT_CONFIG = os.path.join(os.path.expanduser("~"), ".config", "pf", "config.json")
+_DEFAULT_CONFIG = os.path.join(os.path.expanduser("~"), ".config", "provablyfine", "config.json")
 
 
 def _initialize_function(args: argparse.Namespace) -> None:
@@ -91,12 +91,10 @@ def pfa() -> None:
     if sys.platform != "win32":
         signal.signal(signal.SIGPIPE, signal.SIG_DFL)
     parser = argparse.ArgumentParser()
-    parser.add_argument("-c", "--config", help="configuration file", default=_DEFAULT_CONFIG)
+    parser.add_argument("-c", "--config", help="configuration file. Default: %(default)s", default=_DEFAULT_CONFIG)
     parser.add_argument("--auto-login", action="store_true", default=False)
-    parser.add_argument("--timeout", default=1.0, help="Timeout for HTTP requests")
-    parser.add_argument(
-        "-d", "--debug", help="Increase debugging level", action="count", default=int(os.environ.get("PF_DEBUG") or "0")
-    )
+    parser.add_argument("--timeout", default=1.0, help="Timeout for HTTP requests. Default: %(default)s")
+    parser.add_argument("-d", "--debug", help="Debug level", action="count", default=0)
     parser.add_argument("--log-filename", help="Filename where logs will be written", default=None)
     subparsers = parser.add_subparsers(required=True, dest="command", metavar="command")
 

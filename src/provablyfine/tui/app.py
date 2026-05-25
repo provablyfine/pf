@@ -8,7 +8,7 @@ import textual.screen
 from .. import client, log
 from . import base, home, relogin, setup
 
-_DEFAULT_CONFIG = os.path.join(os.path.expanduser("~"), ".config", "pf", "config.json")
+_DEFAULT_CONFIG = os.path.join(os.path.expanduser("~"), ".config", "provablyfine", "config.json")
 
 
 class SetupApp(base.App):
@@ -35,7 +35,7 @@ class TuiApp(base.App):
 
 def pfat() -> None:
     parser = argparse.ArgumentParser(description="pf admin TUI")
-    parser.add_argument("-c", "--config", default=_DEFAULT_CONFIG, help="Configuration file")
+    parser.add_argument("-c", "--config", default=_DEFAULT_CONFIG, help="Configuration file. Default: %(default)s")
     parser.add_argument("-d", "--debug", help="Debugging level", action="count", default=0)
     parser.add_argument("--log-filename", help="Filename where logs will be written", default=None)
     args = parser.parse_args()

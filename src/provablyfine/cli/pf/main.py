@@ -16,7 +16,7 @@ from . import bastion_cli, openssh_cli, ssh_cli
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_CONFIG = os.path.join(os.path.expanduser("~"), ".config", "pf", "config.json")
+_DEFAULT_CONFIG = os.path.join(os.path.expanduser("~"), ".config", "provablyfine", "config.json")
 
 
 @client.ssh_utils.exception
@@ -102,8 +102,8 @@ def pf() -> None:
     if sys.platform != "win32":
         signal.signal(signal.SIGPIPE, signal.SIG_DFL)
     parser = argparse.ArgumentParser()
-    parser.add_argument("-c", "--config", help="configuration file", default=_DEFAULT_CONFIG)
-    parser.add_argument("--timeout", default=1.0, help="Timeout for HTTP requests")
+    parser.add_argument("-c", "--config", help="configuration file. Default: %(default)s", default=_DEFAULT_CONFIG)
+    parser.add_argument("--timeout", default=1.0, help="Timeout for HTTP requests. Default: %(default)s")
     parser.add_argument("-d", "--debug", help="Debugging level", action="count", default=0)
     parser.add_argument("--log-filename", help="Filename where logs will be written", default=None)
     subparsers = parser.add_subparsers(required=True, dest="command", metavar="command")
