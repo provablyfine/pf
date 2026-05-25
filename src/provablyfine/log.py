@@ -96,7 +96,7 @@ def setup(debug: int, log_filename: str) -> None:
         f = open(log_filename, "a", buffering=1)
     except Exception:
         f = sys.stdout
-    logging.basicConfig(stream=f, level=level, format=FORMAT, datefmt=DATEFMT)
+    logging.basicConfig(stream=f, level=level, format=FORMAT, datefmt=DATEFMT, force=True)
 
 
 def setup_server(prog: str, level: int, log_filename: str | None = None) -> None:
