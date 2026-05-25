@@ -17,7 +17,7 @@ We want to complete the following items before we release 1.0:
   - create tenant after user provides valid email
 - [x] Prometheus metrics in pf-api
 - [ ] Request id logging in pf-api and pf-bastion
-- [ ] Custom metrics in pf-bastion
+- [x] Custom metrics in pf-bastion
 - [ ] Make sure we can use encrypted account keys (ask for user password)
 
 ## Documentation

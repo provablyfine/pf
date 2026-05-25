@@ -197,8 +197,16 @@ class Relay:
         self.bytes_tx = 0
 
     @property
-    def nconnections(self):
+    def nconnections(self) -> int:
         return len(self._connections)
+
+    @property
+    def total_bytes_rx(self) -> int:
+        return self.bytes_rx + sum(c.bytes_rx for c in self._connections.values())
+
+    @property
+    def total_bytes_tx(self) -> int:
+        return self.bytes_tx + sum(c.bytes_tx for c in self._connections.values())
 
     @classmethod
     def start(cls, socket_name: str, client_key: tuple[int, str]) -> Relay:
@@ -273,8 +281,8 @@ class Relay:
             mux_snapshot=mux_snapshot,
             connections=connections,
             connected_at=self.connected_at,
-            bytes_rx=self.bytes_rx,
-            bytes_tx=self.bytes_tx,
+            bytes_rx=self.total_bytes_rx,
+            bytes_tx=self.total_bytes_tx,
         )
 
     @classmethod
