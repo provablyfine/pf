@@ -82,8 +82,14 @@ def add_subparsers(parser: argparse.ArgumentParser) -> None:
     authorized_principals_parser.set_defaults(func=_authorized_principals)
 
     host_init_parser = subparsers.add_parser("host-init-daemon")
-    host_init_parser.add_argument("--sshd-config-drop-in", required=True, help="Path to sshd_config.d drop-in file")
-    host_init_parser.add_argument("--host-keys-dir", required=True, help="Directory containing host SSH keys")
+    host_init_parser.add_argument("--invitation", required=True, help="Invitation key")
+    host_init_parser.add_argument("--tenant-url", default=None, help="API directory URL")
+    host_init_parser.add_argument("--auth-user", default="nobody", help="User for AuthorizedPrincipalsCommandUser")
+    host_init_parser.add_argument(
+        "--sshd-config-drop-in", default="/etc/ssh/sshd_config.d/10-pf.conf", help="Path to sshd_config.d drop-in file"
+    )
+    host_init_parser.add_argument("--host-keys-dir", default="/etc/ssh", help="Directory containing host SSH keys")
+    host_init_parser.add_argument("--ca-pub-path", default="/etc/ssh/pf_ca.pub", help="Path to CA public key file")
     host_init_parser.set_defaults(func=openssh_host_init.host_init_daemon_function)
 
     host_refresh_parser = subparsers.add_parser("host-refresh")

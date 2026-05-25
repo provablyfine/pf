@@ -2,7 +2,6 @@ import argparse
 import base64
 import json
 import os
-import socket
 import subprocess
 import sys
 import tempfile
@@ -66,24 +65,6 @@ def _write_file_atomic(filepath: str, content: bytes | str, mode: str = "wb") ->
         raise
 
 
-def _write_sshd_drop_in(drop_in_path: str, host_keys_dir: str, ca_pub_path: str, auth_user: str) -> None:
-    drop_in_content = [f"TrustedUserCAKeys {ca_pub_path}"]
-    for key_type in ["ed25519", "ecdsa", "rsa"]:
-        cert_path = os.path.join(host_keys_dir, f"ssh_host_{key_type}_key.cert")
-        if os.path.exists(cert_path):
-            drop_in_content.append(f"HostCertificate {cert_path}")
-
-    drop_in_content += [
-        f"AuthorizedPrincipalsCommand /usr/bin/pf openssh authorized-principals"
-        f" --host-certificate={os.path.join(host_keys_dir, 'ssh_host_ed25519_key.cert')}"
-        f" --username=%u --certificate=%k",
-        f"AuthorizedPrincipalsCommandUser {auth_user}",
-        "PubkeyAuthentication yes",
-    ]
-
-    _write_file_atomic(drop_in_path, "".join(f"{line}\n" for line in drop_in_content), mode="w")
-
-
 def _sign_host_certificates_with_auth(auth_http: client.http_client.HttpClient, host_keys_dir: str) -> None:
     public_keys: list[dict[str, str]] = []
     filename_from_fingerprint: dict[str, str] = {}
@@ -138,41 +119,105 @@ def _do_refresh(
     _write_file_atomic(ca_pub_path, ca_pubkey, mode="w")
 
 
-def _read_json_from_socket(sock: socket.socket) -> dict[str, str]:
-    data = b""
-    while True:
-        chunk = sock.recv(4096)
-        if not chunk:
-            break
-        data += chunk
-        try:
-            return json.loads(data.decode("utf-8"))
-        except json.JSONDecodeError:
-            pass
-    return json.loads(data.decode("utf-8"))
+def _print_init_script(
+    account_key: jwk.Private,
+    directory_url: str,
+    host_keys_dir: str,
+    ca_pub_path: str,
+    sshd_config_drop_in: str,
+    auth_user: str,
+) -> None:
+    account_key_b64 = base64.b64encode(account_key.to_openssh()).decode()
+    config_json = json.dumps(
+        {
+            "directory_url": directory_url,
+            "account_key": "$CREDENTIALS_DIRECTORY/account",
+        }
+    )
+    sshd_drop_in_dir = os.path.dirname(sshd_config_drop_in)
+    refresh_cmd = (
+        f"pf openssh host-refresh"
+        f" --config=/var/lib/pf/config.json"
+        f" --host-keys-dir={host_keys_dir}"
+        f" --ca-pub-path={ca_pub_path}"
+    )
+    refresh_service = "\n".join(
+        [
+            "[Unit]",
+            "Description=Provably Fine SSH host certificate refresh",
+            "",
+            "[Service]",
+            "Type=oneshot",
+            f"ExecStart={refresh_cmd}",
+            "LoadCredential=account:/var/lib/pf/account.cred",
+        ]
+    )
+    refresh_timer = "\n".join(
+        [
+            "[Unit]",
+            "Description=Provably Fine SSH host certificate refresh timer",
+            "",
+            "[Timer]",
+            "OnCalendar=daily",
+            "Persistent=true",
+            "",
+            "[Install]",
+            "WantedBy=timers.target",
+        ]
+    )
+    lines = [
+        "#!/bin/sh",
+        "set -eu",
+        "",
+        "install -d -m 700 /var/lib/pf",
+        f"printf '%s' '{account_key_b64}' | base64 -d | systemd-creds encrypt - /var/lib/pf/account.cred",
+        "",
+        "cat > /var/lib/pf/config.json << 'PFEOF'",
+        config_json,
+        "PFEOF",
+        "",
+        "ssh-keygen -A",
+        refresh_cmd,
+        "",
+        f"install -d -m 755 {sshd_drop_in_dir}",
+        "{",
+        f"  echo 'TrustedUserCAKeys {ca_pub_path}'",
+        f"  for cert in {host_keys_dir}/ssh_host_*_key.cert; do",
+        '    [ -f "$cert" ] && echo "HostCertificate $cert"',
+        "  done",
+        f"  echo 'AuthorizedPrincipalsCommand /usr/bin/pf openssh authorized-principals"
+        f" --host-certificate={host_keys_dir}/ssh_host_ed25519_key.cert --username=%u --certificate=%k'",
+        f"  echo 'AuthorizedPrincipalsCommandUser {auth_user}'",
+        "  echo 'PubkeyAuthentication yes'",
+        f"}} > {sshd_config_drop_in}",
+        "",
+        "cat > /etc/systemd/system/pf-host-refresh.service << 'PFEOF'",
+        refresh_service,
+        "PFEOF",
+        "",
+        "cat > /etc/systemd/system/pf-host-refresh.timer << 'PFEOF'",
+        refresh_timer,
+        "PFEOF",
+        "",
+        "systemctl daemon-reload",
+        "systemctl enable --now pf-host-refresh.timer",
+        "systemctl reload sshd",
+    ]
+    sys.stdout.write("\n".join(lines) + "\n")
 
 
-def _write_json_to_socket(sock: socket.socket, response: dict[str, str]) -> None:
-    sock.sendall(json.dumps(response).encode("utf-8"))
+def host_init_daemon_function(args: argparse.Namespace) -> None:
+    """Accept invitation and print a shell script to stdout that sets up pf on this host."""
 
-
-def _handle_initialization(args: argparse.Namespace, request_data: dict[str, str]) -> None:
-    invitation = request_data.get("invitation")
-    tenant_url = request_data.get("tenant_url")
-    auth_user = request_data.get("auth_user", "nobody")
-
-    if not invitation:
-        raise RuntimeError("Missing 'invitation' field")
-
-    directory_url = tenant_url or "https://pf.provablyfine.net/pf/directory"
+    directory_url = args.tenant_url or "https://pf.provablyfine.net/pf/directory"
 
     _preflight_check(os.path.dirname(args.sshd_config_drop_in), "/etc/ssh/sshd_config")
 
     account_key = jwk.Private.generate_ed25519()
 
-    temp_config = client.configuration.Config(directory_url=directory_url)
-    http = client.http_client.Client(temp_config)
-    auth = http.invitation_auth_with_key(account_key, invitation)
+    config = client.configuration.Config(directory_url=directory_url)
+    http = client.http_client.Client(config)
+    auth = http.invitation_auth_with_key(account_key, args.invitation)
     response = auth.post(
         url=auth.directory.accept_invitation,
         json={"account_public_key": auth.account_public_key.to_dict()},
@@ -180,57 +225,14 @@ def _handle_initialization(args: argparse.Namespace, request_data: dict[str, str
     if response.status_code != 204:
         raise RuntimeError(f"Failed to accept invitation: {response.text}")
 
-    subprocess.run(
-        ["/usr/bin/systemd-creds", "encrypt", "-", "/var/lib/pf/account.cred"],
-        input=account_key.to_openssh(),
-        check=True,
-        capture_output=True,
+    _print_init_script(
+        account_key,
+        directory_url,
+        args.host_keys_dir,
+        args.ca_pub_path,
+        args.sshd_config_drop_in,
+        args.auth_user,
     )
-
-    _write_file_atomic(
-        "/var/lib/pf/config.json",
-        json.dumps({"directory_url": directory_url, "account_key": "$CREDENTIALS_DIRECTORY/account"}),
-        mode="w",
-    )
-
-    subprocess.run(["/usr/bin/ssh-keygen", "-A"], check=True, capture_output=True)
-
-    _do_refresh(account_key, directory_url, args.host_keys_dir, args.ca_pub_path)
-
-    _write_sshd_drop_in(args.sshd_config_drop_in, args.host_keys_dir, args.ca_pub_path, auth_user)
-
-    subprocess.run(["/usr/bin/systemctl", "reload", "sshd"], check=True, capture_output=True)
-
-
-def host_init_daemon_function(args: argparse.Namespace) -> None:
-    """Socket-activated init daemon. Reads JSON from systemd socket fd 3."""
-
-    try:
-        listening_sock = socket.socket(fileno=3)
-    except Exception as e:
-        sys.stderr.write(f"Failed to open socket fd 3: {e}\n")
-        sys.exit(1)
-
-    while True:
-        conn, _ = listening_sock.accept()
-
-        try:
-            request_data = _read_json_from_socket(conn)
-        except Exception as e:
-            _write_json_to_socket(conn, {"status": "error", "message": f"Invalid JSON: {e}"})
-            conn.close()
-            continue
-
-        try:
-            _handle_initialization(args, request_data)
-        except Exception as e:
-            _write_json_to_socket(conn, {"status": "error", "message": str(e)})
-            conn.close()
-            continue
-
-        _write_json_to_socket(conn, {"status": "ok"})
-        conn.close()
-        break
 
 
 def host_refresh_function(args: argparse.Namespace) -> None:
