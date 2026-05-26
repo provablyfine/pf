@@ -8,8 +8,15 @@ repos:
       - id: check-toml
       - id: check-merge-conflict
       - id: check-added-large-files
-        args: [ --maxkb=1000 ]
+        args: [--maxkb=1000]
       - id: debug-statements
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.4.2
+    hooks:
+      - id: codespell
+        name: Spell check Markdown files
+        args: ["--skip=*.py,*.json"]
+        files: \.md$
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.14
     hooks:
@@ -27,17 +34,17 @@ repos:
         name: Type checking for python
         entry: uv run pyright
         language: system
-        types: [ python ]
+        types: [python]
         pass_filenames: false
       - id: licensecheck
         name: License compatibility
         entry: uv run licensecheck
         language: system
         pass_filenames: false
-        stages: [ pre-push ]
+        stages: [pre-push]
       - id: uv-audit
         name: Vulnerability scan (uv audit)
         entry: uv audit
         language: system
         pass_filenames: false
-        stages: [ pre-push ]
+        stages: [pre-push]
