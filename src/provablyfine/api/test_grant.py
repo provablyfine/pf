@@ -202,7 +202,7 @@ def test_tag_with_ceiling():
 
 
 def test_tag_with_denied():
-    # I am granted create, read, and delete, within ceiling, but I am explicitely denied read
+    # I am granted create, read, and delete, within ceiling, but I am explicitly denied read
     grants = grant.Grants(
         [
             boundary(
@@ -218,7 +218,7 @@ def test_tag_with_denied():
 
 
 def test_tag_with_ceiling_and_denied():
-    # I am granted create, read, and delete but the ceiling only gives me create and I am explicitely denied create
+    # I am granted create, read, and delete but the ceiling only gives me create and I am explicitly denied create
     grants = grant.Grants(
         [
             boundary(

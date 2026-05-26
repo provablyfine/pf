@@ -17,7 +17,7 @@ List existing identities (there is one)
 Create a boundary to be able to create an identity with it
   $ pfa -c config.json boundary create -n boundary1
 
-Create tags to be able to tag and untag indentity
+Create tags to be able to tag and untag identity
   $ pfa -c config.json tag create -n env -v dev
   $ pfa -c config.json tag create -n env -v preprod
   $ pfa -c config.json tag create -n env -v prod

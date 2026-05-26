@@ -31,7 +31,7 @@ async def test_stream_read_until_single_recv(anet_socketpair: SocketPair) -> Non
 async def test_stream_read_until_spanning_recvs(anet_socketpair: SocketPair) -> None:
     """read_until finds delimiter spanning multiple recvs."""
     client, server = anet_socketpair
-    chunk1 = b"hel"
+    chunk1 = b"hel"  # codespell:ignore hel
     chunk2 = b"lo\nworld"
 
     async def server_send_chunks() -> None:

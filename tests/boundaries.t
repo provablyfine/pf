@@ -27,7 +27,7 @@ Display details about the boundary
   description  The Root boundary is not a boundary at all.
   ceiling      *
 
-Search for the root boundary explicitely
+Search for the root boundary explicitly
   $ pfa -c config.json boundary list -n root -q
   1
 

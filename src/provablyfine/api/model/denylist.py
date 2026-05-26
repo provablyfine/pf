@@ -15,7 +15,7 @@ def create(key_id: str, **kwargs: typing.Any) -> None:
 def enforce_not_denied(key_id: str) -> None:
     denylist_entry = ctx.app_db.public_key_denylist.read_one(key_id=key_id)
     if denylist_entry:
-        # Purposedly return an error that is not very clear
+        # Purposely return an error that is not very clear
         # because the client is probably malevolent
         audit_log.create_warning(type="denylist-check-failed", public_key_id=key_id)
         raise responses.ProblemHTTPException(responses.problem_response(status_code=403, title="Unable to use key"))

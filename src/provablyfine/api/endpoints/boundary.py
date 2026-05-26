@@ -135,7 +135,7 @@ def update_endpoint(
                     status_code=403, title="Not allowed to update ceiling list on boundary that applies to self"
                 )
             )
-        # We explicitely allow ceiling_list to be null to mean:
+        # We explicitly allow ceiling_list to be null to mean:
         # "no ceiling is set, so nothing is disallowed by the ceiling"
         # which is different from being an empty list which means:
         # "ceiling is set to an empty list so, everything is disallowed by the ceiling"

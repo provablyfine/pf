@@ -15,8 +15,6 @@ repos:
     hooks:
       - id: codespell
         name: Spell check Markdown files
-        args: ["--skip=*.py,*.json"]
-        files: \.md$
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.14
     hooks:

@@ -16,7 +16,7 @@ uv run ruff format
 uv run pyright
 ```
 
-Most notably, all code is expected to use python type anotations for
+Most notably, all code is expected to use python type annotations for
 method/function arguments and return values. "type: ignore" is considered
 evil: avoid at all costs.
 

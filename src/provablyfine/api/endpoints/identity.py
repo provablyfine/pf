@@ -180,7 +180,7 @@ def delete_endpoint(identity_id: int) -> fastapi.responses.Response:
 
 
 def _403_tag() -> responses.ProblemHTTPException:
-    # We purposedly do not return detailed information to the client
+    # We purposely do not return detailed information to the client
     # to make sure we do not leak information that the client should not know
     return responses.ProblemHTTPException(
         responses.problem_response(status_code=403, title="Not allowed to update tag")
@@ -242,7 +242,7 @@ def update_endpoint(identity_id: int, data: schemas.identity.IdentityUpdateReque
         assert data.tags is not None  # Guaranteed by "after" pydantic validation
         # 1. We need to have native add and del operations because we have an identity:add-tag
         #    permission. If we did not have add and del operations, the client would need to be
-        #    able to read the identity before it is able to add tag so, implicitely using the
+        #    able to read the identity before it is able to add tag so, implicitly using the
         #    the add-tag permission would also require using the read permission. We want to make
         #    sure permissions DO NOT DEPEND UPON EACH OTHER
         # 2. I am fully aware that this operation data structure looks a lot like
