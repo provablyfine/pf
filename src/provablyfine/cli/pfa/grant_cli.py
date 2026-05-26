@@ -175,7 +175,7 @@ def _ssh_command_function(args: argparse.Namespace) -> None:
 def add_subparser(parser: argparse.ArgumentParser) -> None:
     subparsers = parser.add_subparsers(required=True, dest="subcommand", metavar="subcommand")
 
-    tag_parser = subparsers.add_parser("tag")
+    tag_parser = subparsers.add_parser("tag", help="Tag permission")
     tag_parser.add_argument("-f", "--format", choices=["yaml", "json"], default="yaml")
     group = tag_parser.add_argument_group("filter")
     group.add_argument("--name-value", default=None)
@@ -185,7 +185,7 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
     group.add_argument("-d", "--delete", action="store_true")
     tag_parser.set_defaults(func=_tag_function)
 
-    role_parser = subparsers.add_parser("role")
+    role_parser = subparsers.add_parser("role", help="Role permission")
     role_parser.add_argument("-f", "--format", choices=["yaml", "json"], default="yaml")
     group = role_parser.add_argument_group("filter")
     group.add_argument("--name", default=None)
@@ -204,7 +204,7 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
     group.add_argument("-d", "--delete", action="store_true")
     role_parser.set_defaults(func=_role_function)
 
-    boundary_parser = subparsers.add_parser("boundary")
+    boundary_parser = subparsers.add_parser("boundary", help="Boundary permission")
     boundary_parser.add_argument("-f", "--format", choices=["yaml", "json"], default="yaml")
     group = boundary_parser.add_argument_group("filter")
     group.add_argument("--name", default=None)
@@ -223,7 +223,7 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
     group.add_argument("-d", "--delete", action="store_true")
     boundary_parser.set_defaults(func=_boundary_function)
 
-    identity_parser = subparsers.add_parser("identity")
+    identity_parser = subparsers.add_parser("identity", help="Identity permission")
     identity_parser.add_argument("-f", "--format", choices=["yaml", "json"], default="yaml")
     group = identity_parser.add_argument_group("filter")
     group.add_argument("--name", default=None)
@@ -244,7 +244,7 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
     group.add_argument("--invite", default=[], nargs="*", choices=["email", "manual"])
     identity_parser.set_defaults(func=_identity_function)
 
-    ssh_shell_parser = subparsers.add_parser("ssh-shell")
+    ssh_shell_parser = subparsers.add_parser("ssh-shell", help="SSH Shell permission")
     ssh_shell_parser.add_argument("-f", "--format", choices=["yaml", "json"], default="yaml")
     group = ssh_shell_parser.add_argument_group("filter")
     group.add_argument("--name", default=None)
@@ -256,7 +256,7 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
     group.add_argument("--permit-x11-forwarding", action="store_true")
     ssh_shell_parser.set_defaults(func=_ssh_shell_function)
 
-    ssh_port_forwarding_parser = subparsers.add_parser("ssh-port-forwarding")
+    ssh_port_forwarding_parser = subparsers.add_parser("ssh-port", help="SSH Port Forwarding permission")
     ssh_port_forwarding_parser.add_argument("-f", "--format", choices=["yaml", "json"], default="yaml")
     group = ssh_port_forwarding_parser.add_argument_group("filter")
     group.add_argument("--name", default=None)
@@ -266,7 +266,7 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
     group.add_argument("--username", nargs="*", default=[])
     ssh_port_forwarding_parser.set_defaults(func=_ssh_port_forwarding_function)
 
-    ssh_command_parser = subparsers.add_parser("ssh-command")
+    ssh_command_parser = subparsers.add_parser("ssh-command", help="SSH Command permission")
     ssh_command_parser.add_argument("-f", "--format", choices=["yaml", "json"], default="yaml")
     group = ssh_command_parser.add_argument_group("filter")
     group.add_argument("--name", default=None)
