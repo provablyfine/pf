@@ -45,15 +45,8 @@ def _find_key_filename(fingerprint: str) -> str:
     )
 
 
-def _ensure_account_key_in_agent(c: client.Config) -> None:
-    """If account key is a fingerprint missing from agent, recover it from ~/.ssh/*.pub scan."""
-    if c.account_key is None or os.path.exists(c.account_key):
-        return
-
-    if _agent_has_key(c.account_key):
-        return
-
-    private_path = _find_key_filename(c.account_key)
+def _agent_load_key(account_key: str) -> None:
+    private_path = _find_key_filename(account_key)
     try:
         with open(private_path, "rb") as f:
             data = f.read()
@@ -75,7 +68,9 @@ def has_valid_session(c: client.Config) -> bool:
 
 def http_sig_login(c: client.Config, sc: client.sync.Client, session_key_path: str | None = None) -> str:
     """HTTP signature login. Returns session fingerprint. Caller updates config."""
-    _ensure_account_key_in_agent(c)
+    if c.account_key is not None and not os.path.exists(c.account_key) and not _agent_has_key(c.account_key):
+        _agent_load_key(c.account_key)
+
     if session_key_path is None:
         try:
             ssh_agent = ssh.agent.Client()
