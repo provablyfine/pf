@@ -154,9 +154,9 @@ def private_key_signer(prefix: str, filename: str | None) -> PrivateSigner:
         if identity.comment == filename or identity.public_key.match_ssh_fingerprint(filename):
             if identity.public_key.type != jwk.KeyType.ED25519:
                 raise exceptions.UI(f"Unsupported: {identity.public_key.type}")
-
             return AgentSigner(prefix, identity.public_key)
-    raise exceptions.UI(f"Unable to find requested key={filename}")
+
+    raise exceptions.KeyExpired(prefix)
 
 
 class RequestsAuth:

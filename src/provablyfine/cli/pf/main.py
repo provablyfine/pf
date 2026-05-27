@@ -92,6 +92,9 @@ def _do_main(args: argparse.Namespace) -> None:
     try:
         args.func(args)
         exitcode = 0
+    except client.exceptions.KeyExpired:
+        sys.stderr.write('Your session has expired. You must "pf login".\n')
+        exitcode = 2
     except client.exceptions.UI as e:
         sys.stderr.write(f"{e!s}\n")
         exitcode = 2

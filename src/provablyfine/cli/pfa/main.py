@@ -68,19 +68,12 @@ def _version_function(args: argparse.Namespace) -> None:
 def _do_main(args: argparse.Namespace) -> None:
     log.setup(args.debug, log.filename("pfa", args))
 
-    if getattr(args, "auto_login", False):
-        try:
-            c = client.Config.load(args.config)
-            if not login.has_valid_session(c):
-                sc = client.sync.Client(c, timeout=args.timeout)
-                c.session_key = login.login(c, sc, c.auth_name or "default")
-                c.save(args.config)
-        except client.exceptions.UI:
-            pass
-
     try:
         args.func(args)
         exitcode = 0
+    except client.exceptions.KeyExpired:
+        sys.stderr.write('Your session has expired. You must "pfa login".\n')
+        exitcode = 2
     except client.exceptions.UI as e:
         sys.stderr.write(f"{e!s}\n")
         exitcode = 2
@@ -96,7 +89,6 @@ def pfa() -> None:
         signal.signal(signal.SIGPIPE, signal.SIG_DFL)
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", "--config", help="configuration file. Default: %(default)s", default=_DEFAULT_CONFIG)
-    parser.add_argument("--auto-login", action="store_true", default=False)
     parser.add_argument("--timeout", default=1.0, help="Timeout for HTTP requests. Default: %(default)s")
     parser.add_argument("-d", "--debug", help="Debug level", action="count", default=0)
     parser.add_argument("--log-filename", help="Filename where logs will be written", default=None)

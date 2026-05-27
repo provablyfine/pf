@@ -64,7 +64,7 @@ User lists hosts - shell only so far
   host    shell   alice
 
 Add port-forwarding and command grants
-  $ pfa -c config.json grant ssh-port-forwarding --tag id=device --username root | pfa -c config.json role grant -i $ROLE_ID --add
+  $ pfa -c config.json grant ssh-port --tag id=device --username root | pfa -c config.json role grant -i $ROLE_ID --add
   $ pfa -c config.json grant ssh-command --tag id=device --username root --cmd /bin/df /bin/ls | pfa -c config.json role grant -i $ROLE_ID --add
 
 User lists hosts - all permission types
