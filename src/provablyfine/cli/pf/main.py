@@ -64,17 +64,9 @@ def _accept_function(args: argparse.Namespace) -> None:
         _, account_key_id = key_utils.generate_and_save_key()
     else:
         account_key_id = args.key
-    # XXX: remove 
-    try:
-        response = requests.get(invitation.directory_url, timeout=0.5)
-    except requests.exceptions.ConnectionError:
-        raise client.exceptions.UI(f"Unable to connect to {invitation.directory_url}")
-    if response.status_code != 200:
-        raise client.exceptions.UI(f"Unable to read directory: {response.text}")
     c = client.Config(
         directory_url=invitation.directory_url,
         auth_name=invitation.auth_name,
-        directory=response.json(),
     )
     sc = client.sync.Client(c, timeout=args.timeout)
     sc.connect(invitation.key, account_key_id)

@@ -329,7 +329,8 @@ class Client:
             raise exceptions.UI("Unable to connect to server #2")
         if response.status_code != 200:
             raise exceptions.UI("Unable to read directory from server")
-        self._directory = types.SimpleNamespace(**response.json())
+        self._config.directory = response.json()
+        self._directory = types.SimpleNamespace(**self._config.directory)
         return self._directory
 
     @property
