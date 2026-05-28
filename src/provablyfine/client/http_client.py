@@ -330,6 +330,7 @@ class Client:
         if response.status_code != 200:
             raise exceptions.UI("Unable to read directory from server")
         self._config.directory = response.json()
+        assert self._config.directory is not None
         self._directory = types.SimpleNamespace(**self._config.directory)
         return self._directory
 

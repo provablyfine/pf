@@ -4,9 +4,6 @@ import os.path
 import signal
 import sys
 import traceback
-import urllib.parse
-
-import requests
 
 from ... import __version__, client, log
 from .. import key_utils, login
@@ -16,10 +13,7 @@ _DEFAULT_CONFIG = os.path.join(os.path.expanduser("~"), ".config", "provablyfine
 
 
 def _initialize_function(args: argparse.Namespace) -> None:
-    response = requests.get(args.url, timeout=args.timeout)
-    if response.status_code != 200:
-        raise client.exceptions.UI(f"Unable to read directory: {response.text}")
-    c = client.Config(directory_url=args.url, directory=response.json())
+    c = client.Config(directory_url=args.url)
     sc = client.sync.Client(c, timeout=args.timeout)
     if args.key is None:
         _, account_key_id = key_utils.generate_and_save_key()
@@ -28,28 +22,6 @@ def _initialize_function(args: argparse.Namespace) -> None:
     sc.initialize(account_key_id)
     c.account_key = account_key_id
     c.auth_name = "default"
-    c.save(args.config)
-
-
-def _connect_function(args: argparse.Namespace) -> None:
-    parsed = urllib.parse.urlparse(str(args.url))
-    params = urllib.parse.parse_qs(parsed.query)
-    clean_url = urllib.parse.urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, "", parsed.fragment))
-
-    invitation = params.get("invitation", [None])[0] or args.invitation
-    auth_name = params.get("auth", [None])[0] or args.auth or "default"
-
-    response = requests.get(clean_url, timeout=args.timeout)
-    if response.status_code != 200:
-        raise client.exceptions.UI(f"Unable to read directory: {response.text}")
-    c = client.Config(directory_url=clean_url, directory=response.json())
-    sc = client.sync.Client(c, timeout=args.timeout)
-
-    if invitation and args.key:
-        sc.connect(invitation, args.key)
-        c.account_key = args.key
-
-    c.auth_name = auth_name
     c.save(args.config)
 
 
@@ -101,13 +73,6 @@ def pfa() -> None:
     initialize_parser.add_argument("url", help="Directory URL of the server")
     initialize_parser.add_argument("--key", default=None, help="Account key (filename or fingerprint)")
     initialize_parser.set_defaults(func=_initialize_function)
-
-    connect_parser = subparsers.add_parser("connect", help="Connect to an existing server")
-    connect_parser.add_argument("url", help="Directory URL (may include invitation= and auth= query params)")
-    connect_parser.add_argument("--auth", default=None, help="Auth config name")
-    connect_parser.add_argument("--invitation", default=None, help="Invitation key")
-    connect_parser.add_argument("--key", default=None, help="Account key (filename or fingerprint)")
-    connect_parser.set_defaults(func=_connect_function)
 
     login_parser = subparsers.add_parser("login", help="Login using the configured auth method")
     login_parser.add_argument("--auth", default=None, help="Auth config name to use for login")

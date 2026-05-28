@@ -1,4 +1,5 @@
 import argparse
+import dataclasses
 import logging
 import os
 import os.path
@@ -6,9 +7,7 @@ import signal
 import sys
 import traceback
 import urllib.parse
-import dataclasses
 
-import requests
 import tabulate
 
 from ... import __version__, client, log
