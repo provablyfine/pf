@@ -37,20 +37,6 @@ def _hosts_function(args: argparse.Namespace) -> None:
         print(output)
 
 
-def _config_function(args: argparse.Namespace) -> None:
-    try:
-        response = requests.get(args.directory, timeout=0.5)
-    except requests.exceptions.ConnectionError:
-        raise client.exceptions.UI(f"Unable to connect to {args.directory}")
-    if response.status_code != 200:
-        raise client.exceptions.UI(f"Unable to read directory: {response.text}")
-    c = client.Config(
-        directory_url=args.directory,
-        directory=response.json(),
-    )
-    c.save(args.config)
-
-
 @dataclasses.dataclass
 class Invitation:
     directory_url: str
@@ -140,13 +126,6 @@ def pf() -> None:
 
     version_parser = subparsers.add_parser("version", help="Print current version number")
     version_parser.set_defaults(func=_version_function)
-
-    config_parser = subparsers.add_parser("config", help="Create a configuration file")
-    config_parser.add_argument(
-        "directory",
-        help="Directory to connect to.",
-    )
-    config_parser.set_defaults(func=_config_function)
 
     register_parser = subparsers.add_parser("accept", help="Accept an invitation")
     register_parser.add_argument("--key", help="Private key to register", default=None)
