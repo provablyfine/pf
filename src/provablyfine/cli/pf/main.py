@@ -6,6 +6,7 @@ import signal
 import sys
 import traceback
 import urllib.parse
+import dataclasses
 
 import requests
 import tabulate
@@ -50,25 +51,47 @@ def _config_function(args: argparse.Namespace) -> None:
     c.save(args.config)
 
 
-def _parse_invitation(invitation: str) -> str:
-    if invitation.startswith("http"):
-        params = urllib.parse.parse_qs(urllib.parse.urlparse(invitation).query)
-        keys = params.get("invitation")
-        if not keys:
-            raise client.exceptions.UI("No invitation key found in URL")
-        return keys[0]
-    return invitation
+@dataclasses.dataclass
+class Invitation:
+    directory_url: str
+    key: str
+    auth_name: str
+
+
+def _parse_invitation(invitation_url: str) -> Invitation:
+    url = urllib.parse.urlsplit(invitation_url)
+    qs = urllib.parse.parse_qs(url.query)
+    invitation = qs.get("invitation")
+    if not invitation:
+        raise client.exceptions.UI("No invitation key found in URL")
+    auth = qs.get("auth")
+    if not auth:
+        raise client.exceptions.UI("No auth key found in URL")
+    url_no_qs = url._replace(query="")
+    directory_url = urllib.parse.urlunsplit(url_no_qs)
+    return Invitation(directory_url=directory_url, key=invitation[0], auth_name=auth[0])
 
 
 def _accept_function(args: argparse.Namespace) -> None:
-    c = client.Config.load(args.config)
-    sc = client.sync.Client(c, timeout=args.timeout)
-    invitation_key = _parse_invitation(args.invitation)
+    invitation = _parse_invitation(args.invitation)
     if args.key is None:
         _, account_key_id = key_utils.generate_and_save_key()
     else:
         account_key_id = args.key
-    sc.connect(invitation_key, account_key_id)
+    # XXX: remove 
+    try:
+        response = requests.get(invitation.directory_url, timeout=0.5)
+    except requests.exceptions.ConnectionError:
+        raise client.exceptions.UI(f"Unable to connect to {invitation.directory_url}")
+    if response.status_code != 200:
+        raise client.exceptions.UI(f"Unable to read directory: {response.text}")
+    c = client.Config(
+        directory_url=invitation.directory_url,
+        auth_name=invitation.auth_name,
+        directory=response.json(),
+    )
+    sc = client.sync.Client(c, timeout=args.timeout)
+    sc.connect(invitation.key, account_key_id)
     c.account_key = account_key_id
     c.save(args.config)
 

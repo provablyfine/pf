@@ -30,8 +30,6 @@ Provision host identity
   $ pfa -c config.json identity create -n host
   $ HOST_ID=$(pfa -c config.json identity list -n host -q)
   $ INVITATION=$(pfa -c config.json identity invite --manual -i $HOST_ID)
-  $ DIRECTORY_URL=http://127.0.0.1:$API_PORT/pf/t/root/directory
-  $ pf -c host.json config $DIRECTORY_URL
   $ ssh-keygen -t ed25519 -f host-account -N "" > /dev/null
   $ pf -c host.json accept --invitation=$INVITATION --key host-account
   $ pf -c host.json login
@@ -69,7 +67,6 @@ Provision user identity
   $ pfa -c config.json identity create -n user
   $ USER_ID=$(pfa -c config.json identity list -n user -q)
   $ INVITATION=$(pfa -c config.json identity invite --manual -i $USER_ID)
-  $ pf -c user.json config $DIRECTORY_URL
   $ ssh-keygen -t ed25519 -f user-account -N "" > /dev/null
   $ pf -c user.json accept --invitation=$INVITATION --key user-account
   $ pf -c user.json login
