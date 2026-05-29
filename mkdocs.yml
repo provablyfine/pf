@@ -23,7 +23,9 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - Getting Started: getting-started.md
+  - Getting Started:
+      - Managed tenant: getting-started.md
+      - Self-hosted tenant: getting-started-self-hosted.md
   - Access control:
       - Identities & tags: access-control/identities-tags.md
       - Permissions: access-control/permissions.md
