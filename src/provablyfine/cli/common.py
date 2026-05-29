@@ -1,9 +1,11 @@
 import argparse
+import dataclasses
 import getpass
 import os
 import os.path
 import sys
 import traceback
+import urllib.parse
 
 from .. import __version__, client, jwk, log, ssh
 from . import login
@@ -55,6 +57,7 @@ def add_common_args(parser: argparse.ArgumentParser) -> None:
 def version_function(args: argparse.Namespace) -> None:
     print(__version__)
 
+
 @dataclasses.dataclass
 class Invitation:
     directory_url: str
@@ -79,7 +82,7 @@ def _parse_invitation(invitation_url: str) -> Invitation:
 def _accept_function(args: argparse.Namespace) -> None:
     invitation = _parse_invitation(args.invitation)
     if args.key is None:
-        _, account_key_id = common.generate_and_save_key()
+        _, account_key_id = generate_and_save_key()
     else:
         account_key_id = args.key
     c = client.Config(
@@ -90,7 +93,6 @@ def _accept_function(args: argparse.Namespace) -> None:
     sc.connect(invitation.key, account_key_id)
     c.account_key = account_key_id
     c.save(args.config)
-
 
 
 def _login_function(args: argparse.Namespace) -> None:
@@ -110,11 +112,11 @@ def setup_login_subparser(parser: argparse.ArgumentParser) -> None:
     )
     parser.set_defaults(func=_login_function)
 
+
 def setup_accept_subparser(parser: argparse.ArgumentParser) -> None:
-    accept_parser = parser.add_parser("accept", help="Accept an invitation")
-    accept_parser.add_argument("--key", help="Private key to register", default=None)
-    accept_parser.add_argument("--invitation", help="Invitation you were given", required=True)
-    accept_parser.set_defaults(func=_accept_function)
+    parser.add_argument("--key", help="Private key to register", default=None)
+    parser.add_argument("--invitation", help="Invitation you were given", required=True)
+    parser.set_defaults(func=_accept_function)
 
 
 def do_main(binary_name: str, args: argparse.Namespace) -> None:

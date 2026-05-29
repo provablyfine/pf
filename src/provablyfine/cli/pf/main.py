@@ -1,9 +1,7 @@
 import argparse
-import dataclasses
 import logging
 import signal
 import sys
-import urllib.parse
 
 import tabulate
 

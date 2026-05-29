@@ -2,10 +2,10 @@
 
 ## Install pf
 
-We recommend to use `pip` to install pf. From a terminal, run this command:
+We recommend to use `pipx` to install pf. From a terminal, run this command:
 
 ```console
-$ pip install --user provablyfine
+$ pipx install --user provablyfine
 XXX
 ```
 
@@ -28,19 +28,20 @@ the initialization url for your tenant.
 
 ## Initialize your tenant
 
-
-If you have an `ssh-agent` already running, you just need:
+The following command asks you to go through a browser-based login: if you
+have an `ssh-agent` running, the temporary (30min) login session key will be
+stored securely in your `ssh-agent`. If you do not have an `ssh-agent`, the command
+will ask for confirmation to store the key as cleartext in
+`~/.cache/provablyfine/session-key.json`
 ```console
-$ pfa initialize https://api.provablyfine.net/pf/t/your-tenant
+$ pfa accept https://api.provablyfine.net/pf/t/your-tenant
 XXX
 ```
 
-This one-time operation creates an account key, asks for a passphrase to
-encrypt it at rest in SSH format in your `~/.ssh/` directory, and associates this
-key with your tenant's root identity.
-
-After the tenant is initialized, this command also saves in `~/.config/pf/config.json` your
-tenant url and your *account* key fingerprint.
+This command assumes you have an ssh-agent running where a temporary session key
+is stored to allow other cli commands to authenticate securely with our servers
+without storing an access token in the clear in your home directory. This command
+also saves in `~/.config/pf/config.json` your tenant url.
 
 ## Register a new host
 
@@ -51,7 +52,6 @@ it within your tenant.
 
 First, create an identity associated with this OpenSSH server instance:
 ```console
-$ pfa login
 $ pfa identity create -n demo
 $ pfa identity invite --manual -i $(pfa identity list -n demo -q)
 https://api.provablyfine.net/pf/t/your-tenant/directory?invitation=R1_fe_2G60SE9neYHFJojuwHMKKDsdPEMiO_Hzw&auth=default
