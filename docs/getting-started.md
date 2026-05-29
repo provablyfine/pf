@@ -32,17 +32,11 @@ The following command asks you to go through a browser-based login: if you
 have an `ssh-agent` running, the temporary (30min) login session key will be
 stored securely in your `ssh-agent`. If you do not have an `ssh-agent`, the command
 will ask for confirmation to store the key as cleartext in
-`~/.cache/provablyfine/session-key.json`
+`~/.cache/provablyfine/session-key.json`:
 ```console
 $ pfa accept https://api.provablyfine.net/pf/t/your-tenant
 XXX
 ```
-
-This command assumes you have an ssh-agent running where a temporary session key
-is stored to allow other cli commands to authenticate securely with our servers
-without storing an access token in the clear in your home directory. This command
-also saves in `~/.config/pf/config.json` your tenant url.
-
 ## Register a new host
 
 If you have a recent-enough (XXX) OpenSSH server installed on your host, you can register
@@ -74,11 +68,6 @@ hello
 ```
 
 ## Onboard new users via email
-
-While you can onboard new users via private/public key authentication, like you
-you authenticated the `root` user during tenant initialization,
-it is often more convenient to authenticate via one of our builtin SSOs (google,
-gitlab, XXX).
 
 ### Create a new user identity
 
