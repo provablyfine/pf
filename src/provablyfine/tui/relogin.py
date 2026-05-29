@@ -1,41 +1,21 @@
-import hashlib
-import http.server
-import secrets
 import socket
 import typing
-import urllib.parse
 import webbrowser
 
-import requests
 import textual
 import textual.app
 import textual.widgets
 
-from .. import base64url, client, jwk, ssh
+from .. import browser_login, client
 from . import base
 
 
 def has_valid_session(config: client.Config) -> bool:
-    if not config.session_key:
-        return False
-    try:
-        agent = ssh.agent.Client()
-        for identity in agent.list_identities():
-            if identity.public_key.match_ssh_fingerprint(config.session_key):
-                return True
-    except Exception:
-        pass
-    return False
+    return browser_login.has_valid_session(config)
 
 
 def http_sig_login(cfg: client.Config, api: client.Client) -> str:
-    try:
-        agent = ssh.agent.Client()
-    except Exception:
-        raise client.exceptions.UI("Unable to connect to SSH agent")
-    session_key = jwk.Private.generate_ed25519()
-    agent.add(session_key, comment="pf-session", lifetime=1800)
-    fp = session_key.public().ssh_fingerprint()
+    session_key, fp = browser_login.generate_session_key()
     http_client = api.login_auth(account=cfg.account_key, session=fp)
     response = http_client.post(
         url=http_client.directory.login,
@@ -47,75 +27,12 @@ def http_sig_login(cfg: client.Config, api: client.Client) -> str:
 
 
 def oidc_login(api: client.Client, auth_name: str) -> str:
-    try:
-        agent = ssh.agent.Client()
-    except Exception:
-        raise client.exceptions.UI("Unable to connect to SSH agent")
-    session_key = jwk.Private.generate_ed25519()
-    agent.add(session_key, comment="pf-session", lifetime=1800)
-    fp = session_key.public().ssh_fingerprint()
-
+    session_key, fp = browser_login.generate_session_key()
     sync_client = client.sync.Client(api.config)
     auth_public = sync_client.get_public_auth(auth_name)
-    assert isinstance(auth_public.config, client.schemas.OidcConfig)
-
-    discovery_resp = requests.get(f"{auth_public.config.issuer}/.well-known/openid-configuration", timeout=10)
-    if discovery_resp.status_code != 200:
-        raise client.exceptions.UI("Unable to fetch OIDC discovery document")
-    discovery = discovery_resp.json()
-
-    code_verifier = base64url.encode(secrets.token_bytes(32))
-    code_challenge = base64url.encode(hashlib.sha256(code_verifier.encode()).digest())
-
-    sock = socket.socket()
-    sock.bind(("127.0.0.1", 0))
-    port = sock.getsockname()[1]
-    sock.close()
-    redirect_uri = f"http://127.0.0.1:{port}/callback"
-
-    auth_url = (
-        f"{discovery['authorization_endpoint']}"
-        f"?client_id={urllib.parse.quote(auth_public.config.client_id)}"
-        f"&redirect_uri={urllib.parse.quote(redirect_uri)}"
-        f"&response_type=code&scope=openid+email"
-        f"&code_challenge={urllib.parse.quote(code_challenge)}&code_challenge_method=S256"
-    )
-    webbrowser.open(auth_url)
-
-    code_holder: list[str] = []
-
-    class _Handler(http.server.BaseHTTPRequestHandler):
-        def do_GET(self):
-            qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
-            if "code" in qs:
-                code_holder.append(qs["code"][0])
-            self.send_response(200)
-            self.end_headers()
-            self.wfile.write(b"Login successful. You may close this tab.")
-
-        def log_message(self, format: str, *args: object) -> None:
-            pass
-
-    http.server.HTTPServer(("127.0.0.1", port), _Handler).handle_request()
-    if not code_holder:
-        raise client.exceptions.UI("OIDC callback did not receive authorization code")
-
-    token_data: dict[str, str] = {
-        "grant_type": "authorization_code",
-        "code": code_holder[0],
-        "code_verifier": code_verifier,
-        "redirect_uri": redirect_uri,
-        "client_id": auth_public.config.client_id,
-    }
-    if auth_public.config.client_secret:
-        token_data["client_secret"] = auth_public.config.client_secret
-    token_resp = requests.post(discovery["token_endpoint"], data=token_data, timeout=10)
-    if token_resp.status_code != 200:
-        raise client.exceptions.UI(f"Unable to exchange code for token: {token_resp.text}")
-    id_token = token_resp.json().get("id_token")
-    if not id_token:
-        raise client.exceptions.UI("Token response did not include id_token")
-
+    if not isinstance(auth_public.config, client.schemas.OidcConfig):
+        raise client.exceptions.UI(f"Auth '{auth_name}' is not OIDC")
+    id_token = browser_login.oidc_flow(auth_public.config)
     session_http = api.session_auth(session=fp)
     response = session_http.post(
         url=session_http.directory.login_oidc,
@@ -131,14 +48,7 @@ def oidc_login(api: client.Client, auth_name: str) -> str:
 
 
 def oauth2_login(api: client.Client, auth_name: str) -> str:
-    try:
-        agent = ssh.agent.Client()
-    except Exception:
-        raise client.exceptions.UI("Unable to connect to SSH agent")
-    session_key = jwk.Private.generate_ed25519()
-    agent.add(session_key, comment="pf-session", lifetime=1800)
-    fp = session_key.public().ssh_fingerprint()
-
+    session_key, fp = browser_login.generate_session_key()
     sync_client = client.sync.Client(api.config)
     auth_public = sync_client.get_public_auth(auth_name)
 
@@ -160,34 +70,11 @@ def oauth2_login(api: client.Client, auth_name: str) -> str:
     if response.status_code != 200:
         raise client.exceptions.UI(f"Unable to start OAuth2 login: {response.text}")
     webbrowser.open(response.json()["auth_url"])
-
-    result: list[dict[str, str]] = []
-
-    class _Handler(http.server.BaseHTTPRequestHandler):
-        def do_GET(self):
-            qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
-            status = qs.get("status", ["error"])[0]
-            reason = qs.get("reason", ["Unknown error"])[0]
-            result.append({"status": status, "reason": reason})
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html")
-            self.end_headers()
-            msg = b"Login successful. You may close this tab."
-            if status != "ok":
-                msg = b"Login failed. You may close this tab."
-            self.wfile.write(msg)
-
-        def log_message(self, format: str, *args: object) -> None:
-            pass
-
-    http.server.HTTPServer(("127.0.0.1", port), _Handler).handle_request()
-    if not result or result[0]["status"] != "ok":
-        reason = result[0]["reason"] if result else "unknown"
-        raise client.exceptions.UI(f"OAuth2 login failed: {reason}")
+    browser_login.oauth2_callback(port)
     return fp
 
 
-def browser_login(api: client.Client, auth_name: str, auth_type: str) -> str:
+def login(api: client.Client, auth_name: str, auth_type: str) -> str:
     match auth_type:
         case "oidc":
             return oidc_login(api, auth_name)

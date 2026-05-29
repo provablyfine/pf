@@ -371,7 +371,7 @@ class ConnectScreen(base.Screen):
                 fp = await asyncio.to_thread(relogin.http_sig_login, c, api)
             else:
                 self.notify(f"Opening browser for {auth_name}...")
-                fp = await asyncio.to_thread(relogin.browser_login, api, auth_name, auth_type)
+                fp = await asyncio.to_thread(relogin.login, api, auth_name, auth_type)
             c.session_key = fp
             c.save(self._config_path)
             self.app.exit()
