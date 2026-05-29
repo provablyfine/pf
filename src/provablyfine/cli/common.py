@@ -55,6 +55,43 @@ def add_common_args(parser: argparse.ArgumentParser) -> None:
 def version_function(args: argparse.Namespace) -> None:
     print(__version__)
 
+@dataclasses.dataclass
+class Invitation:
+    directory_url: str
+    key: str
+    auth_name: str
+
+
+def _parse_invitation(invitation_url: str) -> Invitation:
+    url = urllib.parse.urlsplit(invitation_url)
+    qs = urllib.parse.parse_qs(url.query)
+    invitation = qs.get("invitation")
+    if not invitation:
+        raise client.exceptions.UI("No invitation key found in URL")
+    auth = qs.get("auth")
+    if not auth:
+        raise client.exceptions.UI("No auth key found in URL")
+    url_no_qs = url._replace(query="")
+    directory_url = urllib.parse.urlunsplit(url_no_qs)
+    return Invitation(directory_url=directory_url, key=invitation[0], auth_name=auth[0])
+
+
+def _accept_function(args: argparse.Namespace) -> None:
+    invitation = _parse_invitation(args.invitation)
+    if args.key is None:
+        _, account_key_id = common.generate_and_save_key()
+    else:
+        account_key_id = args.key
+    c = client.Config(
+        directory_url=invitation.directory_url,
+        auth_name=invitation.auth_name,
+    )
+    sc = client.sync.Client(c, timeout=args.timeout)
+    sc.connect(invitation.key, account_key_id)
+    c.account_key = account_key_id
+    c.save(args.config)
+
+
 
 def _login_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
@@ -72,6 +109,12 @@ def setup_login_subparser(parser: argparse.ArgumentParser) -> None:
         help="Session key file. If none is provided, a new one is generated in SSH agent.",
     )
     parser.set_defaults(func=_login_function)
+
+def setup_accept_subparser(parser: argparse.ArgumentParser) -> None:
+    accept_parser = parser.add_parser("accept", help="Accept an invitation")
+    accept_parser.add_argument("--key", help="Private key to register", default=None)
+    accept_parser.add_argument("--invitation", help="Invitation you were given", required=True)
+    accept_parser.set_defaults(func=_accept_function)
 
 
 def do_main(binary_name: str, args: argparse.Namespace) -> None:

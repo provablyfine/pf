@@ -30,13 +30,16 @@ def pfa() -> None:
     version_parser = subparsers.add_parser("version", help="Print current version number")
     version_parser.set_defaults(func=common.version_function)
 
+    accept_parser = subparsers.add_parser("accept", help="Accept an invitation")
+    common.setup_accept_subparser(accept_parser)
+
+    login_parser = subparsers.add_parser("login", help="Login using the configured auth method")
+    common.setup_login_subparser(login_parser)
+
     initialize_parser = subparsers.add_parser("initialize", help="Initialize a new server and register account key")
     initialize_parser.add_argument("url", help="Directory URL of the server")
     initialize_parser.add_argument("--key", default=None, help="Account key (filename or fingerprint)")
     initialize_parser.set_defaults(func=_initialize_function)
-
-    login_parser = subparsers.add_parser("login", help="Login using the configured auth method")
-    common.setup_login_subparser(login_parser)
 
     boundary_parser = subparsers.add_parser("boundary", help="View and edit boundaries")
     boundary_cli.add_subparser(boundary_parser)
