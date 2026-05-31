@@ -64,14 +64,14 @@ class AuthViewScreen(base.Screen):
             if isinstance(self._a.config, client.schemas.OidcConfig):
                 with textual.containers.HorizontalGroup(classes="field") as c:
                     c.border_title = "Issuer"
-                    yield textual.widgets.Input(self._a.config.issuer, id="issuer", compact=True)
+                    yield textual.widgets.Input(self._a.config.issuer, id="issuer", compact=True, disabled=True)
                 with textual.containers.HorizontalGroup(classes="field") as c:
                     c.border_title = "Client ID"
-                    yield textual.widgets.Input(self._a.config.client_id, id="client_id", compact=True)
+                    yield textual.widgets.Input(self._a.config.client_id, id="client_id", compact=True, disabled=True)
                 with textual.containers.HorizontalGroup(classes="field") as c:
                     c.border_title = "Client secret"
                     yield textual.widgets.Input(
-                        "", placeholder="unchanged", id="client_secret", compact=True, password=True
+                        "", placeholder="unchanged", id="client_secret", compact=True, password=True, disabled=True
                     )
             elif isinstance(self._a.config, client.schemas.OAuth2Config):
                 with textual.containers.HorizontalGroup(classes="field") as c:
