@@ -2,11 +2,7 @@ from __future__ import annotations
 
 import typing
 
-from . import exceptions, schemas
-from .directory import Directory
-from .http_session import HttpSession
-from .http_signatures import Auth
-from .signer import Signer
+from . import directory, exceptions, http_session, http_signatures, schemas, signer
 
 
 def _problem_title(response: typing.Any, default: str) -> str:
@@ -22,13 +18,15 @@ def _problem_title(response: typing.Any, default: str) -> str:
 class SessionClient:
     """API methods that require session authentication."""
 
-    def __init__(self, session: HttpSession, directory: Directory, session_signer: Signer) -> None:
+    def __init__(
+        self, session: http_session.HttpSession, _directory: directory.Directory, session_signer: signer.Signer
+    ) -> None:
         self._session = session
-        self._directory = directory
+        self._directory = _directory
         self._session_signer = session_signer
 
-    def _auth(self) -> Auth:
-        return Auth([self._session_signer])
+    def _auth(self) -> http_signatures.Auth:
+        return http_signatures.Auth([self._session_signer])
 
     # SSH
 

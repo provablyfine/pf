@@ -9,7 +9,7 @@ import urllib.parse
 import http_sfv
 import requests
 
-from .signer import Signer
+from . import signer
 
 # http_sfv type stubs are incomplete (private imports, reportPrivateImportUsage)
 # pyright: reportPrivateImportUsage=false
@@ -39,10 +39,12 @@ def _build_signature_base(
 class Auth:
     """HTTP Message Signatures (RFC 9421) — signs a request with one or more Signer instances."""
 
-    def __init__(self, signers: typing.Sequence[Signer]) -> None:
+    def __init__(self, signers: typing.Sequence[signer.Signer]) -> None:
         self._signers = signers
 
-    def _sign(self, signer: Signer, request: requests.PreparedRequest, covered: tuple[str, ...]) -> tuple[str, str]:
+    def _sign(
+        self, signer: signer.Signer, request: requests.PreparedRequest, covered: tuple[str, ...]
+    ) -> tuple[str, str]:
         key_id = f"{signer.prefix()}:{signer.thumbprint()}"
 
         inner = http_sfv.InnerList([http_sfv.Item(c) for c in covered])
@@ -71,8 +73,8 @@ class Auth:
         covered = ("@method", "@authority", "@target-uri", "content-digest", "@signature-params")
         signatures_input: list[str] = []
         signatures: list[str] = []
-        for signer in self._signers:
-            signature_input, signature = self._sign(signer, request, covered)
+        for _signer in self._signers:
+            signature_input, signature = self._sign(_signer, request, covered)
             signatures_input.append(signature_input)
             signatures.append(signature)
         request.headers["Signature-Input"] = ", ".join(signatures_input)

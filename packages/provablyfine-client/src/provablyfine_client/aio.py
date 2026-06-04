@@ -3,16 +3,11 @@ from __future__ import annotations
 import asyncio
 import typing
 
-from . import schemas
-from .account_client import AccountClient
-from .invitation_client import InvitationClient
-from .public_client import PublicClient
-from .session_client import SessionClient
-from .signer import Signer
+from . import account_client, invitation_client, public_client, schemas, session_client, signer
 
 
 class AsyncPublicClient:
-    def __init__(self, inner: PublicClient) -> None:
+    def __init__(self, inner: public_client.PublicClient) -> None:
         self._inner = inner
         self._lock = asyncio.Lock()
 
@@ -29,12 +24,12 @@ class AsyncPublicClient:
     async def list_public_auths(self) -> list[schemas.AuthPublicSummary]:
         return await self._run(self._inner.list_public_auths)
 
-    async def initialize(self, account_signer: Signer, account_public_key: dict[str, typing.Any]) -> None:
+    async def initialize(self, account_signer: signer.Signer, account_public_key: dict[str, typing.Any]) -> None:
         return await self._run(lambda: self._inner.initialize(account_signer, account_public_key))
 
 
 class AsyncSessionClient:
-    def __init__(self, inner: SessionClient) -> None:
+    def __init__(self, inner: session_client.SessionClient) -> None:
         self._inner = inner
         self._lock = asyncio.Lock()
 
@@ -304,7 +299,7 @@ class AsyncSessionClient:
 
 
 class AsyncAccountClient:
-    def __init__(self, inner: AccountClient) -> None:
+    def __init__(self, inner: account_client.AccountClient) -> None:
         self._inner = inner
         self._lock = asyncio.Lock()
 
@@ -317,7 +312,7 @@ class AsyncAccountClient:
 
 
 class AsyncInvitationClient:
-    def __init__(self, inner: InvitationClient) -> None:
+    def __init__(self, inner: invitation_client.InvitationClient) -> None:
         self._inner = inner
         self._lock = asyncio.Lock()
 

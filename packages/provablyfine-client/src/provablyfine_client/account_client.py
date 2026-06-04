@@ -2,26 +2,26 @@ from __future__ import annotations
 
 import typing
 
-from . import exceptions
-from .directory import Directory
-from .http_session import HttpSession
-from .http_signatures import Auth
-from .signer import Signer
+from . import directory, exceptions, http_session, http_signatures, signer
 
 
 class AccountClient:
     """API methods that require account + session authentication."""
 
     def __init__(
-        self, session: HttpSession, directory: Directory, account_signer: Signer, session_signer: Signer
+        self,
+        session: http_session.HttpSession,
+        _directory: directory.Directory,
+        account_signer: signer.Signer,
+        session_signer: signer.Signer,
     ) -> None:
         self._session = session
-        self._directory = directory
+        self._directory = _directory
         self._account_signer = account_signer
         self._session_signer = session_signer
 
     def login_http_sig(self, session_public_key: dict[str, typing.Any]) -> None:
-        auth = Auth([self._account_signer, self._session_signer])
+        auth = http_signatures.Auth([self._account_signer, self._session_signer])
         response = self._session.post(
             self._directory.login,
             auth=auth,

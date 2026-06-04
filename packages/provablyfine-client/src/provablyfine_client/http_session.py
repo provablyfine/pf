@@ -5,8 +5,7 @@ import typing
 
 import requests
 
-from . import exceptions
-from .http_signatures import Auth
+from . import exceptions, http_signatures
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +22,7 @@ class HttpSession:
         method: str,
         url: str,
         *,
-        auth: Auth | None = None,
+        auth: http_signatures.Auth | None = None,
         json: typing.Any = None,
         data: typing.Any = None,
         headers: dict[str, str] | None = None,
@@ -65,7 +64,7 @@ class HttpSession:
         self,
         url: str,
         *,
-        auth: Auth | None = None,
+        auth: http_signatures.Auth | None = None,
         params: dict[str, typing.Any] | None = None,
     ) -> requests.Response:
         return self.request("GET", url, auth=auth, params=params)
@@ -74,7 +73,7 @@ class HttpSession:
         self,
         url: str,
         *,
-        auth: Auth | None = None,
+        auth: http_signatures.Auth | None = None,
         json: typing.Any = None,
     ) -> requests.Response:
         return self.request("POST", url, auth=auth, json=json)
@@ -83,7 +82,7 @@ class HttpSession:
         self,
         url: str,
         *,
-        auth: Auth | None = None,
+        auth: http_signatures.Auth | None = None,
         json: typing.Any = None,
     ) -> requests.Response:
         return self.request("PATCH", url, auth=auth, json=json)
@@ -92,7 +91,7 @@ class HttpSession:
         self,
         url: str,
         *,
-        auth: Auth | None = None,
+        auth: http_signatures.Auth | None = None,
     ) -> requests.Response:
         return self.request("DELETE", url, auth=auth)
 
@@ -100,7 +99,7 @@ class HttpSession:
         self,
         url: str,
         *,
-        auth: Auth | None = None,
+        auth: http_signatures.Auth | None = None,
         json: typing.Any = None,
     ) -> requests.Response:
         return self.request("PUT", url, auth=auth, json=json)
