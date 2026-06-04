@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import typing
 
-import provablyfine_client
+import provablyfine_client as pfc
 import requests
-from provablyfine_client import AccountClient, InvitationClient, PublicClient, SessionClient
 
 from .. import base64url, jwk
 from . import configuration, http_client, schemas
@@ -13,15 +12,15 @@ from . import configuration, http_client, schemas
 class Client:
     def __init__(self, config: configuration.Config, timeout: float = 1.0) -> None:
         self._config = config
-        self._http = provablyfine_client.HttpSession(requests.Session(), timeout)
-        self._directory = provablyfine_client.Directory(config.directory_url, timeout)
+        self._http = pfc.HttpSession(requests.Session(), timeout)
+        self._directory = pfc.Directory(config.directory_url, timeout)
 
-    def _session(self) -> SessionClient:
+    def _session(self) -> pfc.SessionClient:
         signer = http_client.private_key_signer("session", self._config.session_key)
-        return SessionClient(self._http, self._directory, signer)
+        return pfc.SessionClient(self._http, self._directory, signer)
 
-    def _public(self) -> PublicClient:
-        return PublicClient(self._http, self._directory)
+    def _public(self) -> pfc.PublicClient:
+        return pfc.PublicClient(self._http, self._directory)
 
     # SSH
 
@@ -266,8 +265,8 @@ class Client:
 
     def connect(self, invitation: str, key: str) -> None:
         account_signer = http_client.private_key_signer("account", key)
-        inv_signer = provablyfine_client.HmacSigner("invitation", base64url.decode(invitation))
-        InvitationClient(self._http, self._directory, inv_signer, account_signer).connect(
+        inv_signer = pfc.HmacSigner("invitation", base64url.decode(invitation))
+        pfc.InvitationClient(self._http, self._directory, inv_signer, account_signer).connect(
             account_signer.public_key().to_dict()
         )
 
@@ -280,12 +279,12 @@ class Client:
     def login_http_sig(self, session_public_key: dict[str, typing.Any], session_fingerprint: str) -> None:
         account_signer = http_client.private_key_signer("account", self._config.account_key)
         session_signer = http_client.private_key_signer("session", session_fingerprint)
-        AccountClient(self._http, self._directory, account_signer, session_signer).login_http_sig(session_public_key)
+        pfc.AccountClient(self._http, self._directory, account_signer, session_signer).login_http_sig(session_public_key)
 
     def login_http_sig_with_keys(self, account: jwk.Private, session: jwk.Private) -> None:
         account_signer = http_client.FileSigner("account", account)
         session_signer = http_client.FileSigner("session", session)
-        AccountClient(self._http, self._directory, account_signer, session_signer).login_http_sig(
+        pfc.AccountClient(self._http, self._directory, account_signer, session_signer).login_http_sig(
             session.public().to_dict()
         )
 
@@ -293,7 +292,7 @@ class Client:
         self, auth_name: str, id_token: str, session_public_key: dict[str, typing.Any], session_fingerprint: str
     ) -> None:
         signer = http_client.private_key_signer("session", session_fingerprint)
-        SessionClient(self._http, self._directory, signer).login_oidc(auth_name, id_token, session_public_key)
+        pfc.SessionClient(self._http, self._directory, signer).login_oidc(auth_name, id_token, session_public_key)
 
     def login_oauth2_start(
         self,
@@ -303,7 +302,7 @@ class Client:
         client_redirect_uri: str,
     ) -> str:
         signer = http_client.private_key_signer("session", session_fingerprint)
-        return SessionClient(self._http, self._directory, signer).login_oauth2_start(
+        return pfc.SessionClient(self._http, self._directory, signer).login_oauth2_start(
             auth_name, session_public_key, client_redirect_uri
         )
 
