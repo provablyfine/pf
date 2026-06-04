@@ -2,6 +2,7 @@ import argparse
 import json
 
 import tabulate
+import provablyfine_client as pfc
 
 from ... import client
 
@@ -9,7 +10,7 @@ from ... import client
 def _parse_tag(s: str) -> dict[str, str]:
     equal = s.find("=")
     if equal == -1:
-        raise client.exceptions.UI(f"Tag is invalid. Expected format: name=value. Got: {s}")
+        raise pfc.exceptions.UI(f"Tag is invalid. Expected format: name=value. Got: {s}")
     name = s[:equal]
     value = s[equal + 1 :]
     return {"name": name, "value": value}

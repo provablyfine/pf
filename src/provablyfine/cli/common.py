@@ -7,6 +7,8 @@ import sys
 import traceback
 import urllib.parse
 
+import provablyfine_client as pfc
+
 from .. import __version__, client, jwk, log, ssh
 from . import login
 
@@ -70,10 +72,10 @@ def _parse_invitation(invitation_url: str) -> Invitation:
     qs = urllib.parse.parse_qs(url.query)
     invitation = qs.get("invitation")
     if not invitation:
-        raise client.exceptions.UI("No invitation key found in URL")
+        raise pfc.exceptions.UI("No invitation key found in URL")
     auth = qs.get("auth")
     if not auth:
-        raise client.exceptions.UI("No auth key found in URL")
+        raise pfc.exceptions.UI("No auth key found in URL")
     url_no_qs = url._replace(query="")
     directory_url = urllib.parse.urlunsplit(url_no_qs)
     return Invitation(directory_url=directory_url, key=invitation[0], auth_name=auth[0])
@@ -125,10 +127,10 @@ def do_main(binary_name: str, args: argparse.Namespace) -> None:
     try:
         args.func(args)
         exitcode = 0
-    except client.exceptions.KeyExpired:
+    except pfc.exceptions.KeyExpired:
         sys.stderr.write(f'Your session has expired. You must "{binary_name} login".\n')
         exitcode = 2
-    except client.exceptions.UI as e:
+    except pfc.exceptions.UI as e:
         sys.stderr.write(f"{e!s}\n")
         exitcode = 2
     except Exception:

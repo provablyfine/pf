@@ -7,19 +7,19 @@ import os.path
 import typing
 
 import cryptography.hazmat.primitives.asymmetric.ed25519
-import provablyfine_client
+import provablyfine_client as pfc
 import requests
 
 from .. import base64url, jwk, ssh
-from . import configuration, exceptions, ssh_utils
+from . import configuration, ssh_utils
 
 logger = logging.getLogger(__name__)
 
-Signer = provablyfine_client.Signer
-HmacSigner = provablyfine_client.HmacSigner
+Signer = pfc.Signer
+HmacSigner = pfc.HmacSigner
 
 
-class PrivateSigner(provablyfine_client.Signer):
+class PrivateSigner(pfc.Signer):
     @abc.abstractmethod
     def public_key(self) -> jwk.Public:
         pass
@@ -60,17 +60,17 @@ class AgentSigner(PrivateSigner):
             if identity.public_key.match_ssh_fingerprint(fingerprint):
                 assert identity.public_key.type == jwk.KeyType.ED25519
                 return ssh_agent.sign(identity, data, 0)
-        raise exceptions.UI(f"Unable to find requested key={fingerprint}")
+        raise pfc.exceptions.UI(f"Unable to find requested key={fingerprint}")
 
 
-def hmac_signer(prefix: str, key: str) -> provablyfine_client.Signer:
-    return provablyfine_client.HmacSigner(prefix, base64url.decode(key))
+def hmac_signer(prefix: str, key: str) -> pfc.Signer:
+    return pfc.HmacSigner(prefix, base64url.decode(key))
 
 
 @ssh_utils.exception
 def private_key_signer(prefix: str, filename: str | None) -> PrivateSigner:
     if filename is None:
-        raise exceptions.UI("Did you forget to login ?")
+        raise pfc.exceptions.UI("Did you forget to login ?")
 
     if os.path.exists(filename):
         with open(filename, "rb") as f:
@@ -86,20 +86,20 @@ def private_key_signer(prefix: str, filename: str | None) -> PrivateSigner:
                 ssh_agent.add(key, comment=f"pf-{prefix}", lifetime=lifetime)
             except Exception:
                 pass
-        except exceptions.UI:
-            raise exceptions.UI("Unable to parse data either as PEM or SSH format")
+        except pfc.exceptions.UI:
+            raise pfc.exceptions.UI("Unable to parse data either as PEM or SSH format")
         if key.type != jwk.KeyType.ED25519:
-            raise exceptions.UI(f"Unsupported: {key.type}")
+            raise pfc.exceptions.UI(f"Unsupported: {key.type}")
         return FileSigner(prefix, key)
 
     ssh_agent = ssh.agent.Client()
     for identity in ssh_agent.list_identities():
         if identity.comment == filename or identity.public_key.match_ssh_fingerprint(filename):
             if identity.public_key.type != jwk.KeyType.ED25519:
-                raise exceptions.UI(f"Unsupported: {identity.public_key.type}")
+                raise pfc.exceptions.UI(f"Unsupported: {identity.public_key.type}")
             return AgentSigner(prefix, identity.public_key)
 
-    raise exceptions.KeyExpired(prefix)
+    raise pfc.exceptions.KeyExpired(prefix)
 
 
 class HttpClient:
@@ -107,16 +107,16 @@ class HttpClient:
 
     def __init__(
         self,
-        session: provablyfine_client.HttpSession,
-        directory: provablyfine_client.Directory,
-        auth: provablyfine_client.Auth | None = None,
+        session: pfc.HttpSession,
+        directory: pfc.Directory,
+        auth: pfc.Auth | None = None,
     ) -> None:
         self._pf_session = session
         self._directory = directory
         self._auth = auth
 
     @property
-    def directory(self) -> provablyfine_client.Directory:
+    def directory(self) -> pfc.Directory:
         return self._directory
 
     def get(self, url: str, *, params: dict[str, typing.Any] | None = None) -> requests.Response:
@@ -138,9 +138,9 @@ class HttpClient:
 class InvitationHttpClient(HttpClient):
     def __init__(
         self,
-        session: provablyfine_client.HttpSession,
-        directory: provablyfine_client.Directory,
-        auth: provablyfine_client.Auth | None,
+        session: pfc.HttpSession,
+        directory: pfc.Directory,
+        auth: pfc.Auth | None,
         account_public_key: jwk.Public,
     ) -> None:
         super().__init__(session, directory, auth)
@@ -156,8 +156,8 @@ class Client:
 
     def __init__(self, config: configuration.Config, timeout: float = 1.0) -> None:
         self._config = config
-        self._pf_session = provablyfine_client.HttpSession(requests.Session(), timeout)
-        self._pf_directory = provablyfine_client.Directory(config.directory_url, timeout)
+        self._pf_session = pfc.HttpSession(requests.Session(), timeout)
+        self._pf_directory = pfc.Directory(config.directory_url, timeout)
 
     @property
     def config(self) -> configuration.Config:
@@ -165,21 +165,21 @@ class Client:
 
     def session_auth(self, session: str | None) -> HttpClient:
         signer = private_key_signer("session", session)
-        return HttpClient(self._pf_session, self._pf_directory, provablyfine_client.Auth([signer]))
+        return HttpClient(self._pf_session, self._pf_directory, pfc.Auth([signer]))
 
     def session_auth_with_key(self, session: jwk.Private) -> HttpClient:
-        auth = provablyfine_client.Auth([FileSigner("session", session)])
+        auth = pfc.Auth([FileSigner("session", session)])
         return HttpClient(self._pf_session, self._pf_directory, auth)
 
     def login_auth(self, account: str | None, session: str | None) -> HttpClient:
-        signers: list[provablyfine_client.Signer] = [
+        signers: list[pfc.Signer] = [
             private_key_signer("account", account),
             private_key_signer("session", session),
         ]
-        return HttpClient(self._pf_session, self._pf_directory, provablyfine_client.Auth(signers))
+        return HttpClient(self._pf_session, self._pf_directory, pfc.Auth(signers))
 
     def invitation_auth_with_key(self, account: jwk.Private, invitation: str) -> InvitationHttpClient:
         account_signer = FileSigner("account", account)
-        inv_signer = provablyfine_client.HmacSigner("invitation", base64url.decode(invitation))
-        auth = provablyfine_client.Auth([inv_signer, account_signer])
+        inv_signer = pfc.HmacSigner("invitation", base64url.decode(invitation))
+        auth = pfc.Auth([inv_signer, account_signer])
         return InvitationHttpClient(self._pf_session, self._pf_directory, auth, account.public())

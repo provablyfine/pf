@@ -5,6 +5,7 @@ import webbrowser
 import textual
 import textual.app
 import textual.widgets
+import provablyfine_client as pfc
 
 from .. import browser_login, client
 from . import base
@@ -22,7 +23,7 @@ def http_sig_login(cfg: client.Config, api: client.Client) -> str:
         json={"session_public_key": session_key.public().to_dict()},
     )
     if response.status_code != 204:
-        raise client.exceptions.UI(f"Login failed: {response.text}")
+        raise pfc.exceptions.UI(f"Login failed: {response.text}")
     return fp
 
 
@@ -31,7 +32,7 @@ def oidc_login(api: client.Client, auth_name: str) -> str:
     sync_client = client.sync.Client(api.config)
     auth_public = sync_client.get_public_auth(auth_name)
     if not isinstance(auth_public.config, client.schemas.OidcConfig):
-        raise client.exceptions.UI(f"Auth '{auth_name}' is not OIDC")
+        raise pfc.exceptions.UI(f"Auth '{auth_name}' is not OIDC")
     id_token = browser_login.oidc_flow(auth_public.config)
     session_http = api.session_auth(session=fp)
     response = session_http.post(
@@ -43,7 +44,7 @@ def oidc_login(api: client.Client, auth_name: str) -> str:
         },
     )
     if response.status_code != 204:
-        raise client.exceptions.UI(f"OIDC login failed: {response.text}")
+        raise pfc.exceptions.UI(f"OIDC login failed: {response.text}")
     return fp
 
 
@@ -68,7 +69,7 @@ def oauth2_login(api: client.Client, auth_name: str) -> str:
         },
     )
     if response.status_code != 200:
-        raise client.exceptions.UI(f"Unable to start OAuth2 login: {response.text}")
+        raise pfc.exceptions.UI(f"Unable to start OAuth2 login: {response.text}")
     webbrowser.open(response.json()["auth_url"])
     browser_login.oauth2_callback(port)
     return fp
@@ -81,7 +82,7 @@ def login(api: client.Client, auth_name: str, auth_type: str) -> str:
         case "oauth2-github":
             return oauth2_login(api, auth_name)
         case _:
-            raise client.exceptions.UI(f"Unsupported browser auth type: {auth_type}")
+            raise pfc.exceptions.UI(f"Unsupported browser auth type: {auth_type}")
 
 
 class ReloginScreen(base.Screen):
@@ -114,7 +115,7 @@ class ReloginScreen(base.Screen):
         aio_client = client.aio.Client(self._api.config)
         try:
             auth_public = await aio_client.get_public_auth(auth_name)
-        except client.exceptions.UI as e:
+        except pfc.exceptions.UI as e:
             self.notify(str(e), severity="error")
             return
         auth_type = auth_public.config.type
@@ -135,9 +136,9 @@ class ReloginScreen(base.Screen):
                 case "oauth2-github":
                     fp = oauth2_login(self._api, auth_name)
                 case _:
-                    raise client.exceptions.UI(f"Unsupported auth type: {auth_type}")
+                    raise pfc.exceptions.UI(f"Unsupported auth type: {auth_type}")
             self._cfg.session_key = fp
             self._cfg.save(self._config_path)
             self.app.call_from_thread(self.app.exit)
-        except client.exceptions.UI as e:
+        except pfc.exceptions.UI as e:
             self.notify(str(e), severity="error")

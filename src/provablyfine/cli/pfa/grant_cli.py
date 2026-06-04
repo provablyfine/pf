@@ -1,7 +1,8 @@
 import argparse
 import json
 
-from ... import client
+import provablyfine_client as pfc
+
 from .. import yaml_utils
 
 
@@ -19,7 +20,7 @@ def _output(args: argparse.Namespace, data: object) -> None:
 def _tag(t: str) -> dict[str, str]:
     equal = t.find("=")
     if equal == -1:
-        raise client.exceptions.UI(f"Tag is invalid. Expected name=value. Got: {t}")
+        raise pfc.exceptions.UI(f"Tag is invalid. Expected name=value. Got: {t}")
     name = t[:equal]
     value = t[equal + 1 :]
     return {"name": name, "value": value}

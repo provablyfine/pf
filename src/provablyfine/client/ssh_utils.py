@@ -1,8 +1,9 @@
 import functools
 import typing
 
+import provablyfine_client as pfc
+
 from .. import jwk, ssh
-from . import exceptions
 
 P = typing.ParamSpec("P")
 R = typing.TypeVar("R")
@@ -14,7 +15,7 @@ def exception(f: typing.Callable[P, R]) -> typing.Callable[P, R]:  # noqa: UP047
         try:
             return f(*args, **kwargs)
         except ssh.exceptions.Error as e:
-            raise exceptions.UI(str(e))
+            raise pfc.exceptions.UI(str(e))
 
     return wrapper
 
@@ -29,4 +30,4 @@ def load_private_key(data: bytes, password: bytes | None = None) -> jwk.Private:
     except TypeError:
         raise
     except Exception:
-        raise exceptions.UI("Unable to load key as either a PEM or an OpenSSH-formatted public key")
+        raise pfc.exceptions.UI("Unable to load key as either a PEM or an OpenSSH-formatted public key")

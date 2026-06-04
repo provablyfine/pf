@@ -5,6 +5,7 @@ import typing
 import urllib.parse
 import webbrowser
 
+import provablyfine_client as pfc
 import requests
 
 from . import base64url, client, jwk, ssh
@@ -27,7 +28,7 @@ def generate_session_key() -> tuple[jwk.Private, str]:
     try:
         agent = ssh.agent.Client()
     except Exception:
-        raise client.exceptions.UI("Unable to connect to user's SSH agent")
+        raise pfc.exceptions.UI("Unable to connect to user's SSH agent")
     session_key = jwk.Private.generate_ed25519()
     agent.add(session_key, comment="pf-session", lifetime=1800)
     return session_key, session_key.public().ssh_fingerprint()
@@ -37,7 +38,7 @@ def oidc_flow(oidc_config: client.schemas.OidcConfig) -> str:
     """Run OIDC browser flow. Returns id_token. Caller opens browser message if desired."""
     discovery_resp = requests.get(f"{oidc_config.issuer}/.well-known/openid-configuration", timeout=10)
     if discovery_resp.status_code != 200:
-        raise client.exceptions.UI("Unable to fetch OIDC discovery document")
+        raise pfc.exceptions.UI("Unable to fetch OIDC discovery document")
     discovery = discovery_resp.json()
 
     code_verifier = base64url.encode(secrets.token_bytes(32))
@@ -75,7 +76,7 @@ def oidc_flow(oidc_config: client.schemas.OidcConfig) -> str:
     server.server_close()
 
     if not code_holder:
-        raise client.exceptions.UI("OIDC callback did not receive an authorization code")
+        raise pfc.exceptions.UI("OIDC callback did not receive an authorization code")
 
     token_data: dict[str, str] = {
         "grant_type": "authorization_code",
@@ -88,10 +89,10 @@ def oidc_flow(oidc_config: client.schemas.OidcConfig) -> str:
         token_data["client_secret"] = oidc_config.client_secret
     token_resp = requests.post(discovery["token_endpoint"], data=token_data, timeout=10)
     if token_resp.status_code != 200:
-        raise client.exceptions.UI(f"Unable to exchange code for token: {token_resp.text}")
+        raise pfc.exceptions.UI(f"Unable to exchange code for token: {token_resp.text}")
     id_token = token_resp.json().get("id_token")
     if not id_token:
-        raise client.exceptions.UI("Token response did not include id_token")
+        raise pfc.exceptions.UI("Token response did not include id_token")
     return id_token
 
 
@@ -119,4 +120,4 @@ def oauth2_callback(port: int) -> None:
     http.server.HTTPServer(("127.0.0.1", port), _DoneHandler).handle_request()
     if not result or result[0]["status"] != "ok":
         reason = result[0]["reason"] if result else "unknown"
-        raise client.exceptions.UI(f"OAuth2 login failed: {reason}")
+        raise pfc.exceptions.UI(f"OAuth2 login failed: {reason}")

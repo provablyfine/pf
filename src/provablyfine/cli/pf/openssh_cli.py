@@ -2,6 +2,8 @@ import argparse
 import base64
 import os
 
+import provablyfine_client as pfc
+
 from ... import client, jwk, ssh
 from . import openssh_host_init
 
@@ -42,7 +44,7 @@ def _authorized_principals(args: argparse.Namespace) -> None:
         host_certificate = ssh.cert.Cert.from_openssh(data)
         host_items = host_certificate.identifier.split(":")
         if len(host_items) == 0:
-            raise client.exceptions.UI(f"Invalid host identifier={host_certificate.identifier}")
+            raise pfc.exceptions.UI(f"Invalid host identifier={host_certificate.identifier}")
         host_identifier = host_items[0]
 
     certificate = base64.b64decode(args.certificate.encode("ascii"))
@@ -51,14 +53,14 @@ def _authorized_principals(args: argparse.Namespace) -> None:
     for principal in cert.principals:
         items = principal.split("@")
         if len(items) != 2:
-            raise client.exceptions.UI(f"Invalid user principal={principal}")
+            raise pfc.exceptions.UI(f"Invalid user principal={principal}")
         username, host_id = items
         if username != args.username:
             # the certificate grants access to a username that is not the user that is currently
             # requested by the SSH connection
             continue
         if host_id != host_identifier:
-            raise client.exceptions.UI(f"Invalid user host id={host_id} expected={host_identifier}")
+            raise pfc.exceptions.UI(f"Invalid user host id={host_id} expected={host_identifier}")
         accepted.append(principal)
     print("\n".join(accepted))
 

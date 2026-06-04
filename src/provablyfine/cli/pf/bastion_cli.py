@@ -9,6 +9,8 @@ import signal
 import sys
 import urllib.parse
 
+import provablyfine_client as pfc
+
 from ... import anet, client
 from .. import login
 
@@ -28,7 +30,7 @@ class Response:
         try:
             response = await anet.http.Response.deserialize(sock)
         except anet.exceptions.Error as exc:
-            raise client.exceptions.UI("Unable to reach bastion") from exc
+            raise pfc.exceptions.UI("Unable to reach bastion") from exc
         return Response(
             version=response.version,
             status_code=response.status_code,
@@ -45,7 +47,7 @@ async def _http_connect(socket_path: str | None, url: str, prefix: str, hostname
     port = u.port if u.port is not None else scheme_port
 
     if u.scheme not in ["http", "https"]:
-        raise client.exceptions.UI(f"Unsupported url scheme={u.scheme}")
+        raise pfc.exceptions.UI(f"Unsupported url scheme={u.scheme}")
 
     retval: anet.base.Socket
     if socket_path is not None:
@@ -77,9 +79,9 @@ async def _http_connect(socket_path: str | None, url: str, prefix: str, hostname
     await request.serialize(retval)
     response = await Response.deserialize(retval)
     if response.version != "HTTP/1.1":
-        raise client.exceptions.UI(f"Unable to reach bastion: version={response.version}")
+        raise pfc.exceptions.UI(f"Unable to reach bastion: version={response.version}")
     if response.status_code != 200:
-        raise client.exceptions.UI(f"Unable to reach bastion: status_code={response.status_code}")
+        raise pfc.exceptions.UI(f"Unable to reach bastion: status_code={response.status_code}")
     return retval
 
 
@@ -144,7 +146,7 @@ def _register_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
 
     if not login.has_valid_session(c):
-        raise client.exceptions.UI("Not logged in. Run 'pf login' first.")
+        raise pfc.exceptions.UI("Not logged in. Run 'pf login' first.")
 
     async def _run():
         loop = asyncio.get_running_loop()
@@ -241,7 +243,7 @@ def _connect_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
 
     if not login.has_valid_session(c):
-        raise client.exceptions.UI("Not logged in. Run 'pf login' first.")
+        raise pfc.exceptions.UI("Not logged in. Run 'pf login' first.")
 
     sc = client.sync.Client(c, timeout=args.timeout)
     token_response = sc.get_self_token("bastion")

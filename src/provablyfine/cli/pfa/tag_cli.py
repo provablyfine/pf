@@ -2,6 +2,7 @@ import argparse
 import json
 
 import tabulate
+import provablyfine_client as pfc
 
 from ... import client
 
@@ -58,7 +59,7 @@ def _tag_create_function(args: argparse.Namespace) -> None:
 
 def _tag_delete_function(args: argparse.Namespace) -> None:
     if args.id is None:
-        raise client.exceptions.UI("You must specify a tag ID to delete")
+        raise pfc.exceptions.UI("You must specify a tag ID to delete")
     c = client.Config.load(args.config)
     sc = client.sync.Client(c, timeout=args.timeout)
     sc.delete_tag(id=args.id)

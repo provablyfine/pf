@@ -4,7 +4,7 @@ import dataclasses
 import json
 import os
 
-from . import exceptions
+import provablyfine_client as pfc
 
 
 @dataclasses.dataclass
@@ -23,7 +23,7 @@ class Config:
                 data = json.load(f)
                 return Config(**data)
         except Exception:
-            raise exceptions.UI(f"Unable to load {filename}")
+            raise pfc.exceptions.UI(f"Unable to load {filename}")
 
     def save(self, filename: str):
         os.makedirs(os.path.dirname(os.path.abspath(filename)), exist_ok=True)

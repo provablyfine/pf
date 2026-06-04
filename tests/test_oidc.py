@@ -11,10 +11,11 @@ import cryptography.hazmat.primitives.asymmetric.padding
 import cryptography.hazmat.primitives.hashes
 import pytest
 import requests
+import provablyfine_client as pfc
 
 import provablyfine.cli.login
 import provablyfine.client
-import provablyfine.client.exceptions
+import provablyfine.pfc.exceptions
 import provablyfine.client.sync
 import provablyfine.jwk
 import provablyfine.ssh.agent
@@ -146,7 +147,7 @@ def test_endpoint_expired(oidc_env: OidcEnv) -> None:
     id_token = oidc_env.mock.issue_token("user@example.com", expired=True)
     session_key, session_fingerprint = _create_session_key()
 
-    with pytest.raises(provablyfine.client.exceptions.UI):
+    with pytest.raises(provablyfine.pfc.exceptions.UI):
         oidc_env.sc.login_oidc(
             auth_name="oidc-test",
             id_token=id_token,
@@ -160,7 +161,7 @@ def test_endpoint_wrong_issuer(oidc_env: OidcEnv) -> None:
     id_token = oidc_env.mock.issue_token("user@example.com", issuer="https://evil.example.com")
     session_key, session_fingerprint = _create_session_key()
 
-    with pytest.raises(provablyfine.client.exceptions.UI):
+    with pytest.raises(provablyfine.pfc.exceptions.UI):
         oidc_env.sc.login_oidc(
             auth_name="oidc-test",
             id_token=id_token,
@@ -174,7 +175,7 @@ def test_endpoint_wrong_audience(oidc_env: OidcEnv) -> None:
     id_token = oidc_env.mock.issue_token("user@example.com", audience="wrong-client")
     session_key, session_fingerprint = _create_session_key()
 
-    with pytest.raises(provablyfine.client.exceptions.UI):
+    with pytest.raises(provablyfine.pfc.exceptions.UI):
         oidc_env.sc.login_oidc(
             auth_name="oidc-test",
             id_token=id_token,
@@ -208,7 +209,7 @@ def test_endpoint_missing_email(oidc_env: OidcEnv) -> None:
 
     session_key, session_fingerprint = _create_session_key()
 
-    with pytest.raises(provablyfine.client.exceptions.UI):
+    with pytest.raises(provablyfine.pfc.exceptions.UI):
         oidc_env.sc.login_oidc(
             auth_name="oidc-test",
             id_token=id_token,
@@ -222,7 +223,7 @@ def test_endpoint_unknown_auth(oidc_env: OidcEnv) -> None:
     id_token = oidc_env.mock.issue_token("user@example.com")
     session_key, session_fingerprint = _create_session_key()
 
-    with pytest.raises(provablyfine.client.exceptions.UI):
+    with pytest.raises(provablyfine.pfc.exceptions.UI):
         oidc_env.sc.login_oidc(
             auth_name="no-such-auth",
             id_token=id_token,
@@ -277,7 +278,7 @@ def test_endpoint_tag_restriction_fail(oidc_env: OidcEnv) -> None:
     id_token = oidc_env.mock.issue_token("user@example.com")
     session_key, session_fingerprint = _create_session_key()
 
-    with pytest.raises(provablyfine.client.exceptions.UI):
+    with pytest.raises(provablyfine.pfc.exceptions.UI):
         oidc_env.sc.login_oidc(
             auth_name="oidc-restricted",
             id_token=id_token,
@@ -332,5 +333,5 @@ def test_full_oidc_login_flow_callback_error(oidc_env: OidcEnv, monkeypatch) -> 
     monkeypatch.setattr("provablyfine.cli.login.webbrowser.open", fake_browser)
 
     # Should raise because callback never receives a code
-    with pytest.raises(provablyfine.client.exceptions.UI, match="did not receive an authorization code"):
+    with pytest.raises(provablyfine.pfc.exceptions.UI, match="did not receive an authorization code"):
         provablyfine.cli.login.oidc_login(oidc_env.config, oidc_env.sc, "oidc-test")

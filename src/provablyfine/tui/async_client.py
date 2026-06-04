@@ -1,7 +1,7 @@
 import asyncio
 import typing
 
-import provablyfine_client
+import provablyfine_client as pfc
 import requests
 
 from .. import client
@@ -15,7 +15,7 @@ class AsyncClient:
         self._lock = asyncio.Lock()
 
     @property
-    def directory(self) -> provablyfine_client.Directory:
+    def directory(self) -> pfc.Directory:
         return self._client.directory
 
     async def get(self, url: str, *, params: dict[str, typing.Any] | None = None) -> requests.Response:
@@ -41,7 +41,7 @@ class AsyncClient:
     async def get_list(self, url: str, key: str, error_msg: str) -> list[dict[str, typing.Any]]:
         response = await self.get(url)
         if response.status_code != 200:
-            raise client.exceptions.UI(response.json().get("title", error_msg))
+            raise pfc.exceptions.UI(response.json().get("title", error_msg))
         return response.json()[key]
 
     async def list_roles(self) -> list[dict[str, typing.Any]]:

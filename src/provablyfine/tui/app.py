@@ -4,6 +4,7 @@ import os.path
 import sys
 
 import textual.screen
+import provablyfine_client as pfc
 
 from .. import client, log
 from . import base, home, relogin, setup
@@ -50,7 +51,7 @@ def pfat() -> None:
 
     try:
         cfg = client.Config.load(args.config)
-    except client.exceptions.UI as e:
+    except pfc.exceptions.UI as e:
         sys.stderr.write(f"{e}\n")
         sys.exit(2)
 
@@ -59,7 +60,7 @@ def pfat() -> None:
         app.run()
         try:
             cfg = client.Config.load(args.config)
-        except client.exceptions.UI as e:
+        except pfc.exceptions.UI as e:
             sys.stderr.write(f"{e}\n")
             sys.exit(2)
         if not relogin.has_valid_session(cfg):
@@ -67,7 +68,7 @@ def pfat() -> None:
 
     try:
         auth = client.aio.Client(cfg)
-    except client.exceptions.UI as e:
+    except pfc.exceptions.UI as e:
         sys.stderr.write(f"{e}\n")
         sys.exit(2)
 

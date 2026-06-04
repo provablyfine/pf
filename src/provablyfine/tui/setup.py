@@ -9,6 +9,7 @@ import textual.app
 import textual.containers
 import textual.screen
 import textual.widgets
+import provablyfine_client as pfc
 
 from .. import client, ssh
 from . import base, relogin
@@ -215,7 +216,7 @@ class NewServerSetupScreen(base.Screen):
         try:
             resp = requests.get(url, timeout=5)
             if resp.status_code != 200:
-                raise client.exceptions.UI(f"Unable to read directory: {resp.status_code}")
+                raise pfc.exceptions.UI(f"Unable to read directory: {resp.status_code}")
             directory_data = resp.json()
             c = client.Config(directory_url=url, directory=directory_data)
             api = client.Client(c)
@@ -224,9 +225,9 @@ class NewServerSetupScreen(base.Screen):
             api_sync = client.sync.Client(c)
             try:
                 api_sync.initialize(account_key)
-            except client.exceptions.UI as e:
+            except pfc.exceptions.UI as e:
                 if "already initialized" in str(e):
-                    raise client.exceptions.UI("Server already initialized — use 'Connect to existing server'")
+                    raise pfc.exceptions.UI("Server already initialized — use 'Connect to existing server'")
                 raise
 
             set_status("Logging in...")
@@ -236,7 +237,7 @@ class NewServerSetupScreen(base.Screen):
             c.session_key = fp
             c.save(self._config_path)
             self.app.call_from_thread(self.app.exit)
-        except client.exceptions.UI as e:
+        except pfc.exceptions.UI as e:
             self.notify(str(e), severity="error")
             set_status("Enter URL then select account key")
 
@@ -318,7 +319,7 @@ class ConnectScreen(base.Screen):
             status.update("Accepting invitation...")
             try:
                 await aio_client.connect(invitation=invitation, key=account_key)
-            except client.exceptions.UI as e:
+            except pfc.exceptions.UI as e:
                 self.notify(str(e), severity="error")
                 status.update("Paste invitation URL or directory URL")
                 return
@@ -328,7 +329,7 @@ class ConnectScreen(base.Screen):
             status.update("Fetching auth methods...")
             try:
                 auths = await aio_client.list_public_auths()
-            except client.exceptions.UI as e:
+            except pfc.exceptions.UI as e:
                 self.notify(str(e), severity="error")
                 status.update("Paste invitation URL or directory URL")
                 return
@@ -346,7 +347,7 @@ class ConnectScreen(base.Screen):
             try:
                 auth_public = await aio_client.get_public_auth(auth_name)
                 auth_type = auth_public.config.type
-            except client.exceptions.UI as e:
+            except pfc.exceptions.UI as e:
                 self.notify(str(e), severity="error")
                 status.update("Paste invitation URL or directory URL")
                 return
@@ -375,6 +376,6 @@ class ConnectScreen(base.Screen):
             c.session_key = fp
             c.save(self._config_path)
             self.app.exit()
-        except client.exceptions.UI as e:
+        except pfc.exceptions.UI as e:
             self.notify(str(e), severity="error")
             status.update("Paste invitation URL or directory URL")

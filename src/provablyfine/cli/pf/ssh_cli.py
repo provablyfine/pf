@@ -5,6 +5,8 @@ import logging
 import os
 import tempfile
 
+import provablyfine_client as pfc
+
 from ... import client, jwk, ssh
 from .. import login
 
@@ -30,14 +32,14 @@ def _ssh_function(args: argparse.Namespace) -> None:
         sc = client.sync.Client(c, timeout=args.timeout)
         try:
             auth_public = sc.get_public_auth("default")
-        except client.exceptions.UI:
-            raise client.exceptions.UI("Not logged in. Run 'pf login' first.")
+        except pfc.exceptions.UI:
+            raise pfc.exceptions.UI("Not logged in. Run 'pf login' first.")
         match auth_public.config.type:
             case "http_sig":
                 c.session_key = login.http_sig_login(c, sc)
                 c.save(args.config)
             case _:
-                raise client.exceptions.UI(
+                raise pfc.exceptions.UI(
                     f"Session expired. Run 'pf login' first (auth type: {auth_public.config.type})."
                 )
 
@@ -57,7 +59,7 @@ def _ssh_function(args: argparse.Namespace) -> None:
             action=action,
             public_key=user_key.public().to_dict(),
         )
-    except client.exceptions.Forbidden:
+    except pfc.exceptions.Forbidden:
         if action == "shell" and args.cmd:
             cert_data = sc.get_user_certificate(
                 hostname=host,
@@ -67,7 +69,7 @@ def _ssh_function(args: argparse.Namespace) -> None:
                 command=args.cmd,
             )
         else:
-            raise client.exceptions.UI("User is not authorized to connect to host")
+            raise pfc.exceptions.UI("User is not authorized to connect to host")
 
     certificates = cert_data.certificates
     assert len(certificates) == 1
@@ -77,7 +79,7 @@ def _ssh_function(args: argparse.Namespace) -> None:
     try:
         ssh_agent = ssh.agent.Client()
     except Exception:
-        raise client.exceptions.UI("Unable to connect to user's SSH agent")
+        raise pfc.exceptions.UI("Unable to connect to user's SSH agent")
 
     ssh_agent.add(user_key, comment=host, lifetime=60)
 
@@ -164,7 +166,7 @@ def _ssh_function(args: argparse.Namespace) -> None:
         except Exception as e:
             last_error = e
 
-    raise client.exceptions.UI(f"Failed to connect via any bastion or direct IP: {last_error}")
+    raise pfc.exceptions.UI(f"Failed to connect via any bastion or direct IP: {last_error}")
 
 
 def add_subparser(parser: argparse.ArgumentParser) -> None:

@@ -3,7 +3,9 @@ import asyncio
 import sys
 import traceback
 
-from ... import client, log
+import provablyfine_client as pfc
+
+from ... import log
 from . import bastion_cli
 
 
@@ -21,7 +23,7 @@ def _do_main(args: argparse.Namespace) -> None:
     try:
         args.func(args)
         exitcode = 0
-    except client.exceptions.UI as e:
+    except pfc.exceptions.UI as e:
         sys.stderr.write(f"{e!s}\n")
         exitcode = 2
     except Exception:

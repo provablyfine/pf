@@ -4,16 +4,15 @@ import textual.app
 import textual.screen
 import textual.widget
 import textual.worker
-
-from .. import client
+import provablyfine_client as pfc
 
 
 class App(textual.app.App[None]):
     def _handle_exception(self, error: Exception) -> None:
-        ui_error: client.exceptions.UI | None = None
-        if isinstance(error, client.exceptions.UI):
+        ui_error: pfc.exceptions.UI | None = None
+        if isinstance(error, pfc.exceptions.UI):
             ui_error = error
-        elif isinstance(error, textual.worker.WorkerFailed) and isinstance(error.error, client.exceptions.UI):
+        elif isinstance(error, textual.worker.WorkerFailed) and isinstance(error.error, pfc.exceptions.UI):
             ui_error = error.error
         if ui_error is not None:
             self.notify(str(ui_error), severity="error")

@@ -4,6 +4,8 @@ import os
 import socket
 import webbrowser
 
+import provablyfine_client as pfc
+
 from .. import browser_login, client, jwk, ssh
 
 
@@ -32,7 +34,7 @@ def _find_key_filename(fingerprint: str) -> str:
         if not os.path.isfile(private_path):
             continue
         return private_path
-    raise client.exceptions.UI(
+    raise pfc.exceptions.UI(
         f"Account key {fingerprint} not found in SSH agent or ~/.ssh/. Add your key file with 'ssh-add'."
     )
 
@@ -51,7 +53,7 @@ def _agent_load_key(account_key: str) -> None:
         agent.add(key, comment="pf-account", lifetime=60)
         return
     except Exception as e:
-        raise client.exceptions.UI(f"Failed to load account key {private_path}: {e}") from e
+        raise pfc.exceptions.UI(f"Failed to load account key {private_path}: {e}") from e
 
 
 def has_valid_session(c: client.Config) -> bool:
@@ -71,7 +73,7 @@ def http_sig_login(c: client.Config, sc: client.sync.Client, session_key_path: s
         try:
             session_key = client.ssh_utils.load_private_key(data)
         except ValueError:
-            raise client.exceptions.UI("Unable to parse data either as PEM or SSH format")
+            raise pfc.exceptions.UI("Unable to parse data either as PEM or SSH format")
         session_fingerprint = session_key_path
 
     sc.login_http_sig(session_key.public().to_dict(), session_fingerprint)
@@ -82,7 +84,7 @@ def oidc_login(c: client.Config, sc: client.sync.Client, auth_name: str) -> str:
     """OIDC login. Returns session fingerprint. Caller updates config."""
     auth_public = sc.get_public_auth(auth_name)
     if not isinstance(auth_public.config, client.schemas.OidcConfig):
-        raise client.exceptions.UI(f"Auth '{auth_name}' is not OIDC")
+        raise pfc.exceptions.UI(f"Auth '{auth_name}' is not OIDC")
 
     session_key, session_fingerprint = browser_login.generate_session_key()
     print("Opening browser for OIDC login...")
@@ -95,7 +97,7 @@ def oauth2_login(c: client.Config, sc: client.sync.Client, auth_name: str) -> st
     """OAuth2 login. Returns session fingerprint. Caller updates config."""
     auth_public = sc.get_public_auth(auth_name)
     if not isinstance(auth_public.config, client.schemas.OAuth2Config):
-        raise client.exceptions.UI(f"Auth '{auth_name}' is not OAuth2")
+        raise pfc.exceptions.UI(f"Auth '{auth_name}' is not OAuth2")
 
     session_key, session_fingerprint = browser_login.generate_session_key()
 
@@ -126,4 +128,4 @@ def login(c: client.Config, sc: client.sync.Client, auth_name: str, session_key_
         case "oauth2-github":
             return oauth2_login(c, sc, auth_name)
         case _:
-            raise client.exceptions.UI(f"Unsupported auth type: {auth_public.config.type}")
+            raise pfc.exceptions.UI(f"Unsupported auth type: {auth_public.config.type}")

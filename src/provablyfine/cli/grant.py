@@ -4,8 +4,7 @@ import sys
 import typing
 
 import yaml
-
-from .. import client
+import provablyfine_client as pfc
 
 
 def add_parser(parser: argparse.ArgumentParser, f: typing.Callable[..., None]) -> None:
@@ -17,7 +16,7 @@ def add_parser(parser: argparse.ArgumentParser, f: typing.Callable[..., None]) -
             try:
                 grant = yaml.safe_load(data)
             except Exception:
-                raise client.exceptions.UI("Unable to read grant from stdin")
+                raise pfc.exceptions.UI("Unable to read grant from stdin")
         return grant
 
     def _do(args: argparse.Namespace) -> None:
