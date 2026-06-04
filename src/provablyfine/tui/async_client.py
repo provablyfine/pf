@@ -1,7 +1,7 @@
 import asyncio
-import types
 import typing
 
+import provablyfine_client
 import requests
 
 from .. import client
@@ -15,7 +15,7 @@ class AsyncClient:
         self._lock = asyncio.Lock()
 
     @property
-    def directory(self) -> types.SimpleNamespace:
+    def directory(self) -> provablyfine_client.Directory:
         return self._client.directory
 
     async def get(self, url: str, *, params: dict[str, typing.Any] | None = None) -> requests.Response:

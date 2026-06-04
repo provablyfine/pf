@@ -2,68 +2,24 @@ from __future__ import annotations
 
 import abc
 import getpass
-import hashlib
-import hmac
 import logging
 import os.path
-import secrets
-import time
-import types
 import typing
-import urllib.parse
 
 import cryptography.hazmat.primitives.asymmetric.ed25519
-import http_sfv
+import provablyfine_client
 import requests
 
 from .. import base64url, jwk, ssh
 from . import configuration, exceptions, ssh_utils
 
-# http_sfv type stubs are incomplete (private imports, reportPrivateImportUsage)
-# pyright: reportPrivateImportUsage=false
-
 logger = logging.getLogger(__name__)
 
-
-def _build_signature_base(
-    request: requests.PreparedRequest,
-    covered: tuple[str, ...],
-    sig_params: str,
-) -> str:
-    """Build the signature base string per RFC 9421 §2.5."""
-    parts: list[str] = []
-    for c in covered:
-        match c:
-            case "@method":
-                parts.append(f'"@method": {request.method}')
-            case "@authority":
-                parts.append(f'"@authority": {urllib.parse.urlparse(request.url).netloc}')
-            case "@target-uri":
-                parts.append(f'"@target-uri": {request.url}')
-            case "@signature-params":
-                parts.append(f'"@signature-params": {sig_params}')
-            case _:
-                parts.append(f'"{c}": {request.headers[c]}')
-    return "\n".join(parts)
+Signer = provablyfine_client.Signer
+HmacSigner = provablyfine_client.HmacSigner
 
 
-class Signer(abc.ABC):
-    def __init__(self, prefix: str):
-        self._prefix = prefix
-
-    def prefix(self) -> str:
-        return self._prefix
-
-    @abc.abstractmethod
-    def thumbprint(self) -> str:
-        pass
-
-    @abc.abstractmethod
-    def sign(self, data: bytes) -> bytes:
-        pass
-
-
-class PrivateSigner(Signer):
+class PrivateSigner(provablyfine_client.Signer):
     @abc.abstractmethod
     def public_key(self) -> jwk.Public:
         pass
@@ -107,21 +63,8 @@ class AgentSigner(PrivateSigner):
         raise exceptions.UI(f"Unable to find requested key={fingerprint}")
 
 
-class HmacSigner(Signer):
-    def __init__(self, prefix: str, key: jwk.Symmetric):
-        super().__init__(prefix)
-        self._key = key
-
-    def thumbprint(self) -> str:
-        return self._key.thumbprint()
-
-    def sign(self, data: bytes) -> bytes:
-        return hmac.new(self._key.to_bytes(), data, hashlib.sha256).digest()
-
-
-def hmac_signer(prefix: str, key: str) -> Signer:
-    k = jwk.Symmetric.from_bytes(base64url.decode(key))
-    return HmacSigner(prefix, k)
+def hmac_signer(prefix: str, key: str) -> provablyfine_client.Signer:
+    return provablyfine_client.HmacSigner(prefix, base64url.decode(key))
 
 
 @ssh_utils.exception
@@ -159,144 +102,48 @@ def private_key_signer(prefix: str, filename: str | None) -> PrivateSigner:
     raise exceptions.KeyExpired(prefix)
 
 
-class RequestsAuth:
-    """HTTP Message Signature auth handler for requests library.
-
-    Signs requests with one or more Signer instances and adds
-    Signature-Input and Signature headers.
-    """
-
-    def __init__(self, signers: typing.Sequence[Signer]) -> None:
-        self._signers = signers
-
-    def _sign(self, signer: Signer, request: requests.PreparedRequest, covered: tuple[str, ...]) -> tuple[str, str]:
-        """Generate HTTP signature headers for a single signer.
-
-        Returns (Signature-Input entry, Signature entry) — caller joins multiple signers.
-        """
-        key_id = f"{signer.prefix()}:{signer.thumbprint()}"
-
-        inner = http_sfv.InnerList([http_sfv.Item(c) for c in covered])
-        inner.params["created"] = int(time.time())
-        inner.params["keyid"] = key_id
-        inner.params["nonce"] = secrets.token_hex(16)
-
-        sig_params = str(inner)
-        sig_base = _build_signature_base(request, covered, sig_params)
-        sig_bytes = signer.sign(sig_base.encode())
-
-        return (
-            f"{signer.prefix()}={sig_params}",
-            f"{signer.prefix()}={http_sfv.Item(sig_bytes)}",
-        )
-
-    def __call__(self, request: requests.PreparedRequest) -> requests.PreparedRequest:
-        if "Content-Digest" not in request.headers:
-            body = request.body or b""
-            if isinstance(body, str):
-                body_bytes = body.encode()
-            else:
-                body_bytes = body if isinstance(body, bytes) else b""
-            digest = hashlib.sha256(body_bytes).digest()
-            request.headers["Content-Digest"] = str(http_sfv.Dictionary({"sha-256": digest}))
-        covered = ("@method", "@authority", "@target-uri", "content-digest", "@signature-params")
-        signatures_input: list[str] = []
-        signatures: list[str] = []
-        for signer in self._signers:
-            signature_input, signature = self._sign(signer, request, covered)
-            signatures_input.append(signature_input)
-            signatures.append(signature)
-        request.headers["Signature-Input"] = ", ".join(signatures_input)
-        request.headers["Signature"] = ", ".join(signatures)
-        return request
-
-
 class HttpClient:
-    def __init__(self, client: Client, auth: RequestsAuth | None, timeout: float):
-        self._client = client
-        self._auth = auth
-        self._session = requests.Session()
-        self._timeout = timeout
+    """Backward-compat HTTP wrapper used by TUI and CLI (raw URL-based access)."""
 
-    @property
-    def config(self) -> configuration.Config:
-        return self._client.config
-
-    @property
-    def directory(self) -> types.SimpleNamespace:
-        return self._client.directory
-
-    def request(
+    def __init__(
         self,
-        method: str,
-        url: str,
-        data: typing.Any = None,
-        json: typing.Any = None,
-        headers: dict[str, str] | None = None,
-        timeout: float | None = None,
-        params: dict[str, typing.Any] | None = None,
-    ) -> requests.Response:
-        request = requests.Request(method=method, url=url, data=data, json=json, headers=headers, params=params)
-        request = request.prepare()
-        if self._auth is not None:
-            request = self._auth(request)
+        session: provablyfine_client.HttpSession,
+        directory: provablyfine_client.Directory,
+        auth: provablyfine_client.Auth | None = None,
+    ) -> None:
+        self._pf_session = session
+        self._directory = directory
+        self._auth = auth
 
-        logger.info(f"tx {request.method} to {request.url}")
-        logger.debug(f"tx headers: {request.headers}")
-        logger.debug(f"tx body: {request.body}")
-        try:
-            response = self._session.send(request, timeout=self._timeout)
-        except requests.exceptions.ConnectionError:
-            raise exceptions.UI("Unable to connect to server. #3")
-        except requests.exceptions.ReadTimeout:
-            raise exceptions.UI("Unable to connect to server. #4")
-        logger.info(f"rx status: {response.status_code}")
-        logger.debug(f"rx headers: {response.headers}")
-        logger.debug(f"rx body: {response.content}")
-        if response.status_code in [400, 422]:
-            problem = response.json()
-            title = problem.get("title")
-            detail = problem.get("detail")
-            if detail is not None:
-                raise exceptions.UI(f"{title} {detail}")
-            else:
-                raise exceptions.UI(f"{title}")
-
-        content_type = response.headers.get("Content-Type", "")
-        if content_type in ["application/json", "application/problem+json"]:
-            problem = response.json()
-            instance = problem.get("instance")
-            title = problem.get("title")
-            detail = problem.get("detail")
-            type = problem.get("type")
-            if instance is not None and type is not None:
-                logger.warning(f"{title} {detail} {instance}")
-            if instance is not None:
-                debug = requests.get(instance, timeout=0.5)
-                if "backtrace" in debug.json():
-                    raise exceptions.UI(debug.json()["backtrace"])
-                raise exceptions.UI(str(debug.json()))
-        return response
+    @property
+    def directory(self) -> provablyfine_client.Directory:
+        return self._directory
 
     def get(self, url: str, *, params: dict[str, typing.Any] | None = None) -> requests.Response:
-        return self.request("GET", url, params=params)
+        return self._pf_session.get(url, auth=self._auth, params=params)
 
     def post(self, url: str, *, json: typing.Any = None) -> requests.Response:
-        return self.request("POST", url, json=json)
+        return self._pf_session.post(url, auth=self._auth, json=json)
 
     def patch(self, url: str, *, json: typing.Any = None) -> requests.Response:
-        return self.request("PATCH", url, json=json)
+        return self._pf_session.patch(url, auth=self._auth, json=json)
 
     def delete(self, url: str) -> requests.Response:
-        return self.request("DELETE", url)
+        return self._pf_session.delete(url, auth=self._auth)
 
     def put(self, url: str, *, json: typing.Any = None) -> requests.Response:
-        return self.request("PUT", url, json=json)
+        return self._pf_session.put(url, auth=self._auth, json=json)
 
 
 class InvitationHttpClient(HttpClient):
-    def __init__(self, client: Client, auth: RequestsAuth | None, timeout: float, account_public_key: jwk.Public):
-        super().__init__(client, auth, timeout)
+    def __init__(
+        self,
+        session: provablyfine_client.HttpSession,
+        directory: provablyfine_client.Directory,
+        auth: provablyfine_client.Auth | None,
+        account_public_key: jwk.Public,
+    ) -> None:
+        super().__init__(session, directory, auth)
         self._account_public_key = account_public_key
 
     @property
@@ -305,73 +152,34 @@ class InvitationHttpClient(HttpClient):
 
 
 class Client:
-    def __init__(self, config: configuration.Config, timeout: float = 1.0):
+    """HTTP client factory for JWK-based auth (used by CLI)."""
+
+    def __init__(self, config: configuration.Config, timeout: float = 1.0) -> None:
         self._config = config
-        self._directory = None
-        self._timeout = timeout
+        self._pf_session = provablyfine_client.HttpSession(requests.Session(), timeout)
+        self._pf_directory = provablyfine_client.Directory(config.directory_url, timeout)
 
     @property
     def config(self) -> configuration.Config:
         return self._config
 
-    @property
-    def directory(self) -> types.SimpleNamespace:
-        if self._directory is not None:
-            return self._directory
-        if self._config.directory is not None:
-            self._directory = types.SimpleNamespace(**self._config.directory)
-            return self._directory
-        try:
-            response = requests.get(self._config.directory_url, timeout=self._timeout)
-        except requests.exceptions.ConnectionError:
-            raise exceptions.UI("Unable to connect to server. #1")
-        except requests.exceptions.ReadTimeout:
-            raise exceptions.UI("Unable to connect to server #2")
-        if response.status_code != 200:
-            raise exceptions.UI("Unable to read directory from server")
-        self._config.directory = response.json()
-        assert self._config.directory is not None
-        self._directory = types.SimpleNamespace(**self._config.directory)
-        return self._directory
+    def session_auth(self, session: str | None) -> HttpClient:
+        signer = private_key_signer("session", session)
+        return HttpClient(self._pf_session, self._pf_directory, provablyfine_client.Auth([signer]))
 
-    @property
-    def no_auth(self) -> HttpClient:
-        return HttpClient(self, auth=None, timeout=self._timeout)
-
-    def invitation_auth_with_key(self, account: jwk.Private, invitation: str) -> InvitationHttpClient:
-        account_signer = FileSigner("account", account)
-        return self._invitation_auth(account_signer, invitation)
-
-    def invitation_auth(self, account: str | None, invitation: str) -> InvitationHttpClient:
-        account_signer = private_key_signer("account", account)
-        return self._invitation_auth(account_signer, invitation)
-
-    def _invitation_auth(self, account_signer: PrivateSigner, invitation: str) -> InvitationHttpClient:
-        invitation_signer = hmac_signer("invitation", invitation)
-        signers = [invitation_signer, account_signer]
-        return InvitationHttpClient(
-            self,
-            auth=RequestsAuth(signers),
-            timeout=self._timeout,
-            account_public_key=account_signer.public_key(),
-        )
+    def session_auth_with_key(self, session: jwk.Private) -> HttpClient:
+        auth = provablyfine_client.Auth([FileSigner("session", session)])
+        return HttpClient(self._pf_session, self._pf_directory, auth)
 
     def login_auth(self, account: str | None, session: str | None) -> HttpClient:
-        signers = [
+        signers: list[provablyfine_client.Signer] = [
             private_key_signer("account", account),
             private_key_signer("session", session),
         ]
-        return HttpClient(self, auth=RequestsAuth(signers), timeout=self._timeout)
+        return HttpClient(self._pf_session, self._pf_directory, provablyfine_client.Auth(signers))
 
-    def login_auth_with_keys(self, account: jwk.Private, session: jwk.Private) -> HttpClient:
-        """login_auth variant accepting in-memory account and session keys."""
-        signers = [FileSigner("account", account), FileSigner("session", session)]
-        return HttpClient(self, auth=RequestsAuth(signers), timeout=self._timeout)
-
-    def session_auth(self, session: str | None) -> HttpClient:
-        signers = [private_key_signer("session", session)]
-        return HttpClient(self, auth=RequestsAuth(signers), timeout=self._timeout)
-
-    def session_auth_with_key(self, session: jwk.Private) -> HttpClient:
-        """session_auth variant for in-memory session key."""
-        return HttpClient(self, auth=RequestsAuth([FileSigner("session", session)]), timeout=self._timeout)
+    def invitation_auth_with_key(self, account: jwk.Private, invitation: str) -> InvitationHttpClient:
+        account_signer = FileSigner("account", account)
+        inv_signer = provablyfine_client.HmacSigner("invitation", base64url.decode(invitation))
+        auth = provablyfine_client.Auth([inv_signer, account_signer])
+        return InvitationHttpClient(self._pf_session, self._pf_directory, auth, account.public())

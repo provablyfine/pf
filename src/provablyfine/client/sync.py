@@ -1,39 +1,35 @@
+from __future__ import annotations
+
 import typing
 
+import provablyfine_client
 import requests
+from provablyfine_client import AccountClient, InvitationClient, PublicClient, SessionClient
 
-from .. import jwk
-from . import configuration, exceptions, http_client, schemas
-
-
-def _problem_title(response: requests.Response, default: str) -> str:
-    """Extract title from a RFC 7807 Problem Details response, or return default."""
-    try:
-        title = response.json().get("title")
-        if title:
-            return str(title)
-    except Exception:
-        pass
-    return default
+from .. import base64url, jwk
+from . import configuration, http_client, schemas
 
 
 class Client:
     def __init__(self, config: configuration.Config, timeout: float = 1.0) -> None:
-        self._client = http_client.Client(config, timeout)
+        self._config = config
+        self._http = provablyfine_client.HttpSession(requests.Session(), timeout)
+        self._directory = provablyfine_client.Directory(config.directory_url, timeout)
+
+    def _session(self) -> SessionClient:
+        signer = http_client.private_key_signer("session", self._config.session_key)
+        return SessionClient(self._http, self._directory, signer)
+
+    def _public(self) -> PublicClient:
+        return PublicClient(self._http, self._directory)
+
+    # SSH
 
     def list_ssh_hosts(self) -> schemas.SshHostsResponse:
-        http = self._client.session_auth(self._client.config.session_key)
-        response = http.get(f"{http.directory.ssh}/hosts")
-        if response.status_code != 200:
-            raise exceptions.UI(_problem_title(response, "Failed to list SSH hosts"))
-        return schemas.SshHostsResponse.model_validate(response.json())
+        return self._session().list_ssh_hosts()
 
     def get_host_trusted_keys(self) -> str:
-        http = self._client.session_auth(self._client.config.session_key)
-        response = http.get(f"{http.directory.ssh}/host/trusted-keys")
-        if response.status_code != 200:
-            raise exceptions.UI(_problem_title(response, "Failed to get host trusted keys"))
-        return response.content.decode("utf-8")
+        return self._session().get_host_trusted_keys()
 
     def get_user_certificate(
         self,
@@ -43,51 +39,23 @@ class Client:
         public_key: dict[str, typing.Any],
         command: str | None = None,
     ) -> schemas.SshUserCertificateResponse:
-        http = self._client.session_auth(self._client.config.session_key)
-        body: dict[str, typing.Any] = {
-            "public_key": public_key,
-            "hostname": hostname,
-            "username": username,
-            "action": action,
-        }
-        if command is not None:
-            body["command"] = command
-        response = http.post(f"{http.directory.ssh}/user/certificate", json=body)
-        if response.status_code == 403:
-            raise exceptions.Forbidden("User is not authorized to connect to host")
-        elif response.status_code != 200:
-            raise exceptions.UI(_problem_title(response, "Failed to get user certificate"))
-        return schemas.SshUserCertificateResponse.model_validate(response.json())
+        return self._session().get_user_certificate(hostname, username, action, public_key, command)
 
     def get_user_trusted_keys_public(self) -> str:
-        """Get user trusted keys without authentication."""
-        http = self._client.no_auth
-        response = http.get(f"{http.directory.ssh}/user/trusted-keys")
-        if response.status_code != 200:
-            raise exceptions.UI(_problem_title(response, "Failed to get user trusted keys"))
-        return response.text
+        return self._public().get_user_trusted_keys_public()
 
     def sign_host_certificates(self, public_keys: list[dict[str, typing.Any]]) -> schemas.SshHostCertificateResponse:
-        """Sign host certificates."""
-        http = self._client.session_auth(self._client.config.session_key)
-        response = http.post(f"{http.directory.ssh}/host/certificate", json={"public_keys": public_keys})
-        if response.status_code != 200:
-            raise exceptions.UI(_problem_title(response, "Failed to sign host certificates"))
-        return schemas.SshHostCertificateResponse.model_validate(response.json())
+        return self._session().sign_host_certificates(public_keys)
+
+    # Identity / self
 
     def list_self_bastions(self) -> schemas.IdentitySelfBastionListResponse:
-        http = self._client.session_auth(self._client.config.session_key)
-        response = http.get(f"{http.directory.identity}/self/bastions")
-        if response.status_code != 200:
-            raise exceptions.UI(_problem_title(response, "Failed to get bastions"))
-        return schemas.IdentitySelfBastionListResponse.model_validate(response.json())
+        return self._session().list_self_bastions()
 
     def get_self_token(self, service: str) -> schemas.IdentitySelfTokenResponse:
-        http = self._client.session_auth(self._client.config.session_key)
-        response = http.get(f"{http.directory.identity}/self/token", params={"service": service})
-        if response.status_code != 200:
-            raise exceptions.UI(_problem_title(response, "Failed to get token"))
-        return schemas.IdentitySelfTokenResponse.model_validate(response.json())
+        return self._session().get_self_token(service)
+
+    # Tags
 
     def list_tags(
         self,
@@ -95,62 +63,24 @@ class Client:
         name: str | None = None,
         value: str | None = None,
     ) -> schemas.TagsResponse:
-        params: dict[str, int | str] = {}
-        if id is not None:
-            params["id"] = id
-        if name is not None:
-            params["name"] = name
-        if value is not None:
-            params["value"] = value
-
-        http = self._client.session_auth(self._client.config.session_key)
-        response = http.get(http.directory.tag, params=params)
-        if response.status_code != 200:
-            params_str = ",".join("=".join(str(v) for v in kv) for kv in params.items())
-            raise exceptions.UI(f"Unable to find tags {params_str}")
-        return schemas.TagsResponse.model_validate(response.json())
+        return self._session().list_tags(id, name, value)
 
     def create_tag(self, name: str, value: str) -> schemas.Tag:
-        http = self._client.session_auth(self._client.config.session_key)
-        response = http.post(
-            http.directory.tag,
-            json={"name": name, "value": value},
-        )
-        if response.status_code != 201:
-            raise exceptions.UI(_problem_title(response, "Unable to create tag"))
-        return schemas.Tag.model_validate(response.json())
+        return self._session().create_tag(name, value)
 
     def delete_tag(self, id: int) -> None:
-        http = self._client.session_auth(self._client.config.session_key)
-        response = http.delete(f"{http.directory.tag}/{id}")
-        if response.status_code != 204:
-            raise exceptions.UI(_problem_title(response, "Unable to delete tag"))
+        return self._session().delete_tag(id)
+
+    # Tenants
 
     def list_tenants(self, id: int | None = None) -> schemas.TenantsResponse:
-        params: dict[str, int] = {}
-        if id is not None:
-            params["id"] = id
-        http = self._client.session_auth(self._client.config.session_key)
-        response = http.get(http.directory.tenant, params=params)
-        if response.status_code != 200:
-            raise exceptions.UI(_problem_title(response, "Unable to list tenants"))
-        return schemas.TenantsResponse.model_validate(response.json())
+        return self._session().list_tenants(id)
 
     def get_tenant(self, id: int) -> schemas.Tenant:
-        http = self._client.session_auth(self._client.config.session_key)
-        response = http.get(f"{http.directory.tenant}/{id}")
-        if response.status_code == 404:
-            raise exceptions.UI(f"Tenant {id} not found")
-        if response.status_code != 200:
-            raise exceptions.UI(_problem_title(response, "Unable to get tenant"))
-        return schemas.Tenant.model_validate(response.json())
+        return self._session().get_tenant(id)
 
     def create_tenant(self, name: str, display_name: str) -> schemas.Tenant:
-        http = self._client.session_auth(self._client.config.session_key)
-        response = http.post(http.directory.tenant, json={"name": name, "display_name": display_name})
-        if response.status_code != 200:
-            raise exceptions.UI(_problem_title(response, "Unable to create tenant"))
-        return schemas.Tenant.model_validate(response.json())
+        return self._session().create_tenant(name, display_name)
 
     def update_tenant(
         self,
@@ -158,56 +88,21 @@ class Client:
         display_name: str | None = None,
         is_enabled: bool | None = None,
     ) -> None:
-        data: dict[str, str | bool] = {}
-        if display_name is not None:
-            data["display_name"] = display_name
-        if is_enabled is not None:
-            data["is_enabled"] = is_enabled
-        if not data:
-            raise exceptions.UI("Nothing to update")
-        http = self._client.session_auth(self._client.config.session_key)
-        response = http.patch(f"{http.directory.tenant}/{id}", json=data)
-        if response.status_code == 404:
-            raise exceptions.UI(f"Tenant {id} not found")
-        if response.status_code != 204:
-            raise exceptions.UI(_problem_title(response, "Unable to update tenant"))
+        return self._session().update_tenant(id, display_name, is_enabled)
 
     def delete_tenant(self, id: int) -> None:
-        http = self._client.session_auth(self._client.config.session_key)
-        response = http.delete(f"{http.directory.tenant}/{id}")
-        if response.status_code == 404:
-            raise exceptions.UI(f"Tenant {id} not found")
-        if response.status_code != 204:
-            raise exceptions.UI(_problem_title(response, "Unable to delete tenant"))
+        return self._session().delete_tenant(id)
+
+    # Auth configs
 
     def list_auths(self) -> schemas.AuthListResponse:
-        http = self._client.session_auth(self._client.config.session_key)
-        response = http.get(http.directory.auth)
-        if response.status_code != 200:
-            raise exceptions.UI(_problem_title(response, "Unable to list auth configs"))
-        return schemas.AuthListResponse.model_validate(response.json())
+        return self._session().list_auths()
 
     def get_auth(self, id: int) -> schemas.Auth:
-        http = self._client.session_auth(self._client.config.session_key)
-        response = http.get(f"{http.directory.auth}/{id}")
-        if response.status_code == 404:
-            raise exceptions.UI("Auth config not found")
-        if response.status_code != 200:
-            raise exceptions.UI(_problem_title(response, "Unable to read auth config"))
-        return schemas.Auth.model_validate(response.json())
+        return self._session().get_auth(id)
 
     def create_auth_http_sig(self, name: str, description: str, tags: list[dict[str, str]]) -> schemas.Auth:
-        http = self._client.session_auth(self._client.config.session_key)
-        body = {
-            "name": name,
-            "description": description,
-            "config": {"type": "http_sig"},
-            "tags": tags,
-        }
-        response = http.post(http.directory.auth, json=body)
-        if response.status_code != 201:
-            raise exceptions.UI(_problem_title(response, "Unable to create auth config"))
-        return schemas.Auth.model_validate(response.json())
+        return self._session().create_auth_http_sig(name, description, tags)
 
     def create_auth_oidc(
         self,
@@ -218,19 +113,7 @@ class Client:
         client_id: str,
         client_secret: str | None,
     ) -> schemas.Auth:
-        http = self._client.session_auth(self._client.config.session_key)
-        config: dict[str, str] = {
-            "type": "oidc",
-            "issuer": issuer,
-            "client_id": client_id,
-        }
-        if client_secret is not None:
-            config["client_secret"] = client_secret
-        body = {"name": name, "description": description, "config": config, "tags": tags}
-        response = http.post(http.directory.auth, json=body)
-        if response.status_code != 201:
-            raise exceptions.UI(_problem_title(response, "Unable to create auth config"))
-        return schemas.Auth.model_validate(response.json())
+        return self._session().create_auth_oidc(name, description, tags, issuer, client_id, client_secret)
 
     def create_auth_oauth2_github(
         self,
@@ -240,17 +123,7 @@ class Client:
         client_id: str,
         client_secret: str,
     ) -> schemas.Auth:
-        http = self._client.session_auth(self._client.config.session_key)
-        config = {
-            "type": "oauth2-github",
-            "client_id": client_id,
-            "client_secret": client_secret,
-        }
-        body = {"name": name, "description": description, "config": config, "tags": tags}
-        response = http.post(http.directory.auth, json=body)
-        if response.status_code != 201:
-            raise exceptions.UI(_problem_title(response, "Unable to create auth config"))
-        return schemas.Auth.model_validate(response.json())
+        return self._session().create_auth_oauth2_github(name, description, tags, client_id, client_secret)
 
     def update_auth(
         self,
@@ -260,49 +133,18 @@ class Client:
         is_enabled: bool | None = None,
         tags: list[schemas.TagNameValue] | None = None,
     ) -> None:
-        body: dict[str, typing.Any] = {}
-        if name is not None:
-            body["name"] = name
-        if description is not None:
-            body["description"] = description
-        if is_enabled is not None:
-            body["is_enabled"] = is_enabled
-        if tags is not None:
-            body["tags"] = [{"name": t.name, "value": t.value} for t in tags]
-        if not body:
-            raise exceptions.UI("Nothing to update")
-        http = self._client.session_auth(self._client.config.session_key)
-        response = http.patch(f"{http.directory.auth}/{id}", json=body)
-        if response.status_code == 404:
-            raise exceptions.UI("Auth config not found")
-        if response.status_code != 200:
-            raise exceptions.UI(_problem_title(response, "Unable to update auth config"))
+        return self._session().update_auth(id, name, description, is_enabled, tags)
 
     def delete_auth(self, id: int) -> None:
-        http = self._client.session_auth(self._client.config.session_key)
-        response = http.delete(f"{http.directory.auth}/{id}")
-        if response.status_code == 404:
-            raise exceptions.UI("Auth config not found")
-        if response.status_code != 204:
-            raise exceptions.UI(_problem_title(response, "Unable to delete auth config"))
+        return self._session().delete_auth(id)
+
+    # Bastions
 
     def list_bastions(self, id: int | None = None) -> schemas.BastionListResponse:
-        params: dict[str, int] = {}
-        if id is not None:
-            params["id"] = id
-        http = self._client.session_auth(self._client.config.session_key)
-        response = http.get(http.directory.bastion, params=params)
-        if response.status_code != 200:
-            params_str = ",".join(f"{k}={v}" for k, v in params.items())
-            raise exceptions.UI(f"Unable to find bastion {params_str}")
-        return schemas.BastionListResponse.model_validate(response.json())
+        return self._session().list_bastions(id)
 
     def get_bastion(self, id: int) -> schemas.Bastion:
-        result = self.list_bastions(id=id)
-        if len(result.bastions) == 0:
-            raise exceptions.UI("No bastion found")
-        assert len(result.bastions) == 1
-        return result.bastions[0]
+        return self._session().get_bastion(id)
 
     def create_bastion(
         self,
@@ -311,19 +153,7 @@ class Client:
         tag_id_list: list[int],
         tag_name_value_list: list[dict[str, str]],
     ) -> schemas.Bastion:
-        http = self._client.session_auth(self._client.config.session_key)
-        response = http.post(
-            http.directory.bastion,
-            json={
-                "url": url,
-                "ssh_proxy_jump": ssh_proxy_jump,
-                "tag_id_list": tag_id_list,
-                "tag_name_value_list": tag_name_value_list,
-            },
-        )
-        if response.status_code != 201:
-            raise exceptions.UI(_problem_title(response, "Unable to create bastion"))
-        return schemas.Bastion.model_validate(response.json())
+        return self._session().create_bastion(url, ssh_proxy_jump, tag_id_list, tag_name_value_list)
 
     def update_bastion(
         self,
@@ -333,54 +163,21 @@ class Client:
         tag_id_list: list[int] | None = None,
         tag_name_value_list: list[schemas.TagNameValue] | None = None,
     ) -> None:
-        query: dict[str, typing.Any] = {}
-        if url is not None:
-            query["url"] = url
-        if ssh_proxy_jump is not None:
-            query["ssh_proxy_jump"] = ssh_proxy_jump
-        if tag_id_list is not None:
-            query["tag_id_list"] = tag_id_list
-        if tag_name_value_list is not None:
-            query["tag_name_value_list"] = [{"name": t.name, "value": t.value} for t in tag_name_value_list]
-        if not query:
-            raise exceptions.UI("No fields to update")
-        http = self._client.session_auth(self._client.config.session_key)
-        response = http.patch(f"{http.directory.bastion}/{id}", json=query)
-        if response.status_code != 200:
-            raise exceptions.UI(_problem_title(response, "Unable to update bastion"))
+        return self._session().update_bastion(id, url, ssh_proxy_jump, tag_id_list, tag_name_value_list)
 
     def delete_bastion(self, id: int) -> None:
-        http = self._client.session_auth(self._client.config.session_key)
-        response = http.delete(f"{http.directory.bastion}/{id}")
-        if response.status_code != 204:
-            raise exceptions.UI(_problem_title(response, "Unable to delete bastion"))
+        return self._session().delete_bastion(id)
+
+    # Roles
 
     def list_roles(self, id: int | None = None, name: str | None = None) -> schemas.RolesResponse:
-        params: dict[str, int | str] = {}
-        if id is not None:
-            params["id"] = id
-        if name is not None:
-            params["name"] = name
-        http = self._client.session_auth(self._client.config.session_key)
-        response = http.get(http.directory.role, params=params)
-        if response.status_code != 200:
-            params_str = ",".join(f"{k}={v}" for k, v in params.items())
-            raise exceptions.UI(f"Unable to find role {params_str}")
-        return schemas.RolesResponse.model_validate(response.json())
+        return self._session().list_roles(id, name)
 
     def get_role(self, id: int) -> schemas.Role:
-        result = self.list_roles(id=id)
-        if len(result.roles) == 0:
-            raise exceptions.UI("No role found")
-        assert len(result.roles) == 1
-        return result.roles[0]
+        return self._session().get_role(id)
 
     def create_role(self, name: str, description: str) -> schemas.Role:
-        http = self._client.session_auth(self._client.config.session_key)
-        response = http.post(http.directory.role, json={"name": name, "description": description})
-        if response.status_code != 201:
-            raise exceptions.UI(_problem_title(response, "Unable to create role"))
-        return schemas.Role.model_validate(response.json())
+        return self._session().create_role(name, description)
 
     def update_role(
         self,
@@ -390,54 +187,21 @@ class Client:
         grant_list: list[schemas.Grant] | None = None,
         member_list: list[schemas.RoleMemberRef] | None = None,
     ) -> None:
-        body: dict[str, typing.Any] = {}
-        if name is not None:
-            body["name"] = name
-        if description is not None:
-            body["description"] = description
-        if grant_list is not None:
-            body["grant_list"] = [g.model_dump() for g in grant_list]
-        if member_list is not None:
-            body["member_list"] = [m.model_dump(exclude_none=True) for m in member_list]
-        if not body:
-            raise exceptions.UI("Nothing to update")
-        http = self._client.session_auth(self._client.config.session_key)
-        response = http.patch(f"{http.directory.role}/{id}", json=body)
-        if response.status_code != 200:
-            raise exceptions.UI(_problem_title(response, "Unable to update role"))
+        return self._session().update_role(id, name, description, grant_list, member_list)
 
     def delete_role(self, id: int) -> None:
-        http = self._client.session_auth(self._client.config.session_key)
-        response = http.delete(f"{http.directory.role}/{id}")
-        if response.status_code != 204:
-            raise exceptions.UI(_problem_title(response, "Unable to delete role"))
+        return self._session().delete_role(id)
+
+    # Boundaries
 
     def list_boundaries(self, id: int | None = None, name: str | None = None) -> schemas.BoundariesResponse:
-        params: dict[str, int | str] = {}
-        if id is not None:
-            params["id"] = id
-        if name is not None:
-            params["name"] = name
-        http = self._client.session_auth(self._client.config.session_key)
-        response = http.get(http.directory.boundary, params=params)
-        if response.status_code != 200:
-            params_str = ",".join(f"{k}={v}" for k, v in params.items())
-            raise exceptions.UI(f"Unable to find boundary {params_str}")
-        return schemas.BoundariesResponse.model_validate(response.json())
+        return self._session().list_boundaries(id, name)
 
     def get_boundary(self, id: int) -> schemas.Boundary:
-        result = self.list_boundaries(id=id)
-        if len(result.boundaries) == 0:
-            raise exceptions.UI("No boundary found")
-        assert len(result.boundaries) == 1
-        return result.boundaries[0]
+        return self._session().get_boundary(id)
 
     def create_boundary(self, name: str, description: str) -> schemas.Boundary:
-        http = self._client.session_auth(self._client.config.session_key)
-        response = http.post(http.directory.boundary, json={"name": name, "description": description})
-        if response.status_code != 201:
-            raise exceptions.UI(_problem_title(response, "Unable to create boundary"))
-        return schemas.Boundary.model_validate(response.json()["boundary"])
+        return self._session().create_boundary(name, description)
 
     def update_boundary(
         self,
@@ -447,27 +211,12 @@ class Client:
         ceiling_list: list[schemas.Grant] | None = None,
         denied_list: list[schemas.Grant] | None = None,
     ) -> None:
-        body: dict[str, typing.Any] = {}
-        if name is not None:
-            body["name"] = name
-        if description is not None:
-            body["description"] = description
-        if ceiling_list is not None:
-            body["ceiling_list"] = [g.model_dump() for g in ceiling_list]
-        if denied_list is not None:
-            body["denied_list"] = [g.model_dump() for g in denied_list]
-        if not body:
-            raise exceptions.UI("Nothing to update")
-        http = self._client.session_auth(self._client.config.session_key)
-        response = http.patch(f"{http.directory.boundary}/{id}", json=body)
-        if response.status_code != 200:
-            raise exceptions.UI(_problem_title(response, "Unable to update boundary"))
+        return self._session().update_boundary(id, name, description, ceiling_list, denied_list)
 
     def delete_boundary(self, id: int) -> None:
-        http = self._client.session_auth(self._client.config.session_key)
-        response = http.delete(f"{http.directory.boundary}/{id}")
-        if response.status_code != 204:
-            raise exceptions.UI(_problem_title(response, "Unable to delete boundary"))
+        return self._session().delete_boundary(id)
+
+    # Identities
 
     def list_identities(
         self,
@@ -478,32 +227,10 @@ class Client:
         boundary_id: list[str] | None = None,
         boundary_name: list[str] | None = None,
     ) -> schemas.IdentitiesResponse:
-        params: dict[str, typing.Any] = {}
-        if id is not None:
-            params["id"] = id
-        if name is not None:
-            params["name"] = name
-        if tag_id is not None:
-            params["tag_id"] = tag_id
-        if tag_name is not None:
-            params["tag_name"] = tag_name
-        if boundary_id is not None:
-            params["boundary_id"] = boundary_id
-        if boundary_name is not None:
-            params["boundary_name"] = boundary_name
-        http = self._client.session_auth(self._client.config.session_key)
-        response = http.get(http.directory.identity, params=params)
-        if response.status_code != 200:
-            params_str = ",".join(f"{k}={v}" for k, v in params.items())
-            raise exceptions.UI(f"Unable to find identity {params_str}")
-        return schemas.IdentitiesResponse.model_validate(response.json())
+        return self._session().list_identities(id, name, tag_id, tag_name, boundary_id, boundary_name)
 
     def get_identity(self, id: int) -> schemas.Identity:
-        result = self.list_identities(id=id)
-        if len(result.identities) == 0:
-            raise exceptions.UI("No identity found")
-        assert len(result.identities) == 1
-        return result.identities[0]
+        return self._session().get_identity(id)
 
     def create_identity(
         self,
@@ -513,35 +240,15 @@ class Client:
         tag_id_list: list[int],
         tag_name_value_list: list[dict[str, str]],
     ) -> schemas.Identity:
-        http = self._client.session_auth(self._client.config.session_key)
-        response = http.post(
-            http.directory.identity,
-            json={
-                "name": name,
-                "boundary_id_list": boundary_id_list,
-                "boundary_name_list": boundary_name_list,
-                "tag_id_list": tag_id_list,
-                "tag_name_value_list": tag_name_value_list,
-            },
+        return self._session().create_identity(
+            name, boundary_id_list, boundary_name_list, tag_id_list, tag_name_value_list
         )
-        if response.status_code != 201:
-            raise exceptions.UI(_problem_title(response, "Unable to create identity"))
-        return schemas.Identity.model_validate(response.json())
 
     def invite_identity(self, id: int, delivery: str) -> str | None:
-        http = self._client.session_auth(self._client.config.session_key)
-        response = http.post(f"{http.directory.identity}/{id}/invite", json={"delivery": delivery})
-        if response.status_code == 204:
-            return None
-        if response.status_code == 200:
-            return response.json()["key"]["k"]
-        raise exceptions.UI(_problem_title(response, "Unable to invite identity"))
+        return self._session().invite_identity(id, delivery)
 
     def delete_identity(self, id: int) -> None:
-        http = self._client.session_auth(self._client.config.session_key)
-        response = http.delete(f"{http.directory.identity}/{id}")
-        if response.status_code != 204:
-            raise exceptions.UI(_problem_title(response, "Unable to delete identity"))
+        return self._session().delete_identity(id)
 
     def update_identity(
         self,
@@ -549,94 +256,44 @@ class Client:
         name: str | None = None,
         tags: list[schemas.IdentityTagOp] | None = None,
     ) -> None:
-        body: dict[str, typing.Any] = {}
-        if name is not None:
-            body["name"] = name
-        if tags is not None:
-            body["tags"] = [op.model_dump(exclude_none=True) for op in tags]
-        if not body:
-            raise exceptions.UI("Nothing to update")
-        http = self._client.session_auth(self._client.config.session_key)
-        response = http.patch(f"{http.directory.identity}/{id}", json=body)
-        if response.status_code != 200:
-            raise exceptions.UI(_problem_title(response, "Unable to update identity"))
+        return self._session().update_identity(id, name, tags)
+
+    # Auth flow
 
     def initialize(self, key: str) -> None:
-        """POST to initialize endpoint, then accept the returned invitation."""
-        response = self._client.no_auth.post(self._client.directory.initialize)
-        if response.status_code == 204:
-            raise exceptions.UI("Unable to initialize app: it is already initialized.")
-        if response.status_code != 200:
-            raise exceptions.UI(f"Unable to initialize app. Unexpected error: {response.status_code}.")
-        invitation_key = response.json()["key"]["k"]
-        auth = self._client.invitation_auth(account=key, invitation=invitation_key)
-        response = auth.post(
-            url=auth.directory.accept_invitation,
-            json={"account_public_key": auth.account_public_key.to_dict()},
-        )
-        if response.status_code != 204:
-            raise exceptions.UI(f"Unable to accept invitation: {response.text}")
+        signer = http_client.private_key_signer("account", key)
+        self._public().initialize(signer, signer.public_key().to_dict())
 
     def connect(self, invitation: str, key: str) -> None:
-        """Accept an existing invitation."""
-        auth = self._client.invitation_auth(account=key, invitation=invitation)
-        response = auth.post(
-            url=auth.directory.accept_invitation,
-            json={"account_public_key": auth.account_public_key.to_dict()},
+        account_signer = http_client.private_key_signer("account", key)
+        inv_signer = provablyfine_client.HmacSigner("invitation", base64url.decode(invitation))
+        InvitationClient(self._http, self._directory, inv_signer, account_signer).connect(
+            account_signer.public_key().to_dict()
         )
-        if response.status_code != 204:
-            raise exceptions.UI(f"Unable to accept invitation: {response.text}")
 
     def get_public_auth(self, auth_name: str) -> schemas.AuthPublic:
-        """Fetch public auth configuration."""
-        http = self._client.no_auth
-        response = http.get(f"{http.directory.public_auth}/{auth_name}")
-        if response.status_code == 404:
-            raise exceptions.UI(f"Auth config '{auth_name}' not found")
-        if response.status_code != 200:
-            raise exceptions.UI(f"Unable to read auth config: {response.text}")
-        return schemas.AuthPublic.model_validate(response.json())
+        return self._public().get_public_auth(auth_name)
 
     def list_public_auths(self) -> list[schemas.AuthPublicSummary]:
-        """Fetch list of public auth methods."""
-        http = self._client.no_auth
-        response = http.get(http.directory.public_auth)
-        if response.status_code != 200:
-            raise exceptions.UI("Unable to list auth methods")
-        return [schemas.AuthPublicSummary.model_validate(a) for a in response.json().get("auths", [])]
+        return self._public().list_public_auths()
 
     def login_http_sig(self, session_public_key: dict[str, typing.Any], session_fingerprint: str) -> None:
-        """POST to /login endpoint. Caller manages session key and config updates."""
-        auth = self._client.login_auth(account=self._client.config.account_key, session=session_fingerprint)
-        response = auth.post(url=auth.directory.login, json={"session_public_key": session_public_key})
-        if response.status_code != 204:
-            raise exceptions.UI(f"Unable to login successfully: {response.text}")
+        account_signer = http_client.private_key_signer("account", self._config.account_key)
+        session_signer = http_client.private_key_signer("session", session_fingerprint)
+        AccountClient(self._http, self._directory, account_signer, session_signer).login_http_sig(session_public_key)
 
     def login_http_sig_with_keys(self, account: jwk.Private, session: jwk.Private) -> None:
-        """login_http_sig variant for fully in-memory keys (no SSH agent, no file)."""
-        auth = self._client.login_auth_with_keys(account, session)
-        response = auth.post(
-            url=auth.directory.login,
-            json={"session_public_key": session.public().to_dict()},
+        account_signer = http_client.FileSigner("account", account)
+        session_signer = http_client.FileSigner("session", session)
+        AccountClient(self._http, self._directory, account_signer, session_signer).login_http_sig(
+            session.public().to_dict()
         )
-        if response.status_code != 204:
-            raise exceptions.UI(f"Unable to login successfully: {response.text}")
 
     def login_oidc(
         self, auth_name: str, id_token: str, session_public_key: dict[str, typing.Any], session_fingerprint: str
     ) -> None:
-        """POST to /auth/oidc/login endpoint. Caller manages OIDC flow, session key, and config updates."""
-        auth = self._client.session_auth(session=session_fingerprint)
-        response = auth.post(
-            url=auth.directory.login_oidc,
-            json={
-                "auth_name": auth_name,
-                "id_token": id_token,
-                "session_public_key": session_public_key,
-            },
-        )
-        if response.status_code != 204:
-            raise exceptions.UI(f"Unable to login via OIDC: {response.text}")
+        signer = http_client.private_key_signer("session", session_fingerprint)
+        SessionClient(self._http, self._directory, signer).login_oidc(auth_name, id_token, session_public_key)
 
     def login_oauth2_start(
         self,
@@ -645,22 +302,10 @@ class Client:
         session_fingerprint: str,
         client_redirect_uri: str,
     ) -> str:
-        """POST to /auth/oauth2/start and return auth_url.
-
-        Caller manages session key, browser, callback server, and config updates.
-        """
-        auth = self._client.session_auth(session=session_fingerprint)
-        response = auth.post(
-            url=auth.directory.login_oauth2_start,
-            json={
-                "auth_name": auth_name,
-                "session_public_key": session_public_key,
-                "client_redirect_uri": client_redirect_uri,
-            },
+        signer = http_client.private_key_signer("session", session_fingerprint)
+        return SessionClient(self._http, self._directory, signer).login_oauth2_start(
+            auth_name, session_public_key, client_redirect_uri
         )
-        if response.status_code != 200:
-            raise exceptions.UI(f"Unable to start OAuth2 login: {response.text}")
-        return response.json()["auth_url"]
 
     def list_audit_log(
         self,
@@ -670,19 +315,4 @@ class Client:
         start_time: int | None = None,
         end_time: int | None = None,
     ) -> schemas.AuditLogListResponse:
-        params: dict[str, int | str] = {}
-        if level is not None:
-            params["level"] = level
-        if object_type is not None:
-            params["object_type"] = object_type
-        if by_identity_id is not None:
-            params["by_identity_id"] = by_identity_id
-        if start_time is not None:
-            params["start_time"] = start_time
-        if end_time is not None:
-            params["end_time"] = end_time
-        http = self._client.session_auth(self._client.config.session_key)
-        response = http.get(http.directory.audit_log, params=params)
-        if response.status_code != 200:
-            raise exceptions.UI(_problem_title(response, "Unable to list audit log"))
-        return schemas.AuditLogListResponse.model_validate(response.json())
+        return self._session().list_audit_log(level, object_type, by_identity_id, start_time, end_time)

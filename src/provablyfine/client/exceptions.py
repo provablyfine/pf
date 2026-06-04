@@ -1,11 +1,3 @@
-class UI(Exception):
-    pass
+from provablyfine_client.exceptions import UI, Forbidden, KeyExpired
 
-
-class Forbidden(UI):
-    pass
-
-
-class KeyExpired(Exception):
-    def __init__(self, key_type: str):
-        self.key_type = key_type
+__all__ = ["UI", "Forbidden", "KeyExpired"]

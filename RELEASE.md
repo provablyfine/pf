@@ -6,14 +6,15 @@ The release process is fully automated via GitHub Actions. The workflow is trigg
 
 ### Manual steps
 
-1. Bump the version in `pyproject.toml`:
+1. Bump the version in both `pyproject.toml` and `packages/provablyfine-client/pyproject.toml`:
 ```console
 $ uv version --bump minor
+$ uv version --bump minor --project packages/provablyfine-client
 ```
 
 2. Commit the version bump:
 ```console
-$ git add pyproject.toml
+$ git add pyproject.toml packages/provablyfine-client/pyproject.toml
 $ git commit -m "release: $(uv version --short)"
 ```
 

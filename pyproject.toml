@@ -50,6 +50,7 @@ dependencies = [
   "pyjwt>=2.12.1",
   "PyYAML>=6.0",
   "prometheus_client>=0.20.0",
+  "provablyfine-client",
 ]
 
 [project.urls]
@@ -119,7 +120,7 @@ PYTHONUNBUFFERED = "1"
 PF_LOG_LEVEL = "3"
 
 [tool.pyright]
-include = ["src/provablyfine", "tests"]
+include = ["src/provablyfine", "tests", "packages/provablyfine-client/src/provablyfine_client"]
 exclude = [
 "**/node_modules",
 "**/__pycache__",
@@ -141,5 +142,9 @@ select = ["E", "F", "I", "UP", "RUF", "S"]
 [tool.mypy]
 strict = true
 
+[tool.uv.workspace]
+members = ["packages/provablyfine-client"]
+
 [tool.uv.sources]
 mike = { git = "https://github.com/squidfunk/mike.git" }
+provablyfine-client = { workspace = true }
