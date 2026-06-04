@@ -3,6 +3,7 @@ from __future__ import annotations
 import dataclasses
 import typing
 
+import provablyfine_client as pfc
 import textual
 import textual.containers
 import textual.widget
@@ -14,7 +15,7 @@ from .. import auto_complete, checkbox_input
 
 
 class _TripletFilterGrant(typing.Protocol):
-    filter: client.schemas.TripletFilter
+    filter: pfc.schemas.TripletFilter
 
 
 @dataclasses.dataclass
@@ -22,19 +23,19 @@ class Field:
     active: bool
     value: str
 
-    def tag_filter(self) -> list[client.schemas.TagNameValue] | None:
+    def tag_filter(self) -> list[pfc.schemas.TagNameValue] | None:
         if not self.active:
             return None
         return [
-            client.schemas.TagNameValue(name=k, value=v)
+            pfc.schemas.TagNameValue(name=k, value=v)
             for k, v in (s.split("=", 1) for s in self.value.split() if "=" in s)
         ]
 
-    def tag_perm(self) -> list[client.schemas.TagNameValue]:
+    def tag_perm(self) -> list[pfc.schemas.TagNameValue]:
         if not self.active:
             return []
         return [
-            client.schemas.TagNameValue(name=k, value=v)
+            pfc.schemas.TagNameValue(name=k, value=v)
             for k, v in (s.split("=", 1) for s in self.value.split() if "=" in s)
         ]
 
@@ -51,14 +52,14 @@ class Field:
         name = self.value.strip()
         return name if (self.active and name) else None
 
-    def tag_name_value_filter(self) -> client.schemas.TagNameValue | None:
+    def tag_name_value_filter(self) -> pfc.schemas.TagNameValue | None:
         if not self.active:
             return None
         items = [s.split("=", 1) for s in self.value.split() if "=" in s]
         if not items:
             return None
         k, v = items[0]
-        return client.schemas.TagNameValue(name=k, value=v)
+        return pfc.schemas.TagNameValue(name=k, value=v)
 
     def int_filter(self) -> int | None:
         if not self.active:
@@ -67,7 +68,7 @@ class Field:
         return int(s) if s.isdigit() else None
 
     @classmethod
-    def from_tag_list(cls, tag_list: list[client.schemas.TagNameValue] | None) -> Field:
+    def from_tag_list(cls, tag_list: list[pfc.schemas.TagNameValue] | None) -> Field:
         return cls(
             active=tag_list is not None,
             value=" ".join(f"{t.name}={t.value}" for t in (tag_list or [])),
@@ -88,31 +89,31 @@ class Field:
         )
 
 
-def new_grant(grant_type: str) -> client.schemas.Grant:
+def new_grant(grant_type: str) -> pfc.schemas.Grant:
     match grant_type:
         case "role":
-            return client.schemas.RoleGrant(
+            return pfc.schemas.RoleGrant(
                 type="role",
-                filter=client.schemas.RoleFilter(name=None),
-                permission=client.schemas.RolePermission(
+                filter=pfc.schemas.RoleFilter(name=None),
+                permission=pfc.schemas.RolePermission(
                     create=False,
                     read=False,
-                    update=client.schemas.RoleUpdatePermission(
+                    update=pfc.schemas.RoleUpdatePermission(
                         name=False, description=False, grant_list=False, member_list=False
                     ),
                     delete=False,
                 ),
             )
         case "identity":
-            return client.schemas.IdentityGrant(
+            return pfc.schemas.IdentityGrant(
                 type="identity",
-                filter=client.schemas.TripletFilter(name=None, tag_list=None, boundary_list=None),
-                permission=client.schemas.IdentityPermission(
-                    create=client.schemas.IdentityCreatePermission(
+                filter=pfc.schemas.TripletFilter(name=None, tag_list=None, boundary_list=None),
+                permission=pfc.schemas.IdentityPermission(
+                    create=pfc.schemas.IdentityCreatePermission(
                         allowed=False, allowed_tag_list=[], required_boundary_list=None
                     ),
                     read=False,
-                    update=client.schemas.IdentityUpdatePermission(name=False),
+                    update=pfc.schemas.IdentityUpdatePermission(name=False),
                     delete=False,
                     add_tag_list=None,
                     del_tag_list=None,
@@ -120,63 +121,63 @@ def new_grant(grant_type: str) -> client.schemas.Grant:
                 ),
             )
         case "tag":
-            return client.schemas.TagGrant(
+            return pfc.schemas.TagGrant(
                 type="tag",
-                filter=client.schemas.TagFilter(name_value=None),
-                permission=client.schemas.TagPermission(create=False, read=False, delete=False),
+                filter=pfc.schemas.TagFilter(name_value=None),
+                permission=pfc.schemas.TagPermission(create=False, read=False, delete=False),
             )
         case "boundary":
-            return client.schemas.BoundaryGrant(
+            return pfc.schemas.BoundaryGrant(
                 type="boundary",
-                filter=client.schemas.BoundaryFilter(name=None),
-                permission=client.schemas.BoundaryPermission(
+                filter=pfc.schemas.BoundaryFilter(name=None),
+                permission=pfc.schemas.BoundaryPermission(
                     create=False,
                     read=False,
-                    update=client.schemas.BoundaryUpdatePermission(
+                    update=pfc.schemas.BoundaryUpdatePermission(
                         name=False, description=False, ceiling_list=False, denied_list=False
                     ),
                     delete=False,
                 ),
             )
         case "tenant":
-            return client.schemas.TenantGrant(
+            return pfc.schemas.TenantGrant(
                 type="tenant",
-                filter=client.schemas.TenantFilter(id=None),
-                permission=client.schemas.TenantPermission(
+                filter=pfc.schemas.TenantFilter(id=None),
+                permission=pfc.schemas.TenantPermission(
                     create=False,
                     read=False,
-                    update=client.schemas.TenantUpdatePermission(display_name=False, is_enabled=False),
+                    update=pfc.schemas.TenantUpdatePermission(display_name=False, is_enabled=False),
                     delete=False,
                 ),
             )
         case "ssh-shell":
-            return client.schemas.SSHShellGrant(
+            return pfc.schemas.SSHShellGrant(
                 type="ssh-shell",
-                filter=client.schemas.TripletFilter(name=None, tag_list=None, boundary_list=None),
-                permission=client.schemas.SSHShellPermission(
+                filter=pfc.schemas.TripletFilter(name=None, tag_list=None, boundary_list=None),
+                permission=pfc.schemas.SSHShellPermission(
                     username_list=[],
                     permit_agent_forwarding=False,
                     permit_x11_forwarding=False,
                 ),
             )
         case "ssh-port-forwarding":
-            return client.schemas.SSHPortForwardingGrant(
+            return pfc.schemas.SSHPortForwardingGrant(
                 type="ssh-port-forwarding",
-                filter=client.schemas.TripletFilter(name=None, tag_list=None, boundary_list=None),
-                permission=client.schemas.SSHPortForwardingPermission(username_list=[]),
+                filter=pfc.schemas.TripletFilter(name=None, tag_list=None, boundary_list=None),
+                permission=pfc.schemas.SSHPortForwardingPermission(username_list=[]),
             )
         case "ssh-command":
-            return client.schemas.SSHCommandGrant(
+            return pfc.schemas.SSHCommandGrant(
                 type="ssh-command",
-                filter=client.schemas.TripletFilter(name=None, tag_list=None, boundary_list=None),
-                permission=client.schemas.SSHCommandPermission(username_list=[], command_list=[]),
+                filter=pfc.schemas.TripletFilter(name=None, tag_list=None, boundary_list=None),
+                permission=pfc.schemas.SSHCommandPermission(username_list=[], command_list=[]),
             )
         case _:
-            return client.schemas.InvalidGrant(type="invalid")
+            return pfc.schemas.InvalidGrant(type="invalid")
 
 
 class GrantEditWidget(textual.widget.Widget):
-    def get_grant_data(self) -> client.schemas.Grant:
+    def get_grant_data(self) -> pfc.schemas.Grant:
         raise NotImplementedError
 
     def _read_field(self, widget_id: str) -> Field:
@@ -233,8 +234,8 @@ class TripletFilterGrantEditWidget[T: _TripletFilterGrant](GrantEditWidget):
         boundaries = [textual_autocomplete.DropdownItem(main=b.name) for b in boundaries_raw]
         self.query_one("#filter-bounded-by", checkbox_input.CheckboxInput).set_candidates(boundaries)
 
-    def _filter_data(self) -> client.schemas.TripletFilter:
-        return client.schemas.TripletFilter(
+    def _filter_data(self) -> pfc.schemas.TripletFilter:
+        return pfc.schemas.TripletFilter(
             name=self._read_field("#filter-name").name_filter(),
             tag_list=self._read_field("#filter-tagged-by").tag_filter(),
             boundary_list=self._read_field("#filter-bounded-by").boundary_filter(),

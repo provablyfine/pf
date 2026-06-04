@@ -1,3 +1,4 @@
+import provablyfine_client as pfc
 import textual
 import textual.app
 import textual.containers
@@ -20,7 +21,7 @@ class TagGrantEditWidget(base.GrantEditWidget):
     }
     """
 
-    def __init__(self, auth: client.aio.Client, grant: client.schemas.TagGrant):
+    def __init__(self, auth: client.aio.Client, grant: pfc.schemas.TagGrant):
         super().__init__()
         self._auth = auth
         self._grant = grant
@@ -53,12 +54,12 @@ class TagGrantEditWidget(base.GrantEditWidget):
         candidates = [textual_autocomplete.DropdownItem(main=f"{t.name}={t.value}") for t in tags_raw]
         self.query_one("#filter-name-value", checkbox_input.CheckboxInput).set_candidates(candidates)
 
-    def get_grant_data(self) -> client.schemas.TagGrant:
+    def get_grant_data(self) -> pfc.schemas.TagGrant:
         selected = set(self.query_one(PermissionSelectionList).selected)
-        return client.schemas.TagGrant(
+        return pfc.schemas.TagGrant(
             type="tag",
-            filter=client.schemas.TagFilter(name_value=self._read_field("#filter-name-value").tag_name_value_filter()),
-            permission=client.schemas.TagPermission(
+            filter=pfc.schemas.TagFilter(name_value=self._read_field("#filter-name-value").tag_name_value_filter()),
+            permission=pfc.schemas.TagPermission(
                 create="create" in selected,
                 read="read" in selected,
                 delete="delete" in selected,

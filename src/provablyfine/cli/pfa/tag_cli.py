@@ -1,21 +1,21 @@
 import argparse
 import json
 
-import tabulate
 import provablyfine_client as pfc
+import tabulate
 
 from ... import client
 
 
-def _sort_by_id(t: client.schemas.Tag) -> int:
+def _sort_by_id(t: pfc.schemas.Tag) -> int:
     return t.id
 
 
-def _sort_by_name(t: client.schemas.Tag) -> tuple[str, str, int]:
+def _sort_by_name(t: pfc.schemas.Tag) -> tuple[str, str, int]:
     return (t.name, t.value, t.id)
 
 
-def _sort_by_value(t: client.schemas.Tag) -> tuple[str, str, int]:
+def _sort_by_value(t: pfc.schemas.Tag) -> tuple[str, str, int]:
     return (t.value, t.name, t.id)
 
 

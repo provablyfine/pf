@@ -6,7 +6,7 @@ import provablyfine_client as pfc
 import requests
 
 from .. import base64url, jwk
-from . import configuration, http_client, schemas
+from . import configuration, http_client
 
 
 class Client:
@@ -24,7 +24,7 @@ class Client:
 
     # SSH
 
-    def list_ssh_hosts(self) -> schemas.SshHostsResponse:
+    def list_ssh_hosts(self) -> pfc.schemas.SshHostsResponse:
         return self._session().list_ssh_hosts()
 
     def get_host_trusted_keys(self) -> str:
@@ -37,21 +37,23 @@ class Client:
         action: str,
         public_key: dict[str, typing.Any],
         command: str | None = None,
-    ) -> schemas.SshUserCertificateResponse:
+    ) -> pfc.schemas.SshUserCertificateResponse:
         return self._session().get_user_certificate(hostname, username, action, public_key, command)
 
     def get_user_trusted_keys_public(self) -> str:
         return self._public().get_user_trusted_keys_public()
 
-    def sign_host_certificates(self, public_keys: list[dict[str, typing.Any]]) -> schemas.SshHostCertificateResponse:
+    def sign_host_certificates(
+        self, public_keys: list[dict[str, typing.Any]]
+    ) -> pfc.schemas.SshHostCertificateResponse:
         return self._session().sign_host_certificates(public_keys)
 
     # Identity / self
 
-    def list_self_bastions(self) -> schemas.IdentitySelfBastionListResponse:
+    def list_self_bastions(self) -> pfc.schemas.IdentitySelfBastionListResponse:
         return self._session().list_self_bastions()
 
-    def get_self_token(self, service: str) -> schemas.IdentitySelfTokenResponse:
+    def get_self_token(self, service: str) -> pfc.schemas.IdentitySelfTokenResponse:
         return self._session().get_self_token(service)
 
     # Tags
@@ -61,10 +63,10 @@ class Client:
         id: int | None = None,
         name: str | None = None,
         value: str | None = None,
-    ) -> schemas.TagsResponse:
+    ) -> pfc.schemas.TagsResponse:
         return self._session().list_tags(id, name, value)
 
-    def create_tag(self, name: str, value: str) -> schemas.Tag:
+    def create_tag(self, name: str, value: str) -> pfc.schemas.Tag:
         return self._session().create_tag(name, value)
 
     def delete_tag(self, id: int) -> None:
@@ -72,13 +74,13 @@ class Client:
 
     # Tenants
 
-    def list_tenants(self, id: int | None = None) -> schemas.TenantsResponse:
+    def list_tenants(self, id: int | None = None) -> pfc.schemas.TenantsResponse:
         return self._session().list_tenants(id)
 
-    def get_tenant(self, id: int) -> schemas.Tenant:
+    def get_tenant(self, id: int) -> pfc.schemas.Tenant:
         return self._session().get_tenant(id)
 
-    def create_tenant(self, name: str, display_name: str) -> schemas.Tenant:
+    def create_tenant(self, name: str, display_name: str) -> pfc.schemas.Tenant:
         return self._session().create_tenant(name, display_name)
 
     def update_tenant(
@@ -94,13 +96,13 @@ class Client:
 
     # Auth configs
 
-    def list_auths(self) -> schemas.AuthListResponse:
+    def list_auths(self) -> pfc.schemas.AuthListResponse:
         return self._session().list_auths()
 
-    def get_auth(self, id: int) -> schemas.Auth:
+    def get_auth(self, id: int) -> pfc.schemas.Auth:
         return self._session().get_auth(id)
 
-    def create_auth_http_sig(self, name: str, description: str, tags: list[dict[str, str]]) -> schemas.Auth:
+    def create_auth_http_sig(self, name: str, description: str, tags: list[dict[str, str]]) -> pfc.schemas.Auth:
         return self._session().create_auth_http_sig(name, description, tags)
 
     def create_auth_oidc(
@@ -111,7 +113,7 @@ class Client:
         issuer: str,
         client_id: str,
         client_secret: str | None,
-    ) -> schemas.Auth:
+    ) -> pfc.schemas.Auth:
         return self._session().create_auth_oidc(name, description, tags, issuer, client_id, client_secret)
 
     def create_auth_oauth2_github(
@@ -121,7 +123,7 @@ class Client:
         tags: list[dict[str, str]],
         client_id: str,
         client_secret: str,
-    ) -> schemas.Auth:
+    ) -> pfc.schemas.Auth:
         return self._session().create_auth_oauth2_github(name, description, tags, client_id, client_secret)
 
     def update_auth(
@@ -130,7 +132,7 @@ class Client:
         name: str | None = None,
         description: str | None = None,
         is_enabled: bool | None = None,
-        tags: list[schemas.TagNameValue] | None = None,
+        tags: list[pfc.schemas.TagNameValue] | None = None,
     ) -> None:
         return self._session().update_auth(id, name, description, is_enabled, tags)
 
@@ -139,10 +141,10 @@ class Client:
 
     # Bastions
 
-    def list_bastions(self, id: int | None = None) -> schemas.BastionListResponse:
+    def list_bastions(self, id: int | None = None) -> pfc.schemas.BastionListResponse:
         return self._session().list_bastions(id)
 
-    def get_bastion(self, id: int) -> schemas.Bastion:
+    def get_bastion(self, id: int) -> pfc.schemas.Bastion:
         return self._session().get_bastion(id)
 
     def create_bastion(
@@ -151,7 +153,7 @@ class Client:
         ssh_proxy_jump: str | None,
         tag_id_list: list[int],
         tag_name_value_list: list[dict[str, str]],
-    ) -> schemas.Bastion:
+    ) -> pfc.schemas.Bastion:
         return self._session().create_bastion(url, ssh_proxy_jump, tag_id_list, tag_name_value_list)
 
     def update_bastion(
@@ -160,7 +162,7 @@ class Client:
         url: str | None = None,
         ssh_proxy_jump: str | None = None,
         tag_id_list: list[int] | None = None,
-        tag_name_value_list: list[schemas.TagNameValue] | None = None,
+        tag_name_value_list: list[pfc.schemas.TagNameValue] | None = None,
     ) -> None:
         return self._session().update_bastion(id, url, ssh_proxy_jump, tag_id_list, tag_name_value_list)
 
@@ -169,13 +171,13 @@ class Client:
 
     # Roles
 
-    def list_roles(self, id: int | None = None, name: str | None = None) -> schemas.RolesResponse:
+    def list_roles(self, id: int | None = None, name: str | None = None) -> pfc.schemas.RolesResponse:
         return self._session().list_roles(id, name)
 
-    def get_role(self, id: int) -> schemas.Role:
+    def get_role(self, id: int) -> pfc.schemas.Role:
         return self._session().get_role(id)
 
-    def create_role(self, name: str, description: str) -> schemas.Role:
+    def create_role(self, name: str, description: str) -> pfc.schemas.Role:
         return self._session().create_role(name, description)
 
     def update_role(
@@ -183,8 +185,8 @@ class Client:
         id: int,
         name: str | None = None,
         description: str | None = None,
-        grant_list: list[schemas.Grant] | None = None,
-        member_list: list[schemas.RoleMemberRef] | None = None,
+        grant_list: list[pfc.schemas.Grant] | None = None,
+        member_list: list[pfc.schemas.RoleMemberRef] | None = None,
     ) -> None:
         return self._session().update_role(id, name, description, grant_list, member_list)
 
@@ -193,13 +195,13 @@ class Client:
 
     # Boundaries
 
-    def list_boundaries(self, id: int | None = None, name: str | None = None) -> schemas.BoundariesResponse:
+    def list_boundaries(self, id: int | None = None, name: str | None = None) -> pfc.schemas.BoundariesResponse:
         return self._session().list_boundaries(id, name)
 
-    def get_boundary(self, id: int) -> schemas.Boundary:
+    def get_boundary(self, id: int) -> pfc.schemas.Boundary:
         return self._session().get_boundary(id)
 
-    def create_boundary(self, name: str, description: str) -> schemas.Boundary:
+    def create_boundary(self, name: str, description: str) -> pfc.schemas.Boundary:
         return self._session().create_boundary(name, description)
 
     def update_boundary(
@@ -207,8 +209,8 @@ class Client:
         id: int,
         name: str | None = None,
         description: str | None = None,
-        ceiling_list: list[schemas.Grant] | None = None,
-        denied_list: list[schemas.Grant] | None = None,
+        ceiling_list: list[pfc.schemas.Grant] | None = None,
+        denied_list: list[pfc.schemas.Grant] | None = None,
     ) -> None:
         return self._session().update_boundary(id, name, description, ceiling_list, denied_list)
 
@@ -225,10 +227,10 @@ class Client:
         tag_name: list[str] | None = None,
         boundary_id: list[str] | None = None,
         boundary_name: list[str] | None = None,
-    ) -> schemas.IdentitiesResponse:
+    ) -> pfc.schemas.IdentitiesResponse:
         return self._session().list_identities(id, name, tag_id, tag_name, boundary_id, boundary_name)
 
-    def get_identity(self, id: int) -> schemas.Identity:
+    def get_identity(self, id: int) -> pfc.schemas.Identity:
         return self._session().get_identity(id)
 
     def create_identity(
@@ -238,7 +240,7 @@ class Client:
         boundary_name_list: list[str],
         tag_id_list: list[int],
         tag_name_value_list: list[dict[str, str]],
-    ) -> schemas.Identity:
+    ) -> pfc.schemas.Identity:
         return self._session().create_identity(
             name, boundary_id_list, boundary_name_list, tag_id_list, tag_name_value_list
         )
@@ -253,7 +255,7 @@ class Client:
         self,
         id: int,
         name: str | None = None,
-        tags: list[schemas.IdentityTagOp] | None = None,
+        tags: list[pfc.schemas.IdentityTagOp] | None = None,
     ) -> None:
         return self._session().update_identity(id, name, tags)
 
@@ -270,16 +272,18 @@ class Client:
             account_signer.public_key().to_dict()
         )
 
-    def get_public_auth(self, auth_name: str) -> schemas.AuthPublic:
+    def get_public_auth(self, auth_name: str) -> pfc.schemas.AuthPublic:
         return self._public().get_public_auth(auth_name)
 
-    def list_public_auths(self) -> list[schemas.AuthPublicSummary]:
+    def list_public_auths(self) -> list[pfc.schemas.AuthPublicSummary]:
         return self._public().list_public_auths()
 
     def login_http_sig(self, session_public_key: dict[str, typing.Any], session_fingerprint: str) -> None:
         account_signer = http_client.private_key_signer("account", self._config.account_key)
         session_signer = http_client.private_key_signer("session", session_fingerprint)
-        pfc.AccountClient(self._http, self._directory, account_signer, session_signer).login_http_sig(session_public_key)
+        pfc.AccountClient(self._http, self._directory, account_signer, session_signer).login_http_sig(
+            session_public_key
+        )
 
     def login_http_sig_with_keys(self, account: jwk.Private, session: jwk.Private) -> None:
         account_signer = http_client.FileSigner("account", account)
@@ -313,5 +317,5 @@ class Client:
         by_identity_id: str | None = None,
         start_time: int | None = None,
         end_time: int | None = None,
-    ) -> schemas.AuditLogListResponse:
+    ) -> pfc.schemas.AuditLogListResponse:
         return self._session().list_audit_log(level, object_type, by_identity_id, start_time, end_time)

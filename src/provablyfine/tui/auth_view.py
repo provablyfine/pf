@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import typing
 
+import provablyfine_client as pfc
 import textual
 import textual.app
 import textual.containers
@@ -12,14 +13,12 @@ from .. import client
 from . import auto_complete, base, header
 
 
-def _tags_to_str(tags: list[client.schemas.TagNameValue]) -> str:
+def _tags_to_str(tags: list[pfc.schemas.TagNameValue]) -> str:
     return " ".join(f"{t.name}={t.value}" for t in tags)
 
 
-def _str_to_tags(value: str) -> list[client.schemas.TagNameValue]:
-    return [
-        client.schemas.TagNameValue(name=k, value=v) for k, v in (s.split("=", 1) for s in value.split() if "=" in s)
-    ]
+def _str_to_tags(value: str) -> list[pfc.schemas.TagNameValue]:
+    return [pfc.schemas.TagNameValue(name=k, value=v) for k, v in (s.split("=", 1) for s in value.split() if "=" in s)]
 
 
 class AuthViewScreen(base.Screen):
@@ -37,7 +36,7 @@ class AuthViewScreen(base.Screen):
     }
     """
 
-    def __init__(self, auth: client.aio.Client, a: client.schemas.Auth) -> None:
+    def __init__(self, auth: client.aio.Client, a: pfc.schemas.Auth) -> None:
         super().__init__()
         self._auth = auth
         self._a = a
@@ -61,7 +60,7 @@ class AuthViewScreen(base.Screen):
             with textual.containers.HorizontalGroup(classes="field") as c:
                 c.border_title = "Tags"
                 yield textual.widgets.Input(self._saved_tags_str, placeholder="name=value ...", id="tags", compact=True)
-            if isinstance(self._a.config, client.schemas.OidcConfig):
+            if isinstance(self._a.config, pfc.schemas.OidcConfig):
                 with textual.containers.HorizontalGroup(classes="field") as c:
                     c.border_title = "Issuer"
                     yield textual.widgets.Input(self._a.config.issuer, id="issuer", compact=True, disabled=True)
@@ -73,7 +72,7 @@ class AuthViewScreen(base.Screen):
                     yield textual.widgets.Input(
                         "", placeholder="unchanged", id="client_secret", compact=True, password=True, disabled=True
                     )
-            elif isinstance(self._a.config, client.schemas.OAuth2Config):
+            elif isinstance(self._a.config, pfc.schemas.OAuth2Config):
                 with textual.containers.HorizontalGroup(classes="field") as c:
                     c.border_title = "Authorization endpoint"
                     yield textual.widgets.Label(self._a.config.authorization_endpoint)

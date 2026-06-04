@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import typing
 
+import provablyfine_client as pfc
 import textual
 import textual.app
 import textual.containers
@@ -76,7 +77,7 @@ class GrantListScreen(base.Screen):
     def __init__(
         self,
         auth: client.aio.Client,
-        grant_list: list[client.schemas.Grant],
+        grant_list: list[pfc.schemas.Grant],
         sub_title: str,
         role_id: int,
     ) -> None:

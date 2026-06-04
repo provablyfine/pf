@@ -2,17 +2,18 @@ import argparse
 import json
 import typing
 
+import provablyfine_client as pfc
 import tabulate
 
 from ... import client
 from .. import grant, yaml_utils
 
 
-def _sort_by_id(t: client.schemas.Role) -> int:
+def _sort_by_id(t: pfc.schemas.Role) -> int:
     return t.id
 
 
-def _sort_by_name(t: client.schemas.Role) -> tuple[str, int]:
+def _sort_by_name(t: pfc.schemas.Role) -> tuple[str, int]:
     return (t.name, t.id)
 
 
@@ -101,11 +102,11 @@ def _role_grant_function(args: argparse.Namespace, action: str, grant: dict[str,
 
     match action:
         case "add":
-            grant_list = [*role.grant_list, client.schemas.validate_grant(grant)]
+            grant_list = [*role.grant_list, pfc.schemas.validate_grant(grant)]
         case "del":
             grant_list = [g for g in role.grant_list if g.model_dump() != grant]
         case "set":
-            grant_list = [client.schemas.validate_grant(g) for g in grant]
+            grant_list = [pfc.schemas.validate_grant(g) for g in grant]
         case _:
             assert False
 
@@ -113,13 +114,13 @@ def _role_grant_function(args: argparse.Namespace, action: str, grant: dict[str,
 
 
 def _role_member_function(args: argparse.Namespace) -> None:
-    def to_ref(member: str) -> client.schemas.RoleMemberRef:
+    def to_ref(member: str) -> pfc.schemas.RoleMemberRef:
         if member.isdigit():
-            return client.schemas.RoleMemberRef(id=int(member))
+            return pfc.schemas.RoleMemberRef(id=int(member))
         else:
-            return client.schemas.RoleMemberRef(name=member)
+            return pfc.schemas.RoleMemberRef(name=member)
 
-    def is_equal(a: client.schemas.RoleMemberRef, b: client.schemas.RoleMemberRef) -> bool:
+    def is_equal(a: pfc.schemas.RoleMemberRef, b: pfc.schemas.RoleMemberRef) -> bool:
         if a.id is not None and b.id is not None and a.id == b.id:
             return True
         if a.name is not None and b.name is not None and a.name == b.name:
@@ -129,8 +130,8 @@ def _role_member_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     sc = client.sync.Client(c, timeout=args.timeout)
     role = sc.get_role(args.id)
-    member_list: list[client.schemas.RoleMemberRef] = [
-        client.schemas.RoleMemberRef(id=m.id, name=m.name) for m in role.member_list
+    member_list: list[pfc.schemas.RoleMemberRef] = [
+        pfc.schemas.RoleMemberRef(id=m.id, name=m.name) for m in role.member_list
     ]
 
     for added in args.add:

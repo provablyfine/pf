@@ -1,5 +1,6 @@
 import typing
 
+import provablyfine_client as pfc
 import textual
 import textual.app
 import textual.containers
@@ -67,7 +68,7 @@ class BastionListScreen(base.Screen):
     def __init__(self, auth: client.aio.Client) -> None:
         super().__init__()
         self._auth = auth
-        self._bastions: list[client.schemas.Bastion] = []
+        self._bastions: list[pfc.schemas.Bastion] = []
 
     def compose(self) -> textual.app.ComposeResult:
         yield header.AppHeader()

@@ -2,6 +2,7 @@ import argparse
 import json
 import typing
 
+import provablyfine_client as pfc
 import tabulate
 
 from ... import client
@@ -87,13 +88,13 @@ def _auth_read_function(args: argparse.Namespace) -> None:
                 ["created_at", a.created_at],
                 ["tags", " ".join(f"{t.name}={t.value}" for t in a.tags)],
             ]
-            if isinstance(a.config, client.schemas.OidcConfig):
+            if isinstance(a.config, pfc.schemas.OidcConfig):
                 rows.append(["issuer", a.config.issuer])
                 rows.append(["client_id", a.config.client_id])
                 rows.append(["callback_url", a.config.callback_url])
                 if a.config.client_secret:
                     rows.append(["client_secret", a.config.client_secret])
-            elif isinstance(a.config, client.schemas.OAuth2Config):
+            elif isinstance(a.config, pfc.schemas.OAuth2Config):
                 rows.append(["authorization_endpoint", a.config.authorization_endpoint])
                 rows.append(["client_id", a.config.client_id])
                 rows.append(["callback_url", a.config.callback_url])

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+import provablyfine_client as pfc
 import textual.app
 import textual.screen
 import textual.widget
 import textual.worker
-import provablyfine_client as pfc
 
 
 class App(textual.app.App[None]):

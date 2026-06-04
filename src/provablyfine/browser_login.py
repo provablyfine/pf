@@ -34,7 +34,7 @@ def generate_session_key() -> tuple[jwk.Private, str]:
     return session_key, session_key.public().ssh_fingerprint()
 
 
-def oidc_flow(oidc_config: client.schemas.OidcConfig) -> str:
+def oidc_flow(oidc_config: pfc.schemas.OidcConfig) -> str:
     """Run OIDC browser flow. Returns id_token. Caller opens browser message if desired."""
     discovery_resp = requests.get(f"{oidc_config.issuer}/.well-known/openid-configuration", timeout=10)
     if discovery_resp.status_code != 200:

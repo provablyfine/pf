@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import typing
 
+import provablyfine_client as pfc
 import textual
 import textual.app
 import textual.containers
@@ -39,16 +40,16 @@ class RoleViewScreen(base.Screen):
     }
     """
 
-    def __init__(self, auth: client.aio.Client, role: client.schemas.Role) -> None:
+    def __init__(self, auth: client.aio.Client, role: pfc.schemas.Role) -> None:
         super().__init__()
         self._auth = auth
         self._role = role
         self._member_names: list[str] = [m.name for m in role.member_list]
-        self._grant_list: list[client.schemas.Grant] = list(role.grant_list)
+        self._grant_list: list[pfc.schemas.Grant] = list(role.grant_list)
         self._saved_name: str = role.name
         self._saved_description: str = role.description
         self._saved_member_names: set[str] = {m.name for m in role.member_list}
-        self._saved_grant_list: list[client.schemas.Grant] = list(role.grant_list)
+        self._saved_grant_list: list[pfc.schemas.Grant] = list(role.grant_list)
 
     def compose(self) -> textual.app.ComposeResult:
         yield header.AppHeader()
@@ -183,7 +184,7 @@ class RoleViewScreen(base.Screen):
             name=name if name_changed else None,
             description=description if description_changed else None,
             grant_list=self._grant_list if grants_changed else None,
-            member_list=[client.schemas.RoleMemberRef(name=name) for name in self._member_names]
+            member_list=[pfc.schemas.RoleMemberRef(name=name) for name in self._member_names]
             if members_changed
             else None,
         )

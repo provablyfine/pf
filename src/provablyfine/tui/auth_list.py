@@ -1,6 +1,7 @@
 import dataclasses
 import typing
 
+import provablyfine_client as pfc
 import textual
 import textual.app
 import textual.containers
@@ -149,7 +150,7 @@ class AuthListScreen(base.Screen):
     def __init__(self, auth: client.aio.Client) -> None:
         super().__init__()
         self._auth = auth
-        self._auths: list[client.schemas.Auth] = []
+        self._auths: list[pfc.schemas.Auth] = []
 
     def compose(self) -> textual.app.ComposeResult:
         yield header.AppHeader()

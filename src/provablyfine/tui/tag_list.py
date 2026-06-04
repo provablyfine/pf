@@ -1,5 +1,6 @@
 import typing
 
+import provablyfine_client as pfc
 import textual
 import textual.app
 import textual.containers
@@ -10,7 +11,7 @@ from .. import client
 from . import base, header
 
 
-class _TagCreateScreen(textual.screen.ModalScreen[client.schemas.TagNameValue | None]):
+class _TagCreateScreen(textual.screen.ModalScreen[pfc.schemas.TagNameValue | None]):
     DEFAULT_CSS = """
     _TagCreateScreen {
         align: center middle;
@@ -40,7 +41,7 @@ class _TagCreateScreen(textual.screen.ModalScreen[client.schemas.TagNameValue | 
         value = self.query_one("#value", textual.widgets.Input).value.strip()
         if not name or not value:
             return
-        self.dismiss(client.schemas.TagNameValue(name=name, value=value))
+        self.dismiss(pfc.schemas.TagNameValue(name=name, value=value))
 
 
 class TagListScreen(base.Screen):
@@ -53,7 +54,7 @@ class TagListScreen(base.Screen):
     def __init__(self, auth: client.aio.Client) -> None:
         super().__init__()
         self._auth = auth
-        self._tags: list[client.schemas.Tag] = []
+        self._tags: list[pfc.schemas.Tag] = []
 
     def compose(self) -> textual.app.ComposeResult:
         yield header.AppHeader()

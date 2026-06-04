@@ -2,8 +2,8 @@ import argparse
 import json
 import typing
 
-import tabulate
 import provablyfine_client as pfc
+import tabulate
 
 from ... import client
 
@@ -17,14 +17,14 @@ def _parse_tag(s: str) -> dict[str, str]:
     return {"name": name, "value": value}
 
 
-def _format_tag_op(op: str, values: list[str]) -> list[client.schemas.IdentityTagOp]:
+def _format_tag_op(op: str, values: list[str]) -> list[pfc.schemas.IdentityTagOp]:
     tag_id_list = [int(t) for t in values if t.isdigit()]
-    tag_name_value_list = [client.schemas.TagNameValue(**_parse_tag(t)) for t in values if not t.isdigit()]
-    output: list[client.schemas.IdentityTagOp] = []
+    tag_name_value_list = [pfc.schemas.TagNameValue(**_parse_tag(t)) for t in values if not t.isdigit()]
+    output: list[pfc.schemas.IdentityTagOp] = []
     if tag_id_list:
-        output.append(client.schemas.IdentityTagOp(type=op, tag_id_list=tag_id_list))
+        output.append(pfc.schemas.IdentityTagOp(type=op, tag_id_list=tag_id_list))
     if tag_name_value_list:
-        output.append(client.schemas.IdentityTagOp(type=op, tag_name_value_list=tag_name_value_list))
+        output.append(pfc.schemas.IdentityTagOp(type=op, tag_name_value_list=tag_name_value_list))
     return output
 
 
@@ -134,7 +134,7 @@ def _identity_tag_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     sc = client.sync.Client(c, timeout=args.timeout)
 
-    ops: list[client.schemas.IdentityTagOp] = []
+    ops: list[pfc.schemas.IdentityTagOp] = []
     for op_type, values in args.ops:
         ops.extend(_format_tag_op(op_type, typing.cast(list[str], values or [])))
 

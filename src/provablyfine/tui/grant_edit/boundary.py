@@ -1,3 +1,4 @@
+import provablyfine_client as pfc
 import textual
 import textual.app
 import textual.containers
@@ -20,7 +21,7 @@ class BoundaryGrantEditWidget(base.GrantEditWidget):
     }
     """
 
-    def __init__(self, auth: client.aio.Client, grant: client.schemas.BoundaryGrant):
+    def __init__(self, auth: client.aio.Client, grant: pfc.schemas.BoundaryGrant):
         super().__init__()
         self._auth = auth
         self._grant = grant
@@ -57,7 +58,7 @@ class BoundaryGrantEditWidget(base.GrantEditWidget):
         candidates = [textual_autocomplete.DropdownItem(main=b.name) for b in boundaries_raw]
         self.query_one("#filter-name", checkbox_input.CheckboxInput).set_candidates(candidates)
 
-    def get_grant_data(self) -> client.schemas.BoundaryGrant:
+    def get_grant_data(self) -> pfc.schemas.BoundaryGrant:
         selected = set(self.query_one(PermissionSelectionList).selected)
         update_dict = {
             "name": "update.name" in selected,
@@ -65,13 +66,13 @@ class BoundaryGrantEditWidget(base.GrantEditWidget):
             "ceiling_list": "update.ceiling_list" in selected,
             "denied_list": "update.denied_list" in selected,
         }
-        return client.schemas.BoundaryGrant(
+        return pfc.schemas.BoundaryGrant(
             type="boundary",
-            filter=client.schemas.BoundaryFilter(name=self._read_field("#filter-name").name_filter()),
-            permission=client.schemas.BoundaryPermission(
+            filter=pfc.schemas.BoundaryFilter(name=self._read_field("#filter-name").name_filter()),
+            permission=pfc.schemas.BoundaryPermission(
                 create="create" in selected,
                 read="read" in selected,
-                update=client.schemas.BoundaryUpdatePermission(**update_dict),
+                update=pfc.schemas.BoundaryUpdatePermission(**update_dict),
                 delete="delete" in selected,
             ),
         )

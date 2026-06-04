@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import typing
 
+import provablyfine_client as pfc
 import textual
 import textual.app
 import textual.containers
@@ -45,7 +46,7 @@ class BoundaryViewScreen(base.Screen):
     }
     """
 
-    def __init__(self, auth: client.aio.Client, boundary: client.schemas.Boundary) -> None:
+    def __init__(self, auth: client.aio.Client, boundary: pfc.schemas.Boundary) -> None:
         super().__init__()
         self._auth = auth
         self._boundary = boundary

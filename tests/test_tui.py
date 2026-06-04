@@ -2,6 +2,7 @@ import os
 import subprocess
 import tempfile
 
+import provablyfine_client as pfc
 import pytest
 import textual.widgets
 import textual.worker
@@ -122,7 +123,7 @@ async def test_tui_grant_edit_identity_fails(api, ssh_agent):
 
 async def _setup_role_with_grant(auth: provablyfine.client.aio.Client, grant_dict: dict) -> int:
     role = await auth.create_role("test-role", "")
-    grant = provablyfine.client.schemas.validate_grant(grant_dict)
+    grant = pfc.schemas.validate_grant(grant_dict)
     await auth.update_role(role.id, grant_list=[grant])
     return role.id
 

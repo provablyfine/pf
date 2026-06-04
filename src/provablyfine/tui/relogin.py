@@ -2,10 +2,10 @@ import socket
 import typing
 import webbrowser
 
+import provablyfine_client as pfc
 import textual
 import textual.app
 import textual.widgets
-import provablyfine_client as pfc
 
 from .. import browser_login, client
 from . import base
@@ -31,7 +31,7 @@ def oidc_login(api: client.Client, auth_name: str) -> str:
     session_key, fp = browser_login.generate_session_key()
     sync_client = client.sync.Client(api.config)
     auth_public = sync_client.get_public_auth(auth_name)
-    if not isinstance(auth_public.config, client.schemas.OidcConfig):
+    if not isinstance(auth_public.config, pfc.schemas.OidcConfig):
         raise pfc.exceptions.UI(f"Auth '{auth_name}' is not OIDC")
     id_token = browser_login.oidc_flow(auth_public.config)
     session_http = api.session_auth(session=fp)

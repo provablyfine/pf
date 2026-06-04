@@ -2,17 +2,18 @@ import argparse
 import json
 import typing
 
+import provablyfine_client as pfc
 import tabulate
 
 from ... import client
 from .. import grant, yaml_utils
 
 
-def _sort_by_id(b: client.schemas.Boundary) -> int:
+def _sort_by_id(b: pfc.schemas.Boundary) -> int:
     return b.id
 
 
-def _sort_by_name(b: client.schemas.Boundary) -> tuple[str, int]:
+def _sort_by_name(b: pfc.schemas.Boundary) -> tuple[str, int]:
     return (b.name, b.id)
 
 
@@ -113,16 +114,16 @@ def _boundary_grant_function(
 
     match action:
         case "add":
-            grant_obj = client.schemas.validate_grant(grant)
+            grant_obj = pfc.schemas.validate_grant(grant)
             grant_list = [grant_obj] if current_list is None else [*current_list, grant_obj]
         case "del":
-            grant_obj = client.schemas.validate_grant(grant)
+            grant_obj = pfc.schemas.validate_grant(grant)
             if current_list is None:
                 grant_list = None
             else:
                 grant_list = [g for g in current_list if g.model_dump() != grant]
         case "set":
-            grant_list = [client.schemas.validate_grant(g) for g in grant]
+            grant_list = [pfc.schemas.validate_grant(g) for g in grant]
         case _:
             assert False
 

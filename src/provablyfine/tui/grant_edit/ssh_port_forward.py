@@ -1,14 +1,14 @@
+import provablyfine_client as pfc
 import textual
 import textual.app
 import textual.containers
 import textual.widgets
 
-from ... import client
 from .. import checkbox_input
 from . import base
 
 
-class SshPortForwardingGrantEditWidget(base.TripletFilterGrantEditWidget[client.schemas.SSHPortForwardingGrant]):
+class SshPortForwardingGrantEditWidget(base.TripletFilterGrantEditWidget[pfc.schemas.SSHPortForwardingGrant]):
     DEFAULT_CSS = """
     SshPortForwardingGrantEditWidget {
         height: auto;
@@ -33,11 +33,11 @@ class SshPortForwardingGrantEditWidget(base.TripletFilterGrantEditWidget[client.
         await self._mount_filter_candidates()
         self.query_one("#perm-username-list", checkbox_input.CheckboxInput).set_candidates([])
 
-    def get_grant_data(self) -> client.schemas.SSHPortForwardingGrant:
-        return client.schemas.SSHPortForwardingGrant(
+    def get_grant_data(self) -> pfc.schemas.SSHPortForwardingGrant:
+        return pfc.schemas.SSHPortForwardingGrant(
             type="ssh-port-forwarding",
             filter=self._filter_data(),
-            permission=client.schemas.SSHPortForwardingPermission(
+            permission=pfc.schemas.SSHPortForwardingPermission(
                 username_list=self._read_field("#perm-username-list").boundary_perm(),
             ),
         )

@@ -1,5 +1,6 @@
 import typing
 
+import provablyfine_client as pfc
 import textual
 import textual.app
 import textual.containers
@@ -12,7 +13,7 @@ from .. import client
 from . import auto_complete, base, header
 
 
-class _TagAddScreen(textual.screen.ModalScreen[client.schemas.TagNameValue | None]):
+class _TagAddScreen(textual.screen.ModalScreen[pfc.schemas.TagNameValue | None]):
     DEFAULT_CSS = """
     _TagAddScreen {
         align: center middle;
@@ -27,9 +28,9 @@ class _TagAddScreen(textual.screen.ModalScreen[client.schemas.TagNameValue | Non
     """
     BINDINGS: typing.ClassVar = [("escape", "cancel", "Cancel")]
 
-    def __init__(self, tags: list[client.schemas.TagNameValue]) -> None:
+    def __init__(self, tags: list[pfc.schemas.TagNameValue]) -> None:
         super().__init__()
-        self._tags: dict[str, client.schemas.TagNameValue] = {f"{t.name}={t.value}": t for t in tags}
+        self._tags: dict[str, pfc.schemas.TagNameValue] = {f"{t.name}={t.value}": t for t in tags}
 
     def compose(self) -> textual.app.ComposeResult:
         candidates = [textual_autocomplete.DropdownItem(main=label) for label in self._tags]
@@ -70,13 +71,13 @@ class IdentityViewScreen(base.Screen):
     }
     """
 
-    def __init__(self, auth: client.aio.Client, identity: client.schemas.Identity) -> None:
+    def __init__(self, auth: client.aio.Client, identity: pfc.schemas.Identity) -> None:
         super().__init__()
         self._auth = auth
         self._identity = identity
-        self._tags: list[client.schemas.TagNameValue] = list(identity.tags)
+        self._tags: list[pfc.schemas.TagNameValue] = list(identity.tags)
         self._saved_name: str = identity.name
-        self._saved_tags: list[client.schemas.TagNameValue] = list(identity.tags)
+        self._saved_tags: list[pfc.schemas.TagNameValue] = list(identity.tags)
 
     def compose(self) -> textual.app.ComposeResult:
         yield header.AppHeader()
@@ -130,9 +131,7 @@ class IdentityViewScreen(base.Screen):
         all_tags = (await self._auth.list_tags()).tags
         existing = {(t.name, t.value) for t in self._tags}
         available = [
-            client.schemas.TagNameValue(name=t.name, value=t.value)
-            for t in all_tags
-            if (t.name, t.value) not in existing
+            pfc.schemas.TagNameValue(name=t.name, value=t.value) for t in all_tags if (t.name, t.value) not in existing
         ]
         if not available:
             self.notify("No tags available to add")
@@ -164,7 +163,7 @@ class IdentityViewScreen(base.Screen):
         if self._tags != self._saved_tags:
             all_tags = {(t.name, t.value): t.id for t in (await self._auth.list_tags()).tags}
             tag_id_list = [all_tags[(t.name, t.value)] for t in self._tags if (t.name, t.value) in all_tags]
-            tags = [client.schemas.IdentityTagOp.model_validate({"type": "set", "tag_id_list": tag_id_list})]
+            tags = [pfc.schemas.IdentityTagOp.model_validate({"type": "set", "tag_id_list": tag_id_list})]
 
         await self._auth.update_identity(
             self._identity.id,

@@ -1,3 +1,4 @@
+import provablyfine_client as pfc
 import textual
 import textual.app
 import textual.containers
@@ -9,7 +10,7 @@ from .. import checkbox_input
 from . import base
 
 
-class IdentityGrantEditWidget(base.TripletFilterGrantEditWidget[client.schemas.IdentityGrant]):
+class IdentityGrantEditWidget(base.TripletFilterGrantEditWidget[pfc.schemas.IdentityGrant]):
     DEFAULT_CSS = """
     IdentityGrantEditWidget {
         height: auto;
@@ -24,7 +25,7 @@ class IdentityGrantEditWidget(base.TripletFilterGrantEditWidget[client.schemas.I
     }
     """
 
-    def __init__(self, auth: client.aio.Client, grant: client.schemas.IdentityGrant):
+    def __init__(self, auth: client.aio.Client, grant: pfc.schemas.IdentityGrant):
         super().__init__(auth=auth, grant=grant)
 
     def compose(self) -> textual.app.ComposeResult:
@@ -105,19 +106,19 @@ class IdentityGrantEditWidget(base.TripletFilterGrantEditWidget[client.schemas.I
     def _on_perm_create_changed(self, event: textual.widgets.Checkbox.Changed) -> None:
         self.query_one("#permission-create-fields").disabled = not event.value
 
-    def get_grant_data(self) -> client.schemas.IdentityGrant:
+    def get_grant_data(self) -> pfc.schemas.IdentityGrant:
         create_perm = self.query_one("#permission-create", textual.widgets.Checkbox).value
-        return client.schemas.IdentityGrant(
+        return pfc.schemas.IdentityGrant(
             type="identity",
             filter=self._filter_data(),
-            permission=client.schemas.IdentityPermission(
-                create=client.schemas.IdentityCreatePermission(
+            permission=pfc.schemas.IdentityPermission(
+                create=pfc.schemas.IdentityCreatePermission(
                     allowed=create_perm,
                     allowed_tag_list=self._read_field("#permission-create-allowed-tags").tag_perm(),
                     required_boundary_list=self._read_field("#permission-create-req-boundaries").boundary_perm(),
                 ),
                 read=self.query_one("#permission-read", textual.widgets.Checkbox).value,
-                update=client.schemas.IdentityUpdatePermission(
+                update=pfc.schemas.IdentityUpdatePermission(
                     name=self.query_one("#permission-update-name", textual.widgets.Checkbox).value,
                 ),
                 delete=self.query_one("#permission-delete", textual.widgets.Checkbox).value,

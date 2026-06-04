@@ -1,6 +1,7 @@
 import datetime
 import typing
 
+import provablyfine_client as pfc
 import textual
 import textual.app
 import textual.widgets
@@ -15,7 +16,7 @@ class AuditLogListScreen(base.Screen):
     def __init__(self, auth: client.aio.Client) -> None:
         super().__init__()
         self._auth = auth
-        self._entries: list[client.schemas.AuditLogEntry] = []
+        self._entries: list[pfc.schemas.AuditLogEntry] = []
 
     def compose(self) -> textual.app.ComposeResult:
         yield header.AppHeader()

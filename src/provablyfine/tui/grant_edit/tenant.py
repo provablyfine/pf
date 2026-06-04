@@ -1,3 +1,4 @@
+import provablyfine_client as pfc
 import textual
 import textual.app
 import textual.containers
@@ -20,7 +21,7 @@ class TenantGrantEditWidget(base.GrantEditWidget):
     }
     """
 
-    def __init__(self, auth: client.aio.Client, grant: client.schemas.TenantGrant):
+    def __init__(self, auth: client.aio.Client, grant: pfc.schemas.TenantGrant):
         super().__init__()
         self._auth = auth
         self._grant = grant
@@ -55,19 +56,19 @@ class TenantGrantEditWidget(base.GrantEditWidget):
         candidates = [textual_autocomplete.DropdownItem(main=str(t.id)) for t in tenants_raw]
         self.query_one("#filter-id", checkbox_input.CheckboxInput).set_candidates(candidates)
 
-    def get_grant_data(self) -> client.schemas.TenantGrant:
+    def get_grant_data(self) -> pfc.schemas.TenantGrant:
         selected = self.query_one(PermissionSelectionList).selected
         update_dict = {
             "display_name": "update.display_name" in selected,
             "is_enabled": "update.is_enabled" in selected,
         }
-        return client.schemas.TenantGrant(
+        return pfc.schemas.TenantGrant(
             type="tenant",
-            filter=client.schemas.TenantFilter(id=self._read_field("#filter-id").int_filter()),
-            permission=client.schemas.TenantPermission(
+            filter=pfc.schemas.TenantFilter(id=self._read_field("#filter-id").int_filter()),
+            permission=pfc.schemas.TenantPermission(
                 create="create" in selected,
                 read="read" in selected,
-                update=client.schemas.TenantUpdatePermission(**update_dict),
+                update=pfc.schemas.TenantUpdatePermission(**update_dict),
                 delete="delete" in selected,
             ),
         )

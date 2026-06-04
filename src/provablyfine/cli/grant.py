@@ -3,8 +3,8 @@ import json
 import sys
 import typing
 
-import yaml
 import provablyfine_client as pfc
+import yaml
 
 
 def add_parser(parser: argparse.ArgumentParser, f: typing.Callable[..., None]) -> None:

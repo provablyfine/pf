@@ -1,3 +1,4 @@
+import provablyfine_client as pfc
 import textual
 import textual.app
 import textual.containers
@@ -20,7 +21,7 @@ class RoleGrantEditWidget(base.GrantEditWidget):
     }
     """
 
-    def __init__(self, auth: client.aio.Client, grant: client.schemas.RoleGrant):
+    def __init__(self, auth: client.aio.Client, grant: pfc.schemas.RoleGrant):
         super().__init__()
         self._auth = auth
         self._grant = grant
@@ -57,7 +58,7 @@ class RoleGrantEditWidget(base.GrantEditWidget):
         candidates = [textual_autocomplete.DropdownItem(main=r.name) for r in roles]
         self.query_one("#filter-name", checkbox_input.CheckboxInput).set_candidates(candidates)
 
-    def get_grant_data(self) -> client.schemas.RoleGrant:
+    def get_grant_data(self) -> pfc.schemas.RoleGrant:
         selected = set(self.query_one(PermissionSelectionList).selected)
         update_dict = {
             "name": "update.name" in selected,
@@ -65,13 +66,13 @@ class RoleGrantEditWidget(base.GrantEditWidget):
             "member_list": "update.member_list" in selected,
             "grant_list": "update.grant_list" in selected,
         }
-        return client.schemas.RoleGrant(
+        return pfc.schemas.RoleGrant(
             type="role",
-            filter=client.schemas.RoleFilter(name=self._read_field("#filter-name").name_filter()),
-            permission=client.schemas.RolePermission(
+            filter=pfc.schemas.RoleFilter(name=self._read_field("#filter-name").name_filter()),
+            permission=pfc.schemas.RolePermission(
                 create="create" in selected,
                 read="read" in selected,
-                update=client.schemas.RoleUpdatePermission(**update_dict),
+                update=pfc.schemas.RoleUpdatePermission(**update_dict),
                 delete="delete" in selected,
             ),
         )

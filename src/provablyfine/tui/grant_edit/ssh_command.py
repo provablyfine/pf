@@ -1,14 +1,14 @@
+import provablyfine_client as pfc
 import textual
 import textual.app
 import textual.containers
 import textual.widgets
 
-from ... import client
 from .. import checkbox_input
 from . import base
 
 
-class SshCommandGrantEditWidget(base.TripletFilterGrantEditWidget[client.schemas.SSHCommandGrant]):
+class SshCommandGrantEditWidget(base.TripletFilterGrantEditWidget[pfc.schemas.SSHCommandGrant]):
     DEFAULT_CSS = """
     SshCommandGrantEditWidget {
         height: auto;
@@ -42,11 +42,11 @@ class SshCommandGrantEditWidget(base.TripletFilterGrantEditWidget[client.schemas
         self.query_one("#perm-username-list", checkbox_input.CheckboxInput).set_candidates([])
         self.query_one("#perm-command-list", checkbox_input.CheckboxInput).set_candidates([])
 
-    def get_grant_data(self) -> client.schemas.SSHCommandGrant:
-        return client.schemas.SSHCommandGrant(
+    def get_grant_data(self) -> pfc.schemas.SSHCommandGrant:
+        return pfc.schemas.SSHCommandGrant(
             type="ssh-command",
             filter=self._filter_data(),
-            permission=client.schemas.SSHCommandPermission(
+            permission=pfc.schemas.SSHCommandPermission(
                 username_list=self._read_field("#perm-username-list").boundary_perm(),
                 command_list=self._read_field("#perm-command-list").boundary_perm(),
             ),

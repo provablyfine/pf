@@ -1,8 +1,8 @@
 import argparse
 import json
 
-import tabulate
 import provablyfine_client as pfc
+import tabulate
 
 from ... import client
 

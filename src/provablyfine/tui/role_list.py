@@ -1,5 +1,6 @@
 import typing
 
+import provablyfine_client as pfc
 import textual
 import textual.app
 import textual.containers
@@ -53,7 +54,7 @@ class RoleListScreen(base.Screen):
     def __init__(self, auth: client.aio.Client) -> None:
         super().__init__()
         self._auth = auth
-        self._roles: list[client.schemas.Role] = []
+        self._roles: list[pfc.schemas.Role] = []
 
     def compose(self) -> textual.app.ComposeResult:
         yield header.AppHeader()

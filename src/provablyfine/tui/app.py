@@ -3,8 +3,8 @@ import os
 import os.path
 import sys
 
-import textual.screen
 import provablyfine_client as pfc
+import textual.screen
 
 from .. import client, log
 from . import base, home, relogin, setup

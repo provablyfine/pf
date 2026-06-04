@@ -1,16 +1,17 @@
 import argparse
 import json
 
+import provablyfine_client as pfc
 import tabulate
 
 from ... import client
 
 
-def _sort_by_id(t: client.schemas.Tenant) -> int:
+def _sort_by_id(t: pfc.schemas.Tenant) -> int:
     return t.id
 
 
-def _sort_by_name(t: client.schemas.Tenant) -> tuple[str, int]:
+def _sort_by_name(t: pfc.schemas.Tenant) -> tuple[str, int]:
     return (t.name, t.id)
 
 

@@ -3,13 +3,13 @@ import os
 import typing
 import urllib.parse
 
+import provablyfine_client as pfc
 import requests
 import textual
 import textual.app
 import textual.containers
 import textual.screen
 import textual.widgets
-import provablyfine_client as pfc
 
 from .. import client, ssh
 from . import base, relogin
@@ -74,7 +74,7 @@ class _KeySelectScreen(textual.screen.ModalScreen[str | None]):
         self.dismiss(self._keys[index][1])
 
 
-class _AuthMethodSelectScreen(textual.screen.ModalScreen[client.schemas.AuthPublicSummary | None]):
+class _AuthMethodSelectScreen(textual.screen.ModalScreen[pfc.schemas.AuthPublicSummary | None]):
     DEFAULT_CSS = """
     _AuthMethodSelectScreen {
         align: center middle;
@@ -92,7 +92,7 @@ class _AuthMethodSelectScreen(textual.screen.ModalScreen[client.schemas.AuthPubl
     """
     BINDINGS: typing.ClassVar = [("escape", "cancel", "Cancel")]
 
-    def __init__(self, auths: list[client.schemas.AuthPublicSummary]) -> None:
+    def __init__(self, auths: list[pfc.schemas.AuthPublicSummary]) -> None:
         super().__init__()
         self._auths = auths
 

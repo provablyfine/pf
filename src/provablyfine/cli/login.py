@@ -83,7 +83,7 @@ def http_sig_login(c: client.Config, sc: client.sync.Client, session_key_path: s
 def oidc_login(c: client.Config, sc: client.sync.Client, auth_name: str) -> str:
     """OIDC login. Returns session fingerprint. Caller updates config."""
     auth_public = sc.get_public_auth(auth_name)
-    if not isinstance(auth_public.config, client.schemas.OidcConfig):
+    if not isinstance(auth_public.config, pfc.schemas.OidcConfig):
         raise pfc.exceptions.UI(f"Auth '{auth_name}' is not OIDC")
 
     session_key, session_fingerprint = browser_login.generate_session_key()
@@ -96,7 +96,7 @@ def oidc_login(c: client.Config, sc: client.sync.Client, auth_name: str) -> str:
 def oauth2_login(c: client.Config, sc: client.sync.Client, auth_name: str) -> str:
     """OAuth2 login. Returns session fingerprint. Caller updates config."""
     auth_public = sc.get_public_auth(auth_name)
-    if not isinstance(auth_public.config, client.schemas.OAuth2Config):
+    if not isinstance(auth_public.config, pfc.schemas.OAuth2Config):
         raise pfc.exceptions.UI(f"Auth '{auth_name}' is not OAuth2")
 
     session_key, session_fingerprint = browser_login.generate_session_key()
