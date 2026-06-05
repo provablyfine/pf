@@ -26,7 +26,7 @@ class SetupApp(base.App):
 class TuiApp(base.App):
     TITLE = "Provably Fine"
 
-    def __init__(self, auth: client.aio.Client) -> None:
+    def __init__(self, auth: pfc.AsyncSessionClient) -> None:
         super().__init__()
         self.auth = auth
 

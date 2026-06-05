@@ -8,7 +8,6 @@ import textual.containers
 import textual.screen
 import textual.widgets
 
-from .. import client
 from . import auth_view, base, header
 
 
@@ -147,7 +146,7 @@ class AuthListScreen(base.Screen):
     class _StrDataTable(textual.widgets.DataTable[str]):
         pass
 
-    def __init__(self, auth: client.aio.Client) -> None:
+    def __init__(self, auth: pfc.AsyncSessionClient) -> None:
         super().__init__()
         self._auth = auth
         self._auths: list[pfc.schemas.Auth] = []

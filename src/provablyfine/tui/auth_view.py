@@ -9,7 +9,6 @@ import textual.containers
 import textual.widgets
 import textual_autocomplete
 
-from .. import client
 from . import auto_complete, base, header
 
 
@@ -36,7 +35,7 @@ class AuthViewScreen(base.Screen):
     }
     """
 
-    def __init__(self, auth: client.aio.Client, a: pfc.schemas.Auth) -> None:
+    def __init__(self, auth: pfc.AsyncSessionClient, a: pfc.schemas.Auth) -> None:
         super().__init__()
         self._auth = auth
         self._a = a

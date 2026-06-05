@@ -9,7 +9,6 @@ import textual.containers
 import textual.events
 import textual.widgets
 
-from .. import client
 from . import base, grant_edit, grant_list, header, member_list
 
 
@@ -40,7 +39,7 @@ class RoleViewScreen(base.Screen):
     }
     """
 
-    def __init__(self, auth: client.aio.Client, role: pfc.schemas.Role) -> None:
+    def __init__(self, auth: pfc.AsyncSessionClient, role: pfc.schemas.Role) -> None:
         super().__init__()
         self._auth = auth
         self._role = role

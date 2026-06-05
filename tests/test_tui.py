@@ -121,14 +121,14 @@ async def test_tui_grant_edit_identity_fails(api, ssh_agent):
         assert error_notifications, "Expected an error notification after saving identity grant"
 
 
-async def _setup_role_with_grant(auth: provablyfine.client.aio.Client, grant_dict: dict) -> int:
+async def _setup_role_with_grant(auth: pfc.AsyncSessionClient, grant_dict: dict) -> int:
     role = await auth.create_role("test-role", "")
     grant = pfc.schemas.validate_grant(grant_dict)
     await auth.update_role(role.id, grant_list=[grant])
     return role.id
 
 
-async def _get_grant(auth: provablyfine.client.aio.Client, role_id: int) -> dict:
+async def _get_grant(auth: pfc.AsyncSessionClient, role_id: int) -> dict:
     role = await auth.get_role(role_id)
     return role.grant_list[0].model_dump()
 

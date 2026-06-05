@@ -7,7 +7,6 @@ import textual.containers
 import textual.screen
 import textual.widgets
 
-from .. import client
 from . import base, header
 
 
@@ -54,7 +53,7 @@ class TenantListScreen(base.Screen):
         ("escape", "app.pop_screen", "Back"),
     ]
 
-    def __init__(self, auth: client.aio.Client) -> None:
+    def __init__(self, auth: pfc.AsyncSessionClient) -> None:
         super().__init__()
         self._auth = auth
         self._tenants: list[pfc.schemas.Tenant] = []

@@ -5,7 +5,6 @@ import textual.containers
 import textual.widgets
 import textual_autocomplete
 
-from ... import client
 from .. import checkbox_input
 from . import base
 
@@ -25,7 +24,7 @@ class IdentityGrantEditWidget(base.TripletFilterGrantEditWidget[pfc.schemas.Iden
     }
     """
 
-    def __init__(self, auth: client.aio.Client, grant: pfc.schemas.IdentityGrant):
+    def __init__(self, auth: pfc.AsyncSessionClient, grant: pfc.schemas.IdentityGrant):
         super().__init__(auth=auth, grant=grant)
 
     def compose(self) -> textual.app.ComposeResult:

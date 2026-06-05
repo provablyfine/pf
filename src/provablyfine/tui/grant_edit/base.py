@@ -10,7 +10,6 @@ import textual.widget
 import textual.widgets
 import textual_autocomplete
 
-from ... import client
 from .. import auto_complete, checkbox_input
 
 
@@ -186,7 +185,7 @@ class GrantEditWidget(textual.widget.Widget):
 
 
 class TripletFilterGrantEditWidget[T: _TripletFilterGrant](GrantEditWidget):
-    def __init__(self, auth: client.aio.Client, grant: T):
+    def __init__(self, auth: pfc.AsyncSessionClient, grant: T):
         super().__init__()
         self._auth = auth
         self._grant = grant

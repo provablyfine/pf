@@ -9,7 +9,6 @@ import textual.screen
 import textual.widgets
 import textual_autocomplete
 
-from .. import client
 from . import auto_complete, base, header
 
 
@@ -71,7 +70,7 @@ class BastionViewScreen(base.Screen):
     }
     """
 
-    def __init__(self, auth: client.aio.Client, bastion: pfc.schemas.Bastion) -> None:
+    def __init__(self, auth: pfc.AsyncSessionClient, bastion: pfc.schemas.Bastion) -> None:
         super().__init__()
         self._auth = auth
         self._bastion = bastion

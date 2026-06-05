@@ -6,14 +6,13 @@ import textual
 import textual.app
 import textual.widgets
 
-from .. import client
 from . import base, header
 
 
 class AuditLogListScreen(base.Screen):
     BINDINGS: typing.ClassVar = [("escape", "app.pop_screen", "Back")]
 
-    def __init__(self, auth: client.aio.Client) -> None:
+    def __init__(self, auth: pfc.AsyncSessionClient) -> None:
         super().__init__()
         self._auth = auth
         self._entries: list[pfc.schemas.AuditLogEntry] = []

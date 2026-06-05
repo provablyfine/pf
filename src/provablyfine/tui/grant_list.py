@@ -9,7 +9,6 @@ import textual.containers
 import textual.screen
 import textual.widgets
 
-from .. import client
 from . import base, grant_edit, header
 
 GRANT_TYPES = ["identity", "tag", "role", "boundary", "tenant", "ssh-shell", "ssh-port-forwarding", "ssh-command"]
@@ -76,7 +75,7 @@ class GrantListScreen(base.Screen):
 
     def __init__(
         self,
-        auth: client.aio.Client,
+        auth: pfc.AsyncSessionClient,
         grant_list: list[pfc.schemas.Grant],
         sub_title: str,
         role_id: int,

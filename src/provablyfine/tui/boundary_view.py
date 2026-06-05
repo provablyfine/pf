@@ -9,7 +9,6 @@ import textual.containers
 import textual.events
 import textual.widgets
 
-from .. import client
 from . import base, grant_edit, grant_list, header
 
 
@@ -46,7 +45,7 @@ class BoundaryViewScreen(base.Screen):
     }
     """
 
-    def __init__(self, auth: client.aio.Client, boundary: pfc.schemas.Boundary) -> None:
+    def __init__(self, auth: pfc.AsyncSessionClient, boundary: pfc.schemas.Boundary) -> None:
         super().__init__()
         self._auth = auth
         self._boundary = boundary

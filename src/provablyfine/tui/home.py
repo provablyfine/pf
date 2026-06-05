@@ -1,11 +1,11 @@
 import collections.abc
 import typing
 
+import provablyfine_client as pfc
 import textual
 import textual.app
 import textual.widgets
 
-from .. import client
 from . import (
     audit_log_list,
     auth_list,
@@ -19,7 +19,7 @@ from . import (
     tenant_list,
 )
 
-_RESOURCES: list[tuple[str, collections.abc.Callable[[client.aio.Client], base.Screen]]] = [
+_RESOURCES: list[tuple[str, collections.abc.Callable[[pfc.AsyncSessionClient], base.Screen]]] = [
     ("Tenants", tenant_list.TenantListScreen),
     ("Identities", identity_list.IdentityListScreen),
     ("Bastions", bastion_list.BastionListScreen),
@@ -45,7 +45,7 @@ class HomeScreen(base.Screen):
         ("escape", "app.quit", "Quit"),
     ]
 
-    def __init__(self, auth: client.aio.Client) -> None:
+    def __init__(self, auth: pfc.AsyncSessionClient) -> None:
         super().__init__()
         self._auth = auth
 

@@ -8,7 +8,6 @@ import textual.reactive
 import textual.screen
 import textual.widgets
 
-from ... import client
 from .. import header
 from . import base, boundary, identity, role, ssh_command, ssh_port_forward, ssh_shell, tag, tenant
 
@@ -33,7 +32,7 @@ class GrantEditScreen(textual.screen.Screen[pfc.schemas.Grant | None]):
     ]
     grant_type: textual.reactive.Reactive[str] = textual.reactive.Reactive("")
 
-    def __init__(self, auth: client.aio.Client, grant: pfc.schemas.Grant):
+    def __init__(self, auth: pfc.AsyncSessionClient, grant: pfc.schemas.Grant):
         super().__init__(id="grant-edit")
         self._auth = auth
         self._grant = grant

@@ -5,7 +5,6 @@ import textual.containers
 import textual.widgets
 import textual_autocomplete
 
-from ... import client
 from .. import auto_complete, checkbox_input
 from . import base
 
@@ -21,7 +20,7 @@ class TenantGrantEditWidget(base.GrantEditWidget):
     }
     """
 
-    def __init__(self, auth: client.aio.Client, grant: pfc.schemas.TenantGrant):
+    def __init__(self, auth: pfc.AsyncSessionClient, grant: pfc.schemas.TenantGrant):
         super().__init__()
         self._auth = auth
         self._grant = grant
