@@ -222,9 +222,8 @@ class NewServerSetupScreen(base.Screen):
             api = client.Client(c)
 
             set_status("Initializing...")
-            api_sync = client.sync.Client(c)
             try:
-                api_sync.initialize(account_key)
+                client.Factory(c).initialize(account_key)
             except pfc.exceptions.UI as e:
                 if "already initialized" in str(e):
                     raise pfc.exceptions.UI("Server already initialized — use 'Connect to existing server'")
@@ -301,7 +300,7 @@ class ConnectScreen(base.Screen):
         directory_data = resp.json()
         c = client.Config(directory_url=clean_url, directory=directory_data)
         api = client.Client(c)
-        aio_client = client.aio.Client(c)
+        factory = client.Factory(c)
 
         account_key: str | None = None
 
@@ -318,7 +317,7 @@ class ConnectScreen(base.Screen):
 
             status.update("Accepting invitation...")
             try:
-                await aio_client.connect(invitation=invitation, key=account_key)
+                await asyncio.to_thread(factory.connect, invitation, account_key)
             except pfc.exceptions.UI as e:
                 self.notify(str(e), severity="error")
                 status.update("Paste invitation URL or directory URL")
@@ -328,7 +327,7 @@ class ConnectScreen(base.Screen):
         if auth_name is None:
             status.update("Fetching auth methods...")
             try:
-                auths = await aio_client.list_public_auths()
+                auths = await factory.async_public().list_public_auths()
             except pfc.exceptions.UI as e:
                 self.notify(str(e), severity="error")
                 status.update("Paste invitation URL or directory URL")
@@ -345,7 +344,7 @@ class ConnectScreen(base.Screen):
             auth_type = selected.type
         else:
             try:
-                auth_public = await aio_client.get_public_auth(auth_name)
+                auth_public = await factory.async_public().get_public_auth(auth_name)
                 auth_type = auth_public.config.type
             except pfc.exceptions.UI as e:
                 self.notify(str(e), severity="error")

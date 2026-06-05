@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 @client.ssh_utils.exception
 def _hosts_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout).session()
     data = sc.list_ssh_hosts()
     rows: list[tuple[str, str, str, str]] = []
     for entry in data.hosts:

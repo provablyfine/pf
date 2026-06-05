@@ -29,21 +29,21 @@ def _ssh_function(args: argparse.Namespace) -> None:
 
     # Auto-login for http_sig only; other auth types require pf login first
     if not login.has_valid_session(c):
-        sc = client.sync.Client(c, timeout=args.timeout)
+        factory = client.Factory(c, timeout=args.timeout)
         try:
-            auth_public = sc.get_public_auth("default")
+            auth_public = factory.public().get_public_auth("default")
         except pfc.exceptions.UI:
             raise pfc.exceptions.UI("Not logged in. Run 'pf login' first.")
         match auth_public.config.type:
             case "http_sig":
-                c.session_key = login.http_sig_login(c, sc)
+                c.session_key = login.http_sig_login(c, factory)
                 c.save(args.config)
             case _:
                 raise pfc.exceptions.UI(
                     f"Session expired. Run 'pf login' first (auth type: {auth_public.config.type})."
                 )
 
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout).session()
 
     # Fetch and cache host trusted keys in config
     c.known_hosts = sc.get_host_trusted_keys()

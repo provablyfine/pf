@@ -29,8 +29,7 @@ def http_sig_login(cfg: client.Config, api: client.Client) -> str:
 
 def oidc_login(api: client.Client, auth_name: str) -> str:
     session_key, fp = browser_login.generate_session_key()
-    sync_client = client.sync.Client(api.config)
-    auth_public = sync_client.get_public_auth(auth_name)
+    auth_public = client.Factory(api.config).public().get_public_auth(auth_name)
     if not isinstance(auth_public.config, pfc.schemas.OidcConfig):
         raise pfc.exceptions.UI(f"Auth '{auth_name}' is not OIDC")
     id_token = browser_login.oidc_flow(auth_public.config)
@@ -50,8 +49,7 @@ def oidc_login(api: client.Client, auth_name: str) -> str:
 
 def oauth2_login(api: client.Client, auth_name: str) -> str:
     session_key, fp = browser_login.generate_session_key()
-    sync_client = client.sync.Client(api.config)
-    auth_public = sync_client.get_public_auth(auth_name)
+    auth_public = client.Factory(api.config).public().get_public_auth(auth_name)
 
     sock = socket.socket()
     sock.bind(("127.0.0.1", 0))
@@ -112,9 +110,8 @@ class ReloginScreen(base.Screen):
         auth_name = self._cfg.auth_name or "default"
         status = self.query_one("#status", textual.widgets.Label)
 
-        aio_client = client.aio.Client(self._api.config)
         try:
-            auth_public = await aio_client.get_public_auth(auth_name)
+            auth_public = await client.Factory(self._api.config).async_public().get_public_auth(auth_name)
         except pfc.exceptions.UI as e:
             self.notify(str(e), severity="error")
             return

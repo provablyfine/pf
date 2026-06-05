@@ -19,7 +19,7 @@ def _sort_by_name(t: pfc.schemas.Role) -> tuple[str, int]:
 
 def _role_list_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout).session()
     response = sc.list_roles(id=args.id, name=args.name)
     roles = response.roles
     sort_functions = {
@@ -52,7 +52,7 @@ def _role_list_function(args: argparse.Namespace) -> None:
 
 def _role_read_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout).session()
     role = sc.get_role(args.id)
     match args.format:
         case "json":
@@ -79,25 +79,25 @@ def _role_read_function(args: argparse.Namespace) -> None:
 
 def _role_delete_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout).session()
     sc.delete_role(args.id)
 
 
 def _role_create_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout).session()
     sc.create_role(args.name, args.description or "")
 
 
 def _role_update_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout).session()
     sc.update_role(args.id, name=args.name, description=args.description)
 
 
 def _role_grant_function(args: argparse.Namespace, action: str, grant: dict[str, typing.Any]) -> None:
     c = client.Config.load(args.config)
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout).session()
     role = sc.get_role(args.id)
 
     match action:
@@ -128,7 +128,7 @@ def _role_member_function(args: argparse.Namespace) -> None:
         return False
 
     c = client.Config.load(args.config)
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout).session()
     role = sc.get_role(args.id)
     member_list: list[pfc.schemas.RoleMemberRef] = [
         pfc.schemas.RoleMemberRef(id=m.id, name=m.name) for m in role.member_list

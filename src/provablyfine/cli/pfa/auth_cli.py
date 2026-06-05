@@ -10,7 +10,7 @@ from ... import client
 
 def _auth_list_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout).session()
     response = sc.list_auths()
     auths = response.auths
     if args.quiet:
@@ -36,7 +36,7 @@ def _auth_list_function(args: argparse.Namespace) -> None:
 
 def _auth_create_http_sig_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout).session()
     tag_list = typing.cast(list[str], args.tag or [])
     tags: list[dict[str, str]] = []
     for t in tag_list:
@@ -47,7 +47,7 @@ def _auth_create_http_sig_function(args: argparse.Namespace) -> None:
 
 def _auth_create_oidc_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout).session()
     tag_list = typing.cast(list[str], args.tag or [])
     tags: list[dict[str, str]] = []
     for t in tag_list:
@@ -58,7 +58,7 @@ def _auth_create_oidc_function(args: argparse.Namespace) -> None:
 
 def _auth_create_oauth2_github_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout).session()
     tag_list = typing.cast(list[str], args.tag or [])
     tags: list[dict[str, str]] = []
     for t in tag_list:
@@ -69,7 +69,7 @@ def _auth_create_oauth2_github_function(args: argparse.Namespace) -> None:
 
 def _auth_read_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout).session()
     a = sc.get_auth(args.id)
     if args.quiet:
         args.format = "quiet"
@@ -105,7 +105,7 @@ def _auth_read_function(args: argparse.Namespace) -> None:
 
 def _auth_update_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout).session()
     is_enabled = None
     if args.enable:
         is_enabled = True
@@ -116,7 +116,7 @@ def _auth_update_function(args: argparse.Namespace) -> None:
 
 def _auth_delete_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout).session()
     sc.delete_auth(args.id)
 
 

@@ -65,7 +65,7 @@ def _setup(api, tmpdir, ssh_agent):
     _run(["pfa", "-c", config_file, "login", f"--session-key={session_key}"], env)
 
     cfg = provablyfine.client.Config.load(config_file)
-    return provablyfine.client.aio.Client(cfg)
+    return provablyfine.client.Factory(cfg).async_session()
 
 
 @pytest.mark.anyio

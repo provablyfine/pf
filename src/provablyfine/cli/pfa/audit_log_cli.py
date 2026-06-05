@@ -9,7 +9,7 @@ from ... import client
 
 def _list_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout).session()
     response = sc.list_audit_log(
         level=args.level,
         object_type=args.object_type,

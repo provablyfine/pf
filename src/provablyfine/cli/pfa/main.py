@@ -9,7 +9,7 @@ from . import audit_log_cli, auth_cli, bastion_cli, boundary_cli, grant_cli, ide
 
 def _initialize_function(args: argparse.Namespace) -> None:
     c = client.Config(directory_url=args.url)
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout)
     if args.key is None:
         _, account_key_id = common.generate_and_save_key()
     else:

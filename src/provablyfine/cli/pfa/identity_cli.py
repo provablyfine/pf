@@ -30,7 +30,7 @@ def _format_tag_op(op: str, values: list[str]) -> list[pfc.schemas.IdentityTagOp
 
 def _identity_list_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout).session()
     response = sc.list_identities(
         id=args.id,
         name=args.name,
@@ -63,7 +63,7 @@ def _identity_list_function(args: argparse.Namespace) -> None:
 
 def _identity_read_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout).session()
     identity = sc.get_identity(args.id)
     match args.format:
         case "json":
@@ -84,13 +84,13 @@ def _identity_read_function(args: argparse.Namespace) -> None:
 
 def _identity_delete_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout).session()
     sc.delete_identity(args.id)
 
 
 def _identity_create_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout).session()
     boundary_id_list = [int(b) for b in args.boundary if b.isdigit()]
     boundary_name_list = [b for b in args.boundary if not b.isdigit()]
     tag_id_list = [int(t) for t in args.tag if t.isdigit()]
@@ -100,7 +100,7 @@ def _identity_create_function(args: argparse.Namespace) -> None:
 
 def _identity_invite_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout).session()
     key = sc.invite_identity(args.id, args.delivery)
     if key is not None:
         auth_name = args.auth or c.auth_name or "default"
@@ -109,7 +109,7 @@ def _identity_invite_function(args: argparse.Namespace) -> None:
 
 def _identity_update_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout).session()
     sc.update_identity(args.id, name=args.name)
 
 
@@ -132,7 +132,7 @@ class TagAction(argparse.Action):
 
 def _identity_tag_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout).session()
 
     ops: list[pfc.schemas.IdentityTagOp] = []
     for op_type, values in args.ops:

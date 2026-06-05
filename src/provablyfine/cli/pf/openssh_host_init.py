@@ -69,14 +69,14 @@ def _do_refresh(
     session_key = jwk.Private.generate_ed25519()
 
     config = client.configuration.Config(directory_url=directory_url)
-    sc = client.sync.Client(config)
+    factory = client.Factory(config)
 
-    sc.login_http_sig_with_keys(account_key, session_key)
+    factory.account_from_keys(account_key, session_key).login_http_sig(session_key.public().to_dict())
 
     http = client.http_client.Client(config)
     _sign_host_certificates_with_auth(http.session_auth_with_key(session_key), host_keys_dir)
 
-    ca_pubkey = sc.get_user_trusted_keys_public()
+    ca_pubkey = factory.public().get_user_trusted_keys_public()
     _write_file_atomic(ca_pub_path, ca_pubkey, mode="w")
 
 

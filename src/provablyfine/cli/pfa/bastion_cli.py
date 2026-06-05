@@ -18,7 +18,7 @@ def _parse_tag(s: str) -> dict[str, str]:
 
 def _bastion_list_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout).session()
     response = sc.list_bastions(id=args.id)
     bastions = response.bastions
     if args.quiet:
@@ -44,7 +44,7 @@ def _bastion_list_function(args: argparse.Namespace) -> None:
 
 def _bastion_read_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout).session()
     bastion = sc.get_bastion(args.id)
     match args.format:
         case "json":
@@ -65,13 +65,13 @@ def _bastion_read_function(args: argparse.Namespace) -> None:
 
 def _bastion_delete_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout).session()
     sc.delete_bastion(args.id)
 
 
 def _bastion_create_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout).session()
     tag_id_list = [int(t) for t in args.tag if t.isdigit()]
     tag_name_value_list = [_parse_tag(t) for t in args.tag if not t.isdigit()]
     sc.create_bastion(args.url, args.ssh_proxy_jump, tag_id_list, tag_name_value_list)
@@ -79,7 +79,7 @@ def _bastion_create_function(args: argparse.Namespace) -> None:
 
 def _bastion_update_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout).session()
     sc.update_bastion(args.id, args.url, args.ssh_proxy_jump)
 
 

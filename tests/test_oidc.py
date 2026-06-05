@@ -15,7 +15,6 @@ import requests
 
 import provablyfine.cli.login
 import provablyfine.client
-import provablyfine.client.sync
 import provablyfine.jwk
 import provablyfine.ssh.agent
 
@@ -36,7 +35,7 @@ class OidcEnv:
     """Test environment with OIDC setup."""
 
     config: provablyfine.client.Config
-    sc: provablyfine.client.sync.Client
+    sc: provablyfine.client.Factory
     mock: mock_oidc.MockOidcProvider
 
 
@@ -59,8 +58,8 @@ def oidc_env(api, mock_oidc, ssh_agent, tmp_path) -> typing.Iterator[OidcEnv]:
             account_key=str(account_key_file),
         )
 
-        # Create sync client and initialize tenant
-        sc = provablyfine.client.sync.Client(config)
+        # Create factory and initialize tenant
+        sc = provablyfine.client.Factory(config)
         sc.initialize(str(account_key_file))
 
         # Generate session key and login via http_sig
@@ -69,10 +68,7 @@ def oidc_env(api, mock_oidc, ssh_agent, tmp_path) -> typing.Iterator[OidcEnv]:
         session_key_file.write_bytes(session_key_obj.to_pem())
         session_fingerprint = str(session_key_file)  # Full path for http_sig_login
 
-        sc.login_http_sig(
-            session_public_key=session_key_obj.public().to_dict(),
-            session_fingerprint=session_fingerprint,
-        )
+        sc.account(str(account_key_file), session_fingerprint).login_http_sig(session_key_obj.public().to_dict())
 
         # Update config to include session key so subsequent calls work
         config = provablyfine.client.Config(
@@ -80,10 +76,10 @@ def oidc_env(api, mock_oidc, ssh_agent, tmp_path) -> typing.Iterator[OidcEnv]:
             account_key=config.account_key,
             session_key=str(session_key_file),
         )
-        sc = provablyfine.client.sync.Client(config)
+        sc = provablyfine.client.Factory(config)
 
         # Create OIDC auth config pointing to mock OIDC provider
-        sc.create_auth_oidc(
+        sc.session().create_auth_oidc(
             name="oidc-test",
             description="Test OIDC provider",
             tags=[],
@@ -93,7 +89,7 @@ def oidc_env(api, mock_oidc, ssh_agent, tmp_path) -> typing.Iterator[OidcEnv]:
         )
 
         # Create identity with email matching the mock token
-        sc.create_identity(
+        sc.session().create_identity(
             name="user@example.com",
             boundary_id_list=[],
             boundary_name_list=[],
@@ -120,11 +116,10 @@ def test_endpoint_rs256(oidc_env: OidcEnv) -> None:
     id_token = oidc_env.mock.issue_token("user@example.com", alg="RS256")
     session_key, session_fingerprint = _create_session_key()
 
-    oidc_env.sc.login_oidc(
+    oidc_env.sc.session_with_key(session_fingerprint).login_oidc(
         auth_name="oidc-test",
         id_token=id_token,
         session_public_key=session_key.public().to_dict(),
-        session_fingerprint=session_fingerprint,
     )
 
 
@@ -133,11 +128,10 @@ def test_endpoint_es256(oidc_env: OidcEnv) -> None:
     id_token = oidc_env.mock.issue_token("user@example.com", alg="ES256")
     session_key, session_fingerprint = _create_session_key()
 
-    oidc_env.sc.login_oidc(
+    oidc_env.sc.session_with_key(session_fingerprint).login_oidc(
         auth_name="oidc-test",
         id_token=id_token,
         session_public_key=session_key.public().to_dict(),
-        session_fingerprint=session_fingerprint,
     )
 
 
@@ -147,11 +141,10 @@ def test_endpoint_expired(oidc_env: OidcEnv) -> None:
     session_key, session_fingerprint = _create_session_key()
 
     with pytest.raises(pfc.exceptions.UI):
-        oidc_env.sc.login_oidc(
+        oidc_env.sc.session_with_key(session_fingerprint).login_oidc(
             auth_name="oidc-test",
             id_token=id_token,
             session_public_key=session_key.public().to_dict(),
-            session_fingerprint=session_fingerprint,
         )
 
 
@@ -161,11 +154,10 @@ def test_endpoint_wrong_issuer(oidc_env: OidcEnv) -> None:
     session_key, session_fingerprint = _create_session_key()
 
     with pytest.raises(pfc.exceptions.UI):
-        oidc_env.sc.login_oidc(
+        oidc_env.sc.session_with_key(session_fingerprint).login_oidc(
             auth_name="oidc-test",
             id_token=id_token,
             session_public_key=session_key.public().to_dict(),
-            session_fingerprint=session_fingerprint,
         )
 
 
@@ -175,11 +167,10 @@ def test_endpoint_wrong_audience(oidc_env: OidcEnv) -> None:
     session_key, session_fingerprint = _create_session_key()
 
     with pytest.raises(pfc.exceptions.UI):
-        oidc_env.sc.login_oidc(
+        oidc_env.sc.session_with_key(session_fingerprint).login_oidc(
             auth_name="oidc-test",
             id_token=id_token,
             session_public_key=session_key.public().to_dict(),
-            session_fingerprint=session_fingerprint,
         )
 
 
@@ -209,11 +200,10 @@ def test_endpoint_missing_email(oidc_env: OidcEnv) -> None:
     session_key, session_fingerprint = _create_session_key()
 
     with pytest.raises(pfc.exceptions.UI):
-        oidc_env.sc.login_oidc(
+        oidc_env.sc.session_with_key(session_fingerprint).login_oidc(
             auth_name="oidc-test",
             id_token=id_token,
             session_public_key=session_key.public().to_dict(),
-            session_fingerprint=session_fingerprint,
         )
 
 
@@ -223,18 +213,17 @@ def test_endpoint_unknown_auth(oidc_env: OidcEnv) -> None:
     session_key, session_fingerprint = _create_session_key()
 
     with pytest.raises(pfc.exceptions.UI):
-        oidc_env.sc.login_oidc(
+        oidc_env.sc.session_with_key(session_fingerprint).login_oidc(
             auth_name="no-such-auth",
             id_token=id_token,
             session_public_key=session_key.public().to_dict(),
-            session_fingerprint=session_fingerprint,
         )
 
 
 def test_endpoint_tag_restriction_pass(oidc_env: OidcEnv) -> None:
     """Login succeeds when auth has no tag restrictions."""
     # Create a basic auth config with no tag restrictions
-    oidc_env.sc.create_auth_oidc(
+    oidc_env.sc.session().create_auth_oidc(
         name="oidc-unrestricted",
         description="Unrestricted OIDC",
         tags=[],
@@ -247,21 +236,20 @@ def test_endpoint_tag_restriction_pass(oidc_env: OidcEnv) -> None:
     id_token = oidc_env.mock.issue_token("user@example.com")
     session_key, session_fingerprint = _create_session_key()
 
-    oidc_env.sc.login_oidc(
+    oidc_env.sc.session_with_key(session_fingerprint).login_oidc(
         auth_name="oidc-unrestricted",
         id_token=id_token,
         session_public_key=session_key.public().to_dict(),
-        session_fingerprint=session_fingerprint,
     )
 
 
 def test_endpoint_tag_restriction_fail(oidc_env: OidcEnv) -> None:
     """Login fails when identity lacks required tag."""
     # Create a tag
-    tag_response = oidc_env.sc.create_tag("restricted-tag", "restricted-value")
+    tag_response = oidc_env.sc.session().create_tag("restricted-tag", "restricted-value")
 
     # Create auth config with tag restriction
-    oidc_auth = oidc_env.sc.create_auth_oidc(
+    oidc_auth = oidc_env.sc.session().create_auth_oidc(
         name="oidc-restricted",
         description="Restricted OIDC",
         tags=[],
@@ -271,18 +259,17 @@ def test_endpoint_tag_restriction_fail(oidc_env: OidcEnv) -> None:
     )
 
     # Update auth to require the tag
-    oidc_env.sc.update_auth(id=oidc_auth.id, tags=[tag_response])
+    oidc_env.sc.session().update_auth(id=oidc_auth.id, tags=[tag_response])
 
     # Identity does NOT have the tag
     id_token = oidc_env.mock.issue_token("user@example.com")
     session_key, session_fingerprint = _create_session_key()
 
     with pytest.raises(pfc.exceptions.UI):
-        oidc_env.sc.login_oidc(
+        oidc_env.sc.session_with_key(session_fingerprint).login_oidc(
             auth_name="oidc-restricted",
             id_token=id_token,
             session_public_key=session_key.public().to_dict(),
-            session_fingerprint=session_fingerprint,
         )
 
 

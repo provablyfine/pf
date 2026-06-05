@@ -19,7 +19,7 @@ def _sort_by_name(b: pfc.schemas.Boundary) -> tuple[str, int]:
 
 def _boundary_list_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout).session()
     response = sc.list_boundaries(id=args.id, name=args.name)
     boundaries = response.boundaries
     sort_functions = {
@@ -52,7 +52,7 @@ def _boundary_list_function(args: argparse.Namespace) -> None:
 
 def _boundary_read_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout).session()
     boundary = sc.get_boundary(args.id)
     match args.format:
         case "json":
@@ -87,19 +87,19 @@ def _boundary_read_function(args: argparse.Namespace) -> None:
 
 def _boundary_delete_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout).session()
     sc.delete_boundary(args.id)
 
 
 def _boundary_create_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout).session()
     sc.create_boundary(args.name, args.description or "")
 
 
 def _boundary_update_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout).session()
     sc.update_boundary(args.id, name=args.name, description=args.description)
 
 
@@ -107,7 +107,7 @@ def _boundary_grant_function(
     args: argparse.Namespace, action: str, grant: dict[str, typing.Any] | list[typing.Any], field_name: str
 ) -> None:
     c = client.Config.load(args.config)
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout).session()
     boundary = sc.get_boundary(args.id)
 
     current_list = getattr(boundary, field_name)

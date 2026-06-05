@@ -60,7 +60,7 @@ def has_valid_session(c: client.Config) -> bool:
     return browser_login.has_valid_session(c)
 
 
-def http_sig_login(c: client.Config, sc: client.sync.Client, session_key_path: str | None = None) -> str:
+def http_sig_login(c: client.Config, sc: client.Factory, session_key_path: str | None = None) -> str:
     """HTTP signature login. Returns session fingerprint. Caller updates config."""
     if c.account_key is not None and not os.path.exists(c.account_key) and not _agent_has_key(c.account_key):
         _agent_load_key(c.account_key)
@@ -76,26 +76,26 @@ def http_sig_login(c: client.Config, sc: client.sync.Client, session_key_path: s
             raise pfc.exceptions.UI("Unable to parse data either as PEM or SSH format")
         session_fingerprint = session_key_path
 
-    sc.login_http_sig(session_key.public().to_dict(), session_fingerprint)
+    sc.account(c.account_key, session_fingerprint).login_http_sig(session_key.public().to_dict())
     return session_fingerprint
 
 
-def oidc_login(c: client.Config, sc: client.sync.Client, auth_name: str) -> str:
+def oidc_login(c: client.Config, sc: client.Factory, auth_name: str) -> str:
     """OIDC login. Returns session fingerprint. Caller updates config."""
-    auth_public = sc.get_public_auth(auth_name)
+    auth_public = sc.public().get_public_auth(auth_name)
     if not isinstance(auth_public.config, pfc.schemas.OidcConfig):
         raise pfc.exceptions.UI(f"Auth '{auth_name}' is not OIDC")
 
     session_key, session_fingerprint = browser_login.generate_session_key()
     print("Opening browser for OIDC login...")
     id_token = browser_login.oidc_flow(auth_public.config)
-    sc.login_oidc(auth_name, id_token, session_key.public().to_dict(), session_fingerprint)
+    sc.session_with_key(session_fingerprint).login_oidc(auth_name, id_token, session_key.public().to_dict())
     return session_fingerprint
 
 
-def oauth2_login(c: client.Config, sc: client.sync.Client, auth_name: str) -> str:
+def oauth2_login(c: client.Config, sc: client.Factory, auth_name: str) -> str:
     """OAuth2 login. Returns session fingerprint. Caller updates config."""
-    auth_public = sc.get_public_auth(auth_name)
+    auth_public = sc.public().get_public_auth(auth_name)
     if not isinstance(auth_public.config, pfc.schemas.OAuth2Config):
         raise pfc.exceptions.UI(f"Auth '{auth_name}' is not OAuth2")
 
@@ -107,8 +107,8 @@ def oauth2_login(c: client.Config, sc: client.sync.Client, auth_name: str) -> st
     sock.close()
     client_redirect_uri = f"http://127.0.0.1:{port}/done"
 
-    auth_url = sc.login_oauth2_start(
-        auth_name, session_key.public().to_dict(), session_fingerprint, client_redirect_uri
+    auth_url = sc.session_with_key(session_fingerprint).login_oauth2_start(
+        auth_name, session_key.public().to_dict(), client_redirect_uri
     )
 
     print("Opening browser for OAuth2 login...")
@@ -117,9 +117,9 @@ def oauth2_login(c: client.Config, sc: client.sync.Client, auth_name: str) -> st
     return session_fingerprint
 
 
-def login(c: client.Config, sc: client.sync.Client, auth_name: str, session_key_path: str | None = None) -> str:
+def login(c: client.Config, sc: client.Factory, auth_name: str, session_key_path: str | None = None) -> str:
     """Perform login based on server auth config. Returns session fingerprint. Caller updates config."""
-    auth_public = sc.get_public_auth(auth_name)
+    auth_public = sc.public().get_public_auth(auth_name)
     match auth_public.config.type:
         case "http_sig":
             return http_sig_login(c, sc, session_key_path)

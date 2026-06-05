@@ -91,7 +91,7 @@ def _accept_function(args: argparse.Namespace) -> None:
         directory_url=invitation.directory_url,
         auth_name=invitation.auth_name,
     )
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout)
     sc.connect(invitation.key, account_key_id)
     c.account_key = account_key_id
     c.save(args.config)
@@ -99,7 +99,7 @@ def _accept_function(args: argparse.Namespace) -> None:
 
 def _login_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout)
     auth_name = args.auth or c.auth_name or "default"
     c.session_key = login.login(c, sc, auth_name, session_key_path=args.session_key)
     c.save(args.config)

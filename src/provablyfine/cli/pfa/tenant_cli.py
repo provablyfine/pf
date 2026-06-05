@@ -17,7 +17,7 @@ def _sort_by_name(t: pfc.schemas.Tenant) -> tuple[str, int]:
 
 def _list_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout).session()
     response = sc.list_tenants()
     tenants = response.tenants
     sort_functions = {
@@ -42,21 +42,21 @@ def _list_function(args: argparse.Namespace) -> None:
 
 def _get_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout).session()
     t = sc.get_tenant(args.id)
     print(tabulate.tabulate([t.model_dump()], headers="keys"))
 
 
 def _create_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout).session()
     t = sc.create_tenant(name=args.name, display_name=args.display_name)
     print(tabulate.tabulate([t.model_dump()], headers="keys"))
 
 
 def _update_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout).session()
     is_enabled = None
     if args.enable:
         is_enabled = True
@@ -67,7 +67,7 @@ def _update_function(args: argparse.Namespace) -> None:
 
 def _delete_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout).session()
     sc.delete_tenant(args.id)
 
 

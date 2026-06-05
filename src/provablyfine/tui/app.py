@@ -67,7 +67,7 @@ def pfat() -> None:
             return
 
     try:
-        auth = client.aio.Client(cfg)
+        auth = client.Factory(cfg).async_session()
     except pfc.exceptions.UI as e:
         sys.stderr.write(f"{e}\n")
         sys.exit(2)

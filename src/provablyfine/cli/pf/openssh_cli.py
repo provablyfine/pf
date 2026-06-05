@@ -10,13 +10,12 @@ from . import openssh_host_init
 
 def _user_trusted_keys_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    sc = client.sync.Client(c, timeout=args.timeout)
-    print(sc.get_user_trusted_keys_public())
+    print(client.Factory(c, timeout=args.timeout).public().get_user_trusted_keys_public())
 
 
 def _sign_host_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout).session()
 
     public_keys: list[dict[str, str]] = []
     filename_from_fingerprint: dict[str, str] = {}

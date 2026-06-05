@@ -21,7 +21,7 @@ def _sort_by_value(t: pfc.schemas.Tag) -> tuple[str, str, int]:
 
 def tag_list_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout).session()
     response = sc.list_tags(id=args.id, name=args.name, value=args.value)
     tags = response.tags
     sort_functions = {
@@ -53,7 +53,7 @@ def tag_list_function(args: argparse.Namespace) -> None:
 
 def _tag_create_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout).session()
     sc.create_tag(name=args.name, value=args.value)
 
 
@@ -61,7 +61,7 @@ def _tag_delete_function(args: argparse.Namespace) -> None:
     if args.id is None:
         raise pfc.exceptions.UI("You must specify a tag ID to delete")
     c = client.Config.load(args.config)
-    sc = client.sync.Client(c, timeout=args.timeout)
+    sc = client.Factory(c, timeout=args.timeout).session()
     sc.delete_tag(id=args.id)
 
 
