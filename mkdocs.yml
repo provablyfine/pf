@@ -36,6 +36,7 @@ nav:
   - Self-hosting:
       - API Server: self-hosting/api-server.md
       - Bastion: self-hosting/bastion.md
+  - Changelog: changelog.md
 
 #  - Reference:
 #      - Overview: reference/index.md

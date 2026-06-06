@@ -1,15 +1,15 @@
 # Changelog
 
-## [0.4.0] - 2026-06-XX
+## 0.4.0 - 2026-06-XX
 
 ### Added
 - CHANGELOG.md
-- Add "pfa initialize --transient-key" [#9](https://github.com/provablyfine/pf/issues/9)
+- Add "pfa initialize --transient-key" ([#9](https://github.com/provablyfine/pf/issues/9))
 
 ### Fixed
-- Sync client-side schema with server-side schema [#10](//github.com/provablyfine/pf/issues/10)
+- Sync client-side schema with server-side schema ([#10](//github.com/provablyfine/pf/issues/10))
 
-## [0.3.0] - 2026-06-05
+## 0.3.0 - 2026-06-05
 
 ### Added
 - Rough documentation TOC
@@ -21,7 +21,7 @@
 - Split main package _provablyfine_ (AGPLv3) in two packages, _provablyfine_ (AGPLv3)
   and _provablyfine-client_ (MIT)
 
-## [0.2.0] - 2026-05-23
+## 0.2.0 - 2026-05-23
 
 ### Added
 - ROADMAP.md for 1.0.0
@@ -29,7 +29,7 @@
 - Automated release process works
 - All style and type checks pass
 
-## [0.1.0] - 2026-05-23
+## 0.1.0 - 2026-05-23
 
 ### Added
 - Automated release process to pypi
