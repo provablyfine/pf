@@ -6,6 +6,9 @@
 - CHANGELOG.md
 - Add "pfa initialize --transient-key" [#9](https://github.com/provablyfine/pf/issues/9)
 
+### Fixed
+- Sync client-side schema with server-side schema [#10](//github.com/provablyfine/pf/issues/10)
+
 ## [0.3.0] - 2026-06-05
 
 ### Added
