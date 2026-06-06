@@ -1,9 +1,10 @@
 # Changelog
 
-## [0.4.0] - 2026-06-06
+## [0.4.0] - 2026-06-XX
 
 ### Added
 - CHANGELOG.md
+- #9: pfa initialize --transient-key
 
 ## [0.3.0] - 2026-06-05
 
