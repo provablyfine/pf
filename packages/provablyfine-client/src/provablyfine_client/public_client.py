@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import typing
 
-from . import _base64url, directory, exceptions, http_session, http_signatures, schemas, signer
+from . import directory, exceptions, http_session, schemas
 
 
 def _problem_title(response: typing.Any, default: str) -> str:
@@ -42,20 +42,11 @@ class PublicClient:
             raise exceptions.UI("Unable to list auth methods")
         return [schemas.AuthPublicSummary.model_validate(a) for a in response.json().get("auths", [])]
 
-    def initialize(self, account_signer: signer.Signer, account_public_key: dict[str, typing.Any]) -> None:
-        """Bootstrap a new server: fetch invitation, then register account public key."""
+    def initialize(self) -> str:
+        """Fetch a one-time invitation key to bootstrap a new server."""
         response = self._session.post(self._directory.initialize)
         if response.status_code == 204:
             raise exceptions.UI("Unable to initialize app: it is already initialized.")
         if response.status_code != 200:
             raise exceptions.UI(f"Unable to initialize app. Unexpected error: {response.status_code}.")
-        invitation_key = response.json()["key"]["k"]
-        inv_signer = signer.HmacSigner("invitation", _base64url.decode(invitation_key))
-        auth = http_signatures.Auth([inv_signer, account_signer])
-        response = self._session.post(
-            self._directory.accept_invitation,
-            auth=auth,
-            json={"account_public_key": account_public_key},
-        )
-        if response.status_code != 204:
-            raise exceptions.UI(f"Unable to accept invitation: {response.text}")
+        return str(response.json()["key"]["k"])

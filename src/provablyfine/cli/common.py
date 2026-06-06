@@ -92,7 +92,7 @@ def _accept_function(args: argparse.Namespace) -> None:
         auth_name=invitation.auth_name,
     )
     sc = client.Factory(c, timeout=args.timeout)
-    sc.connect(invitation.key, account_key_id)
+    sc.invitation(invitation.key, account_key_id).accept_invitation()
     c.account_key = account_key_id
     c.save(args.config)
 

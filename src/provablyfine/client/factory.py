@@ -37,15 +37,11 @@ class Factory:
             http_client.FileSigner("session", session),
         )
 
-    def initialize(self, account_key: str) -> None:
-        signer = http_client.private_key_signer("account", account_key)
-        pfc.PublicClient(self._http, self._directory).initialize(signer, signer.public_key().to_dict())
-
-    def connect(self, invitation_key: str, account_key: str) -> None:
+    def invitation(self, invitation_key: str, account_key: str) -> pfc.InvitationClient:
         account_signer = http_client.private_key_signer("account", account_key)
         inv_signer = pfc.HmacSigner("invitation", base64url.decode(invitation_key))
-        pfc.InvitationClient(self._http, self._directory, inv_signer, account_signer).connect(
-            account_signer.public_key().to_dict()
+        return pfc.InvitationClient(
+            self._http, self._directory, inv_signer, account_signer, account_signer.public_key().to_dict()
         )
 
     def async_session(self) -> pfc.AsyncSessionClient:

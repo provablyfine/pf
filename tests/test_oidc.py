@@ -60,7 +60,7 @@ def oidc_env(api, mock_oidc, ssh_agent, tmp_path) -> typing.Iterator[OidcEnv]:
 
         # Create factory and initialize tenant
         sc = provablyfine.client.Factory(config)
-        sc.initialize(str(account_key_file))
+        sc.invitation(sc.public().initialize(), str(account_key_file)).accept_invitation()
 
         # Generate session key and login via http_sig
         session_key_obj = provablyfine.jwk.Private.generate_ed25519()

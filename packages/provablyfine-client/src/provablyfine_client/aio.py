@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import typing
 
-from . import account_client, invitation_client, public_client, schemas, session_client, signer
+from . import account_client, invitation_client, public_client, schemas, session_client
 
 
 class AsyncPublicClient:
@@ -24,8 +24,8 @@ class AsyncPublicClient:
     async def list_public_auths(self) -> list[schemas.AuthPublicSummary]:
         return await self._run(self._inner.list_public_auths)
 
-    async def initialize(self, account_signer: signer.Signer, account_public_key: dict[str, typing.Any]) -> None:
-        return await self._run(lambda: self._inner.initialize(account_signer, account_public_key))
+    async def initialize(self) -> str:
+        return await self._run(self._inner.initialize)
 
 
 class AsyncSessionClient:
@@ -320,5 +320,5 @@ class AsyncInvitationClient:
         async with self._lock:
             return await asyncio.to_thread(fn)
 
-    async def connect(self, account_public_key: dict[str, typing.Any]) -> None:
-        return await self._run(lambda: self._inner.connect(account_public_key))
+    async def accept_invitation(self) -> None:
+        return await self._run(self._inner.accept_invitation)

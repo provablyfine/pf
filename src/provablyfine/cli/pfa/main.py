@@ -14,7 +14,7 @@ def _initialize_function(args: argparse.Namespace) -> None:
         _, account_key_id = common.generate_and_save_key()
     else:
         account_key_id = args.key
-    sc.initialize(account_key_id)
+    sc.invitation(sc.public().initialize(), account_key_id).accept_invitation()
     c.account_key = account_key_id
     c.auth_name = "default"
     c.save(args.config)

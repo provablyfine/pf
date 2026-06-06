@@ -223,7 +223,8 @@ class NewServerSetupScreen(base.Screen):
 
             set_status("Initializing...")
             try:
-                client.Factory(c).initialize(account_key)
+                f = client.Factory(c)
+                f.invitation(f.public().initialize(), account_key).accept_invitation()
             except pfc.exceptions.UI as e:
                 if "already initialized" in str(e):
                     raise pfc.exceptions.UI("Server already initialized — use 'Connect to existing server'")
@@ -317,7 +318,7 @@ class ConnectScreen(base.Screen):
 
             status.update("Accepting invitation...")
             try:
-                await asyncio.to_thread(factory.connect, invitation, account_key)
+                await asyncio.to_thread(factory.invitation(invitation, account_key).accept_invitation)
             except pfc.exceptions.UI as e:
                 self.notify(str(e), severity="error")
                 status.update("Paste invitation URL or directory URL")
