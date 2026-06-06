@@ -382,7 +382,7 @@ class SessionClient:
         name: str | None = None,
         description: str | None = None,
         grant_list: list[schemas.Grant] | None = None,
-        member_list: list[schemas.RoleMemberRef] | None = None,
+        member_list: list[schemas.RoleMemberUpdateRequest] | None = None,
     ) -> None:
         body: dict[str, typing.Any] = {}
         if name is not None:

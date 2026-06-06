@@ -194,7 +194,7 @@ class AsyncSessionClient:
         name: str | None = None,
         description: str | None = None,
         grant_list: list[schemas.Grant] | None = None,
-        member_list: list[schemas.RoleMemberRef] | None = None,
+        member_list: list[schemas.RoleMemberUpdateRequest] | None = None,
     ) -> None:
         return await self._run(lambda: self._inner.update_role(id, name, description, grant_list, member_list))
 

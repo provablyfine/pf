@@ -565,9 +565,8 @@ class RoleMember(_Base):
     name: str
 
 
-class RoleMemberRef(_Base):
-    id: int | None = None
-    name: str | None = None
+class RoleMemberUpdateRequest(_Base):
+    name: str
 
 
 class Role(_Base):

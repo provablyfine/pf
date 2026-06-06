@@ -114,37 +114,22 @@ def _role_grant_function(args: argparse.Namespace, action: str, grant: dict[str,
 
 
 def _role_member_function(args: argparse.Namespace) -> None:
-    def to_ref(member: str) -> pfc.schemas.RoleMemberRef:
-        if member.isdigit():
-            return pfc.schemas.RoleMemberRef(id=int(member))
-        else:
-            return pfc.schemas.RoleMemberRef(name=member)
-
-    def is_equal(a: pfc.schemas.RoleMemberRef, b: pfc.schemas.RoleMemberRef) -> bool:
-        if a.id is not None and b.id is not None and a.id == b.id:
-            return True
-        if a.name is not None and b.name is not None and a.name == b.name:
-            return True
-        return False
-
     c = client.Config.load(args.config)
     sc = client.Factory(c, timeout=args.timeout).session()
     role = sc.get_role(args.id)
-    member_list: list[pfc.schemas.RoleMemberRef] = [
-        pfc.schemas.RoleMemberRef(id=m.id, name=m.name) for m in role.member_list
+    member_list: list[pfc.schemas.RoleMemberUpdateRequest] = [
+        pfc.schemas.RoleMemberUpdateRequest(name=m.name) for m in role.member_list
     ]
 
     for added in args.add:
-        member = to_ref(added)
-        if not any(is_equal(member, m) for m in member_list):
-            member_list.append(member)
+        if not any(m.name == added for m in member_list):
+            member_list.append(pfc.schemas.RoleMemberUpdateRequest(name=added))
 
     for deleted in args.delete:
-        member = to_ref(deleted)
-        member_list = [m for m in member_list if not is_equal(m, member)]
+        member_list = [m for m in member_list if not m.name == deleted]
 
     if args.set is not None:
-        member_list = [to_ref(m) for m in args.set]
+        member_list = [pfc.schemas.RoleMemberUpdateRequest(name=m) for m in args.set]
 
     sc.update_role(role.id, member_list=member_list)
 

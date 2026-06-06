@@ -80,3 +80,14 @@ Create a new role
   >     permit_agent_forwarding: false
   >     permit_x11_forwarding: false
   > EOF
+
+Add first member to developer role
+  $ pfa -c config.json identity create -n user1
+  $ pfa -c config.json role member -i $ROLE_ID -a user1
+
+Add second member to role that already has a member
+  $ pfa -c config.json identity create -n user2
+  $ pfa -c config.json role member -i $ROLE_ID -a user2
+  $ pfa -c config.json role read -i $ROLE_ID | grep ^member
+  member       user1
+  member       user2

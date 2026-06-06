@@ -183,7 +183,7 @@ class RoleViewScreen(base.Screen):
             name=name if name_changed else None,
             description=description if description_changed else None,
             grant_list=self._grant_list if grants_changed else None,
-            member_list=[pfc.schemas.RoleMemberRef(name=name) for name in self._member_names]
+            member_list=[pfc.schemas.RoleMemberUpdateRequest(name=name) for name in self._member_names]
             if members_changed
             else None,
         )
