@@ -2,7 +2,7 @@ import argparse
 import signal
 import sys
 
-from ... import client
+from ... import client, jwk, ssh
 from .. import common
 from . import audit_log_cli, auth_cli, bastion_cli, boundary_cli, grant_cli, identity_cli, role_cli, tag_cli, tenant_cli
 
@@ -10,7 +10,15 @@ from . import audit_log_cli, auth_cli, bastion_cli, boundary_cli, grant_cli, ide
 def _initialize_function(args: argparse.Namespace) -> None:
     c = client.Config(directory_url=args.url)
     sc = client.Factory(c, timeout=args.timeout)
-    if args.key is None:
+    if args.transient_key:
+        # This is a convenient way to generate transient keys that never touch
+        # the disk. i.e., ssh-keygen + ssh-add make this more difficult than
+        # it should be
+        key = jwk.Private.generate_ed25519()
+        account_key_id = key.public().ssh_fingerprint()
+        ssh_agent = ssh.agent.Client()
+        ssh_agent.add(key, comment="pf-account", lifetime=60)
+    elif args.key is None:
         _, account_key_id = common.generate_and_save_key()
     else:
         account_key_id = args.key
@@ -38,7 +46,9 @@ def pfa() -> None:
 
     initialize_parser = subparsers.add_parser("initialize", help="Initialize a new server and register account key")
     initialize_parser.add_argument("url", help="Directory URL of the server")
-    initialize_parser.add_argument("--key", default=None, help="Account key (filename or fingerprint)")
+    group = initialize_parser.add_mutually_exclusive_group()
+    group.add_argument("--key", default=None, help="Account key (filename or fingerprint)")
+    group.add_argument("--transient-key", action="store_true", help="Generate an account key and store it in ssh-agent for 60s")
     initialize_parser.set_defaults(func=_initialize_function)
 
     boundary_parser = subparsers.add_parser("boundary", help="View and edit boundaries")
