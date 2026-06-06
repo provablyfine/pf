@@ -63,7 +63,7 @@ def version_function(args: argparse.Namespace) -> None:
 @dataclasses.dataclass
 class Invitation:
     directory_url: str
-    key: str
+    key: str | None
     auth_name: str
 
 
@@ -71,31 +71,36 @@ def _parse_invitation(invitation_url: str) -> Invitation:
     url = urllib.parse.urlsplit(invitation_url)
     qs = urllib.parse.parse_qs(url.query)
     invitation = qs.get("invitation")
-    if not invitation:
-        raise pfc.exceptions.UI("No invitation key found in URL")
     auth = qs.get("auth")
     if not auth:
         raise pfc.exceptions.UI("No auth key found in URL")
     url_no_qs = url._replace(query="")
     directory_url = urllib.parse.urlunsplit(url_no_qs)
-    return Invitation(directory_url=directory_url, key=invitation[0], auth_name=auth[0])
+    return Invitation(directory_url=directory_url, key=None if not invitation else invitation[0], auth_name=auth[0])
 
 
 def _accept_function(args: argparse.Namespace) -> None:
     invitation = _parse_invitation(args.invitation)
-    # XXX: use the key below only if auth_name points to an auth that is http sig
-    # In this case, trigger a login flow via the alternate auth method
-    if args.key is None:
-        _, account_key_id = generate_and_save_key()
-    else:
-        account_key_id = args.key
     c = client.Config(
         directory_url=invitation.directory_url,
         auth_name=invitation.auth_name,
     )
     sc = client.Factory(c, timeout=args.timeout)
-    sc.invitation(invitation.key, account_key_id).accept_invitation()
-    c.account_key = account_key_id
+    auths = sc.public().list_public_auths()
+    for auth in auths:
+        if auth.name != invitation.auth_name:
+            continue
+        if auth.type != "http_sig":
+            continue
+        if invitation.key is None:
+            raise pfc.exceptions.UI("No invitation key found in URL")
+        if args.key is None:
+            _, account_key_id = generate_and_save_key()
+        else:
+            account_key_id = args.key
+        sc.invitation(invitation.key, account_key_id).accept_invitation()
+        c.account_key = account_key_id
+        break
     c.save(args.config)
 
 
