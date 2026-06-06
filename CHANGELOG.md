@@ -4,7 +4,7 @@
 
 ### Added
 - CHANGELOG.md
-- #9: pfa initialize --transient-key
+- Add "pfa initialize --transient-key" (#9)
 
 ## [0.3.0] - 2026-06-05
 
