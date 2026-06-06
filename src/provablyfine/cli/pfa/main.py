@@ -48,7 +48,9 @@ def pfa() -> None:
     initialize_parser.add_argument("url", help="Directory URL of the server")
     group = initialize_parser.add_mutually_exclusive_group()
     group.add_argument("--key", default=None, help="Account key (filename or fingerprint)")
-    group.add_argument("--transient-key", action="store_true", help="Generate an account key and store it in ssh-agent for 60s")
+    group.add_argument(
+        "--transient-key", action="store_true", help="Generate an account key and store it in ssh-agent for 60s"
+    )
     initialize_parser.set_defaults(func=_initialize_function)
 
     boundary_parser = subparsers.add_parser("boundary", help="View and edit boundaries")
