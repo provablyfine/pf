@@ -4,7 +4,7 @@
 
 ### Added
 - CHANGELOG.md
-- Add "pfa initialize --transient-key" (#9)
+- Add "pfa initialize --transient-key" [#9](https://github.com/provablyfine/pf/issues/9)
 
 ## [0.3.0] - 2026-06-05
 
