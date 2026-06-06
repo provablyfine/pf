@@ -95,6 +95,26 @@ def _boundary_function(args: argparse.Namespace) -> None:
     _output(args, boundary)
 
 
+def _tenant_function(args: argparse.Namespace) -> None:
+    tenant = {
+        "type": "tenant",
+        "filter": {"id": args.id},
+        "permission": {
+            "create": args.create,
+            "read": args.read,
+            "delete": args.delete,
+            "update": _all_or(
+                args.update_all,
+                {
+                    "display_name": any("display_name" in entry for entry in args.update),
+                    "is_enabled": any("is_enabled" in entry for entry in args.update),
+                },
+            ),
+        },
+    }
+    _output(args, tenant)
+
+
 def _identity_function(args: argparse.Namespace) -> None:
     identity = {
         "type": "identity",
@@ -223,6 +243,25 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
     group.add_argument("--update-all", action="store_true")
     group.add_argument("-d", "--delete", action="store_true")
     boundary_parser.set_defaults(func=_boundary_function)
+
+    tenant_parser = subparsers.add_parser("tenant", help="Tenant permission")
+    tenant_parser.add_argument("-f", "--format", choices=["yaml", "json"], default="yaml")
+    group = tenant_parser.add_argument_group("filter")
+    group.add_argument("--id", type=int, default=None)
+    group = tenant_parser.add_argument_group("permission")
+    group.add_argument("-c", "--create", action="store_true")
+    group.add_argument("-r", "--read", action="store_true")
+    group.add_argument(
+        "-u",
+        "--update",
+        action="append",
+        nargs="*",
+        default=[],
+        choices=["display_name", "is_enabled"],
+    )
+    group.add_argument("--update-all", action="store_true")
+    group.add_argument("-d", "--delete", action="store_true")
+    tenant_parser.set_defaults(func=_tenant_function)
 
     identity_parser = subparsers.add_parser("identity", help="Identity permission")
     identity_parser.add_argument("-f", "--format", choices=["yaml", "json"], default="yaml")

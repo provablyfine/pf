@@ -1,0 +1,82 @@
+Initialize server and login
+  $ bash $TESTDIR/fixture.sh
+  .* (re)
+
+Create role and user1
+  $ pfa -c config.json role create -n role
+  $ ROLE_ID=$(pfa -c config.json role list -n role -q)
+  $ pfa -c config.json identity create -n user1
+  $ USER1_ID=$(pfa -c config.json identity list -n user1 -q)
+  $ INVITATION=$(pfa -c config.json identity invite -i $USER1_ID --manual)
+  $ pfa -c config.json role member -i $ROLE_ID -a user1
+  $ ssh-keygen -t ed25519 -f user1 -N "" > /dev/null
+  $ pf -c user1.json accept --invitation=$INVITATION --key user1
+  $ ssh-keygen -t ed25519 -f user1-session -N "" > /dev/null
+  $ pf -c user1.json login --session-key user1-session
+
+Create a child tenant for testing (will get id=2)
+  $ pfa -c config.json tenant create --name acme --display-name "Acme Corp"
+  .* (re)
+  .* (re)
+  .* (re)
+  $ TENANT_ID=$(pfa -c config.json tenant list -q | tail -1)
+
+Check that grant "--read" is actually enforcing access control
+  $ pfa -c user1.json tenant list -q
+  $ pfa -c config.json grant tenant --read | pfa -c config.json role grant -i $ROLE_ID --add
+  $ pfa -c user1.json tenant list -q
+  1
+  2
+  $ pfa -c config.json role read -i $ROLE_ID -f json | jq '.grant_list[-1]' | pfa -c config.json role grant -i $ROLE_ID --del
+  $ pfa -c user1.json tenant list -q
+
+Check that grant "--read --id 2" is actually enforcing access control
+  $ pfa -c user1.json tenant list -q
+  $ pfa -c config.json grant tenant --read --id 2 | pfa -c config.json role grant -i $ROLE_ID --add
+  $ pfa -c user1.json tenant list -q
+  2
+  $ pfa -c config.json role read -i $ROLE_ID -f json | jq '.grant_list[-1]' | pfa -c config.json role grant -i $ROLE_ID --del
+  $ pfa -c user1.json tenant list -q
+
+{% for grant in ["--create"] %}
+Check that grant "{{grant}}" is actually enforcing access control
+  $ pfa -c user1.json tenant create --name beta --display-name "Beta Corp"
+  Not allowed to create tenant
+  [2]
+  $ pfa -c config.json grant tenant {{grant}} | pfa -c config.json role grant -i $ROLE_ID --add
+  $ pfa -c user1.json tenant create --name beta --display-name "Beta Corp"
+  .* (re)
+  .* (re)
+  .* (re)
+  $ pfa -c config.json role read -i $ROLE_ID -f json | jq '.grant_list[-1]' | pfa -c config.json role grant -i $ROLE_ID --del
+{% endfor %}
+
+{% for grant, flag in [
+  ("--update display_name", "--display-name \"New Name\""),
+  ("--update is_enabled", "--disable"),
+  ("--update-all", "--display-name \"New Name\""),
+] %}
+Check that grant "{{grant}}" is actually enforcing access control
+  $ pfa -c user1.json tenant update -i $TENANT_ID {{flag}}
+  Not allowed to update tenant field
+  [2]
+  $ pfa -c config.json grant tenant {{grant}} | pfa -c config.json role grant -i $ROLE_ID --add
+  $ pfa -c user1.json tenant update -i $TENANT_ID {{flag}}
+  $ pfa -c config.json role read -i $ROLE_ID -f json | jq '.grant_list[-1]' | pfa -c config.json role grant -i $ROLE_ID --del
+  $ pfa -c user1.json tenant update -i $TENANT_ID {{flag}}
+  Not allowed to update tenant field
+  [2]
+{% endfor %}
+
+Check that grant "--delete" is actually enforcing access control
+  $ pfa -c config.json tenant create --name gamma --display-name "Gamma Corp"
+  .* (re)
+  .* (re)
+  .* (re)
+  $ GAMMA_ID=$(pfa -c config.json tenant list -q | tail -1)
+  $ pfa -c user1.json tenant delete -i $GAMMA_ID
+  Not allowed to delete tenant
+  [2]
+  $ pfa -c config.json grant tenant --delete | pfa -c config.json role grant -i $ROLE_ID --add
+  $ pfa -c user1.json tenant delete -i $GAMMA_ID
+  $ pfa -c config.json role read -i $ROLE_ID -f json | jq '.grant_list[-1]' | pfa -c config.json role grant -i $ROLE_ID --del

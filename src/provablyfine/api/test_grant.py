@@ -47,6 +47,10 @@ def _boundary_update(name: bool, description: bool, ceiling_list: bool, denied_l
     }
 
 
+def _tenant_update(display_name: bool, is_enabled: bool):
+    return {"display_name": display_name, "is_enabled": is_enabled}
+
+
 def _crud(create: bool, read: bool, update: dict[str, bool] | None, delete: bool):
     return {
         "create": create,
@@ -522,6 +526,86 @@ def test_identity_create(tag_id_list, boundary_id_list, expected1, expected2):
 
     assert grants.identity().can_create([1], [1]) == expected1
     assert grants.identity().can_create([1, 2], [1, 2]) == expected2
+
+
+######## TENANT ########
+
+
+def test_empty_tenant():
+    grants = grant.Grants([], [])
+
+    assert not grants.tenant(None).can_create()
+    assert not grants.tenant(1).can_read()
+    assert not grants.tenant(1).can_update("display_name")
+    assert not grants.tenant(1).can_update("is_enabled")
+    assert not grants.tenant(1).can_delete()
+    with pytest.raises(AssertionError):
+        assert not grants.tenant(1).can_update("beurk")
+
+
+@pytest.mark.parametrize(
+    "create,read,update,delete",
+    [
+        (False, False, _tenant_update(False, False), False),
+        (True, False, _tenant_update(False, False), False),
+        (False, True, _tenant_update(False, False), False),
+        (False, False, _tenant_update(True, False), False),
+        (False, False, _tenant_update(False, True), False),
+        (False, False, _tenant_update(False, False), True),
+        (True, True, _tenant_update(True, True), True),
+        (True, True, None, True),
+        (True, False, None, True),
+        (False, True, _tenant_update(True, False), True),
+    ],
+)
+def test_filter_all_tenant(create, read, update, delete):
+    grants = single_grants(
+        {
+            "type": "tenant",
+            "filter": {"id": None},
+            "permission": _crud(create=create, read=read, update=update, delete=delete),
+        }
+    )
+    assert grants.tenant(None).can_create() == create
+    for tenant_id in [1, 2, 3]:
+        assert grants.tenant(tenant_id).can_read() == read
+        assert grants.tenant(tenant_id).can_delete() == delete
+        assert grants.tenant(tenant_id).can_update("display_name") == (update is None or update["display_name"])
+        assert grants.tenant(tenant_id).can_update("is_enabled") == (update is None or update["is_enabled"])
+
+
+@pytest.mark.parametrize(
+    "read,update,delete",
+    [
+        (False, _tenant_update(False, False), False),
+        (True, _tenant_update(False, False), False),
+        (False, _tenant_update(True, False), False),
+        (False, _tenant_update(False, True), False),
+        (False, _tenant_update(False, False), True),
+        (True, _tenant_update(True, True), True),
+        (True, None, True),
+        (False, None, True),
+        (True, _tenant_update(True, False), True),
+    ],
+)
+def test_filter_one_tenant(read, update, delete):
+    grants = single_grants(
+        {
+            "type": "tenant",
+            "filter": {"id": 2},
+            "permission": _crud(create=False, read=read, update=update, delete=delete),
+        }
+    )
+    assert not grants.tenant(None).can_create()
+    for tenant_id in [1, 2, 3]:
+        assert grants.tenant(tenant_id).can_read() == (tenant_id == 2 and read)
+        assert grants.tenant(tenant_id).can_delete() == (tenant_id == 2 and delete)
+        assert grants.tenant(tenant_id).can_update("display_name") == (
+            tenant_id == 2 and (update is None or update["display_name"])
+        )
+        assert grants.tenant(tenant_id).can_update("is_enabled") == (
+            tenant_id == 2 and (update is None or update["is_enabled"])
+        )
 
 
 ######## SSH ########
