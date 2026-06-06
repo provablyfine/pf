@@ -83,6 +83,8 @@ def _parse_invitation(invitation_url: str) -> Invitation:
 
 def _accept_function(args: argparse.Namespace) -> None:
     invitation = _parse_invitation(args.invitation)
+    # XXX: use the key below only if auth_name points to an auth that is http sig
+    # In this case, trigger a login flow via the alternate auth method
     if args.key is None:
         _, account_key_id = generate_and_save_key()
     else:
