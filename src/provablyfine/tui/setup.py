@@ -328,7 +328,7 @@ class ConnectScreen(base.Screen):
         if auth_name is None:
             status.update("Fetching auth methods...")
             try:
-                auths = await factory.async_public().list_public_auths()
+                auths = await factory.async_public().list_public_auths(client_type="cli")
             except pfc.exceptions.UI as e:
                 self.notify(str(e), severity="error")
                 status.update("Paste invitation URL or directory URL")

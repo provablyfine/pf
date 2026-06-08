@@ -21,8 +21,8 @@ class AsyncPublicClient:
     async def get_public_auth(self, auth_name: str) -> schemas.AuthPublic:
         return await self._run(lambda: self._inner.get_public_auth(auth_name))
 
-    async def list_public_auths(self) -> list[schemas.AuthPublicSummary]:
-        return await self._run(self._inner.list_public_auths)
+    async def list_public_auths(self, client_type: str) -> list[schemas.AuthPublicSummary]:
+        return await self._run(lambda: self._inner.list_public_auths(client_type))
 
     async def initialize(self) -> str:
         return await self._run(self._inner.initialize)
@@ -106,12 +106,15 @@ class AsyncSessionClient:
     async def get_auth(self, id: int) -> schemas.Auth:
         return await self._run(lambda: self._inner.get_auth(id))
 
-    async def create_auth_http_sig(self, name: str, description: str, tags: list[dict[str, str]]) -> schemas.Auth:
-        return await self._run(lambda: self._inner.create_auth_http_sig(name, description, tags))
+    async def create_auth_http_sig(
+        self, name: str, client_type: str, description: str, tags: list[dict[str, str]]
+    ) -> schemas.Auth:
+        return await self._run(lambda: self._inner.create_auth_http_sig(name, client_type, description, tags))
 
     async def create_auth_oidc(
         self,
         name: str,
+        client_type: str,
         description: str,
         tags: list[dict[str, str]],
         issuer: str,
@@ -119,19 +122,22 @@ class AsyncSessionClient:
         client_secret: str | None,
     ) -> schemas.Auth:
         return await self._run(
-            lambda: self._inner.create_auth_oidc(name, description, tags, issuer, client_id, client_secret)
+            lambda: self._inner.create_auth_oidc(name, client_type, description, tags, issuer, client_id, client_secret)
         )
 
     async def create_auth_oauth2_github(
         self,
         name: str,
+        client_type: str,
         description: str,
         tags: list[dict[str, str]],
         client_id: str,
         client_secret: str,
     ) -> schemas.Auth:
         return await self._run(
-            lambda: self._inner.create_auth_oauth2_github(name, description, tags, client_id, client_secret)
+            lambda: self._inner.create_auth_oauth2_github(
+                name, client_type, description, tags, client_id, client_secret
+            )
         )
 
     async def update_auth(

@@ -14,11 +14,13 @@ from . import auth_view, base, header
 @dataclasses.dataclass
 class _HttpSigParams:
     name: str
+    client_type: str
 
 
 @dataclasses.dataclass
 class _OidcParams:
     name: str
+    client_type: str
     issuer: str
     client_id: str
     client_secret: str | None
@@ -27,6 +29,7 @@ class _OidcParams:
 @dataclasses.dataclass
 class _OAuth2Params:
     name: str
+    client_type: str
     client_id: str
     client_secret: str
 
@@ -98,6 +101,7 @@ class _AuthParamsScreen(textual.screen.ModalScreen[_AuthParamsResult | None]):
         with textual.containers.VerticalGroup() as container:
             container.border_title = f"New {self._type} auth"
             yield textual.widgets.Input(placeholder="name", id="name", compact=True)
+            yield textual.widgets.Input(placeholder="client_type (cli or web)", id="client_type", compact=True)
             if self._type == "oidc":
                 yield textual.widgets.Input(placeholder="issuer", id="issuer", compact=True)
                 yield textual.widgets.Input(placeholder="client_id", id="client_id", compact=True)
@@ -118,21 +122,30 @@ class _AuthParamsScreen(textual.screen.ModalScreen[_AuthParamsResult | None]):
         name = self.query_one("#name", textual.widgets.Input).value.strip()
         if not name:
             return
+        client_type = self.query_one("#client_type", textual.widgets.Input).value.strip()
+        if client_type not in ("cli", "web"):
+            return
         if self._type == "oidc":
             issuer = self.query_one("#issuer", textual.widgets.Input).value.strip()
             client_id = self.query_one("#client_id", textual.widgets.Input).value.strip()
             if not issuer or not client_id:
                 return
             secret = self.query_one("#client_secret", textual.widgets.Input).value.strip()
-            self.dismiss(_OidcParams(name=name, issuer=issuer, client_id=client_id, client_secret=secret or None))
+            self.dismiss(
+                _OidcParams(
+                    name=name, client_type=client_type, issuer=issuer, client_id=client_id, client_secret=secret or None
+                )
+            )
         elif self._type == "oauth2-github":
             client_id = self.query_one("#client_id", textual.widgets.Input).value.strip()
             client_secret = self.query_one("#client_secret", textual.widgets.Input).value.strip()
             if not client_id or not client_secret:
                 return
-            self.dismiss(_OAuth2Params(name=name, client_id=client_id, client_secret=client_secret))
+            self.dismiss(
+                _OAuth2Params(name=name, client_type=client_type, client_id=client_id, client_secret=client_secret)
+            )
         else:
-            self.dismiss(_HttpSigParams(name=name))
+            self.dismiss(_HttpSigParams(name=name, client_type=client_type))
 
 
 class AuthListScreen(base.Screen):
@@ -158,7 +171,7 @@ class AuthListScreen(base.Screen):
 
     async def on_mount(self) -> None:
         table = self.query_one(self._StrDataTable)
-        table.add_columns("Name", "Type", "Enabled")
+        table.add_columns("Name", "Client Type", "Type", "Enabled")
         self._auths = (await self._auth.list_auths()).auths
         self._populate_table(table)
 
@@ -170,7 +183,7 @@ class AuthListScreen(base.Screen):
     def _populate_table(self, table: "AuthListScreen._StrDataTable") -> None:
         table.clear(columns=False)
         for a in self._auths:
-            table.add_row(a.name, a.config.type, str(a.is_enabled))
+            table.add_row(a.name, a.client_type, a.config.type, str(a.is_enabled))
 
     @textual.on(textual.widgets.DataTable.RowSelected)
     def _on_row_selected(self) -> None:
@@ -193,13 +206,15 @@ class AuthListScreen(base.Screen):
             return
         match body:
             case _HttpSigParams():
-                a = await self._auth.create_auth_http_sig(body.name, "", [])
+                a = await self._auth.create_auth_http_sig(body.name, body.client_type, "", [])
             case _OidcParams():
                 a = await self._auth.create_auth_oidc(
-                    body.name, "", [], body.issuer, body.client_id, body.client_secret
+                    body.name, body.client_type, "", [], body.issuer, body.client_id, body.client_secret
                 )
             case _OAuth2Params():
-                a = await self._auth.create_auth_oauth2_github(body.name, "", [], body.client_id, body.client_secret)
+                a = await self._auth.create_auth_oauth2_github(
+                    body.name, body.client_type, "", [], body.client_id, body.client_secret
+                )
         self._auths.append(a)
         table = self.query_one(self._StrDataTable)
         self._populate_table(table)

@@ -46,6 +46,7 @@ class OAuth2CreateConfig(base.APIBase):
 class Auth(base.APIBase):
     id: int
     name: str
+    client_type: str
     description: str
     tags: list[tag.TagNameValue]
     created_at: int
@@ -59,6 +60,7 @@ class AuthListResponse(base.APIBase):
 
 class AuthCreateRequest(base.APIBase):
     name: str
+    client_type: str
     description: str = ""
     tags: list[tag.TagNameValue] = pydantic.Field(default_factory=list[tag.TagNameValue])
     config: OidcCreateConfig | OAuth2CreateConfig | HttpSigCreateConfig
@@ -105,6 +107,7 @@ class OidcJwksResponse(base.APIBase):
 
 class AuthPublicSummary(base.APIBase):
     name: str
+    client_type: str
     type: typing.Literal["http_sig", "oidc", "oauth2-github"]
 
 

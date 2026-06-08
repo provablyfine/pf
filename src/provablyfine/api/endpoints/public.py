@@ -15,10 +15,15 @@ def public_oidc_jwks() -> schemas.auth.OidcJwksResponse:
 
 
 @router.get("/public/auth", status_code=200)
-def public_auth_list() -> schemas.auth.AuthPublicListResponse:
-    acs = model.auth_config.read_all(is_enabled=True)
+def public_auth_list(client_type: str) -> schemas.auth.AuthPublicListResponse:
+    acs = model.auth_config.read_all(is_enabled=True, client_type=client_type)
     return schemas.auth.AuthPublicListResponse(
-        auths=[schemas.auth.AuthPublicSummary.model_validate({"name": ac.name, "type": ac.type}) for ac in acs]
+        auths=[
+            schemas.auth.AuthPublicSummary.model_validate(
+                {"name": ac.name, "client_type": ac.client_type, "type": ac.type}
+            )
+            for ac in acs
+        ]
     )
 
 

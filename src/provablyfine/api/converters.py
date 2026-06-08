@@ -554,6 +554,7 @@ def auth_config_to_schema(ac: model.auth_config.AuthConfig) -> schemas.auth.Auth
     return schemas.auth.Auth(
         id=ac.id,
         name=ac.name,
+        client_type=ac.client_type,
         description=ac.description,
         tags=converter.to_tag_list(ac.tag_id_list) or [],
         created_at=ac.created_at,

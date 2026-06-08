@@ -5,6 +5,7 @@
 ### Added
 - CHANGELOG.md
 - Add "pfa initialize --transient-key" ([#9](https://github.com/provablyfine/pf/issues/9))
+- Track client_type on a per-auth basis ([#12](//github.com/provablyfine/pf/issues/12))
 
 ### Fixed
 - Sync client-side schema with server-side schema ([#10](//github.com/provablyfine/pf/issues/10))

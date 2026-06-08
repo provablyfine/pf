@@ -41,7 +41,8 @@ SerializedGrant = dict[str, typing.Any]
 
 class AuthRow(typing.NamedTuple):
     id: typing.Annotated[int, db.Col(primary_key=True)]
-    name: typing.Annotated[str, db.Col(unique=True, index=True)]
+    name: typing.Annotated[str, db.Col(index=True)]
+    client_type: str
     description: str
     tag_id_list: list[int]
     created_at: int
@@ -50,7 +51,7 @@ class AuthRow(typing.NamedTuple):
     config: bytes
 
 
-auth = db.make_table("auth", metadata, AuthRow)
+auth = db.make_table("auth", metadata, AuthRow, sqlalchemy.UniqueConstraint("name", "client_type"))
 
 
 class PublicKeyDenylistRow(typing.NamedTuple):

@@ -12,6 +12,7 @@ from . import audit_log
 class AuthConfig:
     id: int
     name: str
+    client_type: str
     description: str
     tag_id_list: list[int]
     created_at: int
@@ -24,6 +25,7 @@ def _from_db(row: app_db.AuthRow) -> AuthConfig:
     return AuthConfig(
         id=row.id,
         name=row.name,
+        client_type=row.client_type,
         description=row.description,
         tag_id_list=row.tag_id_list,
         created_at=row.created_at,
@@ -33,10 +35,13 @@ def _from_db(row: app_db.AuthRow) -> AuthConfig:
     )
 
 
-def create(name: str, description: str, tag_id_list: list[int], type: str, config: dict[str, typing.Any]) -> int:
+def create(
+    name: str, client_type: str, description: str, tag_id_list: list[int], type: str, config: dict[str, typing.Any]
+) -> int:
     now = int(time.time())
     auth_id = ctx.app_db.auth.create(
         name=name,
+        client_type=client_type,
         description=description,
         tag_id_list=tag_id_list,
         created_at=now,

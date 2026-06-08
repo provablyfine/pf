@@ -86,7 +86,7 @@ def _accept_function(args: argparse.Namespace) -> None:
         auth_name=invitation.auth_name,
     )
     sc = client.Factory(c, timeout=args.timeout)
-    auths = sc.public().list_public_auths()
+    auths = sc.public().list_public_auths(client_type="cli")
     for auth in auths:
         if auth.name != invitation.auth_name:
             continue

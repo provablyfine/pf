@@ -81,6 +81,7 @@ def oidc_env(api, mock_oidc, ssh_agent, tmp_path) -> typing.Iterator[OidcEnv]:
         # Create OIDC auth config pointing to mock OIDC provider
         sc.session().create_auth_oidc(
             name="oidc-test",
+            client_type="cli",
             description="Test OIDC provider",
             tags=[],
             issuer=mock_oidc.issuer,
@@ -225,6 +226,7 @@ def test_endpoint_tag_restriction_pass(oidc_env: OidcEnv) -> None:
     # Create a basic auth config with no tag restrictions
     oidc_env.sc.session().create_auth_oidc(
         name="oidc-unrestricted",
+        client_type="cli",
         description="Unrestricted OIDC",
         tags=[],
         issuer=oidc_env.mock.issuer,
@@ -251,6 +253,7 @@ def test_endpoint_tag_restriction_fail(oidc_env: OidcEnv) -> None:
     # Create auth config with tag restriction
     oidc_auth = oidc_env.sc.session().create_auth_oidc(
         name="oidc-restricted",
+        client_type="cli",
         description="Restricted OIDC",
         tags=[],
         issuer=oidc_env.mock.issuer,

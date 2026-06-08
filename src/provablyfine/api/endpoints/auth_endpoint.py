@@ -58,6 +58,7 @@ def create_endpoint(data: schemas.auth.AuthCreateRequest) -> schemas.auth.Auth:
     try:
         auth_id = model.auth_config.create(
             name=data.name,
+            client_type=data.client_type,
             description=data.description,
             tag_id_list=converter.from_tag_list(data.tags) or [],
             type=data.config.type,

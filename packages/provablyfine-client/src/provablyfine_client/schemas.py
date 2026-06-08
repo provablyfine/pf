@@ -157,12 +157,14 @@ class AuthPublic(_Base):
 
 class AuthPublicSummary(_Base):
     name: str
+    client_type: str
     type: str
 
 
 class Auth(_Base):
     id: int
     name: str
+    client_type: str
     description: str
     tags: list[TagNameValue] = []
     created_at: int

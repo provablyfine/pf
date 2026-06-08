@@ -200,9 +200,12 @@ class SessionClient:
             raise exceptions.UI(_problem_title(response, "Unable to read auth config"))
         return schemas.Auth.model_validate(response.json())
 
-    def create_auth_http_sig(self, name: str, description: str, tags: list[dict[str, str]]) -> schemas.Auth:
+    def create_auth_http_sig(
+        self, name: str, client_type: str, description: str, tags: list[dict[str, str]]
+    ) -> schemas.Auth:
         body = {
             "name": name,
+            "client_type": client_type,
             "description": description,
             "config": {"type": "http_sig"},
             "tags": tags,
@@ -215,6 +218,7 @@ class SessionClient:
     def create_auth_oidc(
         self,
         name: str,
+        client_type: str,
         description: str,
         tags: list[dict[str, str]],
         issuer: str,
@@ -224,7 +228,7 @@ class SessionClient:
         config: dict[str, str] = {"type": "oidc", "issuer": issuer, "client_id": client_id}
         if client_secret is not None:
             config["client_secret"] = client_secret
-        body = {"name": name, "description": description, "config": config, "tags": tags}
+        body = {"name": name, "client_type": client_type, "description": description, "config": config, "tags": tags}
         response = self._session.post(self._directory.auth, auth=self._auth(), json=body)
         if response.status_code != 201:
             raise exceptions.UI(_problem_title(response, "Unable to create auth config"))
@@ -233,13 +237,14 @@ class SessionClient:
     def create_auth_oauth2_github(
         self,
         name: str,
+        client_type: str,
         description: str,
         tags: list[dict[str, str]],
         client_id: str,
         client_secret: str,
     ) -> schemas.Auth:
         config = {"type": "oauth2-github", "client_id": client_id, "client_secret": client_secret}
-        body = {"name": name, "description": description, "config": config, "tags": tags}
+        body = {"name": name, "client_type": client_type, "description": description, "config": config, "tags": tags}
         response = self._session.post(self._directory.auth, auth=self._auth(), json=body)
         if response.status_code != 201:
             raise exceptions.UI(_problem_title(response, "Unable to create auth config"))

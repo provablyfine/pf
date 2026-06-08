@@ -36,8 +36,8 @@ class PublicClient:
             raise exceptions.UI(_problem_title(response, "Unable to read auth config"))
         return schemas.AuthPublic.model_validate(response.json())
 
-    def list_public_auths(self) -> list[schemas.AuthPublicSummary]:
-        response = self._session.get(self._directory.public_auth)
+    def list_public_auths(self, client_type: str) -> list[schemas.AuthPublicSummary]:
+        response = self._session.get(self._directory.public_auth, params={"client_type": client_type})
         if response.status_code != 200:
             raise exceptions.UI("Unable to list auth methods")
         return [schemas.AuthPublicSummary.model_validate(a) for a in response.json().get("auths", [])]
