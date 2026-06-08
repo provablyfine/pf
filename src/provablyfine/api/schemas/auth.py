@@ -19,6 +19,13 @@ class OidcConfig(base.APIBase):
     type: typing.Literal["oidc"] = "oidc"
 
 
+class OidcDeviceCodeConfig(base.APIBase):
+    issuer: str
+    client_id: str
+    client_secret: str | None = None
+    type: typing.Literal["oidc-device-code"] = "oidc-device-code"
+
+
 class OAuth2Config(base.APIBase):
     client_id: str
     authorization_endpoint: str
@@ -26,10 +33,14 @@ class OAuth2Config(base.APIBase):
     type: typing.Literal["oauth2-github"] = "oauth2-github"
 
 
-AuthConfig = OidcConfig | OAuth2Config | HttpSigConfig
+AuthConfig = OidcConfig | OidcDeviceCodeConfig | OAuth2Config | HttpSigConfig
 
 
 class OidcCreateConfig(OidcConfig):
+    pass
+
+
+class OidcDeviceCodeCreateConfig(OidcDeviceCodeConfig):
     pass
 
 
@@ -63,7 +74,7 @@ class AuthCreateRequest(base.APIBase):
     client_type: str
     description: str = ""
     tags: list[tag.TagNameValue] = pydantic.Field(default_factory=list[tag.TagNameValue])
-    config: OidcCreateConfig | OAuth2CreateConfig | HttpSigCreateConfig
+    config: OidcCreateConfig | OidcDeviceCodeCreateConfig | OAuth2CreateConfig | HttpSigCreateConfig
 
 
 class AuthUpdateRequest(base.APIBase):
@@ -108,7 +119,7 @@ class OidcJwksResponse(base.APIBase):
 class AuthPublicSummary(base.APIBase):
     name: str
     client_type: str
-    type: typing.Literal["http_sig", "oidc", "oauth2-github"]
+    type: typing.Literal["http_sig", "oidc", "oidc-device-code", "oauth2-github"]
 
 
 class AuthPublicListResponse(base.APIBase):

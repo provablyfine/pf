@@ -13,6 +13,7 @@ import provablyfine_client as pfc
 import pytest
 import requests
 
+import provablyfine.browser_login
 import provablyfine.cli.login
 import provablyfine.client
 import provablyfine.jwk
@@ -324,3 +325,135 @@ def test_full_oidc_login_flow_callback_error(oidc_env: OidcEnv, monkeypatch) -> 
     # Should raise because callback never receives a code
     with pytest.raises(pfc.exceptions.UI, match="did not receive an authorization code"):
         provablyfine.cli.login.oidc_login(oidc_env.config, oidc_env.sc, "oidc-test")
+
+
+# =============================================================================
+# Group C: Device code flow tests
+# =============================================================================
+
+
+@dataclasses.dataclass
+class OidcDeviceCodeEnv:
+    """Test environment with oidc-device-code auth config."""
+
+    config: provablyfine.client.Config
+    sc: provablyfine.client.Factory
+    mock: mock_oidc.MockOidcProvider
+
+
+@pytest.fixture
+def oidc_device_code_env(api, mock_oidc, ssh_agent, tmp_path) -> typing.Iterator[OidcDeviceCodeEnv]:
+    """Set up oidc-device-code test environment."""
+    old_ssh_auth_sock = os.environ.get("SSH_AUTH_SOCK")
+    os.environ["SSH_AUTH_SOCK"] = ssh_agent.socket
+
+    try:
+        account_key_obj = provablyfine.jwk.Private.generate_ed25519()
+        account_key_file = tmp_path / "account_key"
+        account_key_file.write_bytes(account_key_obj.to_pem())
+
+        config = provablyfine.client.Config(
+            directory_url=f"http://127.0.0.1:{api.port}/pf/t/root/directory",
+            account_key=str(account_key_file),
+        )
+
+        sc = provablyfine.client.Factory(config)
+        sc.invitation(sc.public().initialize(), str(account_key_file)).accept_invitation()
+
+        session_key_obj = provablyfine.jwk.Private.generate_ed25519()
+        session_key_file = tmp_path / "session_key"
+        session_key_file.write_bytes(session_key_obj.to_pem())
+        session_fingerprint = str(session_key_file)
+
+        sc.account(str(account_key_file), session_fingerprint).login_http_sig(session_key_obj.public().to_dict())
+
+        config = provablyfine.client.Config(
+            directory_url=config.directory_url,
+            account_key=config.account_key,
+            session_key=str(session_key_file),
+        )
+        sc = provablyfine.client.Factory(config)
+
+        sc.session().create_auth_oidc_device_code(
+            name="oidc-dc-test",
+            client_type="cli",
+            description="Test OIDC device code provider",
+            tags=[],
+            issuer=mock_oidc.issuer,
+            client_id=mock_oidc.client_id,
+            client_secret=None,
+        )
+
+        sc.session().create_identity(
+            name="user@example.com",
+            boundary_id_list=[],
+            boundary_name_list=[],
+            tag_id_list=[],
+            tag_name_value_list=[],
+        )
+
+        yield OidcDeviceCodeEnv(config=config, sc=sc, mock=mock_oidc)
+    finally:
+        if old_ssh_auth_sock is None:
+            os.environ.pop("SSH_AUTH_SOCK", None)
+        else:
+            os.environ["SSH_AUTH_SOCK"] = old_ssh_auth_sock
+
+
+def test_device_code_endpoint_success(oidc_device_code_env: OidcDeviceCodeEnv) -> None:
+    """Server endpoint accepts oidc-device-code auth config type."""
+    id_token = oidc_device_code_env.mock.issue_token("user@example.com", alg="RS256")
+    session_key, session_fingerprint = _create_session_key()
+
+    oidc_device_code_env.sc.session_with_key(session_fingerprint).login_oidc(
+        auth_name="oidc-dc-test",
+        id_token=id_token,
+        session_public_key=session_key.public().to_dict(),
+    )
+
+
+def test_device_code_endpoint_expired_token(oidc_device_code_env: OidcDeviceCodeEnv) -> None:
+    """Expired token is rejected for oidc-device-code auth config."""
+    id_token = oidc_device_code_env.mock.issue_token("user@example.com", alg="RS256", expired=True)
+    session_key, session_fingerprint = _create_session_key()
+
+    with pytest.raises(pfc.exceptions.UI, match="Unable to login via OIDC"):
+        oidc_device_code_env.sc.session_with_key(session_fingerprint).login_oidc(
+            auth_name="oidc-dc-test",
+            id_token=id_token,
+            session_public_key=session_key.public().to_dict(),
+        )
+
+
+def test_full_device_code_login_flow(oidc_device_code_env: OidcDeviceCodeEnv) -> None:
+    """Complete device code login flow: device auth → poll → user completes → token → server login."""
+    result: list[str] = []
+    error: list[Exception] = []
+
+    def _run_login() -> None:
+        try:
+            fp = provablyfine.cli.login.oidc_device_code_login(
+                oidc_device_code_env.config, oidc_device_code_env.sc, "oidc-dc-test"
+            )
+            result.append(fp)
+        except Exception as e:
+            error.append(e)
+
+    login_thread = threading.Thread(target=_run_login, daemon=True)
+    login_thread.start()
+
+    # Wait for device code to be issued, then simulate user completing auth
+    deadline = time.time() + 10
+    device_code = None
+    while time.time() < deadline:
+        if oidc_device_code_env.mock._pending_device_codes:
+            device_code = next(iter(oidc_device_code_env.mock._pending_device_codes))
+            break
+        time.sleep(0.05)
+
+    assert device_code is not None, "Device code not issued within timeout"
+    oidc_device_code_env.mock.complete_device_auth(device_code)
+
+    login_thread.join(timeout=10)
+    assert not error, f"Login failed: {error[0]}"
+    assert result, "Login did not return a session fingerprint"

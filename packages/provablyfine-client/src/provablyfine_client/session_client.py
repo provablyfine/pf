@@ -234,6 +234,25 @@ class SessionClient:
             raise exceptions.UI(_problem_title(response, "Unable to create auth config"))
         return schemas.Auth.model_validate(response.json())
 
+    def create_auth_oidc_device_code(
+        self,
+        name: str,
+        client_type: str,
+        description: str,
+        tags: list[dict[str, str]],
+        issuer: str,
+        client_id: str,
+        client_secret: str | None,
+    ) -> schemas.Auth:
+        config: dict[str, str] = {"type": "oidc-device-code", "issuer": issuer, "client_id": client_id}
+        if client_secret is not None:
+            config["client_secret"] = client_secret
+        body = {"name": name, "client_type": client_type, "description": description, "config": config, "tags": tags}
+        response = self._session.post(self._directory.auth, auth=self._auth(), json=body)
+        if response.status_code != 201:
+            raise exceptions.UI(_problem_title(response, "Unable to create auth config"))
+        return schemas.Auth.model_validate(response.json())
+
     def create_auth_oauth2_github(
         self,
         name: str,

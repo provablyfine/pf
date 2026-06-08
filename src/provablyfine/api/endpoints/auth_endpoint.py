@@ -18,6 +18,12 @@ def _build_config(data: schemas.auth.AuthCreateRequest) -> dict[str, typing.Any]
         if data.config.client_secret is not None:
             config["client_secret"] = data.config.client_secret
         return config
+    if data.config.type == "oidc-device-code":
+        assert isinstance(data.config, schemas.auth.OidcDeviceCodeCreateConfig)
+        config = {"issuer": data.config.issuer, "client_id": data.config.client_id}
+        if data.config.client_secret is not None:
+            config["client_secret"] = data.config.client_secret
+        return config
     if data.config.type == "oauth2-github":
         assert isinstance(data.config, schemas.auth.OAuth2CreateConfig)
         return {

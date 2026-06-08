@@ -534,6 +534,12 @@ def _auth_config_to_config(ac: model.auth_config.AuthConfig) -> schemas.auth.Aut
             client_id=ac.config["client_id"],
             client_secret=ac.config.get("client_secret"),
         )
+    elif ac.type == "oidc-device-code":
+        config = schemas.auth.OidcDeviceCodeConfig(
+            issuer=ac.config["issuer"],
+            client_id=ac.config["client_id"],
+            client_secret=ac.config.get("client_secret"),
+        )
     elif ac.type in oauth2_providers.PROVIDER_CONFIG:
         callback_url = f"{ctx.config.base_url}/pf/t/{ctx.tenant_name}/auth/oauth2/callback"
         config = schemas.auth.OAuth2Config(

@@ -136,6 +136,13 @@ class OidcConfig(_Base):
     callback_url: str
 
 
+class OidcDeviceCodeConfig(_Base):
+    type: typing.Literal["oidc-device-code"]
+    issuer: str
+    client_id: str
+    client_secret: str | None = None
+
+
 class OAuth2Config(_Base):
     type: typing.Literal["oauth2-github"]
     client_id: str
@@ -144,7 +151,7 @@ class OAuth2Config(_Base):
 
 
 AuthConfig = typing.Annotated[
-    OidcConfig | OAuth2Config | HttpSigConfig,
+    OidcConfig | OidcDeviceCodeConfig | OAuth2Config | HttpSigConfig,
     pydantic.Field(discriminator="type"),
 ]
 
