@@ -346,9 +346,3 @@ class AppDb(db.Dao):
 def create(connection: sqlalchemy.engine.Connection) -> AppDb:
     """Create a typed DAO for the application database."""
     return AppDb(connection, metadata)
-
-
-def create_tables(url: str) -> None:
-    """Create all tables in the database."""
-    engine = sqlalchemy.create_engine(url)
-    metadata.create_all(engine)
