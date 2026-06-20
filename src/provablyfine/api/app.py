@@ -82,7 +82,7 @@ def create(conf: config.Config) -> fastapi.FastAPI:
 
     def _bootstrap_root_tenant(registry_engine: sqlalchemy.Engine):
         root_db_url = f"sqlite:///{os.path.join(conf.tenants_dir, 'root.db')}"
-        migrate.upgrade_tenant(root_db_url)
+        migrate.create_tenant(root_db_url)
         now = int(time.time())
         with registry_engine.begin() as registry_conn:
             reg_db = registry_db.create(registry_conn)
@@ -100,8 +100,9 @@ def create(conf: config.Config) -> fastapi.FastAPI:
     @contextlib.asynccontextmanager
     async def lifespan(app: fastapi.FastAPI):
         os.makedirs(conf.tenants_dir, exist_ok=True)
-        migrate.upgrade_registry(conf.tenant_registry_url)
         registry_engine = sqlalchemy.create_engine(conf.tenant_registry_url, echo=conf.debug_sql)
+        if not sqlalchemy.inspect(registry_engine).has_table("tenant"):
+            migrate.create_registry(conf.tenant_registry_url)
         kek_filename = conf.kek_filename.format(PF_API_KEK_FILENAME=os.getenv("PF_API_KEK_FILENAME"))
         with open(kek_filename, "rb") as f:
             kek = base64url.encode(f.read()) + "======"

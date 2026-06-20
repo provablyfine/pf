@@ -5,7 +5,7 @@ import alembic.command
 import alembic.config
 import sqlalchemy
 
-from . import config, registry_db
+from . import app_db, config, registry_db
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +17,20 @@ def _alembic_config(schema: str, url: str) -> alembic.config.Config:
     cfg.set_main_option("script_location", str(MIGRATIONS_DIR / schema))
     cfg.set_main_option("sqlalchemy.url", url)
     return cfg
+
+
+def _create(metadata: sqlalchemy.MetaData, schema: str, url: str) -> None:
+    engine = sqlalchemy.create_engine(url)
+    metadata.create_all(engine)
+    alembic.command.stamp(_alembic_config(schema=schema, url=url), "head")
+
+
+def create_registry(url: str) -> None:
+    _create(registry_db.metadata, schema="registry", url=url)
+
+
+def create_tenant(url: str) -> None:
+    _create(app_db.metadata, schema="tenant", url=url)
 
 
 def upgrade_registry(url: str) -> None:

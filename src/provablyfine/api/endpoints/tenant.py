@@ -93,7 +93,7 @@ def create_endpoint(
     assert row is not None
 
     # new database
-    migrate.upgrade_tenant(db_url)
+    migrate.create_tenant(db_url)
 
     return _row_to_schema(row)
 
