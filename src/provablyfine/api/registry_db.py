@@ -55,9 +55,3 @@ class RegistryDb(db.Dao):
 def create(connection: sqlalchemy.engine.Connection) -> RegistryDb:
     """Create a typed DAO for the registry database."""
     return RegistryDb(connection, metadata)
-
-
-def create_tables(url: str) -> None:
-    """Create all tables in the registry database."""
-    engine = sqlalchemy.create_engine(url)
-    metadata.create_all(engine)
