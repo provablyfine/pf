@@ -6,7 +6,7 @@ import time
 import fastapi
 import fastapi.responses
 
-from .. import app_db, dependencies, grant, registry_db, responses, schemas, signature
+from .. import dependencies, grant, migrate, registry_db, responses, schemas, signature
 from ..context import ctx
 
 router = fastapi.APIRouter(prefix="/tenant", dependencies=[fastapi.Depends(signature.verify_session)])
@@ -93,7 +93,7 @@ def create_endpoint(
     assert row is not None
 
     # new database
-    app_db.create_tables(db_url)
+    migrate.upgrade_tenant(db_url)
 
     return _row_to_schema(row)
 
