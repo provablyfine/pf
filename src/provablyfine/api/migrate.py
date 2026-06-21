@@ -5,7 +5,7 @@ import alembic.command
 import alembic.config
 import sqlalchemy
 
-from . import app_db, config, registry_db
+from . import app_db, registry_db
 
 logger = logging.getLogger(__name__)
 
@@ -26,35 +26,25 @@ def _create(metadata: sqlalchemy.MetaData, schema: str, url: str) -> None:
 
 
 def create_registry(url: str) -> None:
+    logger.info("creating registry database")
     _create(registry_db.metadata, schema="registry", url=url)
 
 
 def create_tenant(url: str) -> None:
+    logger.info("creating tenant database")
     _create(app_db.metadata, schema="tenant", url=url)
 
 
 def upgrade_registry(url: str) -> None:
+    logger.info("upgrading registry database")
     alembic.command.upgrade(_alembic_config(schema="registry", url=url), "head")
 
 
 def upgrade_tenant(url: str) -> None:
+    logger.info("upgrading tenant database")
     alembic.command.upgrade(_alembic_config(schema="tenant", url=url), "head")
 
 
-def upgrade_all(conf: config.Config) -> None:
-    logger.info("upgrading registry database")
-    upgrade_registry(conf.tenant_registry_url)
-
-    registry_engine = sqlalchemy.create_engine(conf.tenant_registry_url)
-    with registry_engine.connect() as connection:
-        tenants = registry_db.create(connection).tenant.read_all()
-
-    for tenant_row in tenants:
-        if tenant_row.is_deleted:
-            continue
-        logger.info(f"upgrading tenant {tenant_row.name}")
-        try:
-            upgrade_tenant(tenant_row.database_url)
-        except Exception as exception:
-            logger.exception(f"failed to upgrade tenant {tenant_row.name}")
-            raise exception
+def is_alembic_versioned(url: str) -> bool:
+    engine = sqlalchemy.create_engine(url)
+    return sqlalchemy.inspect(engine).has_table("alembic_version")

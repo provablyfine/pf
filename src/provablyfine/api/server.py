@@ -7,8 +7,7 @@ import urllib.parse
 
 import uvicorn
 
-from .. import log
-from . import app, config, migrate
+from . import app, config
 
 
 def run():
@@ -18,22 +17,8 @@ def run():
     parser.add_argument("--port-file", default=None)
     parser.add_argument("-d", "--debug", help="Debugging level", action="count", default=0)
     parser.add_argument("--log-filename", default=None)
-    parser.add_argument("--upgrade", action="store_true", help="Apply database migrations and exit")
     args = parser.parse_args()
 
-    if args.upgrade:
-        _upgrade(args)
-    else:
-        _serve(args)
-
-
-def _upgrade(args: argparse.Namespace) -> None:
-    log.setup_server("upgrade", args.debug, args.log_filename)
-    conf = config.Config.load(args.config)
-    migrate.upgrade_all(conf)
-
-
-def _serve(args: argparse.Namespace) -> None:
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.bind(("127.0.0.1", args.port))
