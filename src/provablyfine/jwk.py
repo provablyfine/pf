@@ -67,7 +67,7 @@ def rfc7638_thumbprint(data: dict[str, str]) -> str:
         "oct": ["k", "kty"],
     }
     d = {k: data[k] for k in needed[data["kty"]]}
-    encoded = json.dumps(d).encode("utf-8")
+    encoded = json.dumps(d, separators=(",", ":")).encode("utf-8")
     h = hashlib.sha256(encoded).digest()
     return base64url.encode(h)
 
