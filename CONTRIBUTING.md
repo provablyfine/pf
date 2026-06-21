@@ -53,6 +53,28 @@ $ make cov-report
 TOTAL                                          5167    685    87%
 ```
 
+## Database migrations
+
+The schema is versioned with Alembic, with two independent histories: the registry
+(`-n registry`) and the per-tenant schema (`-n tenant`). New databases are created at
+the latest revision automatically when the server starts; you only touch Alembic when
+changing a table definition.
+
+After editing table definition in `registry_db.py` (registry) or `app_db.py` (tenant),
+generate a revision from it:
+
+```
+uv run alembic -n <registry|tenant> revision --autogenerate -m "describe the change"
+```
+
+Migrations are forward-only: generated scripts have no `downgrade()`. To revert a change,
+write a new migration.
+
+> [!WARNING]
+> Always review the generated script: autogenerate does not detect column renames (it emits
+> drop + add, losing data), and column or constraint changes must stay wrapped in
+> `op.batch_alter_table(...)` to work on SQLite.
+
 ## Debugging
 
 Start the textual debugging console:
