@@ -134,9 +134,9 @@ def oidc_login_endpoint(
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=403, title="Auth config not found or disabled")
         )
-    if ac.type != "oidc":
+    if ac.type not in ("oidc", "oidc-device-code"):
         raise responses.ProblemHTTPException(
-            responses.problem_response(status_code=403, title="Auth config is not of type oidc")
+            responses.problem_response(status_code=403, title="Auth config is not of type oidc or oidc-device-code")
         )
 
     # Verify OIDC token

@@ -1,5 +1,10 @@
 # Contribution Guide
 
+## Community
+
+Join our [public contributor channel](https://matrix.to/#/!TuOhYIkcNUOqWkqcqE:matrix.org?via=matrix.org)
+to ask questions and coordinate with other contributors.
+
 ## Development environment
 
 Install pre-commit hooks locally:

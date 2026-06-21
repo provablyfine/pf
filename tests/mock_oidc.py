@@ -38,6 +38,15 @@ class _PendingCode:
     email: str
 
 
+@dataclasses.dataclass
+class _PendingDeviceCode:
+    """Pending device authorization with completion state."""
+
+    user_code: str
+    completed: bool = False
+    email: str = "user@example.com"
+
+
 class _MockOidcHandler(http.server.BaseHTTPRequestHandler):
     """Handler for mock OIDC HTTP server."""
 
@@ -57,11 +66,13 @@ class _MockOidcHandler(http.server.BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
+        content_length = int(self.headers.get("content-length", 0))
+        body = self.rfile.read(content_length).decode("utf-8")
 
         if path == "/token":
-            content_length = int(self.headers.get("content-length", 0))
-            body = self.rfile.read(content_length).decode("utf-8")
             self._handle_token(body)
+        elif path == "/device_authorization":
+            self._handle_device_authorization(body)
         else:
             self.send_error(404)
 
@@ -74,6 +85,7 @@ class _MockOidcHandler(http.server.BaseHTTPRequestHandler):
             "issuer": provider.issuer,
             "authorization_endpoint": f"{provider.issuer}/authorize",
             "token_endpoint": f"{provider.issuer}/token",
+            "device_authorization_endpoint": f"{provider.issuer}/device_authorization",
             "jwks_uri": f"{provider.issuer}/jwks",
         }
         self.send_response(200)
@@ -117,9 +129,48 @@ class _MockOidcHandler(http.server.BaseHTTPRequestHandler):
         self.send_header("location", redirect)
         self.end_headers()
 
+    def _handle_device_authorization(self, body: str) -> None:
+        provider = self.server.mock_provider  # type: ignore
+        device_code = secrets.token_urlsafe(32)
+        user_code = secrets.token_hex(4).upper()
+        provider._pending_device_codes[device_code] = _PendingDeviceCode(user_code=user_code)
+        response = {
+            "device_code": device_code,
+            "user_code": user_code,
+            "verification_uri": f"{provider.issuer}/activate",
+            "expires_in": 300,
+            "interval": 1,
+        }
+        self.send_response(200)
+        self.send_header("content-type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps(response).encode("utf-8"))
+
     def _handle_token(self, body: str) -> None:
         provider = self.server.mock_provider  # type: ignore
         params = urllib.parse.parse_qs(body)
+        grant_type = params.get("grant_type", [""])[0]
+
+        if grant_type == "urn:ietf:params:oauth:grant-type:device_code":
+            device_code = params.get("device_code", [""])[0]
+            pending_device = provider._pending_device_codes.get(device_code)
+            if not pending_device:
+                self.send_error(400, "Invalid device_code")
+                return
+            if not pending_device.completed:
+                self.send_response(400)
+                self.send_header("content-type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "authorization_pending"}).encode("utf-8"))
+                return
+            id_token = provider.issue_token(pending_device.email)
+            del provider._pending_device_codes[device_code]
+            self.send_response(200)
+            self.send_header("content-type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"id_token": id_token, "token_type": "Bearer"}).encode("utf-8"))
+            return
+
         code = params.get("code", [""])[0]
         code_verifier = params.get("code_verifier", [""])[0]
 
@@ -158,6 +209,7 @@ class MockOidcProvider:
         self.client_id = client_id
         self._authorize_error: str | None = None
         self._pending_codes: dict[str, _PendingCode] = {}
+        self._pending_device_codes: dict[str, _PendingDeviceCode] = {}
 
         # Generate RSA-2048 key
         self._rsa_key = cryptography.hazmat.primitives.asymmetric.rsa.generate_private_key(
@@ -181,6 +233,12 @@ class MockOidcProvider:
     def set_authorize_error(self, error: str | None) -> None:
         """Set/clear the error to return from /authorize endpoint."""
         self._authorize_error = error
+
+    def complete_device_auth(self, device_code: str) -> None:
+        """Mark device authorization as completed (simulates user visiting verification_uri)."""
+        pending = self._pending_device_codes.get(device_code)
+        if pending:
+            pending.completed = True
 
     def issue_token(
         self,

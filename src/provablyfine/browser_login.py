@@ -1,6 +1,7 @@
 import hashlib
 import http.server
 import secrets
+import time
 import typing
 import urllib.parse
 import webbrowser
@@ -94,6 +95,64 @@ def oidc_flow(oidc_config: pfc.schemas.OidcConfig) -> str:
     if not id_token:
         raise pfc.exceptions.UI("Token response did not include id_token")
     return id_token
+
+
+def oidc_device_code_flow(
+    config: pfc.schemas.OidcDeviceCodeConfig,
+    display: typing.Callable[[str, str], None] | None = None,
+) -> str:
+    """Run OIDC device code flow. Returns id_token."""
+    discovery_resp = requests.get(f"{config.issuer}/.well-known/openid-configuration", timeout=10)
+    if discovery_resp.status_code != 200:
+        raise pfc.exceptions.UI("Unable to fetch OIDC discovery document")
+    discovery = discovery_resp.json()
+
+    device_endpoint = discovery.get("device_authorization_endpoint")
+    if not device_endpoint:
+        raise pfc.exceptions.UI("OIDC provider does not support device code flow")
+
+    data: dict[str, str] = {"client_id": config.client_id, "scope": "openid email"}
+    if config.client_secret:
+        data["client_secret"] = config.client_secret
+    device_resp = requests.post(device_endpoint, data=data, timeout=10)
+    if device_resp.status_code != 200:
+        raise pfc.exceptions.UI(f"Device authorization failed: {device_resp.text}")
+    device = device_resp.json()
+
+    user_code: str = device["user_code"]
+    verification_uri: str = device.get("verification_uri_complete") or device["verification_uri"]
+    expires_in = int(device.get("expires_in", 300))
+    interval = int(device.get("interval", 5))
+
+    if display:
+        display(user_code, verification_uri)
+    else:
+        print(f"Open {verification_uri}")
+        print(f"Enter code: {user_code}")
+
+    token_data: dict[str, str] = {
+        "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
+        "device_code": device["device_code"],
+        "client_id": config.client_id,
+    }
+    if config.client_secret:
+        token_data["client_secret"] = config.client_secret
+
+    deadline = time.time() + expires_in
+    while time.time() < deadline:
+        time.sleep(interval)
+        token_resp = requests.post(discovery["token_endpoint"], data=token_data, timeout=10)
+        if token_resp.status_code == 200:
+            id_token = token_resp.json().get("id_token")
+            if not id_token:
+                raise pfc.exceptions.UI("Token response did not include id_token")
+            return id_token
+        error = token_resp.json().get("error", "")
+        if error == "slow_down":
+            interval += 5
+        elif error != "authorization_pending":
+            raise pfc.exceptions.UI(f"Device code flow failed: {error}")
+    raise pfc.exceptions.UI("Device code flow timed out")
 
 
 def oauth2_callback(port: int) -> None:

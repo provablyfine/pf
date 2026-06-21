@@ -93,6 +93,17 @@ def oidc_login(c: client.Config, sc: client.Factory, auth_name: str) -> str:
     return session_fingerprint
 
 
+def oidc_device_code_login(c: client.Config, sc: client.Factory, auth_name: str) -> str:
+    """OIDC device code login. Returns session fingerprint. Caller updates config."""
+    auth_public = sc.public().get_public_auth(auth_name)
+    if not isinstance(auth_public.config, pfc.schemas.OidcDeviceCodeConfig):
+        raise pfc.exceptions.UI(f"Auth '{auth_name}' is not OIDC device code")
+    session_key, session_fingerprint = browser_login.generate_session_key()
+    id_token = browser_login.oidc_device_code_flow(auth_public.config)
+    sc.session_with_key(session_fingerprint).login_oidc(auth_name, id_token, session_key.public().to_dict())
+    return session_fingerprint
+
+
 def oauth2_login(c: client.Config, sc: client.Factory, auth_name: str) -> str:
     """OAuth2 login. Returns session fingerprint. Caller updates config."""
     auth_public = sc.public().get_public_auth(auth_name)
@@ -125,6 +136,8 @@ def login(c: client.Config, sc: client.Factory, auth_name: str, session_key_path
             return http_sig_login(c, sc, session_key_path)
         case "oidc":
             return oidc_login(c, sc, auth_name)
+        case "oidc-device-code":
+            return oidc_device_code_login(c, sc, auth_name)
         case "oauth2-github":
             return oauth2_login(c, sc, auth_name)
         case _:

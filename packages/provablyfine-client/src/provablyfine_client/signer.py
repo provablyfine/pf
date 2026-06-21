@@ -9,9 +9,8 @@ from . import _base64url
 
 
 def _rfc7638_thumbprint(key_data: dict[str, str]) -> str:
-    # Use json.dumps default separators (", " and ": ") to match jwk.rfc7638_thumbprint.
     # The insertion order of key_data must match the required RFC 7638 lexicographic order.
-    encoded = json.dumps(key_data).encode("utf-8")
+    encoded = json.dumps(key_data, separators=(",", ":")).encode("utf-8")
     return _base64url.encode(hashlib.sha256(encoded).digest())
 
 

@@ -47,6 +47,30 @@ def oidc_login(api: client.Client, auth_name: str) -> str:
     return fp
 
 
+def oidc_device_code_login(
+    api: client.Client,
+    auth_name: str,
+    on_code: typing.Callable[[str, str], None] | None = None,
+) -> str:
+    session_key, fp = browser_login.generate_session_key()
+    auth_public = client.Factory(api.config).public().get_public_auth(auth_name)
+    if not isinstance(auth_public.config, pfc.schemas.OidcDeviceCodeConfig):
+        raise pfc.exceptions.UI(f"Auth '{auth_name}' is not OIDC device code")
+    id_token = browser_login.oidc_device_code_flow(auth_public.config, display=on_code)
+    session_http = api.session_auth(session=fp)
+    response = session_http.post(
+        url=session_http.directory.login_oidc,
+        json={
+            "auth_name": auth_public.name,
+            "id_token": id_token,
+            "session_public_key": session_key.public().to_dict(),
+        },
+    )
+    if response.status_code != 204:
+        raise pfc.exceptions.UI(f"OIDC device code login failed: {response.text}")
+    return fp
+
+
 def oauth2_login(api: client.Client, auth_name: str) -> str:
     session_key, fp = browser_login.generate_session_key()
     auth_public = client.Factory(api.config).public().get_public_auth(auth_name)
@@ -77,6 +101,8 @@ def login(api: client.Client, auth_name: str, auth_type: str) -> str:
     match auth_type:
         case "oidc":
             return oidc_login(api, auth_name)
+        case "oidc-device-code":
+            return oidc_device_code_login(api, auth_name)
         case "oauth2-github":
             return oauth2_login(api, auth_name)
         case _:
@@ -117,7 +143,7 @@ class ReloginScreen(base.Screen):
             return
         auth_type = auth_public.config.type
 
-        if auth_type != "http_sig":
+        if auth_type not in ("http_sig", "oidc-device-code"):
             status.update(f"Opening browser for {auth_name}…")
 
         self._login(auth_name, auth_type)
@@ -130,6 +156,15 @@ class ReloginScreen(base.Screen):
                     fp = http_sig_login(self._cfg, self._api)
                 case "oidc":
                     fp = oidc_login(self._api, auth_name)
+                case "oidc-device-code":
+
+                    def _show(user_code: str, uri: str) -> None:
+                        def _update() -> None:
+                            self.query_one("#status", textual.widgets.Label).update(f"Visit {uri}\nCode: {user_code}")
+
+                        self.app.call_from_thread(_update)
+
+                    fp = oidc_device_code_login(self._api, auth_name, on_code=_show)
                 case "oauth2-github":
                     fp = oauth2_login(self._api, auth_name)
                 case _:

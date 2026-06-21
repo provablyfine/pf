@@ -534,6 +534,12 @@ def _auth_config_to_config(ac: model.auth_config.AuthConfig) -> schemas.auth.Aut
             client_id=ac.config["client_id"],
             client_secret=ac.config.get("client_secret"),
         )
+    elif ac.type == "oidc-device-code":
+        config = schemas.auth.OidcDeviceCodeConfig(
+            issuer=ac.config["issuer"],
+            client_id=ac.config["client_id"],
+            client_secret=ac.config.get("client_secret"),
+        )
     elif ac.type in oauth2_providers.PROVIDER_CONFIG:
         callback_url = f"{ctx.config.base_url}/pf/t/{ctx.tenant_name}/auth/oauth2/callback"
         config = schemas.auth.OAuth2Config(
@@ -565,6 +571,11 @@ def auth_config_to_schema(ac: model.auth_config.AuthConfig) -> schemas.auth.Auth
 
 def auth_config_to_public_schema(ac: model.auth_config.AuthConfig) -> schemas.auth.AuthPublic:
     config = _auth_config_to_config(ac)
+    if ac.client_type == "web" and isinstance(config, (schemas.auth.OidcConfig, schemas.auth.OidcDeviceCodeConfig)):
+        # We do return client_secret to the client when client_type == cli. This is actually safe
+        # because the only case where this happens if for OIDC desktop applications that have a client_secret
+        # (for example, google) and in this case, the client_secret is known to be public.
+        config = config.model_copy(update={"client_secret": None})
     return schemas.auth.AuthPublic(
         name=ac.name,
         description=ac.description,

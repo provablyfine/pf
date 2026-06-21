@@ -5,10 +5,12 @@
 ### Added
 - CHANGELOG.md
 - Add "pfa initialize --transient-key" ([#9](https://github.com/provablyfine/pf/issues/9))
-- Track client_type on a per-auth basis ([#12](//github.com/provablyfine/pf/issues/12))
+- Track client_type on a per-auth basis ([#12](https://github.com/provablyfine/pf/issues/12))
 
 ### Fixed
-- Sync client-side schema with server-side schema ([#10](//github.com/provablyfine/pf/issues/10))
+- Sync client-side schema with server-side schema ([#10](https://github.com/provablyfine/pf/issues/10))
+- Align key thumbprint calculation with RFC 6738 ([#16](https://github.com/provablyfine/pf/issues/16))
+- Audit session duration ([#8](https://github.com/provablyfine/pf/issues/8))
 
 ## 0.3.0 - 2026-06-05
 
