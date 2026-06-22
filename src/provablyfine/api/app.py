@@ -120,8 +120,7 @@ def create(conf: config.Config) -> fastapi.FastAPI:
         with registry_engine.connect() as registry_conn:
             tenant_rows = registry_db.create(registry_conn).tenant.read_all()
         for tenant_row in tenant_rows:
-            if not tenant_row.is_deleted:
-                migrate.upgrade_tenant(tenant_row.database_url)
+            migrate.upgrade_tenant(tenant_row.database_url)
 
         yield
 
