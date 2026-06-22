@@ -14,7 +14,7 @@ import pydantic
 import sqlalchemy
 
 from .. import base64url, log
-from . import app_db, config, dependencies, endpoints, middleware, registry_db, responses
+from . import config, dependencies, endpoints, middleware, migrate, registry_db, responses
 
 logger = logging.getLogger(__name__)
 
@@ -80,28 +80,33 @@ class _Backtrace:
 def create(conf: config.Config) -> fastapi.FastAPI:
     log.setup_server("api", conf.log_level, conf.log_filename)
 
-    def _bootstrap_root_tenant(registry_engine: sqlalchemy.Engine):
+    def _bootstrap_databases(registry_engine: sqlalchemy.Engine) -> None:
+        """Create the registry and root tenant databases on first startup."""
+        if migrate.is_alembic_versioned(conf.tenant_registry_url):
+            return
+        migrate.create_registry(conf.tenant_registry_url)
         root_db_url = f"sqlite:///{os.path.join(conf.tenants_dir, 'root.db')}"
-        app_db.create_tables(root_db_url)
-        now = int(time.time())
+        migrate.create_tenant(root_db_url)
         with registry_engine.begin() as registry_conn:
-            reg_db = registry_db.create(registry_conn)
-            reg_db.tenant.create(
+            registry_db.create(registry_conn).tenant.create(
                 name="root",
                 display_name="root",
                 owner_id=None,
                 database_url=root_db_url,
                 is_enabled=True,
                 is_initialized=False,
-                created_at=now,
+                created_at=int(time.time()),
                 is_deleted=False,
             )
 
     @contextlib.asynccontextmanager
     async def lifespan(app: fastapi.FastAPI):
         os.makedirs(conf.tenants_dir, exist_ok=True)
-        registry_db.create_tables(conf.tenant_registry_url)
         registry_engine = sqlalchemy.create_engine(conf.tenant_registry_url, echo=conf.debug_sql)
+
+        _bootstrap_databases(registry_engine)
+        migrate.upgrade_registry(conf.tenant_registry_url)
+
         kek_filename = conf.kek_filename.format(PF_API_KEK_FILENAME=os.getenv("PF_API_KEK_FILENAME"))
         with open(kek_filename, "rb") as f:
             kek = base64url.encode(f.read()) + "======"
@@ -112,9 +117,9 @@ def create(conf: config.Config) -> fastapi.FastAPI:
         app.state.debug_store = _InMemoryDebugStore()
 
         with registry_engine.connect() as registry_conn:
-            reg_db = registry_db.create(registry_conn)
-            if reg_db.tenant.read_one() is None:
-                _bootstrap_root_tenant(registry_engine)
+            tenant_rows = registry_db.create(registry_conn).tenant.read_all()
+        for tenant_row in tenant_rows:
+            migrate.upgrade_tenant(tenant_row.database_url)
 
         yield
 

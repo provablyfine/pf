@@ -51,6 +51,7 @@ dependencies = [
   "PyYAML>=6.0",
   "prometheus_client>=0.20.0",
   "provablyfine-client",
+  "alembic>=1.18.4",
 ]
 
 [project.urls]
