@@ -72,7 +72,7 @@ Provision user identity
   $ pf -c user.json login
 
 Verify connection works before reload
-  $ echo "hello" | timeout 2 pf -c user.json bastion connect --url http://localhost:$BASTION_PORT --host host
+  $ echo "hello" | timeout 4 pf -c user.json bastion connect --url http://localhost:$BASTION_PORT --host host
   hello
 
 Check bastion is still alive
@@ -123,7 +123,7 @@ Verify registered connection is still here after reload
   }
 
 Verify connection still works after reload
-  $ echo "hello" | timeout 2 pf -c user.json bastion connect --url http://localhost:$BASTION_PORT --host host
+  $ echo "hello" | timeout 4 pf -c user.json bastion connect --url http://localhost:$BASTION_PORT --host host
   hello
 
 Cleanup

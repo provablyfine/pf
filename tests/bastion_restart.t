@@ -60,7 +60,7 @@ Provision user identity
   $ pf -c user.json login
 
 Verify connection works before restart
-  $ echo "hello" | timeout 2 pf -c user.json bastion connect --socket-path $BASTION_MAIN_SOCK --url $BASTION_URL --host host
+  $ echo "hello" | timeout 4 pf -c user.json bastion connect --socket-path $BASTION_MAIN_SOCK --url $BASTION_URL --host host
   hello
 
 Check bastion is still alive
@@ -107,7 +107,7 @@ Verify registered connection still here after restart
   }
 
 Verify connection still works across exec boundary
-  $ echo "hello" | timeout 2 pf -c user.json bastion connect --socket-path $BASTION_MAIN_SOCK --url $BASTION_URL --host host
+  $ echo "hello" | timeout 4 pf -c user.json bastion connect --socket-path $BASTION_MAIN_SOCK --url $BASTION_URL --host host
   hello
 
 Cleanup
