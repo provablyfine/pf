@@ -5,8 +5,7 @@
 We recommend to use `pipx` to install pf. From a terminal, run this command:
 
 ```console
-$ pipx install --user provablyfine
-XXX
+$ pipx install provablyfine
 ```
 
 And then, check that it has been installed successfully:
@@ -18,25 +17,44 @@ $ pf version
 ## Create your first tenant
 
 The fastest way to create your first tenant is to use the free tier of our
-[managed instance](https://pf.provablyfine.net/). After you login,
-choose a tenant name that is available, and wait for the email that contains
-the initialization url for your tenant.
+[managed instance](https://app.provablyfine.net/). After you login, click on
+**Add tenant** and choose a tenant name that is available.
+
+The list of tenants should display the new tenant!
 
 !!! note
     If you are using your own internal pf deployment, ask your pf administrator
     to create the tenant and share with you the associated initialization url.
 
-## Initialize your tenant
+## Connect with your new tenant
 
-The following command asks you to go through a browser-based login: if you
-have an `ssh-agent` running, the temporary (30min) login session key will be
-stored securely in your `ssh-agent`. If you do not have an `ssh-agent`, the command
-will ask for confirmation to store the key as cleartext in
-`~/.cache/provablyfine/session-key.json`:
+From the managed instance, click on the **Connect via CLI** button to display the
+commands needed and run the `accept` command:
 ```console
-$ pfa accept https://api.provablyfine.net/pf/t/your-tenant
-XXX
+$ pfa accept --invitation https://api.provablyfine.net/pf/t/your-tenant
 ```
+
+You can now login:
+```console
+$ pfa login
+```
+
+The login command triggers a browser-based login and saves your temporary (30
+minutes) session key in your local `ssh-agent`. All other local CLI commands will
+use this key transparently until it expires.
+
+If you do not have a local `ssh-agent`, `login` will ask for confirmation
+to store the session key as cleartext your local configuration file
+`~/.config/pf/config.json`.
+
+## Check your connection
+
+If you get pong, you are authenticated successfully:
+```
+$ pf ping
+pong
+```
+
 ## Register a new host
 
 If you have a recent-enough (XXX) OpenSSH server installed on your host, you can register
