@@ -10,12 +10,14 @@
 
 ### Removed
 - oauth2 GitHub support for auth.
+- Auth tags ([#17](https://github.com/provablyfine/pf/issues/17))
 
 ### Fixed
 - Sync client-side schema with server-side schema ([#10](https://github.com/provablyfine/pf/issues/10))
 - Align key thumbprint calculation with RFC 6738 ([#16](https://github.com/provablyfine/pf/issues/16))
 - Audit session duration ([#8](https://github.com/provablyfine/pf/issues/8))
 - Allow login when we do not have a working ssh-agent ([#6](https://github.com/provablyfine/pf/issues/6))
+- Handle multiple auths with the same name at the HTTP API layer ([#19](https://github.com/provablyfine/pf/issues/19))
 
 ## 0.3.0 - 2026-06-05
 
