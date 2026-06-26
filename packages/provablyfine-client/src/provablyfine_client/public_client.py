@@ -28,8 +28,8 @@ class PublicClient:
             raise exceptions.UI(_problem_title(response, "Failed to get user trusted keys"))
         return response.text
 
-    def get_public_auth(self, auth_name: str) -> schemas.AuthPublic:
-        response = self._session.get(f"{self._directory.public_auth}/{auth_name}")
+    def get_public_auth(self, auth_name: str, client_type: str) -> schemas.AuthPublic:
+        response = self._session.get(f"{self._directory.public_auth}/{auth_name}", params={"client_type": client_type})
         if response.status_code == 404:
             raise exceptions.UI(f"Auth config '{auth_name}' not found")
         if response.status_code != 200:

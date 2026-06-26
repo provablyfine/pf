@@ -79,6 +79,7 @@ class AuthPublic(base.APIBase):
 
 class OidcLoginRequest(base.APIBase):
     auth_name: str
+    client_type: str
     id_token: str
     session_public_key: jwk.PublicJWK
 

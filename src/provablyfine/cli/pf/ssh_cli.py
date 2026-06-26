@@ -31,7 +31,7 @@ def _ssh_function(args: argparse.Namespace) -> None:
     if not login.has_valid_session(c):
         factory = client.Factory(c, timeout=args.timeout)
         try:
-            auth_public = factory.public().get_public_auth("default")
+            auth_public = factory.public().get_public_auth("default", "cli")
         except pfc.exceptions.UI:
             raise pfc.exceptions.UI("Not logged in. Run 'pf login' first.")
         match auth_public.config.type:

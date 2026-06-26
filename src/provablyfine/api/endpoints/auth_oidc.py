@@ -129,7 +129,7 @@ def oidc_login_endpoint(
     signature.verify(request, f"session:{session_key.thumbprint()}", session_key)
 
     # Look up auth config
-    ac = model.auth_config.read_one(name=data.auth_name)
+    ac = model.auth_config.read_one(name=data.auth_name, client_type=data.client_type)
     if ac is None or not ac.is_enabled:
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=403, title="Auth config not found or disabled")

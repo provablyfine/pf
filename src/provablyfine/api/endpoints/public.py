@@ -28,8 +28,8 @@ def public_auth_list(client_type: str) -> schemas.auth.AuthPublicListResponse:
 
 
 @router.get("/public/auth/{name}", status_code=200, responses={404: responses.PROBLEM})
-def public_auth_detail(name: str) -> schemas.auth.AuthPublic:
-    ac = model.auth_config.read_one(name=name)
+def public_auth_detail(name: str, client_type: str) -> schemas.auth.AuthPublic:
+    ac = model.auth_config.read_one(name=name, client_type=client_type)
     if ac is None or not ac.is_enabled:
         raise responses.ProblemHTTPException(responses.problem_response(status_code=404, title="Auth config not found"))
     return converters.auth_config_to_public_schema(ac)

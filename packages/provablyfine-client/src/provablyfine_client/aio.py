@@ -18,8 +18,8 @@ class AsyncPublicClient:
     async def get_user_trusted_keys_public(self) -> str:
         return await self._run(self._inner.get_user_trusted_keys_public)
 
-    async def get_public_auth(self, auth_name: str) -> schemas.AuthPublic:
-        return await self._run(lambda: self._inner.get_public_auth(auth_name))
+    async def get_public_auth(self, auth_name: str, client_type: str) -> schemas.AuthPublic:
+        return await self._run(lambda: self._inner.get_public_auth(auth_name, client_type))
 
     async def list_public_auths(self, client_type: str) -> list[schemas.AuthPublicSummary]:
         return await self._run(lambda: self._inner.list_public_auths(client_type))
@@ -261,10 +261,11 @@ class AsyncSessionClient:
     async def login_oidc(
         self,
         auth_name: str,
+        client_type: str,
         id_token: str,
         session_public_key: dict[str, typing.Any],
     ) -> None:
-        return await self._run(lambda: self._inner.login_oidc(auth_name, id_token, session_public_key))
+        return await self._run(lambda: self._inner.login_oidc(auth_name, client_type, id_token, session_public_key))
 
     async def list_audit_log(
         self,

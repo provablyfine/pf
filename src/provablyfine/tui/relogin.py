@@ -28,7 +28,7 @@ def http_sig_login(cfg: client.Config, api: client.Client) -> str:
 
 def oidc_login(api: client.Client, auth_name: str) -> str:
     session_key, fp = browser_login.generate_session_key()
-    auth_public = client.Factory(api.config).public().get_public_auth(auth_name)
+    auth_public = client.Factory(api.config).public().get_public_auth(auth_name, "cli")
     if not isinstance(auth_public.config, pfc.schemas.OidcConfig):
         raise pfc.exceptions.UI(f"Auth '{auth_name}' is not OIDC")
     id_token = browser_login.oidc_flow(auth_public.config)
@@ -37,6 +37,7 @@ def oidc_login(api: client.Client, auth_name: str) -> str:
         url=session_http.directory.login_oidc,
         json={
             "auth_name": auth_public.name,
+            "client_type": "cli",
             "id_token": id_token,
             "session_public_key": session_key.public().to_dict(),
         },
@@ -52,7 +53,7 @@ def oidc_device_code_login(
     on_code: typing.Callable[[str, str], None] | None = None,
 ) -> str:
     session_key, fp = browser_login.generate_session_key()
-    auth_public = client.Factory(api.config).public().get_public_auth(auth_name)
+    auth_public = client.Factory(api.config).public().get_public_auth(auth_name, "cli")
     if not isinstance(auth_public.config, pfc.schemas.OidcDeviceCodeConfig):
         raise pfc.exceptions.UI(f"Auth '{auth_name}' is not OIDC device code")
     id_token = browser_login.oidc_device_code_flow(auth_public.config, display=on_code)
@@ -61,6 +62,7 @@ def oidc_device_code_login(
         url=session_http.directory.login_oidc,
         json={
             "auth_name": auth_public.name,
+            "client_type": "cli",
             "id_token": id_token,
             "session_public_key": session_key.public().to_dict(),
         },
@@ -108,7 +110,7 @@ class ReloginScreen(base.Screen):
         status = self.query_one("#status", textual.widgets.Label)
 
         try:
-            auth_public = await client.Factory(self._api.config).async_public().get_public_auth(auth_name)
+            auth_public = await client.Factory(self._api.config).async_public().get_public_auth(auth_name, "cli")
         except pfc.exceptions.UI as e:
             self.notify(str(e), severity="error")
             return

@@ -138,11 +138,11 @@ Re-enable an auth config
   tags
 
 Public discovery endpoint returns correct data for http_sig
-  $ curl -s http://127.0.0.1:$API_PORT/pf/t/root/public/auth/default && echo ""
+  $ curl -s "http://127.0.0.1:$API_PORT/pf/t/root/public/auth/default?client_type=cli" && echo ""
   {"name":"default","description":"Default HTTP signature authentication","config":{"type":"http_sig"}}
 
 Public discovery endpoint returns correct data for oidc
-  $ curl -s http://127.0.0.1:$API_PORT/pf/t/root/public/auth/google && echo ""
+  $ curl -s "http://127.0.0.1:$API_PORT/pf/t/root/public/auth/google?client_type=cli" && echo ""
   {"name":"google","description":"","config":{"issuer":"https://accounts.google.com","client_id":"my-client-id","client_secret":null,"callback_url":"http://127.0.0.1/callback","type":"oidc"}}
 
 Public list endpoint filters by client_type
@@ -152,12 +152,12 @@ Public list endpoint filters by client_type
   google
 
 Public discovery endpoint returns 404 for unknown name
-  $ curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:$API_PORT/pf/t/root/public/auth/nonexistent
+  $ curl -s -o /dev/null -w "%{http_code}\n" "http://127.0.0.1:$API_PORT/pf/t/root/public/auth/nonexistent?client_type=cli"
   404
 
 Public discovery endpoint returns 404 for disabled auth config
   $ pfa -c config.json auth update -i 3 --disable
-  $ curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:$API_PORT/pf/t/root/public/auth/google
+  $ curl -s -o /dev/null -w "%{http_code}\n" "http://127.0.0.1:$API_PORT/pf/t/root/public/auth/google?client_type=cli"
   404
   $ pfa -c config.json auth update -i 3 --enable
 

@@ -349,7 +349,7 @@ class ConnectScreen(base.Screen):
             auth_type = selected.type
         else:
             try:
-                auth_public = await factory.async_public().get_public_auth(auth_name)
+                auth_public = await factory.async_public().get_public_auth(auth_name, "cli")
                 auth_type = auth_public.config.type
             except pfc.exceptions.UI as e:
                 self.notify(str(e), severity="error")

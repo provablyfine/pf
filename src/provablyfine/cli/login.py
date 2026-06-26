@@ -99,14 +99,14 @@ def http_sig_login(c: client.Config, sc: client.Factory, session_key_path: str |
 
 def oidc_login(c: client.Config, sc: client.Factory, auth_name: str) -> None:
     """OIDC login. Mutates c with new session key fields."""
-    auth_public = sc.public().get_public_auth(auth_name)
+    auth_public = sc.public().get_public_auth(auth_name, "cli")
     if not isinstance(auth_public.config, pfc.schemas.OidcConfig):
         raise pfc.exceptions.UI(f"Auth '{auth_name}' is not OIDC")
 
     session_key, session_fingerprint = browser_login.generate_session_key()
     print("Opening browser for OIDC login...")
     id_token = browser_login.oidc_flow(auth_public.config)
-    sc.session_with_key(session_fingerprint).login_oidc(auth_name, id_token, session_key.public().to_dict())
+    sc.session_with_key(session_fingerprint).login_oidc(auth_name, "cli", id_token, session_key.public().to_dict())
     c.session_key_fingerprint = session_fingerprint
     c.session_key_file = None
     c.session_key_pem = None
@@ -114,12 +114,12 @@ def oidc_login(c: client.Config, sc: client.Factory, auth_name: str) -> None:
 
 def oidc_device_code_login(c: client.Config, sc: client.Factory, auth_name: str) -> None:
     """OIDC device code login. Mutates c with new session key fields."""
-    auth_public = sc.public().get_public_auth(auth_name)
+    auth_public = sc.public().get_public_auth(auth_name, "cli")
     if not isinstance(auth_public.config, pfc.schemas.OidcDeviceCodeConfig):
         raise pfc.exceptions.UI(f"Auth '{auth_name}' is not OIDC device code")
     session_key, session_fingerprint = browser_login.generate_session_key()
     id_token = browser_login.oidc_device_code_flow(auth_public.config)
-    sc.session_with_key(session_fingerprint).login_oidc(auth_name, id_token, session_key.public().to_dict())
+    sc.session_with_key(session_fingerprint).login_oidc(auth_name, "cli", id_token, session_key.public().to_dict())
     c.session_key_fingerprint = session_fingerprint
     c.session_key_file = None
     c.session_key_pem = None
@@ -127,7 +127,7 @@ def oidc_device_code_login(c: client.Config, sc: client.Factory, auth_name: str)
 
 def login(c: client.Config, sc: client.Factory, auth_name: str, session_key_path: str | None = None) -> None:
     """Perform login based on server auth config. Mutates c with new session key fields."""
-    auth_public = sc.public().get_public_auth(auth_name)
+    auth_public = sc.public().get_public_auth(auth_name, "cli")
     match auth_public.config.type:
         case "http_sig":
             http_sig_login(c, sc, session_key_path)

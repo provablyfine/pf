@@ -120,6 +120,7 @@ def test_endpoint_rs256(oidc_env: OidcEnv) -> None:
 
     oidc_env.sc.session_with_key(session_fingerprint).login_oidc(
         auth_name="oidc-test",
+        client_type="cli",
         id_token=id_token,
         session_public_key=session_key.public().to_dict(),
     )
@@ -132,6 +133,7 @@ def test_endpoint_es256(oidc_env: OidcEnv) -> None:
 
     oidc_env.sc.session_with_key(session_fingerprint).login_oidc(
         auth_name="oidc-test",
+        client_type="cli",
         id_token=id_token,
         session_public_key=session_key.public().to_dict(),
     )
@@ -145,6 +147,7 @@ def test_endpoint_expired(oidc_env: OidcEnv) -> None:
     with pytest.raises(pfc.exceptions.UI):
         oidc_env.sc.session_with_key(session_fingerprint).login_oidc(
             auth_name="oidc-test",
+            client_type="cli",
             id_token=id_token,
             session_public_key=session_key.public().to_dict(),
         )
@@ -158,6 +161,7 @@ def test_endpoint_wrong_issuer(oidc_env: OidcEnv) -> None:
     with pytest.raises(pfc.exceptions.UI):
         oidc_env.sc.session_with_key(session_fingerprint).login_oidc(
             auth_name="oidc-test",
+            client_type="cli",
             id_token=id_token,
             session_public_key=session_key.public().to_dict(),
         )
@@ -171,6 +175,7 @@ def test_endpoint_wrong_audience(oidc_env: OidcEnv) -> None:
     with pytest.raises(pfc.exceptions.UI):
         oidc_env.sc.session_with_key(session_fingerprint).login_oidc(
             auth_name="oidc-test",
+            client_type="cli",
             id_token=id_token,
             session_public_key=session_key.public().to_dict(),
         )
@@ -204,6 +209,7 @@ def test_endpoint_missing_email(oidc_env: OidcEnv) -> None:
     with pytest.raises(pfc.exceptions.UI):
         oidc_env.sc.session_with_key(session_fingerprint).login_oidc(
             auth_name="oidc-test",
+            client_type="cli",
             id_token=id_token,
             session_public_key=session_key.public().to_dict(),
         )
@@ -217,6 +223,7 @@ def test_endpoint_unknown_auth(oidc_env: OidcEnv) -> None:
     with pytest.raises(pfc.exceptions.UI):
         oidc_env.sc.session_with_key(session_fingerprint).login_oidc(
             auth_name="no-such-auth",
+            client_type="cli",
             id_token=id_token,
             session_public_key=session_key.public().to_dict(),
         )
@@ -241,6 +248,7 @@ def test_endpoint_tag_restriction_pass(oidc_env: OidcEnv) -> None:
 
     oidc_env.sc.session_with_key(session_fingerprint).login_oidc(
         auth_name="oidc-unrestricted",
+        client_type="cli",
         id_token=id_token,
         session_public_key=session_key.public().to_dict(),
     )
@@ -272,6 +280,7 @@ def test_endpoint_tag_restriction_fail(oidc_env: OidcEnv) -> None:
     with pytest.raises(pfc.exceptions.UI):
         oidc_env.sc.session_with_key(session_fingerprint).login_oidc(
             auth_name="oidc-restricted",
+            client_type="cli",
             id_token=id_token,
             session_public_key=session_key.public().to_dict(),
         )
@@ -405,6 +414,7 @@ def test_device_code_endpoint_success(oidc_device_code_env: OidcDeviceCodeEnv) -
 
     oidc_device_code_env.sc.session_with_key(session_fingerprint).login_oidc(
         auth_name="oidc-dc-test",
+        client_type="cli",
         id_token=id_token,
         session_public_key=session_key.public().to_dict(),
     )
@@ -418,6 +428,7 @@ def test_device_code_endpoint_expired_token(oidc_device_code_env: OidcDeviceCode
     with pytest.raises(pfc.exceptions.UI, match="Unable to login via OIDC"):
         oidc_device_code_env.sc.session_with_key(session_fingerprint).login_oidc(
             auth_name="oidc-dc-test",
+            client_type="cli",
             id_token=id_token,
             session_public_key=session_key.public().to_dict(),
         )

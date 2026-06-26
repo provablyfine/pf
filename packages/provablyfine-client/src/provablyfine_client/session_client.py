@@ -570,13 +570,19 @@ class SessionClient:
     def login_oidc(
         self,
         auth_name: str,
+        client_type: str,
         id_token: str,
         session_public_key: dict[str, typing.Any],
     ) -> None:
         response = self._session.post(
             self._directory.login_oidc,
             auth=self._auth(),
-            json={"auth_name": auth_name, "id_token": id_token, "session_public_key": session_public_key},
+            json={
+                "auth_name": auth_name,
+                "client_type": client_type,
+                "id_token": id_token,
+                "session_public_key": session_public_key,
+            },
         )
         if response.status_code != 204:
             raise exceptions.UI(f"Unable to login via OIDC: {response.text}")
