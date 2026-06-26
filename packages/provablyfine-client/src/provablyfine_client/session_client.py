@@ -200,15 +200,12 @@ class SessionClient:
             raise exceptions.UI(_problem_title(response, "Unable to read auth config"))
         return schemas.Auth.model_validate(response.json())
 
-    def create_auth_http_sig(
-        self, name: str, client_type: str, description: str, tags: list[dict[str, str]]
-    ) -> schemas.Auth:
+    def create_auth_http_sig(self, name: str, client_type: str, description: str) -> schemas.Auth:
         body = {
             "name": name,
             "client_type": client_type,
             "description": description,
             "config": {"type": "http_sig"},
-            "tags": tags,
         }
         response = self._session.post(self._directory.auth, auth=self._auth(), json=body)
         if response.status_code != 201:
@@ -220,7 +217,6 @@ class SessionClient:
         name: str,
         client_type: str,
         description: str,
-        tags: list[dict[str, str]],
         issuer: str,
         client_id: str,
         client_secret: str | None,
@@ -228,7 +224,7 @@ class SessionClient:
         config: dict[str, str] = {"type": "oidc", "issuer": issuer, "client_id": client_id}
         if client_secret is not None:
             config["client_secret"] = client_secret
-        body = {"name": name, "client_type": client_type, "description": description, "config": config, "tags": tags}
+        body = {"name": name, "client_type": client_type, "description": description, "config": config}
         response = self._session.post(self._directory.auth, auth=self._auth(), json=body)
         if response.status_code != 201:
             raise exceptions.UI(_problem_title(response, "Unable to create auth config"))
@@ -239,7 +235,6 @@ class SessionClient:
         name: str,
         client_type: str,
         description: str,
-        tags: list[dict[str, str]],
         issuer: str,
         client_id: str,
         client_secret: str | None,
@@ -247,7 +242,7 @@ class SessionClient:
         config: dict[str, str] = {"type": "oidc-device-code", "issuer": issuer, "client_id": client_id}
         if client_secret is not None:
             config["client_secret"] = client_secret
-        body = {"name": name, "client_type": client_type, "description": description, "config": config, "tags": tags}
+        body = {"name": name, "client_type": client_type, "description": description, "config": config}
         response = self._session.post(self._directory.auth, auth=self._auth(), json=body)
         if response.status_code != 201:
             raise exceptions.UI(_problem_title(response, "Unable to create auth config"))
@@ -259,7 +254,6 @@ class SessionClient:
         name: str | None = None,
         description: str | None = None,
         is_enabled: bool | None = None,
-        tags: list[schemas.TagNameValue] | None = None,
     ) -> None:
         body: dict[str, typing.Any] = {}
         if name is not None:
@@ -268,8 +262,6 @@ class SessionClient:
             body["description"] = description
         if is_enabled is not None:
             body["is_enabled"] = is_enabled
-        if tags is not None:
-            body["tags"] = [{"name": t.name, "value": t.value} for t in tags]
         if not body:
             raise exceptions.UI("Nothing to update")
         response = self._session.patch(f"{self._directory.auth}/{id}", auth=self._auth(), json=body)

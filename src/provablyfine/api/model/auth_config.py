@@ -14,7 +14,6 @@ class AuthConfig:
     name: str
     client_type: str
     description: str
-    tag_id_list: list[int]
     created_at: int
     is_enabled: bool
     type: str
@@ -27,7 +26,6 @@ def _from_db(row: app_db.AuthRow) -> AuthConfig:
         name=row.name,
         client_type=row.client_type,
         description=row.description,
-        tag_id_list=row.tag_id_list,
         created_at=row.created_at,
         is_enabled=row.is_enabled,
         type=row.type,
@@ -35,15 +33,12 @@ def _from_db(row: app_db.AuthRow) -> AuthConfig:
     )
 
 
-def create(
-    name: str, client_type: str, description: str, tag_id_list: list[int], type: str, config: dict[str, typing.Any]
-) -> int:
+def create(name: str, client_type: str, description: str, type: str, config: dict[str, typing.Any]) -> int:
     now = int(time.time())
     auth_id = ctx.app_db.auth.create(
         name=name,
         client_type=client_type,
         description=description,
-        tag_id_list=tag_id_list,
         created_at=now,
         is_enabled=True,
         type=type,
@@ -67,7 +62,7 @@ def read_one(**kwargs: typing.Any) -> AuthConfig | None:
 
 
 def update(id: int, **fields: typing.Any) -> None:
-    allowed = {"name", "description", "tag_id_list", "is_enabled", "config"}
+    allowed = {"name", "description", "is_enabled", "config"}
     update_fields = {k: v for k, v in fields.items() if k in allowed and v is not None}
     audit_fields = {k: v for k, v in update_fields.items() if k != "config"}
     if "config" in update_fields:

@@ -54,13 +54,11 @@ def create_endpoint(data: schemas.auth.AuthCreateRequest) -> schemas.auth.Auth:
         )
 
     config = _build_config(data)
-    converter = converters.GrantConverter()
     try:
         auth_id = model.auth_config.create(
             name=data.name,
             client_type=data.client_type,
             description=data.description,
-            tag_id_list=converter.from_tag_list(data.tags) or [],
             type=data.config.type,
             config=config,
         )
@@ -120,13 +118,6 @@ def update_endpoint(auth_id: int, data: schemas.auth.AuthUpdateRequest) -> schem
                 responses.problem_response(status_code=403, title="Not allowed to update auth config description")
             )
         fields_to_update["description"] = data.description
-
-    if data.tags is not None:
-        if not grants.auth(ac.id).can_update("config"):
-            raise responses.ProblemHTTPException(
-                responses.problem_response(status_code=403, title="Not allowed to update auth config")
-            )
-        fields_to_update["tag_id_list"] = converters.GrantConverter().from_tag_list(data.tags) or []
 
     if data.is_enabled is not None:
         if not grants.auth(ac.id).can_update("is_enabled"):

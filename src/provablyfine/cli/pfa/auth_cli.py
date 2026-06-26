@@ -1,6 +1,5 @@
 import argparse
 import json
-import typing
 
 import provablyfine_client as pfc
 import tabulate
@@ -39,37 +38,22 @@ def _auth_list_function(args: argparse.Namespace) -> None:
 def _auth_create_http_sig_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     sc = client.Factory(c, timeout=args.timeout).session()
-    tag_list = typing.cast(list[str], args.tag or [])
-    tags: list[dict[str, str]] = []
-    for t in tag_list:
-        parts = t.split("=", 1)
-        tags.append({"name": parts[0], "value": parts[1]})
-    sc.create_auth_http_sig(args.name, args.client_type, args.description or "", tags)
+    sc.create_auth_http_sig(args.name, args.client_type, args.description or "")
 
 
 def _auth_create_oidc_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     sc = client.Factory(c, timeout=args.timeout).session()
-    tag_list = typing.cast(list[str], args.tag or [])
-    tags: list[dict[str, str]] = []
-    for t in tag_list:
-        parts = t.split("=", 1)
-        tags.append({"name": parts[0], "value": parts[1]})
     sc.create_auth_oidc(
-        args.name, args.client_type, args.description or "", tags, args.issuer, args.client_id, args.client_secret
+        args.name, args.client_type, args.description or "", args.issuer, args.client_id, args.client_secret
     )
 
 
 def _auth_create_oidc_device_code_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     sc = client.Factory(c, timeout=args.timeout).session()
-    tag_list = typing.cast(list[str], args.tag or [])
-    tags: list[dict[str, str]] = []
-    for t in tag_list:
-        parts = t.split("=", 1)
-        tags.append({"name": parts[0], "value": parts[1]})
     sc.create_auth_oidc_device_code(
-        args.name, args.client_type, args.description or "", tags, args.issuer, args.client_id, args.client_secret
+        args.name, args.client_type, args.description or "", args.issuer, args.client_id, args.client_secret
     )
 
 
@@ -93,7 +77,6 @@ def _auth_read_function(args: argparse.Namespace) -> None:
                 ["description", a.description],
                 ["enabled", a.is_enabled],
                 ["created_at", a.created_at],
-                ["tags", " ".join(f"{t.name}={t.value}" for t in a.tags)],
             ]
             if isinstance(a.config, pfc.schemas.OidcConfig):
                 rows.append(["issuer", a.config.issuer])
@@ -143,14 +126,12 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
     create_http_sig_parser.add_argument("-n", "--name", required=True, help="Name of auth config")
     create_http_sig_parser.add_argument("--client-type", required=True, choices=["cli", "web"], help="Client type")
     create_http_sig_parser.add_argument("--description", help="Description")
-    create_http_sig_parser.add_argument("--tag", action="append", dest="tag", help="Tag name=value (repeatable)")
     create_http_sig_parser.set_defaults(func=_auth_create_http_sig_function)
 
     create_oidc_parser = create_type_subparsers.add_parser("oidc", help="OpenID Connect auth")
     create_oidc_parser.add_argument("-n", "--name", required=True, help="Name of auth config")
     create_oidc_parser.add_argument("--client-type", required=True, choices=["cli", "web"], help="Client type")
     create_oidc_parser.add_argument("--description", help="Description")
-    create_oidc_parser.add_argument("--tag", action="append", dest="tag", help="Tag name=value (repeatable)")
     create_oidc_parser.add_argument("--issuer", required=True, help="OIDC issuer URL")
     create_oidc_parser.add_argument("--client-id", required=True, help="OIDC client ID")
     create_oidc_parser.add_argument("--client-secret", help="OIDC client secret (for providers that require it)")
@@ -162,7 +143,6 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
     create_oidc_dc_parser.add_argument("-n", "--name", required=True, help="Name of auth config")
     create_oidc_dc_parser.add_argument("--client-type", required=True, choices=["cli", "web"], help="Client type")
     create_oidc_dc_parser.add_argument("--description", help="Description")
-    create_oidc_dc_parser.add_argument("--tag", action="append", dest="tag", help="Tag name=value (repeatable)")
     create_oidc_dc_parser.add_argument("--issuer", required=True, help="OIDC issuer URL")
     create_oidc_dc_parser.add_argument("--client-id", required=True, help="OIDC client ID")
     create_oidc_dc_parser.add_argument("--client-secret", help="OIDC client secret (for providers that require it)")

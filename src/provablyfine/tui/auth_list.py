@@ -184,10 +184,10 @@ class AuthListScreen(base.Screen):
             return
         match body:
             case _HttpSigParams():
-                a = await self._auth.create_auth_http_sig(body.name, body.client_type, "", [])
+                a = await self._auth.create_auth_http_sig(body.name, body.client_type, "")
             case _OidcParams():
                 a = await self._auth.create_auth_oidc(
-                    body.name, body.client_type, "", [], body.issuer, body.client_id, body.client_secret
+                    body.name, body.client_type, "", body.issuer, body.client_id, body.client_secret
                 )
         self._auths.append(a)
         table = self.query_one(self._StrDataTable)

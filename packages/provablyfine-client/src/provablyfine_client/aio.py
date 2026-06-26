@@ -106,23 +106,20 @@ class AsyncSessionClient:
     async def get_auth(self, id: int) -> schemas.Auth:
         return await self._run(lambda: self._inner.get_auth(id))
 
-    async def create_auth_http_sig(
-        self, name: str, client_type: str, description: str, tags: list[dict[str, str]]
-    ) -> schemas.Auth:
-        return await self._run(lambda: self._inner.create_auth_http_sig(name, client_type, description, tags))
+    async def create_auth_http_sig(self, name: str, client_type: str, description: str) -> schemas.Auth:
+        return await self._run(lambda: self._inner.create_auth_http_sig(name, client_type, description))
 
     async def create_auth_oidc(
         self,
         name: str,
         client_type: str,
         description: str,
-        tags: list[dict[str, str]],
         issuer: str,
         client_id: str,
         client_secret: str | None,
     ) -> schemas.Auth:
         return await self._run(
-            lambda: self._inner.create_auth_oidc(name, client_type, description, tags, issuer, client_id, client_secret)
+            lambda: self._inner.create_auth_oidc(name, client_type, description, issuer, client_id, client_secret)
         )
 
     async def update_auth(
@@ -131,9 +128,8 @@ class AsyncSessionClient:
         name: str | None = None,
         description: str | None = None,
         is_enabled: bool | None = None,
-        tags: list[schemas.TagNameValue] | None = None,
     ) -> None:
-        return await self._run(lambda: self._inner.update_auth(id, name, description, is_enabled, tags))
+        return await self._run(lambda: self._inner.update_auth(id, name, description, is_enabled))
 
     async def delete_auth(self, id: int) -> None:
         return await self._run(lambda: self._inner.delete_auth(id))

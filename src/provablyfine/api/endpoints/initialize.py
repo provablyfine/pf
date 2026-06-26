@@ -140,7 +140,6 @@ def _provision(allow_tenant_create: bool):
         name="default",
         client_type="cli",
         description="Default HTTP signature authentication",
-        tag_id_list=[],
         type="http_sig",
         config={},
     )

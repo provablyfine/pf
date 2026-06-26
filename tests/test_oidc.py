@@ -84,7 +84,6 @@ def oidc_env(api, mock_oidc, ssh_agent, tmp_path) -> typing.Iterator[OidcEnv]:
             name="oidc-test",
             client_type="cli",
             description="Test OIDC provider",
-            tags=[],
             issuer=mock_oidc.issuer,
             client_id=mock_oidc.client_id,
             client_secret=None,
@@ -229,63 +228,6 @@ def test_endpoint_unknown_auth(oidc_env: OidcEnv) -> None:
         )
 
 
-def test_endpoint_tag_restriction_pass(oidc_env: OidcEnv) -> None:
-    """Login succeeds when auth has no tag restrictions."""
-    # Create a basic auth config with no tag restrictions
-    oidc_env.sc.session().create_auth_oidc(
-        name="oidc-unrestricted",
-        client_type="cli",
-        description="Unrestricted OIDC",
-        tags=[],
-        issuer=oidc_env.mock.issuer,
-        client_id=oidc_env.mock.client_id,
-        client_secret=None,
-    )
-
-    # Login should succeed since there are no tag restrictions
-    id_token = oidc_env.mock.issue_token("user@example.com")
-    session_key, session_fingerprint = _create_session_key()
-
-    oidc_env.sc.session_with_key(session_fingerprint).login_oidc(
-        auth_name="oidc-unrestricted",
-        client_type="cli",
-        id_token=id_token,
-        session_public_key=session_key.public().to_dict(),
-    )
-
-
-def test_endpoint_tag_restriction_fail(oidc_env: OidcEnv) -> None:
-    """Login fails when identity lacks required tag."""
-    # Create a tag
-    tag_response = oidc_env.sc.session().create_tag("restricted-tag", "restricted-value")
-
-    # Create auth config with tag restriction
-    oidc_auth = oidc_env.sc.session().create_auth_oidc(
-        name="oidc-restricted",
-        client_type="cli",
-        description="Restricted OIDC",
-        tags=[],
-        issuer=oidc_env.mock.issuer,
-        client_id=oidc_env.mock.client_id,
-        client_secret=None,
-    )
-
-    # Update auth to require the tag
-    oidc_env.sc.session().update_auth(id=oidc_auth.id, tags=[tag_response])
-
-    # Identity does NOT have the tag
-    id_token = oidc_env.mock.issue_token("user@example.com")
-    session_key, session_fingerprint = _create_session_key()
-
-    with pytest.raises(pfc.exceptions.UI):
-        oidc_env.sc.session_with_key(session_fingerprint).login_oidc(
-            auth_name="oidc-restricted",
-            client_type="cli",
-            id_token=id_token,
-            session_public_key=session_key.public().to_dict(),
-        )
-
-
 # =============================================================================
 # Group B: Full login.oidc_login flow tests (with browser mock)
 # =============================================================================
@@ -385,7 +327,6 @@ def oidc_device_code_env(api, mock_oidc, ssh_agent, tmp_path) -> typing.Iterator
             name="oidc-dc-test",
             client_type="cli",
             description="Test OIDC device code provider",
-            tags=[],
             issuer=mock_oidc.issuer,
             client_id=mock_oidc.client_id,
             client_secret=None,

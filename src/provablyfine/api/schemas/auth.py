@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import typing
 
-import pydantic
-
-from . import base, jwk, tag
+from . import base, jwk
 
 
 class HttpSigConfig(base.APIBase):
@@ -46,7 +44,6 @@ class Auth(base.APIBase):
     name: str
     client_type: str
     description: str
-    tags: list[tag.TagNameValue]
     created_at: int
     is_enabled: bool
     config: AuthConfig
@@ -60,14 +57,12 @@ class AuthCreateRequest(base.APIBase):
     name: str
     client_type: str
     description: str = ""
-    tags: list[tag.TagNameValue] = pydantic.Field(default_factory=list[tag.TagNameValue])
     config: OidcCreateConfig | OidcDeviceCodeCreateConfig | HttpSigCreateConfig
 
 
 class AuthUpdateRequest(base.APIBase):
     name: str | None = None
     description: str | None = None
-    tags: list[tag.TagNameValue] | None = None
     is_enabled: bool | None = None
 
 

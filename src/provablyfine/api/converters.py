@@ -549,13 +549,11 @@ def _auth_config_to_config(ac: model.auth_config.AuthConfig) -> schemas.auth.Aut
 
 def auth_config_to_schema(ac: model.auth_config.AuthConfig) -> schemas.auth.Auth:
     config = _auth_config_to_config(ac)
-    converter = GrantConverter()
     return schemas.auth.Auth(
         id=ac.id,
         name=ac.name,
         client_type=ac.client_type,
         description=ac.description,
-        tags=converter.to_tag_list(ac.tag_id_list) or [],
         created_at=ac.created_at,
         is_enabled=ac.is_enabled,
         config=config,

@@ -166,7 +166,6 @@ class Auth(_Base):
     name: str
     client_type: str
     description: str
-    tags: list[TagNameValue] = []
     created_at: int
     is_enabled: bool
     config: AuthConfig

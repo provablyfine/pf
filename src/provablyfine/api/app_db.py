@@ -44,7 +44,6 @@ class AuthRow(typing.NamedTuple):
     name: typing.Annotated[str, db.Col(index=True)]
     client_type: str
     description: str
-    tag_id_list: list[int]
     created_at: int
     is_enabled: bool
     type: str

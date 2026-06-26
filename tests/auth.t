@@ -21,7 +21,6 @@ Read the default auth config
   description  Default HTTP signature authentication
   enabled      True
   created_at   .* (re)
-  tags
 
 Create a new http_sig auth config
   $ pfa -c config.json auth create http_sig -n corporate --client-type cli
@@ -40,7 +39,6 @@ Read the new auth config
   description
   enabled      True
   created_at   .* (re)
-  tags
 
 Create a duplicate auth config (same name + client_type)
   $ pfa -c config.json auth create http_sig -n default --client-type cli
@@ -76,7 +74,6 @@ Read the oidc auth config
   description
   enabled       True
   created_at    .* (re)
-  tags
   issuer        https://accounts.google.com
   client_id     my-client-id
   callback_url  http://127.0.0.1/callback
@@ -99,7 +96,6 @@ Update auth config name
   description
   enabled      True
   created_at   .* (re)
-  tags
 
 Update auth config description
   $ pfa -c config.json auth update -i 2 --description "Corporate HTTP signature auth"
@@ -111,7 +107,6 @@ Update auth config description
   description  Corporate HTTP signature auth
   enabled      True
   created_at   .* (re)
-  tags
 
 Disable an auth config
   $ pfa -c config.json auth update -i 2 --disable
@@ -123,7 +118,6 @@ Disable an auth config
   description  Corporate HTTP signature auth
   enabled      False
   created_at   .* (re)
-  tags
 
 Re-enable an auth config
   $ pfa -c config.json auth update -i 2 --enable
@@ -135,7 +129,6 @@ Re-enable an auth config
   description  Corporate HTTP signature auth
   enabled      True
   created_at   .* (re)
-  tags
 
 Public discovery endpoint returns correct data for http_sig
   $ curl -s "http://127.0.0.1:$API_PORT/pf/t/root/public/auth/default?client_type=cli" && echo ""

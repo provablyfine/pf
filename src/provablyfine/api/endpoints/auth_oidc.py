@@ -158,13 +158,6 @@ def oidc_login_endpoint(
             responses.problem_response(status_code=403, title="No identity for this account")
         )
 
-    # Tag restriction: if auth config has tag_id_list, identity must share at least one (OR semantics)
-    if ac.tag_id_list:
-        if not any(tag_id in identity.tag_id_list for tag_id in ac.tag_id_list):
-            raise responses.ProblemHTTPException(
-                responses.problem_response(status_code=403, title="Identity does not have a required tag")
-            )
-
     # Create session key record
     now = int(time.time())
     ctx.app_db.identity_session_key.create(
