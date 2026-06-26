@@ -125,21 +125,6 @@ class AsyncSessionClient:
             lambda: self._inner.create_auth_oidc(name, client_type, description, tags, issuer, client_id, client_secret)
         )
 
-    async def create_auth_oauth2_github(
-        self,
-        name: str,
-        client_type: str,
-        description: str,
-        tags: list[dict[str, str]],
-        client_id: str,
-        client_secret: str,
-    ) -> schemas.Auth:
-        return await self._run(
-            lambda: self._inner.create_auth_oauth2_github(
-                name, client_type, description, tags, client_id, client_secret
-            )
-        )
-
     async def update_auth(
         self,
         id: int,
@@ -280,16 +265,6 @@ class AsyncSessionClient:
         session_public_key: dict[str, typing.Any],
     ) -> None:
         return await self._run(lambda: self._inner.login_oidc(auth_name, id_token, session_public_key))
-
-    async def login_oauth2_start(
-        self,
-        auth_name: str,
-        session_public_key: dict[str, typing.Any],
-        client_redirect_uri: str,
-    ) -> str:
-        return await self._run(
-            lambda: self._inner.login_oauth2_start(auth_name, session_public_key, client_redirect_uri)
-        )
 
     async def list_audit_log(
         self,

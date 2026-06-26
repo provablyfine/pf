@@ -153,30 +153,3 @@ def oidc_device_code_flow(
         elif error != "authorization_pending":
             raise pfc.exceptions.UI(f"Device code flow failed: {error}")
     raise pfc.exceptions.UI("Device code flow timed out")
-
-
-def oauth2_callback(port: int) -> None:
-    """Run OAuth2 /done callback server. Raises UI on failure. Caller handles webbrowser.open."""
-    result: list[dict[str, str]] = []
-
-    class _DoneHandler(http.server.BaseHTTPRequestHandler):
-        def do_GET(self) -> None:
-            qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
-            status = qs.get("status", ["error"])[0]
-            reason = qs.get("reason", ["Unknown error"])[0]
-            result.append({"status": status, "reason": reason})
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html")
-            self.end_headers()
-            if status == "ok":
-                self.wfile.write(b"Login successful. You may close this tab.")
-            else:
-                self.wfile.write(b"Login failed: " + reason.encode() + b". You may close this tab.")
-
-        def log_message(self, format: str, *args: typing.Any) -> None:
-            pass
-
-    http.server.HTTPServer(("127.0.0.1", port), _DoneHandler).handle_request()
-    if not result or result[0]["status"] != "ok":
-        reason = result[0]["reason"] if result else "unknown"
-        raise pfc.exceptions.UI(f"OAuth2 login failed: {reason}")

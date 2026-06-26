@@ -1,8 +1,6 @@
 import getpass
 import glob
 import os
-import socket
-import webbrowser
 
 import provablyfine_client as pfc
 
@@ -104,30 +102,6 @@ def oidc_device_code_login(c: client.Config, sc: client.Factory, auth_name: str)
     return session_fingerprint
 
 
-def oauth2_login(c: client.Config, sc: client.Factory, auth_name: str) -> str:
-    """OAuth2 login. Returns session fingerprint. Caller updates config."""
-    auth_public = sc.public().get_public_auth(auth_name)
-    if not isinstance(auth_public.config, pfc.schemas.OAuth2Config):
-        raise pfc.exceptions.UI(f"Auth '{auth_name}' is not OAuth2")
-
-    session_key, session_fingerprint = browser_login.generate_session_key()
-
-    sock = socket.socket()
-    sock.bind(("127.0.0.1", 0))
-    port = sock.getsockname()[1]
-    sock.close()
-    client_redirect_uri = f"http://127.0.0.1:{port}/done"
-
-    auth_url = sc.session_with_key(session_fingerprint).login_oauth2_start(
-        auth_name, session_key.public().to_dict(), client_redirect_uri
-    )
-
-    print("Opening browser for OAuth2 login...")
-    webbrowser.open(auth_url)
-    browser_login.oauth2_callback(port)
-    return session_fingerprint
-
-
 def login(c: client.Config, sc: client.Factory, auth_name: str, session_key_path: str | None = None) -> str:
     """Perform login based on server auth config. Returns session fingerprint. Caller updates config."""
     auth_public = sc.public().get_public_auth(auth_name)
@@ -138,7 +112,5 @@ def login(c: client.Config, sc: client.Factory, auth_name: str, session_key_path
             return oidc_login(c, sc, auth_name)
         case "oidc-device-code":
             return oidc_device_code_login(c, sc, auth_name)
-        case "oauth2-github":
-            return oauth2_login(c, sc, auth_name)
         case _:
             raise pfc.exceptions.UI(f"Unsupported auth type: {auth_public.config.type}")

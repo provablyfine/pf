@@ -3,7 +3,7 @@ import logging
 import typing
 
 from .. import jwk, ssh
-from . import app_db, model, oauth2_providers, responses, schemas
+from . import app_db, model, responses, schemas
 from .context import ctx
 
 logger = logging.getLogger(__name__)
@@ -539,13 +539,6 @@ def _auth_config_to_config(ac: model.auth_config.AuthConfig) -> schemas.auth.Aut
             issuer=ac.config["issuer"],
             client_id=ac.config["client_id"],
             client_secret=ac.config.get("client_secret"),
-        )
-    elif ac.type in oauth2_providers.PROVIDER_CONFIG:
-        callback_url = f"{ctx.config.base_url}/pf/t/{ctx.tenant_name}/auth/oauth2/callback"
-        config = schemas.auth.OAuth2Config(
-            client_id=ac.config["client_id"],
-            authorization_endpoint=oauth2_providers.PROVIDER_CONFIG[ac.type]["authorization_endpoint"],
-            callback_url=callback_url,
         )
     elif ac.type == "http_sig":
         config = schemas.auth.HttpSigConfig()

@@ -1,6 +1,4 @@
-import socket
 import typing
-import webbrowser
 
 import provablyfine_client as pfc
 import textual
@@ -71,40 +69,12 @@ def oidc_device_code_login(
     return fp
 
 
-def oauth2_login(api: client.Client, auth_name: str) -> str:
-    session_key, fp = browser_login.generate_session_key()
-    auth_public = client.Factory(api.config).public().get_public_auth(auth_name)
-
-    sock = socket.socket()
-    sock.bind(("127.0.0.1", 0))
-    port = sock.getsockname()[1]
-    sock.close()
-    client_redirect_uri = f"http://127.0.0.1:{port}/done"
-
-    session_http = api.session_auth(session=fp)
-    response = session_http.post(
-        url=session_http.directory.login_oauth2_start,
-        json={
-            "auth_name": auth_public.name,
-            "session_public_key": session_key.public().to_dict(),
-            "client_redirect_uri": client_redirect_uri,
-        },
-    )
-    if response.status_code != 200:
-        raise pfc.exceptions.UI(f"Unable to start OAuth2 login: {response.text}")
-    webbrowser.open(response.json()["auth_url"])
-    browser_login.oauth2_callback(port)
-    return fp
-
-
 def login(api: client.Client, auth_name: str, auth_type: str) -> str:
     match auth_type:
         case "oidc":
             return oidc_login(api, auth_name)
         case "oidc-device-code":
             return oidc_device_code_login(api, auth_name)
-        case "oauth2-github":
-            return oauth2_login(api, auth_name)
         case _:
             raise pfc.exceptions.UI(f"Unsupported browser auth type: {auth_type}")
 
@@ -165,8 +135,6 @@ class ReloginScreen(base.Screen):
                         self.app.call_from_thread(_update)
 
                     fp = oidc_device_code_login(self._api, auth_name, on_code=_show)
-                case "oauth2-github":
-                    fp = oauth2_login(self._api, auth_name)
                 case _:
                     raise pfc.exceptions.UI(f"Unsupported auth type: {auth_type}")
             self._cfg.session_key = fp

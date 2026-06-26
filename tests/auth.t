@@ -151,37 +151,6 @@ Public list endpoint filters by client_type
   corp-http-sig
   google
 
-Create an oauth2-github auth config
-  $ pfa -c config.json auth create oauth2-github -n corp-oauth2 --client-type cli --client-id my-app --client-secret s3cr3t
-
-Read the oauth2-github auth config (client_secret must not appear)
-  $ pfa -c config.json auth read -i 4
-  id                      4
-  name                    corp-oauth2
-  client_type             cli
-  type                    oauth2-github
-  description
-  enabled                 True
-  created_at              .* (re)
-  tags
-  authorization_endpoint  https://github.com/login/oauth/authorize
-  client_id               my-app
-  callback_url            .*/auth/oauth2/callback (re)
-
-Create an oauth2-github auth config without client-secret (should fail)
-  $ pfa -c config.json auth create oauth2-github -n bad-oauth2 --client-type cli --client-id my-app 2>&1 | grep "error:"
-  pfa auth create oauth2-github: error: the following arguments are required: --client-secret
-
-Public discovery endpoint returns oauth2-github data without client_secret
-  $ curl -s http://127.0.0.1:$API_PORT/pf/t/root/public/auth/corp-oauth2 | jq -r ".name,.config.client_id,.config.authorization_endpoint,.config.type"
-  corp-oauth2
-  my-app
-  https://github.com/login/oauth/authorize
-  oauth2-github
-
-Delete the oauth2 auth config
-  $ pfa -c config.json auth delete -i 4
-
 Public discovery endpoint returns 404 for unknown name
   $ curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:$API_PORT/pf/t/root/public/auth/nonexistent
   404

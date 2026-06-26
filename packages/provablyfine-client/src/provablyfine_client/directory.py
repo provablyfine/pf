@@ -60,10 +60,6 @@ class Directory:
         return self._load()["login"]
 
     @property
-    def login_oauth2_start(self) -> str:
-        return self._load()["login_oauth2_start"]
-
-    @property
     def login_oidc(self) -> str:
         return self._load()["login_oidc"]
 

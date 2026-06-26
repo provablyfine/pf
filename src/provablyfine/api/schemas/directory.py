@@ -8,7 +8,6 @@ class DirectoryReadResponse(base.APIBase):
     accept_invitation: str
     login: str
     login_oidc: str
-    login_oauth2_start: str
     auth: str
     public_auth: str
     boundary: str

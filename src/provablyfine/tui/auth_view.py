@@ -71,13 +71,6 @@ class AuthViewScreen(base.Screen):
                     yield textual.widgets.Input(
                         "", placeholder="unchanged", id="client_secret", compact=True, password=True, disabled=True
                     )
-            elif isinstance(self._a.config, pfc.schemas.OAuth2Config):
-                with textual.containers.HorizontalGroup(classes="field") as c:
-                    c.border_title = "Authorization endpoint"
-                    yield textual.widgets.Label(self._a.config.authorization_endpoint)
-                with textual.containers.HorizontalGroup(classes="field") as c:
-                    c.border_title = "Callback URL"
-                    yield textual.widgets.Label(self._a.config.callback_url)
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     @textual.work

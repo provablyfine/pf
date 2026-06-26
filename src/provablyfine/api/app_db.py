@@ -244,21 +244,6 @@ audit_log = db.make_table(
 )
 
 
-class OAuth2LoginRequestRow(typing.NamedTuple):
-    id: typing.Annotated[str, db.Col(primary_key=True)]
-    session_key_thumbprint: str
-    session_public_key: dict[str, typing.Any]
-    auth_config_id: int
-    code_verifier: bytes
-    redirect_uri: str
-    client_redirect_uri: str
-    created_at: int
-    expires_at: int
-
-
-oauth2_login_request = db.make_table("oauth2_login_request", metadata, OAuth2LoginRequestRow)
-
-
 class OidcKeyRow(typing.NamedTuple):
     id: typing.Annotated[int, db.Col(primary_key=True)]
     private_key: bytes
@@ -352,10 +337,6 @@ class AppDb(db.Dao):
     @property
     def audit_log(self) -> db.Table[AuditLogRow]:
         return self._get(audit_log)
-
-    @property
-    def oauth2_login_request(self) -> db.Table[OAuth2LoginRequestRow]:
-        return self._get(oauth2_login_request)
 
     @property
     def oidc_key(self) -> db.Table[OidcKeyRow]:

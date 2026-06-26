@@ -26,15 +26,7 @@ class _OidcParams:
     client_secret: str | None
 
 
-@dataclasses.dataclass
-class _OAuth2Params:
-    name: str
-    client_type: str
-    client_id: str
-    client_secret: str
-
-
-_AuthParamsResult = _HttpSigParams | _OidcParams | _OAuth2Params
+_AuthParamsResult = _HttpSigParams | _OidcParams
 
 
 class _AuthTypeScreen(textual.screen.ModalScreen[str | None]):
@@ -67,7 +59,6 @@ class _AuthTypeScreen(textual.screen.ModalScreen[str | None]):
             yield textual.widgets.ListView(
                 textual.widgets.ListItem(textual.widgets.Label("http_sig"), id="http_sig"),
                 textual.widgets.ListItem(textual.widgets.Label("oidc"), id="oidc"),
-                textual.widgets.ListItem(textual.widgets.Label("oauth2-github"), id="oauth2-github"),
             )
 
     def action_cancel(self) -> None:
@@ -108,11 +99,6 @@ class _AuthParamsScreen(textual.screen.ModalScreen[_AuthParamsResult | None]):
                 yield textual.widgets.Input(
                     placeholder="client_secret (optional)", id="client_secret", compact=True, password=True
                 )
-            elif self._type == "oauth2-github":
-                yield textual.widgets.Input(placeholder="client_id", id="client_id", compact=True)
-                yield textual.widgets.Input(
-                    placeholder="client_secret", id="client_secret", compact=True, password=True
-                )
 
     def action_cancel(self) -> None:
         self.dismiss(None)
@@ -135,14 +121,6 @@ class _AuthParamsScreen(textual.screen.ModalScreen[_AuthParamsResult | None]):
                 _OidcParams(
                     name=name, client_type=client_type, issuer=issuer, client_id=client_id, client_secret=secret or None
                 )
-            )
-        elif self._type == "oauth2-github":
-            client_id = self.query_one("#client_id", textual.widgets.Input).value.strip()
-            client_secret = self.query_one("#client_secret", textual.widgets.Input).value.strip()
-            if not client_id or not client_secret:
-                return
-            self.dismiss(
-                _OAuth2Params(name=name, client_type=client_type, client_id=client_id, client_secret=client_secret)
             )
         else:
             self.dismiss(_HttpSigParams(name=name, client_type=client_type))
@@ -210,10 +188,6 @@ class AuthListScreen(base.Screen):
             case _OidcParams():
                 a = await self._auth.create_auth_oidc(
                     body.name, body.client_type, "", [], body.issuer, body.client_id, body.client_secret
-                )
-            case _OAuth2Params():
-                a = await self._auth.create_auth_oauth2_github(
-                    body.name, body.client_type, "", [], body.client_id, body.client_secret
                 )
         self._auths.append(a)
         table = self.query_one(self._StrDataTable)

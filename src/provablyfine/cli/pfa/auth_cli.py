@@ -73,19 +73,6 @@ def _auth_create_oidc_device_code_function(args: argparse.Namespace) -> None:
     )
 
 
-def _auth_create_oauth2_github_function(args: argparse.Namespace) -> None:
-    c = client.Config.load(args.config)
-    sc = client.Factory(c, timeout=args.timeout).session()
-    tag_list = typing.cast(list[str], args.tag or [])
-    tags: list[dict[str, str]] = []
-    for t in tag_list:
-        parts = t.split("=", 1)
-        tags.append({"name": parts[0], "value": parts[1]})
-    sc.create_auth_oauth2_github(
-        args.name, args.client_type, args.description or "", tags, args.client_id, args.client_secret
-    )
-
-
 def _auth_read_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     sc = client.Factory(c, timeout=args.timeout).session()
@@ -119,10 +106,6 @@ def _auth_read_function(args: argparse.Namespace) -> None:
                 rows.append(["client_id", a.config.client_id])
                 if a.config.client_secret:
                     rows.append(["client_secret", a.config.client_secret])
-            elif isinstance(a.config, pfc.schemas.OAuth2Config):
-                rows.append(["authorization_endpoint", a.config.authorization_endpoint])
-                rows.append(["client_id", a.config.client_id])
-                rows.append(["callback_url", a.config.callback_url])
             print(tabulate.tabulate(rows, tablefmt="plain"))
         case _:
             assert False, args.format
@@ -184,15 +167,6 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
     create_oidc_dc_parser.add_argument("--client-id", required=True, help="OIDC client ID")
     create_oidc_dc_parser.add_argument("--client-secret", help="OIDC client secret (for providers that require it)")
     create_oidc_dc_parser.set_defaults(func=_auth_create_oidc_device_code_function)
-
-    create_oauth2_github_parser = create_type_subparsers.add_parser("oauth2-github", help="GitHub OAuth2 auth")
-    create_oauth2_github_parser.add_argument("-n", "--name", required=True, help="Name of auth config")
-    create_oauth2_github_parser.add_argument("--client-type", required=True, choices=["cli", "web"], help="Client type")
-    create_oauth2_github_parser.add_argument("--description", help="Description")
-    create_oauth2_github_parser.add_argument("--tag", action="append", dest="tag", help="Tag name=value (repeatable)")
-    create_oauth2_github_parser.add_argument("--client-id", required=True, help="GitHub OAuth2 client ID")
-    create_oauth2_github_parser.add_argument("--client-secret", required=True, help="GitHub OAuth2 client secret")
-    create_oauth2_github_parser.set_defaults(func=_auth_create_oauth2_github_function)
 
     read_parser = subparsers.add_parser("read", help="Read an auth config")
     read_parser.add_argument("-i", "--id", type=int, required=True, help="ID of auth config")

@@ -253,22 +253,6 @@ class SessionClient:
             raise exceptions.UI(_problem_title(response, "Unable to create auth config"))
         return schemas.Auth.model_validate(response.json())
 
-    def create_auth_oauth2_github(
-        self,
-        name: str,
-        client_type: str,
-        description: str,
-        tags: list[dict[str, str]],
-        client_id: str,
-        client_secret: str,
-    ) -> schemas.Auth:
-        config = {"type": "oauth2-github", "client_id": client_id, "client_secret": client_secret}
-        body = {"name": name, "client_type": client_type, "description": description, "config": config, "tags": tags}
-        response = self._session.post(self._directory.auth, auth=self._auth(), json=body)
-        if response.status_code != 201:
-            raise exceptions.UI(_problem_title(response, "Unable to create auth config"))
-        return schemas.Auth.model_validate(response.json())
-
     def update_auth(
         self,
         id: int,
@@ -596,25 +580,6 @@ class SessionClient:
         )
         if response.status_code != 204:
             raise exceptions.UI(f"Unable to login via OIDC: {response.text}")
-
-    def login_oauth2_start(
-        self,
-        auth_name: str,
-        session_public_key: dict[str, typing.Any],
-        client_redirect_uri: str,
-    ) -> str:
-        response = self._session.post(
-            self._directory.login_oauth2_start,
-            auth=self._auth(),
-            json={
-                "auth_name": auth_name,
-                "session_public_key": session_public_key,
-                "client_redirect_uri": client_redirect_uri,
-            },
-        )
-        if response.status_code != 200:
-            raise exceptions.UI(f"Unable to start OAuth2 login: {response.text}")
-        return response.json()["auth_url"]
 
     # Audit log
 

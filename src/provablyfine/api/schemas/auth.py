@@ -26,14 +26,7 @@ class OidcDeviceCodeConfig(base.APIBase):
     type: typing.Literal["oidc-device-code"] = "oidc-device-code"
 
 
-class OAuth2Config(base.APIBase):
-    client_id: str
-    authorization_endpoint: str
-    callback_url: str
-    type: typing.Literal["oauth2-github"] = "oauth2-github"
-
-
-AuthConfig = OidcConfig | OidcDeviceCodeConfig | OAuth2Config | HttpSigConfig
+AuthConfig = OidcConfig | OidcDeviceCodeConfig | HttpSigConfig
 
 
 class OidcCreateConfig(OidcConfig):
@@ -46,12 +39,6 @@ class OidcDeviceCodeCreateConfig(OidcDeviceCodeConfig):
 
 class HttpSigCreateConfig(HttpSigConfig):
     pass
-
-
-class OAuth2CreateConfig(base.APIBase):
-    type: typing.Literal["oauth2-github"] = "oauth2-github"
-    client_id: str
-    client_secret: str
 
 
 class Auth(base.APIBase):
@@ -74,7 +61,7 @@ class AuthCreateRequest(base.APIBase):
     client_type: str
     description: str = ""
     tags: list[tag.TagNameValue] = pydantic.Field(default_factory=list[tag.TagNameValue])
-    config: OidcCreateConfig | OidcDeviceCodeCreateConfig | OAuth2CreateConfig | HttpSigCreateConfig
+    config: OidcCreateConfig | OidcDeviceCodeCreateConfig | HttpSigCreateConfig
 
 
 class AuthUpdateRequest(base.APIBase):
@@ -96,16 +83,6 @@ class OidcLoginRequest(base.APIBase):
     session_public_key: jwk.PublicJWK
 
 
-class OAuth2StartRequest(base.APIBase):
-    auth_name: str
-    session_public_key: jwk.PublicJWK
-    client_redirect_uri: str
-
-
-class OAuth2StartResponse(base.APIBase):
-    auth_url: str
-
-
 class OidcED25519PublicJwk(jwk.ED25519PublicJWK):
     kid: str
     alg: typing.Literal["EdDSA"] = "EdDSA"
@@ -119,7 +96,7 @@ class OidcJwksResponse(base.APIBase):
 class AuthPublicSummary(base.APIBase):
     name: str
     client_type: str
-    type: typing.Literal["http_sig", "oidc", "oidc-device-code", "oauth2-github"]
+    type: typing.Literal["http_sig", "oidc", "oidc-device-code"]
 
 
 class AuthPublicListResponse(base.APIBase):
