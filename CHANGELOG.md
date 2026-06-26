@@ -6,6 +6,7 @@
 - CHANGELOG.md
 - Add "pfa initialize --transient-key" ([#9](https://github.com/provablyfine/pf/issues/9))
 - Track client_type on a per-auth basis ([#12](https://github.com/provablyfine/pf/issues/12))
+- Ask user to choose which authentication to use to accept an invitiation if there is ambiguity
 
 ### Removed
 - oauth2 GitHub support for auth.

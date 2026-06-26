@@ -64,7 +64,7 @@ def version_function(args: argparse.Namespace) -> None:
 class Invitation:
     directory_url: str
     key: str | None
-    auth_name: str
+    auth_name: str | None
 
 
 def _parse_invitation(invitation_url: str) -> Invitation:
@@ -72,11 +72,10 @@ def _parse_invitation(invitation_url: str) -> Invitation:
     qs = urllib.parse.parse_qs(url.query)
     invitation = qs.get("invitation")
     auth = qs.get("auth")
-    if not auth:
-        raise pfc.exceptions.UI("No auth key found in URL")
+    auth_name = auth[0] if auth else None
     url_no_qs = url._replace(query="")
     directory_url = urllib.parse.urlunsplit(url_no_qs)
-    return Invitation(directory_url=directory_url, key=None if not invitation else invitation[0], auth_name=auth[0])
+    return Invitation(directory_url=directory_url, key=None if not invitation else invitation[0], auth_name=auth_name)
 
 
 def _accept_function(args: argparse.Namespace) -> None:
@@ -87,11 +86,27 @@ def _accept_function(args: argparse.Namespace) -> None:
     )
     sc = client.Factory(c, timeout=args.timeout)
     auths = sc.public().list_public_auths(client_type="cli")
-    for auth in auths:
-        if auth.name != invitation.auth_name:
-            continue
-        if auth.type != "http_sig":
-            continue
+    if len(auths) == 0:
+        raise pfc.exceptions.UI("No auth configured for tenant")
+    if invitation.auth_name is not None:
+        auths = [a for a in auths if a.name == invitation.auth_name]
+        if len(auths) == 0:
+            raise pfc.exceptions.UI(f"No auth found matching name='{invitation.auth_name}'")
+    if len(auths) == 1:
+        auth = auths[0]
+    else:
+        assert len(auths) > 1
+        for i, a in enumerate(auths, 1):
+            print(f"  {i}. {a.name}")
+        raw = input(f"Choose auth method [1-{len(auths)}]: ")
+        try:
+            idx = int(raw)
+            if idx < 1 or idx > len(auths):
+                raise ValueError
+        except ValueError:
+            raise pfc.exceptions.UI(f"Invalid choice: {raw!r}")
+        auth = auths[idx - 1]
+    if auth.type == "http_sig":
         if invitation.key is None:
             raise pfc.exceptions.UI("No invitation key found in URL")
         if args.key is None:
@@ -100,7 +115,7 @@ def _accept_function(args: argparse.Namespace) -> None:
             account_key_id = args.key
         sc.invitation(invitation.key, account_key_id).accept_invitation()
         c.account_key = account_key_id
-        break
+    c.auth_name = auth.name
     c.save(args.config)
 
 
