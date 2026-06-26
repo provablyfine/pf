@@ -92,7 +92,7 @@ def _print_init_script(
     config_json = json.dumps(
         {
             "directory_url": directory_url,
-            "account_key": "$CREDENTIALS_DIRECTORY/account",
+            "account_key_file": "$CREDENTIALS_DIRECTORY/account",
         }
     )
     sshd_drop_in_dir = os.path.dirname(sshd_config_drop_in)
@@ -206,10 +206,11 @@ def host_refresh_function(args: argparse.Namespace) -> None:
 
     c = client.configuration.Config.load(args.config)
 
-    if c.account_key and "$" in c.account_key:
-        c.account_key = os.path.expandvars(c.account_key)
+    account_key_file = c.account_key_file or ""
+    if account_key_file and "$" in account_key_file:
+        account_key_file = os.path.expandvars(account_key_file)
 
-    with open(c.account_key or "", "rb") as f:
+    with open(account_key_file, "rb") as f:
         account_key = client.ssh_utils.load_private_key(f.read())
 
     _do_refresh(account_key, c.directory_url, args.host_keys_dir, args.ca_pub_path)

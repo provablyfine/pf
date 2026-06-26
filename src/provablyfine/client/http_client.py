@@ -68,29 +68,50 @@ def hmac_signer(prefix: str, key: str) -> pfc.Signer:
 
 
 @ssh_utils.exception
+def agent_signer(prefix: str, fingerprint: str) -> PrivateSigner:
+    ssh_agent = ssh.agent.Client()
+    for identity in ssh_agent.list_identities():
+        if identity.comment == fingerprint or identity.public_key.match_ssh_fingerprint(fingerprint):
+            if identity.public_key.type != jwk.KeyType.ED25519:
+                raise pfc.exceptions.UI(f"Unsupported: {identity.public_key.type}")
+            return AgentSigner(prefix, identity.public_key)
+    raise pfc.exceptions.KeyExpired(prefix)
+
+
+def file_signer(prefix: str, path: str) -> PrivateSigner:
+    with open(path, "rb") as f:
+        data = f.read()
+    try:
+        key = ssh_utils.load_private_key(data, password=None)
+    except TypeError:
+        passphrase = getpass.getpass(f"Passphrase for {path}: ").encode()
+        key = ssh_utils.load_private_key(data, password=passphrase)
+        try:
+            lifetime = 60 if prefix == "account" else 1800
+            ssh.agent.Client().add(key, comment=f"pf-{prefix}", lifetime=lifetime)
+        except Exception:
+            pass
+    except pfc.exceptions.UI:
+        raise pfc.exceptions.UI("Unable to parse data either as PEM or SSH format")
+    if key.type != jwk.KeyType.ED25519:
+        raise pfc.exceptions.UI(f"Unsupported: {key.type}")
+    return FileSigner(prefix, key)
+
+
+def pem_signer(prefix: str, pem: str) -> PrivateSigner:
+    key = ssh_utils.load_private_key(pem.encode(), password=None)
+    if key.type != jwk.KeyType.ED25519:
+        raise pfc.exceptions.UI(f"Unsupported: {key.type}")
+    return FileSigner(prefix, key)
+
+
+@ssh_utils.exception
 def private_key_signer(prefix: str, filename: str | None) -> PrivateSigner:
     if filename is None:
         raise pfc.exceptions.UI("Did you forget to login ?")
 
     if os.path.exists(filename):
-        with open(filename, "rb") as f:
-            data = f.read()
-        try:
-            key = ssh_utils.load_private_key(data, password=None)
-        except TypeError:
-            passphrase = getpass.getpass(f"Passphrase for {filename}: ").encode()
-            key = ssh_utils.load_private_key(data, password=passphrase)
-            lifetime = 60 if prefix == "account" else 1800
-            try:
-                ssh_agent = ssh.agent.Client()
-                ssh_agent.add(key, comment=f"pf-{prefix}", lifetime=lifetime)
-            except Exception:
-                pass
-        except pfc.exceptions.UI:
-            raise pfc.exceptions.UI("Unable to parse data either as PEM or SSH format")
-        if key.type != jwk.KeyType.ED25519:
-            raise pfc.exceptions.UI(f"Unsupported: {key.type}")
-        return FileSigner(prefix, key)
+        return file_signer(prefix, filename)
 
     ssh_agent = ssh.agent.Client()
     for identity in ssh_agent.list_identities():

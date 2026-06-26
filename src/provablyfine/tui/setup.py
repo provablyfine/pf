@@ -231,10 +231,13 @@ class NewServerSetupScreen(base.Screen):
                 raise
 
             set_status("Logging in...")
-            c.account_key = account_key
+            c.account_key_fingerprint = account_key
+            c.account_key_file = None
             c.auth_name = "default"
             fp = relogin.http_sig_login(c, api)
-            c.session_key = fp
+            c.session_key_fingerprint = fp
+            c.session_key_file = None
+            c.session_key_pem = None
             c.save(self._config_path)
             self.app.call_from_thread(self.app.exit)
         except pfc.exceptions.UI as e:
@@ -323,7 +326,8 @@ class ConnectScreen(base.Screen):
                 self.notify(str(e), severity="error")
                 status.update("Paste invitation URL or directory URL")
                 return
-            c.account_key = account_key
+            c.account_key_fingerprint = account_key
+            c.account_key_file = None
 
         if auth_name is None:
             status.update("Fetching auth methods...")
@@ -364,7 +368,8 @@ class ConnectScreen(base.Screen):
                 self.notify("No SSH key selected — cannot login", severity="error")
                 status.update("Paste invitation URL or directory URL")
                 return
-            c.account_key = account_key
+            c.account_key_fingerprint = account_key
+            c.account_key_file = None
 
         status.update(f"Logging in via {auth_name}...")
         try:
@@ -373,7 +378,9 @@ class ConnectScreen(base.Screen):
             else:
                 self.notify(f"Opening browser for {auth_name}...")
                 fp = await asyncio.to_thread(relogin.login, api, auth_name, auth_type)
-            c.session_key = fp
+            c.session_key_fingerprint = fp
+            c.session_key_file = None
+            c.session_key_pem = None
             c.save(self._config_path)
             self.app.exit()
         except pfc.exceptions.UI as e:

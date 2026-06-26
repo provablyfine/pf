@@ -111,10 +111,17 @@ def _accept_function(args: argparse.Namespace) -> None:
             raise pfc.exceptions.UI("No invitation key found in URL")
         if args.key is None:
             _, account_key_id = generate_and_save_key()
+            c.account_key_fingerprint = account_key_id
+            c.account_key_file = None
         else:
             account_key_id = args.key
+            if os.path.exists(args.key):
+                c.account_key_fingerprint = None
+                c.account_key_file = args.key
+            else:
+                c.account_key_fingerprint = args.key
+                c.account_key_file = None
         sc.invitation(invitation.key, account_key_id).accept_invitation()
-        c.account_key = account_key_id
     c.auth_name = auth.name
     c.save(args.config)
 
@@ -123,7 +130,7 @@ def _login_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     sc = client.Factory(c, timeout=args.timeout)
     auth_name = args.auth or c.auth_name or "default"
-    c.session_key = login.login(c, sc, auth_name, session_key_path=args.session_key)
+    login.login(c, sc, auth_name, session_key_path=args.session_key)
     c.save(args.config)
 
 

@@ -56,7 +56,7 @@ def oidc_env(api, mock_oidc, ssh_agent, tmp_path) -> typing.Iterator[OidcEnv]:
         # Initialize Config pointing to the API (no session key yet)
         config = provablyfine.client.Config(
             directory_url=f"http://127.0.0.1:{api.port}/pf/t/root/directory",
-            account_key=str(account_key_file),
+            account_key_file=str(account_key_file),
         )
 
         # Create factory and initialize tenant
@@ -74,8 +74,8 @@ def oidc_env(api, mock_oidc, ssh_agent, tmp_path) -> typing.Iterator[OidcEnv]:
         # Update config to include session key so subsequent calls work
         config = provablyfine.client.Config(
             directory_url=config.directory_url,
-            account_key=config.account_key,
-            session_key=str(session_key_file),
+            account_key_file=config.account_key_file,
+            session_key_file=str(session_key_file),
         )
         sc = provablyfine.client.Factory(config)
 
@@ -299,10 +299,8 @@ def test_full_oidc_login_flow(oidc_env: OidcEnv, monkeypatch) -> None:
     monkeypatch.setattr("provablyfine.browser_login.webbrowser.open", fake_browser)
 
     # Call the full OIDC login flow
-    fingerprint = provablyfine.cli.login.oidc_login(oidc_env.config, oidc_env.sc, "oidc-test")
-    assert fingerprint  # Should return a session fingerprint
-    # The fingerprint is an SSH key fingerprint; it can be used to look up the key in SSH agent
-    # In a real CLI, this would be saved to the config file after successful login
+    provablyfine.cli.login.oidc_login(oidc_env.config, oidc_env.sc, "oidc-test")
+    assert oidc_env.config.session_key_fingerprint  # fingerprint stored in config
 
 
 def test_full_oidc_login_flow_callback_error(oidc_env: OidcEnv, monkeypatch) -> None:
@@ -354,7 +352,7 @@ def oidc_device_code_env(api, mock_oidc, ssh_agent, tmp_path) -> typing.Iterator
 
         config = provablyfine.client.Config(
             directory_url=f"http://127.0.0.1:{api.port}/pf/t/root/directory",
-            account_key=str(account_key_file),
+            account_key_file=str(account_key_file),
         )
 
         sc = provablyfine.client.Factory(config)
@@ -369,8 +367,8 @@ def oidc_device_code_env(api, mock_oidc, ssh_agent, tmp_path) -> typing.Iterator
 
         config = provablyfine.client.Config(
             directory_url=config.directory_url,
-            account_key=config.account_key,
-            session_key=str(session_key_file),
+            account_key_file=config.account_key_file,
+            session_key_file=str(session_key_file),
         )
         sc = provablyfine.client.Factory(config)
 
@@ -432,10 +430,12 @@ def test_full_device_code_login_flow(oidc_device_code_env: OidcDeviceCodeEnv) ->
 
     def _run_login() -> None:
         try:
-            fp = provablyfine.cli.login.oidc_device_code_login(
+            provablyfine.cli.login.oidc_device_code_login(
                 oidc_device_code_env.config, oidc_device_code_env.sc, "oidc-dc-test"
             )
-            result.append(fp)
+            fp = oidc_device_code_env.config.session_key_fingerprint
+            if fp:
+                result.append(fp)
         except Exception as e:
             error.append(e)
 

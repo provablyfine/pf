@@ -1,4 +1,5 @@
 import argparse
+import os
 import signal
 import sys
 
@@ -18,12 +19,21 @@ def _initialize_function(args: argparse.Namespace) -> None:
         account_key_id = key.public().ssh_fingerprint()
         ssh_agent = ssh.agent.Client()
         ssh_agent.add(key, comment="pf-account", lifetime=60)
+        c.account_key_fingerprint = account_key_id
+        c.account_key_file = None
     elif args.key is None:
         _, account_key_id = common.generate_and_save_key()
+        c.account_key_fingerprint = account_key_id
+        c.account_key_file = None
     else:
         account_key_id = args.key
+        if os.path.exists(args.key):
+            c.account_key_fingerprint = None
+            c.account_key_file = args.key
+        else:
+            c.account_key_fingerprint = args.key
+            c.account_key_file = None
     sc.invitation(sc.public().initialize(), account_key_id).accept_invitation()
-    c.account_key = account_key_id
     c.auth_name = "default"
     c.save(args.config)
 

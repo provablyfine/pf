@@ -13,12 +13,14 @@ from . import base64url, client, jwk, ssh
 
 
 def has_valid_session(config: client.Config) -> bool:
-    if not config.session_key:
+    if config.session_key_file is not None or config.session_key_pem is not None:
+        return True
+    if not config.session_key_fingerprint:
         return False
     try:
         agent = ssh.agent.Client()
         for identity in agent.list_identities():
-            if identity.public_key.match_ssh_fingerprint(config.session_key):
+            if identity.public_key.match_ssh_fingerprint(config.session_key_fingerprint):
                 return True
     except Exception:
         pass

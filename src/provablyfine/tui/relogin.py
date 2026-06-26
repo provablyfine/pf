@@ -15,7 +15,8 @@ def has_valid_session(config: client.Config) -> bool:
 
 def http_sig_login(cfg: client.Config, api: client.Client) -> str:
     session_key, fp = browser_login.generate_session_key()
-    http_client = api.login_auth(account=cfg.account_key, session=fp)
+    account = cfg.account_key_fingerprint or cfg.account_key_file
+    http_client = api.login_auth(account=account, session=fp)
     response = http_client.post(
         url=http_client.directory.login,
         json={"session_public_key": session_key.public().to_dict()},
@@ -137,7 +138,9 @@ class ReloginScreen(base.Screen):
                     fp = oidc_device_code_login(self._api, auth_name, on_code=_show)
                 case _:
                     raise pfc.exceptions.UI(f"Unsupported auth type: {auth_type}")
-            self._cfg.session_key = fp
+            self._cfg.session_key_fingerprint = fp
+            self._cfg.session_key_file = None
+            self._cfg.session_key_pem = None
             self._cfg.save(self._config_path)
             self.app.call_from_thread(self.app.exit)
         except pfc.exceptions.UI as e:

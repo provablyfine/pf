@@ -13,9 +13,24 @@ class Factory:
         self._http = pfc.HttpSession(requests.Session(), timeout)
         self._directory = pfc.Directory(config.directory_url, timeout)
 
+    def _session_signer(self) -> http_client.PrivateSigner:
+        if self._config.session_key_fingerprint is not None:
+            return http_client.agent_signer("session", self._config.session_key_fingerprint)
+        if self._config.session_key_file is not None:
+            return http_client.file_signer("session", self._config.session_key_file)
+        if self._config.session_key_pem is not None:
+            return http_client.pem_signer("session", self._config.session_key_pem)
+        raise pfc.exceptions.UI("Did you forget to login?")
+
+    def _account_signer(self, fingerprint: str | None, file: str | None) -> http_client.PrivateSigner:
+        if fingerprint is not None:
+            return http_client.agent_signer("account", fingerprint)
+        if file is not None:
+            return http_client.file_signer("account", file)
+        raise pfc.exceptions.UI("No account key configured")
+
     def session(self) -> pfc.SessionClient:
-        signer = http_client.private_key_signer("session", self._config.session_key)
-        return pfc.SessionClient(self._http, self._directory, signer)
+        return pfc.SessionClient(self._http, self._directory, self._session_signer())
 
     def session_with_key(self, session_key: str) -> pfc.SessionClient:
         signer = http_client.private_key_signer("session", session_key)
@@ -36,6 +51,11 @@ class Factory:
             http_client.FileSigner("account", account),
             http_client.FileSigner("session", session),
         )
+
+    def account_with_session_key(self, c: configuration.Config, session: jwk.Private) -> pfc.AccountClient:
+        account_signer = self._account_signer(c.account_key_fingerprint, c.account_key_file)
+        session_signer = http_client.FileSigner("session", session)
+        return pfc.AccountClient(self._http, self._directory, account_signer, session_signer)
 
     def invitation(self, invitation_key: str, account_key: str) -> pfc.InvitationClient:
         account_signer = http_client.private_key_signer("account", account_key)

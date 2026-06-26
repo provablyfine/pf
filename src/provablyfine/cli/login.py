@@ -1,6 +1,7 @@
 import getpass
 import glob
 import os
+import sys
 
 import provablyfine_client as pfc
 
@@ -58,28 +59,46 @@ def has_valid_session(c: client.Config) -> bool:
     return browser_login.has_valid_session(c)
 
 
-def http_sig_login(c: client.Config, sc: client.Factory, session_key_path: str | None = None) -> str:
-    """HTTP signature login. Returns session fingerprint. Caller updates config."""
-    if c.account_key is not None and not os.path.exists(c.account_key) and not _agent_has_key(c.account_key):
-        _agent_load_key(c.account_key)
+def http_sig_login(c: client.Config, sc: client.Factory, session_key_path: str | None = None) -> None:
+    """HTTP signature login. Mutates c with new session key fields."""
+    if c.account_key_fingerprint is not None and not _agent_has_key(c.account_key_fingerprint):
+        _agent_load_key(c.account_key_fingerprint)
 
-    if session_key_path is None:
-        session_key, session_fingerprint = browser_login.generate_session_key()
-    else:
+    if session_key_path is not None:
         with open(session_key_path, "rb") as f:
-            data = f.read()
-        try:
-            session_key = client.ssh_utils.load_private_key(data)
-        except ValueError:
-            raise pfc.exceptions.UI("Unable to parse data either as PEM or SSH format")
-        session_fingerprint = session_key_path
+            session_key = client.ssh_utils.load_private_key(f.read())
+        c.session_key_fingerprint = None
+        c.session_key_file = session_key_path
+        c.session_key_pem = None
+        sc.account_with_session_key(c, session_key).login_http_sig(session_key.public().to_dict())
+        return
 
-    sc.account(c.account_key, session_fingerprint).login_http_sig(session_key.public().to_dict())
-    return session_fingerprint
+    try:
+        session_key, fingerprint = browser_login.generate_session_key()
+        sc.account_with_session_key(c, session_key).login_http_sig(session_key.public().to_dict())
+        c.session_key_fingerprint = fingerprint
+        c.session_key_file = None
+        c.session_key_pem = None
+        return
+    except pfc.exceptions.UI:
+        pass
+
+    print("Warning: no SSH agent available. Session key will be stored as cleartext in the config file.")
+    print("Store session key as cleartext? [Y/n]:", flush=True)
+    answer = sys.stdin.readline().strip().lower()
+    if answer not in ("", "y", "yes"):
+        raise pfc.exceptions.UI("Aborted. Start an SSH agent and retry.")
+
+    session_key = jwk.Private.generate_ed25519()
+    pem = session_key.to_openssh(passphrase=None).decode()
+    sc.account_with_session_key(c, session_key).login_http_sig(session_key.public().to_dict())
+    c.session_key_fingerprint = None
+    c.session_key_file = None
+    c.session_key_pem = pem
 
 
-def oidc_login(c: client.Config, sc: client.Factory, auth_name: str) -> str:
-    """OIDC login. Returns session fingerprint. Caller updates config."""
+def oidc_login(c: client.Config, sc: client.Factory, auth_name: str) -> None:
+    """OIDC login. Mutates c with new session key fields."""
     auth_public = sc.public().get_public_auth(auth_name)
     if not isinstance(auth_public.config, pfc.schemas.OidcConfig):
         raise pfc.exceptions.UI(f"Auth '{auth_name}' is not OIDC")
@@ -88,29 +107,33 @@ def oidc_login(c: client.Config, sc: client.Factory, auth_name: str) -> str:
     print("Opening browser for OIDC login...")
     id_token = browser_login.oidc_flow(auth_public.config)
     sc.session_with_key(session_fingerprint).login_oidc(auth_name, id_token, session_key.public().to_dict())
-    return session_fingerprint
+    c.session_key_fingerprint = session_fingerprint
+    c.session_key_file = None
+    c.session_key_pem = None
 
 
-def oidc_device_code_login(c: client.Config, sc: client.Factory, auth_name: str) -> str:
-    """OIDC device code login. Returns session fingerprint. Caller updates config."""
+def oidc_device_code_login(c: client.Config, sc: client.Factory, auth_name: str) -> None:
+    """OIDC device code login. Mutates c with new session key fields."""
     auth_public = sc.public().get_public_auth(auth_name)
     if not isinstance(auth_public.config, pfc.schemas.OidcDeviceCodeConfig):
         raise pfc.exceptions.UI(f"Auth '{auth_name}' is not OIDC device code")
     session_key, session_fingerprint = browser_login.generate_session_key()
     id_token = browser_login.oidc_device_code_flow(auth_public.config)
     sc.session_with_key(session_fingerprint).login_oidc(auth_name, id_token, session_key.public().to_dict())
-    return session_fingerprint
+    c.session_key_fingerprint = session_fingerprint
+    c.session_key_file = None
+    c.session_key_pem = None
 
 
-def login(c: client.Config, sc: client.Factory, auth_name: str, session_key_path: str | None = None) -> str:
-    """Perform login based on server auth config. Returns session fingerprint. Caller updates config."""
+def login(c: client.Config, sc: client.Factory, auth_name: str, session_key_path: str | None = None) -> None:
+    """Perform login based on server auth config. Mutates c with new session key fields."""
     auth_public = sc.public().get_public_auth(auth_name)
     match auth_public.config.type:
         case "http_sig":
-            return http_sig_login(c, sc, session_key_path)
+            http_sig_login(c, sc, session_key_path)
         case "oidc":
-            return oidc_login(c, sc, auth_name)
+            oidc_login(c, sc, auth_name)
         case "oidc-device-code":
-            return oidc_device_code_login(c, sc, auth_name)
+            oidc_device_code_login(c, sc, auth_name)
         case _:
             raise pfc.exceptions.UI(f"Unsupported auth type: {auth_public.config.type}")

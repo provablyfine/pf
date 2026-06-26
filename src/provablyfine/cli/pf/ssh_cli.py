@@ -36,7 +36,7 @@ def _ssh_function(args: argparse.Namespace) -> None:
             raise pfc.exceptions.UI("Not logged in. Run 'pf login' first.")
         match auth_public.config.type:
             case "http_sig":
-                c.session_key = login.http_sig_login(c, factory)
+                login.http_sig_login(c, factory)
                 c.save(args.config)
             case _:
                 raise pfc.exceptions.UI(
