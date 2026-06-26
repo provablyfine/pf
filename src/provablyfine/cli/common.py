@@ -60,6 +60,17 @@ def version_function(args: argparse.Namespace) -> None:
     print(__version__)
 
 
+def _ping_function(args: argparse.Namespace) -> None:
+    c = client.Config.load(args.config)
+    sc = client.Factory(c, timeout=args.timeout).session()
+    sc.ping()
+    print("pong")
+
+
+def setup_ping_subparser(parser: argparse.ArgumentParser) -> None:
+    parser.set_defaults(func=_ping_function)
+
+
 @dataclasses.dataclass
 class Invitation:
     directory_url: str

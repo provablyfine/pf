@@ -25,4 +25,5 @@ def directory_endpoint(tenant_name: str) -> schemas.directory.DirectoryReadRespo
         bastion=f"{p}/bastion",
         tenant=f"{p}/tenant",
         audit_log=f"{p}/audit-log",
+        ping=f"{p}/ping",
     )

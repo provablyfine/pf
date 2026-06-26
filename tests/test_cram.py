@@ -29,6 +29,7 @@ from . import utils
         "auth.t",
         "audit-log.t",
         "login.t",
+        "ping.t",
     ],
 )
 def test_pf_cram(api, filename):

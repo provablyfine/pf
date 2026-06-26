@@ -82,3 +82,7 @@ class Directory:
     @property
     def tenant(self) -> str:
         return self._load()["tenant"]
+
+    @property
+    def ping(self) -> str:
+        return self._load()["ping"]

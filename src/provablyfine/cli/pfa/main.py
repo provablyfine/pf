@@ -90,6 +90,9 @@ def pfa() -> None:
     audit_log_parser = subparsers.add_parser("audit-log", help="View audit log")
     audit_log_cli.add_subparser(audit_log_parser)
 
+    ping_parser = subparsers.add_parser("ping", help="Ping the server")
+    common.setup_ping_subparser(ping_parser)
+
     args = parser.parse_args()
 
     common.do_main("pfa", args)

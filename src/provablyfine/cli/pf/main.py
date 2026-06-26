@@ -57,6 +57,9 @@ def pf() -> None:
     hosts_parser = subparsers.add_parser("hosts", help="List accessible hosts and permissions")
     hosts_parser.set_defaults(func=_hosts_function)
 
+    ping_parser = subparsers.add_parser("ping", help="Ping the server")
+    common.setup_ping_subparser(ping_parser)
+
     args = parser.parse_args()
 
     common.do_main("pf", args)

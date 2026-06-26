@@ -18,6 +18,7 @@ class DirectoryReadResponse(base.APIBase):
     bastion: str
     tenant: str
     audit_log: str
+    ping: str
 
 
 class InitializeResponse(base.APIBase):

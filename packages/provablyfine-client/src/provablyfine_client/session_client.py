@@ -579,6 +579,13 @@ class SessionClient:
         if response.status_code != 204:
             raise exceptions.UI(f"Unable to login via OIDC: {response.text}")
 
+    # Ping
+
+    def ping(self) -> None:
+        response = self._session.get(self._directory.ping, auth=self._auth())
+        if response.status_code != 200:
+            raise exceptions.UI(_problem_title(response, "Failed to ping"))
+
     # Audit log
 
     def list_audit_log(
