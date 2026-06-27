@@ -375,8 +375,9 @@ def test_device_code_endpoint_expired_token(oidc_device_code_env: OidcDeviceCode
         )
 
 
-def test_full_device_code_login_flow(oidc_device_code_env: OidcDeviceCodeEnv) -> None:
+def test_full_device_code_login_flow(oidc_device_code_env: OidcDeviceCodeEnv, monkeypatch: pytest.MonkeyPatch) -> None:
     """Complete device code login flow: device auth → poll → user completes → token → server login."""
+    monkeypatch.setattr("provablyfine.browser_login.webbrowser.open", lambda url: None)
     result: list[str] = []
     error: list[Exception] = []
 

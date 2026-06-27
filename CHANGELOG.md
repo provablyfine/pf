@@ -8,6 +8,7 @@
 - Track client_type on a per-auth basis ([#12](https://github.com/provablyfine/pf/issues/12))
 - Ask user to choose which authentication to use to accept an invitation if there is ambiguity
 - Add a ping command to verify connectivity ([#20](https://github.com/provablyfine/pf/issues/20))
+- Attempt to open automatically in user's browser device code flow url ([#21](https://github.com/provablyfine/pf/issues/21))
 
 ### Removed
 - oauth2 GitHub support for auth.

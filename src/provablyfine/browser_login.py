@@ -131,6 +131,7 @@ def oidc_device_code_flow(
     else:
         print(f"Open {verification_uri}")
         print(f"Enter code: {user_code}")
+        webbrowser.open(verification_uri)
 
     token_data: dict[str, str] = {
         "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
