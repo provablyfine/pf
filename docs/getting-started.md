@@ -31,7 +31,7 @@ The list of tenants should display the new tenant!
 From the managed instance, click on the **Connect via CLI** button to display the
 commands needed and run the `accept` command:
 ```console
-$ pfa accept --invitation https://api.provablyfine.net/pf/t/your-tenant
+$ pfa accept --invitation https://api.provablyfine.net/pf/t/your-tenant/directory
 ```
 
 You can now login:
@@ -44,7 +44,7 @@ minutes) session key in your local `ssh-agent`. All other local CLI commands wil
 use this key transparently until it expires.
 
 If you do not have a local `ssh-agent`, `login` will ask for confirmation
-to store the session key as cleartext your local configuration file
+to store the session key as cleartext in your local configuration file
 `~/.config/pf/config.json`.
 
 ## Check your connection
@@ -55,26 +55,30 @@ $ pf ping
 pong
 ```
 
-## Register a new host
+## Register a new server
 
-If you have a recent-enough (XXX) OpenSSH server installed on your host, you can register
+If you have a recent-enough (XXX) OpenSSH service installed on your server, you can register
 it within your tenant.
 
 ### Create a new host identity
 
-First, create an identity associated with this OpenSSH server instance:
+First, on your local host, create an identity associated with this OpenSSH server instance:
 ```console
 $ pfa identity create -n demo
-$ pfa identity invite --manual -i $(pfa identity list -n demo -q)
-https://api.provablyfine.net/pf/t/your-tenant/directory?invitation=R1_fe_2G60SE9neYHFJojuwHMKKDsdPEMiO_Hzw&auth=default
+$ INVITATION_URL=$(pfa identity invite --manual -i $(pfa identity list -n demo -q))
 ```
 
 ### Setup the host
 
-Then, make your local OpenSSH daemon know about the new centralized
-authentication system:
+You need to install first `pf` on the server globally:
 ```console
-$ pf -c demo.json openssh host-init https://api.provablyfine.net/pf/t/your-tenant/directory?invitation=R1_fe_2G60SE9neYHFJojuwHMKKDsdPEMiO_Hzw&auth=default | sudo bash -s
+$ pip install --global provablyfine
+```
+
+Then, make your OpenSSH service know about the new centralized
+authentication system. Run this command on the server:
+```console
+$ pf openssh host-init --invitation $INVITATION_URL | sudo bash -s
 ```
 
 ## Connect to your new host

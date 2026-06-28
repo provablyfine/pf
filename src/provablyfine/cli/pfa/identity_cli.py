@@ -100,10 +100,18 @@ def _identity_create_function(args: argparse.Namespace) -> None:
 
 def _identity_invite_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-    sc = client.Factory(c, timeout=args.timeout).session()
-    key = sc.invite_identity(args.id, args.delivery)
+    public = client.Factory(c, timeout=args.timeout).public()
+    auths = public.list_public_auths(client_type="cli")
+    auths = [a for a in auths if a.type == "http_sig"]
+    if len(auths) == 0:
+        raise pfc.exceptions.UI("No headless authentication enabled")
+    session = client.Factory(c, timeout=args.timeout).session()
+    key = session.invite_identity(args.id, args.delivery)
     if key is not None:
-        auth_name = args.auth or c.auth_name or "default"
+        if args.auth is not None:
+            auth_name = args.auth
+        else:
+            auth_name = auths[0].name
         print(f"{c.directory_url}?invitation={key}&auth={auth_name}")
 
 

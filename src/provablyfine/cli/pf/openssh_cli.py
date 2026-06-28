@@ -94,8 +94,17 @@ def add_subparsers(parser: argparse.ArgumentParser) -> None:
     host_init_parser.add_argument("--ca-pub-path", default="/etc/ssh/pf_ca.pub", help="Path to CA public key file")
     host_init_parser.set_defaults(func=openssh_host_init.host_init_daemon_function)
 
+    host_uninit_parser = subparsers.add_parser("host-uninit", help="Print a script to undo host-init")
+    host_uninit_parser.add_argument(
+        "--sshd-config-drop-in", default="/etc/ssh/sshd_config.d/10-pf.conf", help="Path to sshd_config.d drop-in file"
+    )
+    host_uninit_parser.add_argument("--host-keys-dir", default="/etc/ssh", help="Directory containing host SSH keys")
+    host_uninit_parser.add_argument("--ca-pub-path", default="/etc/ssh/pf_ca.pub", help="Path to CA public key file")
+    host_uninit_parser.set_defaults(func=openssh_host_init.host_uninit_function)
+
     host_refresh_parser = subparsers.add_parser("host-refresh", help="Refresh configuration of local SSH daemon")
     host_refresh_parser.add_argument("--config", required=True, help="Path to pf config.json")
     host_refresh_parser.add_argument("--host-keys-dir", required=True, help="Directory containing host SSH keys")
     host_refresh_parser.add_argument("--ca-pub-path", required=True, help="Path to CA public key file")
+    host_refresh_parser.add_argument("--no-sshd-reload", action="store_true", default=False)
     host_refresh_parser.set_defaults(func=openssh_host_init.host_refresh_function)

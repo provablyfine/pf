@@ -7,6 +7,7 @@ import sys
 import tempfile
 
 from ... import client, jwk, ssh
+from .. import common
 
 
 def _write_file_atomic(filepath: str, content: bytes | str, mode: str = "wb") -> None:
@@ -81,14 +82,13 @@ def _do_refresh(
 
 
 def _print_init_script(
-    account_key: jwk.Private,
+    invitation: str,
     directory_url: str,
     host_keys_dir: str,
     ca_pub_path: str,
     sshd_config_drop_in: str,
     auth_user: str,
 ) -> None:
-    account_key_b64 = base64.b64encode(account_key.to_openssh()).decode()
     config_json = json.dumps(
         {
             "directory_url": directory_url,
@@ -102,6 +102,20 @@ def _print_init_script(
         f" --host-keys-dir={host_keys_dir}"
         f" --ca-pub-path={ca_pub_path}"
     )
+    init_refresh_cmd = refresh_cmd + " --no-sshd-reload"
+    systemd_run_with_creds = (
+        "systemd-run --pipe --wait --property=LoadCredentialEncrypted=account:/var/lib/pf/account.cred"
+    )
+    accept_cmd = " ".join(
+        [
+            "pf",
+            "-c",
+            "/dev/null",
+            "accept",
+            f"--invitation='{invitation}'",
+            "--key='$CREDENTIALS_DIRECTORY/account'",
+        ]
+    )
     refresh_service = "\n".join(
         [
             "[Unit]",
@@ -110,7 +124,7 @@ def _print_init_script(
             "[Service]",
             "Type=oneshot",
             f"ExecStart={refresh_cmd}",
-            "LoadCredential=account:/var/lib/pf/account.cred",
+            "LoadCredentialEncrypted=account:/var/lib/pf/account.cred",
         ]
     )
     refresh_timer = "\n".join(
@@ -138,14 +152,16 @@ def _print_init_script(
         "done",
         "",
         "install -d -m 700 /var/lib/pf",
-        f"printf '%s' '{account_key_b64}' | base64 -d | systemd-creds encrypt - /var/lib/pf/account.cred",
+        "openssl genpkey -algorithm ed25519 | systemd-creds encrypt --name=account - /var/lib/pf/account.cred",
         "",
         "cat > /var/lib/pf/config.json << 'PFEOF'",
         config_json,
         "PFEOF",
         "",
+        f"{systemd_run_with_creds} {accept_cmd}",
+        "",
         "ssh-keygen -A",
-        refresh_cmd,
+        f"{systemd_run_with_creds} {init_refresh_cmd}",
         "",
         f"install -d -m 755 {sshd_drop_in_dir}",
         "{",
@@ -169,36 +185,52 @@ def _print_init_script(
         "",
         "systemctl daemon-reload",
         "systemctl enable --now pf-host-refresh.timer",
-        "systemctl reload sshd",
+        "if systemctl is-active sshd; then",
+        "  systemctl reload sshd",
+        "else",
+        "  systemctl enable --now sshd",
+        "fi",
     ]
     sys.stdout.write("\n".join(lines) + "\n")
 
 
 def host_init_daemon_function(args: argparse.Namespace) -> None:
-    """Accept invitation and print a shell script to stdout that sets up pf on this host."""
+    """Print a shell script to stdout that sets up pf on this host."""
 
-    directory_url = args.tenant_url or "https://pf.provablyfine.net/pf/directory"
-
-    account_key = jwk.Private.generate_ed25519()
-
-    config = client.configuration.Config(directory_url=directory_url)
-    http = client.http_client.Client(config)
-    auth = http.invitation_auth_with_key(account_key, args.invitation)
-    response = auth.post(
-        url=auth.directory.accept_invitation,
-        json={"account_public_key": auth.account_public_key.to_dict()},
-    )
-    if response.status_code != 204:
-        raise RuntimeError(f"Failed to accept invitation: {response.text}")
+    invitation = common.parse_invitation(args.invitation)
 
     _print_init_script(
-        account_key,
-        directory_url,
+        args.invitation,
+        invitation.directory_url,
         args.host_keys_dir,
         args.ca_pub_path,
         args.sshd_config_drop_in,
         args.auth_user,
     )
+
+
+def host_uninit_function(args: argparse.Namespace) -> None:
+    """Print a shell script to stdout that undoes host-init."""
+    lines = [
+        "#!/bin/sh",
+        "set -eu",
+        "",
+        "systemctl disable --now pf-host-refresh.timer || true",
+        "systemctl stop pf-host-refresh.service 2>/dev/null || true",
+        "rm -f /etc/systemd/system/pf-host-refresh.service",
+        "rm -f /etc/systemd/system/pf-host-refresh.timer",
+        "systemctl daemon-reload",
+        "",
+        f"rm -f {args.sshd_config_drop_in}",
+        f"rm -f {args.ca_pub_path}",
+        f"rm -f {args.host_keys_dir}/ssh_host_*_key.cert",
+        "rm -rf /var/lib/pf",
+        "",
+        "if systemctl is-active sshd; then",
+        "  systemctl reload sshd",
+        "fi",
+    ]
+    sys.stdout.write("\n".join(lines) + "\n")
 
 
 def host_refresh_function(args: argparse.Namespace) -> None:
@@ -215,4 +247,5 @@ def host_refresh_function(args: argparse.Namespace) -> None:
 
     _do_refresh(account_key, c.directory_url, args.host_keys_dir, args.ca_pub_path)
 
-    subprocess.run(["/usr/bin/systemctl", "reload", "sshd"], check=True, capture_output=True)
+    if not args.no_sshd_reload:
+        subprocess.run(["/usr/bin/systemctl", "reload", "sshd"], check=True, capture_output=True)

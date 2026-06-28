@@ -78,7 +78,7 @@ class Invitation:
     auth_name: str | None
 
 
-def _parse_invitation(invitation_url: str) -> Invitation:
+def parse_invitation(invitation_url: str) -> Invitation:
     url = urllib.parse.urlsplit(invitation_url)
     qs = urllib.parse.parse_qs(url.query)
     invitation = qs.get("invitation")
@@ -90,7 +90,7 @@ def _parse_invitation(invitation_url: str) -> Invitation:
 
 
 def _accept_function(args: argparse.Namespace) -> None:
-    invitation = _parse_invitation(args.invitation)
+    invitation = parse_invitation(args.invitation)
     c = client.Config(
         directory_url=invitation.directory_url,
         auth_name=invitation.auth_name,
@@ -125,12 +125,12 @@ def _accept_function(args: argparse.Namespace) -> None:
             c.account_key_fingerprint = account_key_id
             c.account_key_file = None
         else:
-            account_key_id = args.key
-            if os.path.exists(args.key):
+            account_key_id = os.path.expandvars(args.key) if "$" in args.key else args.key
+            if os.path.exists(account_key_id):
                 c.account_key_fingerprint = None
                 c.account_key_file = args.key
             else:
-                c.account_key_fingerprint = args.key
+                c.account_key_fingerprint = account_key_id
                 c.account_key_file = None
         sc.invitation(invitation.key, account_key_id).accept_invitation()
     c.auth_name = auth.name

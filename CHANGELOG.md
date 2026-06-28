@@ -20,6 +20,7 @@
 - Audit session duration ([#8](https://github.com/provablyfine/pf/issues/8))
 - Allow login when we do not have a working ssh-agent ([#6](https://github.com/provablyfine/pf/issues/6))
 - Handle multiple auths with the same name at the HTTP API layer ([#19](https://github.com/provablyfine/pf/issues/19))
+- openssh host-init fails ([#23](https://github.com/provablyfine/pf/issues/23))
 
 ## 0.3.0 - 2026-06-05
 

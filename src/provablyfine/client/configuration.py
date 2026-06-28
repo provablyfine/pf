@@ -43,6 +43,8 @@ class Config:
             raise pfc.exceptions.UI(f"Unable to load {filename}")
 
     def save(self, filename: str) -> None:
+        if filename == os.devnull:
+            return
         dirname = os.path.dirname(os.path.abspath(filename))
         os.makedirs(dirname, exist_ok=True)
         tmp = filename + ".tmp"
