@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.4.0 - 2026-06-XX
+## 0.4.0 - 2026-06-28
 
 ### Added
 - CHANGELOG.md
