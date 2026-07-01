@@ -63,6 +63,7 @@ pf = "provablyfine.cli.pf.main:pf"
 pfa = "provablyfine.cli.pfa.main:pfa"
 pfat = "provablyfine.tui.app:pfat"
 pf-bastion = "provablyfine.bastion.server:run"
+pf-api-rotate = "provablyfine.api.rotate:main"
 
 [dependency-groups]
 dev = [

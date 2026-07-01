@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.0 - 2026-07-XX
+
+### Fixed
+- create pf-api-rotate binary on install ([#24](https://github.com/provablyfine/pf/issues/24))
+
 ## 0.4.0 - 2026-06-28
 
 ### Added
