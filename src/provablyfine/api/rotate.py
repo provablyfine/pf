@@ -1,6 +1,7 @@
 import argparse
 import datetime
 import logging
+import os
 
 import cryptography.fernet
 import sqlalchemy
@@ -50,7 +51,8 @@ def main():
 
     log.setup_server("rotate", args.debug, args.log_filename)
 
-    with open(conf.kek_filename, "rb") as f:
+    kek_filename = conf.kek_filename.format(PF_API_KEK_FILENAME=os.getenv("PF_API_KEK_FILENAME", ""))
+    with open(kek_filename, "rb") as f:
         kek_string = base64url.encode(f.read()) + "======"
         kek = cryptography.fernet.Fernet(kek_string)
 
