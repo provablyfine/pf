@@ -5,6 +5,7 @@
 ### Fixed
 - create pf-api-rotate binary on install ([#24](https://github.com/provablyfine/pf/issues/24))
 - handle PF_API_KEK_FILENAME in pf-api-rotate ([#25](https://github.com/provablyfine/pf/issues/25))
+- Use absolute paths for pf binaries ([#26](https://github.com/provablyfine/pf/issues/26))
 
 ## 0.4.0 - 2026-06-28
 

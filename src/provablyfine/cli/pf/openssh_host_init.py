@@ -89,109 +89,92 @@ def _print_init_script(
     sshd_config_drop_in: str,
     auth_user: str,
 ) -> None:
+    sshd_drop_in_dir = os.path.dirname(sshd_config_drop_in)
     config_json = json.dumps(
         {
             "directory_url": directory_url,
             "account_key_file": "$CREDENTIALS_DIRECTORY/account",
         }
     )
-    sshd_drop_in_dir = os.path.dirname(sshd_config_drop_in)
-    refresh_cmd = (
-        f"pf openssh host-refresh"
-        f" --config=/var/lib/pf/config.json"
-        f" --host-keys-dir={host_keys_dir}"
-        f" --ca-pub-path={ca_pub_path}"
-    )
-    init_refresh_cmd = refresh_cmd + " --no-sshd-reload"
-    systemd_run_with_creds = (
-        "systemd-run --pipe --wait --property=LoadCredentialEncrypted=account:/var/lib/pf/account.cred"
-    )
-    accept_cmd = " ".join(
-        [
-            "pf",
-            "-c",
-            "/dev/null",
-            "accept",
-            f"--invitation='{invitation}'",
-            "--key='$CREDENTIALS_DIRECTORY/account'",
-        ]
-    )
-    refresh_service = "\n".join(
-        [
-            "[Unit]",
-            "Description=Provably Fine SSH host certificate refresh",
-            "",
-            "[Service]",
-            "Type=oneshot",
-            f"ExecStart={refresh_cmd}",
-            "LoadCredentialEncrypted=account:/var/lib/pf/account.cred",
-        ]
-    )
-    refresh_timer = "\n".join(
-        [
-            "[Unit]",
-            "Description=Provably Fine SSH host certificate refresh timer",
-            "",
-            "[Timer]",
-            "OnCalendar=daily",
-            "Persistent=true",
-            "",
-            "[Install]",
-            "WantedBy=timers.target",
-        ]
-    )
-    lines = [
-        "#!/bin/sh",
-        "set -eu",
-        "",
-        "for _pf_d in TrustedUserCAKeys AuthorizedPrincipalsCommand; do",
-        f'  if grep -rqE "^${{_pf_d}}" /etc/ssh/sshd_config {sshd_drop_in_dir}/ 2>/dev/null; then',
-        "    echo \"conflicting sshd directive '$_pf_d' found; remove before initializing pf\" >&2",
-        "    exit 1",
-        "  fi",
-        "done",
-        "",
-        "install -d -m 700 /var/lib/pf",
-        "openssl genpkey -algorithm ed25519 | systemd-creds encrypt --name=account - /var/lib/pf/account.cred",
-        "",
-        "cat > /var/lib/pf/config.json << 'PFEOF'",
-        config_json,
-        "PFEOF",
-        "",
-        f"{systemd_run_with_creds} {accept_cmd}",
-        "",
-        "ssh-keygen -A",
-        f"{systemd_run_with_creds} {init_refresh_cmd}",
-        "",
-        f"install -d -m 755 {sshd_drop_in_dir}",
-        "{",
-        f"  echo 'TrustedUserCAKeys {ca_pub_path}'",
-        f"  for cert in {host_keys_dir}/ssh_host_*_key.cert; do",
-        '    [ -f "$cert" ] && echo "HostCertificate $cert"',
-        "  done",
-        f"  echo 'AuthorizedPrincipalsCommand /usr/bin/pf openssh auth-principals"
-        f" --host-certificate={host_keys_dir}/ssh_host_ed25519_key.cert --username=%u --certificate=%k'",
-        f"  echo 'AuthorizedPrincipalsCommandUser {auth_user}'",
-        "  echo 'PubkeyAuthentication yes'",
-        f"}} > {sshd_config_drop_in}",
-        "",
-        "cat > /etc/systemd/system/pf-host-refresh.service << 'PFEOF'",
-        refresh_service,
-        "PFEOF",
-        "",
-        "cat > /etc/systemd/system/pf-host-refresh.timer << 'PFEOF'",
-        refresh_timer,
-        "PFEOF",
-        "",
-        "systemctl daemon-reload",
-        "systemctl enable --now pf-host-refresh.timer",
-        "if systemctl is-active sshd; then",
-        "  systemctl reload sshd",
-        "else",
-        "  systemctl enable --now sshd",
-        "fi",
-    ]
-    sys.stdout.write("\n".join(lines) + "\n")
+    sys.stdout.write(f"""\
+#!/bin/sh
+set -eu
+
+_pf_bin=''
+for _d in /usr/local/bin /usr/bin /bin; do
+  if [ -x "$_d/pf" ]; then
+    _pf_bin="$_d/pf"
+    break
+  fi
+done
+if [ -z "$_pf_bin" ]; then
+  echo 'pf binary not found in system PATH (/usr/local/bin, /usr/bin, /bin)' >&2
+  exit 1
+fi
+
+for _pf_d in TrustedUserCAKeys AuthorizedPrincipalsCommand; do
+  if grep -rqE "^${{_pf_d}}" /etc/ssh/sshd_config {sshd_drop_in_dir}/ 2>/dev/null; then
+    echo "conflicting sshd directive '$_pf_d' found; remove before initializing pf" >&2
+    exit 1
+  fi
+done
+
+install -d -m 700 /var/lib/pf
+openssl genpkey -algorithm ed25519 | systemd-creds encrypt --name=account - /var/lib/pf/account.cred
+
+cat > /var/lib/pf/config.json << 'PFEOF'
+{config_json}
+PFEOF
+
+systemd-run --pipe --wait --property=LoadCredentialEncrypted=account:/var/lib/pf/account.cred \\
+  $_pf_bin -c /dev/null accept --invitation='{invitation}' --key='$CREDENTIALS_DIRECTORY/account'
+
+ssh-keygen -A
+systemd-run --pipe --wait --property=LoadCredentialEncrypted=account:/var/lib/pf/account.cred \\
+  $_pf_bin openssh host-refresh --config=/var/lib/pf/config.json \\
+  --host-keys-dir={host_keys_dir} --ca-pub-path={ca_pub_path} --no-sshd-reload
+
+install -d -m 755 {sshd_drop_in_dir}
+
+cat > {sshd_config_drop_in} << PFEOF
+TrustedUserCAKeys {ca_pub_path}
+$(for cert in {host_keys_dir}/ssh_host_*_key.cert; do [ -f "$cert" ] && echo "HostCertificate $cert"; done)
+AuthorizedPrincipalsCommand $_pf_bin openssh auth-principals --host-certificate={host_keys_dir}/ssh_host_ed25519_key.cert --username=%u --certificate=%k
+AuthorizedPrincipalsCommandUser {auth_user}
+PubkeyAuthentication yes
+PFEOF
+
+cat > /etc/systemd/system/pf-host-refresh.service << PFEOF
+[Unit]
+Description=Provably Fine SSH host certificate refresh
+
+[Service]
+Type=oneshot
+ExecStart=$_pf_bin openssh host-refresh --config=/var/lib/pf/config.json \\
+  --host-keys-dir={host_keys_dir} --ca-pub-path={ca_pub_path}
+LoadCredentialEncrypted=account:/var/lib/pf/account.cred
+PFEOF
+
+cat > /etc/systemd/system/pf-host-refresh.timer << 'PFEOF'
+[Unit]
+Description=Provably Fine SSH host certificate refresh timer
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+PFEOF
+
+systemctl daemon-reload
+systemctl enable --now pf-host-refresh.timer
+if systemctl is-active sshd; then
+  systemctl reload sshd
+else
+  systemctl enable --now sshd
+fi
+""")
 
 
 def host_init_daemon_function(args: argparse.Namespace) -> None:
