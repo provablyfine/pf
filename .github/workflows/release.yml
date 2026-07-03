@@ -104,13 +104,19 @@ jobs:
     needs: [publish-pypi]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           name: dist
           path: dist/
+      - name: Extract release notes
+        id: notes
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          NOTES=$(awk "/^## $VERSION/{found=1; next} found && /^## /{exit} found" CHANGELOG.md)
+          printf 'body<<!EOF!\n%s\n!EOF!\n' "$NOTES" >> "$GITHUB_OUTPUT"
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            dist/*
-          generate_release_notes: true
+          files: dist/*
+          body: ${{ steps.notes.outputs.body }}

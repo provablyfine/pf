@@ -139,7 +139,10 @@ install -d -m 755 {sshd_drop_in_dir}
 cat > {sshd_config_drop_in} << PFEOF
 TrustedUserCAKeys {ca_pub_path}
 $(for cert in {host_keys_dir}/ssh_host_*_key.cert; do [ -f "$cert" ] && echo "HostCertificate $cert"; done)
-AuthorizedPrincipalsCommand $_pf_bin openssh auth-principals --host-certificate={host_keys_dir}/ssh_host_ed25519_key.cert --username=%u --certificate=%k
+AuthorizedPrincipalsCommand $_pf_bin openssh auth-principals \\
+  --host-certificate={host_keys_dir}/ssh_host_ed25519_key.cert \\
+  --username=%u \\
+  --certificate=%k
 AuthorizedPrincipalsCommandUser {auth_user}
 PubkeyAuthentication yes
 PFEOF
