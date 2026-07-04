@@ -83,20 +83,11 @@ class BastionViewScreen(base.Screen):
         yield header.AppHeader()
         with textual.containers.Vertical():
             with textual.containers.HorizontalGroup(classes="field") as container:
-                container.border_title = "Register URL"
+                container.border_title = "URL"
                 yield textual.widgets.Input(self._bastion.url, id="url", compact=True)
             with textual.containers.HorizontalGroup(classes="field") as container:
                 container.border_title = "SSH Proxy Jump"
                 yield textual.widgets.Input(self._bastion.ssh_proxy_jump or "", id="ssh_proxy_jump", compact=True)
-            with textual.containers.HorizontalGroup(classes="field") as container:
-                container.border_title = "Token"
-                token = getattr(self._bastion, "token", None) or "—"
-                yield textual.widgets.Label(token, id="token")
-            with textual.containers.HorizontalGroup(classes="field") as container:
-                container.border_title = "IP Addresses"
-                ip_list_attr = getattr(self._bastion, "ip_address_list", None)
-                ip_list = ", ".join(ip_list_attr) if ip_list_attr else "—"
-                yield textual.widgets.Label(ip_list, id="ip_address_list")
             with textual.containers.Container(classes="field") as container:
                 container.border_title = "Tags"
                 yield textual.widgets.ListView(id="tags")
@@ -156,17 +147,18 @@ class BastionViewScreen(base.Screen):
         url = self.query_one("#url", textual.widgets.Input).value
         ssh_proxy_jump = self.query_one("#ssh_proxy_jump", textual.widgets.Input).value.strip() or None
 
-        update_kwargs: dict[str, object] = {}
-        if url != self._saved_url:
-            update_kwargs["url"] = url
-        if ssh_proxy_jump != self._saved_ssh_proxy_jump:
-            update_kwargs["ssh_proxy_jump"] = ssh_proxy_jump
-        if self._tags != self._saved_tags:
-            update_kwargs["tag_name_value_list"] = self._tags
+        url_changed = url != self._saved_url
+        ssh_proxy_jump_changed = ssh_proxy_jump != self._saved_ssh_proxy_jump
+        tags_changed = self._tags != self._saved_tags
 
-        if not update_kwargs:
+        if not (url_changed or ssh_proxy_jump_changed or tags_changed):
             self.notify("No changes")
             return
 
-        await self._auth.update_bastion(self._bastion.id, **update_kwargs)  # type: ignore[arg-type]
+        await self._auth.update_bastion(
+            self._bastion.id,
+            url=url if url_changed else None,
+            ssh_proxy_jump=ssh_proxy_jump if ssh_proxy_jump_changed else None,
+            tag_name_value_list=self._tags if tags_changed else None,
+        )
         self.app.pop_screen()

@@ -76,7 +76,7 @@ class BastionListScreen(base.Screen):
 
     async def on_mount(self) -> None:
         table = self.query_one(self._StrDataTable)
-        table.add_columns("Register URL", "Connect URL", "Tags")
+        table.add_columns("URL", "SSH Proxy Jump", "Tags")
         self._bastions = (await self._auth.list_bastions()).bastions
         self._populate_table(table)
 
@@ -90,6 +90,7 @@ class BastionListScreen(base.Screen):
         for bastion in self._bastions:
             table.add_row(
                 bastion.url,
+                bastion.ssh_proxy_jump or "",
                 str(len(bastion.tag_list)),
             )
 
