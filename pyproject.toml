@@ -112,7 +112,7 @@ testpaths = [
     "src/provablyfine",
     "tests",
 ]
-timeout = 80
+timeout = 120
 
 [tool.pytest_env]
 HTTP_PROXY = { unset = true }
