@@ -19,6 +19,9 @@ class Config:
     known_hosts: str | None = None
     auth_name: str | None = None
 
+    def __post_init__(self) -> None:
+        self.ephemeral: bool = False
+
     @staticmethod
     def load(filename: str) -> Config:
         try:
@@ -43,6 +46,11 @@ class Config:
             raise pfc.exceptions.UI(f"Unable to load {filename}")
 
     def save(self, filename: str) -> None:
+        if self.ephemeral:
+            raise RuntimeError(
+                "Cannot save an ephemeral config: session was obtained non-interactively "
+                "and must not be persisted to disk."
+            )
         if filename == os.devnull:
             return
         dirname = os.path.dirname(os.path.abspath(filename))

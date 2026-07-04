@@ -7,7 +7,7 @@ import sys
 import tempfile
 
 from ... import client, jwk, ssh
-from .. import common
+from .. import common, login
 
 
 def _write_file_atomic(filepath: str, content: bytes | str, mode: str = "wb") -> None:
@@ -60,23 +60,12 @@ def _sign_host_certificates_with_auth(auth_http: client.http_client.HttpClient, 
         _write_file_atomic(cert_path, openssh_cert + b"\n", mode="wb")
 
 
-def _do_refresh(
-    account_key: jwk.Private,
-    directory_url: str,
-    host_keys_dir: str,
-    ca_pub_path: str,
-) -> None:
-    """Shared refresh logic: sign certs, fetch CA pubkey, reload sshd."""
-    session_key = jwk.Private.generate_ed25519()
-
-    config = client.configuration.Config(directory_url=directory_url)
-    factory = client.Factory(config)
-
-    factory.account_from_keys(account_key, session_key).login_http_sig(session_key.public().to_dict())
-
-    http = client.http_client.Client(config)
+def _do_refresh(c: client.Config, host_keys_dir: str, ca_pub_path: str) -> None:
+    assert c.session_key_pem is not None
+    session_key = client.ssh_utils.load_private_key(c.session_key_pem.encode())
+    factory = client.Factory(c)
+    http = client.http_client.Client(c)
     _sign_host_certificates_with_auth(http.session_auth_with_key(session_key), host_keys_dir)
-
     ca_pubkey = factory.public().get_user_trusted_keys_public()
     _write_file_atomic(ca_pub_path, ca_pubkey, mode="w")
 
@@ -246,17 +235,9 @@ def host_uninit_function(args: argparse.Namespace) -> None:
 
 def host_refresh_function(args: argparse.Namespace) -> None:
     """Refresh host SSH certificates and CA public key."""
-
     c = client.configuration.Config.load(args.config)
-
-    account_key_file = c.account_key_file or ""
-    if account_key_file and "$" in account_key_file:
-        account_key_file = os.path.expandvars(account_key_file)
-
-    with open(account_key_file, "rb") as f:
-        account_key = client.ssh_utils.load_private_key(f.read())
-
-    _do_refresh(account_key, c.directory_url, args.host_keys_dir, args.ca_pub_path)
-
+    factory = client.Factory(c)
+    login.ensure_session(c, factory)
+    _do_refresh(c, args.host_keys_dir, args.ca_pub_path)
     if not args.no_sshd_reload:
         subprocess.run(["/usr/bin/systemctl", "reload", "sshd"], check=True, capture_output=True)

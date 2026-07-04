@@ -145,8 +145,8 @@ async def register_async(socket_path: str | None, url: str, token: str, local_po
 def _register_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
 
-    if not login.has_valid_session(c):
-        raise pfc.exceptions.UI("Not logged in. Run 'pf login' first.")
+    factory = client.Factory(c, timeout=args.timeout)
+    login.ensure_session(c, factory)
 
     async def _run():
         loop = asyncio.get_running_loop()
@@ -242,8 +242,8 @@ async def connect_async(socket_path: str | None, url: str, token: str, hostname:
 def _connect_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
 
-    if not login.has_valid_session(c):
-        raise pfc.exceptions.UI("Not logged in. Run 'pf login' first.")
+    factory = client.Factory(c, timeout=args.timeout)
+    login.ensure_session(c, factory)
 
     sc = client.Factory(c, timeout=args.timeout).session()
     token_response = sc.get_self_token("bastion")

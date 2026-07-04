@@ -1,3 +1,13 @@
+# Login policy
+# ------------
+# 'pf login' (and http_sig_login) is the authoritative auth path: it authenticates
+# and saves the result to disk. Use it for interactive users (OIDC or http_sig).
+#
+# ensure_session() is the ephemeral auth path: it authenticates using an on-disk
+# account key without saving anything. Use it for service-mode commands that
+# re-login on every start. Callers must not call c.save() after ensure_session();
+# Config.save() enforces this at runtime by raising if the config is marked ephemeral.
+
 import getpass
 import glob
 import os
@@ -57,6 +67,29 @@ def _agent_load_key(account_key: str) -> None:
 
 def has_valid_session(c: client.Config) -> bool:
     return browser_login.has_valid_session(c)
+
+
+def ensure_session(c: client.Config, factory: client.Factory) -> None:
+    """Attempt an ephemeral http_sig login using the on-disk account key.
+
+    Marks the config as ephemeral so c.save() will raise if called.
+    For persistent login (interactive users), use 'pf login' instead.
+    """
+    if has_valid_session(c):
+        return
+    if not c.account_key_file:
+        raise pfc.exceptions.UI("Not logged in. Run 'pf login' first.")
+    key_file = c.account_key_file
+    if "$" in key_file:
+        key_file = os.path.expandvars(key_file)
+    with open(key_file, "rb") as f:
+        account_key = client.ssh_utils.load_private_key(f.read())
+    session_key = jwk.Private.generate_ed25519()
+    factory.account_from_keys(account_key, session_key).login_http_sig(session_key.public().to_dict())
+    c.session_key_pem = session_key.to_openssh(passphrase=None).decode()
+    c.session_key_fingerprint = None
+    c.session_key_file = None
+    c.ephemeral = True
 
 
 def http_sig_login(c: client.Config, sc: client.Factory, session_key_path: str | None = None) -> None:
