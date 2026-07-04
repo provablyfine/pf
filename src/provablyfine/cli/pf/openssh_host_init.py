@@ -177,6 +177,29 @@ if systemctl is-active sshd; then
 else
   systemctl enable --now sshd
 fi
+
+_ssh_port=$(sshd -T 2>/dev/null | awk '/^port /{{print $2}}')
+_ssh_port=${{_ssh_port:-22}}
+
+cat > /etc/systemd/system/pf-host-bastion.service << PFEOF
+[Unit]
+Description=Provably Fine bastion registration
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+LoadCredentialEncrypted=account:/var/lib/pf/account.cred
+ExecStart=$_pf_bin --config /var/lib/pf/config.json bastion register --port $_ssh_port
+Restart=on-failure
+RestartSec=30s
+
+[Install]
+WantedBy=multi-user.target
+PFEOF
+
+systemctl daemon-reload
+systemctl enable --now pf-host-bastion.service
 """)
 
 
@@ -205,6 +228,8 @@ def host_uninit_function(args: argparse.Namespace) -> None:
         "systemctl stop pf-host-refresh.service 2>/dev/null || true",
         "rm -f /etc/systemd/system/pf-host-refresh.service",
         "rm -f /etc/systemd/system/pf-host-refresh.timer",
+        "systemctl disable --now pf-host-bastion.service || true",
+        "rm -f /etc/systemd/system/pf-host-bastion.service",
         "systemctl daemon-reload",
         "",
         f"rm -f {args.sshd_config_drop_in}",
