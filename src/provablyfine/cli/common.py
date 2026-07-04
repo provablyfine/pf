@@ -50,6 +50,7 @@ def generate_and_save_key() -> tuple[jwk.Private, str]:
 
 
 def add_common_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--version", action="version", version=__version__)
     parser.add_argument("-c", "--config", help="configuration file. Default: %(default)s", default=DEFAULT_CONFIG)
     parser.add_argument("--timeout", default=1.0, help="Timeout for HTTP requests. Default: %(default)s")
     parser.add_argument("-d", "--debug", help="Debug level", action="count", default=0)
