@@ -1,6 +1,7 @@
 Initialize server and login
   $ bash $TESTDIR/fixture.sh
   .* (re)
+  $ . $TESTDIR/bastion-fixture.sh
 
 Create bastion resource
   $ pfa -c config.json bastion create --url http://localhost:$BASTION_PORT
@@ -18,11 +19,11 @@ New host starts
   $ pf -c host.json login
 
 Host starts echo server
-  $ socat TCP-LISTEN:1234,reuseaddr,fork EXEC:/bin/cat > echo-server.log 2>&1 &
-  $ ECHO_PID=$!
+  $ ECHO_PORT=$(start_echo_server)
+  $ ECHO_PID=$(cat echo-server.pid)
 
 Host registers with bastion
-  $ pf -c host.json bastion register -p 1234 > register.log 2>&1 &
+  $ pf -c host.json bastion register -p $ECHO_PORT > register.log 2>&1 &
   $ BASTION_REGISTER_PID=$!
 
 Provision new user
