@@ -149,15 +149,9 @@ async def connect_handler(state: AppState, request: anet.http.Request, sock_name
     if token is None:
         return http.response(status_code=403)
 
-    colon = request.resource_target.find(":")
-    if colon == -1:
-        logger.error("Invalid request resource_target: missing colon")
-        return http.response(status_code=400)
-
-    host = request.resource_target[:colon]
-    port = request.resource_target[colon + 1 :]
-    if not port.isdigit():
-        logger.error("Invalid request resource_target: invalid port")
+    host = request.headers.get("x-pf-host")
+    if host is None:
+        logger.error("Missing X-Pf-Host header")
         return http.response(status_code=400)
 
     logger.info(f"Connect to {token.tenant_id}/{host}")

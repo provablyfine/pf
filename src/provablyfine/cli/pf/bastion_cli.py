@@ -40,7 +40,9 @@ class Response:
         )
 
 
-async def _http_connect(socket_path: str | None, url: str, prefix: str, hostname: str, token: str) -> anet.base.Socket:
+async def _http_connect(
+    socket_path: str | None, url: str, prefix: str, hostname: str | None, token: str
+) -> anet.base.Socket:
     u = urllib.parse.urlsplit(url)
     connect_host = f"{prefix}.{u.hostname}"
     scheme_port = 443 if u.scheme == "https" else 80 if u.scheme == "http" else None
@@ -69,12 +71,18 @@ async def _http_connect(socket_path: str | None, url: str, prefix: str, hostname
     else:
         assert False
 
+    headers: dict[str, str] = {
+        "Host": f"{connect_host}:{port}",
+        "Proxy-Authorization": f"Bearer {token}",
+    }
+    if hostname is not None:
+        headers["X-Pf-Host"] = hostname
     request = anet.http.Request(
         method="CONNECT",
-        resource_target=f"{hostname}:80",
+        resource_target=f"{connect_host}:{port}",
         version="HTTP/1.1",
         body=b"",
-        headers={"Host": connect_host, "Proxy-Authorization": f"Bearer {token}"},
+        headers=headers,
     )
     await request.serialize(retval)
     response = await Response.deserialize(retval)
@@ -124,7 +132,7 @@ async def _handle_channel(mux: anet.mux.Mux, local_id: int, local_port: int) -> 
 
 
 async def register_async(socket_path: str | None, url: str, token: str, local_port: int) -> None:
-    sock = await _http_connect(socket_path, url, "register", "self", token)
+    sock = await _http_connect(socket_path, url, "register", None, token)
     socket_name = f"bastion-server-{id(sock)}"
     anet.sockets.store.add(socket_name, sock)
     try:

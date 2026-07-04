@@ -142,7 +142,8 @@ class Application[T]:
                 if request.method != route.method:
                     continue
             if route.host is not None:
-                if request.headers["host"] != route.host:
+                request_host = request.headers.get("host", "").split(":")[0]
+                if request_host != route.host:
                     continue
             if route.resource is not None:
                 if request.resource_target != route.resource:
@@ -156,7 +157,7 @@ class Application[T]:
                 return problem_response(status_code=500, title="Error while executing request")
             return response
 
-        logger.error(f"Unable to find route for host: {request.headers['host']}")
+        logger.error(f"Unable to find route for host: {request.headers.get('host', '')}")
         return problem_response(status_code=404, title="Unable to find matching route")
 
     async def _run(self) -> None:
