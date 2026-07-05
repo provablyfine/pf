@@ -84,7 +84,27 @@ Beta user sees only beta identities, not acme
   $ pfa -c beta.json identity list -q
   1
 
-Child tenant (acme) cannot create sub-tenants (ceiling blocks it)
+Child tenant (acme) cannot create sub-tenants (denied_list blocks it)
   $ pfa -c acme.json tenant create --name sub-acme --display-name "Sub Acme"
   Not allowed to create tenant
   [2]
+
+Child tenant (acme) CAN use SSH grants (pf hosts returns accessible hosts)
+  $ pfa -c acme.json tag create -n type -v device
+  $ DEVICE_TAG=$(pfa -c acme.json tag list -n type -v device -q)
+  $ pfa -c acme.json identity create -n acme-host -t $DEVICE_TAG
+  $ pfa -c acme.json role create -n ssh-role
+  $ ROLE_ID=$(pfa -c acme.json role list -n ssh-role -q)
+  $ pfa -c acme.json grant ssh-shell --tag type=device --username alice | pfa -c acme.json role grant -i $ROLE_ID --add
+  $ pfa -c acme.json identity create -n user1
+  $ USER1_ID=$(pfa -c acme.json identity list -n user1 -q)
+  $ pfa -c acme.json role member -i $ROLE_ID -a user1
+  $ INVITATION=$(pfa -c acme.json identity invite --manual -i $USER1_ID)
+  $ ssh-keygen -t ed25519 -f acme-user1 -N "" > /dev/null
+  $ pf -c acme-user1.json accept --invitation=$INVITATION --key acme-user1
+  $ ssh-keygen -t ed25519 -f acme-user1-session -N "" > /dev/null
+  $ pf -c acme-user1.json login --session-key acme-user1-session
+  $ pf -c acme-user1.json hosts
+  host       type    username    details
+  ---------  ------  ----------  ---------
+  acme-host  shell   alice

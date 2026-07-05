@@ -92,25 +92,26 @@ def _provision(allow_tenant_create: bool):
 
     if allow_tenant_create:
         ceiling_list = None
+        denied_list: list[model.grant.Grant] = []
     else:
-        # Sub-tenant ceiling: all grant types allowed EXCEPT tenant creation.
-        # We must include ALL grant types here because the Checker's type-specific
-        # filter function returns False for non-matching types, causing any(...)
-        # to be False, which would block the operation.
-        ceiling_list = [
-            identity_grant_all,
-            tag_grant_all,
-            role_grant_all,
-            boundary_grant_all,
-            tenant_grant_all,
-            auth_grant_all,
+        ceiling_list = None
+        denied_list = [
+            model.grant.TenantGrant(
+                filter=model.grant.TenantFilter(id=None),
+                permission=model.grant.TenantPermission(
+                    create=True,
+                    read=False,
+                    delete=False,
+                    update=None,
+                ),
+            )
         ]
 
     root_boundary_id = model.boundary.create(
         name="root",
         description="The Root boundary is not a boundary at all.",
         ceiling_list=ceiling_list,
-        denied_list=[],
+        denied_list=denied_list,
     )
     root_id = model.identity.create(
         name="root",
