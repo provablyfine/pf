@@ -127,7 +127,7 @@ def read_matching() -> list[Bastion]:
     return matching
 
 
-def generate_token() -> str:
+def generate_token(hostname: str) -> str:
     private_key = oidc_key.get_private_key()
     assert private_key.type == jwk.KeyType.ED25519
     self_identity = identity.read_one(id=ctx.identity_id)
@@ -137,7 +137,7 @@ def generate_token() -> str:
     claims = {
         "sub": str(self_identity.id),
         "iss": iss,
-        "aud": "bastion",
+        "aud": hostname,
         "iat": now,
         "exp": now + 60,
         "name": self_identity.name,

@@ -77,17 +77,23 @@ class SessionClient:
 
     # Identity / self
 
+    def get_self(self) -> schemas.Identity:
+        response = self._session.get(f"{self._directory.identity}/self", auth=self._auth())
+        if response.status_code != 200:
+            raise exceptions.UI(_problem_title(response, "Failed to get self identity"))
+        return schemas.Identity.model_validate(response.json())
+
     def list_self_bastions(self) -> schemas.IdentitySelfBastionListResponse:
         response = self._session.get(f"{self._directory.identity}/self/bastions", auth=self._auth())
         if response.status_code != 200:
             raise exceptions.UI(_problem_title(response, "Failed to get bastions"))
         return schemas.IdentitySelfBastionListResponse.model_validate(response.json())
 
-    def get_self_token(self, service: str) -> schemas.IdentitySelfTokenResponse:
+    def get_self_token(self, service: str, hostname: str) -> schemas.IdentitySelfTokenResponse:
         response = self._session.get(
             f"{self._directory.identity}/self/token",
             auth=self._auth(),
-            params={"service": service},
+            params={"service": service, "hostname": hostname},
         )
         if response.status_code != 200:
             raise exceptions.UI(_problem_title(response, "Failed to get token"))

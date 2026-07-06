@@ -74,11 +74,11 @@ def read_self_bastions_endpoint() -> schemas.identity.IdentitySelfBastionListRes
     status_code=200,
     responses={400: responses.PROBLEM, 403: responses.PROBLEM, 404: responses.PROBLEM},
 )
-def read_self_token_endpoint(service: str) -> schemas.identity.IdentitySelfTokenResponse:
+def read_self_token_endpoint(service: str, hostname: str) -> schemas.identity.IdentitySelfTokenResponse:
     if service != "bastion":
         raise responses.ProblemHTTPException(responses.problem_response(status_code=403))
 
-    token = model.bastion.generate_token()
+    token = model.bastion.generate_token(hostname)
     return schemas.identity.IdentitySelfTokenResponse(token=token)
 
 

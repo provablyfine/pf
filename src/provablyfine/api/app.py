@@ -14,7 +14,7 @@ import pydantic
 import sqlalchemy
 
 from .. import base64url, log
-from . import app_db, config, dependencies, endpoints, middleware, registry_db, responses
+from . import app_db, config, dependencies, endpoints, jwt_validator, middleware, registry_db, responses
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +106,7 @@ def create(conf: config.Config) -> fastapi.FastAPI:
         with open(kek_filename, "rb") as f:
             kek = base64url.encode(f.read()) + "======"
         app.state.config = conf
+        app.state.trusted_keys = jwt_validator.TrustedKeys(f"{conf.base_url}/pf/t")
         app.state.tenant_registry_engine = registry_engine
         app.state.tenant_engines = {}
         app.state.kek = kek
@@ -168,6 +169,7 @@ def create(conf: config.Config) -> fastapi.FastAPI:
     fastapi_app.add_middleware(middleware.PrometheusMiddleware)
 
     fastapi_app.include_router(endpoints.debug.router, tags=["debug"])
+    fastapi_app.include_router(endpoints.frps.router)
 
     _tenant_dep = fastapi.Depends(dependencies.tenant_context)
     _tenant_prefix = "/pf/t/{tenant_name}"

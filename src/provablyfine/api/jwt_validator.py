@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import dataclasses
 import logging
 
@@ -18,7 +20,6 @@ class TrustedKeys:
         self._client_by_iss: dict[str, jwt.PyJWKClient] = {}
 
     def lookup(self, token: str) -> TrustedKey | None:
-        # we manually decode the token to extract the iss
         try:
             unverified = jwt.decode_complete(token, options={"verify_signature": False, "require": ["iss"]})
         except jwt.exceptions.InvalidTokenError as e:
@@ -32,8 +33,6 @@ class TrustedKeys:
             return None
         iss = payload["iss"]
 
-        # We manually validate the iss because we want to do a prefix match, not an exact
-        # match because we have multiple tenants !
         if not iss.startswith(self._issuer_prefix):
             logger.debug(f"Invalid token: issuer does not match our prefix: {iss}!={self._issuer_prefix}")
             return None
@@ -43,7 +42,6 @@ class TrustedKeys:
             client = jwt.PyJWKClient(f"{iss}/.well-known/jwks.json")
             self._client_by_iss[iss] = client
         try:
-            # XXX: should use async task ?
             key = client.get_signing_key(kid)
         except jwt.exceptions.PyJWKClientError:
             logger.warning(
