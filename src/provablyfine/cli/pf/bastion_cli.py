@@ -63,32 +63,31 @@ def _write_frpc_config(
     get_token_args = ["bastion", "get-token", "--hostname", identity_name]
     if pf_config is not None:
         get_token_args += ["--config", pf_config]
-    args_toml = "[" + ", ".join(f'"{a}"' for a in get_token_args) + "]"
 
-    content = f"""serverAddr = "{server_addr}"
-serverPort = 443
-user = "{user}"
-
-[auth]
-method = "token"
-
-[auth.tokenSource]
-type = "exec"
-exec.command = "{sys.argv[0]}"
-exec.args = {args_toml}
-
-[transport]
-protocol = "wss"
-
-[[proxies]]
-name = "ssh"
-type = "tcpMuxHTTPConnect"
-localIP = "127.0.0.1"
-localPort = {local_port}
-customDomains = ["{user}.{bastion_domain}"]
-"""
+    config = {
+        "serverAddr": server_addr,
+        "serverPort": 443,
+        "user": user,
+        "auth": {
+            "method": "token",
+            "tokenSource": {
+                "type": "exec",
+                "exec": {"command": sys.argv[0], "args": get_token_args},
+            },
+        },
+        "transport": {"protocol": "wss"},
+        "proxies": [
+            {
+                "name": "ssh",
+                "type": "tcpMuxHTTPConnect",
+                "localIP": "127.0.0.1",
+                "localPort": local_port,
+                "customDomains": [f"{user}.{bastion_domain}"],
+            }
+        ],
+    }
     with open(path, "w") as f:
-        f.write(content)
+        json.dump(config, f)
 
 
 async def _manage_frpc(
@@ -107,13 +106,22 @@ async def _manage_frpc(
     parts = server_addr.split(".", 1)
     bastion_domain = parts[1] if len(parts) > 1 else server_addr
 
-    config_fd, config_path = tempfile.mkstemp(suffix=".toml", prefix="frpc-")
+    config_fd, config_path = tempfile.mkstemp(suffix=".json", prefix="frpc-")
     os.close(config_fd)
 
     try:
         while not stop_event.is_set():
-            token_response = await sc.get_self_token("bastion", hostname=identity_name)
-            frpc_user = _jwt_audience(token_response.token)
+            try:
+                token_response = await sc.get_self_token("bastion", hostname=identity_name)
+                frpc_user = _jwt_audience(token_response.token)
+            except Exception as e:
+                logger.warning(f"Failed to obtain frpc token for bastion={bastion_url}: {e}")
+                try:
+                    await asyncio.wait_for(stop_event.wait(), timeout=5)
+                except TimeoutError:
+                    pass
+                continue
+
             _write_frpc_config(
                 config_path,
                 server_addr,

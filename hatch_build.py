@@ -54,7 +54,13 @@ class CustomBuildHook(hatchling.builders.hooks.plugin.interface.BuildHookInterfa
 
         if not tarball_path.exists():
             self.app.display_info(f"Downloading {tarball_name} ...")
-            urllib.request.urlretrieve(url, tarball_path)
+            tmp_path = tarball_path.with_suffix(".tmp")
+            try:
+                urllib.request.urlretrieve(url, tmp_path)
+                tmp_path.rename(tarball_path)
+            except BaseException:
+                tmp_path.unlink(missing_ok=True)
+                raise
 
         digest = hashlib.sha256(tarball_path.read_bytes()).hexdigest()
         if digest != FRPC_SHA256[target]:
