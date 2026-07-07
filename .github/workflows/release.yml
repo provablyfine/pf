@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v4
+      - uses: astral-sh/setup-uv@v5
       - name: Check tag matches pyproject.toml version
         run: |
           TAG_VERSION="${GITHUB_REF_NAME#v}"
@@ -29,7 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v4
+      - uses: astral-sh/setup-uv@v5
       - uses: pre-commit/action@v3.0.1
         with:
           extra_args: --all-files
@@ -42,7 +42,7 @@ jobs:
         python-version: ["3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v4
+      - uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install podman
@@ -64,7 +64,7 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: astral-sh/setup-uv@v4
+      - uses: astral-sh/setup-uv@v5
       - name: Configure git for mike
         run: |
           git config user.name "github-actions[bot]"
@@ -74,31 +74,57 @@ jobs:
           VERSION=$(uv version --short)
           uv run mike deploy --push --update-aliases "$VERSION" latest
 
-  build:
+  build-client:
     needs: [lint, test]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v4
-      - name: Build distribution
-        run: uv build --all-packages
+      - uses: astral-sh/setup-uv@v5
+      - name: Build provablyfine-client wheel
+        run: uv build --package provablyfine-client
       - uses: actions/upload-artifact@v4
         with:
-          name: dist
+          name: wheel-client
           path: dist/
 
+  build-wheels:
+    needs: [lint, test]
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            arch: x86_64
+          - os: ubuntu-latest   # cross-build: run on x86_64, bundle aarch64 frpc
+            arch: aarch64
+          - os: macos-13
+            arch: x86_64
+          - os: macos-14
+            arch: arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Build provablyfine wheel
+        run: uv build --package provablyfine
+        env:
+          HATCH_TARGET_ARCH: ${{ matrix.arch }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.os }}-${{ matrix.arch }}
+          path: dist/*.whl
+
   publish-pypi:
-    needs: [build, docs]
+    needs: [build-client, build-wheels, docs]
     runs-on: ubuntu-latest
     environment: pypi
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: dist
+          pattern: wheel-*
+          merge-multiple: true
           path: dist/
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
-
 
   github-release:
     needs: [publish-pypi]
@@ -107,7 +133,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: dist
+          pattern: wheel-*
+          merge-multiple: true
           path: dist/
       - name: Extract release notes
         id: notes

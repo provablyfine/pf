@@ -2,6 +2,8 @@
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build.hooks.custom]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/provablyfine"]
 
@@ -138,6 +140,7 @@ select = ["E", "F", "I", "UP", "RUF", "S"]
 "build/**" = []
 "**" = ["S101", "S110", "S606"]
 "tests/**" = ["S"]
+"hatch_build.py" = ["S"]
 #"**/conftest.py" = ["S101"]
 
 [tool.mypy]

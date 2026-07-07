@@ -4,11 +4,15 @@ import argparse
 import asyncio
 import functools
 import http.client
+import importlib.resources
 import logging
 import os
+import pathlib
+import shutil
 import signal
 import socket
 import ssl
+import stat
 import sys
 import tempfile
 import urllib.parse
@@ -23,6 +27,24 @@ logger = logging.getLogger(__name__)
 
 _FRPC_SERVER_PORT = 7000
 _FRPC_TOKEN_REFRESH_INTERVAL = 45
+
+
+def _frpc_binary() -> str:
+    frpc_resource = importlib.resources.files("provablyfine").joinpath("bin/frpc")
+    frpc_path = pathlib.Path(str(frpc_resource))
+    if frpc_path.is_file():
+        mode = frpc_path.stat().st_mode
+        if not (mode & stat.S_IXUSR):
+            try:
+                frpc_path.chmod(mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+            except OSError:
+                pass
+        if os.access(frpc_path, os.X_OK):
+            return str(frpc_path)
+    frpc_in_path = shutil.which("frpc")
+    if frpc_in_path:
+        return frpc_in_path
+    raise pfc.exceptions.UI("frpc not found: reinstall provablyfine or install frpc manually")
 
 
 def _find_free_port() -> int:
@@ -105,7 +127,7 @@ async def _manage_frpc(
                 bastion_domain,
             )
 
-            process = await asyncio.create_subprocess_exec("frpc", "-c", config_path)
+            process = await asyncio.create_subprocess_exec(_frpc_binary(), "-c", config_path)
             logger.info(f"frpc started for bastion={bastion_url} identity={identity_name}")
 
             try:
