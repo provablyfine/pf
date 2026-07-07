@@ -39,6 +39,9 @@ def pf() -> None:
     version_parser = subparsers.add_parser("version", help="Print current version number")
     version_parser.set_defaults(func=common.version_function)
 
+    license_parser = subparsers.add_parser("license", help="Show license information")
+    common.setup_license_subparser(license_parser)
+
     accept_parser = subparsers.add_parser("accept", help="Accept an invitation")
     common.setup_accept_subparser(accept_parser)
 

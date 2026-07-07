@@ -67,6 +67,16 @@ class CustomBuildHook(hatchling.builders.hooks.plugin.interface.BuildHookInterfa
             member.name = "frpc"
             tf.extract(member, path=dest.parent, filter="data")
 
+            licenses_dir = pathlib.Path(self.root) / "src" / "provablyfine" / "licenses"
+            licenses_dir.mkdir(parents=True, exist_ok=True)
+            for name in ("LICENSE", "NOTICE"):
+                try:
+                    lic = tf.getmember(f"frp_{FRPC_VERSION}_{os_name}_{arch}/{name}")
+                    lic.name = f"frpc-{name}"
+                    tf.extract(lic, path=licenses_dir, filter="data")
+                except KeyError:
+                    pass
+
         dest.chmod(dest.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
         self.app.display_info(f"Bundled frpc {FRPC_VERSION} for {target}")
 

@@ -15,4 +15,5 @@ site
 .idea
 .aleash*
 src/provablyfine/bin/
+src/provablyfine/licenses/
 .cache/

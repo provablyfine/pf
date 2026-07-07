@@ -1,8 +1,10 @@
 import argparse
 import dataclasses
 import getpass
+import importlib.resources
 import os
 import os.path
+import pathlib
 import sys
 import traceback
 import urllib.parse
@@ -59,6 +61,29 @@ def add_common_args(parser: argparse.ArgumentParser) -> None:
 
 def version_function(args: argparse.Namespace) -> None:
     print(__version__)
+
+
+def _print_frpc_license() -> None:
+    licenses = importlib.resources.files("provablyfine").joinpath("licenses")
+    for filename, label in [("frpc-NOTICE", "NOTICE"), ("frpc-LICENSE", "LICENSE")]:
+        p = pathlib.Path(str(licenses.joinpath(filename)))
+        if p.is_file():
+            print(f"--- frpc ({label}) ---")
+            print(p.read_text())
+
+
+def license_function(args: argparse.Namespace) -> None:
+    print("provablyfine")
+    print("Copyright (C) 2024 Mathieu Lacage <mathieu.lacage@cutebugs.net>")
+    print("License: GNU Affero General Public License v3 (AGPL-3.0-only)")
+    print("Full text: https://www.gnu.org/licenses/agpl-3.0.txt")
+    print()
+    print("This distribution includes frpc from fatedier/frp (Apache 2.0).")
+    _print_frpc_license()
+
+
+def setup_license_subparser(parser: argparse.ArgumentParser) -> None:
+    parser.set_defaults(func=license_function)
 
 
 def _ping_function(args: argparse.Namespace) -> None:
