@@ -1,0 +1,67 @@
+Initialize server and login
+  $ bash $TESTDIR/fixture.sh
+  .* (re)
+
+Create admin objects
+  $ pfa -c config.json tag create -n id -v device
+  $ DEVICE_TAG_ID=$(pfa -c config.json tag list -n id -v device -q)
+  $ pfa -c config.json role create -n role
+  $ ROLE_ID=$(pfa -c config.json role list -n role -q)
+  $ pfa -c config.json grant ssh-shell --tag id=device --username root | pfa -c config.json role grant -i $ROLE_ID --add
+  $ pfa -c config.json grant ssh-shell --tag id=device --username alice | pfa -c config.json role grant -i $ROLE_ID --add
+
+Create bastion
+  $ pfa -c config.json bastion create --url http://127.0.0.1:$FRPS_CONNECT_PORT
+  $ BASTION_ID=$(pfa -c config.json bastion list -q)
+
+Provision host identity
+  $ pfa -c config.json identity create -n host -t $DEVICE_TAG_ID
+  $ HOST_ID=$(pfa -c config.json identity list -n host -q)
+  $ INVITATION=$(pfa -c config.json identity invite --manual -i $HOST_ID)
+  $ echo $INVITATION
+  .* (re)
+
+Host starts
+  $ ssh-keygen -t ed25519 -f host-account -N "" > /dev/null
+  $ pf -c host.json accept --invitation=$INVITATION --key host-account
+  $ ssh-keygen -t ed25519 -f host-session -N "" > /dev/null
+  $ pf -c host.json login --session-key host-session
+
+Host SSH setup
+  $ pf -c host.json openssh sign-host --public-key=$SSHD_KEYS_DIRECTORY/ssh_host_rsa_key.pub --public-key=$SSHD_KEYS_DIRECTORY/ssh_host_ecdsa_key.pub --public-key=$SSHD_KEYS_DIRECTORY/ssh_host_ed25519_key.pub
+  $ pf -c host.json openssh user-trusted-keys > $SSHD_KEYS_DIRECTORY/user-ca.pub
+  $ podman exec $SSHD_CONTAINER_ID pkill -HUP sshd
+
+Provision user identity
+  $ pfa -c config.json identity create -n user
+  $ USER_ID=$(pfa -c config.json identity list -n user -q)
+  $ pfa -c config.json role member -i $ROLE_ID -a user
+  $ INVITATION=$(pfa -c config.json identity invite --manual -i $USER_ID)
+  $ echo $INVITATION
+  .* (re)
+
+User starts
+  $ ssh-keygen -t ed25519 -f user-account -N "" > /dev/null
+  $ pf -c user.json accept --invitation=$INVITATION --key user-account
+  $ ssh-keygen -t ed25519 -f user-session -N "" > /dev/null
+  $ pf -c user.json login --session-key user-session
+
+Host registers with bastions
+  $ pf -c host.json bastion register --port $SSHD_PORT --poll-interval 1 --frps-bind-port $FRPS_BIND_PORT >/dev/null 2>&1 &
+  $ REGISTER_PID=$!
+
+Wait for frpc to connect
+  $ sleep 2
+
+Test get-token
+  $ pf -c host.json bastion get-token --hostname host
+  .* (re)
+
+User connects via bastion
+  $ pf -c user.json ssh -n root@host "whoami"
+  root
+  $ pf -c user.json ssh -n alice@host "whoami"
+  alice
+
+Cleanup
+  $ kill $REGISTER_PID 2>/dev/null; true

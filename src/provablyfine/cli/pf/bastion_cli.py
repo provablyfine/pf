@@ -54,35 +54,26 @@ def _frpc_binary() -> str:
 def _write_frpc_config(
     path: str,
     server_addr: str,
+    server_port: int,
+    transport_protocol: str,
     user: str,
-    identity_name: str,
-    pf_config: str | None,
+    jwt_token: str,
     local_port: int,
-    bastion_domain: str,
 ) -> None:
-    get_token_args = ["bastion", "get-token", "--hostname", identity_name]
-    if pf_config is not None:
-        get_token_args += ["--config", pf_config]
-
     config = {
         "serverAddr": server_addr,
-        "serverPort": 443,
+        "serverPort": server_port,
         "user": user,
-        "auth": {
-            "method": "token",
-            "tokenSource": {
-                "type": "exec",
-                "exec": {"command": sys.argv[0], "args": get_token_args},
-            },
-        },
-        "transport": {"protocol": "wss"},
+        "metadatas": {"jwt": jwt_token},
+        "transport": {"protocol": transport_protocol},
         "proxies": [
             {
                 "name": "ssh",
-                "type": "tcpMuxHTTPConnect",
+                "type": "tcpmux",
+                "multiplexer": "httpconnect",
                 "localIP": "127.0.0.1",
                 "localPort": local_port,
-                "customDomains": [f"{user}.{bastion_domain}"],
+                "customDomains": [f"{user}.{server_addr}"],
             }
         ],
     }
@@ -94,17 +85,14 @@ async def _manage_frpc(
     sc: pfc.AsyncSessionClient,
     bastion_url: str,
     identity_name: str,
-    pf_config: str | None,
     local_port: int,
     stop_event: asyncio.Event,
+    frps_bind_port: int | None = None,
 ) -> None:
     u = urllib.parse.urlsplit(bastion_url)
     server_addr = u.hostname or bastion_url
-    # server_addr is the frps control host (e.g. frps.bastion.provablyfine.net).
-    # bastion_domain is what SSH clients target (e.g. bastion.provablyfine.net),
-    # derived by stripping the first DNS label.
-    parts = server_addr.split(".", 1)
-    bastion_domain = parts[1] if len(parts) > 1 else server_addr
+    server_port = frps_bind_port or u.port or (443 if u.scheme == "https" else 80)
+    transport_protocol = "wss" if u.scheme == "https" else "tcp"
 
     config_fd, config_path = tempfile.mkstemp(suffix=".json", prefix="frpc-")
     os.close(config_fd)
@@ -125,16 +113,28 @@ async def _manage_frpc(
             _write_frpc_config(
                 config_path,
                 server_addr,
+                server_port,
+                transport_protocol,
                 frpc_user,
-                identity_name,
-                pf_config,
+                token_response.token,
                 local_port,
-                bastion_domain,
             )
 
-            process = await asyncio.create_subprocess_exec(_frpc_binary(), "-c", config_path)
+            env = dict(os.environ)
+            for _var in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy", "ALL_PROXY", "all_proxy"):
+                env.pop(_var, None)
+            env["NO_PROXY"] = "*"
+            process = await asyncio.create_subprocess_exec(
+                _frpc_binary(),
+                "-c",
+                config_path,
+                env=env,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+            )
             logger.info(f"frpc started for bastion={bastion_url} identity={identity_name}")
 
+            frpc_output: bytes = b""
             try:
                 while not stop_event.is_set() and process.returncode is None:
                     try:
@@ -149,7 +149,14 @@ async def _manage_frpc(
                     except TimeoutError:
                         process.kill()
                         await process.wait()
+                if process.stdout is not None:
+                    frpc_output = await process.stdout.read()
 
+            if process.returncode != 0:
+                logger.warning(
+                    f"frpc exited rc={process.returncode} for bastion={bastion_url}:"
+                    f" {frpc_output.decode(errors='replace')!r}"
+                )
             if not stop_event.is_set():
                 logger.info(f"frpc exited, restarting in 5s for bastion={bastion_url}")
                 try:
@@ -202,7 +209,7 @@ def _register_function(args: argparse.Namespace) -> None:
                     if bastion_id in active_tasks:
                         continue
                     task = asyncio.create_task(
-                        _manage_frpc(sc, bastion.url, identity_name, args.config, args.port, stop_event)
+                        _manage_frpc(sc, bastion.url, identity_name, args.port, stop_event, args.frps_bind_port)
                     )
                     active_tasks[bastion_id] = task
                     task.add_done_callback(functools.partial(done_callback, bastion_id))
@@ -222,7 +229,7 @@ def _register_function(args: argparse.Namespace) -> None:
     asyncio.run(_run())
 
 
-async def connect_async(url: str, hostname: str) -> None:
+async def connect_async(url: str, hostname: str, sc: pfc.AsyncSessionClient) -> None:
     u = urllib.parse.urlsplit(url)
     host = u.hostname or url
     scheme_port = 443 if u.scheme == "https" else 80 if u.scheme == "http" else None
@@ -235,9 +242,12 @@ async def connect_async(url: str, hostname: str) -> None:
     if u.scheme == "https":
         ssl_context = ssl.create_default_context()
 
+    token_response = await sc.get_self_token("bastion", hostname=hostname)
+    frpc_user = _jwt_audience(token_response.token)
+
     reader, writer = await asyncio.open_connection(host, port, ssl=ssl_context)
 
-    connect_target = f"{hostname}.{host}:{port}"
+    connect_target = f"{frpc_user}.{host}:{port}"
     await cli_http.Request(
         method="CONNECT",
         resource_target=connect_target,
@@ -299,7 +309,12 @@ def _connect_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     factory = client.Factory(c, timeout=args.timeout)
     login.ensure_session(c, factory)
-    asyncio.run(connect_async(args.url, args.hostname))
+
+    async def _run() -> None:
+        sc = factory.async_session()
+        await connect_async(args.url, args.hostname, sc)
+
+    asyncio.run(_run())
 
 
 def _get_token_function(args: argparse.Namespace) -> None:
@@ -321,6 +336,13 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
         type=int,
         default=30,
         help="Interval in seconds to poll for bastions",
+    )
+    register_parser.add_argument(
+        "--frps-bind-port",
+        type=int,
+        default=None,
+        help="frps control port for frpc (overrides the port in the bastion URL;"
+        " needed when the HTTP CONNECT port and the frpc control port differ)",
     )
     register_parser.set_defaults(func=_register_function)
 

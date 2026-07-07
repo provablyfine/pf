@@ -52,7 +52,7 @@ def test_frps_plugin_accept(api, tmp_path):
             "op": "Login",
             "content": {
                 "user": frpc_user,
-                "privilege_key": token_response.token,
+                "metas": {"jwt": token_response.token},
             },
         },
     )
@@ -71,7 +71,7 @@ def test_frps_plugin_wrong_user(api, tmp_path):
             "op": "Login",
             "content": {
                 "user": "wrong-hostname",
-                "privilege_key": token_response.token,
+                "metas": {"jwt": token_response.token},
             },
         },
     )

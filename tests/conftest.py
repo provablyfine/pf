@@ -4,14 +4,19 @@ import json
 import logging
 import os
 import os.path
+import pathlib
+import platform
 import random
 import re
 import shutil
 import signal
 import socket
+import stat
 import subprocess
+import tarfile
 import tempfile
 import time
+import typing
 
 import psutil
 import pytest
@@ -134,9 +139,9 @@ RUN --mount=type=cache,target=/root/.cache/uv uv pip install \\
     --quiet --link-mode=copy --system --break-system-packages /tmp/pfc && \\
     rm -rf /tmp/pfc
 
-COPY pyproject.toml README.md LICENSE.md /tmp/pf/
+COPY pyproject.toml README.md LICENSE.md hatch_build.py /tmp/pf/
 COPY src /tmp/pf/src/
-RUN --mount=type=cache,target=/root/.cache/uv uv pip install \\
+RUN --mount=type=cache,target=/root/.cache/uv HATCH_TARGET_ARCH=unsupported uv pip install \\
     --quiet --link-mode=copy --system --break-system-packages --no-sources /tmp/pf && \\
     rm -rf /tmp/pf
 
@@ -172,7 +177,7 @@ CMD ["/bin/sh", "/run/start.sh"]
 
 @pytest.fixture
 def sshd(request, sshd_image, tmp_path):
-    with tempfile.TemporaryDirectory() as ssh_keys_directory:
+    with tempfile.TemporaryDirectory(dir=tld()) as ssh_keys_directory:
         # Make sure "nobody" can read this directory
         fd = os.open(ssh_keys_directory, 0)
         os.chmod(fd, 0o755)
@@ -361,3 +366,112 @@ def pytest_runtest_makereport(item, call):
     outcome = yield
     rep = outcome.get_result()
     setattr(item, f"rep_{rep.when}", rep)
+
+
+_FRPC_VERSION = "0.69.1"
+
+_FRPC_SHA256: dict[str, str] = {
+    "linux-amd64": "7be257b72dbbc60bcb3e0e25a5afd1dfac7b63f897084864d3c956dd3d5674e1",
+    "linux-arm64": "bbc0c75e896af3f292fb46ba09c844a04fa9b5ea3530c039c7af20637f836355",
+    "darwin-amd64": "2bc26d02100ef333f2712149ea5997dc530dc0eefac64f4be41cb0f49d032f40",
+    "darwin-arm64": "310012e2f1dcf3cdde2605d29b95340b686c94d1680a23711d58efeffc02f64e",
+}
+
+
+def _find_frps(tmp_path: pathlib.Path) -> str:
+    frps_in_path = shutil.which("frps")
+    if frps_in_path:
+        return frps_in_path
+
+    system = platform.system().lower()
+    machine = platform.machine().lower()
+    os_name = {"linux": "linux", "darwin": "darwin"}.get(system, system)
+    arch = {"x86_64": "amd64", "aarch64": "arm64", "arm64": "arm64"}.get(machine, machine)
+    target = f"{os_name}-{arch}"
+
+    if target not in _FRPC_SHA256:
+        pytest.skip(f"frps not available for platform {target!r}")
+
+    tarball_name = f"frp_{_FRPC_VERSION}_{os_name}_{arch}.tar.gz"
+    tarball_path = pathlib.Path(tld()) / ".cache" / tarball_name
+
+    if not tarball_path.exists():
+        pytest.skip(f"frps tarball not found at {tarball_path}; run 'uv build' first to download it")
+
+    frps_path = tmp_path / "frps"
+    with tarfile.open(tarball_path) as tf:
+        member = tf.getmember(f"frp_{_FRPC_VERSION}_{os_name}_{arch}/frps")
+        member.name = "frps"
+        tf.extract(member, path=tmp_path, filter="data")
+
+    frps_path.chmod(frps_path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    return str(frps_path)
+
+
+def _free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+@dataclasses.dataclass(frozen=True)
+class FrPs:
+    bind_port: int
+    connect_port: int
+
+
+@pytest.fixture
+def frps(api: Api, tmp_path: pathlib.Path, request: pytest.FixtureRequest) -> typing.Generator[FrPs, None, None]:
+    frps_binary = _find_frps(tmp_path)
+    bind_port = _free_port()
+    connect_port = _free_port()
+    frps_log = tmp_path / "frps.log"
+
+    config = {
+        "bindPort": bind_port,
+        "tcpmuxHTTPConnectPort": connect_port,
+        "httpPlugins": [
+            {
+                "name": "pf-plugin",
+                "addr": f"http://127.0.0.1:{api.port}/frps/plugin",
+                "ops": ["Login"],
+            }
+        ],
+    }
+    config_path = tmp_path / "frps.json"
+    with open(config_path, "w") as f:
+        json.dump(config, f)
+
+    frps_log_file = open(frps_log, "w+")
+    popen = subprocess.Popen(
+        [frps_binary, "-c", str(config_path)],
+        stdout=frps_log_file,
+        stderr=subprocess.STDOUT,
+    )
+
+    start = time.time()
+    ready = False
+    while time.time() - start < 10:
+        try:
+            with socket.create_connection(("127.0.0.1", bind_port), timeout=0.5):
+                ready = True
+                break
+        except OSError:
+            time.sleep(0.1)
+
+    if not ready:
+        popen.terminate()
+        popen.wait()
+        frps_log_file.flush()
+        with open(frps_log) as f:
+            print(f.read())
+        raise Exception("frps failed to start")
+
+    try:
+        yield FrPs(bind_port=bind_port, connect_port=connect_port)
+    finally:
+        popen.terminate()
+        popen.wait()
+        frps_log_file.close()
+        if hasattr(request.node, "rep_call") and request.node.rep_call.failed:
+            print(f"frps log: {frps_log}")
