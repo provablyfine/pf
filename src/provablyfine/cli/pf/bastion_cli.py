@@ -25,7 +25,6 @@ from .. import login
 
 logger = logging.getLogger(__name__)
 
-_FRPC_SERVER_PORT = 7000
 _FRPC_TOKEN_REFRESH_INTERVAL = 45
 
 
@@ -63,12 +62,15 @@ def _write_frpc_config(
     bastion_domain: str,
 ) -> None:
     content = f"""serverAddr = "{server_addr}"
-serverPort = {_FRPC_SERVER_PORT}
+serverPort = 443
 user = "{user}"
 
 [auth]
 method = "token"
 token = ""
+
+[transport]
+protocol = "wss"
 
 [metadatas]
 jwt = "{jwt_token}"
@@ -108,7 +110,11 @@ async def _manage_frpc(
 ) -> None:
     u = urllib.parse.urlsplit(bastion_url)
     server_addr = u.hostname or bastion_url
-    bastion_domain = server_addr
+    # server_addr is the frps control host (e.g. frps.bastion.provablyfine.net).
+    # bastion_domain is what SSH clients target (e.g. bastion.provablyfine.net),
+    # derived by stripping the first DNS label.
+    parts = server_addr.split(".", 1)
+    bastion_domain = parts[1] if len(parts) > 1 else server_addr
 
     config_fd, config_path = tempfile.mkstemp(suffix=".toml", prefix="frpc-")
     os.close(config_fd)
