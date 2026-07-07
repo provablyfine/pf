@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import typing
 
 import fastapi
 import jwt
@@ -37,16 +36,10 @@ def frps_plugin_endpoint(request: fastapi.Request, data: _PluginRequest) -> _Plu
         logger.debug("frps plugin: missing or non-string user field")
         return _PluginResponse(reject=True, reject_reason="invalid user field")
 
-    metas_raw = data.content.get("metas")
-    jwt_token: str | None = None
-    if isinstance(metas_raw, dict):
-        metas = typing.cast("dict[str, object]", metas_raw)
-        jwt_val = metas.get("jwt")
-        if isinstance(jwt_val, str):
-            jwt_token = jwt_val
-    if not jwt_token:
-        logger.debug("frps plugin: missing jwt in metas")
-        return _PluginResponse(reject=True, reject_reason="missing jwt in metas")
+    jwt_token = data.content.get("privilege_key")
+    if not isinstance(jwt_token, str) or not jwt_token:
+        logger.debug("frps plugin: missing or empty privilege_key")
+        return _PluginResponse(reject=True, reject_reason="missing jwt")
 
     trusted_keys: jwt_validator.TrustedKeys = request.app.state.trusted_keys
     trusted_key = trusted_keys.lookup(jwt_token)

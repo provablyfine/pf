@@ -4,7 +4,6 @@ import argparse
 import asyncio
 import base64
 import functools
-import http.client
 import importlib.resources
 import json
 import logging
@@ -12,7 +11,6 @@ import os
 import pathlib
 import shutil
 import signal
-import socket
 import ssl
 import stat
 import sys
@@ -26,8 +24,6 @@ from .. import http as cli_http
 from .. import login
 
 logger = logging.getLogger(__name__)
-
-_FRPC_TOKEN_REFRESH_INTERVAL = 45
 
 
 def _jwt_audience(token: str) -> str:
@@ -55,38 +51,34 @@ def _frpc_binary() -> str:
     raise pfc.exceptions.UI("frpc not found: reinstall provablyfine or install frpc manually")
 
 
-def _find_free_port() -> int:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
-
-
 def _write_frpc_config(
     path: str,
     server_addr: str,
     user: str,
-    jwt_token: str,
-    web_port: int,
+    identity_name: str,
+    pf_config: str | None,
     local_port: int,
     bastion_domain: str,
 ) -> None:
+    get_token_args = ["bastion", "get-token", "--hostname", identity_name]
+    if pf_config is not None:
+        get_token_args += ["--config", pf_config]
+    args_toml = "[" + ", ".join(f'"{a}"' for a in get_token_args) + "]"
+
     content = f"""serverAddr = "{server_addr}"
 serverPort = 443
 user = "{user}"
 
 [auth]
 method = "token"
-token = ""
+
+[auth.tokenSource]
+type = "exec"
+exec.command = "{sys.argv[0]}"
+exec.args = {args_toml}
 
 [transport]
 protocol = "wss"
-
-[metadatas]
-jwt = "{jwt_token}"
-
-[webServer]
-addr = "127.0.0.1"
-port = {web_port}
 
 [[proxies]]
 name = "ssh"
@@ -99,21 +91,11 @@ customDomains = ["{user}.{bastion_domain}"]
         f.write(content)
 
 
-def _reload_frpc(web_port: int) -> None:
-    conn = http.client.HTTPConnection("127.0.0.1", web_port, timeout=5)
-    try:
-        conn.request("POST", "/api/reload")
-        conn.getresponse()
-    except Exception as e:
-        logger.warning(f"frpc reload failed: {e}")
-    finally:
-        conn.close()
-
-
 async def _manage_frpc(
     sc: pfc.AsyncSessionClient,
     bastion_url: str,
     identity_name: str,
+    pf_config: str | None,
     local_port: int,
     stop_event: asyncio.Event,
 ) -> None:
@@ -132,13 +114,12 @@ async def _manage_frpc(
         while not stop_event.is_set():
             token_response = await sc.get_self_token("bastion", hostname=identity_name)
             frpc_user = _jwt_audience(token_response.token)
-            web_port = _find_free_port()
             _write_frpc_config(
                 config_path,
                 server_addr,
                 frpc_user,
-                token_response.token,
-                web_port,
+                identity_name,
+                pf_config,
                 local_port,
                 bastion_domain,
             )
@@ -147,28 +128,11 @@ async def _manage_frpc(
             logger.info(f"frpc started for bastion={bastion_url} identity={identity_name}")
 
             try:
-                while not stop_event.is_set():
+                while not stop_event.is_set() and process.returncode is None:
                     try:
-                        await asyncio.wait_for(stop_event.wait(), timeout=_FRPC_TOKEN_REFRESH_INTERVAL)
-                        break
+                        await asyncio.wait_for(stop_event.wait(), timeout=5)
                     except TimeoutError:
                         pass
-
-                    if process.returncode is not None:
-                        break
-
-                    token_response = await sc.get_self_token("bastion", hostname=identity_name)
-                    _write_frpc_config(
-                        config_path,
-                        server_addr,
-                        frpc_user,
-                        token_response.token,
-                        web_port,
-                        local_port,
-                        bastion_domain,
-                    )
-                    await asyncio.to_thread(_reload_frpc, web_port)
-                    logger.debug(f"frpc token refreshed for bastion={bastion_url}")
             finally:
                 if process.returncode is None:
                     process.terminate()
@@ -229,7 +193,9 @@ def _register_function(args: argparse.Namespace) -> None:
                 for bastion_id, bastion in current_bastions.items():
                     if bastion_id in active_tasks:
                         continue
-                    task = asyncio.create_task(_manage_frpc(sc, bastion.url, identity_name, args.port, stop_event))
+                    task = asyncio.create_task(
+                        _manage_frpc(sc, bastion.url, identity_name, args.config, args.port, stop_event)
+                    )
                     active_tasks[bastion_id] = task
                     task.add_done_callback(functools.partial(done_callback, bastion_id))
             except Exception as e:
@@ -328,6 +294,14 @@ def _connect_function(args: argparse.Namespace) -> None:
     asyncio.run(connect_async(args.url, args.hostname))
 
 
+def _get_token_function(args: argparse.Namespace) -> None:
+    c = client.Config.load(args.config)
+    factory = client.Factory(c, timeout=args.timeout)
+    login.ensure_session(c, factory)
+    token_response = factory.session().get_self_token("bastion", hostname=args.hostname)
+    print(token_response.token, end="")
+
+
 def add_subparser(parser: argparse.ArgumentParser) -> None:
     sub = parser.add_subparsers(required=True, dest="subcommand", metavar="subcommand")
 
@@ -346,3 +320,7 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
     connect_parser.add_argument("--url", required=True, help="Bastion URL")
     connect_parser.add_argument("--hostname", required=True, help="Target hostname")
     connect_parser.set_defaults(func=_connect_function)
+
+    get_token_parser = sub.add_parser("get-token", help="Print a bastion JWT to stdout")
+    get_token_parser.add_argument("--hostname", required=True, help="Identity hostname")
+    get_token_parser.set_defaults(func=_get_token_function)
