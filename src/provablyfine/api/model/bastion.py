@@ -137,7 +137,7 @@ def generate_token(hostname: str) -> str:
     claims = {
         "sub": str(self_identity.id),
         "iss": iss,
-        "aud": hostname,
+        "aud": f"{hostname}-{ctx.tenant_id}",
         "iat": now,
         "exp": now + 60,
         "name": self_identity.name,

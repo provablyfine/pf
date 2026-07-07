@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import base64
 import functools
 import http.client
 import importlib.resources
+import json
 import logging
 import os
 import pathlib
@@ -26,6 +28,13 @@ from .. import login
 logger = logging.getLogger(__name__)
 
 _FRPC_TOKEN_REFRESH_INTERVAL = 45
+
+
+def _jwt_audience(token: str) -> str:
+    payload = token.split(".")[1]
+    payload += "=" * (-len(payload) % 4)
+    claims = json.loads(base64.urlsafe_b64decode(payload))
+    return str(claims["aud"])
 
 
 def _frpc_binary() -> str:
@@ -122,11 +131,12 @@ async def _manage_frpc(
     try:
         while not stop_event.is_set():
             token_response = await sc.get_self_token("bastion", hostname=identity_name)
+            frpc_user = _jwt_audience(token_response.token)
             web_port = _find_free_port()
             _write_frpc_config(
                 config_path,
                 server_addr,
-                identity_name,
+                frpc_user,
                 token_response.token,
                 web_port,
                 local_port,
@@ -151,7 +161,7 @@ async def _manage_frpc(
                     _write_frpc_config(
                         config_path,
                         server_addr,
-                        identity_name,
+                        frpc_user,
                         token_response.token,
                         web_port,
                         local_port,

@@ -1,9 +1,18 @@
 """Integration tests for the frps auth plugin endpoint."""
 
+import base64
+import json
+
 import requests
 
 import provablyfine.client
 import provablyfine.jwk
+
+
+def _jwt_audience(token: str) -> str:
+    payload = token.split(".")[1]
+    payload += "=" * (-len(payload) % 4)
+    return str(json.loads(base64.urlsafe_b64decode(payload))["aud"])
 
 
 def _setup_session(api_port: int, tmp_path) -> tuple[provablyfine.client.Factory, str]:
@@ -35,13 +44,14 @@ def _setup_session(api_port: int, tmp_path) -> tuple[provablyfine.client.Factory
 def test_frps_plugin_accept(api, tmp_path):
     factory, identity_name = _setup_session(api.port, tmp_path)
     token_response = factory.session().get_self_token("bastion", hostname=identity_name)
+    frpc_user = _jwt_audience(token_response.token)
 
     response = requests.post(
         f"http://127.0.0.1:{api.port}/frps/plugin",
         json={
             "op": "Login",
             "content": {
-                "user": identity_name,
+                "user": frpc_user,
                 "metas": {"jwt": token_response.token},
             },
         },
