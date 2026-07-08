@@ -10,9 +10,7 @@ from ... import client, jwk, ssh
 from .. import common, login
 
 
-def _write_file_atomic(
-    filepath: str, content: bytes | str, mode: str = "wb"
-) -> None:
+def _write_file_atomic(filepath: str, content: bytes | str, mode: str = "wb") -> None:
     dirname = os.path.dirname(filepath) or "."
     os.makedirs(dirname, exist_ok=True)
 
