@@ -65,7 +65,13 @@ def _write_frpc_config(
         "serverPort": server_port,
         "user": user,
         "metadatas": {"jwt": jwt_token},
-        "transport": {"protocol": transport_protocol},
+        "transport": {
+            "protocol": transport_protocol,
+            "tcpMux": True,
+            "tcpMuxKeepaliveInterval": 5,
+            "dialServerKeepalive": 30,
+            "dialServerTimeout": 10,
+        },
         "proxies": [
             {
                 "name": "ssh",
