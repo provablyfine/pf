@@ -109,6 +109,8 @@ def _ssh_function(args: argparse.Namespace) -> None:
             cmd += ["-p", args.port]
         for opt in args.ssh_options:
             cmd += ["-o", opt]
+        if args.verbose:
+            cmd += ["-v"] * args.verbose
         if args.stdin_null:
             cmd += ["-n"]
         for fwd in args.forward_local:
@@ -165,6 +167,7 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
         metavar="OPTION",
         help="SSH option passed through to the underlying ssh command",
     )
+    parser.add_argument("-v", dest="verbose", action="count", default=0, help="Verbose mode (-v, -vv, -vvv)")
     parser.add_argument("-n", dest="stdin_null", action="store_true", help="Redirect stdin from null")
     parser.add_argument(
         "-L",
