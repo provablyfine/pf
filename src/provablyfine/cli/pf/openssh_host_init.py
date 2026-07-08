@@ -10,7 +10,9 @@ from ... import client, jwk, ssh
 from .. import common, login
 
 
-def _write_file_atomic(filepath: str, content: bytes | str, mode: str = "wb") -> None:
+def _write_file_atomic(
+    filepath: str, content: bytes | str, mode: str = "wb"
+) -> None:
     dirname = os.path.dirname(filepath) or "."
     os.makedirs(dirname, exist_ok=True)
 
@@ -18,6 +20,7 @@ def _write_file_atomic(filepath: str, content: bytes | str, mode: str = "wb") ->
     try:
         with os.fdopen(fd, mode) as f:
             f.write(content)
+        os.chmod(tmp_path, 0o644)
         os.rename(tmp_path, filepath)
     except Exception:
         try:
