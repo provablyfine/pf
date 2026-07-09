@@ -190,6 +190,18 @@ PFEOF
 
 systemctl daemon-reload
 systemctl enable --now pf-host-bastion.service
+
+if [ -d /etc/NetworkManager/dispatcher.d ]; then
+  cat > /etc/NetworkManager/dispatcher.d/pf-host-refresh << 'PFEOF'
+#!/bin/sh
+case "$2" in
+  up|connectivity-change)
+    systemctl start pf-host-refresh.service
+    ;;
+esac
+PFEOF
+  chmod 755 /etc/NetworkManager/dispatcher.d/pf-host-refresh
+fi
 """)
 
 
@@ -220,6 +232,7 @@ def host_uninit_function(args: argparse.Namespace) -> None:
         "rm -f /etc/systemd/system/pf-host-refresh.timer",
         "systemctl disable --now pf-host-bastion.service || true",
         "rm -f /etc/systemd/system/pf-host-bastion.service",
+        "rm -f /etc/NetworkManager/dispatcher.d/pf-host-refresh",
         "systemctl daemon-reload",
         "",
         f"rm -f {args.sshd_config_drop_in}",
