@@ -51,20 +51,52 @@ def _frpc_binary() -> str:
     raise pfc.exceptions.UI("frpc not found: reinstall provablyfine or install frpc manually")
 
 
+def _pf_binary() -> str:
+    # we do this because we do not want to rely on sys.argv[0] which can be
+    # spoofed by the code that invoked this script
+    try:
+        main = sys.modules["__main__"].__file__
+        assert main is not None
+        return main
+    except (KeyError, AttributeError):
+        # This happens if Python was started interactively (REPL) or via -c
+        raise pfc.exceptions.UI("Unable to find current entry point to execute get-token")
+
+
 def _write_frpc_config(
+    configuration: str,
     path: str,
     server_addr: str,
     server_port: int,
     transport_protocol: str,
     user: str,
-    jwt_token: str,
+    identity_name: str,
     local_port: int,
 ) -> None:
     config = {
         "serverAddr": server_addr,
         "serverPort": server_port,
         "user": user,
-        "metadatas": {"jwt": jwt_token},
+        "auth": {
+            "method": "oidc",
+            "oidc": {
+                "tokenSource": {
+                    "type": "exec",
+                    "exec": {
+                        "command": sys.executable,
+                        "args": [
+                            _pf_binary(),
+                            "-c",
+                            configuration,
+                            "bastion",
+                            "get-token",
+                            "--hostname",
+                            identity_name,
+                        ],
+                    },
+                },
+            },
+        },
         "transport": {
             "protocol": transport_protocol,
             "tcpMux": True,
@@ -88,6 +120,7 @@ def _write_frpc_config(
 
 
 async def _manage_frpc(
+    configuration: str,
     sc: pfc.AsyncSessionClient,
     bastion_url: str,
     identity_name: str,
@@ -117,12 +150,13 @@ async def _manage_frpc(
                 continue
 
             _write_frpc_config(
+                configuration,
                 config_path,
                 server_addr,
                 server_port,
                 transport_protocol,
                 frpc_user,
-                token_response.token,
+                identity_name,
                 local_port,
             )
 
@@ -132,6 +166,7 @@ async def _manage_frpc(
             env["NO_PROXY"] = "*"
             process = await asyncio.create_subprocess_exec(
                 _frpc_binary(),
+                "--allow-unsafe=TokenSourceExec",
                 "-c",
                 config_path,
                 env=env,
@@ -215,7 +250,9 @@ def _register_function(args: argparse.Namespace) -> None:
                     if bastion_id in active_tasks:
                         continue
                     task = asyncio.create_task(
-                        _manage_frpc(sc, bastion.url, identity_name, args.port, stop_event, args.frps_bind_port)
+                        _manage_frpc(
+                            args.config, sc, bastion.url, identity_name, args.port, stop_event, args.frps_bind_port
+                        )
                     )
                     active_tasks[bastion_id] = task
                     task.add_done_callback(functools.partial(done_callback, bastion_id))

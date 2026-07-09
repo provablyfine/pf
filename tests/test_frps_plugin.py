@@ -52,7 +52,8 @@ def test_frps_plugin_accept(api, tmp_path):
             "op": "Login",
             "content": {
                 "user": frpc_user,
-                "metas": {"jwt": token_response.token},
+                "privilege_key": token_response.token,
+                "timestamp": 1234567890,
             },
         },
     )

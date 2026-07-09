@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import hashlib
 import logging
-import typing
 
 import fastapi
 import jwt
@@ -25,6 +25,7 @@ class _PluginResponse(pydantic.BaseModel):
     reject: bool
     reject_reason: str = ""
     unchange: bool = True
+    content: dict[str, object] | None = None
 
 
 @router.post("/frps/plugin")
@@ -37,16 +38,13 @@ def frps_plugin_endpoint(request: fastapi.Request, data: _PluginRequest) -> _Plu
         logger.debug("frps plugin: missing or non-string user field")
         return _PluginResponse(reject=True, reject_reason="invalid user field")
 
-    metas_raw = data.content.get("metas")
-    jwt_token: str | None = None
-    if isinstance(metas_raw, dict):
-        metas = typing.cast(dict[str, object], metas_raw)
-        jwt_raw = metas.get("jwt")
-        if isinstance(jwt_raw, str):
-            jwt_token = jwt_raw
+    jwt_token = data.content.get("privilege_key")
     if not jwt_token:
-        logger.debug("frps plugin: missing jwt in metas")
+        logger.debug("frps plugin: missing jwt as privilege_key")
         return _PluginResponse(reject=True, reject_reason="missing jwt")
+    if not isinstance(jwt_token, str):
+        logger.debug("frps plugin: missing jwt as string")
+        return _PluginResponse(reject=True, reject_reason="invalid jwt")
 
     trusted_keys: jwt_validator.TrustedKeys = request.app.state.trusted_keys
     trusted_key = trusted_keys.lookup(jwt_token)
@@ -67,4 +65,10 @@ def frps_plugin_endpoint(request: fastapi.Request, data: _PluginRequest) -> _Plu
         logger.debug(f"frps plugin: jwt validation failed: {e}")
         return _PluginResponse(reject=True, reject_reason=str(e))
 
-    return _PluginResponse(reject=False)
+    timestamp = str(data.content["timestamp"]).encode()
+    expected_key = hashlib.md5(timestamp, usedforsecurity=False).hexdigest()
+    return _PluginResponse(
+        reject=False,
+        unchange=False,
+        content={**data.content, "privilege_key": expected_key},
+    )
