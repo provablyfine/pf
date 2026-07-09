@@ -81,6 +81,9 @@ class SshD:
 @pytest.fixture(scope="session")
 def sshd_image(tmp_path_factory):
     """Build SSH server container image once per worker session."""
+    result = subprocess.run(["podman", "info"], stdin=subprocess.DEVNULL, capture_output=True)
+    if result.returncode != 0:
+        pytest.skip("podman not available or not configured for rootless containers")
     sshd_config = """\
 Port 22
 ListenAddress 0.0.0.0
