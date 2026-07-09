@@ -4,12 +4,16 @@ import json
 import logging
 import os
 import os.path
+import pathlib
+import platform
 import random
 import re
 import shutil
 import signal
 import socket
+import stat
 import subprocess
+import tarfile
 import tempfile
 import time
 import typing
@@ -135,9 +139,9 @@ RUN --mount=type=cache,target=/root/.cache/uv uv pip install \\
     --quiet --link-mode=copy --system --break-system-packages /tmp/pfc && \\
     rm -rf /tmp/pfc
 
-COPY pyproject.toml README.md LICENSE.md /tmp/pf/
+COPY pyproject.toml README.md LICENSE.md hatch_build.py /tmp/pf/
 COPY src /tmp/pf/src/
-RUN --mount=type=cache,target=/root/.cache/uv uv pip install \\
+RUN --mount=type=cache,target=/root/.cache/uv HATCH_TARGET_ARCH=unsupported uv pip install \\
     --quiet --link-mode=copy --system --break-system-packages --no-sources /tmp/pf && \\
     rm -rf /tmp/pf
 
@@ -171,80 +175,9 @@ CMD ["/bin/sh", "/run/start.sh"]
     return image_id
 
 
-def _build_bastion_image(tmp_path) -> str:
-    pf_bastion_control_socket = """[Unit]
-Description=PF Bastion Control Socket
-
-[Socket]
-ListenStream=/run/pf/bastion-control.sock
-SocketMode=0666
-FileDescriptorName=pf-bastion-control
-Service=pf-bastion.service
-
-[Install]
-WantedBy=sockets.target
-"""
-    pf_bastion_socket = """[Unit]
-Description=PF Bastion Socket
-
-[Socket]
-ListenStream=/run/pf/bastion.sock
-SocketMode=0666
-FileDescriptorName=pf-bastion-main
-Service=pf-bastion.service
-
-[Install]
-WantedBy=sockets.target pf-bastion-control.socket
-"""
-
-    pf_bastion_service = """[Unit]
-Description=PF Bastion
-After=network.target
-
-[Service]
-Type=notify
-NotifyAccess=all
-PassEnvironment=ISSUER_PREFIX
-WorkingDirectory=/run/pf
-ExecStart=/usr/bin/python -m coverage run --source=/usr/local/lib/python3.14/site-packages/pf \
-    -p /usr/local/bin/pf-bastion -ddd --log-filename=/run/pf/pf-bastion.${INVOCATION_ID}.log \
-    --issuer-prefix "${ISSUER_PREFIX}" --port-file /run/pf/bastion.port --domain-suffix localhost \
-    --control-socket /run/pf/bastion-control.sock
-FileDescriptorStoreMax=128
-"""
-
-    containerfile = f"""\
-FROM fedora:latest
-RUN dnf install -y python3 uv systemd python3-coverage && dnf clean all
-RUN systemctl mask systemd-resolved systemd-oomd
-
-COPY . /tmp/pf/
-RUN uv pip install --system --break-system-packages /tmp/pf
-
-RUN mkdir -p /etc/systemd/system
-
-RUN printf '%b' '{pf_bastion_control_socket.replace("\n", "\\n")}' > /etc/systemd/system/pf-bastion-control.socket
-RUN printf '%b' '{pf_bastion_socket.replace("\n", "\\n")}' > /etc/systemd/system/pf-bastion.socket
-RUN printf '%b' '{pf_bastion_service.replace("\n", "\\n")}' > /etc/systemd/system/pf-bastion.service
-
-RUN systemctl enable pf-bastion.socket pf-bastion-control.socket
-
-CMD ["/sbin/init"]
-"""
-
-    with tempfile.NamedTemporaryFile(mode="w+", suffix=".Containerfile", dir=tmp_path, delete=False) as container_file:
-        container_file.write(containerfile)
-        container_file.flush()
-        stdout = _run(["podman", "build", "--quiet", "--file", container_file.name, tld()], tmp_path)
-        image_id = stdout.strip("\n")
-        if "\n" in image_id:
-            assert False, image_id
-    return image_id
-
-
 @pytest.fixture
 def sshd(request, sshd_image, tmp_path):
-    with tempfile.TemporaryDirectory() as ssh_keys_directory:
+    with tempfile.TemporaryDirectory(dir=tld()) as ssh_keys_directory:
         # Make sure "nobody" can read this directory
         fd = os.open(ssh_keys_directory, 0)
         os.chmod(fd, 0o755)
@@ -408,163 +341,6 @@ def api(request, tmp_path):
             return
 
 
-@dataclasses.dataclass(frozen=True)
-class BastionServer:
-    port: int
-    control_socket: str
-
-
-def _start_bastion_process(
-    api_port: int,
-    port_file: str,
-    log_file: str,
-    control_socket: str,
-    port: int = 0,
-    env: dict | None = None,
-    pass_fds: tuple = (),
-    preexec_fn=None,
-) -> tuple[subprocess.Popen, typing.IO]:
-    """Helper to start a bastion process. Returns (popen, log_file_handle)."""
-    if env is None:
-        env = copy.copy(os.environ)
-
-    log_f = open(log_file, "a" if os.path.exists(log_file) else "w")
-    issuer_prefix = f"http://127.0.0.1:{api_port}/pf/t"
-    args = [
-        "scripts/pf-bastion",
-        "--issuer-prefix",
-        issuer_prefix,
-        "--port-file",
-        port_file,
-        "--domain-suffix",
-        "localhost",
-        "--control-socket",
-        control_socket,
-    ]
-    if port > 0:
-        args.extend(["-p", str(port)])
-
-    popen = subprocess.Popen(
-        args,
-        stdout=log_f,
-        stderr=subprocess.STDOUT,
-        text=True,
-        env=env,
-        pass_fds=pass_fds,
-        preexec_fn=preexec_fn,
-    )
-    return popen, log_f
-
-
-@pytest.fixture
-def bastion_server(request, api, tmp_path):
-    tmp_path = tmp_path.absolute()
-    port_file = tmp_path / "bastion.port"
-    log_file = tmp_path / "bastion.log"
-    control_socket = tmp_path / "pf-bastion-control.sock"
-
-    popen, log_f = _start_bastion_process(api.port, port_file, log_file, control_socket)
-
-    start = time.time()
-    port = None
-    bastion_ready = False
-    while time.time() - start < 10:
-        try:
-            with open(port_file) as f:
-                data = f.read()
-        except FileNotFoundError:
-            time.sleep(0.1)
-            continue
-        try:
-            port = int(data.strip())
-        except Exception:
-            time.sleep(0.1)
-            continue
-        # Verify bastion is actually accepting TCP connections
-        try:
-            with socket.create_connection(("127.0.0.1", port), timeout=1):
-                bastion_ready = True
-                break
-        except OSError:
-            time.sleep(0.1)
-            continue
-
-    if not bastion_ready:
-        log_f.flush()
-        with open(log_file) as f:
-            print(f"Bastion log: {f.read()}")
-        raise Exception("Unable to start bastion server")
-
-    yield BastionServer(port=port, control_socket=control_socket)
-
-    popen.terminate()
-    log_f.close()
-    if hasattr(request.node, "rep_call"):
-        if request.node.rep_call.failed:
-            with open(log_file) as f:
-                print(f"Bastion log:\n{f.read()}")
-            return
-
-
-@dataclasses.dataclass(frozen=True)
-class BastionContainer:
-    """Bastion server running in podman under real systemd."""
-
-    main_socket: str
-    control_socket: str
-    container_id: str
-
-
-@pytest.fixture
-def bastion_container(request, api, tmp_path):
-    """Start bastion under real systemd in a podman container."""
-    if not shutil.which("podman"):
-        pytest.skip("podman not found")
-    bastion_image = _build_bastion_image(tmp_path)
-
-    # Create shared directories
-    shared_dir = tmp_path / "run-pf"
-    shared_dir.mkdir()
-    logs_dir = tmp_path / "journal"
-    logs_dir.mkdir()
-
-    # Run bastion container with port forwarding
-
-    command = [
-        "podman",
-        "run",
-        "--detach",
-        "--systemd=always",
-        "--network=host",
-        "--volume",
-        f"{shared_dir}:/run/pf:rw",
-        "--volume",
-        f"{logs_dir}:/var/log/journal:rw",
-        "--env",
-        f"ISSUER_PREFIX=http://127.0.0.1:{api.port}/pf/t",
-        bastion_image,
-    ]
-    container_id = subprocess.check_output(command).decode().strip()
-
-    control_socket = str(shared_dir / "bastion-control.sock")
-    main_socket = str(shared_dir / "bastion.sock")
-
-    print(f"main={main_socket} control={control_socket}")
-    yield BastionContainer(main_socket=main_socket, control_socket=control_socket, container_id=container_id)
-
-    subprocess.run(["podman", "stop", "-t", "5", container_id])
-
-    filenames = [filename for filename in os.listdir(shared_dir) if filename.startswith(".coverage")]
-    for filename in filenames:
-        shutil.copy(os.path.join(shared_dir, filename), filename)
-
-    if hasattr(request.node, "rep_call"):
-        if request.node.rep_call.failed:
-            print(f"Bastion container ID: {container_id}")
-            print(f"Systemd journal logs: {logs_dir}")
-            print(f"Control socket and port file: {shared_dir}")
-
-
 @pytest.fixture(autouse=True)
 def pf_log_directory(tmp_path, request):
     """Set PF_LOG_DIRECTORY to a unique temp directory for each test.
@@ -590,3 +366,112 @@ def pytest_runtest_makereport(item, call):
     outcome = yield
     rep = outcome.get_result()
     setattr(item, f"rep_{rep.when}", rep)
+
+
+_FRPC_VERSION = "0.69.1"
+
+_FRPC_SHA256: dict[str, str] = {
+    "linux-amd64": "7be257b72dbbc60bcb3e0e25a5afd1dfac7b63f897084864d3c956dd3d5674e1",
+    "linux-arm64": "bbc0c75e896af3f292fb46ba09c844a04fa9b5ea3530c039c7af20637f836355",
+    "darwin-amd64": "2bc26d02100ef333f2712149ea5997dc530dc0eefac64f4be41cb0f49d032f40",
+    "darwin-arm64": "310012e2f1dcf3cdde2605d29b95340b686c94d1680a23711d58efeffc02f64e",
+}
+
+
+def _find_frps(tmp_path: pathlib.Path) -> str:
+    frps_in_path = shutil.which("frps")
+    if frps_in_path:
+        return frps_in_path
+
+    system = platform.system().lower()
+    machine = platform.machine().lower()
+    os_name = {"linux": "linux", "darwin": "darwin"}.get(system, system)
+    arch = {"x86_64": "amd64", "aarch64": "arm64", "arm64": "arm64"}.get(machine, machine)
+    target = f"{os_name}-{arch}"
+
+    if target not in _FRPC_SHA256:
+        pytest.skip(f"frps not available for platform {target!r}")
+
+    tarball_name = f"frp_{_FRPC_VERSION}_{os_name}_{arch}.tar.gz"
+    tarball_path = pathlib.Path(tld()) / ".cache" / tarball_name
+
+    if not tarball_path.exists():
+        pytest.skip(f"frps tarball not found at {tarball_path}; run 'uv build' first to download it")
+
+    frps_path = tmp_path / "frps"
+    with tarfile.open(tarball_path) as tf:
+        member = tf.getmember(f"frp_{_FRPC_VERSION}_{os_name}_{arch}/frps")
+        member.name = "frps"
+        tf.extract(member, path=tmp_path, filter="data")
+
+    frps_path.chmod(frps_path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    return str(frps_path)
+
+
+def _free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+@dataclasses.dataclass(frozen=True)
+class FrPs:
+    bind_port: int
+    connect_port: int
+
+
+@pytest.fixture
+def frps(api: Api, tmp_path: pathlib.Path, request: pytest.FixtureRequest) -> typing.Generator[FrPs, None, None]:
+    frps_binary = _find_frps(tmp_path)
+    bind_port = _free_port()
+    connect_port = _free_port()
+    frps_log = tmp_path / "frps.log"
+
+    config = {
+        "bindPort": bind_port,
+        "tcpmuxHTTPConnectPort": connect_port,
+        "httpPlugins": [
+            {
+                "name": "pf-plugin",
+                "addr": f"http://127.0.0.1:{api.port}/frps/plugin",
+                "ops": ["Login"],
+            }
+        ],
+    }
+    config_path = tmp_path / "frps.json"
+    with open(config_path, "w") as f:
+        json.dump(config, f)
+
+    frps_log_file = open(frps_log, "w+")
+    popen = subprocess.Popen(
+        [frps_binary, "-c", str(config_path)],
+        stdout=frps_log_file,
+        stderr=subprocess.STDOUT,
+    )
+
+    start = time.time()
+    ready = False
+    while time.time() - start < 10:
+        try:
+            with socket.create_connection(("127.0.0.1", bind_port), timeout=0.5):
+                ready = True
+                break
+        except OSError:
+            time.sleep(0.1)
+
+    if not ready:
+        popen.terminate()
+        popen.wait()
+        frps_log_file.flush()
+        with open(frps_log) as f:
+            print(f.read())
+        raise Exception("frps failed to start")
+
+    try:
+        yield FrPs(bind_port=bind_port, connect_port=connect_port)
+    finally:
+        popen.terminate()
+        popen.wait()
+        frps_log_file.close()
+        if hasattr(request.node, "rep_call") and request.node.rep_call.failed:
+            print(f"frps log: {frps_log}")

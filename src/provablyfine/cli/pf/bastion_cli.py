@@ -2,170 +2,189 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import dataclasses
+import base64
 import functools
+import importlib.resources
+import json
 import logging
+import os
+import pathlib
+import shutil
 import signal
+import ssl
+import stat
 import sys
+import tempfile
 import urllib.parse
 
 import provablyfine_client as pfc
 
-from ... import anet, client
+from ... import client
+from .. import http as cli_http
 from .. import login
 
 logger = logging.getLogger(__name__)
 
 
-@dataclasses.dataclass
-class Response:
-    version: str
-    status_code: int
-    reason: str
-    headers: dict[str, str]
-    body: bytes
-
-    @classmethod
-    async def deserialize(cls, sock: anet.base.Socket) -> Response:
-        try:
-            response = await anet.http.Response.deserialize(sock)
-        except anet.exceptions.Error as exc:
-            raise pfc.exceptions.UI("Unable to reach bastion") from exc
-        return Response(
-            version=response.version,
-            status_code=response.status_code,
-            reason=response.reason,
-            headers=response.headers,
-            body=response.body,
-        )
+def _jwt_audience(token: str) -> str:
+    payload = token.split(".")[1]
+    payload += "=" * (-len(payload) % 4)
+    claims = json.loads(base64.urlsafe_b64decode(payload))
+    return str(claims["aud"])
 
 
-async def _http_connect(
-    socket_path: str | None, url: str, prefix: str, hostname: str | None, token: str
-) -> anet.base.Socket:
-    u = urllib.parse.urlsplit(url)
-    connect_host = f"{prefix}.{u.hostname}"
-    scheme_port = 443 if u.scheme == "https" else 80 if u.scheme == "http" else None
-    port = u.port if u.port is not None else scheme_port
+def _frpc_binary() -> str:
+    frpc_resource = importlib.resources.files("provablyfine").joinpath("bin/frpc")
+    frpc_path = pathlib.Path(str(frpc_resource))
+    if frpc_path.is_file():
+        mode = frpc_path.stat().st_mode
+        if not (mode & stat.S_IXUSR):
+            try:
+                frpc_path.chmod(mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+            except OSError:
+                pass
+        if os.access(frpc_path, os.X_OK):
+            return str(frpc_path)
+    frpc_in_path = shutil.which("frpc")
+    if frpc_in_path:
+        return frpc_in_path
+    raise pfc.exceptions.UI("frpc not found: reinstall provablyfine or install frpc manually")
 
-    if u.scheme not in ["http", "https"]:
-        raise pfc.exceptions.UI(f"Unsupported url scheme={u.scheme}")
 
-    retval: anet.base.Socket
-    if socket_path is not None:
-        sock = anet.socket.socket(anet.socket.Family.UNIX, anet.socket.Type.STREAM)
-        await sock.connect(socket_path)
-    else:
-        sock = anet.socket.socket(anet.socket.Family.INET, anet.socket.Type.STREAM)
-        await sock.connect((connect_host, port))
-
-    if u.scheme == "https":
-        ssl_context = await anet.ssl.create_default_context()
-        # The call below is blocking which is "suboptimal"
-        # but the alternatives are not a lot of fun.
-        ssl_sock = await ssl_context.wrap_socket(sock, server_hostname=connect_host)
-        await ssl_sock.handshake()
-        retval = ssl_sock
-    elif u.scheme == "http":
-        retval = sock
-    else:
-        assert False
-
-    headers: dict[str, str] = {
-        "Host": f"{connect_host}:{port}",
-        "Proxy-Authorization": f"Bearer {token}",
+def _write_frpc_config(
+    path: str,
+    server_addr: str,
+    server_port: int,
+    transport_protocol: str,
+    user: str,
+    jwt_token: str,
+    local_port: int,
+) -> None:
+    config = {
+        "serverAddr": server_addr,
+        "serverPort": server_port,
+        "user": user,
+        "metadatas": {"jwt": jwt_token},
+        "transport": {
+            "protocol": transport_protocol,
+            "tcpMux": True,
+            "tcpMuxKeepaliveInterval": 5,
+            "dialServerKeepalive": 30,
+            "dialServerTimeout": 10,
+        },
+        "proxies": [
+            {
+                "name": "ssh",
+                "type": "tcpmux",
+                "multiplexer": "httpconnect",
+                "localIP": "127.0.0.1",
+                "localPort": local_port,
+                "customDomains": [f"{user}.{server_addr}"],
+            }
+        ],
     }
-    if hostname is not None:
-        headers["X-Pf-Host"] = hostname
-    request = anet.http.Request(
-        method="CONNECT",
-        resource_target=f"{connect_host}:{port}",
-        version="HTTP/1.1",
-        body=b"",
-        headers=headers,
-    )
-    await request.serialize(retval)
-    response = await Response.deserialize(retval)
-    if response.version != "HTTP/1.1":
-        raise pfc.exceptions.UI(f"Unable to reach bastion: version={response.version}")
-    if response.status_code != 200:
-        raise pfc.exceptions.UI(f"Unable to reach bastion: status_code={response.status_code}")
-    return retval
+    with open(path, "w") as f:
+        json.dump(config, f)
 
 
-async def _handle_channel(mux: anet.mux.Mux, local_id: int, local_port: int) -> None:
-    try:
-        local_reader, local_writer = await asyncio.open_connection("127.0.0.1", local_port)
-    except Exception as e:
-        logger.debug(f"Cannot connect to local port {local_port}: {e}")
-        await mux.channel_close(local_id)
-        return
+async def _manage_frpc(
+    sc: pfc.AsyncSessionClient,
+    bastion_url: str,
+    identity_name: str,
+    local_port: int,
+    stop_event: asyncio.Event,
+    frps_bind_port: int | None = None,
+) -> None:
+    u = urllib.parse.urlsplit(bastion_url)
+    server_addr = u.hostname or bastion_url
+    server_port = frps_bind_port or u.port or (443 if u.scheme == "https" else 80)
+    transport_protocol = "wss" if u.scheme == "https" else "tcp"
 
-    async def local_to_remote() -> None:
-        try:
-            while True:
-                data = await local_reader.read(4096)
-                if not data:
-                    break
-                await mux.channel_write(local_id, data)
-        except Exception:
-            pass
-        finally:
-            await mux.channel_close(local_id)
-
-    async def remote_to_local() -> None:
-        while True:
-            data = await mux.channel_read(local_id)
-            if data == b"":
-                break
-            local_writer.write(data)
-            await local_writer.drain()
-        try:
-            local_writer.write_eof()
-        except Exception:
-            pass
+    config_fd, config_path = tempfile.mkstemp(suffix=".json", prefix="frpc-")
+    os.close(config_fd)
 
     try:
-        await asyncio.gather(remote_to_local(), local_to_remote())
+        while not stop_event.is_set():
+            try:
+                token_response = await sc.get_self_token("bastion", hostname=identity_name)
+                frpc_user = _jwt_audience(token_response.token)
+            except Exception as e:
+                logger.warning(f"Failed to obtain frpc token for bastion={bastion_url}: {e}")
+                try:
+                    await asyncio.wait_for(stop_event.wait(), timeout=5)
+                except TimeoutError:
+                    pass
+                continue
+
+            _write_frpc_config(
+                config_path,
+                server_addr,
+                server_port,
+                transport_protocol,
+                frpc_user,
+                token_response.token,
+                local_port,
+            )
+
+            env = dict(os.environ)
+            for _var in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy", "ALL_PROXY", "all_proxy"):
+                env.pop(_var, None)
+            env["NO_PROXY"] = "*"
+            process = await asyncio.create_subprocess_exec(
+                _frpc_binary(),
+                "-c",
+                config_path,
+                env=env,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+            )
+            logger.info(f"frpc started for bastion={bastion_url} identity={identity_name}")
+
+            frpc_output: bytes = b""
+            try:
+                while not stop_event.is_set() and process.returncode is None:
+                    try:
+                        await asyncio.wait_for(stop_event.wait(), timeout=5)
+                    except TimeoutError:
+                        pass
+            finally:
+                if process.returncode is None:
+                    process.terminate()
+                    try:
+                        await asyncio.wait_for(process.wait(), timeout=5)
+                    except TimeoutError:
+                        process.kill()
+                        await process.wait()
+                if process.stdout is not None:
+                    frpc_output = await process.stdout.read()
+
+            if process.returncode != 0:
+                logger.warning(
+                    f"frpc exited rc={process.returncode} for bastion={bastion_url}:"
+                    f" {frpc_output.decode(errors='replace')!r}"
+                )
+            if not stop_event.is_set():
+                logger.info(f"frpc exited, restarting in 5s for bastion={bastion_url}")
+                try:
+                    await asyncio.wait_for(stop_event.wait(), timeout=5)
+                except TimeoutError:
+                    pass
     finally:
-        local_writer.close()
-
-
-async def register_async(socket_path: str | None, url: str, token: str, local_port: int) -> None:
-    sock = await _http_connect(socket_path, url, "register", None, token)
-    socket_name = f"bastion-server-{id(sock)}"
-    anet.sockets.store.add(socket_name, sock)
-    try:
-        server = anet.mux.Mux.create(socket_name)
-        background_tasks: set[asyncio.Task[None]] = set()
-        while True:
-            local_id = await server.channel_accept()
-            task = asyncio.create_task(_handle_channel(server, local_id, local_port))
-            background_tasks.add(task)
-            task.add_done_callback(background_tasks.discard)
-    except Exception:
-        pass
-    finally:
-        anet.sockets.store.remove(socket_name)
+        try:
+            os.unlink(config_path)
+        except OSError:
+            pass
 
 
 @client.ssh_utils.exception
 def _register_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-
     factory = client.Factory(c, timeout=args.timeout)
     login.ensure_session(c, factory)
 
-    async def _run():
+    async def _run() -> None:
         loop = asyncio.get_running_loop()
-
-        sc = client.Factory(c, timeout=args.timeout).session()
-
-        active_tasks: dict[int, asyncio.Task[None]] = {}
         stop_event = asyncio.Event()
-
-        def done_callback(bastion_id: int, task: asyncio.Task[None]) -> None:
-            active_tasks.pop(bastion_id, None)
 
         def signal_handler() -> None:
             stop_event.set()
@@ -173,29 +192,33 @@ def _register_function(args: argparse.Namespace) -> None:
         loop.add_signal_handler(signal.SIGTERM, signal_handler)
         loop.add_signal_handler(signal.SIGINT, signal_handler)
 
+        sc = client.Factory(c, timeout=args.timeout).async_session()
+        identity = await sc.get_self()
+        identity_name = identity.name
+
+        active_tasks: dict[int, asyncio.Task[None]] = {}
+
+        def done_callback(bastion_id: int, task: asyncio.Task[None]) -> None:
+            active_tasks.pop(bastion_id, None)
+
         while not stop_event.is_set():
             try:
-                bastions_response = sc.list_self_bastions()
+                bastions_response = await sc.list_self_bastions()
                 current_bastions = {b.id: b for b in bastions_response.bastions}
 
-                token_response = sc.get_self_token("bastion")
-                token = token_response.token
-
                 for bastion_id in list(active_tasks.keys()):
-                    if bastion_id in current_bastions:
-                        continue
-                    task = active_tasks.pop(bastion_id)
-                    task.cancel()
-                    print(f"Bastion {bastion_id} removed")
+                    if bastion_id not in current_bastions:
+                        task = active_tasks.pop(bastion_id)
+                        task.cancel()
 
                 for bastion_id, bastion in current_bastions.items():
                     if bastion_id in active_tasks:
                         continue
-
-                    task = asyncio.create_task(register_async(args.socket_path, bastion.url, token, args.port))
+                    task = asyncio.create_task(
+                        _manage_frpc(sc, bastion.url, identity_name, args.port, stop_event, args.frps_bind_port)
+                    )
                     active_tasks[bastion_id] = task
                     task.add_done_callback(functools.partial(done_callback, bastion_id))
-                    print(f"Registered bastion {bastion_id}")
             except Exception as e:
                 logger.debug(f"Poll error: {e}")
 
@@ -204,58 +227,108 @@ def _register_function(args: argparse.Namespace) -> None:
             except TimeoutError:
                 pass
 
+        for task in list(active_tasks.values()):
+            task.cancel()
+        if active_tasks:
+            await asyncio.gather(*active_tasks.values(), return_exceptions=True)
+
     asyncio.run(_run())
 
 
-async def connect_async(socket_path: str | None, url: str, token: str, hostname: str) -> None:
-    sock = await _http_connect(socket_path, url, "connect", hostname, token)
+async def connect_async(url: str, hostname: str, sc: pfc.AsyncSessionClient) -> None:
+    u = urllib.parse.urlsplit(url)
+    host = u.hostname or url
+    scheme_port = 443 if u.scheme == "https" else 80 if u.scheme == "http" else None
+    port = u.port if u.port is not None else scheme_port
+
+    if u.scheme not in ["http", "https"]:
+        raise pfc.exceptions.UI(f"Unsupported url scheme={u.scheme}")
+
+    ssl_context: ssl.SSLContext | None = None
+    if u.scheme == "https":
+        ssl_context = ssl.create_default_context()
+
+    token_response = await sc.get_self_token("bastion", hostname=hostname)
+    frpc_user = _jwt_audience(token_response.token)
+
+    reader, writer = await asyncio.open_connection(host, port, ssl=ssl_context)
+
+    connect_target = f"{frpc_user}.{host}:{port}"
+    await cli_http.Request(
+        method="CONNECT",
+        resource_target=connect_target,
+        version="HTTP/1.1",
+        headers={"Host": connect_target},
+        body=b"",
+    ).serialize(writer)
+
+    response = await cli_http.Response.deserialize(reader)
+    if response.version != "HTTP/1.1":
+        raise pfc.exceptions.UI(f"Unable to reach bastion: version={response.version}")
+    if response.status_code == 404:
+        raise pfc.exceptions.UI(f'"{hostname}" is not registered')
+    if response.status_code != 200:
+        raise pfc.exceptions.UI(f"Unable to reach bastion: status_code={response.status_code}")
 
     loop = asyncio.get_running_loop()
 
     stdin_reader = asyncio.StreamReader()
     await loop.connect_read_pipe(lambda: asyncio.StreamReaderProtocol(stdin_reader), sys.stdin.buffer)
-    stdout_writer, _ = await loop.connect_write_pipe(asyncio.BaseProtocol, sys.stdout.buffer)
+    stdout_transport, _ = await loop.connect_write_pipe(asyncio.BaseProtocol, sys.stdout.buffer)
 
     async def forward_stdin() -> None:
-        logger.debug("start forward stdin")
         while True:
             data = await stdin_reader.read(4096)
-            if data == b"":
+            if not data:
                 break
-            logger.debug(f"stdin: read={len(data)}")
-            await sock.send(data)
-            logger.debug(f"ch: write={len(data)}")
-        await sock.shutdown(anet.base.Shut.WR)
+            writer.write(data)
+            await writer.drain()
+        try:
+            writer.write_eof()
+        except (NotImplementedError, OSError):
+            writer.close()
 
     async def forward_stdout() -> None:
-        logger.debug("start forward stdout")
         while True:
-            data = await sock.recv(4096)
-            if data == b"":
+            data = await reader.read(4096)
+            if not data:
                 break
-            logger.debug(f"ch: read={len(data)}")
-            stdout_writer.write(data)
-            logger.debug(f"stdout: write={len(data)}")
+            stdout_transport.write(data)
 
-    task = asyncio.gather(forward_stdin(), forward_stdout())
+    async def _run_both() -> None:
+        await asyncio.gather(forward_stdin(), forward_stdout())
+
+    gather_task: asyncio.Task[None] = asyncio.create_task(_run_both())
 
     def signal_handler() -> None:
-        task.cancel()
+        gather_task.cancel()
 
     loop.add_signal_handler(signal.SIGTERM, signal_handler)
     loop.add_signal_handler(signal.SIGINT, signal_handler)
-    await task
+    try:
+        await gather_task
+    except asyncio.CancelledError:
+        pass
 
 
 def _connect_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
-
     factory = client.Factory(c, timeout=args.timeout)
     login.ensure_session(c, factory)
 
-    sc = client.Factory(c, timeout=args.timeout).session()
-    token_response = sc.get_self_token("bastion")
-    asyncio.run(connect_async(args.socket_path, args.url, token_response.token, args.hostname))
+    async def _run() -> None:
+        sc = factory.async_session()
+        await connect_async(args.url, args.hostname, sc)
+
+    asyncio.run(_run())
+
+
+def _get_token_function(args: argparse.Namespace) -> None:
+    c = client.Config.load(args.config)
+    factory = client.Factory(c, timeout=args.timeout)
+    login.ensure_session(c, factory)
+    token_response = factory.session().get_self_token("bastion", hostname=args.hostname)
+    print(token_response.token, end="")
 
 
 def add_subparser(parser: argparse.ArgumentParser) -> None:
@@ -271,14 +344,19 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
         help="Interval in seconds to poll for bastions",
     )
     register_parser.add_argument(
-        "--socket-path", default=None, help="Path to a UNIX socket to connect to the bastion. Used only for testing"
+        "--frps-bind-port",
+        type=int,
+        default=None,
+        help="frps control port for frpc (overrides the port in the bastion URL;"
+        " needed when the HTTP CONNECT port and the frpc control port differ)",
     )
     register_parser.set_defaults(func=_register_function)
 
     connect_parser = sub.add_parser("connect", help="Connect via bastion")
-    connect_parser.add_argument("--url", required=True, help="Bastion connect URL")
+    connect_parser.add_argument("--url", required=True, help="Bastion URL")
     connect_parser.add_argument("--hostname", required=True, help="Target hostname")
-    connect_parser.add_argument(
-        "--socket-path", default=None, help="Path to a UNIX socket to connect to the bastion. Used only for testing"
-    )
     connect_parser.set_defaults(func=_connect_function)
+
+    get_token_parser = sub.add_parser("get-token", help="Print a bastion JWT to stdout")
+    get_token_parser.add_argument("--hostname", required=True, help="Identity hostname")
+    get_token_parser.set_defaults(func=_get_token_function)

@@ -60,11 +60,14 @@ class AsyncSessionClient:
     ) -> schemas.SshHostCertificateResponse:
         return await self._run(lambda: self._inner.sign_host_certificates(public_keys))
 
+    async def get_self(self) -> schemas.Identity:
+        return await self._run(self._inner.get_self)
+
     async def list_self_bastions(self) -> schemas.IdentitySelfBastionListResponse:
         return await self._run(self._inner.list_self_bastions)
 
-    async def get_self_token(self, service: str) -> schemas.IdentitySelfTokenResponse:
-        return await self._run(lambda: self._inner.get_self_token(service))
+    async def get_self_token(self, service: str, hostname: str) -> schemas.IdentitySelfTokenResponse:
+        return await self._run(lambda: self._inner.get_self_token(service, hostname))
 
     async def list_tags(
         self,

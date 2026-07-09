@@ -2,6 +2,8 @@
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build.hooks.custom]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/provablyfine"]
 
@@ -18,7 +20,7 @@ description = "Centralized Access-Control for SSH"
 readme = "README.md"
 version = "0.4.0"
 license = "AGPL-3.0-only"
-license-files = ["LICENSE.md"]
+license-files = ["LICENSE.md", "src/provablyfine/licenses/frpc-*"]
 keywords = ["SSH", "access-control", "bastion"]
 classifiers = [
   "Development Status :: 3 - Alpha",
@@ -62,7 +64,6 @@ Issues = "https://github.com/provablyfine/pf/issues"
 pf = "provablyfine.cli.pf.main:pf"
 pfa = "provablyfine.cli.pfa.main:pfa"
 pfat = "provablyfine.tui.app:pfat"
-pf-bastion = "provablyfine.bastion.server:run"
 pf-api-rotate = "provablyfine.api.rotate:main"
 
 [dependency-groups]
@@ -139,6 +140,7 @@ select = ["E", "F", "I", "UP", "RUF", "S"]
 "build/**" = []
 "**" = ["S101", "S110", "S606"]
 "tests/**" = ["S"]
+"hatch_build.py" = ["S"]
 #"**/conftest.py" = ["S101"]
 
 [tool.mypy]

@@ -1,48 +1,67 @@
 Initialize server and login
   $ bash $TESTDIR/fixture.sh
   .* (re)
-  $ . $TESTDIR/bastion-fixture.sh
 
-Create bastion resource
-  $ pfa -c config.json bastion create --url http://localhost:$BASTION_PORT
+Create admin objects
+  $ pfa -c config.json tag create -n id -v device
+  $ DEVICE_TAG_ID=$(pfa -c config.json tag list -n id -v device -q)
+  $ pfa -c config.json role create -n role
+  $ ROLE_ID=$(pfa -c config.json role list -n role -q)
+  $ pfa -c config.json grant ssh-shell --tag id=device --username root | pfa -c config.json role grant -i $ROLE_ID --add
+  $ pfa -c config.json grant ssh-shell --tag id=device --username alice | pfa -c config.json role grant -i $ROLE_ID --add
 
-Provision new host
-  $ pfa -c config.json identity create -n host
+Create bastion
+  $ pfa -c config.json bastion create --url http://127.0.0.1:$FRPS_CONNECT_PORT
+  $ BASTION_ID=$(pfa -c config.json bastion list -q)
+
+Provision host identity
+  $ pfa -c config.json identity create -n host -t $DEVICE_TAG_ID
   $ HOST_ID=$(pfa -c config.json identity list -n host -q)
   $ INVITATION=$(pfa -c config.json identity invite --manual -i $HOST_ID)
   $ echo $INVITATION
   .* (re)
 
-New host starts
+Host starts
   $ ssh-keygen -t ed25519 -f host-account -N "" > /dev/null
-  $ pf -c host.json accept --invitation=$INVITATION  --key host-account
-  $ pf -c host.json login
+  $ pf -c host.json accept --invitation=$INVITATION --key host-account
+  $ ssh-keygen -t ed25519 -f host-session -N "" > /dev/null
+  $ pf -c host.json login --session-key host-session
 
-Host starts echo server
-  $ ECHO_PORT=$(start_echo_server)
-  $ ECHO_PID=$(cat echo-server.pid)
+Host SSH setup
+  $ pf -c host.json openssh sign-host --public-key=$SSHD_KEYS_DIRECTORY/ssh_host_rsa_key.pub --public-key=$SSHD_KEYS_DIRECTORY/ssh_host_ecdsa_key.pub --public-key=$SSHD_KEYS_DIRECTORY/ssh_host_ed25519_key.pub
+  $ pf -c host.json openssh user-trusted-keys > $SSHD_KEYS_DIRECTORY/user-ca.pub
+  $ podman exec $SSHD_CONTAINER_ID pkill -HUP sshd
 
-Host registers with bastion
-  $ pf -c host.json bastion register -p $ECHO_PORT > register.log 2>&1 &
-  $ BASTION_REGISTER_PID=$!
-
-Provision new user
+Provision user identity
   $ pfa -c config.json identity create -n user
   $ USER_ID=$(pfa -c config.json identity list -n user -q)
+  $ pfa -c config.json role member -i $ROLE_ID -a user
   $ INVITATION=$(pfa -c config.json identity invite --manual -i $USER_ID)
   $ echo $INVITATION
   .* (re)
 
-User accepts invite and logs in
+User starts
   $ ssh-keygen -t ed25519 -f user-account -N "" > /dev/null
   $ pf -c user.json accept --invitation=$INVITATION --key user-account
-  $ pf -c user.json login
-  $ sleep 1
-  $ echo "hello" | timeout 2 pf -c user.json bastion connect --url http://localhost:$BASTION_PORT --host host
-  hello
-#  $ cat register.log
-#  $ cat echo-server.log
+  $ ssh-keygen -t ed25519 -f user-session -N "" > /dev/null
+  $ pf -c user.json login --session-key user-session
+
+Host registers with bastions
+  $ pf -c host.json bastion register --port $SSHD_PORT --poll-interval 1 --frps-bind-port $FRPS_BIND_PORT >/dev/null 2>&1 &
+  $ REGISTER_PID=$!
+
+Wait for frpc to connect
+  $ sleep 2
+
+Test get-token
+  $ pf -c host.json bastion get-token --hostname host
+  .* (re)
+
+User connects via bastion
+  $ pf -c user.json ssh -n root@host "whoami"
+  root
+  $ pf -c user.json ssh -n alice@host "whoami"
+  alice
 
 Cleanup
-  $ kill -TERM $BASTION_REGISTER_PID 2>/dev/null || true
-  $ kill -TERM $ECHO_PID 2>/dev/null || true
+  $ kill $REGISTER_PID 2>/dev/null; true

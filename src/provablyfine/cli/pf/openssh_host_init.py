@@ -18,6 +18,7 @@ def _write_file_atomic(filepath: str, content: bytes | str, mode: str = "wb") ->
     try:
         with os.fdopen(fd, mode) as f:
             f.write(content)
+        os.chmod(tmp_path, 0o644)
         os.rename(tmp_path, filepath)
     except Exception:
         try:
