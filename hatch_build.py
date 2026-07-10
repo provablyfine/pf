@@ -86,5 +86,8 @@ class CustomBuildHook(hatchling.builders.hooks.plugin.interface.BuildHookInterfa
         dest.chmod(dest.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
         self.app.display_info(f"Bundled frpc {FRPC_VERSION} for {target}")
 
+        # frpc is gitignored; force hatchling to include it when building directly from source
+        build_data["artifacts"].append(str(dest.relative_to(self.root)))
+
         if target in WHEEL_TAGS:
             build_data["tag"] = f"py3-none-{WHEEL_TAGS[target]}"
