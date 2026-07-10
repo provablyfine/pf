@@ -1,3 +1,10 @@
+## 0.6.0 - 2026-07-10
+
+### Fixed
+
+- Bundle frpc binary and licence in release wheels ([#39](https://github.com/provablyfine/pf/issues/39))
+
+
 ## 0.5.0 - 2026-07-10
 
 ### Fixed
