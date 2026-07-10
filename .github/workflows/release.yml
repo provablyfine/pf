@@ -88,6 +88,19 @@ jobs:
           name: wheel-client
           path: dist/
 
+  build-sdist:
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Build provablyfine sdist
+        run: uv build --package provablyfine --sdist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdist-provablyfine
+          path: dist/*.tar.gz
+
   build-wheels:
     needs: [lint, test]
     strategy:
@@ -106,7 +119,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
       - name: Build provablyfine wheel
-        run: uv build --package provablyfine
+        run: uv build --package provablyfine --wheel
         env:
           HATCH_TARGET_ARCH: ${{ matrix.arch }}
       - uses: actions/upload-artifact@v4
@@ -115,13 +128,13 @@ jobs:
           path: dist/*.whl
 
   publish-pypi:
-    needs: [build-client, build-wheels, docs]
+    needs: [build-client, build-sdist, build-wheels, docs]
     runs-on: ubuntu-latest
     environment: pypi
     steps:
       - uses: actions/download-artifact@v4
         with:
-          pattern: wheel-*
+          pattern: '{wheel-*,sdist-*}'
           merge-multiple: true
           path: dist/
       - name: Publish to PyPI
@@ -134,7 +147,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          pattern: wheel-*
+          pattern: '{wheel-*,sdist-*}'
           merge-multiple: true
           path: dist/
       - name: Extract release notes
