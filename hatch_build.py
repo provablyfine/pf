@@ -21,8 +21,8 @@ FRPC_SHA256: dict[str, str] = {
 }
 
 WHEEL_TAGS: dict[str, str] = {
-    "linux-amd64": "linux_x86_64",
-    "linux-arm64": "linux_aarch64",
+    "linux-amd64": "manylinux_2_17_x86_64",
+    "linux-arm64": "manylinux_2_17_aarch64",
     "darwin-amd64": "macosx_10_15_x86_64",
     "darwin-arm64": "macosx_11_0_arm64",
 }
