@@ -80,6 +80,7 @@ class CustomBuildHook(hatchling.builders.hooks.plugin.interface.BuildHookInterfa
                     lic = tf.getmember(f"frp_{FRPC_VERSION}_{os_name}_{arch}/{name}")
                     lic.name = f"frpc-{name}"
                     tf.extract(lic, path=licenses_dir, filter="data")
+                    build_data["artifacts"].append(str((licenses_dir / lic.name).relative_to(self.root)))
                 except KeyError:
                     pass
 
