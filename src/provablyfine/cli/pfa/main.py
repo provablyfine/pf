@@ -45,12 +45,6 @@ def pfa() -> None:
     common.add_common_args(parser)
     subparsers = parser.add_subparsers(required=True, dest="command", metavar="command")
 
-    version_parser = subparsers.add_parser("version", help="Print current version number")
-    version_parser.set_defaults(func=common.version_function)
-
-    license_parser = subparsers.add_parser("license", help="Show license information")
-    common.setup_license_subparser(license_parser)
-
     accept_parser = subparsers.add_parser("accept", help="Accept an invitation")
     common.setup_accept_subparser(accept_parser)
 
@@ -95,6 +89,12 @@ def pfa() -> None:
 
     ping_parser = subparsers.add_parser("ping", help="Ping the server")
     common.setup_ping_subparser(ping_parser)
+
+    version_parser = subparsers.add_parser("version", help="Print current version number")
+    version_parser.set_defaults(func=common.version_function)
+
+    license_parser = subparsers.add_parser("license", help="Show license information")
+    common.setup_license_subparser(license_parser)
 
     args = parser.parse_args()
 
