@@ -20,6 +20,8 @@ markdown_extensions:
   - admonition
   - pymdownx.highlight
   - pymdownx.superfences
+  - zensical.extensions.macros:
+      module_name: zensical_macros
 
 nav:
   - Home: index.md

@@ -10,8 +10,8 @@ $ pipx install provablyfine
 
 And then, check that it has been installed successfully:
 ```console
-$ pf version
-0.2.0
+$ pf --version
+{{pf_version}}
 ```
 
 ## Create your first tenant
@@ -21,10 +21,6 @@ The fastest way to create your first tenant is to use the free tier of our
 **Add tenant** and choose a tenant name that is available.
 
 The list of tenants should display the new tenant!
-
-!!! note
-    If you are using your own internal pf deployment, ask your pf administrator
-    to create the tenant and share with you the associated initialization url.
 
 ## Connect with your new tenant
 
@@ -57,8 +53,8 @@ pong
 
 ## Register a new server
 
-If you have a recent-enough (XXX) OpenSSH service installed on your server, you can register
-it within your tenant.
+If you have an OpenSSH (>= 7.4, released in december 2016) service installed on your server,
+you can register it within your tenant.
 
 ### Create a new host identity
 
@@ -81,9 +77,20 @@ authentication system. Run this command on the server:
 $ pf openssh host-init --invitation $INVITATION_URL | sudo bash -s
 ```
 
+## Grant yourself access to the new host
+
+We create a role, grant ssh permissions to all hosts to that role, and we add
+ourselves to that role:
+```
+$ pf role create -n users
+$ USERS_ROLE_ID=$(pf role list -n users -q)
+$ pfa grant ssh-shell --username root --tag id=device | pfa role grant -i $USERS_ROLE_ID --set
+$ pfa role member -i $USERS_ROLE_ID -a $(pfa whoami)
+```
+
 ## Connect to your new host
 
-The `pf ssh` command is compatible with the OpenSSH `ssh` binary:
+The `pf ssh` command is compatible with the OpenSSH `ssh` binary CLI:
 ```console
 $ pf ssh root@demo echo hello
 hello
