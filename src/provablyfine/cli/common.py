@@ -187,7 +187,7 @@ def _login_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     sc = client.Factory(c, timeout=args.timeout)
     auth_name = args.auth or c.auth_name or "default"
-    login.login(c, sc, auth_name, session_key_path=args.session_key)
+    login.login(c, sc, auth_name, session_key_path=args.session_key, role=args.role)
     c.save(args.config)
 
 
@@ -198,6 +198,7 @@ def setup_login_subparser(parser: argparse.ArgumentParser) -> None:
         default=None,
         help="Session key file. If none is provided, a new one is generated in SSH agent.",
     )
+    parser.add_argument("-r", "--role", default=None, help="Role name or ID to select after login")
     parser.set_defaults(func=_login_function)
 
 

@@ -69,8 +69,23 @@ def has_valid_session(c: client.Config) -> bool:
     return browser_login.has_valid_session(c)
 
 
-def _select_role(roles: list[pfc.schemas.LoginRoleInfo], session_client: pfc.SessionClient) -> None:
+def _select_role(
+    roles: list[pfc.schemas.LoginRoleInfo],
+    session_client: pfc.SessionClient,
+    role: str | None = None,
+) -> None:
     if len(roles) == 0:
+        return
+    if role is not None:
+        try:
+            role_id = int(role)
+            matched = next((r for r in roles if r.id == role_id), None)
+        except ValueError:
+            matched = next((r for r in roles if r.name == role), None)
+        if matched is None:
+            available = ", ".join(r.name for r in roles)
+            raise pfc.exceptions.UI(f"Role {role!r} not found. Available: {available}")
+        session_client.update_session(matched.id)
         return
     if len(roles) == 1:
         session_client.update_session(roles[0].id)
@@ -120,7 +135,9 @@ def ensure_session(c: client.Config, factory: client.Factory) -> None:
         )
 
 
-def http_sig_login(c: client.Config, sc: client.Factory, session_key_path: str | None = None) -> None:
+def http_sig_login(
+    c: client.Config, sc: client.Factory, session_key_path: str | None = None, role: str | None = None
+) -> None:
     """HTTP signature login. Mutates c with new session key fields."""
     if c.account_key_fingerprint is not None and not _agent_has_key(c.account_key_fingerprint):
         _agent_load_key(c.account_key_fingerprint)
@@ -132,7 +149,7 @@ def http_sig_login(c: client.Config, sc: client.Factory, session_key_path: str |
         c.session_key_file = session_key_path
         c.session_key_pem = None
         result = sc.account_with_session_key(c, session_key).login_http_sig(session_key.public().to_dict())
-        _select_role(result.roles, sc.session_with_private_key(session_key))
+        _select_role(result.roles, sc.session_with_private_key(session_key), role)
         return
 
     try:
@@ -141,7 +158,7 @@ def http_sig_login(c: client.Config, sc: client.Factory, session_key_path: str |
         c.session_key_fingerprint = fingerprint
         c.session_key_file = None
         c.session_key_pem = None
-        _select_role(result.roles, sc.session_with_private_key(session_key))
+        _select_role(result.roles, sc.session_with_private_key(session_key), role)
         return
     except pfc.exceptions.UI:
         pass
@@ -158,10 +175,10 @@ def http_sig_login(c: client.Config, sc: client.Factory, session_key_path: str |
     c.session_key_fingerprint = None
     c.session_key_file = None
     c.session_key_pem = pem
-    _select_role(result.roles, sc.session_with_private_key(session_key))
+    _select_role(result.roles, sc.session_with_private_key(session_key), role)
 
 
-def oidc_login(c: client.Config, sc: client.Factory, auth_name: str) -> None:
+def oidc_login(c: client.Config, sc: client.Factory, auth_name: str, role: str | None = None) -> None:
     """OIDC login. Mutates c with new session key fields."""
     auth_public = sc.public().get_public_auth(auth_name, "cli")
     if not isinstance(auth_public.config, pfc.schemas.OidcConfig):
@@ -176,10 +193,10 @@ def oidc_login(c: client.Config, sc: client.Factory, auth_name: str) -> None:
     c.session_key_fingerprint = session_fingerprint
     c.session_key_file = None
     c.session_key_pem = None
-    _select_role(result.roles, sc.session_with_private_key(session_key))
+    _select_role(result.roles, sc.session_with_private_key(session_key), role)
 
 
-def oidc_device_code_login(c: client.Config, sc: client.Factory, auth_name: str) -> None:
+def oidc_device_code_login(c: client.Config, sc: client.Factory, auth_name: str, role: str | None = None) -> None:
     """OIDC device code login. Mutates c with new session key fields."""
     auth_public = sc.public().get_public_auth(auth_name, "cli")
     if not isinstance(auth_public.config, pfc.schemas.OidcDeviceCodeConfig):
@@ -192,18 +209,24 @@ def oidc_device_code_login(c: client.Config, sc: client.Factory, auth_name: str)
     c.session_key_fingerprint = session_fingerprint
     c.session_key_file = None
     c.session_key_pem = None
-    _select_role(result.roles, sc.session_with_private_key(session_key))
+    _select_role(result.roles, sc.session_with_private_key(session_key), role)
 
 
-def login(c: client.Config, sc: client.Factory, auth_name: str, session_key_path: str | None = None) -> None:
+def login(
+    c: client.Config,
+    sc: client.Factory,
+    auth_name: str,
+    session_key_path: str | None = None,
+    role: str | None = None,
+) -> None:
     """Perform login based on server auth config. Mutates c with new session key fields."""
     auth_public = sc.public().get_public_auth(auth_name, "cli")
     match auth_public.config.type:
         case "http_sig":
-            http_sig_login(c, sc, session_key_path)
+            http_sig_login(c, sc, session_key_path, role)
         case "oidc":
-            oidc_login(c, sc, auth_name)
+            oidc_login(c, sc, auth_name, role)
         case "oidc-device-code":
-            oidc_device_code_login(c, sc, auth_name)
+            oidc_device_code_login(c, sc, auth_name, role)
         case _:
             raise pfc.exceptions.UI(f"Unsupported auth type: {auth_public.config.type}")
