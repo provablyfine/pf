@@ -251,7 +251,7 @@ def test_full_oidc_login_flow(oidc_env: OidcEnv, monkeypatch) -> None:
 
         threading.Thread(target=_fetch, daemon=True).start()
 
-    monkeypatch.setattr("provablyfine.browser_login.webbrowser.open", fake_browser)
+    monkeypatch.setattr("provablyfine.browser_login.open_browser", fake_browser)
 
     # Call the full OIDC login flow
     provablyfine.cli.login.oidc_login(oidc_env.config, oidc_env.sc, "oidc-test")
@@ -273,7 +273,7 @@ def test_full_oidc_login_flow_callback_error(oidc_env: OidcEnv, monkeypatch) -> 
 
         threading.Thread(target=_fetch, daemon=True).start()
 
-    monkeypatch.setattr("provablyfine.browser_login.webbrowser.open", fake_browser)
+    monkeypatch.setattr("provablyfine.browser_login.open_browser", fake_browser)
 
     # Should raise because callback never receives a code
     with pytest.raises(pfc.exceptions.UI, match="did not receive an authorization code"):
@@ -385,7 +385,7 @@ def test_device_code_endpoint_expired_token(oidc_device_code_env: OidcDeviceCode
 
 def test_full_device_code_login_flow(oidc_device_code_env: OidcDeviceCodeEnv, monkeypatch: pytest.MonkeyPatch) -> None:
     """Complete device code login flow: device auth → poll → user completes → token → server login."""
-    monkeypatch.setattr("provablyfine.browser_login.webbrowser.open", lambda url: None)
+    monkeypatch.setattr("provablyfine.browser_login.open_browser", lambda url: None)
     result: list[str] = []
     error: list[Exception] = []
 

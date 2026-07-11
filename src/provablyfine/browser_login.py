@@ -1,6 +1,8 @@
 import hashlib
 import http.server
 import secrets
+import subprocess
+import sys
 import time
 import typing
 import urllib.parse
@@ -10,6 +12,20 @@ import provablyfine_client as pfc
 import requests
 
 from . import base64url, client, jwk, ssh
+
+
+def open_browser(url: str) -> None:
+    if sys.platform == "darwin":
+        cmd = ["open", url]
+    elif sys.platform.startswith("linux"):
+        cmd = ["xdg-open", url]
+    else:
+        webbrowser.open(url)
+        return
+    try:
+        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  # noqa: S603
+    except FileNotFoundError:
+        webbrowser.open(url)
 
 
 def has_valid_session(config: client.Config) -> bool:
@@ -73,7 +89,7 @@ def oidc_flow(oidc_config: pfc.schemas.OidcConfig) -> str:
         f"&response_type=code&scope=openid+email"
         f"&code_challenge={urllib.parse.quote(code_challenge)}&code_challenge_method=S256"
     )
-    webbrowser.open(auth_url)
+    open_browser(auth_url)
 
     server.handle_request()
     server.server_close()
@@ -131,7 +147,7 @@ def oidc_device_code_flow(
     else:
         print(f"Open {verification_uri}")
         print(f"Enter code: {user_code}")
-        webbrowser.open(verification_uri)
+        open_browser(verification_uri)
 
     token_data: dict[str, str] = {
         "grant_type": "urn:ietf:params:oauth:grant-type:device_code",

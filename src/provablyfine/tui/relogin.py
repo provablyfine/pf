@@ -1,6 +1,5 @@
 import threading
 import typing
-import webbrowser
 
 import provablyfine_client as pfc
 import textual
@@ -234,7 +233,7 @@ class ReloginScreen(base.Screen):
                 case "oidc-device-code":
 
                     def _show(user_code: str, uri: str) -> None:
-                        webbrowser.open(uri)
+                        browser_login.open_browser(uri)
 
                         def _update() -> None:
                             self.query_one("#status", textual.widgets.Label).update(f"Visit {uri}\nCode: {user_code}")
