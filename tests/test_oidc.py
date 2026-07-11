@@ -69,7 +69,11 @@ def oidc_env(api, mock_oidc, ssh_agent, tmp_path) -> typing.Iterator[OidcEnv]:
         session_key_file.write_bytes(session_key_obj.to_pem())
         session_fingerprint = str(session_key_file)  # Full path for http_sig_login
 
-        sc.account(str(account_key_file), session_fingerprint).login_http_sig(session_key_obj.public().to_dict())
+        result = sc.account(str(account_key_file), session_fingerprint).login_http_sig(
+            session_key_obj.public().to_dict()
+        )
+        if result.roles:
+            sc.session_with_private_key(session_key_obj).update_session(result.roles[0].id)
 
         # Update config to include session key so subsequent calls work
         config = provablyfine.client.Config(
@@ -314,7 +318,11 @@ def oidc_device_code_env(api, mock_oidc, ssh_agent, tmp_path) -> typing.Iterator
         session_key_file.write_bytes(session_key_obj.to_pem())
         session_fingerprint = str(session_key_file)
 
-        sc.account(str(account_key_file), session_fingerprint).login_http_sig(session_key_obj.public().to_dict())
+        result = sc.account(str(account_key_file), session_fingerprint).login_http_sig(
+            session_key_obj.public().to_dict()
+        )
+        if result.roles:
+            sc.session_with_private_key(session_key_obj).update_session(result.roles[0].id)
 
         config = provablyfine.client.Config(
             directory_url=config.directory_url,

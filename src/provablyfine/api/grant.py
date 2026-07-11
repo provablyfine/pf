@@ -464,8 +464,10 @@ class Grants:
         identity_boundaries = ctx.app_db.identity_boundary.read_all(identity_id=identity.id)
         assert len(identity_boundaries) > 0
         boundaries = model.boundary.read_all(id=[i.boundary_id for i in identity_boundaries])
-        member_of = ctx.app_db.role_member.read_all(identity_id=identity.id)
-        roles = model.role.read_all(id=list(set(member.role_id for member in member_of)))
+        if ctx.active_role_id is None:
+            roles: list[model.role.Role] = []
+        else:
+            roles = model.role.read_all(id=[ctx.active_role_id])
         return Grants(boundaries, roles)
 
     def boundary(self, boundary_id: int | None) -> BoundaryChecker:

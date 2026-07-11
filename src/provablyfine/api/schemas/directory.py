@@ -19,6 +19,7 @@ class DirectoryReadResponse(base.APIBase):
     tenant: str
     audit_log: str
     ping: str
+    session: str
 
 
 class InitializeResponse(base.APIBase):
@@ -31,3 +32,12 @@ class AcceptInvitationRequest(base.APIBase):
 
 class LoginRequest(base.APIBase):
     session_public_key: jwk.PublicJWK
+
+
+class LoginRoleInfo(base.APIBase):
+    id: int
+    name: str
+
+
+class LoginResponse(base.APIBase):
+    roles: list[LoginRoleInfo]

@@ -99,10 +99,10 @@ def update_endpoint(role_id: int, data: schemas.role.RoleUpdateRequest) -> schem
         role_update["description"] = data.description
     if "grant_list" in data.model_fields_set:
         assert data.grant_list is not None  # pydantic validation guarantees this
-        if ctx.identity_id in role.member_id_list:
+        if ctx.active_role_id == role.id:
             raise responses.ProblemHTTPException(
                 responses.problem_response(
-                    status_code=403, title="Not allowed to update grants on a role that applies to self"
+                    status_code=403, title="Not allowed to update grants on the active session role"
                 )
             )
         role_update["grant_list"] = [converters.grant_from_schema(converter, g) for g in data.grant_list]
@@ -121,9 +121,9 @@ def update_endpoint(role_id: int, data: schemas.role.RoleUpdateRequest) -> schem
         current_member_id_list = set(role.member_id_list)
         deleted_member_id_list = current_member_id_list.difference(new_member_id_list)
         added_member_id_list = new_member_id_list.difference(current_member_id_list)
-        if ctx.identity_id in deleted_member_id_list:
+        if ctx.active_role_id == role.id and ctx.identity_id in deleted_member_id_list:
             raise responses.ProblemHTTPException(
-                responses.problem_response(status_code=403, title="Not allowed to remove self from role")
+                responses.problem_response(status_code=403, title="Not allowed to remove self from active session role")
             )
         role_update["added_member_id_list"] = list(added_member_id_list)
         role_update["deleted_member_id_list"] = list(deleted_member_id_list)

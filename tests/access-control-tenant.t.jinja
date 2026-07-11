@@ -7,8 +7,8 @@ Create role and user1
   $ ROLE_ID=$(pfa -c config.json role list -n role -q)
   $ pfa -c config.json identity create -n user1
   $ USER1_ID=$(pfa -c config.json identity list -n user1 -q)
-  $ INVITATION=$(pfa -c config.json identity invite -i $USER1_ID --manual)
   $ pfa -c config.json role member -i $ROLE_ID -a user1
+  $ INVITATION=$(pfa -c config.json identity invite -i $USER1_ID --manual)
   $ ssh-keygen -t ed25519 -f user1 -N "" > /dev/null
   $ pf -c user1.json accept --invitation=$INVITATION --key user1
   $ ssh-keygen -t ed25519 -f user1-session -N "" > /dev/null

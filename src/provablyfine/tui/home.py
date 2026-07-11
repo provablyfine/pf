@@ -65,6 +65,9 @@ class HomeScreen(base.Screen):
         _, make_screen = _RESOURCES[index]
         self.app.push_screen(make_screen(self._auth))
 
+    def refresh_auth(self, auth: pfc.AsyncSessionClient) -> None:
+        self._auth = auth
+
     @textual.on(textual.widgets.ListView.Selected)
     def _on_selected(self, event: textual.widgets.ListView.Selected) -> None:
         self.action_select()

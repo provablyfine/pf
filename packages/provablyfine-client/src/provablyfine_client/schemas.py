@@ -64,6 +64,15 @@ def _permission_list(val: list[typing.Any] | None, name: str, f: typing.Callable
     return [f"{name}:{','.join(f(i) for i in val)}"]
 
 
+class LoginRoleInfo(_Base):
+    id: int
+    name: str
+
+
+class LoginResponse(_Base):
+    roles: list[LoginRoleInfo]
+
+
 class Tag(_Base):
     id: int
     name: str

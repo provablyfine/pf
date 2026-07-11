@@ -10,6 +10,8 @@ _kek_var: contextvars.ContextVar[cryptography.fernet.Fernet | None] = contextvar
 _config_var: contextvars.ContextVar[config_module.Config | None] = contextvars.ContextVar("config", default=None)
 _app_db_var: contextvars.ContextVar[app_db_module.AppDb | None] = contextvars.ContextVar("app_db", default=None)
 _identity_id_var: contextvars.ContextVar[int | None] = contextvars.ContextVar("identity_id", default=None)
+_active_role_id_var: contextvars.ContextVar[int | None] = contextvars.ContextVar("active_role_id", default=None)
+_session_key_id_var: contextvars.ContextVar[str | None] = contextvars.ContextVar("session_key_id", default=None)
 _tenant_id_var: contextvars.ContextVar[int | None] = contextvars.ContextVar("tenant_id", default=None)
 _tenant_name_var: contextvars.ContextVar[str | None] = contextvars.ContextVar("tenant_name", default=None)
 
@@ -38,6 +40,14 @@ class RequestContext:
     @property
     def identity_id(self) -> int | None:
         return _identity_id_var.get()
+
+    @property
+    def active_role_id(self) -> int | None:
+        return _active_role_id_var.get()
+
+    @property
+    def session_key_id(self) -> str | None:
+        return _session_key_id_var.get()
 
     @contextlib.contextmanager
     def set_kek(self, kek: cryptography.fernet.Fernet):
@@ -74,6 +84,23 @@ class RequestContext:
             yield
         finally:
             _identity_id_var.set(None)
+
+    @contextlib.contextmanager
+    def set_active_role_id(self, role_id: int | None):
+        token = _active_role_id_var.set(role_id)
+        try:
+            yield
+        finally:
+            _active_role_id_var.reset(token)
+
+    @contextlib.contextmanager
+    def set_session_key_id(self, key_id: str):
+        assert _session_key_id_var.get() is None
+        _session_key_id_var.set(key_id)
+        try:
+            yield
+        finally:
+            _session_key_id_var.set(None)
 
     @property
     def tenant_id(self) -> int:

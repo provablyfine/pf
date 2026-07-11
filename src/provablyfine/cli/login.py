@@ -69,6 +69,24 @@ def has_valid_session(c: client.Config) -> bool:
     return browser_login.has_valid_session(c)
 
 
+def _select_role(roles: list[pfc.schemas.LoginRoleInfo], session_client: pfc.SessionClient) -> None:
+    if len(roles) == 0:
+        return
+    if len(roles) == 1:
+        session_client.update_session(roles[0].id)
+        return
+    for i, r in enumerate(roles, 1):
+        print(f"  {i}. {r.name}")
+    raw = input(f"Select role [1-{len(roles)}]: ").strip()
+    try:
+        idx = int(raw)
+        if not 1 <= idx <= len(roles):
+            raise ValueError
+    except ValueError:
+        raise pfc.exceptions.UI(f"Invalid choice: {raw!r}")
+    session_client.update_session(roles[idx - 1].id)
+
+
 def ensure_session(c: client.Config, factory: client.Factory) -> None:
     """Attempt an ephemeral http_sig login using the on-disk account key.
 
@@ -85,11 +103,21 @@ def ensure_session(c: client.Config, factory: client.Factory) -> None:
     with open(key_file, "rb") as f:
         account_key = client.ssh_utils.load_private_key(f.read())
     session_key = jwk.Private.generate_ed25519()
-    factory.account_from_keys(account_key, session_key).login_http_sig(session_key.public().to_dict())
+    result = factory.account_from_keys(account_key, session_key).login_http_sig(session_key.public().to_dict())
     c.session_key_pem = session_key.to_openssh(passphrase=None).decode()
     c.session_key_fingerprint = None
     c.session_key_file = None
     c.ephemeral = True
+    session_client = factory.session_with_private_key(session_key)
+    if c.role_id is not None:
+        session_client.update_session(c.role_id)
+    elif len(result.roles) == 1:
+        session_client.update_session(result.roles[0].id)
+    elif len(result.roles) > 1:
+        raise pfc.exceptions.UI(
+            "Unable to auto-select role for headless login: "
+            f"{len(result.roles)} roles available. Set role_id in config."
+        )
 
 
 def http_sig_login(c: client.Config, sc: client.Factory, session_key_path: str | None = None) -> None:
@@ -103,15 +131,17 @@ def http_sig_login(c: client.Config, sc: client.Factory, session_key_path: str |
         c.session_key_fingerprint = None
         c.session_key_file = session_key_path
         c.session_key_pem = None
-        sc.account_with_session_key(c, session_key).login_http_sig(session_key.public().to_dict())
+        result = sc.account_with_session_key(c, session_key).login_http_sig(session_key.public().to_dict())
+        _select_role(result.roles, sc.session_with_private_key(session_key))
         return
 
     try:
         session_key, fingerprint = browser_login.generate_session_key()
-        sc.account_with_session_key(c, session_key).login_http_sig(session_key.public().to_dict())
+        result = sc.account_with_session_key(c, session_key).login_http_sig(session_key.public().to_dict())
         c.session_key_fingerprint = fingerprint
         c.session_key_file = None
         c.session_key_pem = None
+        _select_role(result.roles, sc.session_with_private_key(session_key))
         return
     except pfc.exceptions.UI:
         pass
@@ -124,10 +154,11 @@ def http_sig_login(c: client.Config, sc: client.Factory, session_key_path: str |
 
     session_key = jwk.Private.generate_ed25519()
     pem = session_key.to_openssh(passphrase=None).decode()
-    sc.account_with_session_key(c, session_key).login_http_sig(session_key.public().to_dict())
+    result = sc.account_with_session_key(c, session_key).login_http_sig(session_key.public().to_dict())
     c.session_key_fingerprint = None
     c.session_key_file = None
     c.session_key_pem = pem
+    _select_role(result.roles, sc.session_with_private_key(session_key))
 
 
 def oidc_login(c: client.Config, sc: client.Factory, auth_name: str) -> None:
@@ -139,10 +170,13 @@ def oidc_login(c: client.Config, sc: client.Factory, auth_name: str) -> None:
     session_key, session_fingerprint = browser_login.generate_session_key()
     print("Opening browser for OIDC login...")
     id_token = browser_login.oidc_flow(auth_public.config)
-    sc.session_with_key(session_fingerprint).login_oidc(auth_name, "cli", id_token, session_key.public().to_dict())
+    result = sc.session_with_key(session_fingerprint).login_oidc(
+        auth_name, "cli", id_token, session_key.public().to_dict()
+    )
     c.session_key_fingerprint = session_fingerprint
     c.session_key_file = None
     c.session_key_pem = None
+    _select_role(result.roles, sc.session_with_private_key(session_key))
 
 
 def oidc_device_code_login(c: client.Config, sc: client.Factory, auth_name: str) -> None:
@@ -152,10 +186,13 @@ def oidc_device_code_login(c: client.Config, sc: client.Factory, auth_name: str)
         raise pfc.exceptions.UI(f"Auth '{auth_name}' is not OIDC device code")
     session_key, session_fingerprint = browser_login.generate_session_key()
     id_token = browser_login.oidc_device_code_flow(auth_public.config)
-    sc.session_with_key(session_fingerprint).login_oidc(auth_name, "cli", id_token, session_key.public().to_dict())
+    result = sc.session_with_key(session_fingerprint).login_oidc(
+        auth_name, "cli", id_token, session_key.public().to_dict()
+    )
     c.session_key_fingerprint = session_fingerprint
     c.session_key_file = None
     c.session_key_pem = None
+    _select_role(result.roles, sc.session_with_private_key(session_key))
 
 
 def login(c: client.Config, sc: client.Factory, auth_name: str, session_key_path: str | None = None) -> None:

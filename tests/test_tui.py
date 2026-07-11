@@ -10,6 +10,7 @@ import textual.worker
 import provablyfine.client
 import provablyfine.tui.app
 import provablyfine.tui.grant_edit
+import provablyfine.tui.relogin
 
 
 async def _wait(pilot, app=None):
@@ -1013,3 +1014,48 @@ async def test_tui_identity_add_tag(api, ssh_agent):
 
 
 #        assert any(t.name == "env" and t.value == "prod" for t in identity.tags)
+
+
+@pytest.mark.anyio
+async def test_tui_relogin_single_role(api, ssh_agent):
+    """ReloginScreen auto-selects the only role without prompting."""
+    with _setup_ssh_auth_sock(ssh_agent):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            _setup(api, tmpdir, ssh_agent)
+            config_file = os.path.join(tmpdir, "config.json")
+            cfg = provablyfine.client.Config.load(config_file)
+            cfg.session_key_file = None
+            cfg.session_key_fingerprint = None
+            cfg.session_key_pem = None
+            api_client = provablyfine.client.Client(cfg)
+            app = provablyfine.tui.app.SetupApp(provablyfine.tui.relogin.ReloginScreen(cfg, api_client, config_file))
+            async with app.run_test(size=(200, 50)) as pilot:
+                await _wait(pilot, app)
+
+            assert not [n for n in app._notifications if n.severity == "error"]
+            assert cfg.session_key_fingerprint is not None
+
+
+@pytest.mark.anyio
+async def test_tui_relogin_multi_role_uses_saved_role_id(api, ssh_agent):
+    """ReloginScreen uses cfg.role_id to select the role silently when there are multiple roles."""
+    with _setup_ssh_auth_sock(ssh_agent):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            auth = _setup(api, tmpdir, ssh_agent)
+
+            role2 = await auth.create_role("role2", "")
+            await auth.update_role(role2.id, member_list=[pfc.schemas.RoleMemberUpdateRequest(name="root")])
+
+            config_file = os.path.join(tmpdir, "config.json")
+            cfg = provablyfine.client.Config.load(config_file)
+            cfg.session_key_file = None
+            cfg.session_key_fingerprint = None
+            cfg.session_key_pem = None
+            cfg.role_id = role2.id
+            api_client = provablyfine.client.Client(cfg)
+            app = provablyfine.tui.app.SetupApp(provablyfine.tui.relogin.ReloginScreen(cfg, api_client, config_file))
+            async with app.run_test(size=(200, 50)) as pilot:
+                await _wait(pilot, app)
+
+            assert not [n for n in app._notifications if n.severity == "error"]
+            assert cfg.session_key_fingerprint is not None

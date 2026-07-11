@@ -86,3 +86,7 @@ class Directory:
     @property
     def ping(self) -> str:
         return self._load()["ping"]
+
+    @property
+    def session(self) -> str:
+        return self._load()["session"]

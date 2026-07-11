@@ -18,6 +18,7 @@ class Config:
     directory: dict[str, str] | None = None
     known_hosts: str | None = None
     auth_name: str | None = None
+    role_id: int | None = None  # headless only: set from invitation URL, consumed by ensure_session
 
     def __post_init__(self) -> None:
         self.ephemeral: bool = False

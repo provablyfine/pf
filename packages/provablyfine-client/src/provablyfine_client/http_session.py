@@ -58,6 +58,14 @@ class HttpSession:
                 msg = response.text
             raise exceptions.UI(msg or response.text)
 
+        if response.status_code == 403:
+            try:
+                title = response.json().get("title", "")
+            except Exception:
+                title = ""
+            if title in ("Session key is expired", "Session does not exist", "Session key is revoked"):
+                raise exceptions.SessionExpired(title)
+
         return response
 
     def get(

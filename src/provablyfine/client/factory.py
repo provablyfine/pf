@@ -52,6 +52,9 @@ class Factory:
             http_client.FileSigner("session", session),
         )
 
+    def session_with_private_key(self, session: jwk.Private) -> pfc.SessionClient:
+        return pfc.SessionClient(self._http, self._directory, http_client.FileSigner("session", session))
+
     def account_with_session_key(self, c: configuration.Config, session: jwk.Private) -> pfc.AccountClient:
         account_signer = self._account_signer(c.account_key_fingerprint, c.account_key_file)
         session_signer = http_client.FileSigner("session", session)

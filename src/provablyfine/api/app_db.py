@@ -83,6 +83,7 @@ class IdentitySessionKeyRow(typing.NamedTuple):
     revoked_at: int | None
     expires_at: int
     login_ip: str | None
+    role_id: int | None
 
 
 identity_session_key = db.make_table("identity_session_key", metadata, IdentitySessionKeyRow)

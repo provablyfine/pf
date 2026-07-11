@@ -112,7 +112,20 @@ def _identity_invite_function(args: argparse.Namespace) -> None:
             auth_name = args.auth
         else:
             auth_name = auths[0].name
-        print(f"{c.directory_url}?invitation={key}&auth={auth_name}")
+        all_roles = session.list_roles()
+        identity_roles = [r for r in all_roles.roles if any(m.id == args.id for m in r.member_list)]
+        role_suffix = ""
+        if args.role is not None:
+            matching = [r for r in all_roles.roles if r.name == args.role]
+            if len(matching) == 0:
+                raise pfc.exceptions.UI(f"Role '{args.role}' not found")
+            role_suffix = f"&role={matching[0].id}"
+        elif len(identity_roles) == 1:
+            role_suffix = f"&role={identity_roles[0].id}"
+        elif len(identity_roles) > 1:
+            role_names = ", ".join(r.name for r in identity_roles)
+            raise pfc.exceptions.UI(f"Identity belongs to multiple roles: {role_names}. Specify --role=<name>.")
+        print(f"{c.directory_url}?invitation={key}&auth={auth_name}{role_suffix}")
 
 
 def _identity_update_function(args: argparse.Namespace) -> None:
@@ -184,6 +197,7 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
     invite_parser = subparsers.add_parser("invite", help="Invite an identity")
     invite_parser.add_argument("-i", "--id", type=int, help="Id of identity")
     invite_parser.add_argument("--auth", default=None, help="Auth config name to include in invitation URL")
+    invite_parser.add_argument("--role", default=None, help="Role name to embed in invitation URL")
     group = invite_parser.add_mutually_exclusive_group(required=True)
     group.add_argument(
         "--manual",

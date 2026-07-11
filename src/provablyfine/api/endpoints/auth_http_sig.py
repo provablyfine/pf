@@ -61,13 +61,13 @@ def accept_invitation_endpoint(
 
 @router.post(
     "/auth/http_sig/login",
-    status_code=204,
+    status_code=200,
     dependencies=[fastapi.Depends(signature.verify_account)],
     responses={400: responses.PROBLEM, 403: responses.PROBLEM},
 )
 def login_endpoint(
     request: fastapi.requests.Request, data: schemas.directory.LoginRequest
-) -> fastapi.responses.Response:
+) -> schemas.directory.LoginResponse:
     session_key = converters.public_from_schema(data.session_public_key)
     crypto_policy.enforce_key_is_allowed(session_key)
 
@@ -88,5 +88,9 @@ def login_endpoint(
         revoked_at=None,
         expires_at=now + ctx.config.session_duration_s,
         login_ip=request.client.host if request.client else None,
+        role_id=None,
     )
-    return _204
+    members = ctx.app_db.role_member.read_all(identity_id=ctx.identity_id)
+    role_ids = list(set(m.role_id for m in members))
+    roles = ctx.app_db.role.read_all(id=role_ids) if role_ids else []
+    return schemas.directory.LoginResponse(roles=[schemas.directory.LoginRoleInfo(id=r.id, name=r.name) for r in roles])

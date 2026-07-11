@@ -261,4 +261,6 @@ async def verify_session(request: fastapi.requests.Request) -> typing.AsyncGener
     model.denylist.enforce_not_denied(key.thumbprint())
     verify(request, key_id=f"session:{key_id}", key=key)
     with ctx.set_identity_id(session_key.identity_id):
-        yield
+        with ctx.set_active_role_id(session_key.role_id):
+            with ctx.set_session_key_id(key_id):
+                yield

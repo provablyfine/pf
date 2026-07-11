@@ -102,6 +102,7 @@ class Invitation:
     directory_url: str
     key: str | None
     auth_name: str | None
+    role_id: int | None
 
 
 def parse_invitation(invitation_url: str) -> Invitation:
@@ -110,9 +111,16 @@ def parse_invitation(invitation_url: str) -> Invitation:
     invitation = qs.get("invitation")
     auth = qs.get("auth")
     auth_name = auth[0] if auth else None
+    role = qs.get("role")
+    role_id = int(role[0]) if role else None
     url_no_qs = url._replace(query="")
     directory_url = urllib.parse.urlunsplit(url_no_qs)
-    return Invitation(directory_url=directory_url, key=None if not invitation else invitation[0], auth_name=auth_name)
+    return Invitation(
+        directory_url=directory_url,
+        key=None if not invitation else invitation[0],
+        auth_name=auth_name,
+        role_id=role_id,
+    )
 
 
 def _accept_function(args: argparse.Namespace) -> None:
@@ -160,6 +168,7 @@ def _accept_function(args: argparse.Namespace) -> None:
                 c.account_key_file = None
         sc.invitation(invitation.key, account_key_id).accept_invitation()
     c.auth_name = auth.name
+    c.role_id = invitation.role_id
     c.save(args.config)
 
 

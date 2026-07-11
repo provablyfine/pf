@@ -571,7 +571,7 @@ class SessionClient:
         client_type: str,
         id_token: str,
         session_public_key: dict[str, typing.Any],
-    ) -> None:
+    ) -> schemas.LoginResponse:
         response = self._session.post(
             self._directory.login_oidc,
             auth=self._auth(),
@@ -582,8 +582,16 @@ class SessionClient:
                 "session_public_key": session_public_key,
             },
         )
-        if response.status_code != 204:
+        if response.status_code != 200:
             raise exceptions.UI(f"Unable to login via OIDC: {response.text}")
+        return schemas.LoginResponse.model_validate(response.json())
+
+    def update_session(self, role_id: int) -> None:
+        response = self._session.patch(f"{self._directory.session}/self", auth=self._auth(), json={"role_id": role_id})
+        if response.status_code == 409:
+            raise exceptions.UI("Session role already set")
+        if response.status_code != 204:
+            raise exceptions.UI(_problem_title(response, "Unable to set session role"))
 
     # Ping
 

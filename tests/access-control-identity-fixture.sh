@@ -11,18 +11,16 @@ DEVICE_ID=$(pfa -c config.json tag list -n id -v device -q)
 pfa -c config.json role create -n role
 ROLE_ID=$(pfa -c config.json role list -n role -q)
 
-# Create identity user1
+# Create identity user1 and add to role before inviting
 pfa -c config.json identity create -n user1
 USER1_ID=$(pfa -c config.json identity list -n user1 -q)
+pfa -c config.json role member -i $ROLE_ID -a user1
 INVITATION=$(pfa -c config.json identity invite -i $USER1_ID --manual)
 echo $INVITATION
 
 # Create identity user2
 pfa -c config.json identity create -n user2
 USER2_ID=$(pfa -c config.json identity list -n user2 -q)
-
-# Add identity to role
-pfa -c config.json role member -i $ROLE_ID -a user1
 
 # New user accepts invitation and logs in
 ssh-keygen -t ed25519 -f user1 -N "" > /dev/null
