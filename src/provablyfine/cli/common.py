@@ -97,6 +97,17 @@ def setup_ping_subparser(parser: argparse.ArgumentParser) -> None:
     parser.set_defaults(func=_ping_function)
 
 
+def _whoami_function(args: argparse.Namespace) -> None:
+    c = client.Config.load(args.config)
+    sc = client.Factory(c, timeout=args.timeout).session()
+    identity = sc.get_self()
+    print(identity.name)
+
+
+def setup_whoami_subparser(parser: argparse.ArgumentParser) -> None:
+    parser.set_defaults(func=_whoami_function)
+
+
 @dataclasses.dataclass
 class Invitation:
     directory_url: str

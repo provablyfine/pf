@@ -4,6 +4,7 @@ import os.path
 import sys
 
 import provablyfine_client as pfc
+import textual
 import textual.worker
 
 from .. import client, log
@@ -40,6 +41,12 @@ class TuiApp(base.App):
 
     def on_mount(self) -> None:
         self.push_screen(home.HomeScreen(self.auth))
+        self._load_whoami()
+
+    @textual.work
+    async def _load_whoami(self) -> None:
+        identity = await self.auth.get_self()
+        self.whoami = identity.name
 
     def _handle_exception(self, error: Exception) -> None:
         if self._cfg is not None and self._config_path is not None:

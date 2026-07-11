@@ -2,10 +2,6 @@ import threading
 import typing
 import webbrowser
 
-
-class _LoginCancelled(Exception):
-    pass
-
 import provablyfine_client as pfc
 import textual
 import textual.app
@@ -14,6 +10,10 @@ import textual.widgets
 
 from .. import browser_login, client, jwk
 from . import base
+
+
+class _LoginCancelled(Exception):
+    pass
 
 
 def has_valid_session(config: client.Config) -> bool:

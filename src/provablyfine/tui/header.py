@@ -19,6 +19,17 @@ class _HeaderTitle(textual.widgets.Static):
     """
 
 
+class _HeaderIdentity(textual.widgets.Static):
+    DEFAULT_CSS = """
+    _HeaderIdentity {
+        dock: right;
+        width: auto;
+        padding: 0 1;
+        content-align: right middle;
+    }
+    """
+
+
 class AppHeader(base.Widget):
     """A header widget equivalent to textual's Header, without the command-palette icon."""
 
@@ -38,6 +49,7 @@ class AppHeader(base.Widget):
     tall: textual.reactive.Reactive[bool] = textual.reactive.Reactive(False)
 
     def compose(self) -> textual.app.ComposeResult:
+        yield _HeaderIdentity()
         yield _HeaderTitle()
 
     def watch_tall(self, tall: bool) -> None:
@@ -66,7 +78,11 @@ class AppHeader(base.Widget):
             except textual.dom.NoScreen:
                 pass
 
+        async def set_identity(whoami: str) -> None:
+            self.query_one(_HeaderIdentity).update(whoami)
+
         self.watch(self.app, "title", set_title)
         self.watch(self.app, "sub_title", set_title)
         self.watch(self.screen, "title", set_title)
         self.watch(self.screen, "sub_title", set_title)
+        self.watch(self.app, "whoami", set_identity)

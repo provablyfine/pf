@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import provablyfine_client as pfc
 import textual.app
+import textual.reactive
 import textual.screen
 import textual.widget
 import textual.worker
 
 
 class App(textual.app.App[None]):
+    whoami: textual.reactive.Reactive[str] = textual.reactive.Reactive("")
+
     def _handle_exception(self, error: Exception) -> None:
         ui_error: pfc.exceptions.UI | None = None
         if isinstance(error, pfc.exceptions.UI):

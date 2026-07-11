@@ -87,6 +87,9 @@ def pfa() -> None:
     audit_log_parser = subparsers.add_parser("audit-log", help="View audit log")
     audit_log_cli.add_subparser(audit_log_parser)
 
+    whoami_parser = subparsers.add_parser("whoami", help="Print the name of the currently logged-in identity")
+    common.setup_whoami_subparser(whoami_parser)
+
     ping_parser = subparsers.add_parser("ping", help="Ping the server")
     common.setup_ping_subparser(ping_parser)
 

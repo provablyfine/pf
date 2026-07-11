@@ -54,6 +54,9 @@ def pf() -> None:
     hosts_parser = subparsers.add_parser("hosts", help="List accessible hosts and permissions")
     hosts_parser.set_defaults(func=_hosts_function)
 
+    whoami_parser = subparsers.add_parser("whoami", help="Print the name of the currently logged-in identity")
+    common.setup_whoami_subparser(whoami_parser)
+
     ping_parser = subparsers.add_parser("ping", help="Ping the server")
     common.setup_ping_subparser(ping_parser)
 
