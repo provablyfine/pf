@@ -53,6 +53,10 @@ $ make cov-report
 TOTAL                                          5167    685    87%
 ```
 
+## Submitting
+
+Make sure any PR you submit and/or any commit that fixes an issue also creates a file in changelog.d/*.
+
 ## Database migrations
 
 The schema is versioned with Alembic, with two independent histories: the registry
