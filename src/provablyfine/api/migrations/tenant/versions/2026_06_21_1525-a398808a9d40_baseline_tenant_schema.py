@@ -40,7 +40,6 @@ def upgrade() -> None:
         sa.Column("name", sa.String(), nullable=False),
         sa.Column("client_type", sa.String(), nullable=False),
         sa.Column("description", sa.String(), nullable=False),
-        sa.Column("tag_id_list", sa.JSON(), nullable=False),
         sa.Column("created_at", sa.Integer(), nullable=False),
         sa.Column("is_enabled", sa.Boolean(), nullable=False),
         sa.Column("type", sa.String(), nullable=False),
@@ -128,6 +127,7 @@ def upgrade() -> None:
         sa.Column("revoked_at", sa.Integer(), nullable=True),
         sa.Column("expires_at", sa.Integer(), nullable=False),
         sa.Column("login_ip", sa.String(), nullable=True),
+        sa.Column("role_id", sa.Integer(), nullable=True),
     )
     with op.batch_alter_table("identity_session_key", schema=None) as batch_op:
         batch_op.create_index(batch_op.f("ix_identity_session_key_id"), ["id"], unique=True)
@@ -139,19 +139,6 @@ def upgrade() -> None:
         sa.Column("tag_id", sa.Integer(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("identity_id", "tag_id", name="uix_identity_id_tag_id"),
-    )
-    op.create_table(
-        "oauth2_login_request",
-        sa.Column("id", sa.String(), nullable=False),
-        sa.Column("session_key_thumbprint", sa.String(), nullable=False),
-        sa.Column("session_public_key", sa.JSON(), nullable=False),
-        sa.Column("auth_config_id", sa.Integer(), nullable=False),
-        sa.Column("code_verifier", sa.LargeBinary(), nullable=False),
-        sa.Column("redirect_uri", sa.String(), nullable=False),
-        sa.Column("client_redirect_uri", sa.String(), nullable=False),
-        sa.Column("created_at", sa.Integer(), nullable=False),
-        sa.Column("expires_at", sa.Integer(), nullable=False),
-        sa.PrimaryKeyConstraint("id"),
     )
     op.create_table(
         "oidc_key",
