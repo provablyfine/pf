@@ -1,9 +1,3 @@
-## 0.7.0 - 2026-07-14
-
-### Added
-
-- SQL versioning with alembic ([#7](https://github.com/provablyfine/pf/issues/7))
-
 ## 0.6.0 - 2026-07-10
 
 ### Fixed
