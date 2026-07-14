@@ -15,7 +15,7 @@ maintainers = [
   {name = "Mathieu Lacage", email = "mathieu.lacage@cutebugs.net"},
 ]
 description = "HTTP client library for the ProvablyFine API"
-version = "0.6.0"
+version = "0.7.0"
 license = "MIT"
 license-file = "LICENSE"
 keywords = ["SSH", "access-control", "bastion"]

@@ -1,3 +1,13 @@
+## 0.7.0 - 2026-07-14
+
+### Fixed
+
+- Use python native logging configuration to make sure backtraces are sane(r) ([#22](https://github.com/provablyfine/pf/issues/22))
+- Bundle frpc licence in release wheel ([#40](https://github.com/provablyfine/pf/issues/40))
+- Add -r/--role option to `pf login`/`pfa login` ([#43](https://github.com/provablyfine/pf/issues/43))
+- Avoid garbage on stdout/stderr upon webbrowser.open() ([#44](https://github.com/provablyfine/pf/issues/44))
+
+
 ## 0.6.0 - 2026-07-10
 
 ### Fixed
@@ -23,6 +33,9 @@
 - Use frpc/frps instead of custom bastion protocol to improve robustness ([#36](https://github.com/provablyfine/pf/issues/36))
 - Run pf-host-refresh automatically when the network comes back up via network manager dispatcher script ([#37](https://github.com/provablyfine/pf/issues/37))
 - Use `auth.tokenSource.type=exec` to allow reconnections after the initial token expiration ([#38](https://github.com/provablyfine/pf/issues/38))
+
+
+# Changelog
 
 ## 0.4.0 - 2026-06-28
 

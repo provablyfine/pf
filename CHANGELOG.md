@@ -1,3 +1,13 @@
+## 0.7.0 - 2026-07-14
+
+### Fixed
+
+- Use python native logging configuration to make sure backtraces are sane(r) ([#22](https://github.com/provablyfine/pf/issues/22))
+- Bundle frpc licence in release wheel ([#40](https://github.com/provablyfine/pf/issues/40))
+- Add -r/--role option to `pf login`/`pfa login` ([#43](https://github.com/provablyfine/pf/issues/43))
+- Avoid garbage on stdout/stderr upon webbrowser.open() ([#44](https://github.com/provablyfine/pf/issues/44))
+
+
 ## 0.6.0 - 2026-07-10
 
 ### Fixed
