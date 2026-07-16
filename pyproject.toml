@@ -18,7 +18,7 @@ maintainers = [
 ]
 description = "Centralized Access-Control for SSH"
 readme = "README.md"
-version = "0.7.0"
+version = "0.7.1"
 license = "AGPL-3.0-only"
 license-files = ["LICENSE.md", "src/provablyfine/licenses/frpc-*"]
 keywords = ["SSH", "access-control", "bastion"]
@@ -156,7 +156,7 @@ title_format = "## {version} - {project_date}"
 issue_format = "[#{issue}](https://github.com/provablyfine/pf/issues/{issue})"
 
 [[tool.towncrier.type]]
-directory = "feature"
+directory = "added"
 name = "Added"
 showcontent = true
 

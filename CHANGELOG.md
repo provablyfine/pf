@@ -1,3 +1,16 @@
+## 0.7.1 - 2026-07-17
+
+### Added
+
+- SQL versioning with alembic ([#7](https://github.com/provablyfine/pf/issues/7))
+- `whoami` command for pf, pfa, and pfat ([#41](https://github.com/provablyfine/pf/issues/41))
+- Bind sessions to roles ([#42](https://github.com/provablyfine/pf/issues/42))
+
+### Fixed
+
+- added were missing in change-logs ([#49](https://github.com/provablyfine/pf/issues/49))
+
+
 ## 0.7.0 - 2026-07-14
 
 ### Fixed
