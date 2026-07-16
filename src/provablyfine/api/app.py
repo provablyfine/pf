@@ -107,7 +107,7 @@ def create(conf: config.Config) -> fastapi.FastAPI:
         _bootstrap_databases(registry_engine)
         migrate.upgrade_registry(conf.tenant_registry_url)
 
-        kek_filename = conf.kek_filename.format(PF_API_KEK_FILENAME=os.getenv("PF_API_KEK_FILENAME"))
+        kek_filename = conf.kek_filename.format(PF_SECRET_DIRECTORY=os.getenv("PF_SECRET_DIRECTORY", ""))
         with open(kek_filename, "rb") as f:
             kek = base64url.encode(f.read()) + "======"
         app.state.config = conf

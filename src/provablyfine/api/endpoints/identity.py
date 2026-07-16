@@ -7,7 +7,7 @@ import fastapi
 import fastapi.responses
 import sqlalchemy.exc
 
-from .. import converters, grant, model, responses, schemas, signature
+from .. import converters, grant, mailer, model, responses, schemas, signature
 from ..context import ctx
 
 logger = logging.getLogger(__name__)
@@ -325,4 +325,12 @@ def invite_endpoint(
         return schemas.identity.IdentityInviteManualResponse(
             key=converters.symmetric_to_schema(identity_invitation.key)
         )
+    email_cfg = ctx.config.email
+    if email_cfg is None:
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=500, title="Email not configured", detail="")
+        )
+    key_material = identity_invitation.key.to_dict()["k"]
+    url = f"{ctx.config.base_url}?invitation={key_material}"
+    mailer.send(email_cfg, to=identity.name, subject="Your invitation", body=f"Accept your invitation:\n{url}\n")
     return fastapi.responses.Response(status_code=204)
