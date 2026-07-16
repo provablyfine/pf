@@ -99,13 +99,16 @@ def update_endpoint(role_id: int, data: schemas.role.RoleUpdateRequest) -> schem
         role_update["description"] = data.description
     if "grant_list" in data.model_fields_set:
         assert data.grant_list is not None  # pydantic validation guarantees this
+        new_grant_list = [converters.grant_from_schema(converter, g) for g in data.grant_list]
         if ctx.active_role_id == role.id:
-            raise responses.ProblemHTTPException(
-                responses.problem_response(
-                    status_code=403, title="Not allowed to update grants on the active session role"
-                )
-            )
-        role_update["grant_list"] = [converters.grant_from_schema(converter, g) for g in data.grant_list]
+            for existing_grant in role.grant_list:
+                if existing_grant not in new_grant_list:
+                    raise responses.ProblemHTTPException(
+                        responses.problem_response(
+                            status_code=403, title="Not allowed to remove grants from the active session role"
+                        )
+                    )
+        role_update["grant_list"] = new_grant_list
     if "member_list" in data.model_fields_set:
         assert data.member_list is not None  # pydantic validation guarantees this
         members = ctx.app_db.identity.read_all(name=[m.name for m in data.member_list])

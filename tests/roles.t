@@ -91,3 +91,11 @@ Add second member to role that already has a member
   $ pfa -c config.json role read -i $ROLE_ID | grep ^member
   member       user1
   member       user2
+
+Adding a grant to the active role (root, id=1) should succeed
+  $ pfa -c config.json grant tag --create | pfa -c config.json role grant -i 1 --add
+
+Removing a grant from the active role should fail
+  $ pfa -c config.json role read -i 1 -f json | jq '.grant_list[-1]' | pfa -c config.json role grant -i 1 --del
+  Not allowed to remove grants from the active session role
+  [2]
