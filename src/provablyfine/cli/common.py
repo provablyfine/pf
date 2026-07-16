@@ -101,10 +101,15 @@ def _whoami_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     sc = client.Factory(c, timeout=args.timeout).session()
     identity = sc.get_self()
-    print(identity.name)
+    if args.role:
+        if identity.active_role is not None:
+            print(identity.active_role.name)
+    else:
+        print(identity.name)
 
 
 def setup_whoami_subparser(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("-r", "--role", action="store_true", help="Display active role name")
     parser.set_defaults(func=_whoami_function)
 
 

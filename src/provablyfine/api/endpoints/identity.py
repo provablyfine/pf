@@ -47,13 +47,20 @@ def list_endpoint(
 
 
 @router.get("/self", status_code=200, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
-def read_self_endpoint() -> schemas.identity.Identity:
+def read_self_endpoint() -> schemas.identity.IdentitySelf:
     identity_id = ctx.identity_id
     assert identity_id is not None
     identity = model.identity.read_one(id=identity_id)
     assert identity is not None
 
-    return converters.identity_to_schema(identity)
+    active_role: schemas.identity.IdentityRoleInfo | None = None
+    if ctx.active_role_id is not None:
+        role = model.role.read_one(id=ctx.active_role_id)
+        if role is not None:
+            active_role = schemas.identity.IdentityRoleInfo(id=role.id, name=role.name)
+
+    base = converters.identity_to_schema(identity)
+    return schemas.identity.IdentitySelf(**base.model_dump(), active_role=active_role)
 
 
 @router.get("/self/bastions", status_code=200, responses={400: responses.PROBLEM, 403: responses.PROBLEM})

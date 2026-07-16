@@ -613,11 +613,17 @@ class IdentityBoundary(_Base):
     name: str
 
 
+class IdentityRoleInfo(_Base):
+    id: int
+    name: str
+
+
 class Identity(_Base):
     id: int
     name: str
     tags: list[TagNameValue] = []
     boundaries: list[IdentityBoundary] = []
+    active_role: IdentityRoleInfo | None = None
 
 
 class IdentitiesResponse(_Base):

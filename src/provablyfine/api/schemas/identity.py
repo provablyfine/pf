@@ -12,11 +12,20 @@ class IdentityBoundary(base.APIBase):
     name: str
 
 
+class IdentityRoleInfo(base.APIBase):
+    id: int
+    name: str
+
+
 class Identity(base.APIBase):
     id: int
     name: str
     tags: list[tag.Tag]
     boundaries: list[IdentityBoundary]
+
+
+class IdentitySelf(Identity):
+    active_role: IdentityRoleInfo | None = None
 
 
 class IdentityListResponse(base.APIBase):
