@@ -122,6 +122,7 @@ HTTPS_PROXY = { unset = true }
 PYTHONASYNCIODEBUG = "1"
 PYTHONUNBUFFERED = "1"
 PF_LOG_LEVEL = "3"
+PF_TIMEOUT = "30"
 
 [tool.pyright]
 include = ["src/provablyfine", "tests", "packages/provablyfine-client/src/provablyfine_client"]
