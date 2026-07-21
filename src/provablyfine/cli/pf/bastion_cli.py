@@ -3,6 +3,8 @@ from __future__ import annotations
 import argparse
 import asyncio
 import base64
+import collections.abc
+import contextlib
 import functools
 import hashlib
 import json
@@ -20,6 +22,7 @@ import cryptography.hazmat.primitives.ciphers
 import cryptography.hazmat.primitives.ciphers.algorithms
 import cryptography.hazmat.primitives.ciphers.modes
 import provablyfine_client as pfc
+import websockets.asyncio.client
 
 from ... import client
 from .. import http as cli_http
@@ -107,40 +110,6 @@ class _AESCFBDecryptor:
 
 
 # ---------------------------------------------------------------------------
-# WebSocket minimal framing (binary frames only)
-# ---------------------------------------------------------------------------
-
-
-def _ws_encode_frame(payload: bytes) -> bytes:
-    """Encode a client→server masked binary WebSocket frame."""
-    mask = os.urandom(4)
-    length = len(payload)
-    header = bytearray([0x82])  # FIN=1, opcode=binary(2)
-    if length <= 125:
-        header.append(0x80 | length)
-    elif length <= 65535:
-        header.append(0xFE)  # MASK=1, length=126
-        header.extend(struct.pack(">H", length))
-    else:
-        header.append(0xFF)  # MASK=1, length=127
-        header.extend(struct.pack(">Q", length))
-    header.extend(mask)
-    mask4 = mask * ((len(payload) + 3) // 4)
-    return bytes(header) + bytes(a ^ b for a, b in zip(payload, mask4))
-
-
-async def _ws_read_frame(reader: asyncio.StreamReader) -> bytes:
-    """Read one server→client WebSocket frame and return its payload."""
-    hdr = await reader.readexactly(2)
-    length = hdr[1] & 0x7F
-    if length == 126:
-        length = struct.unpack(">H", await reader.readexactly(2))[0]
-    elif length == 127:
-        length = struct.unpack(">Q", await reader.readexactly(8))[0]
-    return await reader.readexactly(length)
-
-
-# ---------------------------------------------------------------------------
 # Frp message framing
 # ---------------------------------------------------------------------------
 
@@ -151,28 +120,23 @@ def _frp_encode(type_tag: str, payload: dict[str, object]) -> bytes:
 
 
 class _FrpReader:
-    """Buffered reader that decrypts bytes from a TCP or WSS stream and
+    """Buffered reader that decrypts bytes from a TCP or WSS transport and
     exposes readexactly() for frp message parsing.
     """
 
     def __init__(
         self,
-        reader: asyncio.StreamReader,
+        recv: collections.abc.Callable[[], collections.abc.Awaitable[bytes]],
         cipher: _AESCFBDecryptor | None,
-        is_wss: bool,
     ) -> None:
-        self._reader = reader
+        self._recv = recv
         self._cipher = cipher
-        self._is_wss = is_wss
         self._buf = bytearray()
 
     async def _fill(self) -> None:
-        if self._is_wss:
-            data: bytes = await _ws_read_frame(self._reader)
-        else:
-            data = await self._reader.read(65536)
-            if not data:
-                raise EOFError("connection closed")
+        data = await self._recv()
+        if not data:
+            raise EOFError("connection closed")
         if self._cipher is not None:
             data = self._cipher.decrypt(data)
         self._buf.extend(data)
@@ -197,51 +161,58 @@ async def _frp_read(frp_reader: _FrpReader) -> tuple[str, dict[str, object]]:
 # Transport: open a TCP or WSS connection to frps
 # ---------------------------------------------------------------------------
 
+_RecvFn = collections.abc.Callable[[], collections.abc.Awaitable[bytes]]
+_SendFn = collections.abc.Callable[[bytes], collections.abc.Awaitable[None]]
 
+
+@contextlib.asynccontextmanager
 async def _open_transport(
     host: str,
     port: int,
     is_wss: bool,
     ssl_ctx: ssl.SSLContext | None,
-) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
-    reader, writer = await asyncio.open_connection(host, port, ssl=ssl_ctx)
+) -> collections.abc.AsyncGenerator[tuple[_RecvFn, _SendFn]]:
     if is_wss:
-        key = base64.b64encode(os.urandom(16)).decode()
-        await cli_http.Request(
-            method="GET",
-            resource_target=_FRP_WS_PATH,
-            version="HTTP/1.1",
-            headers={
-                "Host": host,
-                "Upgrade": "websocket",
-                "Connection": "Upgrade",
-                "Sec-WebSocket-Key": key,
-                "Sec-WebSocket-Version": "13",
-                "Origin": f"http://{host}",
-            },
-            body=b"",
-        ).serialize(writer)
-        response = await cli_http.Response.deserialize(reader)
-        if response.status_code != 101:
-            raise OSError(f"WebSocket upgrade failed: status={response.status_code}")
-    return reader, writer
+        async with websockets.asyncio.client.connect(
+            f"wss://{host}:{port}{_FRP_WS_PATH}",
+            ssl=ssl_ctx,
+            ping_interval=None,
+        ) as ws:
+
+            async def wss_recv() -> bytes:
+                data = await ws.recv()
+                return data if isinstance(data, bytes) else data.encode()
+
+            async def wss_send(msg: bytes) -> None:
+                await ws.send(msg)
+
+            yield wss_recv, wss_send
+    else:
+        reader, writer = await asyncio.open_connection(host, port)
+
+        async def tcp_recv() -> bytes:
+            return await reader.read(65536)
+
+        async def tcp_send(data: bytes) -> None:
+            writer.write(data)
+            await writer.drain()
+
+        try:
+            yield tcp_recv, tcp_send
+        finally:
+            writer.close()
 
 
 async def _frp_write(
-    writer: asyncio.StreamWriter,
+    send: _SendFn,
     cipher: _AESCFBEncryptor | None,
-    is_wss: bool,
     type_tag: str,
     payload: dict[str, object],
 ) -> None:
     data = _frp_encode(type_tag, payload)
     if cipher is not None:
         data = cipher.encrypt(data)
-    if is_wss:
-        writer.write(_ws_encode_frame(data))
-    else:
-        writer.write(data)
-    await writer.drain()
+    await send(data)
 
 
 # ---------------------------------------------------------------------------
@@ -264,59 +235,46 @@ async def _handle_work_conn(
     local_port: int,
 ) -> None:
     try:
-        reader, writer = await _open_transport(host, port, is_wss, ssl_ctx)
+        async with _open_transport(host, port, is_wss, ssl_ctx) as (recv, send):
+            # Work connections do NOT use the stream cipher.
+            frp_reader = _FrpReader(recv, cipher=None)
+            await _frp_write(send, None, "w", {"run_id": run_id})
+            tag, msg = await _frp_read(frp_reader)
+            if tag != "s":
+                logger.debug(f"work conn: unexpected tag={tag!r}")
+                return
+            if msg.get("error"):
+                logger.debug(f"work conn: rejected: {msg['error']}")
+                return
+
+            local_reader, local_writer = await asyncio.open_connection(local_ip, local_port)
+
+            async def frps_to_local() -> None:
+                try:
+                    while True:
+                        data = await recv()
+                        if not data:
+                            break
+                        local_writer.write(data)
+                except Exception:
+                    pass
+
+            async def local_to_frps() -> None:
+                try:
+                    while True:
+                        data = await local_reader.read(65536)
+                        if not data:
+                            break
+                        await send(data)
+                except Exception:
+                    pass
+
+            try:
+                await asyncio.gather(frps_to_local(), local_to_frps())
+            finally:
+                local_writer.close()
     except Exception as e:
-        logger.debug(f"work conn: transport open failed: {e}")
-        return
-
-    # Work connections do NOT use the stream cipher.
-    frp_reader = _FrpReader(reader, cipher=None, is_wss=is_wss)
-    try:
-        await _frp_write(writer, None, is_wss, "w", {"run_id": run_id})
-        tag, msg = await _frp_read(frp_reader)
-        if tag != "s":
-            logger.debug(f"work conn: unexpected tag={tag!r}")
-            return
-        if msg.get("error"):
-            logger.debug(f"work conn: rejected: {msg['error']}")
-            return
-    except Exception as e:
-        logger.debug(f"work conn: handshake failed: {e}")
-        writer.close()
-        return
-
-    try:
-        local_reader, local_writer = await asyncio.open_connection(local_ip, local_port)
-    except Exception as e:
-        logger.debug(f"work conn: cannot connect to local {local_ip}:{local_port}: {e}")
-        writer.close()
-        return
-
-    async def frps_to_local() -> None:
-        try:
-            while True:
-                data = await _ws_read_frame(reader) if is_wss else await reader.read(65536)
-                if not data:
-                    break
-                local_writer.write(data)
-        except Exception:
-            pass
-
-    async def local_to_frps() -> None:
-        try:
-            while True:
-                data = await local_reader.read(65536)
-                if not data:
-                    break
-                writer.write(_ws_encode_frame(data) if is_wss else data)
-        except Exception:
-            pass
-
-    try:
-        await asyncio.gather(frps_to_local(), local_to_frps())
-    finally:
-        writer.close()
-        local_writer.close()
+        logger.debug(f"work conn: failed: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -355,35 +313,29 @@ async def _run_frp_client(
                 pass
             continue
 
+        connected = False
         try:
-            reader, writer = await _open_transport(host, server_port, is_wss, ssl_ctx)
+            async with _open_transport(host, server_port, is_wss, ssl_ctx) as (recv, send):
+                connected = True
+                logger.info(f"frp: connected to bastion={bastion_url}")
+                await _frp_session(
+                    recv=recv,
+                    send=send,
+                    host=host,
+                    server_port=server_port,
+                    is_wss=is_wss,
+                    ssl_ctx=ssl_ctx,
+                    jwt_token=jwt_token,
+                    frpc_user=frpc_user,
+                    identity_name=identity_name,
+                    local_port=local_port,
+                    stop_event=stop_event,
+                )
         except Exception as e:
-            logger.warning(f"frp: transport connect failed for bastion={bastion_url}: {e}")
-            try:
-                await asyncio.wait_for(stop_event.wait(), timeout=5)
-            except TimeoutError:
-                pass
-            continue
-
-        logger.info(f"frp: connected to bastion={bastion_url}")
-        try:
-            await _frp_session(
-                reader=reader,
-                writer=writer,
-                host=host,
-                server_port=server_port,
-                is_wss=is_wss,
-                ssl_ctx=ssl_ctx,
-                jwt_token=jwt_token,
-                frpc_user=frpc_user,
-                identity_name=identity_name,
-                local_port=local_port,
-                stop_event=stop_event,
-            )
-        except Exception as e:
-            logger.warning(f"frp: session ended for bastion={bastion_url}: {e}")
-        finally:
-            writer.close()
+            if connected:
+                logger.warning(f"frp: session ended for bastion={bastion_url}: {e}")
+            else:
+                logger.warning(f"frp: transport connect failed for bastion={bastion_url}: {e}")
 
         if not stop_event.is_set():
             logger.info(f"frp: reconnecting in 5s for bastion={bastion_url}")
@@ -395,8 +347,8 @@ async def _run_frp_client(
 
 async def _frp_session(
     *,
-    reader: asyncio.StreamReader,
-    writer: asyncio.StreamWriter,
+    recv: _RecvFn,
+    send: _SendFn,
     host: str,
     server_port: int,
     is_wss: bool,
@@ -420,8 +372,8 @@ async def _frp_session(
         "pool_count": 1,
     }
     # Before cipher: write Login in plain frp framing.
-    plain_reader = _FrpReader(reader, cipher=None, is_wss=is_wss)
-    await _frp_write(writer, None, is_wss, "o", login_msg)
+    plain_reader = _FrpReader(recv, cipher=None)
+    await _frp_write(send, None, "o", login_msg)
 
     tag, resp = await _frp_read(plain_reader)
     if tag != "1":
@@ -438,7 +390,7 @@ async def _frp_session(
     cipher_key = _frp_derive_key("")
     cipher_r = _AESCFBDecryptor(cipher_key)
     cipher_w = _AESCFBEncryptor(cipher_key)
-    enc_reader = _FrpReader(reader, cipher=cipher_r, is_wss=is_wss)
+    enc_reader = _FrpReader(recv, cipher=cipher_r)
 
     # --- Register proxy ---
     proxy_msg: dict[str, object] = {
@@ -449,7 +401,7 @@ async def _frp_session(
         "local_port": local_port,
         "custom_domains": [f"{frpc_user}.{host}"],
     }
-    await _frp_write(writer, cipher_w, is_wss, "p", proxy_msg)
+    await _frp_write(send, cipher_w, "p", proxy_msg)
 
     # frps sends ReqWorkConn immediately on ctl.Start() before NewProxyResp arrives.
     # Collect work-conn tasks started during registration to manage their lifecycle.
@@ -490,7 +442,7 @@ async def _frp_session(
                 # Time to send a ping.
                 if loop.time() - last_ping > _HEARTBEAT_TIMEOUT:
                     raise OSError("heartbeat timeout")
-                await _frp_write(writer, cipher_w, is_wss, "h", {})
+                await _frp_write(send, cipher_w, "h", {})
                 last_ping = loop.time()
                 continue
 
