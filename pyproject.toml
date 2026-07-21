@@ -49,7 +49,6 @@ dependencies = [
   "PyYAML>=6.0",
   "prometheus_client>=0.20.0",
   "provablyfine-client",
-  "websockets>=14.0",
   "alembic>=1.18.4",
 ]
 
