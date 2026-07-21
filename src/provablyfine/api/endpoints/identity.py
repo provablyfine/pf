@@ -280,7 +280,14 @@ def update_endpoint(identity_id: int, data: schemas.identity.IdentityUpdateReque
         update_params["added_tag_id_list"] = added_tag_id_list
         update_params["deleted_tag_id_list"] = deleted_tag_id_list
 
-    model.identity.update(id=identity_id, **update_params)
+    try:
+        model.identity.update(id=identity_id, **update_params)
+    except sqlalchemy.exc.IntegrityError:
+        raise responses.ProblemHTTPException(
+            responses.problem_response(
+                status_code=400, title="Identity already exists. Name must be unique.", detail=data.name
+            )
+        )
     identity = model.identity.read_one(id=identity_id)
     assert identity is not None
 
