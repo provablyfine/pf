@@ -1,5 +1,5 @@
-uv version --bump minor
-uv version --bump minor --project packages/provablyfine-client
+uv version --bump patch
+uv version --bump patch --project packages/provablyfine-client
 VERSION=$(uv version --short)
 uv run towncrier build --version "$VERSION" --yes
 cp CHANGELOG.md docs/changelog.md
