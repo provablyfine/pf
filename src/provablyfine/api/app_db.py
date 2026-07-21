@@ -124,7 +124,7 @@ class IdentityRow(typing.NamedTuple):
     id: typing.Annotated[int, db.Col(primary_key=True)]
     created_by_id: int | None
     created_at: int
-    name: str
+    name: typing.Annotated[str, db.Col(unique=True)]
 
 
 identity = db.make_table("identity", metadata, IdentityRow, sqlite_autoincrement=True)
