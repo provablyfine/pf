@@ -346,7 +346,7 @@ async def _handle_work_conn(
 
 
 # ---------------------------------------------------------------------------
-# Main frp client loop (replaces _manage_frpc)
+# Main frp client loop
 # ---------------------------------------------------------------------------
 
 
@@ -482,7 +482,7 @@ async def _frp_session(
             if resp.get("error"):
                 raise OSError(f"NewProxy rejected: {resp['error']}")
             break
-        if tag == "r":  # ReqWorkConn interleaved before NewProxyResp
+        if tag == "r":
             spawn_work_conn()
         else:
             logger.debug(f"frp: unhandled tag during proxy setup: {tag!r}")
