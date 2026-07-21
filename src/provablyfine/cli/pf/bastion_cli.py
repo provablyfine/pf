@@ -19,9 +19,9 @@ import sys
 import time
 import urllib.parse
 
+import cryptography.hazmat.decrepit.ciphers.modes
 import cryptography.hazmat.primitives.ciphers
 import cryptography.hazmat.primitives.ciphers.algorithms
-import cryptography.hazmat.primitives.ciphers.modes
 import provablyfine_client as pfc
 
 from ... import client
@@ -68,7 +68,7 @@ class _AESCFBEncryptor:
         iv = os.urandom(16)
         c = cryptography.hazmat.primitives.ciphers.Cipher(
             cryptography.hazmat.primitives.ciphers.algorithms.AES(key),
-            cryptography.hazmat.primitives.ciphers.modes.CFB(iv),
+            cryptography.hazmat.decrepit.ciphers.modes.CFB(iv),
         )
         self._enc = c.encryptor()
         self._iv: bytes | None = iv
@@ -102,7 +102,7 @@ class _AESCFBDecryptor:
         self._iv_buf.extend(data[:needed])
         c = cryptography.hazmat.primitives.ciphers.Cipher(
             cryptography.hazmat.primitives.ciphers.algorithms.AES(self._key),
-            cryptography.hazmat.primitives.ciphers.modes.CFB(bytes(self._iv_buf)),
+            cryptography.hazmat.decrepit.ciphers.modes.CFB(bytes(self._iv_buf)),
         )
         self._dec = c.decryptor()
         remaining = data[needed:]
