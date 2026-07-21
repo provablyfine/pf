@@ -142,7 +142,7 @@ RUN --mount=type=cache,target=/root/.cache/uv uv pip install \\
     --quiet --link-mode=copy --system --break-system-packages /tmp/pfc && \\
     rm -rf /tmp/pfc
 
-COPY pyproject.toml README.md LICENSE.md hatch_build.py /tmp/pf/
+COPY pyproject.toml README.md LICENSE.md /tmp/pf/
 COPY src /tmp/pf/src/
 RUN --mount=type=cache,target=/root/.cache/uv HATCH_TARGET_ARCH=unsupported uv pip install \\
     --quiet --link-mode=copy --system --break-system-packages --no-sources /tmp/pf && \\
@@ -433,6 +433,7 @@ def frps(api: Api, tmp_path: pathlib.Path, request: pytest.FixtureRequest) -> ty
     config = {
         "bindPort": bind_port,
         "tcpmuxHTTPConnectPort": connect_port,
+        "transport": {"tcpMux": False},
         "httpPlugins": [
             {
                 "name": "pf-plugin",
