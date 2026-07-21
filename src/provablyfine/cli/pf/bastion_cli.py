@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 _FRP_VERSION = "0.69.1"
 _HEARTBEAT_INTERVAL = 30.0
 _HEARTBEAT_TIMEOUT = 90.0
+_FRP_WS_PATH = "/~!frp"  # frp's fixed WebSocket upgrade path (fatedier/frp)
 
 
 def _jwt_audience(token: str) -> str:
@@ -61,21 +62,19 @@ class _AESCFBEncryptor:
     """
 
     def __init__(self, key: bytes) -> None:
-        self._iv = os.urandom(16)
+        iv = os.urandom(16)
         c = cryptography.hazmat.primitives.ciphers.Cipher(
             cryptography.hazmat.primitives.ciphers.algorithms.AES(key),
-            cryptography.hazmat.primitives.ciphers.modes.CFB(self._iv),
+            cryptography.hazmat.primitives.ciphers.modes.CFB(iv),
         )
         self._enc = c.encryptor()
-        self._iv_sent = False
+        self._iv: bytes | None = iv
 
     def encrypt(self, data: bytes) -> bytes:
-        result = bytearray()
-        if not self._iv_sent:
-            self._iv_sent = True
-            result.extend(self._iv)
-        result.extend(self._enc.update(data))
-        return bytes(result)
+        if self._iv is not None:
+            prefix, self._iv = self._iv, None
+            return prefix + self._enc.update(data)
+        return self._enc.update(data)
 
 
 class _AESCFBDecryptor:
@@ -126,24 +125,18 @@ def _ws_encode_frame(payload: bytes) -> bytes:
         header.append(0xFF)  # MASK=1, length=127
         header.extend(struct.pack(">Q", length))
     header.extend(mask)
-    return bytes(header) + bytes(b ^ mask[i % 4] for i, b in enumerate(payload))
+    mask4 = mask * ((len(payload) + 3) // 4)
+    return bytes(header) + bytes(a ^ b for a, b in zip(payload, mask4))
 
 
 async def _ws_read_frame(reader: asyncio.StreamReader) -> bytes:
     """Read one server→client WebSocket frame and return its payload."""
     hdr = await reader.readexactly(2)
-    masked = (hdr[1] & 0x80) != 0
     length = hdr[1] & 0x7F
     if length == 126:
         length = struct.unpack(">H", await reader.readexactly(2))[0]
     elif length == 127:
         length = struct.unpack(">Q", await reader.readexactly(8))[0]
-    if masked:
-        mask = await reader.readexactly(4)
-        data = bytearray(await reader.readexactly(length))
-        for i in range(length):
-            data[i] ^= mask[i % 4]
-        return bytes(data)
     return await reader.readexactly(length)
 
 
@@ -214,21 +207,23 @@ async def _open_transport(
     reader, writer = await asyncio.open_connection(host, port, ssl=ssl_ctx)
     if is_wss:
         key = base64.b64encode(os.urandom(16)).decode()
-        upgrade = (
-            f"GET /~!frp HTTP/1.1\r\n"
-            f"Host: {host}\r\n"
-            f"Upgrade: websocket\r\n"
-            f"Connection: Upgrade\r\n"
-            f"Sec-WebSocket-Key: {key}\r\n"
-            f"Sec-WebSocket-Version: 13\r\n"
-            f"Origin: http://{host}\r\n"
-            f"\r\n"
-        )
-        writer.write(upgrade.encode())
-        await writer.drain()
-        response = await reader.readuntil(b"\r\n\r\n")
-        if b" 101 " not in response:
-            raise OSError(f"WebSocket upgrade failed: {response[:120]!r}")
+        await cli_http.Request(
+            method="GET",
+            resource_target=_FRP_WS_PATH,
+            version="HTTP/1.1",
+            headers={
+                "Host": host,
+                "Upgrade": "websocket",
+                "Connection": "Upgrade",
+                "Sec-WebSocket-Key": key,
+                "Sec-WebSocket-Version": "13",
+                "Origin": f"http://{host}",
+            },
+            body=b"",
+        ).serialize(writer)
+        response = await cli_http.Response.deserialize(reader)
+        if response.status_code != 101:
+            raise OSError(f"WebSocket upgrade failed: status={response.status_code}")
     return reader, writer
 
 
@@ -304,7 +299,6 @@ async def _handle_work_conn(
                 if not data:
                     break
                 local_writer.write(data)
-                await local_writer.drain()
         except Exception:
             pass
 
@@ -314,11 +308,7 @@ async def _handle_work_conn(
                 data = await local_reader.read(65536)
                 if not data:
                     break
-                if is_wss:
-                    writer.write(_ws_encode_frame(data))
-                else:
-                    writer.write(data)
-                await writer.drain()
+                writer.write(_ws_encode_frame(data) if is_wss else data)
         except Exception:
             pass
 
@@ -464,6 +454,14 @@ async def _frp_session(
     # frps sends ReqWorkConn immediately on ctl.Start() before NewProxyResp arrives.
     # Collect work-conn tasks started during registration to manage their lifecycle.
     background_tasks: set[asyncio.Task[None]] = set()
+
+    def spawn_work_conn() -> None:
+        t: asyncio.Task[None] = asyncio.create_task(
+            _handle_work_conn(host, server_port, is_wss, ssl_ctx, run_id, "127.0.0.1", local_port)
+        )
+        background_tasks.add(t)
+        t.add_done_callback(background_tasks.discard)
+
     while True:
         tag, resp = await asyncio.wait_for(_frp_read(enc_reader), timeout=30.0)
         if tag == "2":  # NewProxyResp
@@ -471,21 +469,18 @@ async def _frp_session(
                 raise OSError(f"NewProxy rejected: {resp['error']}")
             break
         if tag == "r":  # ReqWorkConn interleaved before NewProxyResp
-            task: asyncio.Task[None] = asyncio.create_task(
-                _handle_work_conn(host, server_port, is_wss, ssl_ctx, run_id, "127.0.0.1", local_port)
-            )
-            background_tasks.add(task)
-            task.add_done_callback(background_tasks.discard)
+            spawn_work_conn()
         else:
             logger.debug(f"frp: unhandled tag during proxy setup: {tag!r}")
     logger.info("frp: proxy registered")
 
     # --- Steady state ---
-    last_ping = asyncio.get_event_loop().time()
+    loop = asyncio.get_running_loop()
+    last_ping = loop.time()
 
     try:
         while not stop_event.is_set():
-            now = asyncio.get_event_loop().time()
+            now = loop.time()
             elapsed = now - last_ping
             timeout = max(0.1, _HEARTBEAT_INTERVAL - elapsed)
 
@@ -493,20 +488,16 @@ async def _frp_session(
                 tag, _msg = await asyncio.wait_for(_frp_read(enc_reader), timeout=timeout)
             except TimeoutError:
                 # Time to send a ping.
-                if asyncio.get_event_loop().time() - last_ping > _HEARTBEAT_TIMEOUT:
+                if loop.time() - last_ping > _HEARTBEAT_TIMEOUT:
                     raise OSError("heartbeat timeout")
                 await _frp_write(writer, cipher_w, is_wss, "h", {})
-                last_ping = asyncio.get_event_loop().time()
+                last_ping = loop.time()
                 continue
 
             if tag == "r":  # ReqWorkConn
-                task = asyncio.create_task(
-                    _handle_work_conn(host, server_port, is_wss, ssl_ctx, run_id, "127.0.0.1", local_port)
-                )
-                background_tasks.add(task)
-                task.add_done_callback(background_tasks.discard)
+                spawn_work_conn()
             elif tag == "4":  # Pong
-                last_ping = asyncio.get_event_loop().time()
+                last_ping = loop.time()
             else:
                 logger.debug(f"frp: unhandled control tag={tag!r}")
     finally:
