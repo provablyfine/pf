@@ -7,7 +7,7 @@ import fastapi
 import fastapi.responses
 import sqlalchemy.exc
 
-from .. import converters, grant, model, responses, schemas, signature
+from .. import converters, grant, mailer, model, responses, schemas, signature
 from ..context import ctx
 
 logger = logging.getLogger(__name__)
@@ -47,13 +47,20 @@ def list_endpoint(
 
 
 @router.get("/self", status_code=200, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
-def read_self_endpoint() -> schemas.identity.Identity:
+def read_self_endpoint() -> schemas.identity.IdentitySelf:
     identity_id = ctx.identity_id
     assert identity_id is not None
     identity = model.identity.read_one(id=identity_id)
     assert identity is not None
 
-    return converters.identity_to_schema(identity)
+    active_role: schemas.identity.IdentityRoleInfo | None = None
+    if ctx.active_role_id is not None:
+        role = model.role.read_one(id=ctx.active_role_id)
+        if role is not None:
+            active_role = schemas.identity.IdentityRoleInfo(id=role.id, name=role.name)
+
+    base = converters.identity_to_schema(identity)
+    return schemas.identity.IdentitySelf(**base.model_dump(), active_role=active_role)
 
 
 @router.get("/self/bastions", status_code=200, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
@@ -318,4 +325,12 @@ def invite_endpoint(
         return schemas.identity.IdentityInviteManualResponse(
             key=converters.symmetric_to_schema(identity_invitation.key)
         )
+    email_cfg = ctx.config.email
+    if email_cfg is None:
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=500, title="Email not configured", detail="")
+        )
+    key_material = identity_invitation.key.to_dict()["k"]
+    url = f"{ctx.config.base_url}?invitation={key_material}"
+    mailer.send(email_cfg, to=identity.name, subject="Your invitation", body=f"Accept your invitation:\n{url}\n")
     return fastapi.responses.Response(status_code=204)
