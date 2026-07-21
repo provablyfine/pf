@@ -46,7 +46,10 @@ class TuiApp(base.App):
     @textual.work
     async def _load_whoami(self) -> None:
         identity = await self.auth.get_self()
-        self.whoami = identity.name
+        if identity.active_role is not None:
+            self.whoami = f"{identity.name} [{identity.active_role.name}]"
+        else:
+            self.whoami = identity.name
 
     def _handle_exception(self, error: Exception) -> None:
         if self._cfg is not None and self._config_path is not None:

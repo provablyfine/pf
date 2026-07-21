@@ -16,21 +16,22 @@ $ pf --version
 
 ## Create your first tenant
 
-The fastest way to create your first tenant is to use the free tier of our
-[managed instance](https://app.provablyfine.net/). After you login, click on
-**Add tenant** and choose a tenant name that is available.
-
-The list of tenants should display the new tenant!
+The fastest way to create your first tenant is to use our
+[demo environment](https://demo.provablyfine.net/). After you login for
+the first time, choose an organization name. From the main page,
+the list of tenants, click on **Add tenant**. Choose a tenant name, click
+**Create**, and wait a couple of seconds until the list of tenants displays
+the new tenant!
 
 ## Connect with your new tenant
 
-From the managed instance, click on the **Connect via CLI** button to display the
+From the list of tenants, click on the **Connect** button to display the
 commands needed and run the `accept` command:
 ```console
-$ pfa accept --invitation https://api.provablyfine.net/pf/t/your-tenant/directory
+$ pfa accept --invitation https://demo.provablyfine.net/pf/t/your-tenant/directory
 ```
 
-You can now login:
+You can now login
 ```console
 $ pfa login
 ```
@@ -60,8 +61,20 @@ you can register it within your tenant.
 
 First, on your local host, create an identity associated with this OpenSSH server instance:
 ```console
-$ pfa identity create -n demo
+$ pfa identity create -n demo --tag id=device
 $ INVITATION_URL=$(pfa identity invite --manual -i $(pfa identity list -n demo -q))
+```
+
+### Grant yourself access to the host
+
+```
+# Create a role
+$ pfa role create -n users
+$ USERS_ROLE_ID=$(pfa role list -n users -q)
+# Grant ssh permissions to all hosts to the new role
+$ pfa grant ssh-shell --username root --tag id=device | pfa role grant -i $USERS_ROLE_ID --set
+# Add ourselves to the role
+$ pfa role member -i $USERS_ROLE_ID -a $(pfa whoami)
 ```
 
 ### Setup the host
@@ -77,26 +90,34 @@ authentication system. Run this command on the server:
 $ pf openssh host-init --invitation $INVITATION_URL | sudo bash -s
 ```
 
-## Grant yourself access to the new host
-
-We create a role, grant ssh permissions to all hosts to that role, and we add
-ourselves to that role:
-```
-$ pf role create -n users
-$ USERS_ROLE_ID=$(pf role list -n users -q)
-$ pfa grant ssh-shell --username root --tag id=device | pfa role grant -i $USERS_ROLE_ID --set
-$ pfa role member -i $USERS_ROLE_ID -a $(pfa whoami)
-```
-
 ## Connect to your new host
 
-The `pf ssh` command is compatible with the OpenSSH `ssh` binary CLI:
+First, you need to login under the `users` role:
+```console
+$ pf login -r users
+Open https://demo.provablyfine.net/device?user_code=TJCK-RJUX
+Enter code: TJCK-RJUX
+```
+
+And then, replace the usual `ssh` command with `pf ssh`: it is compatible
+with the OpenSSH `ssh` binary CLI.
 ```console
 $ pf ssh root@demo echo hello
 hello
 ```
 
 ## Onboard new users via email
+
+### Login as admin
+
+```
+$ pfa login
+Open https://demo.provablyfine.net/device?user_code=TJCK-RCUX
+Enter code: TJCK-RCUX
+  1. admin
+  2. users
+Select role [1-2]: 1
+```
 
 ### Create a new user identity
 
@@ -106,10 +127,10 @@ $ pfa identity create -n julie.chloe@gmail.com
 
 ### Grant permissions to the new user
 
-We are going to make this new user a member of the builtin `root` role
+We are going to make this new user a member of the `users` role
 for convenience:
 ```console
-$ pfa role -i $(pfa role list -n root -q) -a julie.chloe@gmail.com
+$ pfa role -i $(pfa role list -n users -q) -a julie.chloe@gmail.com
 ```
 
 ### Invite the user
@@ -122,18 +143,28 @@ $ pfa identity invite --email -i $(pfa identity list -n julie.chloe@gmail.com -q
 ### Accept the invitation
 
 After you share the invitation with your new user, she receives an email
-that describes how to connect via the SSO. `accept` asks the user to
+that describes how to connect via the SSO:
+```console
+$ pf accept https://demo.provablyfine.net/pf/t/your-tenant/directory
+```
+
+. `accept` asks the user to
 select which SSO to use, and completes login via a browser popin
 before coming back to the terminal:
-```console
-$ pf accept https://api.provablyfine.net/pf/t/your-tenant/directory
-XXX
-```
 
 She can then look at which hosts she is allowed to access:
 ```console
+$ pf login
+Open https://demo.provablyfine.net/device?user_code=TJCK-ICUX
+Enter code: TJCK-ICUX
+  1. admin
+  2. users
+Select role [1-2]: 1
 $ pf hosts
-XXX
+host             type    username    details
+---------------  ------  ----------  ---------
+laptop-ml-perso  shell   root
+laptop-ml-perso  shell   mathieu
 ```
 
 ## Next steps

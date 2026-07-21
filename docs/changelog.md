@@ -47,9 +47,6 @@
 - Run pf-host-refresh automatically when the network comes back up via network manager dispatcher script ([#37](https://github.com/provablyfine/pf/issues/37))
 - Use `auth.tokenSource.type=exec` to allow reconnections after the initial token expiration ([#38](https://github.com/provablyfine/pf/issues/38))
 
-
-# Changelog
-
 ## 0.4.0 - 2026-06-28
 
 ### Added

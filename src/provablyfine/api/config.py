@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os.path
+import typing
 
 import pydantic
 import yaml
@@ -12,6 +13,28 @@ class DefaultBastion(pydantic.BaseModel):
 
     url: str | None = None
     ssh_proxy_jump: str | None = None
+
+
+class SendmailEmailConfig(pydantic.BaseModel):
+    model_config = pydantic.ConfigDict(extra="forbid")
+
+    type: typing.Literal["sendmail"] = "sendmail"
+    from_address: str
+    sendmail_path: str = "/usr/sbin/sendmail"
+
+
+class ResendEmailConfig(pydantic.BaseModel):
+    model_config = pydantic.ConfigDict(extra="forbid")
+
+    type: typing.Literal["resend"] = "resend"
+    from_address: str
+    api_key_filename: str
+
+
+EmailConfig = typing.Annotated[
+    SendmailEmailConfig | ResendEmailConfig,
+    pydantic.Field(discriminator="type"),
+]
 
 
 class Config(pydantic.BaseModel):
@@ -42,6 +65,7 @@ class Config(pydantic.BaseModel):
     oidc_key_rotation_period: int = 30 * 86400
 
     default_bastion: DefaultBastion | None = None
+    email: EmailConfig | None = None
 
     @staticmethod
     def load(filename: str | None = None) -> Config:
