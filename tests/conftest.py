@@ -433,6 +433,7 @@ def frps(api: Api, tmp_path: pathlib.Path, request: pytest.FixtureRequest) -> ty
     config = {
         "bindPort": bind_port,
         "tcpmuxHTTPConnectPort": connect_port,
+        "transport": {"tcpMux": False},
         "httpPlugins": [
             {
                 "name": "pf-plugin",

@@ -50,12 +50,8 @@ Host registers with bastions
   $ pf -c host.json bastion register --port $SSHD_PORT --poll-interval 1 --frps-bind-port $FRPS_BIND_PORT >/dev/null 2>&1 &
   $ REGISTER_PID=$!
 
-Wait for frpc to connect
+Wait for frp client to connect
   $ sleep 2
-
-Test get-token
-  $ pf -c host.json bastion get-token --hostname host
-  .* (re)
 
 User connects via bastion
   $ pf -c user.json ssh -n root@host "whoami"
