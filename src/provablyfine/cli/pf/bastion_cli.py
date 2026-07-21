@@ -120,9 +120,7 @@ def _frp_encode(type_tag: str, payload: dict[str, object]) -> bytes:
 
 
 class _FrpReader:
-    """Buffered reader that decrypts bytes from a TCP or WSS transport and
-    exposes readexactly() for frp message parsing.
-    """
+    """Buffered reader that decrypts bytes and exposes readexactly() for frp message parsing."""
 
     def __init__(
         self,
@@ -158,7 +156,7 @@ async def _frp_read(frp_reader: _FrpReader) -> tuple[str, dict[str, object]]:
 
 
 # ---------------------------------------------------------------------------
-# Transport: open a TCP or WSS connection to frps
+# Transport: open a WS/WSS connection to frps
 # ---------------------------------------------------------------------------
 
 _RecvFn = collections.abc.Callable[[], collections.abc.Awaitable[bytes]]
