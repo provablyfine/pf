@@ -465,8 +465,6 @@ async def _frp_session(
     }
     await _frp_write(send, cipher_w, "p", proxy_msg)
 
-    # frps sends ReqWorkConn immediately on ctl.Start() before NewProxyResp arrives.
-    # Collect work-conn tasks started during registration to manage their lifecycle.
     background_tasks: set[asyncio.Task[None]] = set()
 
     def spawn_work_conn() -> None:
@@ -476,19 +474,6 @@ async def _frp_session(
         background_tasks.add(t)
         t.add_done_callback(background_tasks.discard)
 
-    while True:
-        tag, resp = await asyncio.wait_for(_frp_read(enc_reader), timeout=30.0)
-        if tag == "2":  # NewProxyResp
-            if resp.get("error"):
-                raise OSError(f"NewProxy rejected: {resp['error']}")
-            break
-        if tag == "r":
-            spawn_work_conn()
-        else:
-            logger.debug(f"frp: unhandled tag during proxy setup: {tag!r}")
-    logger.info("frp: proxy registered")
-
-    # --- Steady state ---
     loop = asyncio.get_running_loop()
     last_ping = loop.time()
 
@@ -499,16 +484,19 @@ async def _frp_session(
             timeout = max(0.1, _HEARTBEAT_INTERVAL - elapsed)
 
             try:
-                tag, _msg = await asyncio.wait_for(_frp_read(enc_reader), timeout=timeout)
+                tag, msg = await asyncio.wait_for(_frp_read(enc_reader), timeout=timeout)
             except TimeoutError:
-                # Time to send a ping.
                 if loop.time() - last_ping > _HEARTBEAT_TIMEOUT:
                     raise OSError("heartbeat timeout")
                 await _frp_write(send, cipher_w, "h", {})
                 last_ping = loop.time()
                 continue
 
-            if tag == "r":  # ReqWorkConn
+            if tag == "2":  # NewProxyResp
+                if msg.get("error"):
+                    raise OSError(f"NewProxy rejected: {msg['error']}")
+                logger.info("frp: proxy registered")
+            elif tag == "r":  # ReqWorkConn
                 spawn_work_conn()
             elif tag == "4":  # Pong
                 last_ping = loop.time()
