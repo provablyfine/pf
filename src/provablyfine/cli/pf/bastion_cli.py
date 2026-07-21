@@ -228,12 +228,14 @@ async def _ws_connect(
     """Open a raw TCP connection and perform WebSocket upgrade to frp's control path."""
     reader, writer = await asyncio.open_connection(host, port, ssl=ssl_ctx)
     key = base64.b64encode(os.urandom(16)).decode()
+    default_port = 443 if ssl_ctx else 80
+    host_header = host if port == default_port else f"{host}:{port}"
     await cli_http.Request(
         method="GET",
         resource_target=_FRP_WS_PATH,
         version="HTTP/1.1",
         headers={
-            "Host": f"{host}:{port}",
+            "Host": host_header,
             "Upgrade": "websocket",
             "Connection": "Upgrade",
             "Sec-WebSocket-Key": key,
