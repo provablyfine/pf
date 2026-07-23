@@ -248,6 +248,7 @@ class MockOidcProvider:
         issuer: str | None = None,
         audience: str | None = None,
         nbf: int | None = None,
+        no_kid: bool = False,
     ) -> str:
         """Generate a signed JWT token."""
         if issuer is None:
@@ -258,7 +259,9 @@ class MockOidcProvider:
         now = int(time.time())
         exp = now - 1 if expired else now + 3600
 
-        header = {"alg": alg, "typ": "JWT", "kid": "rsa-1" if alg == "RS256" else "ec-1"}
+        header = {"alg": alg, "typ": "JWT"}
+        if not no_kid:
+            header["kid"] = "rsa-1" if alg == "RS256" else "ec-1"
         payload = {
             "iss": issuer,
             "aud": audience,

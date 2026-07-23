@@ -38,6 +38,9 @@ def _verify_oidc_token(issuer: str, client_id: str, id_token: str) -> str:
     kid = header.get("kid")
     alg = header.get("alg")
 
+    if kid is None:
+        raise ValueError("JWT header is missing kid")
+
     if alg not in ("RS256", "ES256"):
         raise ValueError(f"Unsupported JWT algorithm: {alg}")
 
@@ -55,7 +58,7 @@ def _verify_oidc_token(issuer: str, client_id: str, id_token: str) -> str:
     # Find matching JWK by kid
     jwk_dict = None
     for k in jwks.get("keys", []):
-        if kid is None or k.get("kid") == kid:
+        if k.get("kid") == kid:
             jwk_dict = k
             break
     if jwk_dict is None:

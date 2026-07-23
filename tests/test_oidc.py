@@ -232,6 +232,20 @@ def test_endpoint_missing_email(oidc_env: OidcEnv) -> None:
         )
 
 
+def test_endpoint_missing_kid(oidc_env: OidcEnv) -> None:
+    """Token without a kid in its header is rejected rather than validated against a random JWK."""
+    id_token = oidc_env.mock.issue_token("user@example.com", alg="RS256", no_kid=True)
+    session_key, session_fingerprint = _create_session_key()
+
+    with pytest.raises(pfc.exceptions.UI):
+        oidc_env.sc.session_with_key(session_fingerprint).login_oidc(
+            auth_name="oidc-test",
+            client_type="cli",
+            id_token=id_token,
+            session_public_key=session_key.public().to_dict(),
+        )
+
+
 def test_endpoint_unknown_auth(oidc_env: OidcEnv) -> None:
     """Login with unknown auth config fails."""
     id_token = oidc_env.mock.issue_token("user@example.com")
