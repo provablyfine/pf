@@ -177,6 +177,26 @@ class AuthGrant(base.APIBase):
     permission: AuthPermission
 
 
+class BastionFilter(base.APIBase):
+    id: int | None
+
+
+class BastionUpdatePermission(base.APIBase):
+    url: bool
+    ssh_proxy_jump: bool
+    tag_list: bool
+
+
+class BastionPermission(CRDPermission):
+    update: BastionUpdatePermission | None
+
+
+class BastionGrant(base.APIBase):
+    type: typing.Literal["bastion"] = "bastion"
+    filter: BastionFilter
+    permission: BastionPermission
+
+
 class InvalidGrant(base.APIBase):
     type: typing.Literal["invalid"] = "invalid"
 
@@ -191,6 +211,7 @@ Grant = typing.Annotated[
     | SSHCommandGrant
     | TenantGrant
     | AuthGrant
+    | BastionGrant
     | InvalidGrant,
     pydantic.Field(discriminator="type"),
 ]

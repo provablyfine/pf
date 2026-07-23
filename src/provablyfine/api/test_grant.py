@@ -51,6 +51,10 @@ def _tenant_update(display_name: bool, is_enabled: bool):
     return {"display_name": display_name, "is_enabled": is_enabled}
 
 
+def _bastion_update(url: bool, ssh_proxy_jump: bool, tag_list: bool):
+    return {"url": url, "ssh_proxy_jump": ssh_proxy_jump, "tag_list": tag_list}
+
+
 def _crud(create: bool, read: bool, update: dict[str, bool] | None, delete: bool):
     return {
         "create": create,
@@ -605,6 +609,91 @@ def test_filter_one_tenant(read, update, delete):
         )
         assert grants.tenant(tenant_id).can_update("is_enabled") == (
             tenant_id == 2 and (update is None or update["is_enabled"])
+        )
+
+
+######## BASTION ########
+
+
+def test_empty_bastion():
+    grants = grant.Grants([], [])
+
+    assert not grants.bastion(None).can_create()
+    assert not grants.bastion(1).can_read()
+    assert not grants.bastion(1).can_update("url")
+    assert not grants.bastion(1).can_update("ssh_proxy_jump")
+    assert not grants.bastion(1).can_update("tag_list")
+    assert not grants.bastion(1).can_delete()
+    with pytest.raises(AssertionError):
+        assert not grants.bastion(1).can_update("beurk")
+
+
+@pytest.mark.parametrize(
+    "create,read,update,delete",
+    [
+        (False, False, _bastion_update(False, False, False), False),
+        (True, False, _bastion_update(False, False, False), False),
+        (False, True, _bastion_update(False, False, False), False),
+        (False, False, _bastion_update(True, False, False), False),
+        (False, False, _bastion_update(False, True, False), False),
+        (False, False, _bastion_update(False, False, True), False),
+        (False, False, _bastion_update(False, False, False), True),
+        (True, True, _bastion_update(True, True, True), True),
+        (True, True, None, True),
+        (True, False, None, True),
+        (False, True, _bastion_update(True, False, False), True),
+    ],
+)
+def test_filter_all_bastion(create, read, update, delete):
+    grants = single_grants(
+        {
+            "type": "bastion",
+            "filter": {"id": None},
+            "permission": _crud(create=create, read=read, update=update, delete=delete),
+        }
+    )
+    assert grants.bastion(None).can_create() == create
+    for bastion_id in [1, 2, 3]:
+        assert grants.bastion(bastion_id).can_read() == read
+        assert grants.bastion(bastion_id).can_delete() == delete
+        assert grants.bastion(bastion_id).can_update("url") == (update is None or update["url"])
+        assert grants.bastion(bastion_id).can_update("ssh_proxy_jump") == (update is None or update["ssh_proxy_jump"])
+        assert grants.bastion(bastion_id).can_update("tag_list") == (update is None or update["tag_list"])
+
+
+@pytest.mark.parametrize(
+    "read,update,delete",
+    [
+        (False, _bastion_update(False, False, False), False),
+        (True, _bastion_update(False, False, False), False),
+        (False, _bastion_update(True, False, False), False),
+        (False, _bastion_update(False, True, False), False),
+        (False, _bastion_update(False, False, True), False),
+        (False, _bastion_update(False, False, False), True),
+        (True, _bastion_update(True, True, True), True),
+        (True, None, True),
+        (False, None, True),
+        (True, _bastion_update(True, False, False), True),
+    ],
+)
+def test_filter_one_bastion(read, update, delete):
+    grants = single_grants(
+        {
+            "type": "bastion",
+            "filter": {"id": 2},
+            "permission": _crud(create=False, read=read, update=update, delete=delete),
+        }
+    )
+    assert not grants.bastion(None).can_create()
+    for bastion_id in [1, 2, 3]:
+        assert grants.bastion(bastion_id).can_read() == (bastion_id == 2 and read)
+        assert grants.bastion(bastion_id).can_delete() == (bastion_id == 2 and delete)
+        assert grants.bastion(bastion_id).can_update("url") == (bastion_id == 2 and (update is None or update["url"]))
+        assert grants.bastion(bastion_id).can_update("ssh_proxy_jump") == (
+            bastion_id == 2 and (update is None or update["ssh_proxy_jump"])
+        )
+        assert grants.bastion(bastion_id).can_update("tag_list") == (
+            bastion_id == 2 and (update is None or update["tag_list"])
         )
 
 

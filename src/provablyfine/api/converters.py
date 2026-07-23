@@ -308,6 +308,21 @@ def _grant_to_schema(converter: GrantConverter, grant: model.grant.Grant) -> sch
                 delete=grant.permission.delete,
             )
             g = schemas.grant.AuthGrant(filter=filter, permission=permission)
+        case "bastion":
+            filter = schemas.grant.BastionFilter(id=grant.filter.id)
+            permission = schemas.grant.BastionPermission(
+                create=grant.permission.create,
+                read=grant.permission.read,
+                update=None
+                if grant.permission.update is None
+                else schemas.grant.BastionUpdatePermission(
+                    url=grant.permission.update.url,
+                    ssh_proxy_jump=grant.permission.update.ssh_proxy_jump,
+                    tag_list=grant.permission.update.tag_list,
+                ),
+                delete=grant.permission.delete,
+            )
+            g = schemas.grant.BastionGrant(filter=filter, permission=permission)
         case _:
             assert False
     return g
@@ -458,6 +473,21 @@ def _grant_from_schema(converter: GrantConverter, grant: schemas.grant.Grant) ->
                 delete=grant.permission.delete,
             )
             g = model.grant.AuthGrant(filter=filter, permission=permission)
+        case "bastion":
+            filter = model.grant.BastionFilter(id=grant.filter.id)
+            permission = model.grant.BastionPermission(
+                create=grant.permission.create,
+                read=grant.permission.read,
+                update=None
+                if grant.permission.update is None
+                else model.grant.BastionUpdatePermission(
+                    url=grant.permission.update.url,
+                    ssh_proxy_jump=grant.permission.update.ssh_proxy_jump,
+                    tag_list=grant.permission.update.tag_list,
+                ),
+                delete=grant.permission.delete,
+            )
+            g = model.grant.BastionGrant(filter=filter, permission=permission)
         case _:
             assert False
     return g

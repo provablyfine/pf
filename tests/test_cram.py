@@ -13,6 +13,7 @@ from . import utils
         "permission.t",
         "access-control-tag.t.jinja",
         "access-control-tenant.t.jinja",
+        "access-control-bastion.t.jinja",
         "access-control-identity.t",
         "access-control-identity-invite.t.jinja",
         "access-control-identity-create.t.jinja",

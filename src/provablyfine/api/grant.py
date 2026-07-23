@@ -452,6 +452,44 @@ class AuthChecker:
         return self._checker.can(check)
 
 
+class BastionChecker:
+    def __init__(self, boundaries: list[model.boundary.Boundary], roles: list[model.role.Role], bastion_id: int | None):
+        def cmp(g: model.grant.BastionGrant) -> bool:
+            if g.filter.id is not None and g.filter.id != bastion_id:
+                return False
+            return True
+
+        self._checker = Checker[model.grant.BastionGrant](boundaries, roles, cmp, model.grant.BastionGrant)
+
+    def can_create(self) -> bool:
+        def check(g: model.grant.BastionGrant):
+            return g.permission.create
+
+        return self._checker.can(check)
+
+    def can_read(self) -> bool:
+        def check(g: model.grant.BastionGrant):
+            return g.permission.read
+
+        return self._checker.can(check)
+
+    def can_update(self, field: str) -> bool:
+        assert field in ["url", "ssh_proxy_jump", "tag_list"], "You tried to update a field that does not exist"
+
+        def check(g: model.grant.BastionGrant) -> bool:
+            if g.permission.update is None:
+                return True
+            return getattr(g.permission.update, field)
+
+        return self._checker.can(check)
+
+    def can_delete(self) -> bool:
+        def check(g: model.grant.BastionGrant):
+            return g.permission.delete
+
+        return self._checker.can(check)
+
+
 class Grants:
     def __init__(self, boundaries: list[model.boundary.Boundary], roles: list[model.role.Role]):
         self._boundaries = boundaries
@@ -503,3 +541,6 @@ class Grants:
 
     def auth(self, auth_id: int | None) -> AuthChecker:
         return AuthChecker(self._boundaries, self._roles, auth_id)
+
+    def bastion(self, bastion_id: int | None) -> BastionChecker:
+        return BastionChecker(self._boundaries, self._roles, bastion_id)

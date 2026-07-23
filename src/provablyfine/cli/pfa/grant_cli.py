@@ -115,6 +115,27 @@ def _tenant_function(args: argparse.Namespace) -> None:
     _output(args, tenant)
 
 
+def _bastion_function(args: argparse.Namespace) -> None:
+    bastion = {
+        "type": "bastion",
+        "filter": {"id": args.id},
+        "permission": {
+            "create": args.create,
+            "read": args.read,
+            "delete": args.delete,
+            "update": _all_or(
+                args.update_all,
+                {
+                    "url": any("url" in entry for entry in args.update),
+                    "ssh_proxy_jump": any("ssh_proxy_jump" in entry for entry in args.update),
+                    "tag_list": any("tag_list" in entry for entry in args.update),
+                },
+            ),
+        },
+    }
+    _output(args, bastion)
+
+
 def _identity_function(args: argparse.Namespace) -> None:
     identity = {
         "type": "identity",
@@ -262,6 +283,25 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
     group.add_argument("--update-all", action="store_true")
     group.add_argument("-d", "--delete", action="store_true")
     tenant_parser.set_defaults(func=_tenant_function)
+
+    bastion_parser = subparsers.add_parser("bastion", help="Bastion permission")
+    bastion_parser.add_argument("-f", "--format", choices=["yaml", "json"], default="yaml")
+    group = bastion_parser.add_argument_group("filter")
+    group.add_argument("--id", type=int, default=None)
+    group = bastion_parser.add_argument_group("permission")
+    group.add_argument("-c", "--create", action="store_true")
+    group.add_argument("-r", "--read", action="store_true")
+    group.add_argument(
+        "-u",
+        "--update",
+        action="append",
+        nargs="*",
+        default=[],
+        choices=["url", "ssh_proxy_jump", "tag_list"],
+    )
+    group.add_argument("--update-all", action="store_true")
+    group.add_argument("-d", "--delete", action="store_true")
+    bastion_parser.set_defaults(func=_bastion_function)
 
     identity_parser = subparsers.add_parser("identity", help="Identity permission")
     identity_parser.add_argument("-f", "--format", choices=["yaml", "json"], default="yaml")

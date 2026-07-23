@@ -207,6 +207,26 @@ class AuthGrant(DBBase):
     permission: AuthPermission
 
 
+class BastionFilter(Filter):
+    id: int | None
+
+
+class BastionUpdatePermission(DBBase):
+    url: bool
+    ssh_proxy_jump: bool
+    tag_list: bool
+
+
+class BastionPermission(CRDPermission):
+    update: BastionUpdatePermission | None
+
+
+class BastionGrant(DBBase):
+    type: typing.Literal["bastion"] = "bastion"
+    filter: BastionFilter
+    permission: BastionPermission
+
+
 Grant = typing.Annotated[
     BoundaryGrant
     | TagGrant
@@ -216,7 +236,8 @@ Grant = typing.Annotated[
     | SSHPortForwardingGrant
     | SSHCommandGrant
     | TenantGrant
-    | AuthGrant,
+    | AuthGrant
+    | BastionGrant,
     pydantic.Field(discriminator="type"),
 ]
 

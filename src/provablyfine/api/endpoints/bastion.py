@@ -4,7 +4,7 @@ import fastapi
 import fastapi.responses
 
 from .. import converters as converter_module
-from .. import model, responses, schemas, signature
+from .. import grant, model, responses, schemas, signature
 from ..context import ctx
 
 router = fastapi.APIRouter(prefix="/bastion", dependencies=[fastapi.Depends(signature.verify_session)])
@@ -30,11 +30,21 @@ def list_endpoint(id: int | None = None) -> schemas.bastion.BastionListResponse:
     if id is not None:
         query["id"] = id
     bastions = model.bastion.read_all(**query)
+
+    grants = grant.Grants.create()
+    bastions = [b for b in bastions if grants.bastion(b.id).can_read()]
+
     return schemas.bastion.BastionListResponse(bastions=converter_module.bastion_list_to_schema(bastions))
 
 
 @router.post("", status_code=201, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
 def create_endpoint(data: schemas.bastion.BastionCreateRequest) -> schemas.bastion.Bastion:
+    grants = grant.Grants.create()
+    if not grants.bastion(None).can_create():
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=403, title="Not allowed to create bastion")
+        )
+
     tag_ids = _read_tag_ids(data.tag_id_list, data.tag_name_value_list)
 
     bastion_id = model.bastion.create(
@@ -57,6 +67,14 @@ def update_endpoint(bastion_id: int, data: schemas.bastion.BastionUpdateRequest)
     bastion = model.bastion.read_one(id=bastion_id)
     if bastion is None:
         raise responses.ProblemHTTPException(responses.problem_response(status_code=404, title="Bastion not found"))
+
+    grants = grant.Grants.create()
+    for field in data.model_fields_set:
+        checked_field = "tag_list" if field in ("tag_id_list", "tag_name_value_list") else field
+        if not grants.bastion(bastion.id).can_update(checked_field):
+            raise responses.ProblemHTTPException(
+                responses.problem_response(status_code=403, title="Not allowed to update bastion field", detail=field)
+            )
 
     tag_ids: list[int] | None = None
     if data.tag_name_value_list is not None or data.tag_id_list is not None:
@@ -83,6 +101,12 @@ def delete_endpoint(bastion_id: int) -> fastapi.responses.Response:
     bastion = model.bastion.read_one(id=bastion_id)
     if bastion is None:
         raise responses.ProblemHTTPException(responses.problem_response(status_code=404, title="Bastion not found"))
+
+    grants = grant.Grants.create()
+    if not grants.bastion(bastion.id).can_delete():
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=403, title="Not allowed to delete bastion")
+        )
 
     model.bastion.delete(id=bastion_id)
     return _204

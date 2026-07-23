@@ -254,6 +254,13 @@ class AuthFilter(_Base):
         return f"name:{self.name}" if self.name is not None else "*"
 
 
+class BastionFilter(_Base):
+    id: int | None
+
+    def to_text(self) -> str:
+        return f"id:{self.id}" if self.id is not None else "*"
+
+
 class TagPermission(_Base):
     create: bool
     read: bool
@@ -456,6 +463,34 @@ class AuthPermission(_Base):
         return " ".join(output)
 
 
+class BastionUpdatePermission(_Base):
+    url: bool
+    ssh_proxy_jump: bool
+    tag_list: bool
+
+    def to_text(self) -> str:
+        output = (
+            _bool(self.url, "url") + _bool(self.ssh_proxy_jump, "ssh_proxy_jump") + _bool(self.tag_list, "tag_list")
+        )
+        return " ".join(output)
+
+
+class BastionPermission(_Base):
+    create: bool
+    read: bool
+    delete: bool
+    update: BastionUpdatePermission | None
+
+    def to_text(self) -> str:
+        output = (
+            _bool(self.create, "create")
+            + _bool(self.read, "read")
+            + _update(self.update)
+            + _bool(self.delete, "delete")
+        )
+        return " ".join(output)
+
+
 class TagGrant(_Base):
     type: typing.Literal["tag"] = "tag"
     filter: TagFilter
@@ -537,6 +572,15 @@ class AuthGrant(_Base):
         return GrantText("auth", self.filter.to_text(), self.permission.to_text())
 
 
+class BastionGrant(_Base):
+    type: typing.Literal["bastion"] = "bastion"
+    filter: BastionFilter
+    permission: BastionPermission
+
+    def to_text(self) -> GrantText:
+        return GrantText("bastion", self.filter.to_text(), self.permission.to_text())
+
+
 class InvalidGrant(_Base):
     type: typing.Literal["invalid"] = "invalid"
 
@@ -554,6 +598,7 @@ Grant = typing.Annotated[
     | SSHCommandGrant
     | TenantGrant
     | AuthGrant
+    | BastionGrant
     | InvalidGrant,
     pydantic.Field(discriminator="type"),
 ]
