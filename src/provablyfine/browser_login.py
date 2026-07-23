@@ -30,6 +30,8 @@ def open_browser(url: str) -> None:
 
 def has_valid_session(config: client.Config) -> bool:
     if config.session_key_file is not None or config.session_key_pem is not None:
+        if config.session_expires_at is not None and config.session_expires_at <= time.time():
+            return False
         return True
     if not config.session_key_fingerprint:
         return False

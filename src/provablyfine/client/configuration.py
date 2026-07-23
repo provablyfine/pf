@@ -22,6 +22,7 @@ class Config:
 
     def __post_init__(self) -> None:
         self.ephemeral: bool = False
+        self.session_expires_at: int | None = None
 
     @staticmethod
     def load(filename: str) -> Config:

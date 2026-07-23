@@ -71,6 +71,7 @@ class LoginRoleInfo(_Base):
 
 class LoginResponse(_Base):
     roles: list[LoginRoleInfo]
+    expires_at: int
 
 
 class Tag(_Base):

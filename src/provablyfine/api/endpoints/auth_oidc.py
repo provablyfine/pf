@@ -174,4 +174,7 @@ def oidc_login_endpoint(
     members = ctx.app_db.role_member.read_all(identity_id=identity.id)
     role_ids = list(set(m.role_id for m in members))
     roles = ctx.app_db.role.read_all(id=role_ids) if role_ids else []
-    return schemas.directory.LoginResponse(roles=[schemas.directory.LoginRoleInfo(id=r.id, name=r.name) for r in roles])
+    return schemas.directory.LoginResponse(
+        roles=[schemas.directory.LoginRoleInfo(id=r.id, name=r.name) for r in roles],
+        expires_at=now + ctx.config.session_duration_s,
+    )

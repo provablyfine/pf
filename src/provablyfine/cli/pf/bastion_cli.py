@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 _FRP_VERSION = "0.69.1"
 _HEARTBEAT_INTERVAL = 30.0
-_HEARTBEAT_TIMEOUT = 90.0
+_HEARTBEAT_TIMEOUT = 45.0
 _FRP_WS_PATH = "/~!frp"  # frp's fixed WebSocket upgrade path (fatedier/frp)
 
 
@@ -349,7 +349,7 @@ async def _handle_work_conn(
 
 
 async def _run_frp_client(
-    sc: pfc.AsyncSessionClient,
+    session: _ManagedSession,
     bastion_url: str,
     identity_name: str,
     local_port: int,
@@ -364,7 +364,7 @@ async def _run_frp_client(
     while not stop_event.is_set():
         # Refresh token on each (re)connect attempt.
         try:
-            token_response = await sc.get_self_token("bastion", hostname=identity_name)
+            token_response = await session.get_self_token("bastion", hostname=identity_name)
             jwt_token = token_response.token
             frpc_user = _jwt_audience(jwt_token)
         except Exception as e:
@@ -474,6 +474,7 @@ async def _frp_session(
 
     loop = asyncio.get_running_loop()
     last_ping = loop.time()
+    last_pong = loop.time()
 
     try:
         while not stop_event.is_set():
@@ -484,7 +485,7 @@ async def _frp_session(
             try:
                 tag, msg = await asyncio.wait_for(_frp_read(enc_reader), timeout=timeout)
             except TimeoutError:
-                if loop.time() - last_ping > _HEARTBEAT_TIMEOUT:
+                if loop.time() - last_pong > _HEARTBEAT_TIMEOUT:
                     raise OSError("heartbeat timeout")
                 await _frp_write(send, cipher_w, "h", {})
                 last_ping = loop.time()
@@ -497,7 +498,7 @@ async def _frp_session(
             elif tag == "r":  # ReqWorkConn
                 spawn_work_conn()
             elif tag == "4":  # Pong
-                last_ping = loop.time()
+                last_pong = loop.time()
             else:
                 logger.debug(f"frp: unhandled control tag={tag!r}")
     finally:
@@ -505,6 +506,39 @@ async def _frp_session(
             t.cancel()
         if background_tasks:
             await asyncio.gather(*background_tasks, return_exceptions=True)
+
+
+# ---------------------------------------------------------------------------
+# Managed session: transparent re-login on expiry
+# ---------------------------------------------------------------------------
+
+
+class _ManagedSession:
+    """Holds an AsyncSessionClient and re-logs automatically when the session key expires."""
+
+    def __init__(self, c: client.Config, factory: client.Factory) -> None:
+        self._c = c
+        self._factory = factory
+        self.sc = factory.async_session()
+
+    async def _renew(self) -> None:
+        logger.info("session expired, renewing")
+        await asyncio.get_running_loop().run_in_executor(None, login.ensure_session, self._c, self._factory)
+        self.sc = self._factory.async_session()
+        logger.info("session renewed")
+
+    async def _call[T](self, fn: collections.abc.Callable[[], collections.abc.Awaitable[T]]) -> T:
+        try:
+            return await fn()
+        except pfc.exceptions.SessionExpired:
+            await self._renew()
+            return await fn()
+
+    async def get_self_token(self, service: str, hostname: str) -> pfc.schemas.IdentitySelfTokenResponse:
+        return await self._call(lambda: self.sc.get_self_token(service, hostname=hostname))
+
+    async def list_self_bastions(self) -> pfc.schemas.IdentitySelfBastionListResponse:
+        return await self._call(lambda: self.sc.list_self_bastions())
 
 
 # ---------------------------------------------------------------------------
@@ -528,8 +562,8 @@ def _register_function(args: argparse.Namespace) -> None:
         loop.add_signal_handler(signal.SIGTERM, signal_handler)
         loop.add_signal_handler(signal.SIGINT, signal_handler)
 
-        sc = client.Factory(c, timeout=args.timeout).async_session()
-        identity = await sc.get_self()
+        session = _ManagedSession(c, factory)
+        identity = await session.sc.get_self()
         identity_name = identity.name
 
         active_tasks: dict[int, asyncio.Task[None]] = {}
@@ -539,7 +573,7 @@ def _register_function(args: argparse.Namespace) -> None:
 
         while not stop_event.is_set():
             try:
-                bastions_response = await sc.list_self_bastions()
+                bastions_response = await session.list_self_bastions()
                 current_bastions = {b.id: b for b in bastions_response.bastions}
 
                 for bastion_id in list(active_tasks.keys()):
@@ -551,7 +585,7 @@ def _register_function(args: argparse.Namespace) -> None:
                     if bastion_id in active_tasks:
                         continue
                     task = asyncio.create_task(
-                        _run_frp_client(sc, bastion.url, identity_name, args.port, stop_event, args.frps_bind_port)
+                        _run_frp_client(session, bastion.url, identity_name, args.port, stop_event, args.frps_bind_port)
                     )
                     active_tasks[bastion_id] = task
                     task.add_done_callback(functools.partial(done_callback, bastion_id))

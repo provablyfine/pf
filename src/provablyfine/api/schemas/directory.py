@@ -41,3 +41,4 @@ class LoginRoleInfo(base.APIBase):
 
 class LoginResponse(base.APIBase):
     roles: list[LoginRoleInfo]
+    expires_at: int

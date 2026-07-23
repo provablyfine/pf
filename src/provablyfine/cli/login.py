@@ -122,6 +122,7 @@ def ensure_session(c: client.Config, factory: client.Factory) -> None:
     c.session_key_pem = session_key.to_openssh(passphrase=None).decode()
     c.session_key_fingerprint = None
     c.session_key_file = None
+    c.session_expires_at = result.expires_at
     c.ephemeral = True
     session_client = factory.session_with_private_key(session_key)
     if c.role_id is not None:
