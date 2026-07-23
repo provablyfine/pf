@@ -106,6 +106,10 @@ def _verify_oidc_token(issuer: str, client_id: str, id_token: str) -> str:
     if payload.get("exp", 0) <= now:
         raise ValueError("JWT is expired")
 
+    nbf = payload.get("nbf")
+    if nbf is not None and nbf > now:
+        raise ValueError("JWT is not yet valid")
+
     email = payload.get("email")
     if not email:
         raise ValueError("JWT missing email claim")

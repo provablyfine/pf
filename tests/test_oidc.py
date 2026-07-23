@@ -156,6 +156,20 @@ def test_endpoint_expired(oidc_env: OidcEnv) -> None:
         )
 
 
+def test_endpoint_not_yet_valid(oidc_env: OidcEnv) -> None:
+    """Token with nbf in the future is rejected."""
+    id_token = oidc_env.mock.issue_token("user@example.com", nbf=int(time.time()) + 3600)
+    session_key, session_fingerprint = _create_session_key()
+
+    with pytest.raises(pfc.exceptions.UI):
+        oidc_env.sc.session_with_key(session_fingerprint).login_oidc(
+            auth_name="oidc-test",
+            client_type="cli",
+            id_token=id_token,
+            session_public_key=session_key.public().to_dict(),
+        )
+
+
 def test_endpoint_wrong_issuer(oidc_env: OidcEnv) -> None:
     """Token with wrong issuer is rejected."""
     id_token = oidc_env.mock.issue_token("user@example.com", issuer="https://evil.example.com")

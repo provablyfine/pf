@@ -247,6 +247,7 @@ class MockOidcProvider:
         expired: bool = False,
         issuer: str | None = None,
         audience: str | None = None,
+        nbf: int | None = None,
     ) -> str:
         """Generate a signed JWT token."""
         if issuer is None:
@@ -265,6 +266,8 @@ class MockOidcProvider:
             "exp": exp,
             "iat": now,
         }
+        if nbf is not None:
+            payload["nbf"] = nbf
 
         header_b64 = _b64url_encode(json.dumps(header).encode())
         payload_b64 = _b64url_encode(json.dumps(payload).encode())
