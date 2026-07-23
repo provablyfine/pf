@@ -1,10 +1,10 @@
 NULL:=
 
 tests:
-	PYTHONUNBUFFERED=1 uv run pytest --tb=short -n auto
+	PYTHONUNBUFFERED=1 uv run pytest
 cov:
 	@rm -rf .coverage
-	PYTHONUNBUFFERED=1 COVERAGE_FILE=$(shell pwd)/.coverage COVERAGE_PROCESS_START=$(shell pwd)/tests/.coveragerc COVERAGE_RCFILE=$(shell pwd)/tests/.coveragerc uv run pytest --tb=short -n auto
+	PYTHONUNBUFFERED=1 COVERAGE_FILE=$(shell pwd)/.coverage COVERAGE_PROCESS_START=$(shell pwd)/tests/.coveragerc COVERAGE_RCFILE=$(shell pwd)/tests/.coveragerc uv run pytest
 
 cov-report:
 	uv run coverage combine --rcfile $(shell pwd)/tests/.coveragerc -a -q || true
