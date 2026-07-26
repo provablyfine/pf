@@ -63,6 +63,14 @@ pfa = "provablyfine.cli.pfa.main:pfa"
 pfat = "provablyfine.tui.app:pfat"
 pf-api-rotate = "provablyfine.api.rotate:main"
 
+[tool.coverage.run]
+source = [
+    "./src/provablyfine",
+    "/usr/local/lib/python3.14/site-packages/provablyfine",
+]
+parallel = true
+patch = ["subprocess", "_exit"]
+
 [dependency-groups]
 dev = [
     "coverage>=7.13.4",

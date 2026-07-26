@@ -4,11 +4,11 @@ tests:
 	PYTHONUNBUFFERED=1 uv run pytest
 cov:
 	@rm -rf .coverage
-	PYTHONUNBUFFERED=1 COVERAGE_FILE=$(shell pwd)/.coverage COVERAGE_PROCESS_START=$(shell pwd)/tests/.coveragerc COVERAGE_RCFILE=$(shell pwd)/tests/.coveragerc uv run pytest
+	PYTHONUNBUFFERED=1 COVERAGE_PROCESS_START=$(shell pwd)/pyproject.toml uv run pytest
 
 cov-report:
-	uv run coverage combine --rcfile $(shell pwd)/tests/.coveragerc -a -q || true
-	uv run coverage html -d cov --rcfile $(shell pwd)/tests/.coveragerc
+	uv run coverage combine --rcfile $(shell pwd)/pyproject.toml -a -q || true
+	uv run coverage html -d cov --rcfile $(shell pwd)/pyproject.toml
 	uv run coverage report
 
 lint:
