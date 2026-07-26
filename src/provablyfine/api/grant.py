@@ -490,6 +490,17 @@ class BastionChecker:
         return self._checker.can(check)
 
 
+class AuditLogChecker:
+    def __init__(self, boundaries: list[model.boundary.Boundary], roles: list[model.role.Role]):
+        self._checker = Checker[model.grant.AuditLogGrant](boundaries, roles, lambda g: True, model.grant.AuditLogGrant)
+
+    def can_read(self) -> bool:
+        def check(g: model.grant.AuditLogGrant) -> bool:
+            return g.permission.read
+
+        return self._checker.can(check)
+
+
 class Grants:
     def __init__(self, boundaries: list[model.boundary.Boundary], roles: list[model.role.Role]):
         self._boundaries = boundaries
@@ -544,3 +555,6 @@ class Grants:
 
     def bastion(self, bastion_id: int | None) -> BastionChecker:
         return BastionChecker(self._boundaries, self._roles, bastion_id)
+
+    def audit_log(self) -> AuditLogChecker:
+        return AuditLogChecker(self._boundaries, self._roles)

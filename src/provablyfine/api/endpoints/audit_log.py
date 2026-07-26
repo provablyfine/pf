@@ -1,11 +1,11 @@
 import fastapi
 
-from .. import model, schemas, signature
+from .. import grant, model, responses, schemas, signature
 
 router = fastapi.APIRouter(prefix="/audit-log", dependencies=[fastapi.Depends(signature.verify_session)])
 
 
-@router.get("", status_code=200)
+@router.get("", status_code=200, responses={403: responses.PROBLEM})
 def list_endpoint(
     level: int | None = None,
     object_type: str | None = None,
@@ -13,6 +13,11 @@ def list_endpoint(
     start_time: int | None = None,
     end_time: int | None = None,
 ) -> schemas.audit.AuditLogListResponse:
+    grants = grant.Grants.create()
+    if not grants.audit_log().can_read():
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=403, title="Not allowed to read audit log")
+        )
     rows = model.audit_log.read_all(level, object_type, by_identity_id, start_time, end_time)
     entries = [
         schemas.audit.AuditLogEntry(

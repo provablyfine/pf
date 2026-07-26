@@ -227,6 +227,20 @@ class BastionGrant(DBBase):
     permission: BastionPermission
 
 
+class AuditLogFilter(Filter):
+    pass
+
+
+class AuditLogPermission(DBBase):
+    read: bool
+
+
+class AuditLogGrant(DBBase):
+    type: typing.Literal["audit-log"] = "audit-log"
+    filter: AuditLogFilter
+    permission: AuditLogPermission
+
+
 Grant = typing.Annotated[
     BoundaryGrant
     | TagGrant
@@ -237,7 +251,8 @@ Grant = typing.Annotated[
     | SSHCommandGrant
     | TenantGrant
     | AuthGrant
-    | BastionGrant,
+    | BastionGrant
+    | AuditLogGrant,
     pydantic.Field(discriminator="type"),
 ]
 

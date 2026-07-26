@@ -697,6 +697,47 @@ def test_filter_one_bastion(read, update, delete):
         )
 
 
+######## AUDIT LOG ########
+
+
+def test_empty_audit_log():
+    grants = grant.Grants([], [])
+    assert not grants.audit_log().can_read()
+
+    grants = grant.Grants([], [role([])])
+    assert not grants.audit_log().can_read()
+
+    grants = grant.Grants([boundary([], [])], [role([])])
+    assert not grants.audit_log().can_read()
+
+
+@pytest.mark.parametrize("read", [False, True])
+def test_audit_log_read(read: bool):
+    grants = single_grants({"type": "audit-log", "filter": {}, "permission": {"read": read}})
+    assert grants.audit_log().can_read() == read
+
+
+def test_audit_log_with_ceiling():
+    grants = grant.Grants(
+        [boundary([{"type": "audit-log", "filter": {}, "permission": {"read": False}}], [])],
+        [role([{"type": "audit-log", "filter": {}, "permission": {"read": True}}])],
+    )
+    assert not grants.audit_log().can_read()
+
+
+def test_audit_log_with_denied():
+    grants = grant.Grants(
+        [
+            boundary(
+                [{"type": "audit-log", "filter": {}, "permission": {"read": True}}],
+                [{"type": "audit-log", "filter": {}, "permission": {"read": True}}],
+            )
+        ],
+        [role([{"type": "audit-log", "filter": {}, "permission": {"read": True}}])],
+    )
+    assert not grants.audit_log().can_read()
+
+
 ######## SSH ########
 
 

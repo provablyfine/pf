@@ -323,6 +323,10 @@ def _grant_to_schema(converter: GrantConverter, grant: model.grant.Grant) -> sch
                 delete=grant.permission.delete,
             )
             g = schemas.grant.BastionGrant(filter=filter, permission=permission)
+        case "audit-log":
+            filter = schemas.grant.AuditLogFilter()
+            permission = schemas.grant.AuditLogPermission(read=grant.permission.read)
+            g = schemas.grant.AuditLogGrant(filter=filter, permission=permission)
         case _:
             assert False
     return g
@@ -488,6 +492,10 @@ def _grant_from_schema(converter: GrantConverter, grant: schemas.grant.Grant) ->
                 delete=grant.permission.delete,
             )
             g = model.grant.BastionGrant(filter=filter, permission=permission)
+        case "audit-log":
+            filter = model.grant.AuditLogFilter()
+            permission = model.grant.AuditLogPermission(read=grant.permission.read)
+            g = model.grant.AuditLogGrant(filter=filter, permission=permission)
         case _:
             assert False
     return g

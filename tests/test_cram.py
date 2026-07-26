@@ -29,6 +29,7 @@ from . import utils
         "tenant-isolation.t",
         "auth.t",
         "audit-log.t",
+        "access-control-audit-log.t",
         "login.t",
         "ping.t",
     ],

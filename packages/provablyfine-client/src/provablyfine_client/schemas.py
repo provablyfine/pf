@@ -581,6 +581,28 @@ class BastionGrant(_Base):
         return GrantText("bastion", self.filter.to_text(), self.permission.to_text())
 
 
+class AuditLogFilter(_Base):
+    def to_text(self) -> str:
+        return "*"
+
+
+class AuditLogPermission(_Base):
+    read: bool
+
+    def to_text(self) -> str:
+        output = _bool(self.read, "read")
+        return " ".join(output)
+
+
+class AuditLogGrant(_Base):
+    type: typing.Literal["audit-log"] = "audit-log"
+    filter: AuditLogFilter
+    permission: AuditLogPermission
+
+    def to_text(self) -> GrantText:
+        return GrantText("audit-log", self.filter.to_text(), self.permission.to_text())
+
+
 class InvalidGrant(_Base):
     type: typing.Literal["invalid"] = "invalid"
 
@@ -599,6 +621,7 @@ Grant = typing.Annotated[
     | TenantGrant
     | AuthGrant
     | BastionGrant
+    | AuditLogGrant
     | InvalidGrant,
     pydantic.Field(discriminator="type"),
 ]

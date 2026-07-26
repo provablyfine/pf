@@ -93,6 +93,10 @@ def _provision(allow_tenant_create: bool):
         filter=model.grant.BastionFilter(id=None),
         permission=model.grant.BastionPermission(create=True, read=True, update=None, delete=True),
     )
+    audit_log_grant_all = model.grant.AuditLogGrant(
+        filter=model.grant.AuditLogFilter(),
+        permission=model.grant.AuditLogPermission(read=True),
+    )
 
     if allow_tenant_create:
         ceiling_list = None
@@ -130,6 +134,7 @@ def _provision(allow_tenant_create: bool):
         tenant_grant_all,
         auth_grant_all,
         bastion_grant_all,
+        audit_log_grant_all,
     ]
     root_role_id = model.role.create(
         name="root",

@@ -214,6 +214,17 @@ def _ssh_command_function(args: argparse.Namespace) -> None:
     _output(args, grant)
 
 
+def _audit_log_function(args: argparse.Namespace) -> None:
+    grant = {
+        "type": "audit-log",
+        "filter": {},
+        "permission": {
+            "read": args.read,
+        },
+    }
+    _output(args, grant)
+
+
 def add_subparser(parser: argparse.ArgumentParser) -> None:
     subparsers = parser.add_subparsers(required=True, dest="subcommand", metavar="subcommand")
 
@@ -356,3 +367,9 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
     group.add_argument("--username", nargs="*", default=[])
     group.add_argument("--cmd", nargs="*", default=[])
     ssh_command_parser.set_defaults(func=_ssh_command_function)
+
+    audit_log_parser = subparsers.add_parser("audit-log", help="Audit log permission")
+    audit_log_parser.add_argument("-f", "--format", choices=["yaml", "json"], default="yaml")
+    group = audit_log_parser.add_argument_group("permission")
+    group.add_argument("-r", "--read", action="store_true")
+    audit_log_parser.set_defaults(func=_audit_log_function)

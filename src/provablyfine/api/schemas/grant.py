@@ -197,6 +197,20 @@ class BastionGrant(base.APIBase):
     permission: BastionPermission
 
 
+class AuditLogFilter(base.APIBase):
+    pass
+
+
+class AuditLogPermission(base.APIBase):
+    read: bool
+
+
+class AuditLogGrant(base.APIBase):
+    type: typing.Literal["audit-log"] = "audit-log"
+    filter: AuditLogFilter
+    permission: AuditLogPermission
+
+
 class InvalidGrant(base.APIBase):
     type: typing.Literal["invalid"] = "invalid"
 
@@ -212,6 +226,7 @@ Grant = typing.Annotated[
     | TenantGrant
     | AuthGrant
     | BastionGrant
+    | AuditLogGrant
     | InvalidGrant,
     pydantic.Field(discriminator="type"),
 ]
