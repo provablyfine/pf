@@ -327,6 +327,10 @@ def api(request, tmp_path):
         print(f"Config: {api_config}")
         print(f"Port file: {api_port_file}")
         print(f"Log:\n{log_content}")
+        try:
+            popen.terminate()
+        except Exception:
+            pass
         raise Exception("Unable to start pf server")
 
     yield Api(api_port)
