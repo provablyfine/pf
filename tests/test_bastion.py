@@ -14,6 +14,7 @@ def test_bastion_ssh(api, frps, sshd, ssh_agent):
             "FRPS_BIND_PORT": str(frps.bind_port),
             "FRPS_CONNECT_PORT": str(frps.connect_port),
             "SSHD_PORT": str(sshd.host_port),
+            "SSHD_ADDRESS": str(sshd.host_address),
             "SSHD_CONTAINER_ID": sshd.container_id,
             "SSHD_KEYS_DIRECTORY": sshd.keys_directory,
             "SSH_AUTH_SOCK": ssh_agent.socket,

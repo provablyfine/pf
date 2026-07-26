@@ -47,7 +47,7 @@ User starts
   $ pf -c user.json login --session-key user-session
 
 Host registers with bastions
-  $ pf -c host.json bastion register --port $SSHD_PORT --poll-interval 1 --frps-bind-port $FRPS_BIND_PORT >/dev/null 2>&1 &
+  $ pf -c host.json bastion register --address $SSHD_ADDRESS --port $SSHD_PORT --poll-interval 1 --frps-bind-port $FRPS_BIND_PORT >/dev/null 2>&1 &
   $ REGISTER_PID=$!
 
 Wait for frp client to connect

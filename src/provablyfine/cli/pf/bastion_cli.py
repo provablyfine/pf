@@ -352,7 +352,8 @@ async def _run_frp_client(
     session: _ManagedSession,
     bastion_url: str,
     identity_name: str,
-    local_port: int,
+    address: str,
+    port: int,
     stop_event: asyncio.Event,
     frps_bind_port: int | None = None,
 ) -> None:
@@ -389,7 +390,8 @@ async def _run_frp_client(
                     jwt_token=jwt_token,
                     frpc_user=frpc_user,
                     identity_name=identity_name,
-                    local_port=local_port,
+                    address=address,
+                    port=port,
                     stop_event=stop_event,
                 )
         except Exception as e:
@@ -416,7 +418,8 @@ async def _frp_session(
     jwt_token: str,
     frpc_user: str,
     identity_name: str,
-    local_port: int,
+    address: str,
+    port: int,
     stop_event: asyncio.Event,
 ) -> None:
     # --- Login ---
@@ -457,8 +460,8 @@ async def _frp_session(
         "proxy_name": "ssh",
         "proxy_type": "tcpmux",
         "multiplexer": "httpconnect",
-        "local_ip": "127.0.0.1",
-        "local_port": local_port,
+        "local_ip": address,
+        "local_port": port,
         "custom_domains": [f"{frpc_user}.{host}"],
     }
     await _frp_write(send, cipher_w, "p", proxy_msg)
@@ -466,8 +469,9 @@ async def _frp_session(
     background_tasks: set[asyncio.Task[None]] = set()
 
     def spawn_work_conn() -> None:
+        logger.info("work connection created")
         t: asyncio.Task[None] = asyncio.create_task(
-            _handle_work_conn(host, server_port, ssl_ctx, run_id, "127.0.0.1", local_port)
+            _handle_work_conn(host, server_port, ssl_ctx, run_id, address, port)
         )
         background_tasks.add(t)
         t.add_done_callback(background_tasks.discard)
@@ -585,7 +589,15 @@ def _register_function(args: argparse.Namespace) -> None:
                     if bastion_id in active_tasks:
                         continue
                     task = asyncio.create_task(
-                        _run_frp_client(session, bastion.url, identity_name, args.port, stop_event, args.frps_bind_port)
+                        _run_frp_client(
+                            session,
+                            bastion.url,
+                            identity_name,
+                            args.address,
+                            args.port,
+                            stop_event,
+                            args.frps_bind_port,
+                        )
                     )
                     active_tasks[bastion_id] = task
                     task.add_done_callback(functools.partial(done_callback, bastion_id))
@@ -697,7 +709,8 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
     sub = parser.add_subparsers(required=True, dest="subcommand", metavar="subcommand")
 
     register_parser = sub.add_parser("register", help="Register with bastions")
-    register_parser.add_argument("-p", "--port", type=int, default=2222, help="Local port to listen on")
+    register_parser.add_argument("--address", type=str, default="127.0.0.1", help="Address to forward connections to")
+    register_parser.add_argument("-p", "--port", type=int, default=2222, help="Port to forward connections to")
     register_parser.add_argument(
         "-i",
         "--poll-interval",

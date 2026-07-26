@@ -73,6 +73,7 @@ def _parse_port_mapping(s):
 
 @dataclasses.dataclass(frozen=True)
 class SshD:
+    host_address: str
     host_port: int
     keys_directory: str
     container_id: str
@@ -191,6 +192,8 @@ def sshd(request, sshd_image, tmp_path):
                 "podman",
                 "run",
                 "--detach",  # run in background and return immediately
+                # We do not --rm because we want to be able to read the logs when
+                # something goes wrong.
                 "--quiet",
                 "--publish-all",
                 "--volume",
@@ -208,17 +211,26 @@ def sshd(request, sshd_image, tmp_path):
             raise
         # Wait for sshd to be ready inside container (key generation + daemon startup can take ~10s)
         start = time.time()
-        while time.time() - start < 30:
-            try:
-                with socket.create_connection(("127.0.0.1", port), timeout=1):
-                    break
-            except OSError:
-                time.sleep(0.1)
-        else:
+        host_address = None
+        while time.time() - start < 30 and host_address is None:
+            # We try 169.254.0.1 because we might be running within a sandbox isolated from the
+            # host and in this case, the ports exposed by the podman containers will be accessible
+            # as 169.254.0.1
+            # The normal case is 127.0.0.1: we are running next to the podman runtime
+            for address in ["127.0.0.1", "169.254.0.1"]:
+                try:
+                    with socket.create_connection((address, port), timeout=1):
+                        host_address = address
+                        break
+                except OSError:
+                    time.sleep(0.1)
+        if host_address is None:
             print(f"SSH Server container: {container_id}")
             raise Exception(f"sshd not ready after 30s in container {container_id}")
         try:
-            yield SshD(host_port=port, keys_directory=ssh_keys_directory, container_id=container_id)
+            yield SshD(
+                host_address=host_address, host_port=port, keys_directory=ssh_keys_directory, container_id=container_id
+            )
         finally:
             if hasattr(request.node, "rep_call"):
                 if request.node.rep_call.failed:
@@ -422,13 +434,13 @@ def _free_port() -> int:
 
 
 @dataclasses.dataclass(frozen=True)
-class FrPs:
+class FRPS:
     bind_port: int
     connect_port: int
 
 
 @pytest.fixture
-def frps(api: Api, tmp_path: pathlib.Path, request: pytest.FixtureRequest) -> typing.Generator[FrPs, None, None]:
+def frps(api: Api, tmp_path: pathlib.Path, request: pytest.FixtureRequest) -> typing.Generator[FRPS, None, None]:
     frps_binary = _find_frps(tmp_path)
     bind_port = _free_port()
     connect_port = _free_port()
@@ -476,7 +488,7 @@ def frps(api: Api, tmp_path: pathlib.Path, request: pytest.FixtureRequest) -> ty
         raise Exception("frps failed to start")
 
     try:
-        yield FrPs(bind_port=bind_port, connect_port=connect_port)
+        yield FRPS(bind_port=bind_port, connect_port=connect_port)
     finally:
         popen.terminate()
         popen.wait()
