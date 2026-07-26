@@ -14,7 +14,7 @@ import pydantic
 import sqlalchemy
 
 from .. import base64url, log
-from . import config, dependencies, endpoints, jwt_validator, middleware, migrate, registry_db, responses
+from . import config, dependencies, endpoints, jwt_validator, middleware, migrate, registry_db, responses, signature
 
 logger = logging.getLogger(__name__)
 
@@ -116,6 +116,7 @@ def create(conf: config.Config) -> fastapi.FastAPI:
         app.state.tenant_engines = {}
         app.state.kek = kek
         app.state.debug_store = _InMemoryDebugStore()
+        app.state.nonce_store = signature.NonceStore()
 
         with registry_engine.connect() as registry_conn:
             tenant_rows = registry_db.create(registry_conn).tenant.read_all()

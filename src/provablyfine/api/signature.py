@@ -17,6 +17,31 @@ from .context import ctx
 # http_sfv type stubs are incomplete
 # pyright: reportPrivateImportUsage=false, reportUnknownMemberType=false, reportUnknownVariableType=false
 
+# Signatures older than this are rejected, regardless of nonce tracking.
+FRESHNESS_WINDOW_SECONDS = 300
+
+
+class NonceStore:
+    """In-memory TTL set of (key_id, nonce) pairs used to reject replayed signatures."""
+
+    def __init__(self, window_seconds: int = FRESHNESS_WINDOW_SECONDS):
+        self._window_seconds = window_seconds
+        self._seen: dict[tuple[str, str], int] = {}
+
+    def check_and_add(self, key_id: str, nonce: str, now: int) -> bool:
+        """Records (key_id, nonce) as seen; returns False if it was already seen."""
+        self._expire(now)
+        entry = (key_id, nonce)
+        if entry in self._seen:
+            return False
+        self._seen[entry] = now
+        return True
+
+    def _expire(self, now: int) -> None:
+        expired = [entry for entry, seen_at in self._seen.items() if now - seen_at > self._window_seconds]
+        for entry in expired:
+            del self._seen[entry]
+
 
 def _parse_signature_input(signature_input: str) -> dict[str, tuple[str, http_sfv.InnerList]]:
     d = http_sfv.Dictionary()
@@ -123,14 +148,26 @@ def verify(request: fastapi.requests.Request, key_id: str, key: jwk.Symmetric | 
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=400, title="Missing nonce in Signature-Input", detail=key_id)
         )
+    nonce = inner.params["nonce"]
+    if not isinstance(nonce, str):
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=400, title="nonce mistyped in Signature-Input", detail=key_id)
+        )
     if "created" not in inner.params:
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=400, title="Missing created in Signature-Input", detail=key_id)
         )
     created: int = inner.params["created"]
-    if int(time.time()) - created > 5 * 3600:
+    now = int(time.time())
+    if now - created > FRESHNESS_WINDOW_SECONDS:
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=400, title="Signature is too old", detail=key_id)
+        )
+
+    nonce_store: NonceStore = request.app.state.nonce_store
+    if not nonce_store.check_and_add(key_id, nonce, now):
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=400, title="Signature nonce has already been used", detail=key_id)
         )
 
     if label not in signature_by_label:
