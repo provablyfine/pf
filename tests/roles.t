@@ -39,6 +39,10 @@ List existing roles (there is one)
   grant        type:       bastion
                filter:     *
                permission: create read update.* delete
+  grant        type:       audit-log
+               filter:     *
+               permission: read
+
 
 Create tags to be able to define tag-related permissions in role
   $ pfa -c config.json tag create -n env -v dev
