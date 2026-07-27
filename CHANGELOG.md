@@ -1,3 +1,10 @@
+## 0.7.2 - 2026-07-27
+
+### Added
+
+- Send email on user email invite ([#48](https://github.com/provablyfine/pf/issues/48))
+
+
 ## 0.7.1 - 2026-07-17
 
 ### Added

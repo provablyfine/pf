@@ -1,3 +1,10 @@
+## 0.7.2 - 2026-07-27
+
+### Added
+
+- Send email on user email invite ([#48](https://github.com/provablyfine/pf/issues/48))
+
+
 ## 0.7.1 - 2026-07-17
 
 ### Added
@@ -46,6 +53,9 @@
 - Use frpc/frps instead of custom bastion protocol to improve robustness ([#36](https://github.com/provablyfine/pf/issues/36))
 - Run pf-host-refresh automatically when the network comes back up via network manager dispatcher script ([#37](https://github.com/provablyfine/pf/issues/37))
 - Use `auth.tokenSource.type=exec` to allow reconnections after the initial token expiration ([#38](https://github.com/provablyfine/pf/issues/38))
+
+
+# Changelog
 
 ## 0.4.0 - 2026-06-28
 
