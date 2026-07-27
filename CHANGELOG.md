@@ -1,3 +1,27 @@
+## 0.7.3 - 2026-07-27
+
+### Fixed
+
+- Add missing -r --role option from whoami ([#45](https://github.com/provablyfine/pf/issues/45))
+- Avoid parallel test runs in CI ([#46](https://github.com/provablyfine/pf/issues/46))
+- Add grants to active role is allowed ([#47](https://github.com/provablyfine/pf/issues/47))
+- Increase client timeout to 30s for e2e tests ([#50](https://github.com/provablyfine/pf/issues/50))
+- Avoid use of frpc binary: replace with a client-side frp pure-python implementation ([#52](https://github.com/provablyfine/pf/issues/52))
+- Make sure we are not able to create the same identity twice. ([#54](https://github.com/provablyfine/pf/issues/54))
+- Track session key expiration explicitly to renew it on time and reconnect successfully when a bastion connection dies. ([#55](https://github.com/provablyfine/pf/issues/55))
+- Publish main branch documentation updates to "dev" documentation version ([#56](https://github.com/provablyfine/pf/issues/56))
+- Validate tenant name on creation to only allow `[a-zA-Z0-9_-]`, preventing path traversal via slash characters. ([#57](https://github.com/provablyfine/pf/issues/57))
+- Reduce HTTP signature freshness window to 5 minutes and reject replayed (key_id, nonce) pairs. ([#58](https://github.com/provablyfine/pf/issues/58))
+- Enforce role-based access control on bastion create/read/update/delete endpoints, which were previously reachable by any authenticated identity. ([#59](https://github.com/provablyfine/pf/issues/59))
+- Add audit-log grant type and enforce read permission on the audit log endpoint ([#61](https://github.com/provablyfine/pf/issues/61))
+- Reject OIDC id_tokens whose `nbf` (not before) claim is in the future. ([#62](https://github.com/provablyfine/pf/issues/62))
+- Reject OIDC id_tokens whose header is missing a `kid`, instead of validating against an arbitrary JWK from the provider's JWKS. ([#63](https://github.com/provablyfine/pf/issues/63))
+- OIDC login now generates and verifies a nonce, preventing id_token replay attacks. ([#64](https://github.com/provablyfine/pf/issues/64))
+- Bastion cram e2e tests are failing when run from within a sandbox ([#65](https://github.com/provablyfine/pf/issues/65))
+- Speedup e2e tests ([#66](https://github.com/provablyfine/pf/issues/66))
+- Rename files so they are picked by towncrier ([#67](https://github.com/provablyfine/pf/issues/67))
+
+
 ## 0.7.2 - 2026-07-27
 
 ### Added
