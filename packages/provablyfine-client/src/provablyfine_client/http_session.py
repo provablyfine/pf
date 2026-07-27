@@ -58,7 +58,7 @@ class HttpSession:
                 msg = response.text
             raise exceptions.UI(msg or response.text)
 
-        if response.status_code == 403:
+        if response.status_code == 401:
             try:
                 title = response.json().get("title", "")
             except Exception:

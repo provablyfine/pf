@@ -224,7 +224,7 @@ def verify(request: fastapi.requests.Request, key_id: str, key: jwk.Symmetric | 
 def _get_keyid(request: fastapi.requests.Request, prefix: str) -> str:
     if "Signature-Input" not in request.headers:
         raise responses.ProblemHTTPException(
-            responses.problem_response(status_code=403, title="Missing Signature-Input header")
+            responses.problem_response(status_code=401, title="Missing Signature-Input header")
         )
     keyid_by_label = _parse_signature_input(request.headers["Signature-Input"])
     for _label, (keyid, _signature_input) in keyid_by_label.items():
@@ -232,7 +232,7 @@ def _get_keyid(request: fastapi.requests.Request, prefix: str) -> str:
             continue
         return keyid[len(f"{prefix}:") :]
     raise responses.ProblemHTTPException(
-        responses.problem_response(status_code=403, title="Missing signature for prefix", detail=prefix)
+        responses.problem_response(status_code=401, title="Missing signature for prefix", detail=prefix)
     )
 
 
@@ -243,13 +243,13 @@ async def verify_invitation(
     invitation = model.identity_invitation_key.read(key_id)
     if invitation is None:
         raise responses.ProblemHTTPException(
-            responses.problem_response(status_code=403, title="Invitation does not exist")
+            responses.problem_response(status_code=401, title="Invitation does not exist")
         )
     if invitation.is_revoked:
-        raise responses.ProblemHTTPException(responses.problem_response(status_code=403, title="Invitation is revoked"))
+        raise responses.ProblemHTTPException(responses.problem_response(status_code=401, title="Invitation is revoked"))
     now = int(time.time())
     if invitation.expires_at <= now:
-        raise responses.ProblemHTTPException(responses.problem_response(status_code=403, title="Invitation is expired"))
+        raise responses.ProblemHTTPException(responses.problem_response(status_code=401, title="Invitation is expired"))
     assert invitation.key.thumbprint() == key_id
     verify(request, key_id=f"invitation:{key_id}", key=invitation.key)
     with ctx.set_identity_id(invitation.identity_id):
@@ -261,11 +261,11 @@ async def verify_account(request: fastapi.requests.Request) -> typing.AsyncGener
     account_key = ctx.app_db.identity_account_key.read_one(id=key_id)
     if account_key is None:
         raise responses.ProblemHTTPException(
-            responses.problem_response(status_code=403, title="Account does not exist")
+            responses.problem_response(status_code=401, title="Account does not exist")
         )
     if account_key.is_revoked:
         raise responses.ProblemHTTPException(
-            responses.problem_response(status_code=403, title="Account key is revoked")
+            responses.problem_response(status_code=401, title="Account key is revoked")
         )
     key = jwk.Public.from_dict(account_key.public_key)
     crypto_policy.enforce_key_is_allowed(key)
@@ -281,16 +281,16 @@ async def verify_session(request: fastapi.requests.Request) -> typing.AsyncGener
     session_key = ctx.app_db.identity_session_key.read_one(id=key_id)
     if session_key is None:
         raise responses.ProblemHTTPException(
-            responses.problem_response(status_code=403, title="Session does not exist")
+            responses.problem_response(status_code=401, title="Session does not exist")
         )
     if session_key.is_revoked:
         raise responses.ProblemHTTPException(
-            responses.problem_response(status_code=403, title="Session key is revoked")
+            responses.problem_response(status_code=401, title="Session key is revoked")
         )
     now = int(time.time())
     if session_key.expires_at <= now:
         raise responses.ProblemHTTPException(
-            responses.problem_response(status_code=403, title="Session key is expired")
+            responses.problem_response(status_code=401, title="Session key is expired")
         )
     key = jwk.Public.from_dict(session_key.public_key)
     crypto_policy.enforce_key_is_allowed(key)
