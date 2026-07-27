@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+import typing
+
+import pydantic
+
 from . import base
+
+TenantName = typing.Annotated[str, pydantic.Field(pattern=r"^[a-zA-Z0-9_-]+$")]
 
 
 class TenantCreateRequest(base.APIBase):
-    name: str
+    name: TenantName
     display_name: str
 
 

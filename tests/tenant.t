@@ -49,3 +49,17 @@ Get a non-existing tenant
   $ pfa -c config.json tenant get -i 999
   Tenant 999 not found
   [2]
+
+Reject tenant names with slashes (path traversal)
+  $ pfa -c config.json tenant create --name "bad/name" --display-name "Bad"
+  Request invalid..*name.* (re)
+  [2]
+
+  $ pfa -c config.json tenant create --name "bad\\name" --display-name "Bad"
+  Request invalid..*name.* (re)
+  [2]
+
+Reject tenant names with special characters
+  $ pfa -c config.json tenant create --name "bad name" --display-name "Bad"
+  Request invalid..*name.* (re)
+  [2]
