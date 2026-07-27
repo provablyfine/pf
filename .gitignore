@@ -17,3 +17,4 @@ site
 src/provablyfine/bin/
 src/provablyfine/licenses/
 .cache/
+tests/tmp*.t
