@@ -1,0 +1,41 @@
+#!/usr/bin/env -S uv run -q --script
+import pathlib
+import re
+import tomllib
+
+
+def load_valid_types() -> set[str]:
+    with open("pyproject.toml", "rb") as f:
+        config = tomllib.load(f)
+    types = config.get("tool", {}).get("towncrier", {}).get("type", [])
+    return {t["directory"] for t in types}
+
+
+def check_file(path: pathlib.Path, valid_types: set[str]) -> list[str]:
+    name = path.name
+    match = re.fullmatch(r"\d+\.([a-z]+)\.md", name)
+    if not match:
+        return [f"{path}: invalid changelog fragment name (expected <number>.<type>.md)"]
+    fragment_type = match.group(1)
+    if fragment_type not in valid_types:
+        return [
+            f"{path}: invalid fragment type '{fragment_type}'. "
+            f"Valid types: {', '.join(sorted(valid_types))}"
+        ]
+    return []
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("files", nargs="*", type=pathlib.Path)
+    args = parser.parse_args()
+
+    valid_types = load_valid_types()
+    errors = []
+    for path in args.files:
+        errors.extend(check_file(path, valid_types))
+    if errors:
+        print("\n".join(errors))
+        raise SystemExit(1)

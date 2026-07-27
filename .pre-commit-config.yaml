@@ -46,3 +46,8 @@ repos:
         language: system
         pass_filenames: false
         stages: [pre-push]
+      - id: check-changelog-fragments
+        name: Validate changelog fragment filenames
+        entry: scripts/check-changelog-fragments
+        language: system
+        files: ^changelog\.d/.*\.md$
