@@ -263,8 +263,11 @@ class AsyncSessionClient:
         client_type: str,
         id_token: str,
         session_public_key: dict[str, typing.Any],
+        nonce: str,
     ) -> None:
-        return await self._run(lambda: self._inner.login_oidc(auth_name, client_type, id_token, session_public_key))
+        return await self._run(
+            lambda: self._inner.login_oidc(auth_name, client_type, id_token, session_public_key, nonce)
+        )
 
     async def list_audit_log(
         self,

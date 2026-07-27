@@ -262,6 +262,14 @@ oidc_key = db.make_table(
 )
 
 
+class OidcNonceRow(typing.NamedTuple):
+    nonce: typing.Annotated[str, db.Col(primary_key=True)]
+    expires_at: int
+
+
+oidc_nonce = db.make_table("oidc_nonce", metadata, OidcNonceRow)
+
+
 # ============================================================================
 # Typed DAO
 # ============================================================================
@@ -341,6 +349,10 @@ class AppDb(db.Dao):
     @property
     def oidc_key(self) -> db.Table[OidcKeyRow]:
         return self._get(oidc_key)
+
+    @property
+    def oidc_nonce(self) -> db.Table[OidcNonceRow]:
+        return self._get(oidc_nonce)
 
 
 def create(connection: sqlalchemy.engine.Connection) -> AppDb:

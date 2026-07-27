@@ -36,6 +36,7 @@ class _PendingCode:
 
     code_challenge: str
     email: str
+    nonce: str | None = None
 
 
 @dataclasses.dataclass
@@ -45,6 +46,7 @@ class _PendingDeviceCode:
     user_code: str
     completed: bool = False
     email: str = "user@example.com"
+    nonce: str | None = None
 
 
 class _MockOidcHandler(http.server.BaseHTTPRequestHandler):
@@ -106,6 +108,7 @@ class _MockOidcHandler(http.server.BaseHTTPRequestHandler):
         params = urllib.parse.parse_qs(query)
         redirect_uri = params.get("redirect_uri", [""])[0]
         code_challenge = params.get("code_challenge", [""])[0]
+        nonce = params.get("nonce", [None])[0]
 
         if not redirect_uri or not code_challenge:
             self.send_error(400, "Missing redirect_uri or code_challenge")
@@ -122,7 +125,9 @@ class _MockOidcHandler(http.server.BaseHTTPRequestHandler):
 
         # Generate authorization code
         code = secrets.token_urlsafe(32)
-        provider._pending_codes[code] = _PendingCode(code_challenge=code_challenge, email="user@example.com")
+        provider._pending_codes[code] = _PendingCode(
+            code_challenge=code_challenge, email="user@example.com", nonce=nonce
+        )
 
         redirect = f"{redirect_uri}?code={urllib.parse.quote(code)}"
         self.send_response(302)
@@ -131,9 +136,11 @@ class _MockOidcHandler(http.server.BaseHTTPRequestHandler):
 
     def _handle_device_authorization(self, body: str) -> None:
         provider = self.server.mock_provider  # type: ignore
+        params = urllib.parse.parse_qs(body)
+        nonce = params.get("nonce", [None])[0]
         device_code = secrets.token_urlsafe(32)
         user_code = secrets.token_hex(4).upper()
-        provider._pending_device_codes[device_code] = _PendingDeviceCode(user_code=user_code)
+        provider._pending_device_codes[device_code] = _PendingDeviceCode(user_code=user_code, nonce=nonce)
         response = {
             "device_code": device_code,
             "user_code": user_code,
@@ -163,7 +170,7 @@ class _MockOidcHandler(http.server.BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(json.dumps({"error": "authorization_pending"}).encode("utf-8"))
                 return
-            id_token = provider.issue_token(pending_device.email)
+            id_token = provider.issue_token(pending_device.email, nonce=pending_device.nonce)
             del provider._pending_device_codes[device_code]
             self.send_response(200)
             self.send_header("content-type", "application/json")
@@ -190,7 +197,7 @@ class _MockOidcHandler(http.server.BaseHTTPRequestHandler):
             return
 
         # Generate and return id_token
-        id_token = provider.issue_token(pending.email)
+        id_token = provider.issue_token(pending.email, nonce=pending.nonce)
         response = {"id_token": id_token, "token_type": "Bearer"}
 
         self.send_response(200)
@@ -249,6 +256,7 @@ class MockOidcProvider:
         audience: str | None = None,
         nbf: int | None = None,
         no_kid: bool = False,
+        nonce: str | None = None,
     ) -> str:
         """Generate a signed JWT token."""
         if issuer is None:
@@ -271,6 +279,8 @@ class MockOidcProvider:
         }
         if nbf is not None:
             payload["nbf"] = nbf
+        if nonce is not None:
+            payload["nonce"] = nonce
 
         header_b64 = _b64url_encode(json.dumps(header).encode())
         payload_b64 = _b64url_encode(json.dumps(payload).encode())

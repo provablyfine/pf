@@ -55,8 +55,8 @@ def generate_session_key() -> tuple[jwk.Private, str]:
     return session_key, session_key.public().ssh_fingerprint()
 
 
-def oidc_flow(oidc_config: pfc.schemas.OidcConfig) -> str:
-    """Run OIDC browser flow. Returns id_token. Caller opens browser message if desired."""
+def oidc_flow(oidc_config: pfc.schemas.OidcConfig) -> tuple[str, str]:
+    """Run OIDC browser flow. Returns (id_token, nonce)."""
     discovery_resp = requests.get(f"{oidc_config.issuer}/.well-known/openid-configuration", timeout=10)
     if discovery_resp.status_code != 200:
         raise pfc.exceptions.UI("Unable to fetch OIDC discovery document")
@@ -64,6 +64,7 @@ def oidc_flow(oidc_config: pfc.schemas.OidcConfig) -> str:
 
     code_verifier = base64url.encode(secrets.token_bytes(32))
     code_challenge = base64url.encode(hashlib.sha256(code_verifier.encode()).digest())
+    nonce = base64url.encode(secrets.token_bytes(32))
 
     code_holder: list[str] = []
 
@@ -90,6 +91,7 @@ def oidc_flow(oidc_config: pfc.schemas.OidcConfig) -> str:
         f"&redirect_uri={urllib.parse.quote(redirect_uri)}"
         f"&response_type=code&scope=openid+email"
         f"&code_challenge={urllib.parse.quote(code_challenge)}&code_challenge_method=S256"
+        f"&nonce={urllib.parse.quote(nonce)}"
     )
     open_browser(auth_url)
 
@@ -114,14 +116,14 @@ def oidc_flow(oidc_config: pfc.schemas.OidcConfig) -> str:
     id_token = token_resp.json().get("id_token")
     if not id_token:
         raise pfc.exceptions.UI("Token response did not include id_token")
-    return id_token
+    return id_token, nonce
 
 
 def oidc_device_code_flow(
     config: pfc.schemas.OidcDeviceCodeConfig,
     display: typing.Callable[[str, str], None] | None = None,
-) -> str:
-    """Run OIDC device code flow. Returns id_token."""
+) -> tuple[str, str]:
+    """Run OIDC device code flow. Returns (id_token, nonce)."""
     discovery_resp = requests.get(f"{config.issuer}/.well-known/openid-configuration", timeout=10)
     if discovery_resp.status_code != 200:
         raise pfc.exceptions.UI("Unable to fetch OIDC discovery document")
@@ -131,7 +133,8 @@ def oidc_device_code_flow(
     if not device_endpoint:
         raise pfc.exceptions.UI("OIDC provider does not support device code flow")
 
-    data: dict[str, str] = {"client_id": config.client_id, "scope": "openid email"}
+    nonce = base64url.encode(secrets.token_bytes(32))
+    data: dict[str, str] = {"client_id": config.client_id, "scope": "openid email", "nonce": nonce}
     if config.client_secret:
         data["client_secret"] = config.client_secret
     device_resp = requests.post(device_endpoint, data=data, timeout=10)
@@ -167,7 +170,7 @@ def oidc_device_code_flow(
             id_token = token_resp.json().get("id_token")
             if not id_token:
                 raise pfc.exceptions.UI("Token response did not include id_token")
-            return id_token
+            return id_token, nonce
         error = token_resp.json().get("error", "")
         if error == "slow_down":
             interval += 5

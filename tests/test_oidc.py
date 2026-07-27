@@ -118,26 +118,30 @@ def oidc_env(api, mock_oidc, ssh_agent, tmp_path) -> typing.Iterator[OidcEnv]:
 
 def test_endpoint_rs256(oidc_env: OidcEnv) -> None:
     """Valid RS256 token succeeds."""
-    id_token = oidc_env.mock.issue_token("user@example.com", alg="RS256")
+    nonce = "test-nonce-rs256"
+    id_token = oidc_env.mock.issue_token("user@example.com", alg="RS256", nonce=nonce)
     session_key, session_fingerprint = _create_session_key()
 
     oidc_env.sc.session_with_key(session_fingerprint).login_oidc(
         auth_name="oidc-test",
         client_type="cli",
         id_token=id_token,
+        nonce=nonce,
         session_public_key=session_key.public().to_dict(),
     )
 
 
 def test_endpoint_es256(oidc_env: OidcEnv) -> None:
     """Valid ES256 token succeeds."""
-    id_token = oidc_env.mock.issue_token("user@example.com", alg="ES256")
+    nonce = "test-nonce-es256"
+    id_token = oidc_env.mock.issue_token("user@example.com", alg="ES256", nonce=nonce)
     session_key, session_fingerprint = _create_session_key()
 
     oidc_env.sc.session_with_key(session_fingerprint).login_oidc(
         auth_name="oidc-test",
         client_type="cli",
         id_token=id_token,
+        nonce=nonce,
         session_public_key=session_key.public().to_dict(),
     )
 
@@ -152,6 +156,7 @@ def test_endpoint_expired(oidc_env: OidcEnv) -> None:
             auth_name="oidc-test",
             client_type="cli",
             id_token=id_token,
+            nonce="irrelevant",
             session_public_key=session_key.public().to_dict(),
         )
 
@@ -166,6 +171,7 @@ def test_endpoint_not_yet_valid(oidc_env: OidcEnv) -> None:
             auth_name="oidc-test",
             client_type="cli",
             id_token=id_token,
+            nonce="irrelevant",
             session_public_key=session_key.public().to_dict(),
         )
 
@@ -180,6 +186,7 @@ def test_endpoint_wrong_issuer(oidc_env: OidcEnv) -> None:
             auth_name="oidc-test",
             client_type="cli",
             id_token=id_token,
+            nonce="irrelevant",
             session_public_key=session_key.public().to_dict(),
         )
 
@@ -194,6 +201,7 @@ def test_endpoint_wrong_audience(oidc_env: OidcEnv) -> None:
             auth_name="oidc-test",
             client_type="cli",
             id_token=id_token,
+            nonce="irrelevant",
             session_public_key=session_key.public().to_dict(),
         )
 
@@ -228,6 +236,7 @@ def test_endpoint_missing_email(oidc_env: OidcEnv) -> None:
             auth_name="oidc-test",
             client_type="cli",
             id_token=id_token,
+            nonce="irrelevant",
             session_public_key=session_key.public().to_dict(),
         )
 
@@ -242,6 +251,7 @@ def test_endpoint_missing_kid(oidc_env: OidcEnv) -> None:
             auth_name="oidc-test",
             client_type="cli",
             id_token=id_token,
+            nonce="irrelevant",
             session_public_key=session_key.public().to_dict(),
         )
 
@@ -256,7 +266,63 @@ def test_endpoint_unknown_auth(oidc_env: OidcEnv) -> None:
             auth_name="no-such-auth",
             client_type="cli",
             id_token=id_token,
+            nonce="irrelevant",
             session_public_key=session_key.public().to_dict(),
+        )
+
+
+def test_endpoint_missing_nonce(oidc_env: OidcEnv) -> None:
+    """Token without nonce claim is rejected."""
+    id_token = oidc_env.mock.issue_token("user@example.com")
+    session_key, session_fingerprint = _create_session_key()
+
+    with pytest.raises(pfc.exceptions.UI):
+        oidc_env.sc.session_with_key(session_fingerprint).login_oidc(
+            auth_name="oidc-test",
+            client_type="cli",
+            id_token=id_token,
+            nonce="some-nonce",
+            session_public_key=session_key.public().to_dict(),
+        )
+
+
+def test_endpoint_wrong_nonce(oidc_env: OidcEnv) -> None:
+    """Token whose nonce does not match the submitted nonce is rejected."""
+    id_token = oidc_env.mock.issue_token("user@example.com", nonce="real-nonce")
+    session_key, session_fingerprint = _create_session_key()
+
+    with pytest.raises(pfc.exceptions.UI):
+        oidc_env.sc.session_with_key(session_fingerprint).login_oidc(
+            auth_name="oidc-test",
+            client_type="cli",
+            id_token=id_token,
+            nonce="wrong-nonce",
+            session_public_key=session_key.public().to_dict(),
+        )
+
+
+def test_endpoint_replay_nonce(oidc_env: OidcEnv) -> None:
+    """Replaying the same id_token with the same nonce is rejected on the second attempt."""
+    nonce = "replay-test-nonce"
+    id_token = oidc_env.mock.issue_token("user@example.com", nonce=nonce)
+    session_key1, session_fingerprint1 = _create_session_key()
+
+    oidc_env.sc.session_with_key(session_fingerprint1).login_oidc(
+        auth_name="oidc-test",
+        client_type="cli",
+        id_token=id_token,
+        nonce=nonce,
+        session_public_key=session_key1.public().to_dict(),
+    )
+
+    session_key2, session_fingerprint2 = _create_session_key()
+    with pytest.raises(pfc.exceptions.UI):
+        oidc_env.sc.session_with_key(session_fingerprint2).login_oidc(
+            auth_name="oidc-test",
+            client_type="cli",
+            id_token=id_token,
+            nonce=nonce,
+            session_public_key=session_key2.public().to_dict(),
         )
 
 
@@ -386,20 +452,23 @@ def oidc_device_code_env(api, mock_oidc, ssh_agent, tmp_path) -> typing.Iterator
 
 def test_device_code_endpoint_success(oidc_device_code_env: OidcDeviceCodeEnv) -> None:
     """Server endpoint accepts oidc-device-code auth config type."""
-    id_token = oidc_device_code_env.mock.issue_token("user@example.com", alg="RS256")
+    nonce = "test-nonce-device-code"
+    id_token = oidc_device_code_env.mock.issue_token("user@example.com", alg="RS256", nonce=nonce)
     session_key, session_fingerprint = _create_session_key()
 
     oidc_device_code_env.sc.session_with_key(session_fingerprint).login_oidc(
         auth_name="oidc-dc-test",
         client_type="cli",
         id_token=id_token,
+        nonce=nonce,
         session_public_key=session_key.public().to_dict(),
     )
 
 
 def test_device_code_endpoint_expired_token(oidc_device_code_env: OidcDeviceCodeEnv) -> None:
     """Expired token is rejected for oidc-device-code auth config."""
-    id_token = oidc_device_code_env.mock.issue_token("user@example.com", alg="RS256", expired=True)
+    nonce = "test-nonce-expired"
+    id_token = oidc_device_code_env.mock.issue_token("user@example.com", alg="RS256", expired=True, nonce=nonce)
     session_key, session_fingerprint = _create_session_key()
 
     with pytest.raises(pfc.exceptions.UI, match="Unable to login via OIDC"):
@@ -407,6 +476,7 @@ def test_device_code_endpoint_expired_token(oidc_device_code_env: OidcDeviceCode
             auth_name="oidc-dc-test",
             client_type="cli",
             id_token=id_token,
+            nonce=nonce,
             session_public_key=session_key.public().to_dict(),
         )
 

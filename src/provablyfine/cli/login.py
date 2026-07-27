@@ -187,9 +187,9 @@ def oidc_login(c: client.Config, sc: client.Factory, auth_name: str, role: str |
 
     session_key, session_fingerprint = browser_login.generate_session_key()
     print("Opening browser for OIDC login...")
-    id_token = browser_login.oidc_flow(auth_public.config)
+    id_token, nonce = browser_login.oidc_flow(auth_public.config)
     result = sc.session_with_key(session_fingerprint).login_oidc(
-        auth_name, "cli", id_token, session_key.public().to_dict()
+        auth_name, "cli", id_token, session_key.public().to_dict(), nonce
     )
     c.session_key_fingerprint = session_fingerprint
     c.session_key_file = None
@@ -203,9 +203,9 @@ def oidc_device_code_login(c: client.Config, sc: client.Factory, auth_name: str,
     if not isinstance(auth_public.config, pfc.schemas.OidcDeviceCodeConfig):
         raise pfc.exceptions.UI(f"Auth '{auth_name}' is not OIDC device code")
     session_key, session_fingerprint = browser_login.generate_session_key()
-    id_token = browser_login.oidc_device_code_flow(auth_public.config)
+    id_token, nonce = browser_login.oidc_device_code_flow(auth_public.config)
     result = sc.session_with_key(session_fingerprint).login_oidc(
-        auth_name, "cli", id_token, session_key.public().to_dict()
+        auth_name, "cli", id_token, session_key.public().to_dict(), nonce
     )
     c.session_key_fingerprint = session_fingerprint
     c.session_key_file = None

@@ -120,7 +120,7 @@ def oidc_login(api: client.Client, auth_name: str, cfg: client.Config, screen: b
     auth_public = client.Factory(api.config).public().get_public_auth(auth_name, "cli")
     if not isinstance(auth_public.config, pfc.schemas.OidcConfig):
         raise pfc.exceptions.UI(f"Auth '{auth_name}' is not OIDC")
-    id_token = browser_login.oidc_flow(auth_public.config)
+    id_token, nonce = browser_login.oidc_flow(auth_public.config)
     session_http = api.session_auth(session=fp)
     response = session_http.post(
         url=session_http.directory.login_oidc,
@@ -128,6 +128,7 @@ def oidc_login(api: client.Client, auth_name: str, cfg: client.Config, screen: b
             "auth_name": auth_public.name,
             "client_type": "cli",
             "id_token": id_token,
+            "nonce": nonce,
             "session_public_key": session_key.public().to_dict(),
         },
     )
@@ -149,7 +150,7 @@ def oidc_device_code_login(
     auth_public = client.Factory(api.config).public().get_public_auth(auth_name, "cli")
     if not isinstance(auth_public.config, pfc.schemas.OidcDeviceCodeConfig):
         raise pfc.exceptions.UI(f"Auth '{auth_name}' is not OIDC device code")
-    id_token = browser_login.oidc_device_code_flow(auth_public.config, display=on_code)
+    id_token, nonce = browser_login.oidc_device_code_flow(auth_public.config, display=on_code)
     session_http = api.session_auth(session=fp)
     response = session_http.post(
         url=session_http.directory.login_oidc,
@@ -157,6 +158,7 @@ def oidc_device_code_login(
             "auth_name": auth_public.name,
             "client_type": "cli",
             "id_token": id_token,
+            "nonce": nonce,
             "session_public_key": session_key.public().to_dict(),
         },
     )

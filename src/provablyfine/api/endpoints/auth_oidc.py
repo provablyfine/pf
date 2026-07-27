@@ -12,6 +12,7 @@ import fastapi
 import fastapi.requests
 import fastapi.responses
 import requests
+import sqlalchemy.exc
 
 from .. import converters, crypto_policy, model, responses, schemas, signature
 from ..context import ctx
@@ -26,8 +27,8 @@ def _b64url_decode(s: str) -> bytes:
     return base64.urlsafe_b64decode(s)
 
 
-def _verify_oidc_token(issuer: str, client_id: str, id_token: str) -> str:
-    """Verify an OIDC id_token JWT and return the email claim."""
+def _verify_oidc_token(issuer: str, client_id: str, id_token: str, nonce: str) -> tuple[str, int]:
+    """Verify an OIDC id_token JWT and return (email, exp)."""
     parts = id_token.split(".")
     if len(parts) != 3:
         raise ValueError("Invalid JWT format")
@@ -117,7 +118,13 @@ def _verify_oidc_token(issuer: str, client_id: str, id_token: str) -> str:
     if not email:
         raise ValueError("JWT missing email claim")
 
-    return email
+    token_nonce = payload.get("nonce")
+    if not token_nonce:
+        raise ValueError("JWT missing nonce claim")
+    if token_nonce != nonce:
+        raise ValueError("JWT nonce mismatch")
+
+    return email, payload["exp"]
 
 
 @router.post(
@@ -148,14 +155,23 @@ def oidc_login_endpoint(
 
     # Verify OIDC token
     try:
-        email = _verify_oidc_token(
+        email, token_exp = _verify_oidc_token(
             issuer=ac.config["issuer"],
             client_id=ac.config["client_id"],
             id_token=data.id_token,
+            nonce=data.nonce,
         )
     except (ValueError, cryptography.exceptions.InvalidSignature, Exception) as exc:
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=403, title="OIDC token verification failed", detail=str(exc))
+        )
+
+    # Prevent nonce replay: store the nonce; reject if already seen
+    try:
+        ctx.app_db.oidc_nonce.create(nonce=data.nonce, expires_at=token_exp)
+    except sqlalchemy.exc.IntegrityError:
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=403, title="OIDC nonce has already been used")
         )
 
     # Look up identity by email
