@@ -1,6 +1,7 @@
 import argparse
 import base64
 import os
+import sys
 
 import provablyfine_client as pfc
 
@@ -93,11 +94,12 @@ def add_subparsers(parser: argparse.ArgumentParser) -> None:
     host_init_parser.add_argument("--host-keys-dir", default="/etc/ssh", help="Directory containing host SSH keys")
     host_init_parser.add_argument("--ca-pub-path", default="/etc/ssh/pf_ca.pub", help="Path to CA public key file")
     host_init_parser.add_argument(
-        "--nss",
-        action="store_true",
-        default=False,
-        help="Configure NSS for automatic Unix account synthesis (requires libnss_provablyfine.so.2 already installed)",
+        "--no-nss",
+        action="store_false",
+        dest="nss",
+        help="Disable automatic Unix account synthesis via NSS (default: enabled on Linux)",
     )
+    host_init_parser.set_defaults(nss=openssh_host_init.nss_available())
     host_init_parser.set_defaults(func=openssh_host_init.host_init_daemon_function)
 
     host_uninit_parser = subparsers.add_parser("host-uninit", help="Print a script to undo host-init")
@@ -107,11 +109,12 @@ def add_subparsers(parser: argparse.ArgumentParser) -> None:
     host_uninit_parser.add_argument("--host-keys-dir", default="/etc/ssh", help="Directory containing host SSH keys")
     host_uninit_parser.add_argument("--ca-pub-path", default="/etc/ssh/pf_ca.pub", help="Path to CA public key file")
     host_uninit_parser.add_argument(
-        "--nss",
-        action="store_true",
-        default=False,
-        help="Also undo NSS configuration added by --nss during host-init",
+        "--no-nss",
+        action="store_false",
+        dest="nss",
+        help="Skip NSS configuration rollback (default: undo NSS setup on Linux)",
     )
+    host_uninit_parser.set_defaults(nss=sys.platform == "linux")
     host_uninit_parser.set_defaults(func=openssh_host_init.host_uninit_function)
 
     host_refresh_parser = subparsers.add_parser("host-refresh", help="Refresh configuration of local SSH daemon")

@@ -147,7 +147,7 @@ RUN --mount=type=cache,target=/root/.cache/uv uv pip install \\
     --quiet --link-mode=copy --system --break-system-packages /tmp/pfc && \\
     rm -rf /tmp/pfc
 
-COPY pyproject.toml README.md LICENSE.md /tmp/pf/
+COPY pyproject.toml README.md LICENSE.md hatch_build.py /tmp/pf/
 COPY src /tmp/pf/src/
 RUN --mount=type=cache,target=/root/.cache/uv HATCH_TARGET_ARCH=unsupported uv pip install \\
     --quiet --link-mode=copy --system --break-system-packages --no-sources /tmp/pf && \\
@@ -339,7 +339,7 @@ RUN --mount=type=cache,target=/root/.cache/uv uv pip install \\
     --quiet --link-mode=copy --system --break-system-packages /tmp/pfc && \\
     rm -rf /tmp/pfc
 
-COPY pyproject.toml README.md LICENSE.md /tmp/pf/
+COPY pyproject.toml README.md LICENSE.md hatch_build.py /tmp/pf/
 COPY src /tmp/pf/src/
 RUN --mount=type=cache,target=/root/.cache/uv HATCH_TARGET_ARCH=unsupported uv pip install \\
     --quiet --link-mode=copy --system --break-system-packages --no-sources /tmp/pf && \\
@@ -376,7 +376,7 @@ CMD ["/bin/sh", "/run/start.sh"]
     # as base64 in the Containerfile and eliminates the race with the sshd_image build.
     ctx_dir = tmp_path_factory.mktemp("nss_build_ctx", numbered=True)
     shutil.copytree(os.path.join(tld(), "packages"), ctx_dir / "packages")
-    for fname in ("pyproject.toml", "README.md", "LICENSE.md"):
+    for fname in ("pyproject.toml", "README.md", "LICENSE.md", "hatch_build.py"):
         shutil.copy2(os.path.join(tld(), fname), ctx_dir / fname)
     shutil.copytree(os.path.join(tld(), "src"), ctx_dir / "src")
     shutil.copy2(nss_lib, ctx_dir / "libnss_provablyfine.so")

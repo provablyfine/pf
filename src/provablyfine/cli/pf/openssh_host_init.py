@@ -10,6 +10,16 @@ from ... import client, jwk, ssh
 from .. import common, login
 
 
+def _bundled_nss_so_path() -> str:
+    # __file__ is provablyfine/cli/pf/openssh_host_init.py; three dirnames reach provablyfine/
+    pkg_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    return os.path.join(pkg_root, "_nss", "libnss_provablyfine.so")
+
+
+def nss_available() -> bool:
+    return sys.platform == "linux" and os.path.exists(_bundled_nss_so_path())
+
+
 def _write_file_atomic(filepath: str, content: bytes | str, mode: str = "wb") -> None:
     dirname = os.path.dirname(filepath) or "."
     os.makedirs(dirname, exist_ok=True)
@@ -71,26 +81,25 @@ def _do_refresh(c: client.Config, host_keys_dir: str, ca_pub_path: str) -> None:
     _write_file_atomic(ca_pub_path, ca_pubkey, mode="w")
 
 
-_NSS_INIT_FRAGMENT = """\
+def _nss_init_fragment(nss_so_path: str) -> str:
+    return f"""\
 
-# pf NSS: synthesize Unix accounts on-demand
-if ! ldconfig -p 2>/dev/null | grep -q 'libnss_provablyfine\\.so\\.2'; then
-  echo 'libnss_provablyfine.so.2 not found in ldconfig cache.' >&2
-  echo 'Install it and run ldconfig first.' >&2
-  exit 1
-fi
+# pf NSS: install bundled NSS module and configure Unix account synthesis
+_multiarch=$(dpkg-architecture -qDEB_HOST_MULTIARCH 2>/dev/null || echo x86_64-linux-gnu)
+install -m 755 '{nss_so_path}' "/usr/lib/$_multiarch/libnss_provablyfine.so.2"
+ldconfig
 cat > /etc/pf-nss.conf << 'PFEOF'
 uid_range_min=100000
 uid_range_max=999999
 PFEOF
 chmod 644 /etc/pf-nss.conf
-_patch_nsswitch() {
+_patch_nsswitch() {{
   local _db="$1"
   if grep -qE "^$_db:.*provablyfine" /etc/nsswitch.conf; then
     return 0
   fi
   sed -i "s|^\\\\($_db:.*files\\\\)\\\\(.*\\\\)|\\\\1 provablyfine\\\\2|" /etc/nsswitch.conf
-}
+}}
 _patch_nsswitch passwd
 _patch_nsswitch group
 _patch_nsswitch shadow
@@ -99,10 +108,14 @@ if [ -f /etc/pam.d/sshd ] && ! grep -q pam_mkhomedir /etc/pam.d/sshd; then
 fi
 """
 
+
 _NSS_UNINIT_FRAGMENT = """\
 rm -f /etc/pf-nss.conf
 sed -i 's/ provablyfine//' /etc/nsswitch.conf
 sed -i '/pam_mkhomedir.so/d' /etc/pam.d/sshd 2>/dev/null || true
+_multiarch=$(dpkg-architecture -qDEB_HOST_MULTIARCH 2>/dev/null || echo x86_64-linux-gnu)
+rm -f "/usr/lib/$_multiarch/libnss_provablyfine.so.2"
+ldconfig
 """
 
 
@@ -114,6 +127,7 @@ def _print_init_script(
     sshd_config_drop_in: str,
     auth_user: str,
     nss: bool = False,
+    nss_so_path: str = "",
 ) -> None:
     sshd_drop_in_dir = os.path.dirname(sshd_config_drop_in)
     config_json = json.dumps(
@@ -240,13 +254,15 @@ PFEOF
 fi
 """)
     if nss:
-        sys.stdout.write(_NSS_INIT_FRAGMENT)
+        sys.stdout.write(_nss_init_fragment(nss_so_path))
 
 
 def host_init_daemon_function(args: argparse.Namespace) -> None:
     """Print a shell script to stdout that sets up pf on this host."""
 
     invitation = common.parse_invitation(args.invitation)
+    nss_so_path = _bundled_nss_so_path()
+    nss = args.nss and os.path.exists(nss_so_path)
 
     _print_init_script(
         args.invitation,
@@ -255,7 +271,8 @@ def host_init_daemon_function(args: argparse.Namespace) -> None:
         args.ca_pub_path,
         args.sshd_config_drop_in,
         args.auth_user,
-        nss=args.nss,
+        nss=nss,
+        nss_so_path=nss_so_path,
     )
 
 
