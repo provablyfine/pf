@@ -117,6 +117,7 @@ class IdentityCreatePermission(DBBase):
 
 class IdentityUpdatePermission(DBBase):
     name: bool
+    posix: bool = False
 
 
 class IdentityPermission(DBBase):

@@ -1,4 +1,5 @@
 import dataclasses
+import hashlib
 import time
 import typing
 
@@ -12,6 +13,15 @@ class Identity:
     name: str
     tag_id_list: list[int]
     boundary_id_list: list[int]
+    unix_username: str | None = None
+    unix_uid: int | None = None
+    unix_gid: int | None = None
+
+
+def _uid_from_username(username: str, range_min: int, range_max: int) -> int:
+    digest = hashlib.sha256(username.encode()).digest()
+    value = int.from_bytes(digest[:8], "big")
+    return range_min + (value % (range_max - range_min))
 
 
 def create(name: str, boundary_id_list: list[int], tag_id_list: list[int]) -> int:
@@ -90,6 +100,9 @@ def read_all(**kwargs: typing.Any) -> list[Identity]:
             name=i.name,
             tag_id_list=tag_ids_by_identity_id.get(i.id, []),
             boundary_id_list=boundary_ids_by_identity_id[i.id],
+            unix_username=i.unix_username,
+            unix_uid=i.unix_uid,
+            unix_gid=i.unix_gid,
         )
         for i in identities
     ]
@@ -129,3 +142,20 @@ def update(
             id=id,
             deleted_tag_id_list=deleted_tag_id_list,
         )
+
+
+def set_posix(
+    identity_id: int,
+    unix_username: str,
+    unix_uid: int | None = None,
+    unix_gid: int | None = None,
+) -> None:
+    if unix_uid is None:
+        unix_uid = _uid_from_username(unix_username, ctx.config.unix_uid_range_min, ctx.config.unix_uid_range_max)
+    if unix_gid is None:
+        unix_gid = unix_uid
+    ctx.app_db.identity.update(unix_username=unix_username, unix_uid=unix_uid, unix_gid=unix_gid).where(id=identity_id)
+
+
+def clear_posix(identity_id: int) -> None:
+    ctx.app_db.identity.update(unix_username=None, unix_uid=None, unix_gid=None).where(id=identity_id)

@@ -551,12 +551,24 @@ class SessionClient:
         id: int,
         name: str | None = None,
         tags: list[schemas.IdentityTagOp] | None = None,
+        unix_username: str | None = None,
+        unix_uid: int | None = None,
+        unix_gid: int | None = None,
+        clear_posix: bool = False,
     ) -> None:
         body: dict[str, typing.Any] = {}
         if name is not None:
             body["name"] = name
         if tags is not None:
             body["tags"] = [op.model_dump(exclude_none=True) for op in tags]
+        if clear_posix:
+            body["unix_username"] = None
+        elif unix_username is not None:
+            body["unix_username"] = unix_username
+            if unix_uid is not None:
+                body["unix_uid"] = unix_uid
+            if unix_gid is not None:
+                body["unix_gid"] = unix_gid
         if not body:
             raise exceptions.UI("Nothing to update")
         response = self._session.patch(f"{self._directory.identity}/{id}", auth=self._auth(), json=body)

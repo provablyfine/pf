@@ -10,6 +10,7 @@ from . import utils
         "boundaries.t",
         "roles.t",
         "identity.t",
+        "identity-posix.t",
         "permission.t",
         "access-control-tag.t.jinja",
         "access-control-tenant.t.jinja",

@@ -12,12 +12,27 @@ Initialize server and login
   "--update-all",
 ]
 %}
-Check that grant "{{grant}}" is actually enforcing access control
+Check that grant "{{grant}}" is actually enforcing name update access control
   $ pfa -c config.json grant identity {{grant}} | pfa -c config.json role grant -i $ROLE_ID --add
   $ pfa -c user1.json identity update -i $USER2_ID -n another
   $ pfa -c user1.json identity update -i $USER2_ID -n user2
   $ pfa -c config.json role read -i $ROLE_ID -f json | jq '.grant_list[-1]' | pfa -c config.json role grant -i $ROLE_ID --del
   $ pfa -c user1.json identity update -i $USER2_ID -n another
+  Not allowed to update identity field
+  [2]
+{% endfor %}
+
+{% for grant in [
+  "--update posix",
+  "--update-all",
+]
+%}
+Check that grant "{{grant}}" is actually enforcing posix update access control
+  $ pfa -c config.json grant identity {{grant}} | pfa -c config.json role grant -i $ROLE_ID --add
+  $ pfa -c user1.json identity update -i $USER2_ID --posix-username alice
+  $ pfa -c config.json identity update -i $USER2_ID --clear-posix
+  $ pfa -c config.json role read -i $ROLE_ID -f json | jq '.grant_list[-1]' | pfa -c config.json role grant -i $ROLE_ID --del
+  $ pfa -c user1.json identity update -i $USER2_ID --posix-username alice
   Not allowed to update identity field
   [2]
 {% endfor %}

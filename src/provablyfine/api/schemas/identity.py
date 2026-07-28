@@ -22,6 +22,9 @@ class Identity(base.APIBase):
     name: str
     tags: list[tag.Tag]
     boundaries: list[IdentityBoundary]
+    unix_username: str | None = None
+    unix_uid: int | None = None
+    unix_gid: int | None = None
 
 
 class IdentitySelf(Identity):
@@ -83,11 +86,15 @@ IdentityTagOperation = typing.Annotated[
 class IdentityUpdateRequest(base.APIBase):
     name: str | None = None
     tags: list[IdentityTagOperation] | None = None
+    unix_username: str | None = None
+    unix_uid: int | None = None
+    unix_gid: int | None = None
 
     @pydantic.model_validator(mode="after")
     def validate_tags_and_boundaries(self):
+        non_nullable = {"name", "tags"}
         for field in self.model_fields_set:
-            if getattr(self, field) is None:
+            if field in non_nullable and getattr(self, field) is None:
                 raise ValueError(f"{field} cannot be explicitly null")
         return self
 

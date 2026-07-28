@@ -349,9 +349,15 @@ class IdentityCreatePermission(_Base):
 
 class IdentityUpdatePermission(_Base):
     name: bool
+    posix: bool = False
 
     def to_text(self) -> str:
-        return "name" if self.name else ""
+        parts: list[str] = []
+        if self.name:
+            parts.append("name")
+        if self.posix:
+            parts.append("posix")
+        return ", ".join(parts)
 
 
 class IdentityPermission(_Base):
@@ -693,6 +699,9 @@ class Identity(_Base):
     tags: list[TagNameValue] = []
     boundaries: list[IdentityBoundary] = []
     active_role: IdentityRoleInfo | None = None
+    unix_username: str | None = None
+    unix_uid: int | None = None
+    unix_gid: int | None = None
 
 
 class IdentitiesResponse(_Base):

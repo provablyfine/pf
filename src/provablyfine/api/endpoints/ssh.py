@@ -91,7 +91,7 @@ def sign_user_certificate(data: schemas.ssh.SSHUserCertificateRequest) -> schema
 
     match data.action:
         case "shell":
-            perm = ssh_shell_checker.can(data.username)
+            perm = ssh_shell_checker.can(data.username, caller.unix_username)
             if perm is None:
                 raise responses.ProblemHTTPException(responses.problem_response(status_code=403, title="Forbidden"))
             cert = ssh.cert.Cert.create_user(
@@ -112,7 +112,7 @@ def sign_user_certificate(data: schemas.ssh.SSHUserCertificateRequest) -> schema
                 signer=signer.key,
             )
         case "port-forwarding":
-            if not ssh_port_forward_checker.can(data.username):
+            if not ssh_port_forward_checker.can(data.username, caller.unix_username):
                 raise responses.ProblemHTTPException(responses.problem_response(status_code=403, title="Forbidden"))
             cert = ssh.cert.Cert.create_user(
                 public_key=public_key,
@@ -136,7 +136,7 @@ def sign_user_certificate(data: schemas.ssh.SSHUserCertificateRequest) -> schema
                 raise responses.ProblemHTTPException(
                     responses.problem_response(status_code=400, title="command required for action=command")
                 )
-            if not ssh_command_checker.can(data.username, data.command):
+            if not ssh_command_checker.can(data.username, data.command, caller.unix_username):
                 raise responses.ProblemHTTPException(responses.problem_response(status_code=403, title="Forbidden"))
             cert = ssh.cert.Cert.create_user(
                 public_key=public_key,
@@ -201,30 +201,35 @@ def sign_user_certificate(data: schemas.ssh.SSHUserCertificateRequest) -> schema
     dependencies=[fastapi.Depends(signature.verify_session)],
 )
 def list_hosts() -> schemas.ssh.SSHHostsResponse:
+    caller = ctx.app_db.identity.read_one(id=ctx.identity_id)
+    assert caller is not None
+    unix_username = caller.unix_username
     identities = model.identity.read_all()
     grants = grant.Grants.create()
     entries: list[schemas.ssh.SSHHostEntry] = []
     for identity in identities:
         shell_checker = grants.ssh_shell(identity.id, identity.tag_id_list, identity.boundary_id_list)
         for g in shell_checker.list_can():
-            entries.append(
-                schemas.ssh.SSHHostEntry(hostname=identity.name, type="shell", username_list=g.permission.username_list)
-            )
+            ulist = [r for e in g.permission.username_list if (r := grant.resolve_username(e, unix_username))]
+            if ulist:
+                entries.append(schemas.ssh.SSHHostEntry(hostname=identity.name, type="shell", username_list=ulist))
         port_forward_checker = grants.ssh_port_forward(identity.id, identity.tag_id_list, identity.boundary_id_list)
         for g in port_forward_checker.list_can():
-            entries.append(
-                schemas.ssh.SSHHostEntry(hostname=identity.name, type="port", username_list=g.permission.username_list)
-            )
+            ulist = [r for e in g.permission.username_list if (r := grant.resolve_username(e, unix_username))]
+            if ulist:
+                entries.append(schemas.ssh.SSHHostEntry(hostname=identity.name, type="port", username_list=ulist))
         command_checker = grants.ssh_command(identity.id, identity.tag_id_list, identity.boundary_id_list)
         for g in command_checker.list_can():
-            entries.append(
-                schemas.ssh.SSHHostEntry(
-                    hostname=identity.name,
-                    type="command",
-                    username_list=g.permission.username_list,
-                    command_list=g.permission.command_list,
+            ulist = [r for e in g.permission.username_list if (r := grant.resolve_username(e, unix_username))]
+            if ulist:
+                entries.append(
+                    schemas.ssh.SSHHostEntry(
+                        hostname=identity.name,
+                        type="command",
+                        username_list=ulist,
+                        command_list=g.permission.command_list,
+                    )
                 )
-            )
     return schemas.ssh.SSHHostsResponse(hosts=entries)
 
 

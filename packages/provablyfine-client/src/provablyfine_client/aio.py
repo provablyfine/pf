@@ -254,8 +254,14 @@ class AsyncSessionClient:
         id: int,
         name: str | None = None,
         tags: list[schemas.IdentityTagOp] | None = None,
+        unix_username: str | None = None,
+        unix_uid: int | None = None,
+        unix_gid: int | None = None,
+        clear_posix: bool = False,
     ) -> None:
-        return await self._run(lambda: self._inner.update_identity(id, name, tags))
+        return await self._run(
+            lambda: self._inner.update_identity(id, name, tags, unix_username, unix_uid, unix_gid, clear_posix)
+        )
 
     async def login_oidc(
         self,

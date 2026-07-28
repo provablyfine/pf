@@ -280,6 +280,21 @@ def update_endpoint(identity_id: int, data: schemas.identity.IdentityUpdateReque
         update_params["added_tag_id_list"] = added_tag_id_list
         update_params["deleted_tag_id_list"] = deleted_tag_id_list
 
+    posix_requested = {"unix_username", "unix_uid", "unix_gid"} & data.model_fields_set
+    if posix_requested:
+        if not permission_request.can_update("posix"):
+            raise responses.ProblemHTTPException(
+                responses.problem_response(
+                    status_code=403, title="Not allowed to update identity field", detail="posix"
+                )
+            )
+        if "unix_username" not in data.model_fields_set:
+            raise responses.ProblemHTTPException(
+                responses.problem_response(
+                    status_code=400, title="unix_username is required when setting unix_uid or unix_gid"
+                )
+            )
+
     try:
         model.identity.update(id=identity_id, **update_params)
     except sqlalchemy.exc.IntegrityError:
@@ -288,6 +303,23 @@ def update_endpoint(identity_id: int, data: schemas.identity.IdentityUpdateReque
                 status_code=400, title="Identity already exists. Name must be unique.", detail=data.name
             )
         )
+
+    if posix_requested:
+        if data.unix_username is None:
+            model.identity.clear_posix(identity_id)
+        else:
+            try:
+                model.identity.set_posix(
+                    identity_id,
+                    data.unix_username,
+                    unix_uid=data.unix_uid if "unix_uid" in data.model_fields_set else None,
+                    unix_gid=data.unix_gid if "unix_gid" in data.model_fields_set else None,
+                )
+            except sqlalchemy.exc.IntegrityError:
+                raise responses.ProblemHTTPException(
+                    responses.problem_response(status_code=400, title="Unix username or uid already in use")
+                )
+
     identity = model.identity.read_one(id=identity_id)
     assert identity is not None
 
