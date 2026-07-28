@@ -1,0 +1,5 @@
+#!/bin/bash
+set -eu
+cd "$(dirname "$0")/../src/nss/libnss_provablyfine"
+CARGO_HTTP_CAINFO=/tmp/aleash-ca.pem cargo build --release
+echo "Built: $(pwd)/target/release/libnss_provablyfine.so"

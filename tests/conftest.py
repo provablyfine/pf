@@ -124,7 +124,7 @@ PasswordAuthentication no
 PermitEmptyPasswords no
 KbdInteractiveAuthentication no
 
-Subsystem sftp /usr/libexec/openssh/sftp-server
+Subsystem sftp /usr/lib/openssh/sftp-server
 TrustedUserCAKeys /etc/ssh/keys/user-ca.pub
 """
     start_sh = """\
@@ -134,9 +134,13 @@ ssh-keygen -t rsa -f /etc/ssh/keys/ssh_host_rsa_key -N "" > /dev/null
 /usr/sbin/sshd -D -e
 """
     containerfile = f"""\
-FROM alpine:3.23
+FROM ubuntu:24.04
 
-RUN apk add --no-cache openssh-server openssh-keygen python3 uv
+RUN apt-get update && apt-get install -y --no-install-recommends \\
+    openssh-server python3 python3-pip \\
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip3 install --break-system-packages uv
 
 COPY packages/provablyfine-client /tmp/pfc/
 RUN --mount=type=cache,target=/root/.cache/uv uv pip install \\
@@ -149,15 +153,16 @@ RUN --mount=type=cache,target=/root/.cache/uv HATCH_TARGET_ARCH=unsupported uv p
     --quiet --link-mode=copy --system --break-system-packages --no-sources /tmp/pf && \\
     rm -rf /tmp/pf
 
-RUN mkdir -p /run/sshd && \\
-    adduser -D alice && \\
-    adduser -D bob && \\
-    adduser -D charlie
+RUN ln -sf "$(which pf)" /usr/bin/pf
 
-# unlock accounts
-RUN passwd -u alice && \\
-    passwd -u bob && \\
-    passwd -u charlie
+RUN mkdir -p /run/sshd && \\
+    useradd -m -s /bin/bash alice && \\
+    useradd -m -s /bin/bash bob && \\
+    useradd -m -s /bin/bash charlie && \\
+    passwd -d alice && \\
+    passwd -d bob && \\
+    passwd -d charlie && \\
+    passwd -d root
 
 RUN printf '%b' '{sshd_config.replace("\n", "\\n")}' > /etc/ssh/sshd_config
 
@@ -179,8 +184,11 @@ CMD ["/bin/sh", "/run/start.sh"]
     return image_id
 
 
-@pytest.fixture
-def sshd(request, sshd_image, tmp_path):
+def _run_sshd_container(
+    request: pytest.FixtureRequest,
+    image_id: str,
+    tmp_path: pathlib.Path,
+) -> typing.Generator[SshD, None, None]:
     with tempfile.TemporaryDirectory(dir=tld()) as ssh_keys_directory:
         # Make sure "nobody" can read this directory
         fd = os.open(ssh_keys_directory, 0)
@@ -191,14 +199,12 @@ def sshd(request, sshd_image, tmp_path):
             [
                 "podman",
                 "run",
-                "--detach",  # run in background and return immediately
-                # We do not --rm because we want to be able to read the logs when
-                # something goes wrong.
+                "--detach",
                 "--quiet",
                 "--publish-all",
                 "--volume",
                 f"{ssh_keys_directory}:/etc/ssh/keys:rw",
-                sshd_image,
+                image_id,
             ],
             tmp_path,
         )
@@ -209,14 +215,9 @@ def sshd(request, sshd_image, tmp_path):
         except Exception:
             print(f"SSH Server container: {container_id}")
             raise
-        # Wait for sshd to be ready inside container (key generation + daemon startup can take ~10s)
         start = time.time()
         host_address = None
         while time.time() - start < 30 and host_address is None:
-            # We try 169.254.0.1 because we might be running within a sandbox isolated from the
-            # host and in this case, the ports exposed by the podman containers will be accessible
-            # as 169.254.0.1
-            # The normal case is 127.0.0.1: we are running next to the podman runtime
             for address in ["127.0.0.1", "169.254.0.1"]:
                 try:
                     with socket.create_connection((address, port), timeout=1):
@@ -229,13 +230,174 @@ def sshd(request, sshd_image, tmp_path):
             raise Exception(f"sshd not ready after 30s in container {container_id}")
         try:
             yield SshD(
-                host_address=host_address, host_port=port, keys_directory=ssh_keys_directory, container_id=container_id
+                host_address=host_address,
+                host_port=port,
+                keys_directory=ssh_keys_directory,
+                container_id=container_id,
             )
         finally:
             if hasattr(request.node, "rep_call"):
                 if request.node.rep_call.failed:
                     print(f"SSH Server container: {container_id}")
             _run(["podman", "container", "stop", "-t", "0", container_id], tmp_path)
+
+
+@pytest.fixture
+def sshd(request: pytest.FixtureRequest, sshd_image: str, tmp_path: pathlib.Path) -> typing.Generator[SshD, None, None]:
+    yield from _run_sshd_container(request, sshd_image, tmp_path)
+
+
+@pytest.fixture(scope="session")
+def nss_lib(tmp_path_factory: pytest.TempPathFactory) -> str:
+    """Build the NSS cdylib and return path to the .so file."""
+    result = subprocess.run(["podman", "info"], stdin=subprocess.DEVNULL, capture_output=True)
+    if result.returncode != 0:
+        pytest.skip("podman not available")
+    if not shutil.which("cargo"):
+        pytest.skip("cargo not available")
+    nss_src = os.path.join(tld(), "src", "nss", "libnss_provablyfine")
+    env = copy.copy(os.environ)
+    if "SSL_CERT_FILE" not in env and os.path.exists("/tmp/aleash-ca.pem"):
+        env["CARGO_HTTP_CAINFO"] = "/tmp/aleash-ca.pem"
+    result = subprocess.run(
+        ["cargo", "build", "--release"],
+        cwd=nss_src,
+        capture_output=True,
+        env=env,
+    )
+    if result.returncode != 0:
+        pytest.skip(f"cargo build failed:\n{result.stderr.decode()}")
+    so_path = os.path.join(nss_src, "target", "release", "libnss_provablyfine.so")
+    assert os.path.exists(so_path), f"expected .so at {so_path}"
+    return so_path
+
+
+@pytest.fixture(scope="session")
+def sshd_nss_image(tmp_path_factory: pytest.TempPathFactory, nss_lib: str) -> str:
+    """Build an Ubuntu sshd image with the NSS module pre-installed."""
+    sshd_config = """\
+Port 22
+ListenAddress 0.0.0.0
+AddressFamily any
+ListenAddress ::
+
+HostKey /etc/ssh/keys/ssh_host_rsa_key
+HostKey /etc/ssh/keys/ssh_host_ecdsa_key
+HostKey /etc/ssh/keys/ssh_host_ed25519_key
+HostCertificate /etc/ssh/keys/ssh_host_rsa_key.cert
+HostCertificate /etc/ssh/keys/ssh_host_ecdsa_key.cert
+HostCertificate /etc/ssh/keys/ssh_host_ed25519_key.cert
+
+SyslogFacility AUTH
+LogLevel INFO
+
+LoginGraceTime 2m
+PermitRootLogin no
+StrictModes yes
+MaxAuthTries 10
+MaxSessions 10
+
+AuthorizedPrincipalsCommand /usr/bin/pf \
+    openssh \
+    auth-principals \
+    --host-certificate=/etc/ssh/keys/ssh_host_ed25519_key.cert \
+    --username=%u \
+    --certificate=%k
+AuthorizedPrincipalsCommandUser nobody
+
+PubkeyAuthentication yes
+AuthorizedKeysFile none
+HostbasedAuthentication no
+PasswordAuthentication no
+PermitEmptyPasswords no
+KbdInteractiveAuthentication no
+UsePAM yes
+
+Subsystem sftp /usr/lib/openssh/sftp-server
+TrustedUserCAKeys /etc/ssh/keys/user-ca.pub
+"""
+    start_sh = """\
+ssh-keygen -t ed25519 -f /etc/ssh/keys/ssh_host_ed25519_key -N "" > /dev/null
+ssh-keygen -t ecdsa -f /etc/ssh/keys/ssh_host_ecdsa_key -N "" > /dev/null
+ssh-keygen -t rsa -f /etc/ssh/keys/ssh_host_rsa_key -N "" > /dev/null
+/usr/sbin/sshd -D -e
+"""
+    # Use a UID range that fits within rootless podman's UID namespace (0-65535).
+    nss_conf = "uid_range_min=1000\nuid_range_max=60000\n"
+
+    containerfile = f"""\
+FROM ubuntu:24.04
+
+RUN apt-get update && apt-get install -y --no-install-recommends \\
+    openssh-server python3 python3-pip libpam-modules \\
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip3 install --break-system-packages uv
+
+COPY packages/provablyfine-client /tmp/pfc/
+RUN --mount=type=cache,target=/root/.cache/uv uv pip install \\
+    --quiet --link-mode=copy --system --break-system-packages /tmp/pfc && \\
+    rm -rf /tmp/pfc
+
+COPY pyproject.toml README.md LICENSE.md /tmp/pf/
+COPY src /tmp/pf/src/
+RUN --mount=type=cache,target=/root/.cache/uv HATCH_TARGET_ARCH=unsupported uv pip install \\
+    --quiet --link-mode=copy --system --break-system-packages --no-sources /tmp/pf && \\
+    rm -rf /tmp/pf
+
+RUN ln -sf "$(which pf)" /usr/bin/pf
+
+COPY libnss_provablyfine.so /tmp/nss_provablyfine.so
+RUN install -m 755 /tmp/nss_provablyfine.so \\
+    "/usr/lib/$(dpkg-architecture -qDEB_HOST_MULTIARCH)/libnss_provablyfine.so.2" && \\
+    ldconfig && rm /tmp/nss_provablyfine.so
+
+RUN printf '%b' '{nss_conf.replace(chr(10), "\\n")}' > /etc/pf-nss.conf && \\
+    chmod 644 /etc/pf-nss.conf
+
+RUN sed -i 's|^\\(passwd:.*files\\)|\\1 provablyfine|' /etc/nsswitch.conf && \\
+    sed -i 's|^\\(group:.*files\\)|\\1 provablyfine|' /etc/nsswitch.conf && \\
+    sed -i 's|^\\(shadow:.*files\\)|\\1 provablyfine|' /etc/nsswitch.conf
+
+RUN echo 'session required pam_mkhomedir.so skel=/etc/skel umask=0077' >> /etc/pam.d/sshd
+
+RUN mkdir -p /run/sshd
+
+RUN printf '%b' '{sshd_config.replace(chr(10), "\\n")}' > /etc/ssh/sshd_config
+
+EXPOSE 22
+
+RUN printf '%b' '{start_sh.replace(chr(10), "\\n")}' > /run/start.sh
+
+CMD ["/bin/sh", "/run/start.sh"]
+    """
+
+    # Build using a dedicated temp context dir — avoids embedding large binaries
+    # as base64 in the Containerfile and eliminates the race with the sshd_image build.
+    ctx_dir = tmp_path_factory.mktemp("nss_build_ctx", numbered=True)
+    shutil.copytree(os.path.join(tld(), "packages"), ctx_dir / "packages")
+    for fname in ("pyproject.toml", "README.md", "LICENSE.md"):
+        shutil.copy2(os.path.join(tld(), fname), ctx_dir / fname)
+    shutil.copytree(os.path.join(tld(), "src"), ctx_dir / "src")
+    shutil.copy2(nss_lib, ctx_dir / "libnss_provablyfine.so")
+    containerfile_path = ctx_dir / "Containerfile"
+    containerfile_path.write_text(containerfile)
+
+    stdout = _run(
+        ["podman", "build", "--quiet", "--file", str(containerfile_path), str(ctx_dir)],
+        ctx_dir,
+    )
+    image_id = stdout.strip("\n")
+    if "\n" in image_id:
+        assert False, image_id
+    return image_id
+
+
+@pytest.fixture
+def sshd_nss(
+    request: pytest.FixtureRequest, sshd_nss_image: str, tmp_path: pathlib.Path
+) -> typing.Generator[SshD, None, None]:
+    yield from _run_sshd_container(request, sshd_nss_image, tmp_path)
 
 
 @dataclasses.dataclass(frozen=True)

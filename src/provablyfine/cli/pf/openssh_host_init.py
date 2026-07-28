@@ -71,6 +71,41 @@ def _do_refresh(c: client.Config, host_keys_dir: str, ca_pub_path: str) -> None:
     _write_file_atomic(ca_pub_path, ca_pubkey, mode="w")
 
 
+_NSS_INIT_FRAGMENT = """\
+
+# pf NSS: synthesize Unix accounts on-demand
+if ! ldconfig -p 2>/dev/null | grep -q 'libnss_provablyfine\\.so\\.2'; then
+  echo 'libnss_provablyfine.so.2 not found in ldconfig cache.' >&2
+  echo 'Install it and run ldconfig first.' >&2
+  exit 1
+fi
+cat > /etc/pf-nss.conf << 'PFEOF'
+uid_range_min=100000
+uid_range_max=999999
+PFEOF
+chmod 644 /etc/pf-nss.conf
+_patch_nsswitch() {
+  local _db="$1"
+  if grep -qE "^$_db:.*provablyfine" /etc/nsswitch.conf; then
+    return 0
+  fi
+  sed -i "s|^\\\\($_db:.*files\\\\)\\\\(.*\\\\)|\\\\1 provablyfine\\\\2|" /etc/nsswitch.conf
+}
+_patch_nsswitch passwd
+_patch_nsswitch group
+_patch_nsswitch shadow
+if [ -f /etc/pam.d/sshd ] && ! grep -q pam_mkhomedir /etc/pam.d/sshd; then
+  echo 'session required pam_mkhomedir.so skel=/etc/skel umask=0077' >> /etc/pam.d/sshd
+fi
+"""
+
+_NSS_UNINIT_FRAGMENT = """\
+rm -f /etc/pf-nss.conf
+sed -i 's/ provablyfine//' /etc/nsswitch.conf
+sed -i '/pam_mkhomedir.so/d' /etc/pam.d/sshd 2>/dev/null || true
+"""
+
+
 def _print_init_script(
     invitation: str,
     directory_url: str,
@@ -78,6 +113,7 @@ def _print_init_script(
     ca_pub_path: str,
     sshd_config_drop_in: str,
     auth_user: str,
+    nss: bool = False,
 ) -> None:
     sshd_drop_in_dir = os.path.dirname(sshd_config_drop_in)
     config_json = json.dumps(
@@ -203,6 +239,8 @@ PFEOF
   chmod 755 /etc/NetworkManager/dispatcher.d/pf-host-refresh
 fi
 """)
+    if nss:
+        sys.stdout.write(_NSS_INIT_FRAGMENT)
 
 
 def host_init_daemon_function(args: argparse.Namespace) -> None:
@@ -217,6 +255,7 @@ def host_init_daemon_function(args: argparse.Namespace) -> None:
         args.ca_pub_path,
         args.sshd_config_drop_in,
         args.auth_user,
+        nss=args.nss,
     )
 
 
@@ -244,6 +283,9 @@ def host_uninit_function(args: argparse.Namespace) -> None:
         "  systemctl reload sshd",
         "fi",
     ]
+    if args.nss:
+        lines.append("")
+        lines.extend(_NSS_UNINIT_FRAGMENT.splitlines())
     sys.stdout.write("\n".join(lines) + "\n")
 
 
