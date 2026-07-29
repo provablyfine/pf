@@ -325,7 +325,6 @@ def update_endpoint(identity_id: int, data: schemas.identity.IdentityUpdateReque
         update_params["added_tag_id_list"] = added_tag_id_list
         update_params["deleted_tag_id_list"] = deleted_tag_id_list
 
-    logger.warning(f"update: {update_params}")
     try:
         model.identity.update(id=identity_id, **update_params)
     except sqlalchemy.exc.IntegrityError:
