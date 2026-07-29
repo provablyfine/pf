@@ -349,14 +349,20 @@ class IdentityCreatePermission(_Base):
 
 class IdentityUpdatePermission(_Base):
     name: bool
-    posix: bool = False
+    unix_username: bool = False
+    unix_uid: bool = False
+    unix_gid: bool = False
 
     def to_text(self) -> str:
         parts: list[str] = []
         if self.name:
             parts.append("name")
-        if self.posix:
-            parts.append("posix")
+        if self.unix_username:
+            parts.append("unix_username")
+        if self.unix_uid:
+            parts.append("unix_uid")
+        if self.unix_gid:
+            parts.append("unix_gid")
         return ", ".join(parts)
 
 

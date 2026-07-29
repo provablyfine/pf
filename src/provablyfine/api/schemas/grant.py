@@ -83,7 +83,9 @@ class IdentityCreatePermission(base.APIBase):
 
 class IdentityUpdatePermission(base.APIBase):
     name: bool
-    posix: bool = False
+    unix_username: bool = False
+    unix_uid: bool = False
+    unix_gid: bool = False
 
 
 class IdentityPermission(base.APIBase):

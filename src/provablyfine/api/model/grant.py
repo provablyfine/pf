@@ -117,7 +117,9 @@ class IdentityCreatePermission(DBBase):
 
 class IdentityUpdatePermission(DBBase):
     name: bool
-    posix: bool = False
+    unix_username: bool = False
+    unix_uid: bool = False
+    unix_gid: bool = False
 
 
 class IdentityPermission(DBBase):

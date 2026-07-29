@@ -1,6 +1,7 @@
 import dataclasses
 import typing
 
+from ... import _sentinel
 from .. import app_db
 from ..context import ctx
 from . import audit_log, grant
@@ -60,36 +61,29 @@ def read_one(**kwargs: typing.Any) -> Boundary | None:
     return _from_db(boundary)
 
 
-class Unset:
-    pass
-
-
-_UNSET = Unset()
-
-
 def update(
     id: int,
-    name: str | Unset = _UNSET,
-    description: str | Unset = _UNSET,
-    ceiling_list: list[grant.Grant] | None | Unset = _UNSET,
-    denied_list: list[grant.Grant] | Unset = _UNSET,
+    name: str | _sentinel.Unset = _sentinel.UNSET,
+    description: str | _sentinel.Unset = _sentinel.UNSET,
+    ceiling_list: list[grant.Grant] | None | _sentinel.Unset = _sentinel.UNSET,
+    denied_list: list[grant.Grant] | _sentinel.Unset = _sentinel.UNSET,
 ) -> None:
     update_fields: dict[str, typing.Any] = {}
-    if not isinstance(name, Unset):
+    if not isinstance(name, _sentinel.Unset):
         update_fields["name"] = name
         audit_log.create(
             "boundary-update-name",
             id=id,
             name=name,
         )
-    if not isinstance(description, Unset):
+    if not isinstance(description, _sentinel.Unset):
         update_fields["description"] = description
         audit_log.create(
             "boundary-update-description",
             id=id,
             description=description,
         )
-    if not isinstance(ceiling_list, Unset):
+    if not isinstance(ceiling_list, _sentinel.Unset):
         db_ceiling_list = None if ceiling_list is None else [grant.serialize(g) for g in ceiling_list]
         update_fields["ceiling_list"] = db_ceiling_list
         audit_log.create(
@@ -97,7 +91,7 @@ def update(
             id=id,
             ceiling_list=db_ceiling_list,
         )
-    if not isinstance(denied_list, Unset):
+    if not isinstance(denied_list, _sentinel.Unset):
         db_denied_list = [grant.serialize(g) for g in denied_list]
         update_fields["denied_list"] = db_denied_list
         audit_log.create(

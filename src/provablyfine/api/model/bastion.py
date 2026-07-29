@@ -4,16 +4,9 @@ import typing
 
 import jwt
 
-from ... import jwk
+from ... import _sentinel, jwk
 from ..context import ctx
 from . import audit_log, identity, oidc_key
-
-
-class Unset:
-    pass
-
-
-_UNSET = Unset()
 
 
 @dataclasses.dataclass(frozen=True)
@@ -21,21 +14,17 @@ class Bastion:
     id: int
     tag_id_list: list[int]
     url: str
+    created_at: int
     ssh_proxy_jump: str | None = None
-    created_at: int | None = None
     created_by_id: int | None = None
 
 
-def create(
-    url: str,
-    ssh_proxy_jump: str | None | Unset = _UNSET,
-    tag_id_list: list[int] | None | Unset = _UNSET,
-) -> int:
+def create(url: str, ssh_proxy_jump: str | None, tag_id_list: list[int]) -> int:
     now = int(time.time())
     bastion_id = ctx.app_db.bastion.create(
         url=url,
-        ssh_proxy_jump=None if ssh_proxy_jump is _UNSET else ssh_proxy_jump,
-        tag_id_list=[] if tag_id_list is _UNSET else tag_id_list,
+        ssh_proxy_jump=ssh_proxy_jump,
+        tag_id_list=tag_id_list,
         created_at=now,
         created_by_id=ctx.identity_id,
     )
@@ -83,16 +72,16 @@ def read_all(**kwargs: typing.Any) -> list[Bastion]:
 
 def update(
     id: int,
-    url: str | None = None,
-    ssh_proxy_jump: str | None = None,
-    tag_id_list: list[int] | None = None,
+    url: str | _sentinel.Unset = _sentinel.UNSET,
+    ssh_proxy_jump: str | None | _sentinel.Unset = _sentinel.UNSET,
+    tag_id_list: list[int] | _sentinel.Unset = _sentinel.UNSET,
 ) -> None:
     update_fields: dict[str, typing.Any] = {}
-    if url is not None:
+    if url is not _sentinel.UNSET:
         update_fields["url"] = url
-    if ssh_proxy_jump is not None:
+    if ssh_proxy_jump is not _sentinel.UNSET:
         update_fields["ssh_proxy_jump"] = ssh_proxy_jump
-    if tag_id_list is not None:
+    if tag_id_list is not _sentinel.UNSET:
         update_fields["tag_id_list"] = tag_id_list
 
     if len(update_fields) > 0:

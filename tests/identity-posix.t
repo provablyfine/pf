@@ -6,8 +6,8 @@ Create a user identity
   $ pfa -c config.json identity create -n user
   $ USER_ID=$(pfa -c config.json identity list -n user -q)
 
-Set posix fields with auto-derived uid/gid
-  $ pfa -c config.json identity update -i $USER_ID --posix-username alice
+Set unix fields with auto-derived uid/gid
+  $ pfa -c config.json identity update -i $USER_ID --unix-username alice
   $ pfa -c config.json identity read -i $USER_ID
   id             [0-9]+ (re)
   name           user
@@ -25,7 +25,7 @@ Auto-derived uid equals gid by default (personal group model)
   true
 
 Override uid and gid explicitly
-  $ pfa -c config.json identity update -i $USER_ID --posix-username alice --posix-uid 100042 --posix-gid 100043
+  $ pfa -c config.json identity update -i $USER_ID --unix-username alice --unix-uid 100042 --unix-gid 100043
   $ pfa -c config.json identity read -i $USER_ID
   id             [0-9]+ (re)
   name           user
@@ -37,24 +37,24 @@ Override uid and gid explicitly
 Unix username must be unique across identities
   $ pfa -c config.json identity create -n user2
   $ USER2_ID=$(pfa -c config.json identity list -n user2 -q)
-  $ pfa -c config.json identity update -i $USER2_ID --posix-username alice
-  Unix username or uid already in use
+  $ pfa -c config.json identity update -i $USER2_ID --unix-username alice
+  Identity already exists. "name", "unix_username", "unix_uid", and "unix_gid" must be unique.
   [2]
 
 Unix uid must be unique (explicit conflict with user's uid 100042)
-  $ pfa -c config.json identity update -i $USER2_ID --posix-username bob --posix-uid 100042
-  Unix username or uid already in use
+  $ pfa -c config.json identity update -i $USER2_ID --unix-username bob --unix-uid 100042
+  Identity already exists. "name", "unix_username", "unix_uid", and "unix_gid" must be unique.
   [2]
   $ pfa -c config.json identity delete -i $USER2_ID
 
-Clear posix fields
-  $ pfa -c config.json identity update -i $USER_ID --clear-posix
+Clear unix fields
+  $ pfa -c config.json identity update -i $USER_ID --unix-username ""
   $ pfa -c config.json identity read -i $USER_ID
   id        [0-9]+ (re)
   name      user
   boundary  root
 
-Cleared posix fields are null in JSON output
+Cleared unix fields are null in JSON output
   $ pfa -c config.json identity list -f json | jq '.[1] | [.unix_username, .unix_uid, .unix_gid]'
   [
     null,
@@ -70,7 +70,7 @@ Set up for {self} resolution test: host with device tag, role with {self} + lite
   $ ROLE_ID=$(pfa -c config.json role list -n role -q)
   $ pfa -c config.json grant ssh-shell --tag id=device --username '{self}' deploy | pfa -c config.json role grant -i $ROLE_ID --add
   $ pfa -c config.json role member -i $ROLE_ID -a user
-  $ pfa -c config.json identity update -i $USER_ID --posix-username alice
+  $ pfa -c config.json identity update -i $USER_ID --unix-username alice
 
 User accepts invitation and logs in
   $ INVITATION=$(pfa -c config.json identity invite --manual -i $USER_ID)
@@ -86,8 +86,8 @@ User with unix_username sees {self} resolved to their username in pf hosts
   host    shell   alice
   host    shell   deploy
 
-Admin clears posix: {self} entry is dropped, literal username still present
-  $ pfa -c config.json identity update -i $USER_ID --clear-posix
+Admin clears unix: {self} entry is dropped, literal username still present
+  $ pfa -c config.json identity update -i $USER_ID --unix-username ""
   $ pf -c user.json hosts
   host    type    username    details
   ------  ------  ----------  ---------

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import typing
 
-from . import directory, exceptions, http_session, http_signatures, schemas, signer
+from . import _sentinel, directory, exceptions, http_session, http_signatures, schemas, signer
 
 
 def _problem_title(response: typing.Any, default: str) -> str:
@@ -549,26 +549,23 @@ class SessionClient:
     def update_identity(
         self,
         id: int,
-        name: str | None = None,
-        tags: list[schemas.IdentityTagOp] | None = None,
-        unix_username: str | None = None,
-        unix_uid: int | None = None,
-        unix_gid: int | None = None,
-        clear_posix: bool = False,
+        name: str | _sentinel.Unset = _sentinel.UNSET,
+        tags: list[schemas.IdentityTagOp] | _sentinel.Unset = _sentinel.UNSET,
+        unix_username: str | None | _sentinel.Unset = _sentinel.UNSET,
+        unix_uid: int | None | _sentinel.Unset = _sentinel.UNSET,
+        unix_gid: int | None | _sentinel.Unset = _sentinel.UNSET,
     ) -> None:
         body: dict[str, typing.Any] = {}
-        if name is not None:
+        if name is not _sentinel.UNSET:
             body["name"] = name
-        if tags is not None:
+        if not isinstance(tags, _sentinel.Unset):
             body["tags"] = [op.model_dump(exclude_none=True) for op in tags]
-        if clear_posix:
-            body["unix_username"] = None
-        elif unix_username is not None:
+        if unix_username is not _sentinel.UNSET:
             body["unix_username"] = unix_username
-            if unix_uid is not None:
-                body["unix_uid"] = unix_uid
-            if unix_gid is not None:
-                body["unix_gid"] = unix_gid
+        if unix_uid is not _sentinel.UNSET:
+            body["unix_uid"] = unix_uid
+        if unix_gid is not _sentinel.UNSET:
+            body["unix_gid"] = unix_gid
         if not body:
             raise exceptions.UI("Nothing to update")
         response = self._session.patch(f"{self._directory.identity}/{id}", auth=self._auth(), json=body)

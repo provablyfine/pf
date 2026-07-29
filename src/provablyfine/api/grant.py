@@ -225,7 +225,7 @@ class IdentityChecker:
         return self._checker.can(check)
 
     def can_update(self, field: str) -> bool:
-        assert field in ("name", "posix"), f"Unknown identity update field: {field}"
+        assert field in ("name", "unix_username", "unix_uid", "unix_gid"), f"Unknown identity update field: {field}"
 
         def check(g: model.grant.IdentityGrant) -> bool:
             if g.permission.update is None:
@@ -346,7 +346,7 @@ class SSHShellChecker:
             boundaries, roles, identity_id, tag_id_list, boundary_id_list, model.grant.SSHShellGrant
         )
 
-    def can(self, username: str, unix_username: str | None = None) -> model.grant.SSHShellPermission | None:
+    def can(self, username: str, unix_username: str | None) -> model.grant.SSHShellPermission | None:
         def check(g: model.grant.SSHShellGrant) -> bool:
             resolved = [r for e in g.permission.username_list if (r := resolve_username(e, unix_username)) is not None]
             return username in resolved
@@ -380,7 +380,7 @@ class SSHPortForwardChecker:
             boundaries, roles, identity_id, tag_id_list, boundary_id_list, model.grant.SSHPortForwardingGrant
         )
 
-    def can(self, username: str, unix_username: str | None = None) -> bool:
+    def can(self, username: str, unix_username: str | None) -> bool:
         def check(g: model.grant.SSHPortForwardingGrant) -> bool:
             resolved = [r for e in g.permission.username_list if (r := resolve_username(e, unix_username)) is not None]
             return username in resolved
@@ -407,7 +407,7 @@ class SSHCommandChecker:
             boundaries, roles, identity_id, tag_id_list, boundary_id_list, model.grant.SSHCommandGrant
         )
 
-    def can(self, username: str, command: str, unix_username: str | None = None) -> bool:
+    def can(self, username: str, command: str, unix_username: str | None) -> bool:
         def check(g: model.grant.SSHCommandGrant) -> bool:
             resolved = [r for e in g.permission.username_list if (r := resolve_username(e, unix_username)) is not None]
             return username in resolved and command in g.permission.command_list

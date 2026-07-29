@@ -744,9 +744,9 @@ def test_audit_log_with_denied():
 def test_empty_ssh():
     grants = grant.Grants([], [])
 
-    assert grants.ssh_shell(1, [], []).can("hello") is None
-    assert not grants.ssh_port_forward(1, [], []).can("hello")
-    assert not grants.ssh_command(1, [], []).can("hello", "ls")
+    assert grants.ssh_shell(1, [], []).can("hello", "unix_hello") is None
+    assert not grants.ssh_port_forward(1, [], []).can("hello", "unix_hello")
+    assert not grants.ssh_command(1, [], []).can("hello", "ls", "unix_hello")
 
 
 def test_ssh_shell():
@@ -758,10 +758,10 @@ def test_ssh_shell():
         }
     )
 
-    assert grants.ssh_shell(1, [], []).can("hello") is None
-    assert grants.ssh_shell(1, [], []).can("alice") is not None
-    assert grants.ssh_shell(1, [], []).can("bob") is not None
-    assert not grants.ssh_port_forward(1, [], []).can("alice")
+    assert grants.ssh_shell(1, [], []).can("hello", "unix_hello") is None
+    assert grants.ssh_shell(1, [], []).can("alice", "unix_alice") is not None
+    assert grants.ssh_shell(1, [], []).can("bob", "unix_bob") is not None
+    assert not grants.ssh_port_forward(1, [], []).can("alice", "unix_alice")
 
 
 def test_ssh_port_forwarding():
@@ -773,9 +773,9 @@ def test_ssh_port_forwarding():
         }
     )
 
-    assert grants.ssh_port_forward(1, [], []).can("alice")
-    assert not grants.ssh_port_forward(1, [], []).can("bob")
-    assert grants.ssh_shell(1, [], []).can("alice") is None
+    assert grants.ssh_port_forward(1, [], []).can("alice", "alice")
+    assert not grants.ssh_port_forward(1, [], []).can("bob", "bob")
+    assert grants.ssh_shell(1, [], []).can("alice", "alice") is None
 
 
 def test_ssh_command():
@@ -787,7 +787,7 @@ def test_ssh_command():
         }
     )
 
-    assert grants.ssh_command(1, [], []).can("alice", "git-upload-pack /repo")
-    assert not grants.ssh_command(1, [], []).can("alice", "rm -rf /")
-    assert not grants.ssh_command(1, [], []).can("bob", "git-upload-pack /repo")
-    assert grants.ssh_shell(1, [], []).can("alice") is None
+    assert grants.ssh_command(1, [], []).can("alice", "git-upload-pack /repo", "alice")
+    assert not grants.ssh_command(1, [], []).can("alice", "rm -rf /", "alice")
+    assert not grants.ssh_command(1, [], []).can("bob", "git-upload-pack /repo", "bob")
+    assert grants.ssh_shell(1, [], []).can("alice", "alice") is None

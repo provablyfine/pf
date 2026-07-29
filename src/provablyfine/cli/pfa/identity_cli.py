@@ -137,14 +137,25 @@ def _identity_invite_function(args: argparse.Namespace) -> None:
 def _identity_update_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     sc = client.Factory(c, timeout=args.timeout).session()
-    sc.update_identity(
-        args.id,
-        name=args.name,
-        unix_username=args.posix_username,
-        unix_uid=args.posix_uid,
-        unix_gid=args.posix_gid,
-        clear_posix=args.clear_posix,
-    )
+    update_params: dict[str, typing.Any] = {}
+    if args.name is not None:
+        update_params["name"] = args.name
+    if args.unix_username is not None:
+        if args.unix_username == "":
+            update_params["unix_username"] = None
+        else:
+            update_params["unix_username"] = args.unix_username
+    if args.unix_uid is not None:
+        if args.unix_uid == 0:
+            update_params["unix_uid"] = None
+        else:
+            update_params["unix_uid"] = args.unix_uid
+    if args.unix_gid is not None:
+        if args.unix_gid == 0:
+            update_params["unix_gid"] = None
+        else:
+            update_params["unix_gid"] = args.unix_gid
+    sc.update_identity(args.id, **update_params)
 
 
 class TagAction(argparse.Action):
@@ -231,36 +242,19 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
     update_parser = subparsers.add_parser("update", help="Update an existing identity")
     update_parser.add_argument("-i", "--id", type=int, help="Id of identity")
     update_parser.add_argument("-n", "--name", help="New name of identity")
-    posix_group = update_parser.add_mutually_exclusive_group()
-    posix_group.add_argument(
-        "--posix-username",
-        dest="posix_username",
-        default=None,
-        metavar="NAME",
-        help="Set Unix username for posix provisioning",
-    )
-    posix_group.add_argument(
-        "--clear-posix",
-        dest="clear_posix",
-        action="store_true",
-        default=False,
-        help="Clear posix provisioning fields",
+    update_parser.add_argument(
+        "--unix-username",
+        help="Set Unix username (empty string to clear)",
     )
     update_parser.add_argument(
-        "--posix-uid",
-        dest="posix_uid",
+        "--unix-uid",
         type=int,
-        default=None,
-        metavar="UID",
-        help="Set Unix UID (auto-derived from username if not specified)",
+        help="Set Unix UID (derived from username if uid is unspecified and username is specified, 0 to clear)",
     )
     update_parser.add_argument(
-        "--posix-gid",
-        dest="posix_gid",
+        "--unix-gid",
         type=int,
-        default=None,
-        metavar="GID",
-        help="Set Unix GID (defaults to UID if not specified)",
+        help="Set Unix GID (derived from username if gid is unspecified and username is specified, 0 to clear)",
     )
     update_parser.set_defaults(func=_identity_update_function)
 

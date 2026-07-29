@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import logging
 import typing
 
@@ -15,6 +16,12 @@ logger = logging.getLogger(__name__)
 router = fastapi.APIRouter(prefix="/identity", dependencies=[fastapi.Depends(signature.verify_session)])
 
 _204 = fastapi.responses.Response(status_code=204)
+
+
+def _uid_from_username(username: str, range_min: int, range_max: int) -> int:
+    digest = hashlib.sha256(username.encode()).digest()
+    value = int.from_bytes(digest[:8], "big")
+    return range_min + (value % (range_max - range_min))
 
 
 @router.get("", status_code=200, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
@@ -245,6 +252,44 @@ def update_endpoint(identity_id: int, data: schemas.identity.IdentityUpdateReque
                 responses.problem_response(status_code=403, title="Not allowed to update identity field", detail="name")
             )
         update_params["name"] = data.name
+
+    uid = None
+    if "unix_username" in data.model_fields_set:
+        if data.unix_username is not None:
+            uid = _uid_from_username(data.unix_username, ctx.config.unix_uid_range_min, ctx.config.unix_uid_range_max)
+        if not permission_request.can_update("unix_username"):
+            raise responses.ProblemHTTPException(
+                responses.problem_response(
+                    status_code=403, title="Not allowed to update identity field", detail="unix_username"
+                )
+            )
+        # When the caller explicitely sets a unix_username,
+        # we update the associated unix_uid and unix_gid,
+        # unless they are overriden explicitely via the
+        # unix_uid and unix_gid fields
+        update_params["unix_username"] = data.unix_username
+        update_params["unix_uid"] = uid
+        # The automated gid is exactly equal to the automated uid
+        update_params["unix_gid"] = uid
+
+    if "unix_uid" in data.model_fields_set:
+        if not permission_request.can_update("unix_uid"):
+            raise responses.ProblemHTTPException(
+                responses.problem_response(
+                    status_code=403, title="Not allowed to update identity field", detail="unix_uid"
+                )
+            )
+        update_params["unix_uid"] = data.unix_uid
+
+    if "unix_gid" in data.model_fields_set:
+        if not permission_request.can_update("unix_gid"):
+            raise responses.ProblemHTTPException(
+                responses.problem_response(
+                    status_code=403, title="Not allowed to update identity field", detail="unix_gid"
+                )
+            )
+        update_params["unix_gid"] = data.unix_gid
+
     if "tags" in data.model_fields_set:
         assert data.tags is not None  # Guaranteed by "after" pydantic validation
         # 1. We need to have native add and del operations because we have an identity:add-tag
@@ -280,45 +325,15 @@ def update_endpoint(identity_id: int, data: schemas.identity.IdentityUpdateReque
         update_params["added_tag_id_list"] = added_tag_id_list
         update_params["deleted_tag_id_list"] = deleted_tag_id_list
 
-    posix_requested = {"unix_username", "unix_uid", "unix_gid"} & data.model_fields_set
-    if posix_requested:
-        if not permission_request.can_update("posix"):
-            raise responses.ProblemHTTPException(
-                responses.problem_response(
-                    status_code=403, title="Not allowed to update identity field", detail="posix"
-                )
-            )
-        if "unix_username" not in data.model_fields_set:
-            raise responses.ProblemHTTPException(
-                responses.problem_response(
-                    status_code=400, title="unix_username is required when setting unix_uid or unix_gid"
-                )
-            )
-
+    logger.warning(f"update: {update_params}")
     try:
         model.identity.update(id=identity_id, **update_params)
     except sqlalchemy.exc.IntegrityError:
         raise responses.ProblemHTTPException(
             responses.problem_response(
-                status_code=400, title="Identity already exists. Name must be unique.", detail=data.name
+                status_code=400, title="Identity already exists. \"name\", \"unix_username\", \"unix_uid\", and \"unix_gid\" must be unique.", detail=data.name
             )
         )
-
-    if posix_requested:
-        if data.unix_username is None:
-            model.identity.clear_posix(identity_id)
-        else:
-            try:
-                model.identity.set_posix(
-                    identity_id,
-                    data.unix_username,
-                    unix_uid=data.unix_uid if "unix_uid" in data.model_fields_set else None,
-                    unix_gid=data.unix_gid if "unix_gid" in data.model_fields_set else None,
-                )
-            except sqlalchemy.exc.IntegrityError:
-                raise responses.ProblemHTTPException(
-                    responses.problem_response(status_code=400, title="Unix username or uid already in use")
-                )
 
     identity = model.identity.read_one(id=identity_id)
     assert identity is not None

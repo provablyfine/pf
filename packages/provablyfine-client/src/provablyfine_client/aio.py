@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import typing
 
-from . import account_client, invitation_client, public_client, schemas, session_client
+from . import _sentinel, account_client, invitation_client, public_client, schemas, session_client
 
 
 class AsyncPublicClient:
@@ -252,16 +252,13 @@ class AsyncSessionClient:
     async def update_identity(
         self,
         id: int,
-        name: str | None = None,
-        tags: list[schemas.IdentityTagOp] | None = None,
-        unix_username: str | None = None,
-        unix_uid: int | None = None,
-        unix_gid: int | None = None,
-        clear_posix: bool = False,
+        name: str | _sentinel.Unset = _sentinel.UNSET,
+        tags: list[schemas.IdentityTagOp] | _sentinel.Unset = _sentinel.UNSET,
+        unix_username: str | None | _sentinel.Unset = _sentinel.UNSET,
+        unix_uid: int | None | _sentinel.Unset = _sentinel.UNSET,
+        unix_gid: int | None | _sentinel.Unset = _sentinel.UNSET,
     ) -> None:
-        return await self._run(
-            lambda: self._inner.update_identity(id, name, tags, unix_username, unix_uid, unix_gid, clear_posix)
-        )
+        return await self._run(lambda: self._inner.update_identity(id, name, tags, unix_username, unix_uid, unix_gid))
 
     async def login_oidc(
         self,

@@ -21,10 +21,10 @@ Provision host identity and set up SSH
   $ pf -c host.json openssh user-trusted-keys > $SSHD_KEYS_DIRECTORY/user-ca.pub
   $ podman exec $SSHD_CONTAINER_ID pkill -HUP sshd
 
-Provision user identity with posix fields
+Provision user identity with unix fields
   $ pfa -c config.json identity create -n user
   $ USER_ID=$(pfa -c config.json identity list -n user -q)
-  $ pfa -c config.json identity update -i $USER_ID --posix-username alice
+  $ pfa -c config.json identity update -i $USER_ID --unix-username alice
   $ pfa -c config.json role member -i $ROLE_ID -a user
   $ INVITATION=$(pfa -c config.json identity invite --manual -i $USER_ID)
 
@@ -48,8 +48,8 @@ bob has no grant — auth still enforced despite NSS synthesizing any username
   User is not authorized to connect to host
   [2]
 
-Clear posix: {self} is now unresolvable, connection fails
-  $ pfa -c config.json identity update -i $USER_ID --clear-posix
+Clear unix: {self} is now unresolvable, connection fails
+  $ pfa -c config.json identity update -i $USER_ID --unix-username ""
   $ pf -c user.json ssh -n -o "Hostname=$SSHD_ADDRESS" -o "HostKeyAlias=host" -p $SSHD_PORT alice@host "whoami"
   User is not authorized to connect to host
   [2]

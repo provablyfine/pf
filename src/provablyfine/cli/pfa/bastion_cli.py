@@ -1,5 +1,6 @@
 import argparse
 import json
+import typing
 
 import provablyfine_client as pfc
 import tabulate
@@ -80,7 +81,12 @@ def _bastion_create_function(args: argparse.Namespace) -> None:
 def _bastion_update_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     sc = client.Factory(c, timeout=args.timeout).session()
-    sc.update_bastion(args.id, args.url, args.ssh_proxy_jump)
+    update_params: dict[str, typing.Any] = {}
+    if args.url is not None:
+        update_params["url"] = args.url
+    if args.ssh_proxy_jump is not None:
+        update_params["ssh_proxy_jump"] = args.ssh_proxy_jump if args.ssh_proxy_jump else ""
+    sc.update_bastion(args.id, **update_params)
 
 
 def add_subparser(parser: argparse.ArgumentParser) -> None:
@@ -101,7 +107,7 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
 
     create_parser = subparsers.add_parser("create", help="Create a new bastion")
     create_parser.add_argument("--url", type=str, required=True, help="URL of the bastion")
-    create_parser.add_argument("--ssh-proxy-jump", type=str, help="SSH ProxyJump string")
+    create_parser.add_argument("--ssh-proxy-jump", type=str, help="SSH ProxyJump string, set empty to clear.")
     create_parser.add_argument("-t", "--tag", help="Tag to apply on the bastion", nargs="*", default=[])
     create_parser.set_defaults(func=_bastion_create_function)
 
