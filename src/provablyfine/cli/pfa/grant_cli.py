@@ -329,7 +329,14 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
     group.add_argument("--create-required-boundary", default=None, nargs="*")
     group.add_argument("-r", "--read", action="store_true")
     group.add_argument("--update-all", action="store_true")
-    group.add_argument("-u", "--update", action="append", nargs="*", default=[], choices=["name", "unix_username", "unix_uid", "unix_gid"])
+    group.add_argument(
+        "-u",
+        "--update",
+        action="append",
+        nargs="*",
+        default=[],
+        choices=["name", "unix_username", "unix_uid", "unix_gid"],
+    )
     group.add_argument("-d", "--delete", action="store_true")
     group.add_argument("--add-tag", default=[], nargs="*")
     group.add_argument("--add-tag-all", action="store_true")

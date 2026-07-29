@@ -157,7 +157,9 @@ def create_endpoint(data: schemas.identity.IdentityCreateRequest) -> schemas.ide
     except sqlalchemy.exc.IntegrityError:
         raise responses.ProblemHTTPException(
             responses.problem_response(
-                status_code=400, title="Identity already exists. \"name\", \"unix_username\", \"unix_uid\", and \"unix_gid\" must be unique.", detail=data.name
+                status_code=400,
+                title='Identity already exists. "name", "unix_username", "unix_uid", and "unix_gid" must be unique.',
+                detail=data.name,
             )
         )
 
@@ -330,7 +332,9 @@ def update_endpoint(identity_id: int, data: schemas.identity.IdentityUpdateReque
     except sqlalchemy.exc.IntegrityError:
         raise responses.ProblemHTTPException(
             responses.problem_response(
-                status_code=400, title="Identity already exists. \"name\", \"unix_username\", \"unix_uid\", and \"unix_gid\" must be unique.", detail=data.name
+                status_code=400,
+                title='Identity already exists. "name", "unix_username", "unix_uid", and "unix_gid" must be unique.',
+                detail=data.name,
             )
         )
 
