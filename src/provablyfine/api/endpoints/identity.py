@@ -265,9 +265,9 @@ def update_endpoint(identity_id: int, data: schemas.identity.IdentityUpdateReque
                     status_code=403, title="Not allowed to update identity field", detail="unix_username"
                 )
             )
-        # When the caller explicitely sets a unix_username,
+        # When the caller explicitly sets a unix_username,
         # we update the associated unix_uid and unix_gid,
-        # unless they are overriden explicitely via the
+        # unless they are overridden explicitly via the
         # unix_uid and unix_gid fields
         update_params["unix_username"] = data.unix_username
         update_params["unix_uid"] = uid
