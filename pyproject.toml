@@ -72,6 +72,10 @@ source = [
 ]
 parallel = true
 patch = ["subprocess", "_exit"]
+# uvicorn re-raises SIGTERM on itself after a graceful shutdown, so the server
+# subprocess dies from the signal and atexit (hence coverage's auto-save) never
+# runs. This makes coverage save its data from its own SIGTERM handler instead.
+sigterm = true
 
 [dependency-groups]
 dev = [
