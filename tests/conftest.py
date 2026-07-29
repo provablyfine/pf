@@ -13,6 +13,7 @@ import signal
 import socket
 import stat
 import subprocess
+import sys
 import tarfile
 import tempfile
 import time
@@ -435,15 +436,49 @@ class Api:
     port: int
 
 
+_LOG_CONFIG_TEMPLATE = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "default": {"()": "uvicorn.logging.DefaultFormatter", "fmt": "%(levelprefix)s %(message)s", "use_colors": None},
+        "access": {
+            "()": "uvicorn.logging.AccessFormatter",
+            "fmt": '%(levelprefix)s %(client_addr)s - "%(request_line)s" %(status_code)s',
+        },
+        "pf": {
+            "format": "%(asctime)s:%(levelname)s:%(module)s.%(funcName)s:%(message)s",
+            "datefmt": "%H:%M:%S",
+        },
+    },
+    "handlers": {
+        "default": {"formatter": "default", "class": "logging.StreamHandler", "stream": "ext://sys.stderr"},
+        "access": {"formatter": "access", "class": "logging.StreamHandler", "stream": "ext://sys.stdout"},
+    },
+    "loggers": {
+        "uvicorn": {"handlers": ["default"], "level": "INFO", "propagate": False},
+        "uvicorn.error": {"level": "INFO"},
+        "uvicorn.access": {"handlers": ["access"], "level": "INFO", "propagate": False},
+    },
+}
+
+
 @pytest.fixture
 def api(request, tmp_path):
     tmp_path = tmp_path.absolute()
     api_kek_file = tmp_path / "kek_file.key"
     api_config = tmp_path / "config.json"
-    api_port_file = tmp_path / "api.port"
     api_log = tmp_path / "api.log"
+    api_pf_log = tmp_path / "api_pf.log"
+    api_log_config = tmp_path / "api_log_config.json"
+
     with open(api_kek_file, "wb+") as f:
         f.write(random.randbytes(32))
+
+    api_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    api_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    api_sock.bind(("127.0.0.1", 0))
+    api_host, api_port = api_sock.getsockname()
+
     with open(api_config, "w+") as f:
         f.write(
             json.dumps(
@@ -453,38 +488,53 @@ def api(request, tmp_path):
                     "debug": True,
                     "log_level": 3,
                     "kek_filename": str(api_kek_file),
+                    "base_url": f"http://{api_host}:{api_port}",
                     #'debug_sql': True,
                 }
             )
         )
+
+    log_config = {
+        **_LOG_CONFIG_TEMPLATE,
+        "handlers": {
+            **_LOG_CONFIG_TEMPLATE["handlers"],
+            "pf": {"class": "logging.FileHandler", "filename": str(api_pf_log), "mode": "a", "formatter": "pf"},
+        },
+        "root": {"handlers": ["pf"], "level": "DEBUG"},
+    }
+    api_log_config.write_text(json.dumps(log_config))
+
     env = copy.copy(os.environ)
+    env["PF_API_CONFIG"] = str(api_config)
     api_log_file = open(api_log, "w+")
     popen = subprocess.Popen(
-        ["scripts/pf-server", "-c", api_config, "--port-file", api_port_file],
+        [
+            sys.executable,
+            "-m",
+            "uvicorn",
+            "--fd",
+            str(api_sock.fileno()),
+            "--log-config",
+            str(api_log_config),
+            "--log-level",
+            "info",
+            "--factory",
+            "provablyfine.api.app:factory",
+        ],
         stdout=api_log_file,
         stderr=subprocess.STDOUT,
         text=True,
         env=env,
+        pass_fds=(api_sock.fileno(),),
     )
+    api_sock.close()
 
     pf_start_timeout = 10
     start = time.time()
-    api_port = None
     api_ready = False
     while time.time() - start < pf_start_timeout:
         try:
-            with open(api_port_file) as f:
-                data = f.read()
-        except FileNotFoundError:
-            time.sleep(0.1)
-            continue
-        try:
-            api_port = int(data)
-        except Exception:
-            time.sleep(0.1)
-            continue
-        try:
-            response = requests.get(f"http://127.0.0.1:{api_port}/pf/t/root/directory")
+            response = requests.get(f"http://{api_host}:{api_port}/pf/t/root/directory")
         except requests.exceptions.ConnectionError:
             time.sleep(0.1)
             continue
@@ -499,7 +549,6 @@ def api(request, tmp_path):
             log_content = f.read()
         print("\n=== API Server Startup Failed ===")
         print(f"Config: {api_config}")
-        print(f"Port file: {api_port_file}")
         print(f"Log:\n{log_content}")
         try:
             popen.terminate()
@@ -516,8 +565,8 @@ def api(request, tmp_path):
     if hasattr(request.node, "rep_call"):
         if request.node.rep_call.failed:
             print(f"API log: {api_log}")
+            print(f"API pf log: {api_pf_log}")
             print(f"API config: {api_config}")
-            print(f"API portfile: {api_port_file}")
             print(f"API kek: {api_kek_file}")
             return
 
