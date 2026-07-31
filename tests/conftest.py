@@ -23,6 +23,8 @@ import psutil
 import pytest
 import requests
 
+import provablyfine.api.log_filter
+
 logger = logging.getLogger(__name__)
 
 pytest_plugins = ["tests.mock_oidc"]
@@ -434,32 +436,7 @@ def ssh_agent(request):
 @dataclasses.dataclass(frozen=True)
 class Api:
     port: int
-
-
-_LOG_CONFIG_TEMPLATE = {
-    "version": 1,
-    "disable_existing_loggers": False,
-    "formatters": {
-        "default": {"()": "uvicorn.logging.DefaultFormatter", "fmt": "%(levelprefix)s %(message)s", "use_colors": None},
-        "access": {
-            "()": "uvicorn.logging.AccessFormatter",
-            "fmt": '%(levelprefix)s %(client_addr)s - "%(request_line)s" %(status_code)s',
-        },
-        "pf": {
-            "format": "%(asctime)s:%(levelname)s:%(module)s.%(funcName)s:%(message)s",
-            "datefmt": "%H:%M:%S",
-        },
-    },
-    "handlers": {
-        "default": {"formatter": "default", "class": "logging.StreamHandler", "stream": "ext://sys.stderr"},
-        "access": {"formatter": "access", "class": "logging.StreamHandler", "stream": "ext://sys.stdout"},
-    },
-    "loggers": {
-        "uvicorn": {"handlers": ["default"], "level": "INFO", "propagate": False},
-        "uvicorn.error": {"level": "INFO"},
-        "uvicorn.access": {"handlers": ["access"], "level": "INFO", "propagate": False},
-    },
-}
+    log: pathlib.Path
 
 
 @pytest.fixture
@@ -494,15 +471,7 @@ def api(request, tmp_path):
             )
         )
 
-    log_config = {
-        **_LOG_CONFIG_TEMPLATE,
-        "handlers": {
-            **_LOG_CONFIG_TEMPLATE["handlers"],
-            "pf": {"class": "logging.FileHandler", "filename": str(api_pf_log), "mode": "a", "formatter": "pf"},
-        },
-        "root": {"handlers": ["pf"], "level": "DEBUG"},
-    }
-    api_log_config.write_text(json.dumps(log_config))
+    api_log_config.write_text(json.dumps(provablyfine.api.log_filter.log_config(str(api_pf_log))))
 
     env = copy.copy(os.environ)
     env["PF_API_CONFIG"] = str(api_config)
@@ -556,7 +525,7 @@ def api(request, tmp_path):
             pass
         raise Exception("Unable to start pf server")
 
-    yield Api(api_port)
+    yield Api(api_port, api_log)
 
     # tear down
     popen.terminate()

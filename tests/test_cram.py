@@ -36,4 +36,4 @@ from . import utils
     ],
 )
 def test_pf_cram(api, filename):
-    utils.run_cram(f"tests/{filename}", {"API_PORT": str(api.port)})
+    utils.run_cram(f"tests/{filename}", {"API_PORT": str(api.port), "API_LOG": str(api.log)})
