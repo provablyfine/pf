@@ -327,9 +327,11 @@ RUN install -m 755 /tmp/nss_provablyfine.so \\
 {_write_file("/etc/pf-nss.conf", nss_conf)}
 RUN chmod 644 /etc/pf-nss.conf
 
-RUN sed -i 's|^\\(passwd:.*files\\)|\\1 provablyfine|' /etc/nsswitch.conf && \\
-    sed -i 's|^\\(group:.*files\\)|\\1 provablyfine|' /etc/nsswitch.conf && \\
-    sed -i 's|^\\(shadow:.*files\\)|\\1 provablyfine|' /etc/nsswitch.conf
+# Appended last, mirroring `pf openssh host-init`: every pre-existing source is
+# consulted before the catch-all provablyfine module.
+RUN sed -i '/^passwd:/ s|[[:space:]]*$| provablyfine|' /etc/nsswitch.conf && \\
+    sed -i '/^group:/ s|[[:space:]]*$| provablyfine|' /etc/nsswitch.conf && \\
+    sed -i '/^shadow:/ s|[[:space:]]*$| provablyfine|' /etc/nsswitch.conf
 
 RUN echo 'session required pam_mkhomedir.so skel=/etc/skel umask=0077' >> /etc/pam.d/sshd
 """,

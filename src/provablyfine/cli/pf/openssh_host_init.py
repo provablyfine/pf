@@ -81,6 +81,27 @@ def _do_refresh(c: client.Config, host_keys_dir: str, ca_pub_path: str) -> None:
     _write_file_atomic(ca_pub_path, ca_pubkey, mode="w")
 
 
+# Adds `provablyfine` to an /etc/nsswitch.conf database line, *last* on the line so
+# that every pre-existing source (files, systemd, sssd, ldap, ...) is consulted
+# first. The module answers to any name, so listing it earlier would shadow real
+# accounts coming from those directories (nsswitch defaults to SUCCESS=return).
+# PF_NSSWITCH_CONF exists so unit tests can exercise this against a scratch file.
+_PATCH_NSSWITCH_SH = """\
+_patch_nsswitch() {
+  _db="$1"
+  _conf="${PF_NSSWITCH_CONF:-/etc/nsswitch.conf}"
+  if grep -qE "^$_db:.*provablyfine" "$_conf"; then
+    return 0
+  fi
+  if ! grep -qE "^$_db:" "$_conf"; then
+    echo "no '$_db:' line in $_conf; cannot enable pf NSS module" >&2
+    exit 1
+  fi
+  sed -i "/^$_db:/ s|[[:space:]]*$| provablyfine|" "$_conf"
+}
+"""
+
+
 def _nss_init_fragment(nss_so_path: str) -> str:
     return f"""\
 
@@ -93,14 +114,7 @@ uid_range_min=100000
 uid_range_max=999999
 PFEOF
 chmod 644 /etc/pf-nss.conf
-_patch_nsswitch() {{
-  local _db="$1"
-  if grep -qE "^$_db:.*provablyfine" /etc/nsswitch.conf; then
-    return 0
-  fi
-  sed -i "s|^\\\\($_db:.*files\\\\)\\\\(.*\\\\)|\\\\1 provablyfine\\\\2|" /etc/nsswitch.conf
-}}
-_patch_nsswitch passwd
+{_PATCH_NSSWITCH_SH}_patch_nsswitch passwd
 _patch_nsswitch group
 _patch_nsswitch shadow
 if [ -f /etc/pam.d/sshd ] && ! grep -q pam_mkhomedir /etc/pam.d/sshd; then

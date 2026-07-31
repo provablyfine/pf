@@ -216,6 +216,9 @@ pub unsafe extern "C" fn _nss_provablyfine_getgrgid_r(
 
 // Called by glibc's getgrouplist to collect supplementary groups for a user.
 // We have no supplementary groups — the primary group comes from the passwd entry.
+// NOTFOUND (rather than SUCCESS) so the module never terminates the lookup chain:
+// under the default `SUCCESS=return` action, claiming success here would truncate
+// the supplementary groups contributed by any source listed after us.
 #[no_mangle]
 pub unsafe extern "C" fn _nss_provablyfine_initgroups_dyn(
     _user: *const c_char,
@@ -224,9 +227,10 @@ pub unsafe extern "C" fn _nss_provablyfine_initgroups_dyn(
     _size: *mut libc::c_long,
     _groups: *mut *mut libc::gid_t,
     _limit: libc::c_long,
-    _errnop: *mut c_int,
+    errnop: *mut c_int,
 ) -> c_int {
-    NSS_STATUS_SUCCESS
+    *errnop = ENOENT;
+    NSS_STATUS_NOTFOUND
 }
 
 #[no_mangle]
