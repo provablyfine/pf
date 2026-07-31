@@ -18,7 +18,7 @@ Unix username must be unique across identities
   $ pfa -c config.json identity create -n user2
   $ USER2_ID=$(pfa -c config.json identity list -n user2 -q)
   $ pfa -c config.json identity update -i $USER2_ID --unix-username alice
-  Identity already exists. "name" and "unix_username" must be unique.
+  Identity already exists. "unix_username" must be unique. alice
   [2]
   $ pfa -c config.json identity delete -i $USER2_ID
 

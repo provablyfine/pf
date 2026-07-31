@@ -21,3 +21,11 @@ def upgrade() -> None:
     with op.batch_alter_table("identity", schema=None) as batch_op:
         batch_op.add_column(sa.Column("unix_username", sa.String(), nullable=True))
         batch_op.create_unique_constraint("uix_identity_unix_username", ["unix_username"])
+
+    op.create_table(
+        "unix_username_counter",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("next_seq", sa.Integer(), nullable=False),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.execute("INSERT INTO unix_username_counter (id, next_seq) VALUES (1, 1)")

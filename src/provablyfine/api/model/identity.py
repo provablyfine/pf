@@ -1,13 +1,10 @@
 import dataclasses
-import re
 import time
 import typing
 
 from ... import _sentinel
 from ..context import ctx
 from . import audit_log, utils
-
-_STANDALONE_UNIX_USERNAME_RE = re.compile(r"^u([0-9a-f]+)$")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -145,18 +142,22 @@ def assign_standalone_unix_username(id: int) -> None:
     """Auto-assign the next sequential "u<hex>" unix_username to an identity.
 
     Only called for identities that already have a NULL unix_username, in
-    "standalone" unix_mode. The sequential id is derived from the max of all
-    existing "u<hex>" usernames rather than a dedicated counter table, since
-    unix_username is already unique and this only runs inside a role update's
-    transaction.
+    "standalone" unix_mode. The sequence is tracked in a dedicated
+    unix_username_counter row (id=1), independent of the identity table, so
+    ids are never recycled even after the identity that received one is
+    deleted or its unix_username is cleared.
+
+    New tenant databases are materialized via `metadata.create_all()` (see
+    migrate.create_tenant) rather than by replaying migrations, so the
+    counter row seeded by the identity_posix_fields migration may not exist
+    yet; lazily create it on first use.
     """
-    max_seq = 0
-    for i in ctx.app_db.identity.read_all():
-        if i.unix_username is None:
-            continue
-        m = _STANDALONE_UNIX_USERNAME_RE.match(i.unix_username)
-        if m is not None:
-            max_seq = max(max_seq, int(m.group(1), 16))
-    username = f"u{max_seq + 1:x}"
+    counter = ctx.app_db.unix_username_counter.read_one(id=1)
+    seq = counter.next_seq if counter is not None else 1
+    if counter is None:
+        ctx.app_db.unix_username_counter.create(id=1, next_seq=seq + 1)
+    else:
+        ctx.app_db.unix_username_counter.update(next_seq=seq + 1).where(id=1)
+    username = f"u{seq:x}"
     assert len(username) <= 8
     update(id=id, unix_username=username)

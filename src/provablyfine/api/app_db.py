@@ -131,6 +131,20 @@ class IdentityRow(typing.NamedTuple):
 identity = db.make_table("identity", metadata, IdentityRow, sqlite_autoincrement=True)
 
 
+class UnixUsernameCounterRow(typing.NamedTuple):
+    """Single-row (id=1) monotonic counter for standalone-mode unix_username allocation.
+
+    Kept independent of the identity table so sequential ids are never recycled,
+    even after the identity that received one is deleted or cleared.
+    """
+
+    id: typing.Annotated[int, db.Col(primary_key=True)]
+    next_seq: int
+
+
+unix_username_counter = db.make_table("unix_username_counter", metadata, UnixUsernameCounterRow)
+
+
 class IdentityBoundaryRow(typing.NamedTuple):
     id: typing.Annotated[int, db.Col(primary_key=True)]
     identity_id: int
@@ -310,6 +324,10 @@ class AppDb(db.Dao):
     @property
     def identity(self) -> db.Table[IdentityRow]:
         return self._get(identity)
+
+    @property
+    def unix_username_counter(self) -> db.Table[UnixUsernameCounterRow]:
+        return self._get(unix_username_counter)
 
     @property
     def identity_boundary(self) -> db.Table[IdentityBoundaryRow]:

@@ -17,6 +17,25 @@ router = fastapi.APIRouter(prefix="/identity", dependencies=[fastapi.Depends(sig
 _204 = fastapi.responses.Response(status_code=204)
 
 
+def _identity_uniqueness_conflict(
+    exc: sqlalchemy.exc.IntegrityError, name: str, unix_username: str | None
+) -> responses.ProblemHTTPException:
+    # sqlite reports which column violated its UNIQUE constraint in the
+    # underlying driver error (e.g. "UNIQUE constraint failed: identity.unix_username"),
+    # so we can tell the two apart instead of returning one generic message.
+    if "identity.unix_username" in str(exc.orig):
+        return responses.ProblemHTTPException(
+            responses.problem_response(
+                status_code=400, title='Identity already exists. "unix_username" must be unique.', detail=unix_username
+            )
+        )
+    return responses.ProblemHTTPException(
+        responses.problem_response(
+            status_code=400, title='Identity already exists. "name" must be unique.', detail=name
+        )
+    )
+
+
 @router.get("", status_code=200, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
 def list_endpoint(
     id: int | None = None,
@@ -147,14 +166,8 @@ def create_endpoint(data: schemas.identity.IdentityCreateRequest) -> schemas.ide
         )
     try:
         identity_id = model.identity.create(name=data.name, boundary_id_list=identity_boundary_ids, tag_id_list=tag_ids)
-    except sqlalchemy.exc.IntegrityError:
-        raise responses.ProblemHTTPException(
-            responses.problem_response(
-                status_code=400,
-                title='Identity already exists. "name" and "unix_username" must be unique.',
-                detail=data.name,
-            )
-        )
+    except sqlalchemy.exc.IntegrityError as e:
+        raise _identity_uniqueness_conflict(e, name=data.name, unix_username=None)
 
     identity = model.identity.read_one(id=identity_id)
     assert identity is not None
@@ -302,13 +315,9 @@ def update_endpoint(identity_id: int, data: schemas.identity.IdentityUpdateReque
 
     try:
         model.identity.update(id=identity_id, **update_params)
-    except sqlalchemy.exc.IntegrityError:
-        raise responses.ProblemHTTPException(
-            responses.problem_response(
-                status_code=400,
-                title='Identity already exists. "name" and "unix_username" must be unique.',
-                detail=data.name,
-            )
+    except sqlalchemy.exc.IntegrityError as e:
+        raise _identity_uniqueness_conflict(
+            e, name=data.name if data.name is not None else identity.name, unix_username=data.unix_username
         )
 
     identity = model.identity.read_one(id=identity_id)
