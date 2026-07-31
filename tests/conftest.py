@@ -82,13 +82,23 @@ class SshD:
     container_id: str
 
 
-@pytest.fixture(scope="session")
-def sshd_image(tmp_path_factory):
-    """Build SSH server container image once per worker session."""
+_START_SH = """\
+ssh-keygen -t ed25519 -f /etc/ssh/keys/ssh_host_ed25519_key -N "" > /dev/null
+ssh-keygen -t ecdsa -f /etc/ssh/keys/ssh_host_ecdsa_key -N "" > /dev/null
+ssh-keygen -t rsa -f /etc/ssh/keys/ssh_host_rsa_key -N "" > /dev/null
+/usr/sbin/sshd -D -e
+"""
+
+
+def _require_podman() -> None:
     result = subprocess.run(["podman", "info"], stdin=subprocess.DEVNULL, capture_output=True)
     if result.returncode != 0:
         pytest.skip("podman not available or not configured for rootless containers")
-    sshd_config = """\
+
+
+def _sshd_config(*, permit_root_login: bool, use_pam: bool) -> str:
+    """sshd_config for the test containers: host certificates plus pf principals."""
+    return f"""\
 Port 22
 ListenAddress 0.0.0.0
 AddressFamily any
@@ -107,7 +117,7 @@ SyslogFacility AUTH
 LogLevel INFO
 
 LoginGraceTime 2m
-PermitRootLogin yes
+PermitRootLogin {"yes" if permit_root_login else "no"}
 StrictModes yes
 MaxAuthTries 10
 MaxSessions 10
@@ -126,21 +136,29 @@ HostbasedAuthentication no
 PasswordAuthentication no
 PermitEmptyPasswords no
 KbdInteractiveAuthentication no
+UsePAM {"yes" if use_pam else "no"}
 
 Subsystem sftp /usr/lib/openssh/sftp-server
 TrustedUserCAKeys /etc/ssh/keys/user-ca.pub
 """
-    start_sh = """\
-ssh-keygen -t ed25519 -f /etc/ssh/keys/ssh_host_ed25519_key -N "" > /dev/null
-ssh-keygen -t ecdsa -f /etc/ssh/keys/ssh_host_ecdsa_key -N "" > /dev/null
-ssh-keygen -t rsa -f /etc/ssh/keys/ssh_host_rsa_key -N "" > /dev/null
-/usr/sbin/sshd -D -e
-"""
-    containerfile = f"""\
+
+
+def _write_file(path: str, contents: str) -> str:
+    """Containerfile RUN instruction writing `contents` to `path`."""
+    return f"""RUN printf '%b' '{contents.replace(chr(10), "\\n")}' > {path}"""
+
+
+def _containerfile(*, packages: list[str], setup: str, sshd_config: str) -> str:
+    """Containerfile for an sshd test container with `pf` installed.
+
+    `packages` are appended to the base apt package list and `setup` holds the
+    image-specific instructions run once `pf` is installed.
+    """
+    return f"""\
 FROM ubuntu:24.04
 
 RUN apt-get update && apt-get install -y --no-install-recommends \\
-    openssh-server python3 python3-pip \\
+    {" ".join(["openssh-server", "python3", "python3-pip", *packages])} \\
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip3 install --break-system-packages uv
@@ -158,23 +176,36 @@ RUN --mount=type=cache,target=/root/.cache/uv HATCH_TARGET_ARCH=unsupported uv p
 
 RUN ln -sf "$(which pf)" /usr/bin/pf
 
-RUN mkdir -p /run/sshd && \\
-    useradd -m -s /bin/bash alice && \\
+{setup}
+RUN mkdir -p /run/sshd
+
+{_write_file("/etc/ssh/sshd_config", sshd_config)}
+
+EXPOSE 22
+
+{_write_file("/run/start.sh", _START_SH)}
+
+CMD ["/bin/sh", "/run/start.sh"]
+"""
+
+
+@pytest.fixture(scope="session")
+def sshd_image(tmp_path_factory):
+    """Build SSH server container image once per worker session."""
+    _require_podman()
+    containerfile = _containerfile(
+        packages=[],
+        setup="""\
+RUN useradd -m -s /bin/bash alice && \\
     useradd -m -s /bin/bash bob && \\
     useradd -m -s /bin/bash charlie && \\
     passwd -d alice && \\
     passwd -d bob && \\
     passwd -d charlie && \\
     passwd -d root
-
-RUN printf '%b' '{sshd_config.replace("\n", "\\n")}' > /etc/ssh/sshd_config
-
-EXPOSE 22
-
-RUN printf '%b' '{start_sh.replace("\n", "\\n")}' > /run/start.sh
-
-CMD ["/bin/sh", "/run/start.sh"]
-    """
+""",
+        sshd_config=_sshd_config(permit_root_login=True, use_pam=False),
+    )
     tmp_path = tmp_path_factory.getbasetemp().parent
     with tempfile.NamedTemporaryFile(mode="w+", dir=tmp_path, delete=False) as container_file:
         container_file.write(containerfile)
@@ -203,6 +234,8 @@ def _run_sshd_container(
                 "podman",
                 "run",
                 "--detach",
+                # We do not --rm because we want to be able to read the logs when
+                # something goes wrong.
                 "--quiet",
                 "--publish-all",
                 "--volume",
@@ -221,6 +254,10 @@ def _run_sshd_container(
         start = time.time()
         host_address = None
         while time.time() - start < 30 and host_address is None:
+            # We try 169.254.0.1 because we might be running within a sandbox isolated from the
+            # host and in this case, the ports exposed by the podman containers will be accessible
+            # as 169.254.0.1
+            # The normal case is 127.0.0.1: we are running next to the podman runtime
             for address in ["127.0.0.1", "169.254.0.1"]:
                 try:
                     with socket.create_connection((address, port), timeout=1):
@@ -253,9 +290,7 @@ def sshd(request: pytest.FixtureRequest, sshd_image: str, tmp_path: pathlib.Path
 @pytest.fixture(scope="session")
 def nss_lib(tmp_path_factory: pytest.TempPathFactory) -> str:
     """Build the NSS cdylib and return path to the .so file."""
-    result = subprocess.run(["podman", "info"], stdin=subprocess.DEVNULL, capture_output=True)
-    if result.returncode != 0:
-        pytest.skip("podman not available")
+    _require_podman()
     if not shutil.which("cargo"):
         pytest.skip("cargo not available")
     nss_src = os.path.join(tld(), "src", "nss", "libnss_provablyfine")
@@ -278,102 +313,28 @@ def nss_lib(tmp_path_factory: pytest.TempPathFactory) -> str:
 @pytest.fixture(scope="session")
 def sshd_nss_image(tmp_path_factory: pytest.TempPathFactory, nss_lib: str) -> str:
     """Build an Ubuntu sshd image with the NSS module pre-installed."""
-    sshd_config = """\
-Port 22
-ListenAddress 0.0.0.0
-AddressFamily any
-ListenAddress ::
-
-HostKey /etc/ssh/keys/ssh_host_rsa_key
-HostKey /etc/ssh/keys/ssh_host_ecdsa_key
-HostKey /etc/ssh/keys/ssh_host_ed25519_key
-HostCertificate /etc/ssh/keys/ssh_host_rsa_key.cert
-HostCertificate /etc/ssh/keys/ssh_host_ecdsa_key.cert
-HostCertificate /etc/ssh/keys/ssh_host_ed25519_key.cert
-
-SyslogFacility AUTH
-LogLevel INFO
-
-LoginGraceTime 2m
-PermitRootLogin no
-StrictModes yes
-MaxAuthTries 10
-MaxSessions 10
-
-AuthorizedPrincipalsCommand /usr/bin/pf \
-    openssh \
-    auth-principals \
-    --host-certificate=/etc/ssh/keys/ssh_host_ed25519_key.cert \
-    --username=%u \
-    --certificate=%k
-AuthorizedPrincipalsCommandUser nobody
-
-PubkeyAuthentication yes
-AuthorizedKeysFile none
-HostbasedAuthentication no
-PasswordAuthentication no
-PermitEmptyPasswords no
-KbdInteractiveAuthentication no
-UsePAM yes
-
-Subsystem sftp /usr/lib/openssh/sftp-server
-TrustedUserCAKeys /etc/ssh/keys/user-ca.pub
-"""
-    start_sh = """\
-ssh-keygen -t ed25519 -f /etc/ssh/keys/ssh_host_ed25519_key -N "" > /dev/null
-ssh-keygen -t ecdsa -f /etc/ssh/keys/ssh_host_ecdsa_key -N "" > /dev/null
-ssh-keygen -t rsa -f /etc/ssh/keys/ssh_host_rsa_key -N "" > /dev/null
-/usr/sbin/sshd -D -e
-"""
     # Use a UID range that fits within rootless podman's UID namespace (0-65535).
     nss_conf = "uid_range_min=1000\nuid_range_max=60000\n"
 
-    containerfile = f"""\
-FROM ubuntu:24.04
-
-RUN apt-get update && apt-get install -y --no-install-recommends \\
-    openssh-server python3 python3-pip libpam-modules \\
-    && rm -rf /var/lib/apt/lists/*
-
-RUN pip3 install --break-system-packages uv
-
-COPY packages/provablyfine-client /tmp/pfc/
-RUN --mount=type=cache,target=/root/.cache/uv uv pip install \\
-    --quiet --link-mode=copy --system --break-system-packages /tmp/pfc && \\
-    rm -rf /tmp/pfc
-
-COPY pyproject.toml README.md LICENSE.md hatch_build.py /tmp/pf/
-COPY src /tmp/pf/src/
-RUN --mount=type=cache,target=/root/.cache/uv HATCH_TARGET_ARCH=unsupported uv pip install \\
-    --quiet --link-mode=copy --system --break-system-packages --no-sources /tmp/pf && \\
-    rm -rf /tmp/pf
-
-RUN ln -sf "$(which pf)" /usr/bin/pf
-
+    containerfile = _containerfile(
+        packages=["libpam-modules"],
+        setup=f"""\
 COPY libnss_provablyfine.so /tmp/nss_provablyfine.so
 RUN install -m 755 /tmp/nss_provablyfine.so \\
     "/usr/lib/$(dpkg-architecture -qDEB_HOST_MULTIARCH)/libnss_provablyfine.so.2" && \\
     ldconfig && rm /tmp/nss_provablyfine.so
 
-RUN printf '%b' '{nss_conf.replace(chr(10), "\\n")}' > /etc/pf-nss.conf && \\
-    chmod 644 /etc/pf-nss.conf
+{_write_file("/etc/pf-nss.conf", nss_conf)}
+RUN chmod 644 /etc/pf-nss.conf
 
 RUN sed -i 's|^\\(passwd:.*files\\)|\\1 provablyfine|' /etc/nsswitch.conf && \\
     sed -i 's|^\\(group:.*files\\)|\\1 provablyfine|' /etc/nsswitch.conf && \\
     sed -i 's|^\\(shadow:.*files\\)|\\1 provablyfine|' /etc/nsswitch.conf
 
 RUN echo 'session required pam_mkhomedir.so skel=/etc/skel umask=0077' >> /etc/pam.d/sshd
-
-RUN mkdir -p /run/sshd
-
-RUN printf '%b' '{sshd_config.replace(chr(10), "\\n")}' > /etc/ssh/sshd_config
-
-EXPOSE 22
-
-RUN printf '%b' '{start_sh.replace(chr(10), "\\n")}' > /run/start.sh
-
-CMD ["/bin/sh", "/run/start.sh"]
-    """
+""",
+        sshd_config=_sshd_config(permit_root_login=False, use_pam=True),
+    )
 
     # Build using a dedicated temp context dir — avoids embedding large binaries
     # as base64 in the Containerfile and eliminates the race with the sshd_image build.
