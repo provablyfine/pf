@@ -313,8 +313,8 @@ def nss_lib(tmp_path_factory: pytest.TempPathFactory) -> str:
 @pytest.fixture(scope="session")
 def sshd_nss_image(tmp_path_factory: pytest.TempPathFactory, nss_lib: str) -> str:
     """Build an Ubuntu sshd image with the NSS module pre-installed."""
-    # Use a UID range that fits within rootless podman's UID namespace (0-65535).
-    nss_conf = "uid_range_min=1000\nuid_range_max=60000\n"
+    # Use a UID base that fits within rootless podman's UID namespace (0-65535).
+    nss_conf = "unix_min_uid=1000\nunix_min_gid=1000\n"
 
     containerfile = _containerfile(
         packages=["libpam-modules"],
@@ -430,6 +430,7 @@ def api(request, tmp_path):
                     "kek_filename": str(api_kek_file),
                     "base_url": f"http://{api_host}:{api_port}",
                     #'debug_sql': True,
+                    **getattr(request, "param", {}),
                 }
             )
         )

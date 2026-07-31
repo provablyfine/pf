@@ -350,8 +350,6 @@ class IdentityCreatePermission(_Base):
 class IdentityUpdatePermission(_Base):
     name: bool
     unix_username: bool = False
-    unix_uid: bool = False
-    unix_gid: bool = False
 
     def to_text(self) -> str:
         parts: list[str] = []
@@ -359,10 +357,6 @@ class IdentityUpdatePermission(_Base):
             parts.append("name")
         if self.unix_username:
             parts.append("unix_username")
-        if self.unix_uid:
-            parts.append("unix_uid")
-        if self.unix_gid:
-            parts.append("unix_gid")
         return ", ".join(parts)
 
 
@@ -706,8 +700,6 @@ class Identity(_Base):
     boundaries: list[IdentityBoundary] = []
     active_role: IdentityRoleInfo | None = None
     unix_username: str | None = None
-    unix_uid: int | None = None
-    unix_gid: int | None = None
 
 
 class IdentitiesResponse(_Base):

@@ -6,6 +6,7 @@ from . import utils
 
 
 @pytest.mark.skipif(not shutil.which("ssh"), reason="ssh not found")
+@pytest.mark.parametrize("api", [{"unix_mode": "standalone"}], indirect=True)
 def test_nss(sshd_nss, api, ssh_agent):
     utils.run_cram(
         "tests/nss.t",

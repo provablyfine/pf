@@ -156,8 +156,6 @@ def _identity_function(args: argparse.Namespace) -> None:
                 {
                     "name": any("name" in entry for entry in args.update),
                     "unix_username": any("unix_username" in entry for entry in args.update),
-                    "unix_uid": any("unix_uid" in entry for entry in args.update),
-                    "unix_gid": any("unix_gid" in entry for entry in args.update),
                 },
             ),
             "delete": args.delete,
@@ -335,7 +333,7 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
         action="append",
         nargs="*",
         default=[],
-        choices=["name", "unix_username", "unix_uid", "unix_gid"],
+        choices=["name", "unix_username"],
     )
     group.add_argument("-d", "--delete", action="store_true")
     group.add_argument("--add-tag", default=[], nargs="*")

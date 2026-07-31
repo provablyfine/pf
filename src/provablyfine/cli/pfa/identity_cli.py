@@ -78,10 +78,6 @@ def _identity_read_function(args: argparse.Namespace) -> None:
                 rows.append(("boundary", b.name))
             if identity.unix_username is not None:
                 rows.append(("unix_username", identity.unix_username))
-            if identity.unix_uid is not None:
-                rows.append(("unix_uid", identity.unix_uid))
-            if identity.unix_gid is not None:
-                rows.append(("unix_gid", identity.unix_gid))
             output = tabulate.tabulate(rows, tablefmt="plain")
         case _:
             assert False
@@ -145,16 +141,6 @@ def _identity_update_function(args: argparse.Namespace) -> None:
             update_params["unix_username"] = None
         else:
             update_params["unix_username"] = args.unix_username
-    if args.unix_uid is not None:
-        if args.unix_uid == 0:
-            update_params["unix_uid"] = None
-        else:
-            update_params["unix_uid"] = args.unix_uid
-    if args.unix_gid is not None:
-        if args.unix_gid == 0:
-            update_params["unix_gid"] = None
-        else:
-            update_params["unix_gid"] = args.unix_gid
     sc.update_identity(args.id, **update_params)
 
 
@@ -245,16 +231,6 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
     update_parser.add_argument(
         "--unix-username",
         help="Set Unix username (empty string to clear)",
-    )
-    update_parser.add_argument(
-        "--unix-uid",
-        type=int,
-        help="Set Unix UID (derived from username if uid is unspecified and username is specified, 0 to clear)",
-    )
-    update_parser.add_argument(
-        "--unix-gid",
-        type=int,
-        help="Set Unix GID (derived from username if gid is unspecified and username is specified, 0 to clear)",
     )
     update_parser.set_defaults(func=_identity_update_function)
 

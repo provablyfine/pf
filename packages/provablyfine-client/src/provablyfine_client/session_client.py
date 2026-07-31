@@ -552,8 +552,6 @@ class SessionClient:
         name: str | _sentinel.Unset = _sentinel.UNSET,
         tags: list[schemas.IdentityTagOp] | _sentinel.Unset = _sentinel.UNSET,
         unix_username: str | None | _sentinel.Unset = _sentinel.UNSET,
-        unix_uid: int | None | _sentinel.Unset = _sentinel.UNSET,
-        unix_gid: int | None | _sentinel.Unset = _sentinel.UNSET,
     ) -> None:
         body: dict[str, typing.Any] = {}
         if name is not _sentinel.UNSET:
@@ -562,10 +560,6 @@ class SessionClient:
             body["tags"] = [op.model_dump(exclude_none=True) for op in tags]
         if unix_username is not _sentinel.UNSET:
             body["unix_username"] = unix_username
-        if unix_uid is not _sentinel.UNSET:
-            body["unix_uid"] = unix_uid
-        if unix_gid is not _sentinel.UNSET:
-            body["unix_gid"] = unix_gid
         if not body:
             raise exceptions.UI("Nothing to update")
         response = self._session.patch(f"{self._directory.identity}/{id}", auth=self._auth(), json=body)

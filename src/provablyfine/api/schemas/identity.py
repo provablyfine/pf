@@ -23,8 +23,6 @@ class Identity(base.APIBase):
     tags: list[tag.Tag]
     boundaries: list[IdentityBoundary]
     unix_username: str | None = None
-    unix_uid: int | None = None
-    unix_gid: int | None = None
 
 
 class IdentitySelf(Identity):
@@ -87,8 +85,6 @@ class IdentityUpdateRequest(base.APIBase):
     name: str | None = None
     tags: list[IdentityTagOperation] | None = None
     unix_username: str | None = None
-    unix_uid: int | None = None
-    unix_gid: int | None = None
 
     @pydantic.model_validator(mode="after")
     def validate_tags_and_boundaries(self):

@@ -225,7 +225,7 @@ class IdentityChecker:
         return self._checker.can(check)
 
     def can_update(self, field: str) -> bool:
-        assert field in ("name", "unix_username", "unix_uid", "unix_gid"), f"Unknown identity update field: {field}"
+        assert field in ("name", "unix_username"), f"Unknown identity update field: {field}"
 
         def check(g: model.grant.IdentityGrant) -> bool:
             if g.permission.update is None:

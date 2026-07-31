@@ -109,7 +109,7 @@ _patch_nsswitch() {{
 """
 
 
-def _nss_init_fragment(nss_so_path: str) -> str:
+def _nss_init_fragment(nss_so_path: str, unix_min_uid: int, unix_min_gid: int) -> str:
     return f"""\
 
 # pf NSS: install bundled NSS module and configure Unix account synthesis
@@ -117,8 +117,8 @@ _multiarch=$(dpkg-architecture -qDEB_HOST_MULTIARCH 2>/dev/null || echo x86_64-l
 install -m 755 '{nss_so_path}' "/usr/lib/$_multiarch/libnss_provablyfine.so.2"
 ldconfig
 cat > /etc/pf-nss.conf << 'PFEOF'
-uid_range_min=100000
-uid_range_max=999999
+unix_min_uid={unix_min_uid}
+unix_min_gid={unix_min_gid}
 PFEOF
 chmod 644 /etc/pf-nss.conf
 {_PATCH_NSSWITCH_SH}_patch_nsswitch passwd
@@ -159,6 +159,8 @@ def _print_init_script(
     auth_user: str,
     nss: bool = False,
     nss_so_path: str = "",
+    unix_min_uid: int = 100000,
+    unix_min_gid: int = 100000,
 ) -> None:
     sshd_drop_in_dir = os.path.dirname(sshd_config_drop_in)
     config_json = json.dumps(
@@ -285,7 +287,7 @@ PFEOF
 fi
 """)
     if nss:
-        sys.stdout.write(_nss_init_fragment(nss_so_path))
+        sys.stdout.write(_nss_init_fragment(nss_so_path, unix_min_uid, unix_min_gid))
 
 
 def host_init_daemon_function(args: argparse.Namespace) -> None:
@@ -293,7 +295,8 @@ def host_init_daemon_function(args: argparse.Namespace) -> None:
 
     invitation = common.parse_invitation(args.invitation)
     nss_so_path = _bundled_nss_so_path()
-    nss = args.nss and os.path.exists(nss_so_path)
+    if args.nss and not nss_available():
+        raise RuntimeError("--nss was requested but the bundled NSS module is not available on this platform")
 
     _print_init_script(
         args.invitation,
@@ -302,8 +305,10 @@ def host_init_daemon_function(args: argparse.Namespace) -> None:
         args.ca_pub_path,
         args.sshd_config_drop_in,
         args.auth_user,
-        nss=nss,
+        nss=args.nss,
         nss_so_path=nss_so_path,
+        unix_min_uid=args.unix_min_uid,
+        unix_min_gid=args.unix_min_gid,
     )
 
 

@@ -255,10 +255,8 @@ class AsyncSessionClient:
         name: str | _sentinel.Unset = _sentinel.UNSET,
         tags: list[schemas.IdentityTagOp] | _sentinel.Unset = _sentinel.UNSET,
         unix_username: str | None | _sentinel.Unset = _sentinel.UNSET,
-        unix_uid: int | None | _sentinel.Unset = _sentinel.UNSET,
-        unix_gid: int | None | _sentinel.Unset = _sentinel.UNSET,
     ) -> None:
-        return await self._run(lambda: self._inner.update_identity(id, name, tags, unix_username, unix_uid, unix_gid))
+        return await self._run(lambda: self._inner.update_identity(id, name, tags, unix_username))
 
     async def login_oidc(
         self,

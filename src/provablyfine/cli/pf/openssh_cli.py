@@ -94,12 +94,19 @@ def add_subparsers(parser: argparse.ArgumentParser) -> None:
     host_init_parser.add_argument("--host-keys-dir", default="/etc/ssh", help="Directory containing host SSH keys")
     host_init_parser.add_argument("--ca-pub-path", default="/etc/ssh/pf_ca.pub", help="Path to CA public key file")
     host_init_parser.add_argument(
-        "--no-nss",
-        action="store_false",
+        "--nss",
+        action="store_true",
         dest="nss",
-        help="Disable automatic Unix account synthesis via NSS (default: enabled on Linux)",
+        default=False,
+        help="Enable automatic Unix account synthesis via NSS for standalone unix_mode "
+        "(default: disabled — manual unix_mode assumes hosts already resolve their own accounts)",
     )
-    host_init_parser.set_defaults(nss=openssh_host_init.nss_available())
+    host_init_parser.add_argument(
+        "--unix-min-uid", type=int, default=100000, help="Base uid for NSS-synthesized standalone accounts"
+    )
+    host_init_parser.add_argument(
+        "--unix-min-gid", type=int, default=100000, help="Base gid for NSS-synthesized standalone accounts"
+    )
     host_init_parser.set_defaults(func=openssh_host_init.host_init_daemon_function)
 
     host_uninit_parser = subparsers.add_parser("host-uninit", help="Print a script to undo host-init")

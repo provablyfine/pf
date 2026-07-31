@@ -20,7 +20,4 @@ def upgrade() -> None:
     """Upgrade schema."""
     with op.batch_alter_table("identity", schema=None) as batch_op:
         batch_op.add_column(sa.Column("unix_username", sa.String(), nullable=True))
-        batch_op.add_column(sa.Column("unix_uid", sa.Integer(), nullable=True))
-        batch_op.add_column(sa.Column("unix_gid", sa.Integer(), nullable=True))
         batch_op.create_unique_constraint("uix_identity_unix_username", ["unix_username"])
-        batch_op.create_unique_constraint("uix_identity_unix_uid", ["unix_uid"])

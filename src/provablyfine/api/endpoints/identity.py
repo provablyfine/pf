@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import logging
 import typing
 
@@ -16,12 +15,6 @@ logger = logging.getLogger(__name__)
 router = fastapi.APIRouter(prefix="/identity", dependencies=[fastapi.Depends(signature.verify_session)])
 
 _204 = fastapi.responses.Response(status_code=204)
-
-
-def _uid_from_username(username: str, range_min: int, range_max: int) -> int:
-    digest = hashlib.sha256(username.encode()).digest()
-    value = int.from_bytes(digest[:8], "big")
-    return range_min + (value % (range_max - range_min))
 
 
 @router.get("", status_code=200, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
@@ -158,7 +151,7 @@ def create_endpoint(data: schemas.identity.IdentityCreateRequest) -> schemas.ide
         raise responses.ProblemHTTPException(
             responses.problem_response(
                 status_code=400,
-                title='Identity already exists. "name", "unix_username", "unix_uid", and "unix_gid" must be unique.',
+                title='Identity already exists. "name" and "unix_username" must be unique.',
                 detail=data.name,
             )
         )
@@ -255,42 +248,22 @@ def update_endpoint(identity_id: int, data: schemas.identity.IdentityUpdateReque
             )
         update_params["name"] = data.name
 
-    uid = None
     if "unix_username" in data.model_fields_set:
-        if data.unix_username is not None:
-            uid = _uid_from_username(data.unix_username, ctx.config.unix_uid_range_min, ctx.config.unix_uid_range_max)
+        if ctx.config.unix_mode == "scim":
+            raise responses.ProblemHTTPException(
+                responses.problem_response(
+                    status_code=403,
+                    title="unix_username is managed via SCIM in this mode",
+                    detail="unix_username",
+                )
+            )
         if not permission_request.can_update("unix_username"):
             raise responses.ProblemHTTPException(
                 responses.problem_response(
                     status_code=403, title="Not allowed to update identity field", detail="unix_username"
                 )
             )
-        # When the caller explicitly sets a unix_username,
-        # we update the associated unix_uid and unix_gid,
-        # unless they are overridden explicitly via the
-        # unix_uid and unix_gid fields
         update_params["unix_username"] = data.unix_username
-        update_params["unix_uid"] = uid
-        # The automated gid is exactly equal to the automated uid
-        update_params["unix_gid"] = uid
-
-    if "unix_uid" in data.model_fields_set:
-        if not permission_request.can_update("unix_uid"):
-            raise responses.ProblemHTTPException(
-                responses.problem_response(
-                    status_code=403, title="Not allowed to update identity field", detail="unix_uid"
-                )
-            )
-        update_params["unix_uid"] = data.unix_uid
-
-    if "unix_gid" in data.model_fields_set:
-        if not permission_request.can_update("unix_gid"):
-            raise responses.ProblemHTTPException(
-                responses.problem_response(
-                    status_code=403, title="Not allowed to update identity field", detail="unix_gid"
-                )
-            )
-        update_params["unix_gid"] = data.unix_gid
 
     if "tags" in data.model_fields_set:
         assert data.tags is not None  # Guaranteed by "after" pydantic validation
@@ -333,7 +306,7 @@ def update_endpoint(identity_id: int, data: schemas.identity.IdentityUpdateReque
         raise responses.ProblemHTTPException(
             responses.problem_response(
                 status_code=400,
-                title='Identity already exists. "name", "unix_username", "unix_uid", and "unix_gid" must be unique.',
+                title='Identity already exists. "name" and "unix_username" must be unique.',
                 detail=data.name,
             )
         )

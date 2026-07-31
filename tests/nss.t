@@ -21,11 +21,13 @@ Provision host identity and set up SSH
   $ pf -c host.json openssh user-trusted-keys > $SSHD_KEYS_DIRECTORY/user-ca.pub
   $ podman exec $SSHD_CONTAINER_ID pkill -HUP sshd
 
-Provision user identity with unix fields
+Provision user identity: joining the role auto-assigns a standalone unix_username
   $ pfa -c config.json identity create -n user
   $ USER_ID=$(pfa -c config.json identity list -n user -q)
-  $ pfa -c config.json identity update -i $USER_ID --unix-username alice
   $ pfa -c config.json role member -i $ROLE_ID -a user
+  $ UNIX_USERNAME=$(pfa -c config.json identity read -i $USER_ID -f json | jq -r .unix_username)
+  $ echo $UNIX_USERNAME
+  u1
   $ INVITATION=$(pfa -c config.json identity invite --manual -i $USER_ID)
 
 User accepts invite and logs in
@@ -34,22 +36,31 @@ User accepts invite and logs in
   $ ssh-keygen -t ed25519 -f user-session -N "" > /dev/null
   $ pf -c user.json login --session-key user-session
 
-{self} resolves to alice — NSS synthesizes the account on-demand, no pre-existing Unix user
-  $ pf -c user.json ssh -n -o "Hostname=$SSHD_ADDRESS" -o "HostKeyAlias=host" -p $SSHD_PORT alice@host "echo \$USER"
-  alice
+{self} resolves to the auto-assigned unix_username — NSS synthesizes the account on-demand, no pre-existing Unix user
+  $ pf -c user.json ssh -n -o "Hostname=$SSHD_ADDRESS" -o "HostKeyAlias=host" -p $SSHD_PORT $UNIX_USERNAME@host "echo \$USER"
+  u1
 
-NSS-synthesized UID is in the configured range [1000, 60000)
-  $ pf -c user.json ssh -n -o "Hostname=$SSHD_ADDRESS" -o "HostKeyAlias=host" -p $SSHD_PORT alice@host \
-  >   'uid=$(id -u); [ "$uid" -ge 1000 ] && [ "$uid" -lt 60000 ] && echo ok'
-  ok
+NSS-synthesized UID is the arithmetic offset from the host's configured unix_min_uid (1000 + 1 = 1001)
+  $ pf -c user.json ssh -n -o "Hostname=$SSHD_ADDRESS" -o "HostKeyAlias=host" -p $SSHD_PORT $UNIX_USERNAME@host \
+  >   'echo "uid=$(id -u) gid=$(id -g)"'
+  uid=1001 gid=1001
 
-bob has no grant — auth still enforced despite NSS synthesizing any username
+Reverse lookup: getent passwd on the synthesized uid resolves back to the same username
+  $ pf -c user.json ssh -n -o "Hostname=$SSHD_ADDRESS" -o "HostKeyAlias=host" -p $SSHD_PORT $UNIX_USERNAME@host \
+  >   'getent passwd $(id -u) | cut -d: -f1'
+  u1
+
+NSS does not synthesize accounts for names outside the u<hex> pattern — it lets them fall through
+  $ podman exec $SSHD_CONTAINER_ID getent passwd notausername
+  [2]
+
+bob has no grant, and "bob" is not a synthesizable username either — auth is still enforced
   $ pf -c user.json ssh -n -o "Hostname=$SSHD_ADDRESS" -o "HostKeyAlias=host" -p $SSHD_PORT bob@host "whoami"
   User is not authorized to connect to host
   [2]
 
-Clear unix: {self} is now unresolvable, connection fails
+Clear unix_username: {self} is now unresolvable, connection fails
   $ pfa -c config.json identity update -i $USER_ID --unix-username ""
-  $ pf -c user.json ssh -n -o "Hostname=$SSHD_ADDRESS" -o "HostKeyAlias=host" -p $SSHD_PORT alice@host "whoami"
+  $ pf -c user.json ssh -n -o "Hostname=$SSHD_ADDRESS" -o "HostKeyAlias=host" -p $SSHD_PORT $UNIX_USERNAME@host "whoami"
   User is not authorized to connect to host
   [2]

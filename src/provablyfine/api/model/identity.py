@@ -1,10 +1,13 @@
 import dataclasses
+import re
 import time
 import typing
 
 from ... import _sentinel
 from ..context import ctx
 from . import audit_log, utils
+
+_STANDALONE_UNIX_USERNAME_RE = re.compile(r"^u([0-9a-f]+)$")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -14,8 +17,6 @@ class Identity:
     tag_id_list: list[int]
     boundary_id_list: list[int]
     unix_username: str | None
-    unix_uid: int | None
-    unix_gid: int | None
 
 
 def create(name: str, boundary_id_list: list[int], tag_id_list: list[int]) -> int:
@@ -95,8 +96,6 @@ def read_all(**kwargs: typing.Any) -> list[Identity]:
             tag_id_list=tag_ids_by_identity_id.get(i.id, []),
             boundary_id_list=boundary_ids_by_identity_id[i.id],
             unix_username=i.unix_username,
-            unix_uid=i.unix_uid,
-            unix_gid=i.unix_gid,
         )
         for i in identities
     ]
@@ -109,8 +108,6 @@ def update(
     added_tag_id_list: list[int] | _sentinel.Unset = _sentinel.UNSET,
     deleted_tag_id_list: list[int] | _sentinel.Unset = _sentinel.UNSET,
     unix_username: str | None | _sentinel.Unset = _sentinel.UNSET,
-    unix_uid: int | None | _sentinel.Unset = _sentinel.UNSET,
-    unix_gid: int | None | _sentinel.Unset = _sentinel.UNSET,
 ) -> None:
     update_fields: dict[str, typing.Any] = {}
     if name is not _sentinel.UNSET:
@@ -123,12 +120,6 @@ def update(
     if unix_username is not _sentinel.UNSET:
         audit_log.create("identity-update-unix-username", id=id, unix_username=unix_username)
         update_fields["unix_username"] = unix_username
-    if unix_uid is not _sentinel.UNSET:
-        audit_log.create("identity-update-unix-uid", id=id, unix_uid=unix_uid)
-        update_fields["unix_uid"] = unix_uid
-    if unix_gid is not _sentinel.UNSET:
-        audit_log.create("identity-update-unix-gid", id=id, unix_gid=unix_gid)
-        update_fields["unix_gid"] = unix_gid
 
     if len(update_fields) > 0:
         ctx.app_db.identity.update(**update_fields).where(id=id)
@@ -148,3 +139,24 @@ def update(
             id=id,
             deleted_tag_id_list=deleted_tag_id_list,
         )
+
+
+def assign_standalone_unix_username(id: int) -> None:
+    """Auto-assign the next sequential "u<hex>" unix_username to an identity.
+
+    Only called for identities that already have a NULL unix_username, in
+    "standalone" unix_mode. The sequential id is derived from the max of all
+    existing "u<hex>" usernames rather than a dedicated counter table, since
+    unix_username is already unique and this only runs inside a role update's
+    transaction.
+    """
+    max_seq = 0
+    for i in ctx.app_db.identity.read_all():
+        if i.unix_username is None:
+            continue
+        m = _STANDALONE_UNIX_USERNAME_RE.match(i.unix_username)
+        if m is not None:
+            max_seq = max(max_seq, int(m.group(1), 16))
+    username = f"u{max_seq + 1:x}"
+    assert len(username) <= 8
+    update(id=id, unix_username=username)
