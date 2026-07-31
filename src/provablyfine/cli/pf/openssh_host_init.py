@@ -86,10 +86,17 @@ def _do_refresh(c: client.Config, host_keys_dir: str, ca_pub_path: str) -> None:
 # first. The module answers to any name, so listing it earlier would shadow real
 # accounts coming from those directories (nsswitch defaults to SUCCESS=return).
 # PF_NSSWITCH_CONF exists so unit tests can exercise this against a scratch file.
-_PATCH_NSSWITCH_SH = """\
-_patch_nsswitch() {
+#
+# The appended token is tagged with a trailing `# pf-nss` comment (nsswitch.conf
+# treats '#' as a comment to end of line) so host-uninit can tell a pf-added
+# `provablyfine` apart from one an admin had configured before pf ever ran, and
+# only strip the former.
+_PF_NSS_MARKER = "pf-nss"
+
+_PATCH_NSSWITCH_SH = f"""\
+_patch_nsswitch() {{
   _db="$1"
-  _conf="${PF_NSSWITCH_CONF:-/etc/nsswitch.conf}"
+  _conf="${{PF_NSSWITCH_CONF:-/etc/nsswitch.conf}}"
   if grep -qE "^$_db:.*provablyfine" "$_conf"; then
     return 0
   fi
@@ -97,8 +104,8 @@ _patch_nsswitch() {
     echo "no '$_db:' line in $_conf; cannot enable pf NSS module" >&2
     exit 1
   fi
-  sed -i "/^$_db:/ s|[[:space:]]*$| provablyfine|" "$_conf"
-}
+  sed -i "/^$_db:/ s|[[:space:]]*$| provablyfine  # {_PF_NSS_MARKER}|" "$_conf"
+}}
 """
 
 
@@ -118,15 +125,25 @@ chmod 644 /etc/pf-nss.conf
 _patch_nsswitch group
 _patch_nsswitch shadow
 if [ -f /etc/pam.d/sshd ] && ! grep -q pam_mkhomedir /etc/pam.d/sshd; then
-  echo 'session required pam_mkhomedir.so skel=/etc/skel umask=0077' >> /etc/pam.d/sshd
+  cat >> /etc/pam.d/sshd << 'PFEOF'
+# BEGIN {_PF_NSS_MARKER}
+session required pam_mkhomedir.so skel=/etc/skel umask=0077
+# END {_PF_NSS_MARKER}
+PFEOF
 fi
 """
 
 
-_NSS_UNINIT_FRAGMENT = """\
+# Only reverts config marked with the `pf-nss` tag written by _nss_init_fragment
+# above, so pre-existing admin config (a pam_mkhomedir line, or an nsswitch db
+# that already listed provablyfine before pf ran) is left untouched.
+_NSS_UNINIT_FRAGMENT = f"""\
 rm -f /etc/pf-nss.conf
-sed -i 's/ provablyfine//' /etc/nsswitch.conf
-sed -i '/pam_mkhomedir.so/d' /etc/pam.d/sshd 2>/dev/null || true
+sed -i -E '/^[a-z]+:.*# {_PF_NSS_MARKER}$/ {{
+  s/[[:space:]]*provablyfine//
+  s/[[:space:]]*# {_PF_NSS_MARKER}$//
+}}' /etc/nsswitch.conf
+sed -i "/# BEGIN {_PF_NSS_MARKER}/,/# END {_PF_NSS_MARKER}/d" /etc/pam.d/sshd 2>/dev/null || true
 _multiarch=$(dpkg-architecture -qDEB_HOST_MULTIARCH 2>/dev/null || echo x86_64-linux-gnu)
 rm -f "/usr/lib/$_multiarch/libnss_provablyfine.so.2"
 ldconfig
