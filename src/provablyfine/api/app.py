@@ -13,7 +13,7 @@ import prometheus_client
 import pydantic
 import sqlalchemy
 
-from .. import base64url, log
+from .. import base64url
 from . import config, dependencies, endpoints, jwt_validator, middleware, migrate, registry_db, responses, signature
 
 logger = logging.getLogger(__name__)
@@ -78,8 +78,6 @@ class _Backtrace:
 
 
 def create(conf: config.Config) -> fastapi.FastAPI:
-    log.setup_server("api", conf.log_level, conf.log_filename)
-
     def _bootstrap_databases(registry_engine: sqlalchemy.Engine) -> None:
         """Create the registry and root tenant databases on first startup."""
         if migrate.is_alembic_versioned(conf.tenant_registry_url):
@@ -205,3 +203,9 @@ def create(conf: config.Config) -> fastapi.FastAPI:
         )
 
     return fastapi_app
+
+
+def factory() -> fastapi.FastAPI:
+    config_path = os.environ.get("PF_API_CONFIG", "pf-server.yaml")
+    conf = config.Config.load(config_path)
+    return create(conf)

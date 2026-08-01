@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import typing
 
-from . import directory, exceptions, http_session, http_signatures, schemas, signer
+from . import _sentinel, directory, exceptions, http_session, http_signatures, schemas, signer
 
 
 def _problem_title(response: typing.Any, default: str) -> str:
@@ -154,11 +154,16 @@ class SessionClient:
             raise exceptions.UI(_problem_title(response, "Unable to get tenant"))
         return schemas.Tenant.model_validate(response.json())
 
-    def create_tenant(self, name: str, display_name: str) -> schemas.Tenant:
+    def create_tenant(
+        self,
+        name: str,
+        display_name: str,
+    ) -> schemas.Tenant:
+        data: dict[str, str | int] = {"name": name, "display_name": display_name}
         response = self._session.post(
             self._directory.tenant,
             auth=self._auth(),
-            json={"name": name, "display_name": display_name},
+            json=data,
         )
         if response.status_code != 200:
             raise exceptions.UI(_problem_title(response, "Unable to create tenant"))
@@ -170,7 +175,7 @@ class SessionClient:
         display_name: str | None = None,
         is_enabled: bool | None = None,
     ) -> None:
-        data: dict[str, str | bool] = {}
+        data: dict[str, str | bool | int] = {}
         if display_name is not None:
             data["display_name"] = display_name
         if is_enabled is not None:
@@ -549,14 +554,17 @@ class SessionClient:
     def update_identity(
         self,
         id: int,
-        name: str | None = None,
-        tags: list[schemas.IdentityTagOp] | None = None,
+        name: str | _sentinel.Unset = _sentinel.UNSET,
+        tags: list[schemas.IdentityTagOp] | _sentinel.Unset = _sentinel.UNSET,
+        unix_username: str | None | _sentinel.Unset = _sentinel.UNSET,
     ) -> None:
         body: dict[str, typing.Any] = {}
-        if name is not None:
+        if not isinstance(name, _sentinel.Unset):
             body["name"] = name
-        if tags is not None:
+        if not isinstance(tags, _sentinel.Unset):
             body["tags"] = [op.model_dump(exclude_none=True) for op in tags]
+        if not isinstance(unix_username, _sentinel.Unset):
+            body["unix_username"] = unix_username
         if not body:
             raise exceptions.UI("Nothing to update")
         response = self._session.patch(f"{self._directory.identity}/{id}", auth=self._auth(), json=body)

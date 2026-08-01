@@ -238,6 +238,7 @@ def _grant_to_schema(converter: GrantConverter, grant: model.grant.Grant) -> sch
                 if grant.permission.update is None
                 else schemas.grant.IdentityUpdatePermission(
                     name=grant.permission.update.name,
+                    unix_username=grant.permission.update.unix_username,
                 ),
                 delete=grant.permission.delete,
                 add_tag_list=converter.to_tag_list(grant.permission.add_tag_id_list),
@@ -407,6 +408,7 @@ def _grant_from_schema(converter: GrantConverter, grant: schemas.grant.Grant) ->
                 if grant.permission.update is None
                 else model.grant.IdentityUpdatePermission(
                     name=grant.permission.update.name,
+                    unix_username=grant.permission.update.unix_username,
                 ),
                 delete=grant.permission.delete,
                 add_tag_id_list=converter.from_tag_list(grant.permission.add_tag_list),
@@ -556,6 +558,7 @@ def identity_list_to_schema(identities: list[model.identity.Identity]) -> list[s
             name=i.name,
             tags=[tag_by_id[tag_id] for tag_id in i.tag_id_list],
             boundaries=[boundary_by_id[boundary_id] for boundary_id in i.boundary_id_list],
+            unix_username=i.unix_username,
         )
 
     return [_one(i) for i in identities]

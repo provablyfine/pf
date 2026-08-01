@@ -155,6 +155,7 @@ def _identity_function(args: argparse.Namespace) -> None:
                 args.update_all,
                 {
                     "name": any("name" in entry for entry in args.update),
+                    "unix_username": any("unix_username" in entry for entry in args.update),
                 },
             ),
             "delete": args.delete,
@@ -326,7 +327,14 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
     group.add_argument("--create-required-boundary", default=None, nargs="*")
     group.add_argument("-r", "--read", action="store_true")
     group.add_argument("--update-all", action="store_true")
-    group.add_argument("-u", "--update", action="append", nargs="*", default=[], choices=["name"])
+    group.add_argument(
+        "-u",
+        "--update",
+        action="append",
+        nargs="*",
+        default=[],
+        choices=["name", "unix_username"],
+    )
     group.add_argument("-d", "--delete", action="store_true")
     group.add_argument("--add-tag", default=[], nargs="*")
     group.add_argument("--add-tag-all", action="store_true")

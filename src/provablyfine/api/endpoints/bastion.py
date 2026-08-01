@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import typing
+
 import fastapi
 import fastapi.responses
 
@@ -76,16 +78,16 @@ def update_endpoint(bastion_id: int, data: schemas.bastion.BastionUpdateRequest)
                 responses.problem_response(status_code=403, title="Not allowed to update bastion field", detail=field)
             )
 
-    tag_ids: list[int] | None = None
-    if data.tag_name_value_list is not None or data.tag_id_list is not None:
+    update_params: dict[str, typing.Any] = {}
+    if "url" in data.model_fields_set:
+        update_params["url"] = data.url
+    if "ssh_proxy_jump" in data.model_fields_set:
+        update_params["ssh_proxy_jump"] = data.ssh_proxy_jump
+    if "tag_id_list" in data.model_fields_set or "tag_name_value_list" in data.model_fields_set:
         tag_ids = _read_tag_ids(data.tag_id_list or [], data.tag_name_value_list or [])
+        update_params["tag_id_list"] = tag_ids
 
-    model.bastion.update(
-        id=bastion_id,
-        url=data.url,
-        ssh_proxy_jump=data.ssh_proxy_jump,
-        tag_id_list=tag_ids,
-    )
+    model.bastion.update(id=bastion_id, **update_params)
 
     bastion = model.bastion.read_one(id=bastion_id)
     assert bastion is not None

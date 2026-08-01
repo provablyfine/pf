@@ -1,6 +1,5 @@
 import argparse
 import base64
-import getpass
 import logging
 import os
 import tempfile
@@ -17,20 +16,22 @@ logger = logging.getLogger(__name__)
 def _ssh_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
 
+    if not login.has_valid_session(c):
+        raise pfc.exceptions.UI("Not logged in. Run 'pf login' first.")
+
+    sc = client.Factory(c, timeout=args.timeout).session()
+
     destination = args.destination
     if "@" in destination:
         user, host = destination.split("@", 1)
     elif args.login_user:
         user, host = args.login_user, destination
     else:
-        user = getpass.getuser()
-        host = destination
+        self_identity = sc.get_self()
+        if self_identity.unix_username is None:
+            raise pfc.exceptions.UI("No unix_username set for your identity. Specify user@host explicitly.")
+        user, host = self_identity.unix_username, destination
     destination = f"{user}@{host}"
-
-    if not login.has_valid_session(c):
-        raise pfc.exceptions.UI("Not logged in. Run 'pf login' first.")
-
-    sc = client.Factory(c, timeout=args.timeout).session()
 
     # Fetch and cache host trusted keys in config
     c.known_hosts = sc.get_host_trusted_keys()

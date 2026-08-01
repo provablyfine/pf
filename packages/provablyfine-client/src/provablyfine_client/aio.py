@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import typing
 
-from . import account_client, invitation_client, public_client, schemas, session_client
+from . import _sentinel, account_client, invitation_client, public_client, schemas, session_client
 
 
 class AsyncPublicClient:
@@ -89,7 +89,11 @@ class AsyncSessionClient:
     async def get_tenant(self, id: int) -> schemas.Tenant:
         return await self._run(lambda: self._inner.get_tenant(id))
 
-    async def create_tenant(self, name: str, display_name: str) -> schemas.Tenant:
+    async def create_tenant(
+        self,
+        name: str,
+        display_name: str,
+    ) -> schemas.Tenant:
         return await self._run(lambda: self._inner.create_tenant(name, display_name))
 
     async def update_tenant(
@@ -252,10 +256,11 @@ class AsyncSessionClient:
     async def update_identity(
         self,
         id: int,
-        name: str | None = None,
-        tags: list[schemas.IdentityTagOp] | None = None,
+        name: str | _sentinel.Unset = _sentinel.UNSET,
+        tags: list[schemas.IdentityTagOp] | _sentinel.Unset = _sentinel.UNSET,
+        unix_username: str | None | _sentinel.Unset = _sentinel.UNSET,
     ) -> None:
-        return await self._run(lambda: self._inner.update_identity(id, name, tags))
+        return await self._run(lambda: self._inner.update_identity(id, name, tags, unix_username))
 
     async def login_oidc(
         self,

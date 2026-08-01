@@ -10,6 +10,7 @@ from . import utils
         "boundaries.t",
         "roles.t",
         "identity.t",
+        "identity-posix.t",
         "permission.t",
         "access-control-tag.t.jinja",
         "access-control-tenant.t.jinja",
@@ -35,4 +36,4 @@ from . import utils
     ],
 )
 def test_pf_cram(api, filename):
-    utils.run_cram(f"tests/{filename}", {"API_PORT": str(api.port)})
+    utils.run_cram(f"tests/{filename}", {"API_PORT": str(api.port), "API_LOG": str(api.log)})

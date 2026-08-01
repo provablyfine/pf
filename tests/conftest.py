@@ -13,6 +13,7 @@ import signal
 import socket
 import stat
 import subprocess
+import sys
 import tarfile
 import tempfile
 import time
@@ -21,6 +22,8 @@ import typing
 import psutil
 import pytest
 import requests
+
+import provablyfine.api.log_filter
 
 logger = logging.getLogger(__name__)
 
@@ -79,13 +82,23 @@ class SshD:
     container_id: str
 
 
-@pytest.fixture(scope="session")
-def sshd_image(tmp_path_factory):
-    """Build SSH server container image once per worker session."""
+_START_SH = """\
+ssh-keygen -t ed25519 -f /etc/ssh/keys/ssh_host_ed25519_key -N "" > /dev/null
+ssh-keygen -t ecdsa -f /etc/ssh/keys/ssh_host_ecdsa_key -N "" > /dev/null
+ssh-keygen -t rsa -f /etc/ssh/keys/ssh_host_rsa_key -N "" > /dev/null
+/usr/sbin/sshd -D -e
+"""
+
+
+def _require_podman() -> None:
     result = subprocess.run(["podman", "info"], stdin=subprocess.DEVNULL, capture_output=True)
     if result.returncode != 0:
         pytest.skip("podman not available or not configured for rootless containers")
-    sshd_config = """\
+
+
+def _sshd_config(*, permit_root_login: bool, use_pam: bool) -> str:
+    """sshd_config for the test containers: host certificates plus pf principals."""
+    return f"""\
 Port 22
 ListenAddress 0.0.0.0
 AddressFamily any
@@ -104,7 +117,7 @@ SyslogFacility AUTH
 LogLevel INFO
 
 LoginGraceTime 2m
-PermitRootLogin yes
+PermitRootLogin {"yes" if permit_root_login else "no"}
 StrictModes yes
 MaxAuthTries 10
 MaxSessions 10
@@ -123,20 +136,32 @@ HostbasedAuthentication no
 PasswordAuthentication no
 PermitEmptyPasswords no
 KbdInteractiveAuthentication no
+UsePAM {"yes" if use_pam else "no"}
 
-Subsystem sftp /usr/libexec/openssh/sftp-server
+Subsystem sftp /usr/lib/openssh/sftp-server
 TrustedUserCAKeys /etc/ssh/keys/user-ca.pub
 """
-    start_sh = """\
-ssh-keygen -t ed25519 -f /etc/ssh/keys/ssh_host_ed25519_key -N "" > /dev/null
-ssh-keygen -t ecdsa -f /etc/ssh/keys/ssh_host_ecdsa_key -N "" > /dev/null
-ssh-keygen -t rsa -f /etc/ssh/keys/ssh_host_rsa_key -N "" > /dev/null
-/usr/sbin/sshd -D -e
-"""
-    containerfile = f"""\
-FROM alpine:3.23
 
-RUN apk add --no-cache openssh-server openssh-keygen python3 uv
+
+def _write_file(path: str, contents: str) -> str:
+    """Containerfile RUN instruction writing `contents` to `path`."""
+    return f"""RUN printf '%b' '{contents.replace(chr(10), "\\n")}' > {path}"""
+
+
+def _containerfile(*, packages: list[str], setup: str, sshd_config: str) -> str:
+    """Containerfile for an sshd test container with `pf` installed.
+
+    `packages` are appended to the base apt package list and `setup` holds the
+    image-specific instructions run once `pf` is installed.
+    """
+    return f"""\
+FROM ubuntu:24.04
+
+RUN apt-get update && apt-get install -y --no-install-recommends \\
+    {" ".join(["openssh-server", "python3", "python3-pip", *packages])} \\
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip3 install --break-system-packages uv
 
 COPY packages/provablyfine-client /tmp/pfc/
 RUN --mount=type=cache,target=/root/.cache/uv uv pip install \\
@@ -145,28 +170,42 @@ RUN --mount=type=cache,target=/root/.cache/uv uv pip install \\
 
 COPY pyproject.toml README.md LICENSE.md /tmp/pf/
 COPY src /tmp/pf/src/
-RUN --mount=type=cache,target=/root/.cache/uv HATCH_TARGET_ARCH=unsupported uv pip install \\
+RUN --mount=type=cache,target=/root/.cache/uv uv pip install \\
     --quiet --link-mode=copy --system --break-system-packages --no-sources /tmp/pf && \\
     rm -rf /tmp/pf
 
-RUN mkdir -p /run/sshd && \\
-    adduser -D alice && \\
-    adduser -D bob && \\
-    adduser -D charlie
+RUN ln -sf "$(which pf)" /usr/bin/pf
 
-# unlock accounts
-RUN passwd -u alice && \\
-    passwd -u bob && \\
-    passwd -u charlie
+{setup}
+RUN mkdir -p /run/sshd
 
-RUN printf '%b' '{sshd_config.replace("\n", "\\n")}' > /etc/ssh/sshd_config
+{_write_file("/etc/ssh/sshd_config", sshd_config)}
 
 EXPOSE 22
 
-RUN printf '%b' '{start_sh.replace("\n", "\\n")}' > /run/start.sh
+{_write_file("/run/start.sh", _START_SH)}
 
 CMD ["/bin/sh", "/run/start.sh"]
-    """
+"""
+
+
+@pytest.fixture(scope="session")
+def sshd_image(tmp_path_factory):
+    """Build SSH server container image once per worker session."""
+    _require_podman()
+    containerfile = _containerfile(
+        packages=[],
+        setup="""\
+RUN useradd -m -s /bin/bash alice && \\
+    useradd -m -s /bin/bash bob && \\
+    useradd -m -s /bin/bash charlie && \\
+    passwd -d alice && \\
+    passwd -d bob && \\
+    passwd -d charlie && \\
+    passwd -d root
+""",
+        sshd_config=_sshd_config(permit_root_login=True, use_pam=False),
+    )
     tmp_path = tmp_path_factory.getbasetemp().parent
     with tempfile.NamedTemporaryFile(mode="w+", dir=tmp_path, delete=False) as container_file:
         container_file.write(containerfile)
@@ -179,8 +218,11 @@ CMD ["/bin/sh", "/run/start.sh"]
     return image_id
 
 
-@pytest.fixture
-def sshd(request, sshd_image, tmp_path):
+def _run_sshd_container(
+    request: pytest.FixtureRequest,
+    image_id: str,
+    tmp_path: pathlib.Path,
+) -> typing.Generator[SshD, None, None]:
     with tempfile.TemporaryDirectory(dir=tld()) as ssh_keys_directory:
         # Make sure "nobody" can read this directory
         fd = os.open(ssh_keys_directory, 0)
@@ -191,14 +233,14 @@ def sshd(request, sshd_image, tmp_path):
             [
                 "podman",
                 "run",
-                "--detach",  # run in background and return immediately
+                "--detach",
                 # We do not --rm because we want to be able to read the logs when
                 # something goes wrong.
                 "--quiet",
                 "--publish-all",
                 "--volume",
                 f"{ssh_keys_directory}:/etc/ssh/keys:rw",
-                sshd_image,
+                image_id,
             ],
             tmp_path,
         )
@@ -209,7 +251,6 @@ def sshd(request, sshd_image, tmp_path):
         except Exception:
             print(f"SSH Server container: {container_id}")
             raise
-        # Wait for sshd to be ready inside container (key generation + daemon startup can take ~10s)
         start = time.time()
         host_address = None
         while time.time() - start < 30 and host_address is None:
@@ -229,13 +270,21 @@ def sshd(request, sshd_image, tmp_path):
             raise Exception(f"sshd not ready after 30s in container {container_id}")
         try:
             yield SshD(
-                host_address=host_address, host_port=port, keys_directory=ssh_keys_directory, container_id=container_id
+                host_address=host_address,
+                host_port=port,
+                keys_directory=ssh_keys_directory,
+                container_id=container_id,
             )
         finally:
             if hasattr(request.node, "rep_call"):
                 if request.node.rep_call.failed:
                     print(f"SSH Server container: {container_id}")
             _run(["podman", "container", "stop", "-t", "0", container_id], tmp_path)
+
+
+@pytest.fixture
+def sshd(request: pytest.FixtureRequest, sshd_image: str, tmp_path: pathlib.Path) -> typing.Generator[SshD, None, None]:
+    yield from _run_sshd_container(request, sshd_image, tmp_path)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -271,6 +320,7 @@ def ssh_agent(request):
 @dataclasses.dataclass(frozen=True)
 class Api:
     port: int
+    log: pathlib.Path
 
 
 @pytest.fixture
@@ -278,51 +328,71 @@ def api(request, tmp_path):
     tmp_path = tmp_path.absolute()
     api_kek_file = tmp_path / "kek_file.key"
     api_config = tmp_path / "config.json"
-    api_port_file = tmp_path / "api.port"
     api_log = tmp_path / "api.log"
+    api_pf_log = tmp_path / "api_pf.log"
+    api_log_config = tmp_path / "api_log_config.json"
+
     with open(api_kek_file, "wb+") as f:
         f.write(random.randbytes(32))
+
+    api_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    api_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    api_sock.bind(("127.0.0.1", 0))
+    api_host, api_port = api_sock.getsockname()
+
+    config_params = getattr(request, "param", {})
+
+    tenant_registry_url = f"sqlite:///{tmp_path / 'tenants.db'!s}"
+
     with open(api_config, "w+") as f:
         f.write(
             json.dumps(
                 {
-                    "tenant_registry_url": f"sqlite:///{tmp_path / 'tenants.db'!s}",
+                    "tenant_registry_url": tenant_registry_url,
                     "tenants_dir": str(tmp_path),
                     "debug": True,
                     "log_level": 3,
                     "kek_filename": str(api_kek_file),
+                    "base_url": f"http://{api_host}:{api_port}",
                     #'debug_sql': True,
+                    **config_params,
                 }
             )
         )
+
+    api_log_config.write_text(json.dumps(provablyfine.api.log_filter.log_config(str(api_pf_log))))
+
     env = copy.copy(os.environ)
+    env["PF_API_CONFIG"] = str(api_config)
     api_log_file = open(api_log, "w+")
     popen = subprocess.Popen(
-        ["scripts/pf-server", "-c", api_config, "--port-file", api_port_file],
+        [
+            sys.executable,
+            "-m",
+            "uvicorn",
+            "--fd",
+            str(api_sock.fileno()),
+            "--log-config",
+            str(api_log_config),
+            "--log-level",
+            "info",
+            "--factory",
+            "provablyfine.api.app:factory",
+        ],
         stdout=api_log_file,
         stderr=subprocess.STDOUT,
         text=True,
         env=env,
+        pass_fds=(api_sock.fileno(),),
     )
+    api_sock.close()
 
     pf_start_timeout = 10
     start = time.time()
-    api_port = None
     api_ready = False
     while time.time() - start < pf_start_timeout:
         try:
-            with open(api_port_file) as f:
-                data = f.read()
-        except FileNotFoundError:
-            time.sleep(0.1)
-            continue
-        try:
-            api_port = int(data)
-        except Exception:
-            time.sleep(0.1)
-            continue
-        try:
-            response = requests.get(f"http://127.0.0.1:{api_port}/pf/t/root/directory")
+            response = requests.get(f"http://{api_host}:{api_port}/pf/t/root/directory")
         except requests.exceptions.ConnectionError:
             time.sleep(0.1)
             continue
@@ -337,7 +407,6 @@ def api(request, tmp_path):
             log_content = f.read()
         print("\n=== API Server Startup Failed ===")
         print(f"Config: {api_config}")
-        print(f"Port file: {api_port_file}")
         print(f"Log:\n{log_content}")
         try:
             popen.terminate()
@@ -345,7 +414,7 @@ def api(request, tmp_path):
             pass
         raise Exception("Unable to start pf server")
 
-    yield Api(api_port)
+    yield Api(api_port, api_log)
 
     # tear down
     popen.terminate()
@@ -354,8 +423,8 @@ def api(request, tmp_path):
     if hasattr(request.node, "rep_call"):
         if request.node.rep_call.failed:
             print(f"API log: {api_log}")
+            print(f"API pf log: {api_pf_log}")
             print(f"API config: {api_config}")
-            print(f"API portfile: {api_port_file}")
             print(f"API kek: {api_kek_file}")
             return
 

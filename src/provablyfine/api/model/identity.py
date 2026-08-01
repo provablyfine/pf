@@ -2,6 +2,7 @@ import dataclasses
 import time
 import typing
 
+from ... import _sentinel
 from ..context import ctx
 from . import audit_log, utils
 
@@ -12,6 +13,7 @@ class Identity:
     name: str
     tag_id_list: list[int]
     boundary_id_list: list[int]
+    unix_username: str | None
 
 
 def create(name: str, boundary_id_list: list[int], tag_id_list: list[int]) -> int:
@@ -90,6 +92,7 @@ def read_all(**kwargs: typing.Any) -> list[Identity]:
             name=i.name,
             tag_id_list=tag_ids_by_identity_id.get(i.id, []),
             boundary_id_list=boundary_ids_by_identity_id[i.id],
+            unix_username=i.unix_username,
         )
         for i in identities
     ]
@@ -98,23 +101,27 @@ def read_all(**kwargs: typing.Any) -> list[Identity]:
 
 def update(
     id: int,
-    name: str | None = None,
-    added_tag_id_list: list[int] | None = None,
-    deleted_tag_id_list: list[int] | None = None,
+    name: str | _sentinel.Unset = _sentinel.UNSET,
+    added_tag_id_list: list[int] | _sentinel.Unset = _sentinel.UNSET,
+    deleted_tag_id_list: list[int] | _sentinel.Unset = _sentinel.UNSET,
+    unix_username: str | None | _sentinel.Unset = _sentinel.UNSET,
 ) -> None:
     update_fields: dict[str, typing.Any] = {}
-    if name is not None:
+    if not isinstance(name, _sentinel.Unset):
         audit_log.create(
             "identity-update-name",
             id=id,
             name=name,
         )
         update_fields["name"] = name
+    if not isinstance(unix_username, _sentinel.Unset):
+        audit_log.create("identity-update-unix-username", id=id, unix_username=unix_username)
+        update_fields["unix_username"] = unix_username
 
     if len(update_fields) > 0:
         ctx.app_db.identity.update(**update_fields).where(id=id)
 
-    if added_tag_id_list is not None and len(added_tag_id_list) > 0:
+    if not isinstance(added_tag_id_list, _sentinel.Unset) and len(added_tag_id_list) > 0:
         for tag_id in added_tag_id_list:
             ctx.app_db.identity_tag.create(tag_id=tag_id, identity_id=id)
         audit_log.create(
@@ -122,7 +129,7 @@ def update(
             id=id,
             added_tag_id_list=added_tag_id_list,
         )
-    if deleted_tag_id_list is not None and len(deleted_tag_id_list) > 0:
+    if not isinstance(deleted_tag_id_list, _sentinel.Unset) and len(deleted_tag_id_list) > 0:
         ctx.app_db.identity_tag.delete(identity_id=id, tag_id=deleted_tag_id_list)
         audit_log.create(
             "identity-delete-tags",

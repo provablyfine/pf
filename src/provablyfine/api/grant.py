@@ -225,7 +225,7 @@ class IdentityChecker:
         return self._checker.can(check)
 
     def can_update(self, field: str) -> bool:
-        assert field == "name", "You are not allowed to update any field but the name field."
+        assert field in ("name", "unix_username"), f"Unknown identity update field: {field}"
 
         def check(g: model.grant.IdentityGrant) -> bool:
             if g.permission.update is None:
@@ -327,6 +327,12 @@ class IdentityFilterChecker[G: model.grant.TripletGrant](Checker[G]):
         super().__init__(boundaries, roles, cmp, cls)
 
 
+def resolve_username(entry: str, unix_username: str | None) -> str | None:
+    if entry == "{self}":
+        return unix_username
+    return entry
+
+
 class SSHShellChecker:
     def __init__(
         self,
@@ -340,9 +346,10 @@ class SSHShellChecker:
             boundaries, roles, identity_id, tag_id_list, boundary_id_list, model.grant.SSHShellGrant
         )
 
-    def can(self, username: str) -> model.grant.SSHShellPermission | None:
+    def can(self, username: str, unix_username: str | None) -> model.grant.SSHShellPermission | None:
         def check(g: model.grant.SSHShellGrant) -> bool:
-            return username in g.permission.username_list
+            resolved = [r for e in g.permission.username_list if (r := resolve_username(e, unix_username)) is not None]
+            return username in resolved
 
         matching = [g for g in self._checker.list_can(check)]
         if not matching:
@@ -373,9 +380,10 @@ class SSHPortForwardChecker:
             boundaries, roles, identity_id, tag_id_list, boundary_id_list, model.grant.SSHPortForwardingGrant
         )
 
-    def can(self, username: str) -> bool:
+    def can(self, username: str, unix_username: str | None) -> bool:
         def check(g: model.grant.SSHPortForwardingGrant) -> bool:
-            return username in g.permission.username_list
+            resolved = [r for e in g.permission.username_list if (r := resolve_username(e, unix_username)) is not None]
+            return username in resolved
 
         return self._checker.can(check)
 
@@ -399,9 +407,10 @@ class SSHCommandChecker:
             boundaries, roles, identity_id, tag_id_list, boundary_id_list, model.grant.SSHCommandGrant
         )
 
-    def can(self, username: str, command: str) -> bool:
+    def can(self, username: str, command: str, unix_username: str | None) -> bool:
         def check(g: model.grant.SSHCommandGrant) -> bool:
-            return username in g.permission.username_list and command in g.permission.command_list
+            resolved = [r for e in g.permission.username_list if (r := resolve_username(e, unix_username)) is not None]
+            return username in resolved and command in g.permission.command_list
 
         return self._checker.can(check)
 

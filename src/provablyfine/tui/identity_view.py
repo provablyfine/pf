@@ -158,15 +158,15 @@ class IdentityViewScreen(base.Screen):
             self.notify("No changes")
             return
 
-        tags = None
+        update_params: dict[str, typing.Any] = {}
+
+        if name != self._saved_name:
+            update_params["name"] = name
         if self._tags != self._saved_tags:
             all_tags = {(t.name, t.value): t.id for t in (await self._auth.list_tags()).tags}
             tag_id_list = [all_tags[(t.name, t.value)] for t in self._tags if (t.name, t.value) in all_tags]
             tags = [pfc.schemas.IdentityTagOp.model_validate({"type": "set", "tag_id_list": tag_id_list})]
+            update_params["tags"] = tags
 
-        await self._auth.update_identity(
-            self._identity.id,
-            name=name if name != self._saved_name else None,
-            tags=tags,
-        )
+        await self._auth.update_identity(self._identity.id, **update_params)
         self.app.pop_screen()

@@ -52,14 +52,14 @@ We can add and remove tags from identities
 
 Identity names must be unique: cannot create a duplicate
   $ pfa -c config.json identity create -n hello -b boundary1
-  Identity already exists. Name must be unique. hello
+  Identity already exists. "name" must be unique. hello
   [2]
 
 Identity names must be unique: cannot rename to an existing name
   $ pfa -c config.json identity create -n user3 -b boundary1
   $ USER3_ID=$(pfa -c config.json identity list -n user3 -q)
   $ pfa -c config.json identity update -i $USER3_ID -n hello
-  Identity already exists. Name must be unique. hello
+  Identity already exists. "name" must be unique. hello
   [2]
   $ pfa -c config.json identity delete -i $USER3_ID
 

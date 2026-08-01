@@ -76,6 +76,8 @@ def _identity_read_function(args: argparse.Namespace) -> None:
                 rows.append(("tag", f"{t.name}={t.value}"))
             for b in identity.boundaries:
                 rows.append(("boundary", b.name))
+            if identity.unix_username is not None:
+                rows.append(("unix_username", identity.unix_username))
             output = tabulate.tabulate(rows, tablefmt="plain")
         case _:
             assert False
@@ -131,7 +133,15 @@ def _identity_invite_function(args: argparse.Namespace) -> None:
 def _identity_update_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     sc = client.Factory(c, timeout=args.timeout).session()
-    sc.update_identity(args.id, name=args.name)
+    update_params: dict[str, typing.Any] = {}
+    if args.name is not None:
+        update_params["name"] = args.name
+    if args.unix_username is not None:
+        if args.unix_username == "":
+            update_params["unix_username"] = None
+        else:
+            update_params["unix_username"] = args.unix_username
+    sc.update_identity(args.id, **update_params)
 
 
 class TagAction(argparse.Action):
@@ -218,6 +228,10 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
     update_parser = subparsers.add_parser("update", help="Update an existing identity")
     update_parser.add_argument("-i", "--id", type=int, help="Id of identity")
     update_parser.add_argument("-n", "--name", help="New name of identity")
+    update_parser.add_argument(
+        "--unix-username",
+        help="Set Unix username (empty string to clear)",
+    )
     update_parser.set_defaults(func=_identity_update_function)
 
     tag_parser = subparsers.add_parser(

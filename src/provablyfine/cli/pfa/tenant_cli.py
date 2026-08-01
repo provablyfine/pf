@@ -50,7 +50,10 @@ def _get_function(args: argparse.Namespace) -> None:
 def _create_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     sc = client.Factory(c, timeout=args.timeout).session()
-    t = sc.create_tenant(name=args.name, display_name=args.display_name)
+    t = sc.create_tenant(
+        name=args.name,
+        display_name=args.display_name,
+    )
     print(tabulate.tabulate([t.model_dump()], headers="keys"))
 
 
@@ -62,7 +65,11 @@ def _update_function(args: argparse.Namespace) -> None:
         is_enabled = True
     elif args.disable:
         is_enabled = False
-    sc.update_tenant(args.id, display_name=args.display_name, is_enabled=is_enabled)
+    sc.update_tenant(
+        args.id,
+        display_name=args.display_name,
+        is_enabled=is_enabled,
+    )
 
 
 def _delete_function(args: argparse.Namespace) -> None:
