@@ -29,7 +29,7 @@ def _read_current(type: app_db.SigningKeyType, staging_period: int):
     responses={400: responses.PROBLEM, 403: responses.PROBLEM},
 )
 def sign_host_certificate(data: schemas.ssh.SSHHostCertificateRequest) -> schemas.ssh.SSHHostCertificateResponse:
-    caller = ctx.app_db.identity.read_one(id=ctx.identity_id)
+    caller = model.identity.read_one(id=ctx.identity_id)
     assert caller is not None  # because we are authenticated
 
     signers = _read_current(app_db.SigningKeyType.HOST, ctx.config.host_key_staging_period)
@@ -74,7 +74,7 @@ def sign_host_certificate(data: schemas.ssh.SSHHostCertificateRequest) -> schema
     responses={400: responses.PROBLEM, 403: responses.PROBLEM, 404: responses.PROBLEM},
 )
 def sign_user_certificate(data: schemas.ssh.SSHUserCertificateRequest) -> schemas.ssh.SSHUserCertificateResponse:
-    caller = ctx.app_db.identity.read_one(id=ctx.identity_id)
+    caller = model.identity.read_one(id=ctx.identity_id)
     assert caller is not None  # because we are authenticated
     host = model.identity.read_one(name=data.hostname)
     if host is None:
@@ -201,7 +201,7 @@ def sign_user_certificate(data: schemas.ssh.SSHUserCertificateRequest) -> schema
     dependencies=[fastapi.Depends(signature.verify_session)],
 )
 def list_hosts() -> schemas.ssh.SSHHostsResponse:
-    caller = ctx.app_db.identity.read_one(id=ctx.identity_id)
+    caller = model.identity.read_one(id=ctx.identity_id)
     assert caller is not None
     unix_username = caller.unix_username
     identities = model.identity.read_all()
