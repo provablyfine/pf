@@ -85,7 +85,7 @@ def _bastion_update_function(args: argparse.Namespace) -> None:
     if args.url is not None:
         update_params["url"] = args.url
     if args.ssh_proxy_jump is not None:
-        update_params["ssh_proxy_jump"] = args.ssh_proxy_jump if args.ssh_proxy_jump else ""
+        update_params["ssh_proxy_jump"] = args.ssh_proxy_jump
     sc.update_bastion(args.id, **update_params)
 
 
@@ -107,7 +107,7 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
 
     create_parser = subparsers.add_parser("create", help="Create a new bastion")
     create_parser.add_argument("--url", type=str, required=True, help="URL of the bastion")
-    create_parser.add_argument("--ssh-proxy-jump", type=str, help="SSH ProxyJump string, set empty to clear.")
+    create_parser.add_argument("--ssh-proxy-jump", type=str, help="SSH ProxyJump string")
     create_parser.add_argument("-t", "--tag", help="Tag to apply on the bastion", nargs="*", default=[])
     create_parser.set_defaults(func=_bastion_create_function)
 
@@ -118,5 +118,5 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
     update_parser = subparsers.add_parser("update", help="Update a bastion")
     update_parser.add_argument("-i", "--id", type=int, help="Id of bastion", required=True)
     update_parser.add_argument("--url", type=str, help="URL of the bastion")
-    update_parser.add_argument("--ssh-proxy-jump", type=str, help="SSH ProxyJump string")
+    update_parser.add_argument("--ssh-proxy-jump", type=str, help="SSH ProxyJump string, set empty to clear.")
     update_parser.set_defaults(func=_bastion_update_function)
