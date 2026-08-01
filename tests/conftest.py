@@ -22,8 +22,10 @@ import typing
 import psutil
 import pytest
 import requests
+import sqlalchemy
 
 import provablyfine.api.log_filter
+import provablyfine.api.registry_db
 
 logger = logging.getLogger(__name__)
 
@@ -402,6 +404,12 @@ class Api:
     log: pathlib.Path
 
 
+# These belong to the "root" tenant's registry row (registry_db.TenantRow), not to the
+# global server Config, so the `api` fixture's `request.param` dict routes them to a
+# direct registry DB update instead of the config.json written for the server process.
+_TENANT_PARAM_KEYS = {"unix_mode", "min_unix_uid", "min_unix_gid"}
+
+
 @pytest.fixture
 def api(request, tmp_path):
     tmp_path = tmp_path.absolute()
@@ -419,18 +427,24 @@ def api(request, tmp_path):
     api_sock.bind(("127.0.0.1", 0))
     api_host, api_port = api_sock.getsockname()
 
+    all_params = getattr(request, "param", {})
+    tenant_params = {k: v for k, v in all_params.items() if k in _TENANT_PARAM_KEYS}
+    config_params = {k: v for k, v in all_params.items() if k not in _TENANT_PARAM_KEYS}
+
+    tenant_registry_url = f"sqlite:///{tmp_path / 'tenants.db'!s}"
+
     with open(api_config, "w+") as f:
         f.write(
             json.dumps(
                 {
-                    "tenant_registry_url": f"sqlite:///{tmp_path / 'tenants.db'!s}",
+                    "tenant_registry_url": tenant_registry_url,
                     "tenants_dir": str(tmp_path),
                     "debug": True,
                     "log_level": 3,
                     "kek_filename": str(api_kek_file),
                     "base_url": f"http://{api_host}:{api_port}",
                     #'debug_sql': True,
-                    **getattr(request, "param", {}),
+                    **config_params,
                 }
             )
         )
@@ -488,6 +502,12 @@ def api(request, tmp_path):
         except Exception:
             pass
         raise Exception("Unable to start pf server")
+
+    if tenant_params:
+        registry_engine = sqlalchemy.create_engine(tenant_registry_url)
+        with registry_engine.begin() as conn:
+            provablyfine.api.registry_db.create(conn).tenant.update(**tenant_params).where(name="root")
+        registry_engine.dispose()
 
     yield Api(api_port, api_log)
 

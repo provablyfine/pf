@@ -24,6 +24,9 @@ def _row_to_schema(row: registry_db.TenantRow) -> schemas.tenant.TenantReadRespo
         is_initialized=row.is_initialized,
         is_deleted=row.is_deleted,
         created_at=row.created_at,
+        unix_mode=row.unix_mode,
+        min_unix_uid=row.min_unix_uid,
+        min_unix_gid=row.min_unix_gid,
     )
 
 
@@ -43,6 +46,15 @@ def list_endpoint(
         if grants.tenant(row.id).can_read():
             output.append(_row_to_schema(row))
     return schemas.tenant.TenantListResponse(tenants=output)
+
+
+@router.get("/self/unix-config", status_code=200)
+def self_unix_config_endpoint() -> schemas.tenant.TenantUnixConfigResponse:
+    return schemas.tenant.TenantUnixConfigResponse(
+        unix_mode=ctx.tenant_unix_mode,
+        min_unix_uid=ctx.tenant_min_unix_uid,
+        min_unix_gid=ctx.tenant_min_unix_gid,
+    )
 
 
 @router.get("/{tenant_id:int}", status_code=200, responses={403: responses.PROBLEM, 404: responses.PROBLEM})
@@ -88,6 +100,9 @@ def create_endpoint(
         is_initialized=False,
         is_deleted=False,
         created_at=now,
+        unix_mode=data.unix_mode,
+        min_unix_uid=data.min_unix_uid,
+        min_unix_gid=data.min_unix_gid,
     )
     row = reg_db.tenant.read_one(id=new_id)
     assert row is not None

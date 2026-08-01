@@ -113,7 +113,7 @@ def update(
             deleted_member_id_list=deleted_member_id_list,
         )
 
-    if ctx.config.unix_mode == "standalone":
+    if ctx.tenant_unix_mode == "standalone":
         if grant_list is not None:
             effective_grant_list = grant_list
         else:

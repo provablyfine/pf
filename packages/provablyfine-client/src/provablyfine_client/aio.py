@@ -89,16 +89,30 @@ class AsyncSessionClient:
     async def get_tenant(self, id: int) -> schemas.Tenant:
         return await self._run(lambda: self._inner.get_tenant(id))
 
-    async def create_tenant(self, name: str, display_name: str) -> schemas.Tenant:
-        return await self._run(lambda: self._inner.create_tenant(name, display_name))
+    async def create_tenant(
+        self,
+        name: str,
+        display_name: str,
+        unix_mode: typing.Literal["manual", "standalone", "scim"] | None = None,
+        min_unix_uid: int | None = None,
+        min_unix_gid: int | None = None,
+    ) -> schemas.Tenant:
+        return await self._run(
+            lambda: self._inner.create_tenant(name, display_name, unix_mode, min_unix_uid, min_unix_gid)
+        )
 
     async def update_tenant(
         self,
         id: int,
         display_name: str | None = None,
         is_enabled: bool | None = None,
+        unix_mode: typing.Literal["manual", "standalone", "scim"] | None = None,
+        min_unix_uid: int | None = None,
+        min_unix_gid: int | None = None,
     ) -> None:
-        return await self._run(lambda: self._inner.update_tenant(id, display_name, is_enabled))
+        return await self._run(
+            lambda: self._inner.update_tenant(id, display_name, is_enabled, unix_mode, min_unix_uid, min_unix_gid)
+        )
 
     async def delete_tenant(self, id: int) -> None:
         return await self._run(lambda: self._inner.delete_tenant(id))

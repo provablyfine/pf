@@ -48,7 +48,13 @@ def _boundary_update(name: bool, description: bool, ceiling_list: bool, denied_l
 
 
 def _tenant_update(display_name: bool, is_enabled: bool):
-    return {"display_name": display_name, "is_enabled": is_enabled}
+    return {
+        "display_name": display_name,
+        "is_enabled": is_enabled,
+        "unix_mode": False,
+        "min_unix_uid": False,
+        "min_unix_gid": False,
+    }
 
 
 def _bastion_update(url: bool, ssh_proxy_jump: bool, tag_list: bool):

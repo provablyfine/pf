@@ -262,7 +262,7 @@ def update_endpoint(identity_id: int, data: schemas.identity.IdentityUpdateReque
         update_params["name"] = data.name
 
     if "unix_username" in data.model_fields_set:
-        if ctx.config.unix_mode == "scim":
+        if ctx.tenant_unix_mode == "scim":
             raise responses.ProblemHTTPException(
                 responses.problem_response(
                     status_code=403,

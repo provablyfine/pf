@@ -56,7 +56,9 @@ def _provision(allow_tenant_create: bool):
             create=allow_tenant_create,
             read=True,
             delete=True,
-            update=model.grant.TenantUpdatePermission(display_name=True, is_enabled=True),
+            update=model.grant.TenantUpdatePermission(
+                display_name=True, is_enabled=True, unix_mode=True, min_unix_uid=True, min_unix_gid=True
+            ),
         ),
     )
     identity_grant_all = model.grant.IdentityGrant(

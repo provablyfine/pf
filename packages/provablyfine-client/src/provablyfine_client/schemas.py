@@ -123,10 +123,19 @@ class Tenant(_Base):
     is_initialized: bool
     is_deleted: bool
     created_at: int
+    unix_mode: typing.Literal["manual", "standalone", "scim"]
+    min_unix_uid: int
+    min_unix_gid: int
 
 
 class TenantsResponse(_Base):
     tenants: list[Tenant] = []
+
+
+class TenantUnixConfig(_Base):
+    unix_mode: typing.Literal["manual", "standalone", "scim"]
+    min_unix_uid: int
+    min_unix_gid: int
 
 
 class TagNameValue(_Base):
@@ -415,9 +424,18 @@ class SSHCommandPermission(_Base):
 class TenantUpdatePermission(_Base):
     display_name: bool
     is_enabled: bool
+    unix_mode: bool
+    min_unix_uid: bool
+    min_unix_gid: bool
 
     def to_text(self) -> str:
-        output = _bool(self.display_name, "display_name") + _bool(self.is_enabled, "is_enabled")
+        output = (
+            _bool(self.display_name, "display_name")
+            + _bool(self.is_enabled, "is_enabled")
+            + _bool(self.unix_mode, "unix_mode")
+            + _bool(self.min_unix_uid, "min_unix_uid")
+            + _bool(self.min_unix_gid, "min_unix_gid")
+        )
         return " ".join(output)
 
 

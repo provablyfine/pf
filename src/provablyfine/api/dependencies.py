@@ -30,7 +30,12 @@ async def tenant_context(
         )
     with engines[tenant_name].begin() as conn:
         application_db = app_db.create(conn)
-        with ctx.set_tenant_id(tenant_row.id):
-            with ctx.set_tenant_name(tenant_name):
-                with ctx.set_app_db(application_db):
-                    yield
+        with (
+            ctx.set_tenant_id(tenant_row.id),
+            ctx.set_tenant_name(tenant_name),
+            ctx.set_tenant_unix_mode(tenant_row.unix_mode),
+            ctx.set_tenant_min_unix_uid(tenant_row.min_unix_uid),
+            ctx.set_tenant_min_unix_gid(tenant_row.min_unix_gid),
+            ctx.set_app_db(application_db),
+        ):
+            yield

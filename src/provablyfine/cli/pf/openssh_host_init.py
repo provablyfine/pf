@@ -16,10 +16,6 @@ def _bundled_nss_so_path() -> str:
     return os.path.join(pkg_root, "_nss", "libnss_provablyfine.so")
 
 
-def nss_available() -> bool:
-    return sys.platform == "linux" and os.path.exists(_bundled_nss_so_path())
-
-
 def _write_file_atomic(filepath: str, content: bytes | str, mode: str = "wb") -> None:
     dirname = os.path.dirname(filepath) or "."
     os.makedirs(dirname, exist_ok=True)
@@ -109,14 +105,16 @@ _patch_nsswitch() {{
 """
 
 
-def _nss_init_fragment(nss_so_path: str, unix_min_uid: int, unix_min_gid: int) -> str:
+def _nss_init_fragment(nss_so_path: str, unix_min_uid: str, unix_min_gid: str) -> str:
+    # unix_min_uid/unix_min_gid are shell expressions (e.g. "$_unix_min_uid"), substituted
+    # by the shell at script-execution time, hence the unquoted heredoc delimiter below.
     return f"""\
 
 # pf NSS: install bundled NSS module and configure Unix account synthesis
 _multiarch=$(dpkg-architecture -qDEB_HOST_MULTIARCH 2>/dev/null || echo x86_64-linux-gnu)
 install -m 755 '{nss_so_path}' "/usr/lib/$_multiarch/libnss_provablyfine.so.2"
 ldconfig
-cat > /etc/pf-nss.conf << 'PFEOF'
+cat > /etc/pf-nss.conf << PFEOF
 unix_min_uid={unix_min_uid}
 unix_min_gid={unix_min_gid}
 PFEOF
@@ -157,12 +155,9 @@ def _print_init_script(
     ca_pub_path: str,
     sshd_config_drop_in: str,
     auth_user: str,
-    nss: bool = False,
-    nss_so_path: str = "",
-    unix_min_uid: int = 100000,
-    unix_min_gid: int = 100000,
 ) -> None:
     sshd_drop_in_dir = os.path.dirname(sshd_config_drop_in)
+    nss_so_path = _bundled_nss_so_path()
     config_json = json.dumps(
         {
             "directory_url": directory_url,
@@ -285,18 +280,25 @@ esac
 PFEOF
   chmod 755 /etc/NetworkManager/dispatcher.d/pf-host-refresh
 fi
+
+# Fetch this tenant's unix_mode/min_unix_uid/min_unix_gid from the server and only
+# install NSS Unix account synthesis when the tenant is actually in standalone mode.
+_nss_cfg=$(systemd-run --pipe --wait --property=LoadCredentialEncrypted=account:/var/lib/pf/account.cred \\
+  $_pf_bin openssh nss-config --config=/var/lib/pf/config.json)
+set -- $_nss_cfg
+_unix_mode=$1
+_unix_min_uid=$2
+_unix_min_gid=$3
+if [ "$_unix_mode" = "standalone" ]; then
+{_nss_init_fragment(nss_so_path, "$_unix_min_uid", "$_unix_min_gid")}
+fi
 """)
-    if nss:
-        sys.stdout.write(_nss_init_fragment(nss_so_path, unix_min_uid, unix_min_gid))
 
 
 def host_init_daemon_function(args: argparse.Namespace) -> None:
     """Print a shell script to stdout that sets up pf on this host."""
 
     invitation = common.parse_invitation(args.invitation)
-    nss_so_path = _bundled_nss_so_path()
-    if args.nss and not nss_available():
-        raise RuntimeError("--nss was requested but the bundled NSS module is not available on this platform")
 
     _print_init_script(
         args.invitation,
@@ -305,10 +307,6 @@ def host_init_daemon_function(args: argparse.Namespace) -> None:
         args.ca_pub_path,
         args.sshd_config_drop_in,
         args.auth_user,
-        nss=args.nss,
-        nss_so_path=nss_so_path,
-        unix_min_uid=args.unix_min_uid,
-        unix_min_gid=args.unix_min_gid,
     )
 
 
@@ -335,10 +333,11 @@ def host_uninit_function(args: argparse.Namespace) -> None:
         "if systemctl is-active sshd; then",
         "  systemctl reload sshd",
         "fi",
+        "",
+        "if [ -f /etc/pf-nss.conf ]; then",
+        *(f"  {line}" for line in _NSS_UNINIT_FRAGMENT.splitlines()),
+        "fi",
     ]
-    if args.nss:
-        lines.append("")
-        lines.extend(_NSS_UNINIT_FRAGMENT.splitlines())
     sys.stdout.write("\n".join(lines) + "\n")
 
 
@@ -350,3 +349,12 @@ def host_refresh_function(args: argparse.Namespace) -> None:
     _do_refresh(c, args.host_keys_dir, args.ca_pub_path)
     if not args.no_sshd_reload:
         subprocess.run(["/usr/bin/systemctl", "reload", "sshd"], check=True, capture_output=True)
+
+
+def nss_config_function(args: argparse.Namespace) -> None:
+    """Print this tenant's unix_mode/min_unix_uid/min_unix_gid as "<mode> <uid> <gid>"."""
+    c = client.configuration.Config.load(args.config)
+    factory = client.Factory(c)
+    login.ensure_session(c, factory)
+    config = factory.session().get_tenant_unix_config()
+    print(f"{config.unix_mode} {config.min_unix_uid} {config.min_unix_gid}")

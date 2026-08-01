@@ -1,7 +1,6 @@
 import argparse
 import base64
 import os
-import sys
 
 import provablyfine_client as pfc
 
@@ -93,20 +92,6 @@ def add_subparsers(parser: argparse.ArgumentParser) -> None:
     )
     host_init_parser.add_argument("--host-keys-dir", default="/etc/ssh", help="Directory containing host SSH keys")
     host_init_parser.add_argument("--ca-pub-path", default="/etc/ssh/pf_ca.pub", help="Path to CA public key file")
-    host_init_parser.add_argument(
-        "--nss",
-        action="store_true",
-        dest="nss",
-        default=False,
-        help="Enable automatic Unix account synthesis via NSS for standalone unix_mode "
-        "(default: disabled — manual unix_mode assumes hosts already resolve their own accounts)",
-    )
-    host_init_parser.add_argument(
-        "--unix-min-uid", type=int, default=100000, help="Base uid for NSS-synthesized standalone accounts"
-    )
-    host_init_parser.add_argument(
-        "--unix-min-gid", type=int, default=100000, help="Base gid for NSS-synthesized standalone accounts"
-    )
     host_init_parser.set_defaults(func=openssh_host_init.host_init_daemon_function)
 
     host_uninit_parser = subparsers.add_parser("host-uninit", help="Print a script to undo host-init")
@@ -115,13 +100,6 @@ def add_subparsers(parser: argparse.ArgumentParser) -> None:
     )
     host_uninit_parser.add_argument("--host-keys-dir", default="/etc/ssh", help="Directory containing host SSH keys")
     host_uninit_parser.add_argument("--ca-pub-path", default="/etc/ssh/pf_ca.pub", help="Path to CA public key file")
-    host_uninit_parser.add_argument(
-        "--no-nss",
-        action="store_false",
-        dest="nss",
-        help="Skip NSS configuration rollback (default: undo NSS setup on Linux)",
-    )
-    host_uninit_parser.set_defaults(nss=sys.platform == "linux")
     host_uninit_parser.set_defaults(func=openssh_host_init.host_uninit_function)
 
     host_refresh_parser = subparsers.add_parser("host-refresh", help="Refresh configuration of local SSH daemon")
@@ -130,3 +108,9 @@ def add_subparsers(parser: argparse.ArgumentParser) -> None:
     host_refresh_parser.add_argument("--ca-pub-path", required=True, help="Path to CA public key file")
     host_refresh_parser.add_argument("--no-sshd-reload", action="store_true", default=False)
     host_refresh_parser.set_defaults(func=openssh_host_init.host_refresh_function)
+
+    nss_config_parser = subparsers.add_parser(
+        "nss-config", help="Print this tenant's unix_mode/min_unix_uid/min_unix_gid as '<mode> <uid> <gid>'"
+    )
+    nss_config_parser.add_argument("--config", required=True, help="Path to pf config.json")
+    nss_config_parser.set_defaults(func=openssh_host_init.nss_config_function)

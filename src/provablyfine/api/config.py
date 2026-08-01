@@ -64,8 +64,6 @@ class Config(pydantic.BaseModel):
     oidc_key_grace_period: int = 7 * 86400
     oidc_key_rotation_period: int = 30 * 86400
 
-    unix_mode: typing.Literal["manual", "standalone", "scim"] = "manual"
-
     default_bastion: DefaultBastion | None = None
     email: EmailConfig | None = None
 
