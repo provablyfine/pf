@@ -559,11 +559,11 @@ class SessionClient:
         unix_username: str | None | _sentinel.Unset = _sentinel.UNSET,
     ) -> None:
         body: dict[str, typing.Any] = {}
-        if name is not _sentinel.UNSET:
+        if not isinstance(name, _sentinel.Unset):
             body["name"] = name
         if not isinstance(tags, _sentinel.Unset):
             body["tags"] = [op.model_dump(exclude_none=True) for op in tags]
-        if unix_username is not _sentinel.UNSET:
+        if not isinstance(unix_username, _sentinel.Unset):
             body["unix_username"] = unix_username
         if not body:
             raise exceptions.UI("Nothing to update")
