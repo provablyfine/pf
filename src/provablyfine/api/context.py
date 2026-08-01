@@ -1,13 +1,10 @@
 import contextlib
 import contextvars
-import typing
 
 import cryptography.fernet
 
 from . import app_db as app_db_module
 from . import config as config_module
-
-UnixMode = typing.Literal["manual", "scim"]
 
 _kek_var: contextvars.ContextVar[cryptography.fernet.Fernet | None] = contextvars.ContextVar("kek", default=None)
 _config_var: contextvars.ContextVar[config_module.Config | None] = contextvars.ContextVar("config", default=None)
@@ -17,9 +14,6 @@ _active_role_id_var: contextvars.ContextVar[int | None] = contextvars.ContextVar
 _session_key_id_var: contextvars.ContextVar[str | None] = contextvars.ContextVar("session_key_id", default=None)
 _tenant_id_var: contextvars.ContextVar[int | None] = contextvars.ContextVar("tenant_id", default=None)
 _tenant_name_var: contextvars.ContextVar[str | None] = contextvars.ContextVar("tenant_name", default=None)
-_tenant_unix_mode_var: contextvars.ContextVar[UnixMode | None] = contextvars.ContextVar(
-    "tenant_unix_mode", default=None
-)
 
 
 class RequestContext:
@@ -137,21 +131,6 @@ class RequestContext:
             yield
         finally:
             _tenant_name_var.set(None)
-
-    @property
-    def tenant_unix_mode(self) -> UnixMode:
-        v = _tenant_unix_mode_var.get()
-        assert v is not None
-        return v
-
-    @contextlib.contextmanager
-    def set_tenant_unix_mode(self, unix_mode: UnixMode):
-        assert _tenant_unix_mode_var.get() is None
-        _tenant_unix_mode_var.set(unix_mode)
-        try:
-            yield
-        finally:
-            _tenant_unix_mode_var.set(None)
 
 
 ctx = RequestContext()

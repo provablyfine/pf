@@ -33,7 +33,6 @@ async def tenant_context(
         with (
             ctx.set_tenant_id(tenant_row.id),
             ctx.set_tenant_name(tenant_name),
-            ctx.set_tenant_unix_mode(tenant_row.unix_mode),
             ctx.set_app_db(application_db),
         ):
             yield

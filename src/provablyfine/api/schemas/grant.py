@@ -138,7 +138,6 @@ class SSHCommandGrant(base.APIBase):
 class TenantUpdatePermission(base.APIBase):
     display_name: bool
     is_enabled: bool
-    unix_mode: bool
 
 
 class TenantPermission(base.APIBase):

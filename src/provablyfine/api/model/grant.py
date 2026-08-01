@@ -168,7 +168,6 @@ class SSHCommandGrant(TripletGrant):
 class TenantUpdatePermission(DBBase):
     display_name: bool
     is_enabled: bool
-    unix_mode: bool
 
 
 class TenantPermission(DBBase):

@@ -158,11 +158,8 @@ class SessionClient:
         self,
         name: str,
         display_name: str,
-        unix_mode: typing.Literal["manual", "scim"] | None = None,
     ) -> schemas.Tenant:
         data: dict[str, str | int] = {"name": name, "display_name": display_name}
-        if unix_mode is not None:
-            data["unix_mode"] = unix_mode
         response = self._session.post(
             self._directory.tenant,
             auth=self._auth(),
@@ -177,15 +174,12 @@ class SessionClient:
         id: int,
         display_name: str | None = None,
         is_enabled: bool | None = None,
-        unix_mode: typing.Literal["manual", "scim"] | None = None,
     ) -> None:
         data: dict[str, str | bool | int] = {}
         if display_name is not None:
             data["display_name"] = display_name
         if is_enabled is not None:
             data["is_enabled"] = is_enabled
-        if unix_mode is not None:
-            data["unix_mode"] = unix_mode
         if not data:
             raise exceptions.UI("Nothing to update")
         response = self._session.patch(f"{self._directory.tenant}/{id}", auth=self._auth(), json=data)

@@ -46,7 +46,6 @@ class TenantGrantEditWidget(base.GrantEditWidget):
                 ("Read", "read", p.read),
                 ("Update display name", "update.display_name", True if update is None else update.display_name),
                 ("Update is enabled", "update.is_enabled", True if update is None else update.is_enabled),
-                ("Update unix mode", "update.unix_mode", True if update is None else update.unix_mode),
                 ("Delete", "delete", p.delete),
                 compact=True,
             )
@@ -61,7 +60,6 @@ class TenantGrantEditWidget(base.GrantEditWidget):
         update_dict = {
             "display_name": "update.display_name" in selected,
             "is_enabled": "update.is_enabled" in selected,
-            "unix_mode": "update.unix_mode" in selected,
         }
         return pfc.schemas.TenantGrant(
             type="tenant",

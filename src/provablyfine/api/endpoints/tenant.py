@@ -24,7 +24,6 @@ def _row_to_schema(row: registry_db.TenantRow) -> schemas.tenant.TenantReadRespo
         is_initialized=row.is_initialized,
         is_deleted=row.is_deleted,
         created_at=row.created_at,
-        unix_mode=row.unix_mode,
     )
 
 
@@ -89,7 +88,6 @@ def create_endpoint(
         is_initialized=False,
         is_deleted=False,
         created_at=now,
-        unix_mode=data.unix_mode,
     )
     row = reg_db.tenant.read_one(id=new_id)
     assert row is not None

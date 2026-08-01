@@ -53,7 +53,6 @@ def _create_function(args: argparse.Namespace) -> None:
     t = sc.create_tenant(
         name=args.name,
         display_name=args.display_name,
-        unix_mode=args.unix_mode,
     )
     print(tabulate.tabulate([t.model_dump()], headers="keys"))
 
@@ -70,7 +69,6 @@ def _update_function(args: argparse.Namespace) -> None:
         args.id,
         display_name=args.display_name,
         is_enabled=is_enabled,
-        unix_mode=args.unix_mode,
     )
 
 
@@ -98,7 +96,6 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
     create_parser = subparsers.add_parser("create", help="Create a tenant")
     create_parser.add_argument("--name", required=True, help="Tenant slug name")
     create_parser.add_argument("--display-name", required=True, dest="display_name", help="Tenant display name")
-    create_parser.add_argument("--unix-mode", dest="unix_mode", choices=["manual", "scim"], default=None)
     create_parser.set_defaults(func=_create_function)
 
     update_parser = subparsers.add_parser("update", help="Update a tenant")
@@ -107,7 +104,6 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
     enable_group = update_parser.add_mutually_exclusive_group()
     enable_group.add_argument("--enable", action="store_true", default=False)
     enable_group.add_argument("--disable", action="store_true", default=False)
-    update_parser.add_argument("--unix-mode", dest="unix_mode", choices=["manual", "scim"], default=None)
     update_parser.set_defaults(func=_update_function)
 
     delete_parser = subparsers.add_parser("delete", help="Delete a tenant")

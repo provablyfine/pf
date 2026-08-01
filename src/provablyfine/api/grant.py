@@ -287,7 +287,7 @@ class TenantChecker:
         return self._checker.can(check)
 
     def can_update(self, field: str) -> bool:
-        assert field in ["display_name", "is_enabled", "unix_mode"]
+        assert field in ["display_name", "is_enabled"]
 
         def check(g: model.grant.TenantGrant):
             if g.permission.update is None:

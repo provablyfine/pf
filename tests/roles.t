@@ -32,7 +32,7 @@ List existing roles (there is one)
                permission: create read update.* delete
   grant        type:       tenant
                filter:     *
-               permission: create read update.display_name update.is_enabled update.unix_mode delete
+               permission: create read update.display_name update.is_enabled delete
   grant        type:       auth
                filter:     *
                permission: create read update.* delete

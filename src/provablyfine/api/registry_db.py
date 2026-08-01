@@ -30,9 +30,6 @@ class TenantRow(typing.NamedTuple):
     is_initialized: bool
     is_deleted: bool
     created_at: int
-    unix_mode: typing.Annotated[
-        typing.Literal["manual", "scim"], db.Col(sa_type=sqlalchemy.String(), nullable=False)
-    ] = "manual"
 
 
 tenant = db.make_table("tenant", metadata, TenantRow)

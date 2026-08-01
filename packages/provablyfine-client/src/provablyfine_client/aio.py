@@ -93,18 +93,16 @@ class AsyncSessionClient:
         self,
         name: str,
         display_name: str,
-        unix_mode: typing.Literal["manual", "scim"] | None = None,
     ) -> schemas.Tenant:
-        return await self._run(lambda: self._inner.create_tenant(name, display_name, unix_mode))
+        return await self._run(lambda: self._inner.create_tenant(name, display_name))
 
     async def update_tenant(
         self,
         id: int,
         display_name: str | None = None,
         is_enabled: bool | None = None,
-        unix_mode: typing.Literal["manual", "scim"] | None = None,
     ) -> None:
-        return await self._run(lambda: self._inner.update_tenant(id, display_name, is_enabled, unix_mode))
+        return await self._run(lambda: self._inner.update_tenant(id, display_name, is_enabled))
 
     async def delete_tenant(self, id: int) -> None:
         return await self._run(lambda: self._inner.delete_tenant(id))

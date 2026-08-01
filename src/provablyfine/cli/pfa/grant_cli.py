@@ -108,7 +108,6 @@ def _tenant_function(args: argparse.Namespace) -> None:
                 {
                     "display_name": any("display_name" in entry for entry in args.update),
                     "is_enabled": any("is_enabled" in entry for entry in args.update),
-                    "unix_mode": any("unix_mode" in entry for entry in args.update),
                 },
             ),
         },
@@ -291,7 +290,7 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
         action="append",
         nargs="*",
         default=[],
-        choices=["display_name", "is_enabled", "unix_mode"],
+        choices=["display_name", "is_enabled"],
     )
     group.add_argument("--update-all", action="store_true")
     group.add_argument("-d", "--delete", action="store_true")

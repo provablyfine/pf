@@ -51,7 +51,6 @@ def _tenant_update(display_name: bool, is_enabled: bool):
     return {
         "display_name": display_name,
         "is_enabled": is_enabled,
-        "unix_mode": False,
     }
 
 
