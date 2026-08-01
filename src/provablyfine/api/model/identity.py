@@ -107,14 +107,14 @@ def update(
     unix_username: str | None | _sentinel.Unset = _sentinel.UNSET,
 ) -> None:
     update_fields: dict[str, typing.Any] = {}
-    if name is not _sentinel.UNSET:
+    if not isinstance(name, _sentinel.Unset):
         audit_log.create(
             "identity-update-name",
             id=id,
             name=name,
         )
         update_fields["name"] = name
-    if unix_username is not _sentinel.UNSET:
+    if not isinstance(unix_username, _sentinel.Unset):
         audit_log.create("identity-update-unix-username", id=id, unix_username=unix_username)
         update_fields["unix_username"] = unix_username
 
