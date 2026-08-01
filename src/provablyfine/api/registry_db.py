@@ -31,10 +31,8 @@ class TenantRow(typing.NamedTuple):
     is_deleted: bool
     created_at: int
     unix_mode: typing.Annotated[
-        typing.Literal["manual", "standalone", "scim"], db.Col(sa_type=sqlalchemy.String(), nullable=False)
+        typing.Literal["manual", "scim"], db.Col(sa_type=sqlalchemy.String(), nullable=False)
     ] = "manual"
-    min_unix_uid: typing.Annotated[int, db.Col(nullable=False)] = 100000
-    min_unix_gid: typing.Annotated[int, db.Col(nullable=False)] = 100000
 
 
 tenant = db.make_table("tenant", metadata, TenantRow)

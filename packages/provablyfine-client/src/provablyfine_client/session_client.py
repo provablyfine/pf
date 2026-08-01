@@ -154,27 +154,15 @@ class SessionClient:
             raise exceptions.UI(_problem_title(response, "Unable to get tenant"))
         return schemas.Tenant.model_validate(response.json())
 
-    def get_tenant_unix_config(self) -> schemas.TenantUnixConfig:
-        response = self._session.get(f"{self._directory.tenant}/self/unix-config", auth=self._auth())
-        if response.status_code != 200:
-            raise exceptions.UI(_problem_title(response, "Unable to get tenant unix config"))
-        return schemas.TenantUnixConfig.model_validate(response.json())
-
     def create_tenant(
         self,
         name: str,
         display_name: str,
-        unix_mode: typing.Literal["manual", "standalone", "scim"] | None = None,
-        min_unix_uid: int | None = None,
-        min_unix_gid: int | None = None,
+        unix_mode: typing.Literal["manual", "scim"] | None = None,
     ) -> schemas.Tenant:
         data: dict[str, str | int] = {"name": name, "display_name": display_name}
         if unix_mode is not None:
             data["unix_mode"] = unix_mode
-        if min_unix_uid is not None:
-            data["min_unix_uid"] = min_unix_uid
-        if min_unix_gid is not None:
-            data["min_unix_gid"] = min_unix_gid
         response = self._session.post(
             self._directory.tenant,
             auth=self._auth(),
@@ -189,9 +177,7 @@ class SessionClient:
         id: int,
         display_name: str | None = None,
         is_enabled: bool | None = None,
-        unix_mode: typing.Literal["manual", "standalone", "scim"] | None = None,
-        min_unix_uid: int | None = None,
-        min_unix_gid: int | None = None,
+        unix_mode: typing.Literal["manual", "scim"] | None = None,
     ) -> None:
         data: dict[str, str | bool | int] = {}
         if display_name is not None:
@@ -200,10 +186,6 @@ class SessionClient:
             data["is_enabled"] = is_enabled
         if unix_mode is not None:
             data["unix_mode"] = unix_mode
-        if min_unix_uid is not None:
-            data["min_unix_uid"] = min_unix_uid
-        if min_unix_gid is not None:
-            data["min_unix_gid"] = min_unix_gid
         if not data:
             raise exceptions.UI("Nothing to update")
         response = self._session.patch(f"{self._directory.tenant}/{id}", auth=self._auth(), json=data)

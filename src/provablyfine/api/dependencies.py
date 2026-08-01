@@ -34,8 +34,6 @@ async def tenant_context(
             ctx.set_tenant_id(tenant_row.id),
             ctx.set_tenant_name(tenant_name),
             ctx.set_tenant_unix_mode(tenant_row.unix_mode),
-            ctx.set_tenant_min_unix_uid(tenant_row.min_unix_uid),
-            ctx.set_tenant_min_unix_gid(tenant_row.min_unix_gid),
             ctx.set_app_db(application_db),
         ):
             yield

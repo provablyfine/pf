@@ -291,8 +291,6 @@ def _grant_to_schema(converter: GrantConverter, grant: model.grant.Grant) -> sch
                     display_name=grant.permission.update.display_name,
                     is_enabled=grant.permission.update.is_enabled,
                     unix_mode=grant.permission.update.unix_mode,
-                    min_unix_uid=grant.permission.update.min_unix_uid,
-                    min_unix_gid=grant.permission.update.min_unix_gid,
                 ),
             )
             g = schemas.grant.TenantGrant(filter=filter, permission=permission)
@@ -464,8 +462,6 @@ def _grant_from_schema(converter: GrantConverter, grant: schemas.grant.Grant) ->
                     display_name=grant.permission.update.display_name,
                     is_enabled=grant.permission.update.is_enabled,
                     unix_mode=grant.permission.update.unix_mode,
-                    min_unix_uid=grant.permission.update.min_unix_uid,
-                    min_unix_gid=grant.permission.update.min_unix_gid,
                 ),
             )
             g = model.grant.TenantGrant(filter=filter, permission=permission)

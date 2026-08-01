@@ -169,8 +169,6 @@ class TenantUpdatePermission(DBBase):
     display_name: bool
     is_enabled: bool
     unix_mode: bool
-    min_unix_uid: bool
-    min_unix_gid: bool
 
 
 class TenantPermission(DBBase):

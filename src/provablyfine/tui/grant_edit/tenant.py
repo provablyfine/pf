@@ -47,8 +47,6 @@ class TenantGrantEditWidget(base.GrantEditWidget):
                 ("Update display name", "update.display_name", True if update is None else update.display_name),
                 ("Update is enabled", "update.is_enabled", True if update is None else update.is_enabled),
                 ("Update unix mode", "update.unix_mode", True if update is None else update.unix_mode),
-                ("Update min unix uid", "update.min_unix_uid", True if update is None else update.min_unix_uid),
-                ("Update min unix gid", "update.min_unix_gid", True if update is None else update.min_unix_gid),
                 ("Delete", "delete", p.delete),
                 compact=True,
             )
@@ -64,8 +62,6 @@ class TenantGrantEditWidget(base.GrantEditWidget):
             "display_name": "update.display_name" in selected,
             "is_enabled": "update.is_enabled" in selected,
             "unix_mode": "update.unix_mode" in selected,
-            "min_unix_uid": "update.min_unix_uid" in selected,
-            "min_unix_gid": "update.min_unix_gid" in selected,
         }
         return pfc.schemas.TenantGrant(
             type="tenant",

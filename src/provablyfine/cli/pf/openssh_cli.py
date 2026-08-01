@@ -108,9 +108,3 @@ def add_subparsers(parser: argparse.ArgumentParser) -> None:
     host_refresh_parser.add_argument("--ca-pub-path", required=True, help="Path to CA public key file")
     host_refresh_parser.add_argument("--no-sshd-reload", action="store_true", default=False)
     host_refresh_parser.set_defaults(func=openssh_host_init.host_refresh_function)
-
-    nss_config_parser = subparsers.add_parser(
-        "nss-config", help="Print this tenant's unix_mode/min_unix_uid/min_unix_gid as '<mode> <uid> <gid>'"
-    )
-    nss_config_parser.add_argument("--config", required=True, help="Path to pf config.json")
-    nss_config_parser.set_defaults(func=openssh_host_init.nss_config_function)

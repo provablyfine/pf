@@ -170,9 +170,9 @@ RUN --mount=type=cache,target=/root/.cache/uv uv pip install \\
     --quiet --link-mode=copy --system --break-system-packages /tmp/pfc && \\
     rm -rf /tmp/pfc
 
-COPY pyproject.toml README.md LICENSE.md hatch_build.py /tmp/pf/
+COPY pyproject.toml README.md LICENSE.md /tmp/pf/
 COPY src /tmp/pf/src/
-RUN --mount=type=cache,target=/root/.cache/uv HATCH_TARGET_ARCH=unsupported uv pip install \\
+RUN --mount=type=cache,target=/root/.cache/uv uv pip install \\
     --quiet --link-mode=copy --system --break-system-packages --no-sources /tmp/pf && \\
     rm -rf /tmp/pf
 
@@ -289,85 +289,6 @@ def sshd(request: pytest.FixtureRequest, sshd_image: str, tmp_path: pathlib.Path
     yield from _run_sshd_container(request, sshd_image, tmp_path)
 
 
-@pytest.fixture(scope="session")
-def nss_lib(tmp_path_factory: pytest.TempPathFactory) -> str:
-    """Build the NSS cdylib and return path to the .so file."""
-    _require_podman()
-    if not shutil.which("cargo"):
-        pytest.skip("cargo not available")
-    nss_src = os.path.join(tld(), "src", "nss", "libnss_provablyfine")
-    env = copy.copy(os.environ)
-    if "SSL_CERT_FILE" not in env and os.path.exists("/tmp/aleash-ca.pem"):
-        env["CARGO_HTTP_CAINFO"] = "/tmp/aleash-ca.pem"
-    result = subprocess.run(
-        ["cargo", "build", "--release"],
-        cwd=nss_src,
-        capture_output=True,
-        env=env,
-    )
-    if result.returncode != 0:
-        pytest.skip(f"cargo build failed:\n{result.stderr.decode()}")
-    so_path = os.path.join(nss_src, "target", "release", "libnss_provablyfine.so")
-    assert os.path.exists(so_path), f"expected .so at {so_path}"
-    return so_path
-
-
-@pytest.fixture(scope="session")
-def sshd_nss_image(tmp_path_factory: pytest.TempPathFactory, nss_lib: str) -> str:
-    """Build an Ubuntu sshd image with the NSS module pre-installed."""
-    # Use a UID base that fits within rootless podman's UID namespace (0-65535).
-    nss_conf = "unix_min_uid=1000\nunix_min_gid=1000\n"
-
-    containerfile = _containerfile(
-        packages=["libpam-modules"],
-        setup=f"""\
-COPY libnss_provablyfine.so /tmp/nss_provablyfine.so
-RUN install -m 755 /tmp/nss_provablyfine.so \\
-    "/usr/lib/$(dpkg-architecture -qDEB_HOST_MULTIARCH)/libnss_provablyfine.so.2" && \\
-    ldconfig && rm /tmp/nss_provablyfine.so
-
-{_write_file("/etc/pf-nss.conf", nss_conf)}
-RUN chmod 644 /etc/pf-nss.conf
-
-# Appended last, mirroring `pf openssh host-init`: every pre-existing source is
-# consulted before the catch-all provablyfine module.
-RUN sed -i '/^passwd:/ s|[[:space:]]*$| provablyfine|' /etc/nsswitch.conf && \\
-    sed -i '/^group:/ s|[[:space:]]*$| provablyfine|' /etc/nsswitch.conf && \\
-    sed -i '/^shadow:/ s|[[:space:]]*$| provablyfine|' /etc/nsswitch.conf
-
-RUN echo 'session required pam_mkhomedir.so skel=/etc/skel umask=0077' >> /etc/pam.d/sshd
-""",
-        sshd_config=_sshd_config(permit_root_login=False, use_pam=True),
-    )
-
-    # Build using a dedicated temp context dir — avoids embedding large binaries
-    # as base64 in the Containerfile and eliminates the race with the sshd_image build.
-    ctx_dir = tmp_path_factory.mktemp("nss_build_ctx", numbered=True)
-    shutil.copytree(os.path.join(tld(), "packages"), ctx_dir / "packages")
-    for fname in ("pyproject.toml", "README.md", "LICENSE.md", "hatch_build.py"):
-        shutil.copy2(os.path.join(tld(), fname), ctx_dir / fname)
-    shutil.copytree(os.path.join(tld(), "src"), ctx_dir / "src")
-    shutil.copy2(nss_lib, ctx_dir / "libnss_provablyfine.so")
-    containerfile_path = ctx_dir / "Containerfile"
-    containerfile_path.write_text(containerfile)
-
-    stdout = _run(
-        ["podman", "build", "--quiet", "--file", str(containerfile_path), str(ctx_dir)],
-        ctx_dir,
-    )
-    image_id = stdout.strip("\n")
-    if "\n" in image_id:
-        assert False, image_id
-    return image_id
-
-
-@pytest.fixture
-def sshd_nss(
-    request: pytest.FixtureRequest, sshd_nss_image: str, tmp_path: pathlib.Path
-) -> typing.Generator[SshD, None, None]:
-    yield from _run_sshd_container(request, sshd_nss_image, tmp_path)
-
-
 @dataclasses.dataclass(frozen=True)
 class SshAgent:
     socket: str
@@ -407,7 +328,7 @@ class Api:
 # These belong to the "root" tenant's registry row (registry_db.TenantRow), not to the
 # global server Config, so the `api` fixture's `request.param` dict routes them to a
 # direct registry DB update instead of the config.json written for the server process.
-_TENANT_PARAM_KEYS = {"unix_mode", "min_unix_uid", "min_unix_gid"}
+_TENANT_PARAM_KEYS = {"unix_mode"}
 
 
 @pytest.fixture

@@ -145,9 +145,7 @@ def new_grant(grant_type: str) -> pfc.schemas.Grant:
                 permission=pfc.schemas.TenantPermission(
                     create=False,
                     read=False,
-                    update=pfc.schemas.TenantUpdatePermission(
-                        display_name=False, is_enabled=False, unix_mode=False, min_unix_uid=False, min_unix_gid=False
-                    ),
+                    update=pfc.schemas.TenantUpdatePermission(display_name=False, is_enabled=False, unix_mode=False),
                     delete=False,
                 ),
             )

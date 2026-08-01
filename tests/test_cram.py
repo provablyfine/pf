@@ -37,8 +37,3 @@ from . import utils
 )
 def test_pf_cram(api, filename):
     utils.run_cram(f"tests/{filename}", {"API_PORT": str(api.port), "API_LOG": str(api.log)})
-
-
-@pytest.mark.parametrize("api", [{"unix_mode": "standalone"}], indirect=True)
-def test_identity_standalone_cram(api):
-    utils.run_cram("tests/identity-standalone.t", {"API_PORT": str(api.port), "API_LOG": str(api.log)})

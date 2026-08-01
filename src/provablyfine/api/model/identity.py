@@ -136,28 +136,3 @@ def update(
             id=id,
             deleted_tag_id_list=deleted_tag_id_list,
         )
-
-
-def assign_standalone_unix_username(id: int) -> None:
-    """Auto-assign the next sequential "u<hex>" unix_username to an identity.
-
-    Only called for identities that already have a NULL unix_username, in
-    "standalone" unix_mode. The sequence is tracked in a dedicated
-    unix_username_counter row (id=1), independent of the identity table, so
-    ids are never recycled even after the identity that received one is
-    deleted or its unix_username is cleared.
-
-    New tenant databases are materialized via `metadata.create_all()` (see
-    migrate.create_tenant) rather than by replaying migrations, so the
-    counter row seeded by the identity_posix_fields migration may not exist
-    yet; lazily create it on first use.
-    """
-    counter = ctx.app_db.unix_username_counter.read_one(id=1)
-    seq = counter.next_seq if counter is not None else 1
-    if counter is None:
-        ctx.app_db.unix_username_counter.create(id=1, next_seq=seq + 1)
-    else:
-        ctx.app_db.unix_username_counter.update(next_seq=seq + 1).where(id=1)
-    username = f"u{seq:x}"
-    assert len(username) <= 8
-    update(id=id, unix_username=username)

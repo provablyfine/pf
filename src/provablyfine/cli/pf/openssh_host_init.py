@@ -10,12 +10,6 @@ from ... import client, jwk, ssh
 from .. import common, login
 
 
-def _bundled_nss_so_path() -> str:
-    # __file__ is provablyfine/cli/pf/openssh_host_init.py; three dirnames reach provablyfine/
-    pkg_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    return os.path.join(pkg_root, "_nss", "libnss_provablyfine.so")
-
-
 def _write_file_atomic(filepath: str, content: bytes | str, mode: str = "wb") -> None:
     dirname = os.path.dirname(filepath) or "."
     os.makedirs(dirname, exist_ok=True)
@@ -77,77 +71,6 @@ def _do_refresh(c: client.Config, host_keys_dir: str, ca_pub_path: str) -> None:
     _write_file_atomic(ca_pub_path, ca_pubkey, mode="w")
 
 
-# Adds `provablyfine` to an /etc/nsswitch.conf database line, *last* on the line so
-# that every pre-existing source (files, systemd, sssd, ldap, ...) is consulted
-# first. The module answers to any name, so listing it earlier would shadow real
-# accounts coming from those directories (nsswitch defaults to SUCCESS=return).
-# PF_NSSWITCH_CONF exists so unit tests can exercise this against a scratch file.
-#
-# The appended token is tagged with a trailing `# pf-nss` comment (nsswitch.conf
-# treats '#' as a comment to end of line) so host-uninit can tell a pf-added
-# `provablyfine` apart from one an admin had configured before pf ever ran, and
-# only strip the former.
-_PF_NSS_MARKER = "pf-nss"
-
-_PATCH_NSSWITCH_SH = f"""\
-_patch_nsswitch() {{
-  _db="$1"
-  _conf="${{PF_NSSWITCH_CONF:-/etc/nsswitch.conf}}"
-  if grep -qE "^$_db:.*provablyfine" "$_conf"; then
-    return 0
-  fi
-  if ! grep -qE "^$_db:" "$_conf"; then
-    echo "no '$_db:' line in $_conf; cannot enable pf NSS module" >&2
-    exit 1
-  fi
-  sed -i "/^$_db:/ s|[[:space:]]*$| provablyfine  # {_PF_NSS_MARKER}|" "$_conf"
-}}
-"""
-
-
-def _nss_init_fragment(nss_so_path: str, unix_min_uid: str, unix_min_gid: str) -> str:
-    # unix_min_uid/unix_min_gid are shell expressions (e.g. "$_unix_min_uid"), substituted
-    # by the shell at script-execution time, hence the unquoted heredoc delimiter below.
-    return f"""\
-
-# pf NSS: install bundled NSS module and configure Unix account synthesis
-_multiarch=$(dpkg-architecture -qDEB_HOST_MULTIARCH 2>/dev/null || echo x86_64-linux-gnu)
-install -m 755 '{nss_so_path}' "/usr/lib/$_multiarch/libnss_provablyfine.so.2"
-ldconfig
-cat > /etc/pf-nss.conf << PFEOF
-unix_min_uid={unix_min_uid}
-unix_min_gid={unix_min_gid}
-PFEOF
-chmod 644 /etc/pf-nss.conf
-{_PATCH_NSSWITCH_SH}_patch_nsswitch passwd
-_patch_nsswitch group
-_patch_nsswitch shadow
-if [ -f /etc/pam.d/sshd ] && ! grep -q pam_mkhomedir /etc/pam.d/sshd; then
-  cat >> /etc/pam.d/sshd << 'PFEOF'
-# BEGIN {_PF_NSS_MARKER}
-session required pam_mkhomedir.so skel=/etc/skel umask=0077
-# END {_PF_NSS_MARKER}
-PFEOF
-fi
-"""
-
-
-# Only reverts config marked with the `pf-nss` tag written by _nss_init_fragment
-# above, so pre-existing admin config (a pam_mkhomedir line, or an nsswitch db
-# that already listed provablyfine before pf ran) is left untouched.
-_NSS_UNINIT_FRAGMENT = f"""\
-rm -f /etc/pf-nss.conf
-sed -i -E '/^[a-z]+:.*# {_PF_NSS_MARKER}$/ {{
-  s/[[:space:]]*provablyfine//
-  s/[[:space:]]*# {_PF_NSS_MARKER}$//
-}}' /etc/nsswitch.conf
-sed -i "/# BEGIN {_PF_NSS_MARKER}/,/# END {_PF_NSS_MARKER}/d" /etc/pam.d/sshd 2>/dev/null || true
-_multiarch=$(dpkg-architecture -qDEB_HOST_MULTIARCH 2>/dev/null || echo x86_64-linux-gnu)
-rm -f "/usr/lib/$_multiarch/libnss_provablyfine.so.2"
-ldconfig
-"""
-
-
 def _print_init_script(
     invitation: str,
     directory_url: str,
@@ -157,7 +80,6 @@ def _print_init_script(
     auth_user: str,
 ) -> None:
     sshd_drop_in_dir = os.path.dirname(sshd_config_drop_in)
-    nss_so_path = _bundled_nss_so_path()
     config_json = json.dumps(
         {
             "directory_url": directory_url,
@@ -280,18 +202,6 @@ esac
 PFEOF
   chmod 755 /etc/NetworkManager/dispatcher.d/pf-host-refresh
 fi
-
-# Fetch this tenant's unix_mode/min_unix_uid/min_unix_gid from the server and only
-# install NSS Unix account synthesis when the tenant is actually in standalone mode.
-_nss_cfg=$(systemd-run --pipe --wait --property=LoadCredentialEncrypted=account:/var/lib/pf/account.cred \\
-  $_pf_bin openssh nss-config --config=/var/lib/pf/config.json)
-set -- $_nss_cfg
-_unix_mode=$1
-_unix_min_uid=$2
-_unix_min_gid=$3
-if [ "$_unix_mode" = "standalone" ]; then
-{_nss_init_fragment(nss_so_path, "$_unix_min_uid", "$_unix_min_gid")}
-fi
 """)
 
 
@@ -333,10 +243,6 @@ def host_uninit_function(args: argparse.Namespace) -> None:
         "if systemctl is-active sshd; then",
         "  systemctl reload sshd",
         "fi",
-        "",
-        "if [ -f /etc/pf-nss.conf ]; then",
-        *(f"  {line}" for line in _NSS_UNINIT_FRAGMENT.splitlines()),
-        "fi",
     ]
     sys.stdout.write("\n".join(lines) + "\n")
 
@@ -349,12 +255,3 @@ def host_refresh_function(args: argparse.Namespace) -> None:
     _do_refresh(c, args.host_keys_dir, args.ca_pub_path)
     if not args.no_sshd_reload:
         subprocess.run(["/usr/bin/systemctl", "reload", "sshd"], check=True, capture_output=True)
-
-
-def nss_config_function(args: argparse.Namespace) -> None:
-    """Print this tenant's unix_mode/min_unix_uid/min_unix_gid as "<mode> <uid> <gid>"."""
-    c = client.configuration.Config.load(args.config)
-    factory = client.Factory(c)
-    login.ensure_session(c, factory)
-    config = factory.session().get_tenant_unix_config()
-    print(f"{config.unix_mode} {config.min_unix_uid} {config.min_unix_gid}")

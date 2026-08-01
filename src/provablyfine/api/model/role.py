@@ -5,13 +5,7 @@ import typing
 
 from .. import app_db
 from ..context import ctx
-from . import audit_log, grant, identity, utils
-
-_SELF_GRANT_TYPES = (grant.SSHShellGrant, grant.SSHPortForwardingGrant, grant.SSHCommandGrant)
-
-
-def _grant_list_has_self(grant_list: typing.Sequence[grant.Grant]) -> bool:
-    return any(isinstance(g, _SELF_GRANT_TYPES) and "{self}" in g.permission.username_list for g in grant_list)
+from . import audit_log, grant, utils
 
 
 @dataclasses.dataclass(frozen=True)
@@ -112,17 +106,3 @@ def update(
             id=id,
             deleted_member_id_list=deleted_member_id_list,
         )
-
-    if ctx.tenant_unix_mode == "standalone":
-        if grant_list is not None:
-            effective_grant_list = grant_list
-        else:
-            role_row = ctx.app_db.role.read_one(id=id)
-            assert role_row is not None
-            effective_grant_list = [grant.deserialize(g) for g in role_row.grant_list]
-        if _grant_list_has_self(effective_grant_list):
-            member_ids = [m.identity_id for m in ctx.app_db.role_member.read_all(role_id=id)]
-            for member_id in member_ids:
-                member = identity.read_one(id=member_id)
-                if member is not None and member.unix_username is None:
-                    identity.assign_standalone_unix_username(member_id)
