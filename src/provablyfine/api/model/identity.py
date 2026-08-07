@@ -30,6 +30,16 @@ def create(name: str, boundary_id_list: list[int], tag_id_list: list[int]) -> in
     return identity_id
 
 
+def delete(id: int) -> None:
+    ctx.app_db.identity_boundary.delete(identity_id=id)
+    ctx.app_db.identity_tag.delete(identity_id=id)
+    ctx.app_db.identity_account_key.delete(identity_id=id)
+    ctx.app_db.identity_session_key.delete(identity_id=id)
+    ctx.app_db.identity_invitation_key.delete(identity_id=id)
+    ctx.app_db.role_member.delete(identity_id=id)
+    ctx.app_db.identity.delete(id=id)
+
+
 def read_one(**kwargs: typing.Any) -> Identity | None:
     identities = read_all(**kwargs)
     if len(identities) == 0:

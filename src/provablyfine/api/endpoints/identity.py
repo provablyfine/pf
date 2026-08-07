@@ -203,8 +203,7 @@ def delete_endpoint(identity_id: int) -> fastapi.responses.Response:
             responses.problem_response(status_code=403, title="Not allowed to delete identity")
         )
 
-    ctx.app_db.identity.delete(id=identity.id)
-    # XXX: delete all rows in other tables that reference this
+    model.identity.delete(id=identity.id)
     return _204
 
 
