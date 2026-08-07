@@ -23,17 +23,20 @@ def _identity_uniqueness_conflict(
     # sqlite reports which column violated its UNIQUE constraint in the
     # underlying driver error (e.g. "UNIQUE constraint failed: identity.unix_username"),
     # so we can tell the two apart instead of returning one generic message.
-    if "identity.unix_username" in str(exc.orig):
+    orig = str(exc.orig)
+    if "identity.unix_username" in orig:
         return responses.ProblemHTTPException(
             responses.problem_response(
                 status_code=400, title='Identity already exists. "unix_username" must be unique.', detail=unix_username
             )
         )
-    return responses.ProblemHTTPException(
-        responses.problem_response(
-            status_code=400, title='Identity already exists. "name" must be unique.', detail=name
+    if "identity.name" in orig:
+        return responses.ProblemHTTPException(
+            responses.problem_response(
+                status_code=400, title='Identity already exists. "name" must be unique.', detail=name
+            )
         )
-    )
+    raise exc
 
 
 @router.get("", status_code=200, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
