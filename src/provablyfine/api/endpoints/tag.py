@@ -60,6 +60,7 @@ def delete_endpoint(tag_id: int) -> fastapi.responses.Response:
             responses.problem_response(status_code=403, title="Not allowed to delete tag")
         )
 
+    # XXX: delete all rows in other tables that reference this
     model.audit_log.create("tag-delete", id=tag_id, name=tag.name, value=tag.value)
     ctx.app_db.tag.delete(id=tag_id)
     return _204
