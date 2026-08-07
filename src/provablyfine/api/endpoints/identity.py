@@ -135,7 +135,14 @@ def _read_tag_ids(tag_id_list: list[int], tag_name_value_list: list[schemas.tag.
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=400, title="Request contains invalid fields")
         )
-    return id_list + tag_id_list
+
+    all_ids = id_list + tag_id_list
+    if len(set(all_ids)) != len(all_ids):
+        logger.info(f"Some tags are specified twice: tag_ids={all_ids}")
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=400, title="Request contains invalid fields")
+        )
+    return all_ids
 
 
 @router.post("", status_code=201, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
