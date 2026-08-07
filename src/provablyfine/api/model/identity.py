@@ -38,6 +38,7 @@ def delete(id: int) -> None:
     ctx.app_db.identity_invitation_key.delete(identity_id=id)
     ctx.app_db.role_member.delete(identity_id=id)
     ctx.app_db.identity.delete(id=id)
+    audit_log.create("identity-delete", id=id)
 
 
 def read_one(**kwargs: typing.Any) -> Identity | None:
