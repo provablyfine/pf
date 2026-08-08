@@ -164,7 +164,7 @@ def new_grant(grant_type: str) -> pfc.schemas.Grant:
                 ),
             )
         case "ssh":
-            # Pre-selecting a shell is an editing-surface default, visible
+            # Preselecting a shell is an editing-surface default, visible
             # before saving, not a schema default.
             return pfc.schemas.SSHGrant(
                 type="ssh",
