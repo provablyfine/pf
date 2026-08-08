@@ -47,6 +47,10 @@ def test_tenant_migration_upcasts_ssh_grants(tmp_path: pathlib.Path) -> None:
     role_grants = [
         tag_grant,
         _legacy("ssh-shell", {"username_list": ["root"], "permit_agent_forwarding": True}),
+        # Both forwarding bools, and the shape where they are absent entirely
+        # (they were schema defaults, so old rows may omit them).
+        _legacy("ssh-shell", {"username_list": ["alice"], "permit_x11_forwarding": True}),
+        _legacy("ssh-shell", {"username_list": ["bob"]}),
         _legacy("ssh-port-forwarding", {"username_list": ["root"]}),
         _legacy("ssh-command", {"username_list": ["root"], "command_list": ["/bin/ls"]}),
         # Denotes no atoms at all: the migration drops it.
@@ -87,15 +91,17 @@ def test_tenant_migration_upcasts_ssh_grants(tmp_path: pathlib.Path) -> None:
         ).scalar_one()
 
     # The no-atom ssh-command entry is gone; the non-SSH grant is untouched.
-    assert [g["type"] for g in grant_list] == ["tag", "ssh", "ssh", "ssh"]
+    assert [g["type"] for g in grant_list] == ["tag", "ssh", "ssh", "ssh", "ssh", "ssh"]
     assert grant_list[0] == tag_grant
     assert grant_list[1]["permission"] == {
         "username_list": ["root"],
         "capability_list": ["shell", "pty", "user-rc", "agent-forwarding"],
         "command_list": [],
     }
-    assert grant_list[2]["permission"]["capability_list"] == ["port-forwarding"]
-    assert grant_list[3]["permission"] == {
+    assert grant_list[2]["permission"]["capability_list"] == ["shell", "pty", "user-rc", "x11-forwarding"]
+    assert grant_list[3]["permission"]["capability_list"] == ["shell", "pty", "user-rc"]
+    assert grant_list[4]["permission"]["capability_list"] == ["port-forwarding"]
+    assert grant_list[5]["permission"] == {
         "username_list": ["root"],
         "capability_list": [],
         "command_list": ["/bin/ls"],

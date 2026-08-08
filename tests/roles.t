@@ -75,7 +75,7 @@ Create a new role
   >       - name: env
   >         value: dev
   >     invite_list: ["email"]
-  > - type: ssh-shell
+  > - type: ssh
   >   filter:
   >     name: null
   >     tag_list:
@@ -84,8 +84,8 @@ Create a new role
   >     boundary_list: null
   >   permission:
   >     username_list: ["root"]
-  >     permit_agent_forwarding: false
-  >     permit_x11_forwarding: false
+  >     capability_list: ["shell", "pty", "user-rc"]
+  >     command_list: []
   > EOF
 
 Add first member to developer role
@@ -107,9 +107,9 @@ Removing a grant from the active role should fail
   Not allowed to remove grants from the active session role
   [2]
 
-An "ssh" grant round-trips through the wire schema. Nothing evaluates it yet:
-this asserts storage and display only. Note how null renders as "*" (the whole
-axis) and an empty list as "!" (explicitly nothing).
+An "ssh" grant round-trips through the wire schema. This asserts storage and
+display only; evaluation is covered by ssh.t. Note how null renders as "*"
+(the whole axis) and an empty list as "!" (explicitly nothing).
   $ pfa -c config.json role create -n ssh-new
   $ SSH_ROLE_ID=$(pfa -c config.json role list -n ssh-new -q)
   $ pfa -c config.json role grant -i $SSH_ROLE_ID --set <<EOF
@@ -182,9 +182,8 @@ axis) and an empty list as "!" (explicitly nothing).
   $ pfa -c config.json grant ssh --username root --capability nonsense 2>&1 | tail -1
   pfa grant ssh: error: argument --capability: invalid choice: * (glob)
 
-Legacy grant types are no longer produced by the CLI, but are still accepted on
-the wire for older clients. They are normalized to "ssh" on the way in, so an
-old client cannot reintroduce a legacy row.
+The legacy grant types are gone: an old client's request is now rejected
+outright rather than silently accepted.
   $ pfa -c config.json role create -n legacy
   $ LEGACY_ROLE_ID=$(pfa -c config.json role list -n legacy -q)
   $ pfa -c config.json role grant -i $LEGACY_ROLE_ID --set <<EOF
@@ -198,10 +197,8 @@ old client cannot reintroduce a legacy row.
   >     permit_agent_forwarding: false
   >     permit_x11_forwarding: true
   > EOF
-  $ pfa -c config.json role read -i $LEGACY_ROLE_ID | grep -A 2 'type:'
-  grant        type:       ssh
-               filter:     tag_list:env=dev
-               permission: username_list:root capability_list:shell,pty,user-rc,x11-forwarding command_list:!
+  Request invalid. Input tag 'ssh-shell' found using 'type' does not match any of the expected tags: * (glob)
+  [2]
 
 An "ssh" permission denoting the empty atom set is rejected
   $ pfa -c config.json role grant -i $SSH_ROLE_ID --set <<EOF

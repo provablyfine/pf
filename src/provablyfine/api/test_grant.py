@@ -121,25 +121,6 @@ def _identity_create(tag_id_list: list[int] | None, boundary_id_list: list[int] 
     )
 
 
-def _ssh_shell(usernames: list[str]):
-    return {
-        "username_list": usernames,
-        "permit_agent_forwarding": False,
-        "permit_x11_forwarding": False,
-    }
-
-
-def _ssh_port_forwarding(usernames: list[str]):
-    return {"username_list": usernames}
-
-
-def _ssh_command(usernames: list[str], command_list: list[str]):
-    return {"username_list": usernames, "command_list": command_list}
-
-
-######## TAG ########
-
-
 def test_empty_tag():
     grants = grant.Grants([], [])
     assert not grants.tag(None).can_create()
@@ -743,61 +724,6 @@ def test_audit_log_with_denied():
 
 ######## SSH ########
 
-
-def test_empty_ssh():
-    grants = grant.Grants([], [])
-
-    assert grants.ssh_shell(1, [], []).can("hello", "unix_hello") is None
-    assert not grants.ssh_port_forward(1, [], []).can("hello", "unix_hello")
-    assert not grants.ssh_command(1, [], []).can("hello", "ls", "unix_hello")
-
-
-def test_ssh_shell():
-    grants = single_grants(
-        {
-            "type": "ssh-shell",
-            "filter": {"id": None, "tag_id_list": None, "boundary_id_list": None},
-            "permission": _ssh_shell(["alice", "bob"]),
-        }
-    )
-
-    assert grants.ssh_shell(1, [], []).can("hello", "unix_hello") is None
-    assert grants.ssh_shell(1, [], []).can("alice", "unix_alice") is not None
-    assert grants.ssh_shell(1, [], []).can("bob", "unix_bob") is not None
-    assert not grants.ssh_port_forward(1, [], []).can("alice", "unix_alice")
-
-
-def test_ssh_port_forwarding():
-    grants = single_grants(
-        {
-            "type": "ssh-port-forwarding",
-            "filter": {"id": None, "tag_id_list": None, "boundary_id_list": None},
-            "permission": _ssh_port_forwarding(["alice"]),
-        }
-    )
-
-    assert grants.ssh_port_forward(1, [], []).can("alice", "alice")
-    assert not grants.ssh_port_forward(1, [], []).can("bob", "bob")
-    assert grants.ssh_shell(1, [], []).can("alice", "alice") is None
-
-
-def test_ssh_command():
-    grants = single_grants(
-        {
-            "type": "ssh-command",
-            "filter": {"id": None, "tag_id_list": None, "boundary_id_list": None},
-            "permission": _ssh_command(["alice"], ["git-upload-pack /repo"]),
-        }
-    )
-
-    assert grants.ssh_command(1, [], []).can("alice", "git-upload-pack /repo", "alice")
-    assert not grants.ssh_command(1, [], []).can("alice", "rm -rf /", "alice")
-    assert not grants.ssh_command(1, [], []).can("bob", "git-upload-pack /repo", "bob")
-    assert grants.ssh_shell(1, [], []).can("alice", "alice") is None
-
-
-######## SSH (set-algebraic) ########
-
 CAP = model.grant.SSHCapability
 ANY_FILTER = {"id": None, "tag_id_list": None, "boundary_id_list": None}
 
@@ -968,43 +894,6 @@ def test_ssh_decide_order_independent():
         assert decision.permits_command(command) == other.permits_command(command)
     assert decision.permits_command("ls")
     assert not decision.permits_command("df")
-
-
-def test_ssh_decide_upcasts_legacy_grants():
-    legacy_shell = {"type": "ssh-shell", "filter": ANY_FILTER, "permission": _ssh_shell(["alice"])}
-
-    # Legacy role grant, new-form ceiling.
-    grants = grant.Grants([boundary([_ssh(capabilities=["shell"], commands=[])], [])], [role([legacy_shell])])
-    assert _decide(grants).capabilities == {CAP.SHELL}
-
-    # New-form role grant, legacy deny.
-    grants = grant.Grants([_deny_boundary([legacy_shell])], [role([_ssh()])])
-    decision = _decide(grants)
-    assert CAP.SHELL not in decision.capabilities
-    assert CAP.PORT_FORWARDING in decision.capabilities
-
-
-def test_ssh_decide_legacy_shell_and_port_forward_union():
-    # Known widening from merging the three types: the shell session of a
-    # caller who also holds a port-forwarding grant now carries
-    # PORT_FORWARDING, which legacy shell issuance hardcoded to False.
-    grants = grant.Grants(
-        [],
-        [
-            role(
-                [
-                    {"type": "ssh-shell", "filter": ANY_FILTER, "permission": _ssh_shell(["alice"])},
-                    {
-                        "type": "ssh-port-forwarding",
-                        "filter": ANY_FILTER,
-                        "permission": _ssh_port_forwarding(["alice"]),
-                    },
-                ]
-            )
-        ],
-    )
-
-    assert _decide(grants).capabilities == {CAP.SHELL, CAP.PTY, CAP.USER_RC, CAP.PORT_FORWARDING}
 
 
 def test_ssh_candidate_usernames():

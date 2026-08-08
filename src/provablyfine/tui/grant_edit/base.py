@@ -179,28 +179,6 @@ def new_grant(grant_type: str) -> pfc.schemas.Grant:
                     command_list=[],
                 ),
             )
-        case "ssh-shell":
-            return pfc.schemas.SSHShellGrant(
-                type="ssh-shell",
-                filter=pfc.schemas.TripletFilter(name=None, tag_list=None, boundary_list=None),
-                permission=pfc.schemas.SSHShellPermission(
-                    username_list=[],
-                    permit_agent_forwarding=False,
-                    permit_x11_forwarding=False,
-                ),
-            )
-        case "ssh-port-forwarding":
-            return pfc.schemas.SSHPortForwardingGrant(
-                type="ssh-port-forwarding",
-                filter=pfc.schemas.TripletFilter(name=None, tag_list=None, boundary_list=None),
-                permission=pfc.schemas.SSHPortForwardingPermission(username_list=[]),
-            )
-        case "ssh-command":
-            return pfc.schemas.SSHCommandGrant(
-                type="ssh-command",
-                filter=pfc.schemas.TripletFilter(name=None, tag_list=None, boundary_list=None),
-                permission=pfc.schemas.SSHCommandPermission(username_list=[], command_list=[]),
-            )
         case _:
             return pfc.schemas.InvalidGrant(type="invalid")
 

@@ -168,9 +168,9 @@ def _identity_function(args: argparse.Namespace) -> None:
 
 
 def _ssh_function(args: argparse.Namespace) -> None:
-    # The schema permits an empty list on any axis, so that upcast stays total
-    # over legacy rows. An authoring surface should still refuse to write a
-    # grant that covers nothing.
+    # The schema tolerates an empty username_list, because migrated rows may
+    # carry one. An authoring surface should still refuse to write a grant
+    # that covers nothing.
     username_list = _all_or(args.username_all, args.username)
     capability_list = _all_or(args.capability_all, args.capability)
     command_list = _all_or(args.cmd_all, args.cmd)

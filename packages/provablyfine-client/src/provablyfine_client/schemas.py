@@ -392,38 +392,6 @@ class IdentityPermission(_Base):
         return " ".join(output)
 
 
-class SSHShellPermission(_Base):
-    username_list: list[str]
-    permit_agent_forwarding: bool = False
-    permit_x11_forwarding: bool = False
-
-    def to_text(self) -> str:
-        output = (
-            _permission_list(self.username_list, "username_list", lambda i: str(i))
-            + _bool(self.permit_agent_forwarding, "permit_agent_forwarding")
-            + _bool(self.permit_x11_forwarding, "permit_x11_forwarding")
-        )
-        return " ".join(output)
-
-
-class SSHPortForwardingPermission(_Base):
-    username_list: list[str]
-
-    def to_text(self) -> str:
-        output = _permission_list(self.username_list, "username_list", lambda i: str(i))
-        return " ".join(output)
-
-
-class SSHCommandPermission(_Base):
-    username_list: list[str]
-    command_list: list[str]
-
-    def to_text(self) -> str:
-        output = _permission_list(self.username_list, "username_list", lambda i: str(i))
-        output += _permission_list(self.command_list, "command_list", lambda i: str(i))
-        return " ".join(output)
-
-
 # Mirrors provablyfine.api.schemas.grant.SSHCapability.
 class SSHCapability(enum.StrEnum):
     SHELL = "shell"
@@ -569,33 +537,6 @@ class IdentityGrant(_Base):
         return GrantText("identity", self.filter.to_text(), self.permission.to_text())
 
 
-class SSHShellGrant(_Base):
-    type: typing.Literal["ssh-shell"] = "ssh-shell"
-    filter: TripletFilter
-    permission: SSHShellPermission
-
-    def to_text(self) -> GrantText:
-        return GrantText("ssh-shell", self.filter.to_text(), self.permission.to_text())
-
-
-class SSHPortForwardingGrant(_Base):
-    type: typing.Literal["ssh-port-forwarding"] = "ssh-port-forwarding"
-    filter: TripletFilter
-    permission: SSHPortForwardingPermission
-
-    def to_text(self) -> GrantText:
-        return GrantText("ssh-port-forwarding", self.filter.to_text(), self.permission.to_text())
-
-
-class SSHCommandGrant(_Base):
-    type: typing.Literal["ssh-command"] = "ssh-command"
-    filter: TripletFilter
-    permission: SSHCommandPermission
-
-    def to_text(self) -> GrantText:
-        return GrantText("ssh-command", self.filter.to_text(), self.permission.to_text())
-
-
 class SSHGrant(_Base):
     type: typing.Literal["ssh"] = "ssh"
     filter: TripletFilter
@@ -666,9 +607,6 @@ Grant = typing.Annotated[
     | BoundaryGrant
     | RoleGrant
     | IdentityGrant
-    | SSHShellGrant
-    | SSHPortForwardingGrant
-    | SSHCommandGrant
     | SSHGrant
     | TenantGrant
     | AuthGrant

@@ -103,39 +103,6 @@ class IdentityGrant(base.APIBase):
     permission: IdentityPermission
 
 
-class SSHShellPermission(base.APIBase):
-    username_list: list[str]
-    permit_agent_forwarding: bool = False
-    permit_x11_forwarding: bool = False
-
-
-class SSHShellGrant(base.APIBase):
-    type: typing.Literal["ssh-shell"] = "ssh-shell"
-    filter: TripletFilter
-    permission: SSHShellPermission
-
-
-class SSHPortForwardingPermission(base.APIBase):
-    username_list: list[str]
-
-
-class SSHPortForwardingGrant(base.APIBase):
-    type: typing.Literal["ssh-port-forwarding"] = "ssh-port-forwarding"
-    filter: TripletFilter
-    permission: SSHPortForwardingPermission
-
-
-class SSHCommandPermission(base.APIBase):
-    username_list: list[str]
-    command_list: list[str]
-
-
-class SSHCommandGrant(base.APIBase):
-    type: typing.Literal["ssh-command"] = "ssh-command"
-    filter: TripletFilter
-    permission: SSHCommandPermission
-
-
 # Mirrors model.grant.SSHCapability. Duplicated rather than imported: schemas
 # must not depend on the model layer.
 class SSHCapability(enum.StrEnum):
@@ -253,9 +220,6 @@ Grant = typing.Annotated[
     | TagGrant
     | RoleGrant
     | IdentityGrant
-    | SSHShellGrant
-    | SSHPortForwardingGrant
-    | SSHCommandGrant
     | SSHGrant
     | TenantGrant
     | AuthGrant

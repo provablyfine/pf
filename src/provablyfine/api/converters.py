@@ -246,15 +246,6 @@ def _grant_to_schema(converter: GrantConverter, grant: model.grant.Grant) -> sch
                 invite_list=grant.permission.invite_list,
             )
             g = schemas.grant.IdentityGrant(filter=filter, permission=permission)
-        case "ssh-shell" | "ssh-port-forwarding" | "ssh-command":
-            # Legacy rows are presented in new form. The data migration rewrites
-            # them, so this only covers a row written before it ran; a grant
-            # denoting no atoms at all has no new-form spelling and surfaces as
-            # an invalid grant.
-            upcast = model.grant.upcast(grant)
-            if upcast is None:
-                raise ValueError("legacy ssh grant denotes no permission")
-            return _grant_to_schema(converter, upcast)
         case "ssh":
             filter = schemas.grant.TripletFilter(
                 name=converter.to_identity(grant.filter.id),
@@ -321,15 +312,6 @@ def _grant_to_schema(converter: GrantConverter, grant: model.grant.Grant) -> sch
         case _:
             assert False
     return g
-
-
-def _upcast_or_reject(
-    g: model.grant.SSHShellGrant | model.grant.SSHPortForwardingGrant | model.grant.SSHCommandGrant,
-) -> model.grant.SSHGrant:
-    upcast = model.grant.upcast(g)
-    if upcast is None:
-        raise ValueError("legacy ssh grant denotes no permission")
-    return upcast
 
 
 def grant_from_schema(converter: GrantConverter, grant: schemas.grant.Grant) -> model.grant.Grant:
@@ -415,43 +397,6 @@ def _grant_from_schema(converter: GrantConverter, grant: schemas.grant.Grant) ->
                 invite_list=grant.permission.invite_list,
             )
             g = model.grant.IdentityGrant(filter=filter, permission=permission)
-        case "ssh-shell":
-            filter = model.grant.TripletFilter(
-                id=converter.from_identity(grant.filter.name),
-                tag_id_list=converter.from_tag_list(grant.filter.tag_list),
-                boundary_id_list=converter.from_boundary_list(grant.filter.boundary_list),
-            )
-            permission = model.grant.SSHShellPermission(
-                username_list=grant.permission.username_list,
-                permit_agent_forwarding=grant.permission.permit_agent_forwarding,
-                permit_x11_forwarding=grant.permission.permit_x11_forwarding,
-            )
-            # Accepted for a deprecation window, because older clients still
-            # send it, but normalized on the way in so a legacy write cannot
-            # reintroduce a legacy row after the data migration.
-            legacy = model.grant.SSHShellGrant(filter=filter, permission=permission)
-            g = _upcast_or_reject(legacy)
-        case "ssh-port-forwarding":
-            filter = model.grant.TripletFilter(
-                id=converter.from_identity(grant.filter.name),
-                tag_id_list=converter.from_tag_list(grant.filter.tag_list),
-                boundary_id_list=converter.from_boundary_list(grant.filter.boundary_list),
-            )
-            permission = model.grant.SSHPortForwardingPermission(
-                username_list=grant.permission.username_list,
-            )
-            g = _upcast_or_reject(model.grant.SSHPortForwardingGrant(filter=filter, permission=permission))
-        case "ssh-command":
-            filter = model.grant.TripletFilter(
-                id=converter.from_identity(grant.filter.name),
-                tag_id_list=converter.from_tag_list(grant.filter.tag_list),
-                boundary_id_list=converter.from_boundary_list(grant.filter.boundary_list),
-            )
-            permission = model.grant.SSHCommandPermission(
-                username_list=grant.permission.username_list,
-                command_list=grant.permission.command_list,
-            )
-            g = _upcast_or_reject(model.grant.SSHCommandGrant(filter=filter, permission=permission))
         case "ssh":
             filter = model.grant.TripletFilter(
                 id=converter.from_identity(grant.filter.name),

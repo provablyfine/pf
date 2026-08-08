@@ -343,97 +343,6 @@ def resolve_username(entry: str, unix_username: str | None) -> str | None:
     return entry
 
 
-# The three checkers below are dead: every SSH endpoint now goes through
-# SSHChecker, which evaluates legacy grants by upcasting them. They are kept
-# only until the legacy grant types themselves are removed.
-class SSHShellChecker:
-    def __init__(
-        self,
-        boundaries: list[model.boundary.Boundary],
-        roles: list[model.role.Role],
-        identity_id: int,
-        tag_id_list: list[int],
-        boundary_id_list: list[int],
-    ):
-        self._checker = IdentityFilterChecker[model.grant.SSHShellGrant](
-            boundaries, roles, identity_id, tag_id_list, boundary_id_list, model.grant.SSHShellGrant
-        )
-
-    def can(self, username: str, unix_username: str | None) -> model.grant.SSHShellPermission | None:
-        def check(g: model.grant.SSHShellGrant) -> bool:
-            resolved = [r for e in g.permission.username_list if (r := resolve_username(e, unix_username)) is not None]
-            return username in resolved
-
-        matching = [g for g in self._checker.list_can(check)]
-        if not matching:
-            return None
-        return model.grant.SSHShellPermission(
-            username_list=[username],
-            permit_agent_forwarding=any(g.permission.permit_agent_forwarding for g in matching),
-            permit_x11_forwarding=any(g.permission.permit_x11_forwarding for g in matching),
-        )
-
-    def list_can(self) -> list[model.grant.SSHShellGrant]:
-        def check(g: model.grant.SSHShellGrant) -> bool:
-            return True
-
-        return [g for g in self._checker.list_can(check)]
-
-
-class SSHPortForwardChecker:
-    def __init__(
-        self,
-        boundaries: list[model.boundary.Boundary],
-        roles: list[model.role.Role],
-        identity_id: int,
-        tag_id_list: list[int],
-        boundary_id_list: list[int],
-    ):
-        self._checker = IdentityFilterChecker[model.grant.SSHPortForwardingGrant](
-            boundaries, roles, identity_id, tag_id_list, boundary_id_list, model.grant.SSHPortForwardingGrant
-        )
-
-    def can(self, username: str, unix_username: str | None) -> bool:
-        def check(g: model.grant.SSHPortForwardingGrant) -> bool:
-            resolved = [r for e in g.permission.username_list if (r := resolve_username(e, unix_username)) is not None]
-            return username in resolved
-
-        return self._checker.can(check)
-
-    def list_can(self) -> list[model.grant.SSHPortForwardingGrant]:
-        def check(g: model.grant.SSHPortForwardingGrant) -> bool:
-            return True
-
-        return self._checker.list_can(check)
-
-
-class SSHCommandChecker:
-    def __init__(
-        self,
-        boundaries: list[model.boundary.Boundary],
-        roles: list[model.role.Role],
-        identity_id: int,
-        tag_id_list: list[int],
-        boundary_id_list: list[int],
-    ):
-        self._checker = IdentityFilterChecker[model.grant.SSHCommandGrant](
-            boundaries, roles, identity_id, tag_id_list, boundary_id_list, model.grant.SSHCommandGrant
-        )
-
-    def can(self, username: str, command: str, unix_username: str | None) -> bool:
-        def check(g: model.grant.SSHCommandGrant) -> bool:
-            resolved = [r for e in g.permission.username_list if (r := resolve_username(e, unix_username)) is not None]
-            return username in resolved and command in g.permission.command_list
-
-        return self._checker.can(check)
-
-    def list_can(self) -> list[model.grant.SSHCommandGrant]:
-        def check(g: model.grant.SSHCommandGrant) -> bool:
-            return True
-
-        return self._checker.list_can(check)
-
-
 _ALL_SSH_CAPABILITIES = frozenset(model.grant.SSHCapability)
 
 # None denotes the whole command axis (any command). Ordered rather than a set:
@@ -442,22 +351,7 @@ type _CommandSet = tuple[str, ...] | None
 
 
 def _ssh_grants(grant_list: list[model.grant.Grant]) -> list[model.grant.SSHGrant]:
-    """New-form grants plus the legacy SSH grants upcast to new form.
-
-    Upcasting at evaluation time keeps a single evaluation path: a boundary
-    expressed in one type family constrains grants expressed in the other.
-    """
-    output: list[model.grant.SSHGrant] = []
-    for g in grant_list:
-        match g:
-            case model.grant.SSHGrant():
-                output.append(g)
-            case model.grant.SSHShellGrant() | model.grant.SSHPortForwardingGrant() | model.grant.SSHCommandGrant():
-                if (upcast := model.grant.upcast(g)) is not None:
-                    output.append(upcast)
-            case _:
-                pass
-    return output
+    return [g for g in grant_list if isinstance(g, model.grant.SSHGrant)]
 
 
 def _capabilities(p: model.grant.SSHPermission) -> frozenset[model.grant.SSHCapability]:
@@ -775,17 +669,6 @@ class Grants:
         boundary_id_list: list[int] | None = None,
     ) -> IdentityChecker:
         return IdentityChecker(self._boundaries, self._roles, identity_id, tag_id_list, boundary_id_list)
-
-    def ssh_shell(self, identity_id: int, tag_id_list: list[int], boundary_id_list: list[int]) -> SSHShellChecker:
-        return SSHShellChecker(self._boundaries, self._roles, identity_id, tag_id_list, boundary_id_list)
-
-    def ssh_port_forward(
-        self, identity_id: int, tag_id_list: list[int], boundary_id_list: list[int]
-    ) -> SSHPortForwardChecker:
-        return SSHPortForwardChecker(self._boundaries, self._roles, identity_id, tag_id_list, boundary_id_list)
-
-    def ssh_command(self, identity_id: int, tag_id_list: list[int], boundary_id_list: list[int]) -> SSHCommandChecker:
-        return SSHCommandChecker(self._boundaries, self._roles, identity_id, tag_id_list, boundary_id_list)
 
     def ssh(self, identity_id: int, tag_id_list: list[int], boundary_id_list: list[int]) -> SSHChecker:
         return SSHChecker(self._boundaries, self._roles, identity_id, tag_id_list, boundary_id_list)
