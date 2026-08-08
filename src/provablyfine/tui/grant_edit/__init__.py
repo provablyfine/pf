@@ -4,6 +4,7 @@ from .boundary import BoundaryGrantEditWidget
 from .identity import IdentityGrantEditWidget
 from .role import RoleGrantEditWidget
 from .screens import GrantEditScreen
+from .ssh import SshGrantEditWidget
 from .ssh_command import SshCommandGrantEditWidget
 from .ssh_port_forward import SshPortForwardingGrantEditWidget
 from .ssh_shell import SshShellGrantEditWidget
@@ -16,6 +17,7 @@ __all__ = [
     "IdentityGrantEditWidget",
     "RoleGrantEditWidget",
     "SshCommandGrantEditWidget",
+    "SshGrantEditWidget",
     "SshPortForwardingGrantEditWidget",
     "SshShellGrantEditWidget",
     "TagGrantEditWidget",

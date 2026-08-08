@@ -11,7 +11,9 @@ import textual.widgets
 
 from . import base, grant_edit, header
 
-GRANT_TYPES = ["identity", "tag", "role", "boundary", "tenant", "ssh-shell", "ssh-port-forwarding", "ssh-command"]
+# The legacy ssh-shell / ssh-port-forwarding / ssh-command types are still
+# editable if one is encountered, but are no longer offered for creation.
+GRANT_TYPES = ["identity", "tag", "role", "boundary", "tenant", "ssh"]
 
 
 class GrantTypeScreen(textual.screen.ModalScreen[str | None]):

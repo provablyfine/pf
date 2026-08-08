@@ -72,7 +72,7 @@ $ INVITATION_URL=$(pfa identity invite --manual -i $(pfa identity list -n demo -
 $ pfa role create -n users
 $ USERS_ROLE_ID=$(pfa role list -n users -q)
 # Grant ssh permissions to all hosts to the new role
-$ pfa grant ssh-shell --username root --tag id=device | pfa role grant -i $USERS_ROLE_ID --set
+$ pfa grant ssh --username root --capability shell pty user-rc --tag id=device | pfa role grant -i $USERS_ROLE_ID --set
 # Add ourselves to the role
 $ pfa role member -i $USERS_ROLE_ID -a $(pfa whoami)
 ```

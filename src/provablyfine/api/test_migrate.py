@@ -1,6 +1,8 @@
+import json
 import pathlib
 
 import alembic.autogenerate
+import alembic.command
 import alembic.runtime.migration
 import sqlalchemy
 
@@ -24,3 +26,80 @@ def test_tenant_migrations_match_model(tmp_path: pathlib.Path) -> None:
     url = f"sqlite:///{tmp_path / 'tenant.db'}"
     migrate.upgrade_tenant(url)
     assert _diffs(url, app_db.metadata) == []
+
+
+# The revision just before the ssh grant capability model.
+_BEFORE_SSH_GRANT = "3f1a92c8b4e5"
+
+_ANY_FILTER = {"id": None, "tag_id_list": None, "boundary_id_list": None}
+
+
+def _legacy(type: str, permission: dict[str, object]) -> dict[str, object]:
+    return {"type": type, "filter": _ANY_FILTER, "permission": permission}
+
+
+def test_tenant_migration_upcasts_ssh_grants(tmp_path: pathlib.Path) -> None:
+    url = f"sqlite:///{tmp_path / 'tenant.db'}"
+    config = migrate._alembic_config(schema="tenant", url=url)
+    alembic.command.upgrade(config, _BEFORE_SSH_GRANT)
+
+    tag_grant = {"type": "tag", "filter": {"id": None}, "permission": {"create": True, "read": True, "delete": True}}
+    role_grants = [
+        tag_grant,
+        _legacy("ssh-shell", {"username_list": ["root"], "permit_agent_forwarding": True}),
+        _legacy("ssh-port-forwarding", {"username_list": ["root"]}),
+        _legacy("ssh-command", {"username_list": ["root"], "command_list": ["/bin/ls"]}),
+        # Denotes no atoms at all: the migration drops it.
+        _legacy("ssh-command", {"username_list": ["root"], "command_list": []}),
+    ]
+    engine = sqlalchemy.create_engine(url)
+    with engine.begin() as connection:
+        connection.execute(
+            sqlalchemy.text("INSERT INTO role (id, name, description, grant_list) VALUES (1, 'r', '', :g)"),
+            {"g": json.dumps(role_grants)},
+        )
+        connection.execute(
+            sqlalchemy.text(
+                "INSERT INTO boundary (id, name, description, ceiling_list, denied_list) VALUES (1, 'b', '', :c, :d)"
+            ),
+            {
+                "c": json.dumps([_legacy("ssh-shell", {"username_list": ["root"]})]),
+                "d": json.dumps([_legacy("ssh-shell", {"username_list": ["alice"]})]),
+            },
+        )
+        # A boundary with no ceiling at all must keep its null.
+        connection.execute(
+            sqlalchemy.text(
+                "INSERT INTO boundary (id, name, description, ceiling_list, denied_list) VALUES (2, 'c', '', NULL, :d)"
+            ),
+            {"d": json.dumps([])},
+        )
+
+    migrate.upgrade_tenant(url)
+
+    with engine.connect() as connection:
+        grant_list = json.loads(connection.execute(sqlalchemy.text("SELECT grant_list FROM role")).scalar_one())
+        ceiling, denied = connection.execute(
+            sqlalchemy.text("SELECT ceiling_list, denied_list FROM boundary WHERE id = 1")
+        ).one()
+        empty_ceiling = connection.execute(
+            sqlalchemy.text("SELECT ceiling_list FROM boundary WHERE id = 2")
+        ).scalar_one()
+
+    # The no-atom ssh-command entry is gone; the non-SSH grant is untouched.
+    assert [g["type"] for g in grant_list] == ["tag", "ssh", "ssh", "ssh"]
+    assert grant_list[0] == tag_grant
+    assert grant_list[1]["permission"] == {
+        "username_list": ["root"],
+        "capability_list": ["shell", "pty", "user-rc", "agent-forwarding"],
+        "command_list": [],
+    }
+    assert grant_list[2]["permission"]["capability_list"] == ["port-forwarding"]
+    assert grant_list[3]["permission"] == {
+        "username_list": ["root"],
+        "capability_list": [],
+        "command_list": ["/bin/ls"],
+    }
+    assert [g["type"] for g in json.loads(ceiling)] == ["ssh"]
+    assert [g["type"] for g in json.loads(denied)] == ["ssh"]
+    assert empty_ceiling is None

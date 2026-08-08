@@ -7,8 +7,8 @@ Create admin objects
   $ DEVICE_TAG_ID=$(pfa -c config.json tag list -n id -v device -q)
   $ pfa -c config.json role create -n role
   $ ROLE_ID=$(pfa -c config.json role list -n role -q)
-  $ pfa -c config.json grant ssh-shell --tag id=device --username root | pfa -c config.json role grant -i $ROLE_ID --add
-  $ pfa -c config.json grant ssh-shell --tag id=device --username alice | pfa -c config.json role grant -i $ROLE_ID --add
+  $ pfa -c config.json grant ssh --tag id=device --username root --capability shell pty user-rc | pfa -c config.json role grant -i $ROLE_ID --add
+  $ pfa -c config.json grant ssh --tag id=device --username alice --capability shell pty user-rc | pfa -c config.json role grant -i $ROLE_ID --add
 
 Provision new host
   $ pfa -c config.json identity create -n host -t $DEVICE_TAG_ID
@@ -60,8 +60,8 @@ User lists hosts - shell only so far
   host    shell   alice
 
 Add port-forwarding and command grants
-  $ pfa -c config.json grant ssh-port --tag id=device --username root | pfa -c config.json role grant -i $ROLE_ID --add
-  $ pfa -c config.json grant ssh-command --tag id=device --username root --cmd /bin/df /bin/ls | pfa -c config.json role grant -i $ROLE_ID --add
+  $ pfa -c config.json grant ssh --tag id=device --username root --capability port-forwarding | pfa -c config.json role grant -i $ROLE_ID --add
+  $ pfa -c config.json grant ssh --tag id=device --username root --cmd /bin/df /bin/ls | pfa -c config.json role grant -i $ROLE_ID --add
 
 User lists hosts - all permission types
   $ pf -c user.json hosts
@@ -86,7 +86,7 @@ Remote port forwarding (-R) succeeds for root
   ok
 
 Add command-only grant for charlie
-  $ pfa -c config.json grant ssh-command --tag id=device --username charlie --cmd /bin/true | pfa -c config.json role grant -i $ROLE_ID --add
+  $ pfa -c config.json grant ssh --tag id=device --username charlie --cmd /bin/true | pfa -c config.json role grant -i $ROLE_ID --add
 
 Command fallback: charlie has command(/bin/true) but not shell — shell cert rejected, command cert accepted
   $ pf -c user.json ssh -n -o "Hostname=$SSHD_ADDRESS" -o "HostKeyAlias=host" -p $SSHD_PORT charlie@host "/bin/true"
@@ -97,7 +97,7 @@ Command fallback fails: /bin/ls not in charlie's allowed command list
   [2]
 
 Grant bob a shell with agent and X11 forwarding
-  $ pfa -c config.json grant ssh-shell --tag id=device --username bob --permit-agent-forwarding --permit-x11-forwarding | pfa -c config.json role grant -i $ROLE_ID --add
+  $ pfa -c config.json grant ssh --tag id=device --username bob --capability shell pty user-rc agent-forwarding x11-forwarding | pfa -c config.json role grant -i $ROLE_ID --add
 
 Forwarding capabilities reach the certificate
   $ pf -c user.json ssh -n -o "Hostname=$SSHD_ADDRESS" -o "HostKeyAlias=host" -p $SSHD_PORT bob@host "whoami"
