@@ -343,6 +343,9 @@ def resolve_username(entry: str, unix_username: str | None) -> str | None:
     return entry
 
 
+# The three checkers below are dead: every SSH endpoint now goes through
+# SSHChecker, which evaluates legacy grants by upcasting them. They are kept
+# only until the legacy grant types themselves are removed.
 class SSHShellChecker:
     def __init__(
         self,
@@ -433,8 +436,9 @@ class SSHCommandChecker:
 
 _ALL_SSH_CAPABILITIES = frozenset(model.grant.SSHCapability)
 
-# None denotes the whole command axis (any command).
-type _CommandSet = frozenset[str] | None
+# None denotes the whole command axis (any command). Ordered rather than a set:
+# `/ssh/hosts` displays these, and grant order is what an administrator wrote.
+type _CommandSet = tuple[str, ...] | None
 
 
 def _ssh_grants(grant_list: list[model.grant.Grant]) -> list[model.grant.SSHGrant]:
@@ -465,7 +469,7 @@ def _capabilities(p: model.grant.SSHPermission) -> frozenset[model.grant.SSHCapa
 def _commands(p: model.grant.SSHPermission) -> _CommandSet:
     if p.command_list is None:
         return None
-    return frozenset(p.command_list)
+    return tuple(p.command_list)
 
 
 def _covers_username(p: model.grant.SSHPermission, username: str, unix_username: str | None) -> bool:
@@ -501,6 +505,19 @@ class _CommandAxis:
                 return False
         return not _covers_command(self.denied, command)
 
+    def candidates(self) -> tuple[list[str], bool]:
+        """The permitted commands that can be enumerated, in grant order, plus
+        whether a grant covers the whole axis (in which case the permitted set
+        is cofinite and cannot be listed)."""
+        output: list[str] = []
+        for entry in self.granted:
+            if entry is None:
+                continue
+            for command in entry:
+                if command not in output and self.permits(command):
+                    output.append(command)
+        return output, any(entry is None for entry in self.granted)
+
 
 @dataclasses.dataclass(frozen=True)
 class SSHDecision:
@@ -516,6 +533,9 @@ class SSHDecision:
 
     def permits_command(self, command: str) -> bool:
         return self.commands.permits(command)
+
+    def candidate_commands(self) -> tuple[list[str], bool]:
+        return self.commands.candidates()
 
 
 class SSHChecker:
@@ -577,15 +597,15 @@ class SSHChecker:
             commands=_CommandAxis(granted=commands_granted, ceilings=tuple(ceilings), denied=tuple(commands_denied)),
         )
 
-    def candidate_usernames(self, unix_username: str | None) -> tuple[frozenset[str], bool]:
+    def candidate_usernames(self, unix_username: str | None) -> tuple[list[str], bool]:
         """Usernames worth calling decide() on, plus whether a wildcard grant exists.
 
         Only role grants are considered, and boundaries are deliberately not
         applied: this enumerates candidates, it does not authorize them. A
         grant with username_list None cannot be enumerated at all, hence the
-        flag.
+        flag. Ordered by first appearance, because these end up on screen.
         """
-        usernames: set[str] = set()
+        usernames: list[str] = []
         wildcard = False
         for role in self._roles:
             for g in self._matching(role.grant_list):
@@ -593,9 +613,43 @@ class SSHChecker:
                     wildcard = True
                     continue
                 for entry in g.permission.username_list:
+                    resolved = resolve_username(entry, unix_username)
+                    if resolved is not None and resolved not in usernames:
+                        usernames.append(resolved)
+        return usernames, wildcard
+
+    def _named_usernames(self, unix_username: str | None) -> set[str]:
+        grant_lists = [role.grant_list for role in self._roles]
+        for boundary in self._boundaries:
+            if boundary.ceiling_list is not None:
+                grant_lists.append(boundary.ceiling_list)
+            grant_lists.append(boundary.denied_list)
+        names: set[str] = set()
+        for grant_list in grant_lists:
+            for g in self._matching(grant_list):
+                for entry in g.permission.username_list or []:
                     if (resolved := resolve_username(entry, unix_username)) is not None:
-                        usernames.add(resolved)
-        return frozenset(usernames), wildcard
+                        names.add(resolved)
+        return names
+
+    def list_decisions(self, unix_username: str | None) -> list[tuple[str | None, SSHDecision]]:
+        """Decisions for enumeration: one per candidate username, plus one for
+        "any other username" (key None) when a wildcard grant exists.
+
+        The wildcard decision is exact, not an approximation: the only
+        username-sensitivity in the algebra is exact membership in a resolved
+        username_list, so every username named by no entry -- in a grant, a
+        ceiling or a deny -- resolves identically.
+        """
+        usernames, wildcard = self.candidate_usernames(unix_username)
+        output: list[tuple[str | None, SSHDecision]] = [(u, self.decide(u, unix_username)) for u in usernames]
+        if wildcard:
+            named = self._named_usernames(unix_username)
+            unnamed = "*"
+            while unnamed in named:
+                unnamed += "*"
+            output.append((None, self.decide(unnamed, unix_username)))
+        return output
 
 
 class AuthChecker:

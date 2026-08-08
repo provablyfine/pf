@@ -1022,7 +1022,9 @@ def test_ssh_candidate_usernames():
 
     usernames, wildcard = grants.ssh(1, [], []).candidate_usernames("unix_alice")
 
-    assert usernames == {"root", "unix_alice"}  # the id=99 grant does not match identity 1
+    # Ordered by first appearance, because these end up on screen. The id=99
+    # grant does not match identity 1.
+    assert usernames == ["root", "unix_alice"]
     assert not wildcard
 
 
@@ -1031,5 +1033,67 @@ def test_ssh_candidate_usernames_wildcard():
 
     usernames, wildcard = grants.ssh(1, [], []).candidate_usernames("unix_alice")
 
-    assert usernames == frozenset()
+    assert usernames == []
     assert wildcard
+
+
+def test_ssh_candidate_commands_in_grant_order():
+    grants = grant.Grants(
+        [_deny_boundary([_ssh(capabilities=[], commands=["/bin/rm"])])],
+        [role([_ssh(capabilities=[], commands=["/bin/df", "/bin/ls", "/bin/rm"])])],
+    )
+
+    commands, any_command = _decide(grants).candidate_commands()
+
+    assert commands == ["/bin/df", "/bin/ls"]  # the denied one is dropped
+    assert not any_command
+
+
+def test_ssh_candidate_commands_wildcard_is_not_enumerable():
+    grants = grant.Grants([], [role([_ssh(commands=None)])])
+
+    commands, any_command = _decide(grants).candidate_commands()
+
+    assert commands == []
+    assert any_command
+
+
+def test_ssh_list_decisions():
+    grants = grant.Grants(
+        [],
+        [role([_ssh(usernames=["root"], capabilities=["shell"], commands=[]), _ssh(usernames=["bob"])])],
+    )
+
+    decisions = grants.ssh(1, [], []).list_decisions("unix_alice")
+
+    assert [u for u, _ in decisions] == ["root", "bob"]
+    assert dict(decisions)["root"].capabilities == {CAP.SHELL}
+
+
+def test_ssh_list_decisions_wildcard_group():
+    # The wildcard decision is exact: it must reflect a deny that names a
+    # different username without inheriting it.
+    grants = grant.Grants(
+        [_deny_boundary([_ssh(usernames=["root"], capabilities=["agent-forwarding"], commands=[])])],
+        [role([_ssh(usernames=["root"]), _ssh(usernames=None)])],
+    )
+
+    decisions = grants.ssh(1, [], []).list_decisions("unix_alice")
+    by_username = dict(decisions)
+
+    assert [u for u, _ in decisions] == ["root", None]
+    assert CAP.AGENT_FORWARDING not in by_username["root"].capabilities
+    assert CAP.AGENT_FORWARDING in by_username[None].capabilities
+
+
+def test_ssh_list_decisions_wildcard_avoids_named_usernames():
+    # "*" is a legal unix username, so the representative used for the wildcard
+    # group must not collide with a name any entry mentions.
+    grants = grant.Grants(
+        [_deny_boundary([_ssh(usernames=["*"], capabilities=["shell"], commands=[])])],
+        [role([_ssh(usernames=None, capabilities=["shell"], commands=[])])],
+    )
+
+    by_username = dict(grants.ssh(1, [], []).list_decisions(None))
+
+    assert by_username[None].capabilities == {CAP.SHELL}
