@@ -507,14 +507,14 @@ async def test_tui_tenant_grant_edit(api, ssh_agent):
 
 @pytest.mark.anyio
 async def test_tui_ssh_grant_edit(api, ssh_agent):
-    """Edit an SSH shell grant: set filter.name, set username_list, enable permit_agent_forwarding."""
+    """Edit an SSH grant: set filter.name, set username_list, widen capabilities to any."""
     with _setup_ssh_auth_sock(ssh_agent):
         with tempfile.TemporaryDirectory() as tmpdir:
             auth = _setup(api, tmpdir, ssh_agent)
 
             await auth.create_tag("env", "prod")
             await auth.create_boundary("zone1", "")
-            role_id = await _setup_role_with_grant(auth, provablyfine.tui.grant_edit.new_grant("ssh-shell"))
+            role_id = await _setup_role_with_grant(auth, provablyfine.tui.grant_edit.new_grant("ssh"))
 
             app = provablyfine.tui.app.TuiApp(auth)
             async with app.run_test(size=(200, 50)) as pilot:
@@ -530,7 +530,7 @@ async def test_tui_ssh_grant_edit(api, ssh_agent):
                 await pilot.press("tab", "tab", "tab")  # focus grants DataTable
                 await pilot.press("enter")
                 await pilot.pause()  # screen transition
-                await pilot.pause()  # SshShellGrantEditWidget.on_mount (3 APIs: identities, boundaries, bastions)
+                await pilot.pause()  # SshGrantEditWidget.on_mount (3 APIs: identities, boundaries, bastions)
 
                 await pilot.click("#filter-name Checkbox")
                 await pilot.pause()  # UI event settle
@@ -543,7 +543,18 @@ async def test_tui_ssh_grant_edit(api, ssh_agent):
                 await pilot.press(*"alice")
                 await pilot.pause()  # UI event settle
 
-                await pilot.click("#perm-permit-agent-forwarding")
+                # Unchecking an axis is how the grant says "any": capability_list
+                # becomes null rather than a list.
+                await pilot.click("#perm-capability-list Checkbox")
+                await pilot.pause()  # UI event settle
+
+                # Checking the TTL box bounds the session; unchecked is unbounded.
+                await pilot.click("#perm-max-session-ttl Checkbox")
+                await pilot.pause()  # UI event settle
+                await pilot.click("#perm-max-session-ttl Input")
+                await pilot.pause()  # UI event settle
+                await pilot.press(*"3600")
+                await pilot.pause()  # UI event settle
 
                 await pilot.press("ctrl+s")  # confirm grant edits
                 await _wait(pilot, app)  # action_edit_grant worker
@@ -554,9 +565,11 @@ async def test_tui_ssh_grant_edit(api, ssh_agent):
 
             grant = await _get_grant(auth, role_id)
         assert grant["filter"]["name"] == "root"
+        assert grant["type"] == "ssh"
         assert grant["permission"]["username_list"] == ["alice"]
-        assert grant["permission"]["permit_agent_forwarding"] is True
-        assert grant["permission"]["permit_x11_forwarding"] is False
+        assert grant["permission"]["capability_list"] is None
+        assert grant["permission"]["command_list"] == []
+        assert grant["permission"]["max_session_ttl_s"] == 3600
 
 
 @pytest.mark.anyio

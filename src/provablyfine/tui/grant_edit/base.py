@@ -47,6 +47,34 @@ class Field:
     def invite_perm(self) -> list[str]:
         return [s for s in self.value.split() if s in ("email", "manual")] if self.active else []
 
+    def axis_perm(self) -> list[str] | None:
+        """Inactive means the whole axis, which the grant spells as null."""
+        return self.value.split() if self.active else None
+
+    def ttl_perm(self) -> int | None:
+        """Inactive is unbounded. Checked-but-unparseable returns 0, which the
+        server rejects (the field is gt=0), on purpose: int_filter() would
+        return None for a typo, and None means *unbounded* on this field. A
+        visible error beats silently widening the grant, and get_grant_data()
+        has no error channel of its own.
+
+        This depends on the client mirror of SSHPermission *not* carrying the
+        gt=0 constraint: if it did, constructing the grant here would raise a
+        ValidationError that _handle_exception does not convert, crashing the
+        app instead of notifying. The server rejects it and the notification
+        path handles that cleanly.
+        """
+        if not self.active:
+            return None
+        value = self.value.strip()
+        return int(value) if value.isdigit() else 0
+
+    def capability_perm(self) -> list[pfc.schemas.SSHCapability] | None:
+        if not self.active:
+            return None
+        valid = {c.value for c in pfc.schemas.SSHCapability}
+        return [pfc.schemas.SSHCapability(s) for s in self.value.split() if s in valid]
+
     def name_filter(self) -> str | None:
         name = self.value.strip()
         return name if (self.active and name) else None
@@ -79,6 +107,10 @@ class Field:
             active=boundary_list is not None,
             value=" ".join(boundary_list or []),
         )
+
+    @classmethod
+    def from_axis(cls, values: list[typing.Any] | None) -> Field:
+        return cls(active=values is not None, value=" ".join(str(v) for v in (values or [])))
 
     @classmethod
     def from_invite_list(cls, invite_list: list[str] | None) -> Field:
@@ -149,27 +181,22 @@ def new_grant(grant_type: str) -> pfc.schemas.Grant:
                     delete=False,
                 ),
             )
-        case "ssh-shell":
-            return pfc.schemas.SSHShellGrant(
-                type="ssh-shell",
+        case "ssh":
+            # Preselecting a shell is an editing-surface default, visible
+            # before saving, not a schema default.
+            return pfc.schemas.SSHGrant(
+                type="ssh",
                 filter=pfc.schemas.TripletFilter(name=None, tag_list=None, boundary_list=None),
-                permission=pfc.schemas.SSHShellPermission(
+                permission=pfc.schemas.SSHPermission(
                     username_list=[],
-                    permit_agent_forwarding=False,
-                    permit_x11_forwarding=False,
+                    capability_list=[
+                        pfc.schemas.SSHCapability.SHELL,
+                        pfc.schemas.SSHCapability.PTY,
+                        pfc.schemas.SSHCapability.USER_RC,
+                    ],
+                    command_list=[],
+                    max_session_ttl_s=None,
                 ),
-            )
-        case "ssh-port-forwarding":
-            return pfc.schemas.SSHPortForwardingGrant(
-                type="ssh-port-forwarding",
-                filter=pfc.schemas.TripletFilter(name=None, tag_list=None, boundary_list=None),
-                permission=pfc.schemas.SSHPortForwardingPermission(username_list=[]),
-            )
-        case "ssh-command":
-            return pfc.schemas.SSHCommandGrant(
-                type="ssh-command",
-                filter=pfc.schemas.TripletFilter(name=None, tag_list=None, boundary_list=None),
-                permission=pfc.schemas.SSHCommandPermission(username_list=[], command_list=[]),
             )
         case _:
             return pfc.schemas.InvalidGrant(type="invalid")

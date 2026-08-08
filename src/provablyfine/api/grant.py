@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import logging
 import typing
 
@@ -303,6 +304,23 @@ class TenantChecker:
         return self._checker.can(check)
 
 
+def triplet_match(
+    g: model.grant.TripletGrant,
+    identity_id: int,
+    tag_id_list: list[int],
+    boundary_id_list: list[int],
+) -> bool:
+    if g.filter.id is not None and g.filter.id != identity_id:
+        return False
+    if g.filter.tag_id_list is not None and not all(tag_id in tag_id_list for tag_id in g.filter.tag_id_list):
+        return False
+    if g.filter.boundary_id_list is not None and not all(
+        boundary_id in boundary_id_list for boundary_id in g.filter.boundary_id_list
+    ):
+        return False
+    return True
+
+
 class IdentityFilterChecker[G: model.grant.TripletGrant](Checker[G]):
     def __init__(
         self,
@@ -314,15 +332,7 @@ class IdentityFilterChecker[G: model.grant.TripletGrant](Checker[G]):
         cls: type[G],
     ):
         def cmp(g: G) -> bool:
-            if g.filter.id is not None and g.filter.id != identity_id:
-                return False
-            if g.filter.tag_id_list is not None and not all(tag_id in tag_id_list for tag_id in g.filter.tag_id_list):
-                return False
-            if g.filter.boundary_id_list is not None and not all(
-                boundary_id in boundary_id_list for boundary_id in g.filter.boundary_id_list
-            ):
-                return False
-            return True
+            return triplet_match(g, identity_id, tag_id_list, boundary_id_list)
 
         super().__init__(boundaries, roles, cmp, cls)
 
@@ -333,7 +343,169 @@ def resolve_username(entry: str, unix_username: str | None) -> str | None:
     return entry
 
 
-class SSHShellChecker:
+_ALL_SSH_CAPABILITIES = frozenset(model.grant.SSHCapability)
+
+# None denotes the whole command axis (any command). Ordered rather than a set:
+# `/ssh/hosts` displays these, and grant order is what an administrator wrote.
+type _CommandSet = tuple[str, ...] | None
+
+
+def _ssh_grants(grant_list: list[model.grant.Grant]) -> list[model.grant.SSHGrant]:
+    return [g for g in grant_list if isinstance(g, model.grant.SSHGrant)]
+
+
+def _capabilities(p: model.grant.SSHPermission) -> frozenset[model.grant.SSHCapability]:
+    if p.capability_list is None:
+        return _ALL_SSH_CAPABILITIES
+    return frozenset(p.capability_list)
+
+
+def _commands(p: model.grant.SSHPermission) -> _CommandSet:
+    if p.command_list is None:
+        return None
+    return tuple(p.command_list)
+
+
+def _entry(p: model.grant.SSHPermission) -> _CommandEntry:
+    return _CommandEntry(commands=_commands(p), ttl=p.max_session_ttl_s)
+
+
+def _covers_username(p: model.grant.SSHPermission, username: str, unix_username: str | None) -> bool:
+    if p.username_list is None:
+        return True
+    resolved = [r for e in p.username_list if (r := resolve_username(e, unix_username)) is not None]
+    return username in resolved
+
+
+# Session TTL is an ordered dimension, so it does not follow the set
+# operations: grants raise the bound, ceilings and denies lower it. None means
+# unbounded, which is the top of the order -- so plain max/min will not do, and
+# None means something different again inside a deny (see decide).
+def _raise_ttl(a: int | None, b: int | None) -> int | None:
+    """Unbounded absorbs: an entry with no bound is the largest bound."""
+    return None if a is None or b is None else max(a, b)
+
+
+def _lower_ttl(a: int | None, b: int | None) -> int | None:
+    """Unbounded is the identity: it tightens nothing."""
+    if a is None:
+        return b
+    return a if b is None else min(a, b)
+
+
+@dataclasses.dataclass(frozen=True)
+class _CommandEntry:
+    commands: _CommandSet  # None = any command
+    ttl: int | None  # None = unbounded, or in a deny, the whole axis
+
+
+def _raise_over(entries: list[_CommandEntry]) -> int | None:
+    """Bound of a layer, whose entries union.
+
+    Asserts non-empty rather than returning None for it: None means unbounded
+    here, so an empty layer would silently read as "no bound" when it actually
+    means "not covered".
+    """
+    assert entries
+    result = entries[0].ttl
+    for entry in entries[1:]:
+        result = _raise_ttl(result, entry.ttl)
+    return result
+
+
+@dataclasses.dataclass(frozen=True)
+class _CommandAxis:
+    """Command patterns captured per layer, evaluated per command.
+
+    Capabilities are a finite universe and are materialized eagerly, but
+    commands are not: a grant of every command minus a deny of "rm" is a
+    cofinite set. So the same union/intersect/subtract structure is kept as a
+    predicate instead.
+    """
+
+    granted: tuple[_CommandEntry, ...]
+    ceilings: tuple[tuple[_CommandEntry, ...] | None, ...]  # one entry per boundary; None = no ceiling
+    denied: tuple[_CommandEntry, ...]
+
+    def _covering(self, entries: tuple[_CommandEntry, ...], command: str) -> list[_CommandEntry]:
+        return [e for e in entries if e.commands is None or command in e.commands]
+
+    def permits(self, command: str) -> bool:
+        if not self._covering(self.granted, command):
+            return False
+        for ceiling in self.ceilings:
+            if ceiling is not None and not self._covering(ceiling, command):
+                return False
+        # Only a deny over the whole duration axis removes the command. One
+        # that names a bound denies the excess -- it clamps, see ttl().
+        return not any(e.ttl is None for e in self._covering(self.denied, command))
+
+    def ttl(self, command: str) -> int | None:
+        """Only valid for a permitted command -- permits() is what guarantees
+        every layer below covers it. Reached through SSHDecision.command_ttl_s,
+        which enforces that.
+        """
+        result = _raise_over(self._covering(self.granted, command))
+        for ceiling in self.ceilings:
+            if ceiling is not None:
+                result = _lower_ttl(result, _raise_over(self._covering(ceiling, command)))
+        for entry in self._covering(self.denied, command):
+            if entry.ttl is not None:
+                result = _lower_ttl(result, entry.ttl)
+        return result
+
+    def candidates(self) -> tuple[list[str], bool]:
+        """The permitted commands that can be enumerated, in grant order, plus
+        whether a grant covers the whole axis (in which case the permitted set
+        is cofinite and cannot be listed)."""
+        output: list[str] = []
+        for entry in self.granted:
+            if entry.commands is None:
+                continue
+            for command in entry.commands:
+                if command not in output and self.permits(command):
+                    output.append(command)
+        return output, any(entry.commands is None for entry in self.granted)
+
+
+@dataclasses.dataclass(frozen=True)
+class SSHDecision:
+    """Resolution of the SSH policy for one (host, username) pair.
+
+    Deliberately not a pydantic schema: a decision is not policy. It has no
+    type tag, no filter and no wildcards, and cannot be serialized back into a
+    grant_list, ceiling_list or denied_list.
+    """
+
+    capabilities: frozenset[model.grant.SSHCapability]
+    commands: _CommandAxis
+    capability_ttl: typing.Mapping[model.grant.SSHCapability, int | None]
+
+    def permits_command(self, command: str) -> bool:
+        return self.commands.permits(command)
+
+    def candidate_commands(self) -> tuple[list[str], bool]:
+        return self.commands.candidates()
+
+    def session_ttl_s(self, capability: model.grant.SSHCapability) -> int | None:
+        """Bound on a session using this capability. None is unbounded.
+
+        Per capability rather than per session: a grant of port-forwarding for
+        8h alongside a grant of shell for 1h must not give the shell session
+        8h. Raises for a capability that is not granted, since None already
+        means unbounded.
+        """
+        if capability not in self.capabilities:
+            raise KeyError(capability)
+        return self.capability_ttl[capability]
+
+    def command_ttl_s(self, command: str) -> int | None:
+        if not self.permits_command(command):
+            raise KeyError(command)
+        return self.commands.ttl(command)
+
+
+class SSHChecker:
     def __init__(
         self,
         boundaries: list[model.boundary.Boundary],
@@ -342,83 +514,137 @@ class SSHShellChecker:
         tag_id_list: list[int],
         boundary_id_list: list[int],
     ):
-        self._checker = IdentityFilterChecker[model.grant.SSHShellGrant](
-            boundaries, roles, identity_id, tag_id_list, boundary_id_list, model.grant.SSHShellGrant
+        self._boundaries = boundaries
+        self._roles = roles
+        self._identity_id = identity_id
+        self._tag_id_list = tag_id_list
+        self._boundary_id_list = boundary_id_list
+
+    def _matching(self, grant_list: list[model.grant.Grant]) -> list[model.grant.SSHGrant]:
+        return [
+            g
+            for g in _ssh_grants(grant_list)
+            if triplet_match(g, self._identity_id, self._tag_id_list, self._boundary_id_list)
+        ]
+
+    def _covering(
+        self, grant_list: list[model.grant.Grant], username: str, unix_username: str | None
+    ) -> list[model.grant.SSHPermission]:
+        return [
+            g.permission for g in self._matching(grant_list) if _covers_username(g.permission, username, unix_username)
+        ]
+
+    def decide(self, username: str, unix_username: str | None) -> SSHDecision:
+        granted: list[model.grant.SSHPermission] = []
+        for role in self._roles:
+            granted += self._covering(role.grant_list, username, unix_username)
+        capabilities = frozenset[model.grant.SSHCapability]().union(*(_capabilities(p) for p in granted))
+        commands_granted = tuple(_entry(p) for p in granted)
+        # Grants raise the bound, per capability.
+        capability_ttl: dict[model.grant.SSHCapability, int | None] = {}
+        for p in granted:
+            for c in _capabilities(p):
+                capability_ttl[c] = (
+                    p.max_session_ttl_s
+                    if c not in capability_ttl
+                    else _raise_ttl(capability_ttl[c], p.max_session_ttl_s)
+                )
+
+        ceilings: list[tuple[_CommandEntry, ...] | None] = []
+        commands_denied: list[_CommandEntry] = []
+        for boundary in self._boundaries:
+            if boundary.ceiling_list is None:
+                ceilings.append(None)
+            else:
+                # Ceiling entries union first, then intersect; an atom no entry
+                # covers is denied.
+                covering = self._covering(boundary.ceiling_list, username, unix_username)
+                ceiling_ttl: dict[model.grant.SSHCapability, int | None] = {}
+                for p in covering:
+                    for c in _capabilities(p):
+                        ceiling_ttl[c] = (
+                            p.max_session_ttl_s
+                            if c not in ceiling_ttl
+                            else _raise_ttl(ceiling_ttl[c], p.max_session_ttl_s)
+                        )
+                capabilities &= frozenset(ceiling_ttl)
+                for c in capabilities:
+                    capability_ttl[c] = _lower_ttl(capability_ttl[c], ceiling_ttl[c])
+                ceilings.append(tuple(_entry(p) for p in covering))
+            # A deny is targeted: it removes only the atoms it covers.
+            for p in self._covering(boundary.denied_list, username, unix_username):
+                if p.max_session_ttl_s is None:
+                    # The whole duration axis: remove the atom outright, as on
+                    # the discrete axes.
+                    capabilities -= _capabilities(p)
+                else:
+                    # A bounded deny denies only the excess, so it clamps
+                    # rather than removes.
+                    for c in _capabilities(p) & capabilities:
+                        capability_ttl[c] = _lower_ttl(capability_ttl[c], p.max_session_ttl_s)
+                commands_denied.append(_entry(p))
+
+        if not capabilities and not commands_granted:
+            logger.info(f"no ssh grant covers username={username}")
+        return SSHDecision(
+            capabilities=capabilities,
+            commands=_CommandAxis(granted=commands_granted, ceilings=tuple(ceilings), denied=tuple(commands_denied)),
+            capability_ttl={c: capability_ttl[c] for c in capabilities},
         )
 
-    def can(self, username: str, unix_username: str | None) -> model.grant.SSHShellPermission | None:
-        def check(g: model.grant.SSHShellGrant) -> bool:
-            resolved = [r for e in g.permission.username_list if (r := resolve_username(e, unix_username)) is not None]
-            return username in resolved
+    def candidate_usernames(self, unix_username: str | None) -> tuple[list[str], bool]:
+        """Usernames worth calling decide() on, plus whether a wildcard grant exists.
 
-        matching = [g for g in self._checker.list_can(check)]
-        if not matching:
-            return None
-        return model.grant.SSHShellPermission(
-            username_list=[username],
-            permit_agent_forwarding=any(g.permission.permit_agent_forwarding for g in matching),
-            permit_x11_forwarding=any(g.permission.permit_x11_forwarding for g in matching),
-        )
+        Only role grants are considered, and boundaries are deliberately not
+        applied: this enumerates candidates, it does not authorize them. A
+        grant with username_list None cannot be enumerated at all, hence the
+        flag. Ordered by first appearance, because these end up on screen.
+        """
+        usernames: list[str] = []
+        wildcard = False
+        for role in self._roles:
+            for g in self._matching(role.grant_list):
+                if g.permission.username_list is None:
+                    wildcard = True
+                    continue
+                for entry in g.permission.username_list:
+                    resolved = resolve_username(entry, unix_username)
+                    if resolved is not None and resolved not in usernames:
+                        usernames.append(resolved)
+        return usernames, wildcard
 
-    def list_can(self) -> list[model.grant.SSHShellGrant]:
-        def check(g: model.grant.SSHShellGrant) -> bool:
-            return True
+    def _named_usernames(self, unix_username: str | None) -> set[str]:
+        grant_lists = [role.grant_list for role in self._roles]
+        for boundary in self._boundaries:
+            if boundary.ceiling_list is not None:
+                grant_lists.append(boundary.ceiling_list)
+            grant_lists.append(boundary.denied_list)
+        names: set[str] = set()
+        for grant_list in grant_lists:
+            for g in self._matching(grant_list):
+                for entry in g.permission.username_list or []:
+                    if (resolved := resolve_username(entry, unix_username)) is not None:
+                        names.add(resolved)
+        return names
 
-        return [g for g in self._checker.list_can(check)]
+    def list_decisions(self, unix_username: str | None) -> list[tuple[str | None, SSHDecision]]:
+        """Decisions for enumeration: one per candidate username, plus one for
+        "any other username" (key None) when a wildcard grant exists.
 
-
-class SSHPortForwardChecker:
-    def __init__(
-        self,
-        boundaries: list[model.boundary.Boundary],
-        roles: list[model.role.Role],
-        identity_id: int,
-        tag_id_list: list[int],
-        boundary_id_list: list[int],
-    ):
-        self._checker = IdentityFilterChecker[model.grant.SSHPortForwardingGrant](
-            boundaries, roles, identity_id, tag_id_list, boundary_id_list, model.grant.SSHPortForwardingGrant
-        )
-
-    def can(self, username: str, unix_username: str | None) -> bool:
-        def check(g: model.grant.SSHPortForwardingGrant) -> bool:
-            resolved = [r for e in g.permission.username_list if (r := resolve_username(e, unix_username)) is not None]
-            return username in resolved
-
-        return self._checker.can(check)
-
-    def list_can(self) -> list[model.grant.SSHPortForwardingGrant]:
-        def check(g: model.grant.SSHPortForwardingGrant) -> bool:
-            return True
-
-        return self._checker.list_can(check)
-
-
-class SSHCommandChecker:
-    def __init__(
-        self,
-        boundaries: list[model.boundary.Boundary],
-        roles: list[model.role.Role],
-        identity_id: int,
-        tag_id_list: list[int],
-        boundary_id_list: list[int],
-    ):
-        self._checker = IdentityFilterChecker[model.grant.SSHCommandGrant](
-            boundaries, roles, identity_id, tag_id_list, boundary_id_list, model.grant.SSHCommandGrant
-        )
-
-    def can(self, username: str, command: str, unix_username: str | None) -> bool:
-        def check(g: model.grant.SSHCommandGrant) -> bool:
-            resolved = [r for e in g.permission.username_list if (r := resolve_username(e, unix_username)) is not None]
-            return username in resolved and command in g.permission.command_list
-
-        return self._checker.can(check)
-
-    def list_can(self) -> list[model.grant.SSHCommandGrant]:
-        def check(g: model.grant.SSHCommandGrant) -> bool:
-            return True
-
-        return self._checker.list_can(check)
+        The wildcard decision is exact, not an approximation: the only
+        username-sensitivity in the algebra is exact membership in a resolved
+        username_list, so every username named by no entry -- in a grant, a
+        ceiling or a deny -- resolves identically.
+        """
+        usernames, wildcard = self.candidate_usernames(unix_username)
+        output: list[tuple[str | None, SSHDecision]] = [(u, self.decide(u, unix_username)) for u in usernames]
+        if wildcard:
+            named = self._named_usernames(unix_username)
+            unnamed = "*"
+            while unnamed in named:
+                unnamed += "*"
+            output.append((None, self.decide(unnamed, unix_username)))
+        return output
 
 
 class AuthChecker:
@@ -545,16 +771,8 @@ class Grants:
     ) -> IdentityChecker:
         return IdentityChecker(self._boundaries, self._roles, identity_id, tag_id_list, boundary_id_list)
 
-    def ssh_shell(self, identity_id: int, tag_id_list: list[int], boundary_id_list: list[int]) -> SSHShellChecker:
-        return SSHShellChecker(self._boundaries, self._roles, identity_id, tag_id_list, boundary_id_list)
-
-    def ssh_port_forward(
-        self, identity_id: int, tag_id_list: list[int], boundary_id_list: list[int]
-    ) -> SSHPortForwardChecker:
-        return SSHPortForwardChecker(self._boundaries, self._roles, identity_id, tag_id_list, boundary_id_list)
-
-    def ssh_command(self, identity_id: int, tag_id_list: list[int], boundary_id_list: list[int]) -> SSHCommandChecker:
-        return SSHCommandChecker(self._boundaries, self._roles, identity_id, tag_id_list, boundary_id_list)
+    def ssh(self, identity_id: int, tag_id_list: list[int], boundary_id_list: list[int]) -> SSHChecker:
+        return SSHChecker(self._boundaries, self._roles, identity_id, tag_id_list, boundary_id_list)
 
     def tenant(self, tenant_id: int | None) -> TenantChecker:
         return TenantChecker(self._boundaries, self._roles, tenant_id)

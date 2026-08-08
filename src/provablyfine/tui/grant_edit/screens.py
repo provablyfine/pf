@@ -9,7 +9,7 @@ import textual.screen
 import textual.widgets
 
 from .. import header
-from . import base, boundary, identity, role, ssh_command, ssh_port_forward, ssh_shell, tag, tenant
+from . import base, boundary, identity, role, ssh, tag, tenant
 
 
 class GrantEditScreen(textual.screen.Screen[pfc.schemas.Grant | None]):
@@ -57,18 +57,8 @@ class GrantEditScreen(textual.screen.Screen[pfc.schemas.Grant | None]):
                 )
             case "tenant":
                 widget = tenant.TenantGrantEditWidget(self._auth, typing.cast(pfc.schemas.TenantGrant, self._grant))
-            case "ssh-shell":
-                widget = ssh_shell.SshShellGrantEditWidget(
-                    self._auth, typing.cast(pfc.schemas.SSHShellGrant, self._grant)
-                )
-            case "ssh-port-forwarding":
-                widget = ssh_port_forward.SshPortForwardingGrantEditWidget(
-                    self._auth, typing.cast(pfc.schemas.SSHPortForwardingGrant, self._grant)
-                )
-            case "ssh-command":
-                widget = ssh_command.SshCommandGrantEditWidget(
-                    self._auth, typing.cast(pfc.schemas.SSHCommandGrant, self._grant)
-                )
+            case "ssh":
+                widget = ssh.SshGrantEditWidget(self._auth, typing.cast(pfc.schemas.SSHGrant, self._grant))
             case _:
                 return
         await fields.mount(widget)

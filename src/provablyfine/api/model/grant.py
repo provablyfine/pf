@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import enum
 import logging
 import typing
 
@@ -135,34 +136,48 @@ class IdentityGrant(TripletGrant):
     permission: IdentityPermission
 
 
-class SSHShellPermission(DBBase):
-    username_list: list[str]
-    permit_agent_forwarding: bool = False
-    permit_x11_forwarding: bool = False
+class SSHCapability(enum.StrEnum):
+    SHELL = "shell"  # the session itself; gates shell certificates
+    PTY = "pty"  # certificate extension permit-pty
+    USER_RC = "user-rc"  # certificate extension permit-user-rc
+    AGENT_FORWARDING = "agent-forwarding"  # certificate extension permit-agent-forwarding
+    X11_FORWARDING = "x11-forwarding"  # certificate extension permit-X11-forwarding
+    PORT_FORWARDING = "port-forwarding"  # certificate extension permit-port-forwarding
 
 
-class SSHShellGrant(TripletGrant):
-    type: typing.Literal["ssh-shell"] = "ssh-shell"
-    permission: SSHShellPermission
+class SSHPermission(DBBase):
+    """A set of capability atoms: (username, capability) and (username, command).
+
+    Every field is required and nullable: `None` always denotes the whole axis
+    (any username, all capabilities including future ones, any command). The
+    entry denotes the same atom set wherever it appears; only the operation
+    depends on the list it sits in (union in a role grant_list, intersection in
+    a boundary ceiling_list, subtraction in a boundary denied_list).
+
+    max_session_ttl_s is the one ordered dimension, so it specializes rather
+    than following the set operations: a grant raises the bound, a ceiling and
+    a deny lower it. None is unbounded.
+    """
+
+    username_list: list[str] | None
+    capability_list: list[SSHCapability] | None
+    command_list: list[str] | None
+    max_session_ttl_s: int | None = pydantic.Field(gt=0)
+
+    # An empty username_list is deliberately *not* rejected: migrated rows may
+    # carry one, and it is fail-closed in every position -- unlike an entry
+    # with both other axes empty, which is a deny that denies nothing. The
+    # authoring surfaces refuse to write either.
+    @pydantic.model_validator(mode="after")
+    def _reject_empty_atom_set(self) -> SSHPermission:
+        if self.capability_list == [] and self.command_list == []:
+            raise ValueError("capability_list and command_list must not both be empty")
+        return self
 
 
-class SSHPortForwardingPermission(DBBase):
-    username_list: list[str]
-
-
-class SSHPortForwardingGrant(TripletGrant):
-    type: typing.Literal["ssh-port-forwarding"] = "ssh-port-forwarding"
-    permission: SSHPortForwardingPermission
-
-
-class SSHCommandPermission(DBBase):
-    username_list: list[str]
-    command_list: list[str]
-
-
-class SSHCommandGrant(TripletGrant):
-    type: typing.Literal["ssh-command"] = "ssh-command"
-    permission: SSHCommandPermission
+class SSHGrant(TripletGrant):
+    type: typing.Literal["ssh"] = "ssh"
+    permission: SSHPermission
 
 
 class TenantUpdatePermission(DBBase):
@@ -247,9 +262,7 @@ Grant = typing.Annotated[
     | TagGrant
     | RoleGrant
     | IdentityGrant
-    | SSHShellGrant
-    | SSHPortForwardingGrant
-    | SSHCommandGrant
+    | SSHGrant
     | TenantGrant
     | AuthGrant
     | BastionGrant
