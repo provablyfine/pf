@@ -153,11 +153,16 @@ class SSHPermission(DBBase):
     entry denotes the same atom set wherever it appears; only the operation
     depends on the list it sits in (union in a role grant_list, intersection in
     a boundary ceiling_list, subtraction in a boundary denied_list).
+
+    max_session_ttl_s is the one ordered dimension, so it specializes rather
+    than following the set operations: a grant raises the bound, a ceiling and
+    a deny lower it. None is unbounded.
     """
 
     username_list: list[str] | None
     capability_list: list[SSHCapability] | None
     command_list: list[str] | None
+    max_session_ttl_s: int | None = pydantic.Field(gt=0)
 
     # An empty username_list is deliberately *not* rejected: migrated rows may
     # carry one, and it is fail-closed in every position -- unlike an entry

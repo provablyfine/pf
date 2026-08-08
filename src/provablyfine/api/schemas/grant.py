@@ -120,6 +120,8 @@ class SSHPermission(base.APIBase):
     username_list: list[str] | None
     capability_list: list[SSHCapability] | None
     command_list: list[str] | None
+    # The one ordered dimension: grants raise it, ceilings and denies lower it.
+    max_session_ttl_s: int | None = pydantic.Field(gt=0)
 
     @pydantic.model_validator(mode="after")
     def _reject_empty_atom_set(self) -> SSHPermission:

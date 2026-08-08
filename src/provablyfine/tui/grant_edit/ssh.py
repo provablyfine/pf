@@ -25,6 +25,10 @@ class SshGrantEditWidget(base.TripletFilterGrantEditWidget[pfc.schemas.SSHGrant]
         username = base.Field.from_axis(p.username_list)
         capability = base.Field.from_axis(p.capability_list)
         command = base.Field.from_axis(p.command_list)
+        ttl = base.Field(
+            active=p.max_session_ttl_s is not None,
+            value="" if p.max_session_ttl_s is None else str(p.max_session_ttl_s),
+        )
         yield from self._compose_filter()
         with textual.containers.VerticalGroup(classes="section"):
             yield textual.widgets.Label("Permissions (unchecked = any)", classes="label")
@@ -49,6 +53,13 @@ class SshGrantEditWidget(base.TripletFilterGrantEditWidget[pfc.schemas.SSHGrant]
                 placeholder="Type a command",
                 id="perm-command-list",
             )
+            yield checkbox_input.CheckboxInput(
+                "Max session TTL (s)",
+                active=ttl.active,
+                value=ttl.value,
+                placeholder="Seconds, e.g. 3600",
+                id="perm-max-session-ttl",
+            )
 
     async def on_mount(self) -> None:
         await self._mount_filter_candidates()
@@ -57,6 +68,7 @@ class SshGrantEditWidget(base.TripletFilterGrantEditWidget[pfc.schemas.SSHGrant]
             [textual_autocomplete.DropdownItem(main=c) for c in _CAPABILITIES]
         )
         self.query_one("#perm-command-list", checkbox_input.CheckboxInput).set_candidates([])
+        self.query_one("#perm-max-session-ttl", checkbox_input.CheckboxInput).set_candidates([])
 
     def get_grant_data(self) -> pfc.schemas.SSHGrant:
         return pfc.schemas.SSHGrant(
@@ -66,5 +78,6 @@ class SshGrantEditWidget(base.TripletFilterGrantEditWidget[pfc.schemas.SSHGrant]
                 username_list=self._read_field("#perm-username-list").axis_perm(),
                 capability_list=self._read_field("#perm-capability-list").capability_perm(),
                 command_list=self._read_field("#perm-command-list").axis_perm(),
+                max_session_ttl_s=self._read_field("#perm-max-session-ttl").ttl_perm(),
             ),
         )

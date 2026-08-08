@@ -51,6 +51,24 @@ class Field:
         """Inactive means the whole axis, which the grant spells as null."""
         return self.value.split() if self.active else None
 
+    def ttl_perm(self) -> int | None:
+        """Inactive is unbounded. Checked-but-unparseable returns 0, which the
+        server rejects (the field is gt=0), on purpose: int_filter() would
+        return None for a typo, and None means *unbounded* on this field. A
+        visible error beats silently widening the grant, and get_grant_data()
+        has no error channel of its own.
+
+        This depends on the client mirror of SSHPermission *not* carrying the
+        gt=0 constraint: if it did, constructing the grant here would raise a
+        ValidationError that _handle_exception does not convert, crashing the
+        app instead of notifying. The server rejects it and the notification
+        path handles that cleanly.
+        """
+        if not self.active:
+            return None
+        value = self.value.strip()
+        return int(value) if value.isdigit() else 0
+
     def capability_perm(self) -> list[pfc.schemas.SSHCapability] | None:
         if not self.active:
             return None
@@ -177,6 +195,7 @@ def new_grant(grant_type: str) -> pfc.schemas.Grant:
                         pfc.schemas.SSHCapability.USER_RC,
                     ],
                     command_list=[],
+                    max_session_ttl_s=None,
                 ),
             )
         case _:

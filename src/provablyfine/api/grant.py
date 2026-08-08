@@ -366,6 +366,10 @@ def _commands(p: model.grant.SSHPermission) -> _CommandSet:
     return tuple(p.command_list)
 
 
+def _entry(p: model.grant.SSHPermission) -> _CommandEntry:
+    return _CommandEntry(commands=_commands(p), ttl=p.max_session_ttl_s)
+
+
 def _covers_username(p: model.grant.SSHPermission, username: str, unix_username: str | None) -> bool:
     if p.username_list is None:
         return True
@@ -373,8 +377,40 @@ def _covers_username(p: model.grant.SSHPermission, username: str, unix_username:
     return username in resolved
 
 
-def _covers_command(entries: tuple[_CommandSet, ...], command: str) -> bool:
-    return any(e is None or command in e for e in entries)
+# Session TTL is an ordered dimension, so it does not follow the set
+# operations: grants raise the bound, ceilings and denies lower it. None means
+# unbounded, which is the top of the order -- so plain max/min will not do, and
+# None means something different again inside a deny (see decide).
+def _raise_ttl(a: int | None, b: int | None) -> int | None:
+    """Unbounded absorbs: an entry with no bound is the largest bound."""
+    return None if a is None or b is None else max(a, b)
+
+
+def _lower_ttl(a: int | None, b: int | None) -> int | None:
+    """Unbounded is the identity: it tightens nothing."""
+    if a is None:
+        return b
+    return a if b is None else min(a, b)
+
+
+@dataclasses.dataclass(frozen=True)
+class _CommandEntry:
+    commands: _CommandSet  # None = any command
+    ttl: int | None  # None = unbounded, or in a deny, the whole axis
+
+
+def _raise_over(entries: list[_CommandEntry]) -> int | None:
+    """Bound of a layer, whose entries union.
+
+    Asserts non-empty rather than returning None for it: None means unbounded
+    here, so an empty layer would silently read as "no bound" when it actually
+    means "not covered".
+    """
+    assert entries
+    result = entries[0].ttl
+    for entry in entries[1:]:
+        result = _raise_ttl(result, entry.ttl)
+    return result
 
 
 @dataclasses.dataclass(frozen=True)
@@ -387,17 +423,36 @@ class _CommandAxis:
     predicate instead.
     """
 
-    granted: tuple[_CommandSet, ...]
-    ceilings: tuple[tuple[_CommandSet, ...] | None, ...]  # one entry per boundary; None = no ceiling
-    denied: tuple[_CommandSet, ...]
+    granted: tuple[_CommandEntry, ...]
+    ceilings: tuple[tuple[_CommandEntry, ...] | None, ...]  # one entry per boundary; None = no ceiling
+    denied: tuple[_CommandEntry, ...]
+
+    def _covering(self, entries: tuple[_CommandEntry, ...], command: str) -> list[_CommandEntry]:
+        return [e for e in entries if e.commands is None or command in e.commands]
 
     def permits(self, command: str) -> bool:
-        if not _covers_command(self.granted, command):
+        if not self._covering(self.granted, command):
             return False
         for ceiling in self.ceilings:
-            if ceiling is not None and not _covers_command(ceiling, command):
+            if ceiling is not None and not self._covering(ceiling, command):
                 return False
-        return not _covers_command(self.denied, command)
+        # Only a deny over the whole duration axis removes the command. One
+        # that names a bound denies the excess -- it clamps, see ttl().
+        return not any(e.ttl is None for e in self._covering(self.denied, command))
+
+    def ttl(self, command: str) -> int | None:
+        """Only valid for a permitted command -- permits() is what guarantees
+        every layer below covers it. Reached through SSHDecision.command_ttl_s,
+        which enforces that.
+        """
+        result = _raise_over(self._covering(self.granted, command))
+        for ceiling in self.ceilings:
+            if ceiling is not None:
+                result = _lower_ttl(result, _raise_over(self._covering(ceiling, command)))
+        for entry in self._covering(self.denied, command):
+            if entry.ttl is not None:
+                result = _lower_ttl(result, entry.ttl)
+        return result
 
     def candidates(self) -> tuple[list[str], bool]:
         """The permitted commands that can be enumerated, in grant order, plus
@@ -405,12 +460,12 @@ class _CommandAxis:
         is cofinite and cannot be listed)."""
         output: list[str] = []
         for entry in self.granted:
-            if entry is None:
+            if entry.commands is None:
                 continue
-            for command in entry:
+            for command in entry.commands:
                 if command not in output and self.permits(command):
                     output.append(command)
-        return output, any(entry is None for entry in self.granted)
+        return output, any(entry.commands is None for entry in self.granted)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -424,12 +479,30 @@ class SSHDecision:
 
     capabilities: frozenset[model.grant.SSHCapability]
     commands: _CommandAxis
+    capability_ttl: typing.Mapping[model.grant.SSHCapability, int | None]
 
     def permits_command(self, command: str) -> bool:
         return self.commands.permits(command)
 
     def candidate_commands(self) -> tuple[list[str], bool]:
         return self.commands.candidates()
+
+    def session_ttl_s(self, capability: model.grant.SSHCapability) -> int | None:
+        """Bound on a session using this capability. None is unbounded.
+
+        Per capability rather than per session: a grant of port-forwarding for
+        8h alongside a grant of shell for 1h must not give the shell session
+        8h. Raises for a capability that is not granted, since None already
+        means unbounded.
+        """
+        if capability not in self.capabilities:
+            raise KeyError(capability)
+        return self.capability_ttl[capability]
+
+    def command_ttl_s(self, command: str) -> int | None:
+        if not self.permits_command(command):
+            raise KeyError(command)
+        return self.commands.ttl(command)
 
 
 class SSHChecker:
@@ -466,10 +539,19 @@ class SSHChecker:
         for role in self._roles:
             granted += self._covering(role.grant_list, username, unix_username)
         capabilities = frozenset[model.grant.SSHCapability]().union(*(_capabilities(p) for p in granted))
-        commands_granted = tuple(_commands(p) for p in granted)
+        commands_granted = tuple(_entry(p) for p in granted)
+        # Grants raise the bound, per capability.
+        capability_ttl: dict[model.grant.SSHCapability, int | None] = {}
+        for p in granted:
+            for c in _capabilities(p):
+                capability_ttl[c] = (
+                    p.max_session_ttl_s
+                    if c not in capability_ttl
+                    else _raise_ttl(capability_ttl[c], p.max_session_ttl_s)
+                )
 
-        ceilings: list[tuple[_CommandSet, ...] | None] = []
-        commands_denied: list[_CommandSet] = []
+        ceilings: list[tuple[_CommandEntry, ...] | None] = []
+        commands_denied: list[_CommandEntry] = []
         for boundary in self._boundaries:
             if boundary.ceiling_list is None:
                 ceilings.append(None)
@@ -477,18 +559,37 @@ class SSHChecker:
                 # Ceiling entries union first, then intersect; an atom no entry
                 # covers is denied.
                 covering = self._covering(boundary.ceiling_list, username, unix_username)
-                capabilities &= frozenset[model.grant.SSHCapability]().union(*(_capabilities(p) for p in covering))
-                ceilings.append(tuple(_commands(p) for p in covering))
+                ceiling_ttl: dict[model.grant.SSHCapability, int | None] = {}
+                for p in covering:
+                    for c in _capabilities(p):
+                        ceiling_ttl[c] = (
+                            p.max_session_ttl_s
+                            if c not in ceiling_ttl
+                            else _raise_ttl(ceiling_ttl[c], p.max_session_ttl_s)
+                        )
+                capabilities &= frozenset(ceiling_ttl)
+                for c in capabilities:
+                    capability_ttl[c] = _lower_ttl(capability_ttl[c], ceiling_ttl[c])
+                ceilings.append(tuple(_entry(p) for p in covering))
             # A deny is targeted: it removes only the atoms it covers.
             for p in self._covering(boundary.denied_list, username, unix_username):
-                capabilities -= _capabilities(p)
-                commands_denied.append(_commands(p))
+                if p.max_session_ttl_s is None:
+                    # The whole duration axis: remove the atom outright, as on
+                    # the discrete axes.
+                    capabilities -= _capabilities(p)
+                else:
+                    # A bounded deny denies only the excess, so it clamps
+                    # rather than removes.
+                    for c in _capabilities(p) & capabilities:
+                        capability_ttl[c] = _lower_ttl(capability_ttl[c], p.max_session_ttl_s)
+                commands_denied.append(_entry(p))
 
         if not capabilities and not commands_granted:
             logger.info(f"no ssh grant covers username={username}")
         return SSHDecision(
             capabilities=capabilities,
             commands=_CommandAxis(granted=commands_granted, ceilings=tuple(ceilings), denied=tuple(commands_denied)),
+            capability_ttl={c: capability_ttl[c] for c in capabilities},
         )
 
     def candidate_usernames(self, unix_username: str | None) -> tuple[list[str], bool]:

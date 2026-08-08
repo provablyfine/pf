@@ -118,6 +118,7 @@ permit_agent_forwarding and permit_x11_forwarding always leaked through.
   >     username_list: null
   >     capability_list: ["shell", "pty", "user-rc"]
   >     command_list: null
+  >     max_session_ttl_s: null
   > EOF
 
 Provision a user inside that boundary
@@ -153,6 +154,7 @@ whole shell for that username.
   >     username_list: ["bob"]
   >     capability_list: ["x11-forwarding"]
   >     command_list: []
+  >     max_session_ttl_s: null
   > EOF
   $ pfa -c config.json identity create -n targeted-user -b targeted
   $ TARGETED_USER_ID=$(pfa -c config.json identity list -n targeted-user -q)
@@ -177,6 +179,7 @@ Denying every capability for alice drops only her
   >     username_list: ["alice"]
   >     capability_list: null
   >     command_list: null
+  >     max_session_ttl_s: null
   > EOF
   $ pf -c targeted.json ssh -n -o "Hostname=$SSHD_ADDRESS" -o "HostKeyAlias=host" -p $SSHD_PORT alice@host "whoami"
   User is not authorized to connect to host
@@ -203,6 +206,7 @@ reported as "*", since a wildcard cannot be enumerated
   >     username_list: null
   >     capability_list: ["shell", "pty"]
   >     command_list: ["/bin/true"]
+  >     max_session_ttl_s: null
   > EOF
   $ pfa -c config.json identity create -n wildcard-user -b targeted
   $ WILDCARD_USER_ID=$(pfa -c config.json identity list -n wildcard-user -q)

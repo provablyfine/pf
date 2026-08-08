@@ -258,6 +258,7 @@ def _grant_to_schema(converter: GrantConverter, grant: model.grant.Grant) -> sch
                 if grant.permission.capability_list is None
                 else [schemas.grant.SSHCapability(c) for c in grant.permission.capability_list],
                 command_list=grant.permission.command_list,
+                max_session_ttl_s=grant.permission.max_session_ttl_s,
             )
             g = schemas.grant.SSHGrant(filter=filter, permission=permission)
         case "tenant":
@@ -409,6 +410,7 @@ def _grant_from_schema(converter: GrantConverter, grant: schemas.grant.Grant) ->
                 if grant.permission.capability_list is None
                 else [model.grant.SSHCapability(c) for c in grant.permission.capability_list],
                 command_list=grant.permission.command_list,
+                max_session_ttl_s=grant.permission.max_session_ttl_s,
             )
             g = model.grant.SSHGrant(filter=filter, permission=permission)
         case "tenant":

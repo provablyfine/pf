@@ -189,6 +189,7 @@ def _ssh_function(args: argparse.Namespace) -> None:
             "username_list": username_list,
             "capability_list": capability_list,
             "command_list": command_list,
+            "max_session_ttl_s": args.max_session_ttl,
         },
     }
     _output(args, grant)
@@ -335,6 +336,9 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
     group.add_argument("--capability-all", action="store_true", help="Every capability, present and future")
     group.add_argument("--cmd", nargs="*", default=[])
     group.add_argument("--cmd-all", action="store_true", help="Any command")
+    # Omitted means null, i.e. unbounded -- there is no empty-list state for a
+    # scalar, so no --*-all counterpart is needed.
+    group.add_argument("--max-session-ttl", type=int, default=None, metavar="SECONDS")
     ssh_parser.set_defaults(func=_ssh_function)
 
     audit_log_parser = subparsers.add_parser("audit-log", help="Audit log permission")

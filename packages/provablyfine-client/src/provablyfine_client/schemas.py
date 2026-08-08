@@ -408,11 +408,15 @@ class SSHPermission(_Base):
     username_list: list[str] | None
     capability_list: list[SSHCapability] | None
     command_list: list[str] | None
+    # The one ordered dimension, in seconds. None is unbounded.
+    max_session_ttl_s: int | None
 
     def to_text(self) -> str:
         output = _axis_list(self.username_list, "username_list", lambda i: str(i))
         output += _axis_list(self.capability_list, "capability_list", lambda i: str(i))
         output += _axis_list(self.command_list, "command_list", lambda i: str(i))
+        ttl = "*" if self.max_session_ttl_s is None else str(self.max_session_ttl_s)
+        output += [f"max_session_ttl_s:{ttl}"]
         return " ".join(output)
 
 

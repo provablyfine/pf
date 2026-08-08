@@ -86,6 +86,7 @@ Create a new role
   >     username_list: ["root"]
   >     capability_list: ["shell", "pty", "user-rc"]
   >     command_list: []
+  >     max_session_ttl_s: null
   > EOF
 
 Add first member to developer role
@@ -124,6 +125,7 @@ display only; evaluation is covered by ssh.t. Note how null renders as "*"
   >     username_list: ["root", "{self}"]
   >     capability_list: ["shell", "pty", "agent-forwarding"]
   >     command_list: []
+  >     max_session_ttl_s: 3600
   > - type: ssh
   >   filter:
   >     name: null
@@ -133,14 +135,15 @@ display only; evaluation is covered by ssh.t. Note how null renders as "*"
   >     username_list: null
   >     capability_list: null
   >     command_list: ["git-upload-pack /repo"]
+  >     max_session_ttl_s: null
   > EOF
   $ pfa -c config.json role read -i $SSH_ROLE_ID | grep -A 2 'type: *ssh'
   grant        type:       ssh
                filter:     tag_list:env=dev
-               permission: username_list:root,{self} capability_list:shell,pty,agent-forwarding command_list:!
+               permission: username_list:root,{self} capability_list:shell,pty,agent-forwarding command_list:! max_session_ttl_s:3600
   grant        type:       ssh
                filter:     *
-               permission: username_list:* capability_list:* command_list:git-upload-pack /repo
+               permission: username_list:* capability_list:* command_list:git-upload-pack /repo max_session_ttl_s:*
 
 "pfa grant ssh" emits the new type. An unset axis is an empty list; the
 --*-all flags spell the whole axis as null.
@@ -159,6 +162,7 @@ display only; evaluation is covered by ssh.t. Note how null renders as "*"
       - shell
       - pty
     command_list: []
+    max_session_ttl_s: null
   $ pfa -c config.json grant ssh --username-all --capability-all --cmd-all -f json
   {
     "type": "ssh",
@@ -170,7 +174,8 @@ display only; evaluation is covered by ssh.t. Note how null renders as "*"
     "permission": {
       "username_list": null,
       "capability_list": null,
-      "command_list": null
+      "command_list": null,
+      "max_session_ttl_s": null
     }
   }
   $ pfa -c config.json grant ssh --username root
@@ -181,6 +186,27 @@ display only; evaluation is covered by ssh.t. Note how null renders as "*"
   [2]
   $ pfa -c config.json grant ssh --username root --capability nonsense 2>&1 | tail -1
   pfa grant ssh: error: argument --capability: invalid choice: * (glob)
+
+"--max-session-ttl" sets the one ordered dimension; omitting it means null,
+i.e. unbounded
+  $ pfa -c config.json grant ssh --username root --capability shell --max-session-ttl 3600 -f json | jq -c .permission
+  {"username_list":["root"],"capability_list":["shell"],"command_list":[],"max_session_ttl_s":3600}
+  $ pfa -c config.json grant ssh --username root --capability shell --max-session-ttl 0 | pfa -c config.json role grant -i $SSH_ROLE_ID --add
+  Request invalid. Input should be greater than 0: body.grant_list.2.ssh.permission.max_session_ttl_s
+  [2]
+
+The field is required, so a grant written by an older client is rejected rather
+than silently defaulted to unbounded
+  $ pfa -c config.json role grant -i $SSH_ROLE_ID --set <<EOF
+  > - type: ssh
+  >   filter: {name: null, tag_list: null, boundary_list: null}
+  >   permission:
+  >     username_list: ["root"]
+  >     capability_list: ["shell"]
+  >     command_list: []
+  > EOF
+  Request invalid. Field required: ssh.permission.max_session_ttl_s
+  [2]
 
 The legacy grant types are gone: an old client's request is now rejected
 outright rather than silently accepted.
@@ -208,6 +234,7 @@ An "ssh" permission denoting the empty atom set is rejected
   >     username_list: ["root"]
   >     capability_list: []
   >     command_list: []
+  >     max_session_ttl_s: null
   > EOF
   Request invalid. Value error, capability_list and command_list must not both be empty: body.grant_list.0.ssh.permission
   [2]
