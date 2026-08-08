@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import enum
 import typing
 
 import pydantic
@@ -135,6 +136,37 @@ class SSHCommandGrant(base.APIBase):
     permission: SSHCommandPermission
 
 
+# Mirrors model.grant.SSHCapability. Duplicated rather than imported: schemas
+# must not depend on the model layer.
+class SSHCapability(enum.StrEnum):
+    SHELL = "shell"
+    PTY = "pty"
+    USER_RC = "user-rc"
+    AGENT_FORWARDING = "agent-forwarding"
+    X11_FORWARDING = "x11-forwarding"
+    PORT_FORWARDING = "port-forwarding"
+
+
+class SSHPermission(base.APIBase):
+    # None always denotes the whole axis: any username, all capabilities
+    # (including future ones), any command.
+    username_list: list[str] | None
+    capability_list: list[SSHCapability] | None
+    command_list: list[str] | None
+
+    @pydantic.model_validator(mode="after")
+    def _reject_empty_atom_set(self) -> SSHPermission:
+        if self.capability_list == [] and self.command_list == []:
+            raise ValueError("capability_list and command_list must not both be empty")
+        return self
+
+
+class SSHGrant(base.APIBase):
+    type: typing.Literal["ssh"] = "ssh"
+    filter: TripletFilter
+    permission: SSHPermission
+
+
 class TenantUpdatePermission(base.APIBase):
     display_name: bool
     is_enabled: bool
@@ -224,6 +256,7 @@ Grant = typing.Annotated[
     | SSHShellGrant
     | SSHPortForwardingGrant
     | SSHCommandGrant
+    | SSHGrant
     | TenantGrant
     | AuthGrant
     | BastionGrant

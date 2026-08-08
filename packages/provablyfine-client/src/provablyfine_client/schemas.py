@@ -7,6 +7,7 @@
 # Keeping them separate avoids coupling and lets each side evolve its constraints
 # independently.
 
+import enum
 import typing
 
 import pydantic
@@ -51,6 +52,17 @@ def _name_value(nv: typing.Any) -> str:
 def _filter_list(val: list[typing.Any] | None, name: str, f: typing.Callable[[typing.Any], str]) -> list[str]:
     if val is None:
         return []
+    if len(val) == 0:
+        return [f"{name}:!"]
+    return [f"{name}:{','.join(f(i) for i in val)}"]
+
+
+def _axis_list(val: list[typing.Any] | None, name: str, f: typing.Callable[[typing.Any], str]) -> list[str]:
+    # For fields where both ends of the axis are meaningful: None is the whole
+    # axis, [] is explicitly nothing. Neither _filter_list nor _permission_list
+    # renders both.
+    if val is None:
+        return [f"{name}:*"]
     if len(val) == 0:
         return [f"{name}:!"]
     return [f"{name}:{','.join(f(i) for i in val)}"]
@@ -412,6 +424,30 @@ class SSHCommandPermission(_Base):
         return " ".join(output)
 
 
+# Mirrors provablyfine.api.schemas.grant.SSHCapability.
+class SSHCapability(enum.StrEnum):
+    SHELL = "shell"
+    PTY = "pty"
+    USER_RC = "user-rc"
+    AGENT_FORWARDING = "agent-forwarding"
+    X11_FORWARDING = "x11-forwarding"
+    PORT_FORWARDING = "port-forwarding"
+
+
+class SSHPermission(_Base):
+    # None always denotes the whole axis: any username, all capabilities
+    # (including future ones), any command.
+    username_list: list[str] | None
+    capability_list: list[SSHCapability] | None
+    command_list: list[str] | None
+
+    def to_text(self) -> str:
+        output = _axis_list(self.username_list, "username_list", lambda i: str(i))
+        output += _axis_list(self.capability_list, "capability_list", lambda i: str(i))
+        output += _axis_list(self.command_list, "command_list", lambda i: str(i))
+        return " ".join(output)
+
+
 class TenantUpdatePermission(_Base):
     display_name: bool
     is_enabled: bool
@@ -560,6 +596,15 @@ class SSHCommandGrant(_Base):
         return GrantText("ssh-command", self.filter.to_text(), self.permission.to_text())
 
 
+class SSHGrant(_Base):
+    type: typing.Literal["ssh"] = "ssh"
+    filter: TripletFilter
+    permission: SSHPermission
+
+    def to_text(self) -> GrantText:
+        return GrantText("ssh", self.filter.to_text(), self.permission.to_text())
+
+
 class TenantGrant(_Base):
     type: typing.Literal["tenant"] = "tenant"
     filter: TenantFilter
@@ -624,6 +669,7 @@ Grant = typing.Annotated[
     | SSHShellGrant
     | SSHPortForwardingGrant
     | SSHCommandGrant
+    | SSHGrant
     | TenantGrant
     | AuthGrant
     | BastionGrant

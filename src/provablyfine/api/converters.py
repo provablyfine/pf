@@ -279,6 +279,20 @@ def _grant_to_schema(converter: GrantConverter, grant: model.grant.Grant) -> sch
                 command_list=grant.permission.command_list,
             )
             g = schemas.grant.SSHCommandGrant(filter=filter, permission=permission)
+        case "ssh":
+            filter = schemas.grant.TripletFilter(
+                name=converter.to_identity(grant.filter.id),
+                tag_list=converter.to_tag_list(grant.filter.tag_id_list),
+                boundary_list=converter.to_boundary_list(grant.filter.boundary_id_list),
+            )
+            permission = schemas.grant.SSHPermission(
+                username_list=grant.permission.username_list,
+                capability_list=None
+                if grant.permission.capability_list is None
+                else [schemas.grant.SSHCapability(c) for c in grant.permission.capability_list],
+                command_list=grant.permission.command_list,
+            )
+            g = schemas.grant.SSHGrant(filter=filter, permission=permission)
         case "tenant":
             filter = schemas.grant.TenantFilter(id=grant.filter.id)
             permission = schemas.grant.TenantPermission(
@@ -449,6 +463,20 @@ def _grant_from_schema(converter: GrantConverter, grant: schemas.grant.Grant) ->
                 command_list=grant.permission.command_list,
             )
             g = model.grant.SSHCommandGrant(filter=filter, permission=permission)
+        case "ssh":
+            filter = model.grant.TripletFilter(
+                id=converter.from_identity(grant.filter.name),
+                tag_id_list=converter.from_tag_list(grant.filter.tag_list),
+                boundary_id_list=converter.from_boundary_list(grant.filter.boundary_list),
+            )
+            permission = model.grant.SSHPermission(
+                username_list=grant.permission.username_list,
+                capability_list=None
+                if grant.permission.capability_list is None
+                else [model.grant.SSHCapability(c) for c in grant.permission.capability_list],
+                command_list=grant.permission.command_list,
+            )
+            g = model.grant.SSHGrant(filter=filter, permission=permission)
         case "tenant":
             filter = model.grant.TenantFilter(id=grant.filter.id)
             permission = model.grant.TenantPermission(

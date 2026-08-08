@@ -106,3 +106,50 @@ Removing a grant from the active role should fail
   $ pfa -c config.json role read -i 1 -f json | jq '.grant_list[-1]' | pfa -c config.json role grant -i 1 --del
   Not allowed to remove grants from the active session role
   [2]
+
+An "ssh" grant round-trips through the wire schema. Nothing evaluates it yet:
+this asserts storage and display only. Note how null renders as "*" (the whole
+axis) and an empty list as "!" (explicitly nothing).
+  $ pfa -c config.json role create -n ssh-new
+  $ SSH_ROLE_ID=$(pfa -c config.json role list -n ssh-new -q)
+  $ pfa -c config.json role grant -i $SSH_ROLE_ID --set <<EOF
+  > - type: ssh
+  >   filter:
+  >     name: null
+  >     tag_list:
+  >       - name: env
+  >         value: dev
+  >     boundary_list: null
+  >   permission:
+  >     username_list: ["root", "{self}"]
+  >     capability_list: ["shell", "pty", "agent-forwarding"]
+  >     command_list: []
+  > - type: ssh
+  >   filter:
+  >     name: null
+  >     tag_list: null
+  >     boundary_list: null
+  >   permission:
+  >     username_list: null
+  >     capability_list: null
+  >     command_list: ["git-upload-pack /repo"]
+  > EOF
+  $ pfa -c config.json role read -i $SSH_ROLE_ID | grep -A 2 'type: *ssh'
+  grant        type:       ssh
+               filter:     tag_list:env=dev
+               permission: username_list:root,{self} capability_list:shell,pty,agent-forwarding command_list:!
+  grant        type:       ssh
+               filter:     *
+               permission: username_list:* capability_list:* command_list:git-upload-pack /repo
+
+An "ssh" permission denoting the empty atom set is rejected
+  $ pfa -c config.json role grant -i $SSH_ROLE_ID --set <<EOF
+  > - type: ssh
+  >   filter: {name: null, tag_list: null, boundary_list: null}
+  >   permission:
+  >     username_list: ["root"]
+  >     capability_list: []
+  >     command_list: []
+  > EOF
+  Request invalid. Value error, capability_list and command_list must not both be empty: body.grant_list.0.ssh.permission
+  [2]

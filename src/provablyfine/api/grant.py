@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import logging
 import typing
 
@@ -303,6 +304,23 @@ class TenantChecker:
         return self._checker.can(check)
 
 
+def triplet_match(
+    g: model.grant.TripletGrant,
+    identity_id: int,
+    tag_id_list: list[int],
+    boundary_id_list: list[int],
+) -> bool:
+    if g.filter.id is not None and g.filter.id != identity_id:
+        return False
+    if g.filter.tag_id_list is not None and not all(tag_id in tag_id_list for tag_id in g.filter.tag_id_list):
+        return False
+    if g.filter.boundary_id_list is not None and not all(
+        boundary_id in boundary_id_list for boundary_id in g.filter.boundary_id_list
+    ):
+        return False
+    return True
+
+
 class IdentityFilterChecker[G: model.grant.TripletGrant](Checker[G]):
     def __init__(
         self,
@@ -314,15 +332,7 @@ class IdentityFilterChecker[G: model.grant.TripletGrant](Checker[G]):
         cls: type[G],
     ):
         def cmp(g: G) -> bool:
-            if g.filter.id is not None and g.filter.id != identity_id:
-                return False
-            if g.filter.tag_id_list is not None and not all(tag_id in tag_id_list for tag_id in g.filter.tag_id_list):
-                return False
-            if g.filter.boundary_id_list is not None and not all(
-                boundary_id in boundary_id_list for boundary_id in g.filter.boundary_id_list
-            ):
-                return False
-            return True
+            return triplet_match(g, identity_id, tag_id_list, boundary_id_list)
 
         super().__init__(boundaries, roles, cmp, cls)
 
@@ -419,6 +429,173 @@ class SSHCommandChecker:
             return True
 
         return self._checker.list_can(check)
+
+
+_ALL_SSH_CAPABILITIES = frozenset(model.grant.SSHCapability)
+
+# None denotes the whole command axis (any command).
+type _CommandSet = frozenset[str] | None
+
+
+def _ssh_grants(grant_list: list[model.grant.Grant]) -> list[model.grant.SSHGrant]:
+    """New-form grants plus the legacy SSH grants upcast to new form.
+
+    Upcasting at evaluation time keeps a single evaluation path: a boundary
+    expressed in one type family constrains grants expressed in the other.
+    """
+    output: list[model.grant.SSHGrant] = []
+    for g in grant_list:
+        match g:
+            case model.grant.SSHGrant():
+                output.append(g)
+            case model.grant.SSHShellGrant() | model.grant.SSHPortForwardingGrant() | model.grant.SSHCommandGrant():
+                if (upcast := model.grant.upcast(g)) is not None:
+                    output.append(upcast)
+            case _:
+                pass
+    return output
+
+
+def _capabilities(p: model.grant.SSHPermission) -> frozenset[model.grant.SSHCapability]:
+    if p.capability_list is None:
+        return _ALL_SSH_CAPABILITIES
+    return frozenset(p.capability_list)
+
+
+def _commands(p: model.grant.SSHPermission) -> _CommandSet:
+    if p.command_list is None:
+        return None
+    return frozenset(p.command_list)
+
+
+def _covers_username(p: model.grant.SSHPermission, username: str, unix_username: str | None) -> bool:
+    if p.username_list is None:
+        return True
+    resolved = [r for e in p.username_list if (r := resolve_username(e, unix_username)) is not None]
+    return username in resolved
+
+
+def _covers_command(entries: tuple[_CommandSet, ...], command: str) -> bool:
+    return any(e is None or command in e for e in entries)
+
+
+@dataclasses.dataclass(frozen=True)
+class _CommandAxis:
+    """Command patterns captured per layer, evaluated per command.
+
+    Capabilities are a finite universe and are materialized eagerly, but
+    commands are not: a grant of every command minus a deny of "rm" is a
+    cofinite set. So the same union/intersect/subtract structure is kept as a
+    predicate instead.
+    """
+
+    granted: tuple[_CommandSet, ...]
+    ceilings: tuple[tuple[_CommandSet, ...] | None, ...]  # one entry per boundary; None = no ceiling
+    denied: tuple[_CommandSet, ...]
+
+    def permits(self, command: str) -> bool:
+        if not _covers_command(self.granted, command):
+            return False
+        for ceiling in self.ceilings:
+            if ceiling is not None and not _covers_command(ceiling, command):
+                return False
+        return not _covers_command(self.denied, command)
+
+
+@dataclasses.dataclass(frozen=True)
+class SSHDecision:
+    """Resolution of the SSH policy for one (host, username) pair.
+
+    Deliberately not a pydantic schema: a decision is not policy. It has no
+    type tag, no filter and no wildcards, and cannot be serialized back into a
+    grant_list, ceiling_list or denied_list.
+    """
+
+    capabilities: frozenset[model.grant.SSHCapability]
+    commands: _CommandAxis
+
+    def permits_command(self, command: str) -> bool:
+        return self.commands.permits(command)
+
+
+class SSHChecker:
+    def __init__(
+        self,
+        boundaries: list[model.boundary.Boundary],
+        roles: list[model.role.Role],
+        identity_id: int,
+        tag_id_list: list[int],
+        boundary_id_list: list[int],
+    ):
+        self._boundaries = boundaries
+        self._roles = roles
+        self._identity_id = identity_id
+        self._tag_id_list = tag_id_list
+        self._boundary_id_list = boundary_id_list
+
+    def _matching(self, grant_list: list[model.grant.Grant]) -> list[model.grant.SSHGrant]:
+        return [
+            g
+            for g in _ssh_grants(grant_list)
+            if triplet_match(g, self._identity_id, self._tag_id_list, self._boundary_id_list)
+        ]
+
+    def _covering(
+        self, grant_list: list[model.grant.Grant], username: str, unix_username: str | None
+    ) -> list[model.grant.SSHPermission]:
+        return [
+            g.permission for g in self._matching(grant_list) if _covers_username(g.permission, username, unix_username)
+        ]
+
+    def decide(self, username: str, unix_username: str | None) -> SSHDecision:
+        granted: list[model.grant.SSHPermission] = []
+        for role in self._roles:
+            granted += self._covering(role.grant_list, username, unix_username)
+        capabilities = frozenset[model.grant.SSHCapability]().union(*(_capabilities(p) for p in granted))
+        commands_granted = tuple(_commands(p) for p in granted)
+
+        ceilings: list[tuple[_CommandSet, ...] | None] = []
+        commands_denied: list[_CommandSet] = []
+        for boundary in self._boundaries:
+            if boundary.ceiling_list is None:
+                ceilings.append(None)
+            else:
+                # Ceiling entries union first, then intersect; an atom no entry
+                # covers is denied.
+                covering = self._covering(boundary.ceiling_list, username, unix_username)
+                capabilities &= frozenset[model.grant.SSHCapability]().union(*(_capabilities(p) for p in covering))
+                ceilings.append(tuple(_commands(p) for p in covering))
+            # A deny is targeted: it removes only the atoms it covers.
+            for p in self._covering(boundary.denied_list, username, unix_username):
+                capabilities -= _capabilities(p)
+                commands_denied.append(_commands(p))
+
+        if not capabilities and not commands_granted:
+            logger.info(f"no ssh grant covers username={username}")
+        return SSHDecision(
+            capabilities=capabilities,
+            commands=_CommandAxis(granted=commands_granted, ceilings=tuple(ceilings), denied=tuple(commands_denied)),
+        )
+
+    def candidate_usernames(self, unix_username: str | None) -> tuple[frozenset[str], bool]:
+        """Usernames worth calling decide() on, plus whether a wildcard grant exists.
+
+        Only role grants are considered, and boundaries are deliberately not
+        applied: this enumerates candidates, it does not authorize them. A
+        grant with username_list None cannot be enumerated at all, hence the
+        flag.
+        """
+        usernames: set[str] = set()
+        wildcard = False
+        for role in self._roles:
+            for g in self._matching(role.grant_list):
+                if g.permission.username_list is None:
+                    wildcard = True
+                    continue
+                for entry in g.permission.username_list:
+                    if (resolved := resolve_username(entry, unix_username)) is not None:
+                        usernames.add(resolved)
+        return frozenset(usernames), wildcard
 
 
 class AuthChecker:
@@ -555,6 +732,9 @@ class Grants:
 
     def ssh_command(self, identity_id: int, tag_id_list: list[int], boundary_id_list: list[int]) -> SSHCommandChecker:
         return SSHCommandChecker(self._boundaries, self._roles, identity_id, tag_id_list, boundary_id_list)
+
+    def ssh(self, identity_id: int, tag_id_list: list[int], boundary_id_list: list[int]) -> SSHChecker:
+        return SSHChecker(self._boundaries, self._roles, identity_id, tag_id_list, boundary_id_list)
 
     def tenant(self, tenant_id: int | None) -> TenantChecker:
         return TenantChecker(self._boundaries, self._roles, tenant_id)
