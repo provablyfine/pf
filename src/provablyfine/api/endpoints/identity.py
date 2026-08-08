@@ -23,17 +23,20 @@ def _identity_uniqueness_conflict(
     # sqlite reports which column violated its UNIQUE constraint in the
     # underlying driver error (e.g. "UNIQUE constraint failed: identity.unix_username"),
     # so we can tell the two apart instead of returning one generic message.
-    if "identity.unix_username" in str(exc.orig):
+    orig = str(exc.orig)
+    if "identity.unix_username" in orig:
         return responses.ProblemHTTPException(
             responses.problem_response(
                 status_code=400, title='Identity already exists. "unix_username" must be unique.', detail=unix_username
             )
         )
-    return responses.ProblemHTTPException(
-        responses.problem_response(
-            status_code=400, title='Identity already exists. "name" must be unique.', detail=name
+    if "identity.name" in orig:
+        return responses.ProblemHTTPException(
+            responses.problem_response(
+                status_code=400, title='Identity already exists. "name" must be unique.', detail=name
+            )
         )
-    )
+    raise exc
 
 
 @router.get("", status_code=200, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
@@ -135,7 +138,14 @@ def _read_tag_ids(tag_id_list: list[int], tag_name_value_list: list[schemas.tag.
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=400, title="Request contains invalid fields")
         )
-    return id_list + tag_id_list
+
+    all_ids = id_list + tag_id_list
+    if len(set(all_ids)) != len(all_ids):
+        logger.info(f"Some tags are specified twice: tag_ids={all_ids}")
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=400, title="Request contains invalid fields")
+        )
+    return all_ids
 
 
 @router.post("", status_code=201, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
@@ -196,8 +206,7 @@ def delete_endpoint(identity_id: int) -> fastapi.responses.Response:
             responses.problem_response(status_code=403, title="Not allowed to delete identity")
         )
 
-    ctx.app_db.identity.delete(id=identity.id)
-    # XXX: delete all rows in other tables that reference this
+    model.identity.delete(id=identity.id)
     return _204
 
 

@@ -1,0 +1,12 @@
+# podman tars this whole directory as the build context. Only the paths the
+# test Containerfile COPYs are needed; everything else is 1.7GB of waste and,
+# worse, a source of flaky builds -- any file that grows while the context is
+# being tarred fails the build with "archive/tar: write too long". Live writers
+# inside the tree include tests/tmp*.t (cram jinja renders) and SQLite WAL
+# files from local tooling.
+*
+!pyproject.toml
+!README.md
+!LICENSE.md
+!src
+!packages/provablyfine-client
