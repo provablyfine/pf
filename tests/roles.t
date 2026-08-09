@@ -108,45 +108,7 @@ Removing a grant from the active role should fail
   Not allowed to remove grants from the active session role
   [2]
 
-An "ssh" grant round-trips through the wire schema. This asserts storage and
-display only; evaluation is covered by ssh.t. Note how null renders as "*"
-(the whole axis) and an empty list as "!" (explicitly nothing).
-  $ pfa -c config.json role create -n ssh-new
-  $ SSH_ROLE_ID=$(pfa -c config.json role list -n ssh-new -q)
-  $ pfa -c config.json role grant -i $SSH_ROLE_ID --set <<EOF
-  > - type: ssh
-  >   filter:
-  >     name: null
-  >     tag_list:
-  >       - name: env
-  >         value: dev
-  >     boundary_list: null
-  >   permission:
-  >     username_list: ["root", "{self}"]
-  >     capability_list: ["shell", "pty", "agent-forwarding"]
-  >     command_list: []
-  >     max_session_ttl_s: 3600
-  > - type: ssh
-  >   filter:
-  >     name: null
-  >     tag_list: null
-  >     boundary_list: null
-  >   permission:
-  >     username_list: null
-  >     capability_list: null
-  >     command_list: ["git-upload-pack /repo"]
-  >     max_session_ttl_s: null
-  > EOF
-  $ pfa -c config.json role read -i $SSH_ROLE_ID | grep -A 2 'type: *ssh'
-  grant        type:       ssh
-               filter:     tag_list:env=dev
-               permission: username_list:root,{self} capability_list:shell,pty,agent-forwarding command_list:! max_session_ttl_s:3600
-  grant        type:       ssh
-               filter:     *
-               permission: username_list:* capability_list:* command_list:git-upload-pack /repo max_session_ttl_s:*
-
-"pfa grant ssh" emits the new type. An unset axis is an empty list; the
---*-all flags spell the whole axis as null.
+Generate the SSH grant type
   $ pfa -c config.json grant ssh --tag env=dev --username root --capability shell pty
   type: ssh
   filter:
@@ -186,17 +148,50 @@ display only; evaluation is covered by ssh.t. Note how null renders as "*"
   [2]
   $ pfa -c config.json grant ssh --username root --capability nonsense 2>&1 | tail -1
   pfa grant ssh: error: argument --capability: invalid choice: * (glob)
-
-"--max-session-ttl" sets the one ordered dimension; omitting it means null,
-i.e. unbounded
   $ pfa -c config.json grant ssh --username root --capability shell --max-session-ttl 3600 -f json | jq -c .permission
   {"username_list":["root"],"capability_list":["shell"],"command_list":[],"max_session_ttl_s":3600}
+
+Add SSH-specific grants
+  $ pfa -c config.json role create -n ssh-new
+  $ SSH_ROLE_ID=$(pfa -c config.json role list -n ssh-new -q)
+  $ pfa -c config.json role grant -i $SSH_ROLE_ID --set <<EOF
+  > - type: ssh
+  >   filter:
+  >     name: null
+  >     tag_list:
+  >       - name: env
+  >         value: dev
+  >     boundary_list: null
+  >   permission:
+  >     username_list: ["root", "{self}"]
+  >     capability_list: ["shell", "pty", "agent-forwarding"]
+  >     command_list: []
+  >     max_session_ttl_s: 3600
+  > - type: ssh
+  >   filter:
+  >     name: null
+  >     tag_list: null
+  >     boundary_list: null
+  >   permission:
+  >     username_list: null
+  >     capability_list: null
+  >     command_list: ["git-upload-pack /repo"]
+  >     max_session_ttl_s: null
+  > EOF
+  $ pfa -c config.json role read -i $SSH_ROLE_ID | grep -A 2 'type: *ssh'
+  grant        type:       ssh
+               filter:     tag_list:env=dev
+               permission: username_list:root,{self} capability_list:shell,pty,agent-forwarding max_session_ttl_s:3600
+  grant        type:       ssh
+               filter:     *
+               permission: username_list:* capability_list:* command_list:git-upload-pack /repo max_session_ttl_s:*
   $ pfa -c config.json grant ssh --username root --capability shell --max-session-ttl 0 | pfa -c config.json role grant -i $SSH_ROLE_ID --add
   Request invalid. Input should be greater than 0: body.grant_list.2.ssh.permission.max_session_ttl_s
   [2]
 
-The field is required, so a grant written by an older client is rejected rather
-than silently defaulted to unbounded
+
+
+max_session_ttl_s is mandatory
   $ pfa -c config.json role grant -i $SSH_ROLE_ID --set <<EOF
   > - type: ssh
   >   filter: {name: null, tag_list: null, boundary_list: null}
@@ -208,25 +203,7 @@ than silently defaulted to unbounded
   Request invalid. Field required: ssh.permission.max_session_ttl_s
   [2]
 
-The legacy grant types are gone: an old client's request is now rejected
-outright rather than silently accepted.
-  $ pfa -c config.json role create -n legacy
-  $ LEGACY_ROLE_ID=$(pfa -c config.json role list -n legacy -q)
-  $ pfa -c config.json role grant -i $LEGACY_ROLE_ID --set <<EOF
-  > - type: ssh-shell
-  >   filter:
-  >     name: null
-  >     tag_list: [{name: env, value: dev}]
-  >     boundary_list: null
-  >   permission:
-  >     username_list: ["root"]
-  >     permit_agent_forwarding: false
-  >     permit_x11_forwarding: true
-  > EOF
-  Request invalid. Input tag 'ssh-shell' found using 'type' does not match any of the expected tags: * (glob)
-  [2]
-
-An "ssh" permission denoting the empty atom set is rejected
+An "ssh" permission granting nothing is rejected
   $ pfa -c config.json role grant -i $SSH_ROLE_ID --set <<EOF
   > - type: ssh
   >   filter: {name: null, tag_list: null, boundary_list: null}

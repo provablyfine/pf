@@ -57,17 +57,6 @@ def _filter_list(val: list[typing.Any] | None, name: str, f: typing.Callable[[ty
     return [f"{name}:{','.join(f(i) for i in val)}"]
 
 
-def _axis_list(val: list[typing.Any] | None, name: str, f: typing.Callable[[typing.Any], str]) -> list[str]:
-    # For fields where both ends of the axis are meaningful: None is the whole
-    # axis, [] is explicitly nothing. Neither _filter_list nor _permission_list
-    # renders both.
-    if val is None:
-        return [f"{name}:*"]
-    if len(val) == 0:
-        return [f"{name}:!"]
-    return [f"{name}:{','.join(f(i) for i in val)}"]
-
-
 def _permission_list(val: list[typing.Any] | None, name: str, f: typing.Callable[[typing.Any], str]) -> list[str]:
     if val is None:
         return [f"{name}:*"]
@@ -392,7 +381,6 @@ class IdentityPermission(_Base):
         return " ".join(output)
 
 
-# Mirrors provablyfine.api.schemas.grant.SSHCapability.
 class SSHCapability(enum.StrEnum):
     SHELL = "shell"
     PTY = "pty"
@@ -403,18 +391,15 @@ class SSHCapability(enum.StrEnum):
 
 
 class SSHPermission(_Base):
-    # None always denotes the whole axis: any username, all capabilities
-    # (including future ones), any command.
     username_list: list[str] | None
     capability_list: list[SSHCapability] | None
     command_list: list[str] | None
-    # The one ordered dimension, in seconds. None is unbounded.
     max_session_ttl_s: int | None
 
     def to_text(self) -> str:
-        output = _axis_list(self.username_list, "username_list", lambda i: str(i))
-        output += _axis_list(self.capability_list, "capability_list", lambda i: str(i))
-        output += _axis_list(self.command_list, "command_list", lambda i: str(i))
+        output = _permission_list(self.username_list, "username_list", lambda i: str(i))
+        output += _permission_list(self.capability_list, "capability_list", lambda i: str(i))
+        output += _permission_list(self.command_list, "command_list", lambda i: str(i))
         ttl = "*" if self.max_session_ttl_s is None else str(self.max_session_ttl_s)
         output += [f"max_session_ttl_s:{ttl}"]
         return " ".join(output)
