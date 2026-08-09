@@ -29,7 +29,7 @@ def test_tenant_migrations_match_model(tmp_path: pathlib.Path) -> None:
 
 
 # The revision just before the ssh grant capability model.
-_BEFORE_SSH_GRANT = "3f1a92c8b4e5"
+_BEFORE_SSH_GRANT = "5045f5101bb7"
 
 _ANY_FILTER = {"id": None, "tag_id_list": None, "boundary_id_list": None}
 

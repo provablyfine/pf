@@ -11,7 +11,7 @@ legacy grant types are deleted in the release that follows this one.
 `test_tenant_migration_upcasts_ssh_grants` pins the behaviour.
 
 Revision ID: c4d7e9b21a35
-Revises: 3f1a92c8b4e5
+Revises: 5045f5101bb7
 Create Date: 2026-08-08 10:00:00.000000
 
 """
@@ -23,7 +23,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = "c4d7e9b21a35"
-down_revision: str | None = "3f1a92c8b4e5"
+down_revision: str | None = "5045f5101bb7"
 branch_labels: str | None = None
 depends_on: str | None = None
 
