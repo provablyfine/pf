@@ -229,13 +229,12 @@ def _capability_entries(
 def list_hosts() -> schemas.ssh.SSHHostsResponse:
     caller = model.identity.read_one(id=ctx.identity_id)
     assert caller is not None
-    unix_username = caller.unix_username
     identities = model.identity.read_all()
     grants = grant.Grants.create()
     entries: list[schemas.ssh.SSHHostEntry] = []
     for identity in identities:
         checker = grants.ssh(identity.id, identity.tag_id_list, identity.boundary_id_list)
-        decisions = checker.list_decisions(unix_username)
+        decisions = checker.list_decisions(caller.unix_username)
 
         entries += _capability_entries(identity.name, "shell", model.grant.SSHCapability.SHELL, decisions)
         entries += _capability_entries(identity.name, "port", model.grant.SSHCapability.PORT_FORWARDING, decisions)
