@@ -91,8 +91,7 @@ def sign_user_certificate(data: schemas.ssh.SSHUserCertificateRequest) -> schema
 
     match data.action:
         case "shell":
-            capabilities = decision.capabilities
-            if model.grant.SSHCapability.SHELL not in capabilities:
+            if model.grant.SSHCapability.SHELL not in decision.capabilities:
                 raise responses.ProblemHTTPException(responses.problem_response(status_code=403, title="Forbidden"))
             cert = ssh.cert.Cert.create_user(
                 public_key=public_key,
@@ -102,19 +101,15 @@ def sign_user_certificate(data: schemas.ssh.SSHUserCertificateRequest) -> schema
                 valid_after=now - 10,
                 valid_before=now + ctx.config.user_certificate_lifetime,
                 critical_options=ssh.cert.CriticalOptions(force_command=None),
-                # Each extension is now a capability, so a boundary can cap it.
                 extensions=ssh.cert.Extensions(
-                    permit_pty=model.grant.SSHCapability.PTY in capabilities,
-                    permit_user_rc=model.grant.SSHCapability.USER_RC in capabilities,
-                    permit_port_forwarding=model.grant.SSHCapability.PORT_FORWARDING in capabilities,
-                    permit_x11_forwarding=model.grant.SSHCapability.X11_FORWARDING in capabilities,
-                    permit_agent_forwarding=model.grant.SSHCapability.AGENT_FORWARDING in capabilities,
+                    permit_pty=model.grant.SSHCapability.PTY in decision.capabilities,
+                    permit_user_rc=model.grant.SSHCapability.USER_RC in decision.capabilities,
+                    permit_port_forwarding=model.grant.SSHCapability.PORT_FORWARDING in decision.capabilities,
+                    permit_x11_forwarding=model.grant.SSHCapability.X11_FORWARDING in decision.capabilities,
+                    permit_agent_forwarding=model.grant.SSHCapability.AGENT_FORWARDING in decision.capabilities,
                 ),
                 signer=signer.key,
             )
-        # The port-forwarding and command certificates keep their hardcoded
-        # extensions: capabilities gate them, they do not shape them. Deriving
-        # them here would put permit-pty on a force-command certificate.
         case "port-forwarding":
             if model.grant.SSHCapability.PORT_FORWARDING not in decision.capabilities:
                 raise responses.ProblemHTTPException(responses.problem_response(status_code=403, title="Forbidden"))
