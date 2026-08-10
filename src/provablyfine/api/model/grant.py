@@ -137,26 +137,47 @@ class IdentityGrant(TripletGrant):
 
 
 class SSHCapability(enum.StrEnum):
-    SHELL = "shell"  # the session itself; gates shell certificates
-    PTY = "pty"  # certificate extension permit-pty
-    USER_RC = "user-rc"  # certificate extension permit-user-rc
-    AGENT_FORWARDING = "agent-forwarding"  # certificate extension permit-agent-forwarding
-    X11_FORWARDING = "x11-forwarding"  # certificate extension permit-X11-forwarding
-    PORT_FORWARDING = "port-forwarding"  # certificate extension permit-port-forwarding
+    """
+    Represent "capabilities" for an SSH certificate:
+    - SHELL: the certificate itself
+    - PTY: permit_pty certificate extension
+    - USER_RC: permit_user_rc certificate extension
+    - AGENT_FORWARDING: permit_agent_forwarding certificate extension
+    - X11_FORWARDING: permit_x11_forwarding certificate extension
+    - PORT_FORWARDING: permit_port_forwarding certificate extension
+    """
+    SHELL = "shell"
+    PTY = "pty"
+    USER_RC = "user-rc"
+    AGENT_FORWARDING = "agent-forwarding"
+    X11_FORWARDING = "x11-forwarding"
+    PORT_FORWARDING = "port-forwarding"
 
 
 class SSHPermission(DBBase):
-    """A set of capability atoms: (username, capability) and (username, command).
+    """
+    Every field is required and nullable: `None` always denotes the whole set
+    of possible values, including future ones. The exact semantics of each
+    field depend on whether this permission lives in a boundary denied or ceiling
+    or in a role grant.
 
-    Every field is required and nullable: `None` always denotes the whole axis
-    (any username, all capabilities including future ones, any command). The
-    entry denotes the same atom set wherever it appears; only the operation
-    depends on the list it sits in (union in a role grant_list, intersection in
-    a boundary ceiling_list, subtraction in a boundary denied_list).
+    For example, in a role grant:
+    - username_list = None means that sessions with any username are allowed.
+    - username_list = [] means that sessions are not allowed. Effectively, a useless entry.
+    - username_list = ["root", "{self}", "alice"] means that sessions can be created
+      for either root, alice, or the user's unix_username.
 
-    max_session_ttl_s is the one ordered dimension, so it specializes rather
-    than following the set operations: a grant raises the bound, a ceiling and
-    a deny lower it. None is unbounded.
+    For example, in a boundary ceiling grant:
+    - username_list = None means that sessions with any username are allowed. Effectively, a useless entry.
+    - username_list = [] means that sessions are not allowed.
+    - username_list = ["root", "{self}", "alice"] means that sessions can be created
+      for either root, alice, or the user's unix_username.
+
+    For example, in a boundary denied grant:
+    - username_list = None means that sessions with any username are disallowed.
+    - username_list = [] means that no sessions are disallowed. Effectively, a useless entry.
+    - username_list = ["root", "{self}", "alice"] means that sessions cannot be created
+      for either root, alice, or the user's unix_username.
     """
 
     username_list: list[str] | None
@@ -164,12 +185,8 @@ class SSHPermission(DBBase):
     command_list: list[str] | None
     max_session_ttl_s: int | None = pydantic.Field(gt=0)
 
-    # An empty username_list is deliberately *not* rejected: migrated rows may
-    # carry one, and it is fail-closed in every position -- unlike an entry
-    # with both other axes empty, which is a deny that denies nothing. The
-    # authoring surfaces refuse to write either.
     @pydantic.model_validator(mode="after")
-    def _reject_empty_atom_set(self) -> SSHPermission:
+    def _reject_empty(self) -> SSHPermission:
         if self.capability_list == [] and self.command_list == []:
             raise ValueError("capability_list and command_list must not both be empty")
         return self
