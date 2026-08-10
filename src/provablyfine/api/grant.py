@@ -423,33 +423,33 @@ class _CommandAxis:
     predicate instead.
     """
 
-    granted: tuple[_CommandEntry, ...]
-    ceilings: tuple[tuple[_CommandEntry, ...] | None, ...]  # one entry per boundary; None = no ceiling
-    denied: tuple[_CommandEntry, ...]
+    _granted: tuple[_CommandEntry, ...]
+    _ceilings: tuple[tuple[_CommandEntry, ...] | None, ...]  # one entry per boundary; None = no ceiling
+    _denied: tuple[_CommandEntry, ...]
 
     def _covering(self, entries: tuple[_CommandEntry, ...], command: str) -> list[_CommandEntry]:
         return [e for e in entries if e.commands is None or command in e.commands]
 
     def permits(self, command: str) -> bool:
-        if not self._covering(self.granted, command):
+        if not self._covering(self._granted, command):
             return False
-        for ceiling in self.ceilings:
+        for ceiling in self._ceilings:
             if ceiling is not None and not self._covering(ceiling, command):
                 return False
         # Only a deny over the whole duration axis removes the command. One
         # that names a bound denies the excess -- it clamps, see ttl().
-        return not any(e.ttl is None for e in self._covering(self.denied, command))
+        return not any(e.ttl is None for e in self._covering(self._denied, command))
 
     def ttl(self, command: str) -> int | None:
         """Only valid for a permitted command -- permits() is what guarantees
         every layer below covers it. Reached through SSHDecision.command_ttl_s,
         which enforces that.
         """
-        result = _raise_over(self._covering(self.granted, command))
-        for ceiling in self.ceilings:
+        result = _raise_over(self._covering(self._granted, command))
+        for ceiling in self._ceilings:
             if ceiling is not None:
                 result = _lower_ttl(result, _raise_over(self._covering(ceiling, command)))
-        for entry in self._covering(self.denied, command):
+        for entry in self._covering(self._denied, command):
             if entry.ttl is not None:
                 result = _lower_ttl(result, entry.ttl)
         return result
@@ -459,13 +459,13 @@ class _CommandAxis:
         whether a grant covers the whole axis (in which case the permitted set
         is cofinite and cannot be listed)."""
         output: list[str] = []
-        for entry in self.granted:
+        for entry in self._granted:
             if entry.commands is None:
                 continue
             for command in entry.commands:
                 if command not in output and self.permits(command):
                     output.append(command)
-        return output, any(entry.commands is None for entry in self.granted)
+        return output, any(entry.commands is None for entry in self._granted)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -588,11 +588,11 @@ class SSHChecker:
             logger.info(f"no ssh grant covers username={username}")
         return SSHDecision(
             capabilities=capabilities,
-            commands=_CommandAxis(granted=commands_granted, ceilings=tuple(ceilings), denied=tuple(commands_denied)),
+            commands=_CommandAxis(_granted=commands_granted, _ceilings=tuple(ceilings), _denied=tuple(commands_denied)),
             capability_ttl={c: capability_ttl[c] for c in capabilities},
         )
 
-    def candidate_usernames(self, unix_username: str | None) -> tuple[list[str], bool]:
+    def _candidate_usernames(self, unix_username: str | None) -> tuple[list[str], bool]:
         """Usernames worth calling decide() on, plus whether a wildcard grant exists.
 
         Only role grants are considered, and boundaries are deliberately not
@@ -636,7 +636,7 @@ class SSHChecker:
         username_list, so every username named by no entry -- in a grant, a
         ceiling or a deny -- resolves identically.
         """
-        usernames, wildcard = self.candidate_usernames(unix_username)
+        usernames, wildcard = self._candidate_usernames(unix_username)
         output: list[tuple[str | None, SSHDecision]] = [(u, self.decide(u, unix_username)) for u in usernames]
         if wildcard:
             named = self._named_usernames(unix_username)
