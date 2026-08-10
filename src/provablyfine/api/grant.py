@@ -560,7 +560,7 @@ class SSHChecker:
             logger.info(f"no ssh grant covers username={username}")
         return SSHDecision(
             capabilities=capabilities,
-            commands=_CommandAxis(
+            commands=SSHCommandPermissions(
                 _granted=tuple(commands_granted), _ceilings=tuple(commands_ceilings), _denied=tuple(commands_denied)
             ),
             capability_ttl={c: capability_ttl[c] for c in capabilities},

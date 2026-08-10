@@ -881,7 +881,7 @@ def test_ssh_decide_command_ceiling():
 
 
 def test_ssh_decide_order_independent():
-    # Compared by behavior, not by equality: _CommandAxis holds tuples, whose
+    # Compared by behavior, not by equality: SSHCommandPermission holds tuples, whose
     # equality is order-sensitive.
     ceiling = [_ssh(capabilities=["shell", "pty"], commands=["ls"]), _ssh(capabilities=["user-rc"], commands=["df"])]
     denied = [_ssh(capabilities=["pty"], commands=[]), _ssh(capabilities=[], commands=["df"])]

@@ -135,7 +135,8 @@ def sign_user_certificate(data: schemas.ssh.SSHUserCertificateRequest) -> schema
                 raise responses.ProblemHTTPException(
                     responses.problem_response(status_code=400, title="command required for action=command")
                 )
-            if not decision.commands.permits(data.command):
+            command_decision = decision.commands.permits(data.command)
+            if command_decision is None:
                 raise responses.ProblemHTTPException(responses.problem_response(status_code=403, title="Forbidden"))
             cert = ssh.cert.Cert.create_user(
                 public_key=public_key,
