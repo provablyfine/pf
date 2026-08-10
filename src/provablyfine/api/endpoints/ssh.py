@@ -135,7 +135,7 @@ def sign_user_certificate(data: schemas.ssh.SSHUserCertificateRequest) -> schema
                 raise responses.ProblemHTTPException(
                     responses.problem_response(status_code=400, title="command required for action=command")
                 )
-            if not decision.permits_command(data.command):
+            if not decision.commands.permits(data.command):
                 raise responses.ProblemHTTPException(responses.problem_response(status_code=403, title="Forbidden"))
             cert = ssh.cert.Cert.create_user(
                 public_key=public_key,
@@ -242,7 +242,7 @@ def list_hosts() -> schemas.ssh.SSHHostsResponse:
         # Command entries carry the permitted commands, which differ per
         # username, so they cannot be merged the way shell and port are.
         for username, decision in decisions:
-            commands, any_command = decision.candidate_commands()
+            commands, any_command = decision.commands.candidates()
             if not commands and not any_command:
                 continue
             entries.append(

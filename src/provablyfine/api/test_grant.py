@@ -761,7 +761,7 @@ def test_ssh_decide_empty():
     decision = _decide(grant.Grants([], []))
 
     assert decision.capabilities == frozenset()
-    assert not decision.permits_command("ls")
+    assert decision.commands.permits("ls") is None
 
 
 def test_ssh_decide_union_over_role_grants():
@@ -859,25 +859,25 @@ def test_ssh_decide_command_cofinite():
     )
     decision = _decide(grants)
 
-    assert decision.permits_command("ls")
-    assert not decision.permits_command("rm -rf /")
+    assert decision.commands.permits("ls") is not None
+    assert decision.commands.permits("rm -rf /") is None
 
 
 def test_ssh_decide_command_is_exact_match():
     grants = grant.Grants([], [role([_ssh(capabilities=[], commands=["git-upload-pack /repo"])])])
     decision = _decide(grants)
 
-    assert decision.permits_command("git-upload-pack /repo")
-    assert not decision.permits_command("git-upload-pack /repo2")
-    assert not decision.permits_command("git-upload-pack")
+    assert decision.commands.permits("git-upload-pack /repo") is not None
+    assert decision.commands.permits("git-upload-pack /repo2") is None
+    assert decision.commands.permits("git-upload-pack") is None
 
 
 def test_ssh_decide_command_ceiling():
     grants = grant.Grants([boundary([_ssh(capabilities=[], commands=["ls"])], [])], [role([_ssh()])])
     decision = _decide(grants)
 
-    assert decision.permits_command("ls")
-    assert not decision.permits_command("rm")
+    assert decision.commands.permits("ls") is not None
+    assert decision.commands.permits("rm") is None
 
 
 def test_ssh_decide_order_independent():
@@ -893,9 +893,9 @@ def test_ssh_decide_order_independent():
 
     assert decision.capabilities == other.capabilities == {CAP.SHELL, CAP.USER_RC}
     for command in ["ls", "df", "rm"]:
-        assert decision.permits_command(command) == other.permits_command(command)
-    assert decision.permits_command("ls")
-    assert not decision.permits_command("df")
+        assert decision.commands.permits(command) == other.commands.permits(command)
+    assert decision.commands.permits("ls") is not None
+    assert decision.commands.permits("df") is None
 
 
 def test_ssh_candidate_commands_in_grant_order():
@@ -904,7 +904,7 @@ def test_ssh_candidate_commands_in_grant_order():
         [role([_ssh(capabilities=[], commands=["/bin/df", "/bin/ls", "/bin/rm"])])],
     )
 
-    commands, any_command = _decide(grants).candidate_commands()
+    commands, any_command = _decide(grants).commands.candidates()
 
     assert commands == ["/bin/df", "/bin/ls"]  # the denied one is dropped
     assert not any_command
@@ -913,7 +913,7 @@ def test_ssh_candidate_commands_in_grant_order():
 def test_ssh_candidate_commands_wildcard_is_not_enumerable():
     grants = grant.Grants([], [role([_ssh(commands=None)])])
 
-    commands, any_command = _decide(grants).candidate_commands()
+    commands, any_command = _decide(grants).commands.candidates()
 
     assert commands == []
     assert any_command
@@ -966,7 +966,7 @@ def test_ssh_list_decisions_wildcard_avoids_named_usernames():
 def test_ssh_ttl_unbounded_by_default():
     grants = grant.Grants([], [role([_ssh(capabilities=["shell"], commands=[])])])
 
-    assert _decide(grants).session_ttl_s(CAP.SHELL) is None
+    assert _decide(grants).capability_ttl[CAP.SHELL] is None
 
 
 def test_ssh_ttl_grants_raise():
@@ -979,7 +979,7 @@ def test_ssh_ttl_grants_raise():
         ],
     )
 
-    assert _decide(grants).session_ttl_s(CAP.SHELL) == 3600
+    assert _decide(grants).capability_ttl[CAP.SHELL] == 3600
 
 
 def test_ssh_ttl_unbounded_grant_absorbs():
@@ -990,22 +990,22 @@ def test_ssh_ttl_unbounded_grant_absorbs():
         [role([_ssh(capabilities=["shell"], commands=[], ttl=60), _ssh(capabilities=["shell"], commands=[])])],
     )
 
-    assert _decide(grants).session_ttl_s(CAP.SHELL) is None
+    assert _decide(grants).capability_ttl[CAP.SHELL] is None
 
 
 def test_ssh_ttl_ceiling_lowers_but_never_raises():
     granted = _ssh(capabilities=["shell"], commands=[], ttl=3600)
 
     tight = grant.Grants([boundary([_ssh(capabilities=["shell"], commands=[], ttl=60)], [])], [role([granted])])
-    assert _decide(tight).session_ttl_s(CAP.SHELL) == 60
+    assert _decide(tight).capability_ttl[CAP.SHELL] == 60
 
     # A ceiling is a bound, not a grant: it cannot raise 3600 to 86400.
     loose = grant.Grants([boundary([_ssh(capabilities=["shell"], commands=[], ttl=86400)], [])], [role([granted])])
-    assert _decide(loose).session_ttl_s(CAP.SHELL) == 3600
+    assert _decide(loose).capability_ttl[CAP.SHELL] == 3600
 
     # An unbounded ceiling tightens nothing.
     unbounded = grant.Grants([boundary([_ssh(capabilities=["shell"], commands=[])], [])], [role([granted])])
-    assert _decide(unbounded).session_ttl_s(CAP.SHELL) == 3600
+    assert _decide(unbounded).capability_ttl[CAP.SHELL] == 3600
 
 
 def test_ssh_ttl_ceiling_bounds_an_unbounded_grant():
@@ -1014,7 +1014,7 @@ def test_ssh_ttl_ceiling_bounds_an_unbounded_grant():
         [role([_ssh(capabilities=["shell"], commands=[])])],
     )
 
-    assert _decide(grants).session_ttl_s(CAP.SHELL) == 60
+    assert _decide(grants).capability_ttl[CAP.SHELL] == 60
 
 
 def test_ssh_ttl_bounded_deny_clamps_rather_than_removes():
@@ -1027,7 +1027,7 @@ def test_ssh_ttl_bounded_deny_clamps_rather_than_removes():
     decision = _decide(grants)
 
     assert CAP.SHELL in decision.capabilities
-    assert decision.session_ttl_s(CAP.SHELL) == 60
+    assert decision.capability_ttl[CAP.SHELL] == 60
 
 
 def test_ssh_ttl_unbounded_deny_removes_the_atom():
@@ -1047,8 +1047,8 @@ def test_ssh_ttl_deny_is_scoped_by_username():
         [role([_ssh(capabilities=["shell"], commands=[], ttl=3600)])],
     )
 
-    assert _decide(grants, username="root").session_ttl_s(CAP.SHELL) == 60
-    assert _decide(grants, username="alice").session_ttl_s(CAP.SHELL) == 3600
+    assert _decide(grants, username="root").capability_ttl[CAP.SHELL] == 60
+    assert _decide(grants, username="alice").capability_ttl[CAP.SHELL] == 3600
 
 
 def test_ssh_ttl_is_per_capability():
@@ -1066,15 +1066,15 @@ def test_ssh_ttl_is_per_capability():
     )
     decision = _decide(grants)
 
-    assert decision.session_ttl_s(CAP.SHELL) == 3600
-    assert decision.session_ttl_s(CAP.PORT_FORWARDING) == 86400
+    assert decision.capability_ttl[CAP.SHELL] == 3600
+    assert decision.capability_ttl[CAP.PORT_FORWARDING] == 86400
 
 
 def test_ssh_ttl_raises_for_a_capability_not_granted():
     grants = grant.Grants([], [role([_ssh(capabilities=["shell"], commands=[], ttl=60)])])
 
     with pytest.raises(KeyError):
-        _decide(grants).session_ttl_s(CAP.PTY)
+        _decide(grants).capability_ttl[CAP.PTY]
 
 
 def test_ssh_command_ttl():
@@ -1086,8 +1086,8 @@ def test_ssh_command_ttl():
 
     # The cofinite case: a bounded deny clamps the command it names and leaves
     # every other command alone.
-    assert decision.command_ttl_s("/bin/ls") == 60
-    assert decision.command_ttl_s("/bin/df") == 3600
+    assert decision.commands.permits("/bin/ls").ttl == 60
+    assert decision.commands.permits("/bin/df").ttl == 3600
 
 
 def test_ssh_command_unbounded_deny_forbids():
@@ -1097,10 +1097,8 @@ def test_ssh_command_unbounded_deny_forbids():
     )
     decision = _decide(grants)
 
-    assert not decision.permits_command("/bin/ls")
-    with pytest.raises(KeyError):
-        decision.command_ttl_s("/bin/ls")
-    assert decision.command_ttl_s("/bin/df") == 3600
+    assert decision.commands.permits("/bin/ls") is None
+    assert decision.commands.permits("/bin/df").ttl == 3600
 
 
 def test_ssh_ttl_order_independent():
@@ -1113,8 +1111,8 @@ def test_ssh_ttl_order_independent():
 
     # ceiling union = 7200, lowered against granted 3600 -> 3600; denies clamp
     # to the smallest, 600.
-    assert _decide(forward).session_ttl_s(CAP.SHELL) == 600
-    assert _decide(backward).session_ttl_s(CAP.SHELL) == 600
+    assert _decide(forward).capability_ttl[CAP.SHELL] == 600
+    assert _decide(backward).capability_ttl[CAP.SHELL] == 600
 
 
 def test_ssh_ttl_across_two_boundaries():
@@ -1135,6 +1133,6 @@ def test_ssh_ttl_across_two_boundaries():
     for grants in (forward, backward):
         decision = _decide(grants)
         assert decision.capabilities == {CAP.PTY}
-        assert decision.session_ttl_s(CAP.PTY) == 3600
+        assert decision.capability_ttl[CAP.PTY] == 3600
         with pytest.raises(KeyError):
-            decision.session_ttl_s(CAP.SHELL)
+            decision.capability_ttl[CAP.SHELL]

@@ -414,15 +414,12 @@ def _raise_over(entries: list[_CommandEntry]) -> int | None:
 
 
 @dataclasses.dataclass(frozen=True)
-class _CommandAxis:
-    """Command patterns captured per layer, evaluated per command.
+class SSHCommandAllowed:
+    ttl: int | None
 
-    Capabilities are a finite universe and are materialized eagerly, but
-    commands are not: a grant of every command minus a deny of "rm" is a
-    cofinite set. So the same union/intersect/subtract structure is kept as a
-    predicate instead.
-    """
 
+@dataclasses.dataclass(frozen=True)
+class SSHCommandPermissions:
     _granted: tuple[_CommandEntry, ...]
     _ceilings: tuple[tuple[_CommandEntry, ...] | None, ...]  # one entry per boundary; None = no ceiling
     _denied: tuple[_CommandEntry, ...]
@@ -430,21 +427,17 @@ class _CommandAxis:
     def _covering(self, entries: tuple[_CommandEntry, ...], command: str) -> list[_CommandEntry]:
         return [e for e in entries if e.commands is None or command in e.commands]
 
-    def permits(self, command: str) -> bool:
+    def permits(self, command: str) -> SSHCommandAllowed | None:
         if not self._covering(self._granted, command):
-            return False
+            return None
         for ceiling in self._ceilings:
             if ceiling is not None and not self._covering(ceiling, command):
-                return False
-        # Only a deny over the whole duration axis removes the command. One
-        # that names a bound denies the excess -- it clamps, see ttl().
-        return not any(e.ttl is None for e in self._covering(self._denied, command))
+                return None
+        if any(e.ttl is None for e in self._covering(self._denied, command)):
+            return None
+        return SSHCommandAllowed(ttl=self._ttl(command))
 
-    def ttl(self, command: str) -> int | None:
-        """Only valid for a permitted command -- permits() is what guarantees
-        every layer below covers it. Reached through SSHDecision.command_ttl_s,
-        which enforces that.
-        """
+    def _ttl(self, command: str) -> int | None:
         result = _raise_over(self._covering(self._granted, command))
         for ceiling in self._ceilings:
             if ceiling is not None:
@@ -471,33 +464,16 @@ class _CommandAxis:
 @dataclasses.dataclass(frozen=True)
 class SSHDecision:
     """
-    Resolution of the SSH policy for one (host, username) pair.
+    SSH permission for one (host, username) pair.
     """
 
     capabilities: frozenset[model.grant.SSHCapability]
-    commands: _CommandAxis
+    commands: SSHCommandPermissions
+    """
+    TTL per capability: a grant of port-forwarding for 8h alongside
+    a grant of shell for 1h must not give the shell session 8h
+    """
     capability_ttl: typing.Mapping[model.grant.SSHCapability, int | None]
-
-    def session_ttl_s(self, capability: model.grant.SSHCapability) -> int | None:
-        """
-        Per capability rather than per session: a grant of port-forwarding for
-        8h alongside a grant of shell for 1h must not give the shell session
-        8h.
-        """
-        if capability not in self.capabilities:
-            raise KeyError(capability)
-        return self.capability_ttl[capability]
-
-    def permits_command(self, command: str) -> bool:
-        return self.commands.permits(command)
-
-    def candidate_commands(self) -> tuple[list[str], bool]:
-        return self.commands.candidates()
-
-    def command_ttl_s(self, command: str) -> int | None:
-        if not self.permits_command(command):
-            raise KeyError(command)
-        return self.commands.ttl(command)
 
 
 class SSHChecker:
