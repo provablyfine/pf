@@ -470,34 +470,29 @@ class _CommandAxis:
 
 @dataclasses.dataclass(frozen=True)
 class SSHDecision:
-    """Resolution of the SSH policy for one (host, username) pair.
-
-    Deliberately not a pydantic schema: a decision is not policy. It has no
-    type tag, no filter and no wildcards, and cannot be serialized back into a
-    grant_list, ceiling_list or denied_list.
+    """
+    Resolution of the SSH policy for one (host, username) pair.
     """
 
     capabilities: frozenset[model.grant.SSHCapability]
     commands: _CommandAxis
     capability_ttl: typing.Mapping[model.grant.SSHCapability, int | None]
 
+    def session_ttl_s(self, capability: model.grant.SSHCapability) -> int | None:
+        """
+        Per capability rather than per session: a grant of port-forwarding for
+        8h alongside a grant of shell for 1h must not give the shell session
+        8h.
+        """
+        if capability not in self.capabilities:
+            raise KeyError(capability)
+        return self.capability_ttl[capability]
+
     def permits_command(self, command: str) -> bool:
         return self.commands.permits(command)
 
     def candidate_commands(self) -> tuple[list[str], bool]:
         return self.commands.candidates()
-
-    def session_ttl_s(self, capability: model.grant.SSHCapability) -> int | None:
-        """Bound on a session using this capability. None is unbounded.
-
-        Per capability rather than per session: a grant of port-forwarding for
-        8h alongside a grant of shell for 1h must not give the shell session
-        8h. Raises for a capability that is not granted, since None already
-        means unbounded.
-        """
-        if capability not in self.capabilities:
-            raise KeyError(capability)
-        return self.capability_ttl[capability]
 
     def command_ttl_s(self, command: str) -> int | None:
         if not self.permits_command(command):
