@@ -366,7 +366,7 @@ def _commands(p: model.grant.SSHPermission) -> _CommandSet:
     return tuple(p.command_list)
 
 
-def _entry(p: model.grant.SSHPermission) -> _CommandEntry:
+def _command_entry(p: model.grant.SSHPermission) -> _CommandEntry:
     return _CommandEntry(commands=_commands(p), ttl=p.max_session_ttl_s)
 
 
@@ -530,29 +530,30 @@ class SSHChecker:
         ]
 
     def decide(self, username: str, unix_username: str | None) -> SSHDecision:
-        granted: list[model.grant.SSHPermission] = []
-        for role in self._roles:
-            granted += self._covering(role.grant_list, username, unix_username)
-        capabilities = frozenset[model.grant.SSHCapability]().union(*(_capabilities(p) for p in granted))
-        commands_granted = tuple(_entry(p) for p in granted)
-        # Grants raise the bound, per capability.
-        capability_ttl: dict[model.grant.SSHCapability, int | None] = {}
-        for p in granted:
-            for c in _capabilities(p):
-                capability_ttl[c] = (
-                    p.max_session_ttl_s
-                    if c not in capability_ttl
-                    else _raise_ttl(capability_ttl[c], p.max_session_ttl_s)
-                )
-
-        ceilings: list[tuple[_CommandEntry, ...] | None] = []
+        commands_granted: list[_CommandEntry] = []
+        commands_ceilings: list[tuple[_CommandEntry, ...] | None] = []
         commands_denied: list[_CommandEntry] = []
+        capabilities: frozenset[model.grant.SSHCapability] = frozenset()
+        capability_ttl: dict[model.grant.SSHCapability, int | None] = {}
+
+        # role grants
+        for role in self._roles:
+            granted = self._covering(role.grant_list, username, unix_username)
+            commands_granted += [_command_entry(p) for p in granted]
+            for p in granted:
+                capabilities |= _capabilities(p)
+                for c in _capabilities(p):
+                    capability_ttl[c] = (
+                        p.max_session_ttl_s
+                        if c not in capability_ttl
+                        else _raise_ttl(capability_ttl[c], p.max_session_ttl_s)
+                    )
+
+        # boundary ceiling_list
         for boundary in self._boundaries:
             if boundary.ceiling_list is None:
-                ceilings.append(None)
+                commands_ceilings.append(None)
             else:
-                # Ceiling entries union first, then intersect; an atom no entry
-                # covers is denied.
                 covering = self._covering(boundary.ceiling_list, username, unix_username)
                 ceiling_ttl: dict[model.grant.SSHCapability, int | None] = {}
                 for p in covering:
@@ -565,25 +566,27 @@ class SSHChecker:
                 capabilities &= frozenset(ceiling_ttl)
                 for c in capabilities:
                     capability_ttl[c] = _lower_ttl(capability_ttl[c], ceiling_ttl[c])
-                ceilings.append(tuple(_entry(p) for p in covering))
-            # A deny is targeted: it removes only the atoms it covers.
+                commands_ceilings.append(tuple(_command_entry(p) for p in covering))
+
+        # boundary denied_list
+        for boundary in self._boundaries:
             for p in self._covering(boundary.denied_list, username, unix_username):
                 if p.max_session_ttl_s is None:
-                    # The whole duration axis: remove the atom outright, as on
-                    # the discrete axes.
+                    # max_session_ttl_s = None in a denied_list means that any session
+                    # of any duration is not allowed so we remove the matching capabilities
                     capabilities -= _capabilities(p)
                 else:
-                    # A bounded deny denies only the excess, so it clamps
-                    # rather than removes.
                     for c in _capabilities(p) & capabilities:
                         capability_ttl[c] = _lower_ttl(capability_ttl[c], p.max_session_ttl_s)
-                commands_denied.append(_entry(p))
+                commands_denied.append(_command_entry(p))
 
         if not capabilities and not commands_granted:
             logger.info(f"no ssh grant covers username={username}")
         return SSHDecision(
             capabilities=capabilities,
-            commands=_CommandAxis(_granted=commands_granted, _ceilings=tuple(ceilings), _denied=tuple(commands_denied)),
+            commands=_CommandAxis(
+                _granted=tuple(commands_granted), _ceilings=tuple(commands_ceilings), _denied=tuple(commands_denied)
+            ),
             capability_ttl={c: capability_ttl[c] for c in capabilities},
         )
 

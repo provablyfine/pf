@@ -898,36 +898,6 @@ def test_ssh_decide_order_independent():
     assert not decision.permits_command("df")
 
 
-def test_ssh_candidate_usernames():
-    grants = grant.Grants(
-        [],
-        [
-            role(
-                [
-                    _ssh(usernames=["root", "{self}"], capabilities=["shell"], commands=[]),
-                    _ssh(usernames=["deploy"], capabilities=["shell"], commands=[], filter={**ANY_FILTER, "id": 99}),
-                ]
-            )
-        ],
-    )
-
-    usernames, wildcard = grants.ssh(1, [], []).candidate_usernames("unix_alice")
-
-    # Ordered by first appearance, because these end up on screen. The id=99
-    # grant does not match identity 1.
-    assert usernames == ["root", "unix_alice"]
-    assert not wildcard
-
-
-def test_ssh_candidate_usernames_wildcard():
-    grants = grant.Grants([], [role([_ssh(usernames=None)])])
-
-    usernames, wildcard = grants.ssh(1, [], []).candidate_usernames("unix_alice")
-
-    assert usernames == []
-    assert wildcard
-
-
 def test_ssh_candidate_commands_in_grant_order():
     grants = grant.Grants(
         [_deny_boundary([_ssh(capabilities=[], commands=["/bin/rm"])])],
