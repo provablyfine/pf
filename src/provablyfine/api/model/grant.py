@@ -146,6 +146,7 @@ class SSHCapability(enum.StrEnum):
     - X11_FORWARDING: permit_x11_forwarding certificate extension
     - PORT_FORWARDING: permit_port_forwarding certificate extension
     """
+
     SHELL = "shell"
     PTY = "pty"
     USER_RC = "user-rc"
