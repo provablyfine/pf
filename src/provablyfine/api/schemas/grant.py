@@ -103,8 +103,6 @@ class IdentityGrant(base.APIBase):
     permission: IdentityPermission
 
 
-# Mirrors model.grant.SSHCapability. Duplicated rather than imported: schemas
-# must not depend on the model layer.
 class SSHCapability(enum.StrEnum):
     SHELL = "shell"
     PTY = "pty"
@@ -115,16 +113,13 @@ class SSHCapability(enum.StrEnum):
 
 
 class SSHPermission(base.APIBase):
-    # None always denotes the whole axis: any username, all capabilities
-    # (including future ones), any command.
     username_list: list[str] | None
     capability_list: list[SSHCapability] | None
     command_list: list[str] | None
-    # The one ordered dimension: grants raise it, ceilings and denies lower it.
     max_session_ttl_s: int | None = pydantic.Field(gt=0)
 
     @pydantic.model_validator(mode="after")
-    def _reject_empty_atom_set(self) -> SSHPermission:
+    def _reject_empty(self) -> SSHPermission:
         if self.capability_list == [] and self.command_list == []:
             raise ValueError("capability_list and command_list must not both be empty")
         return self
