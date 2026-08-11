@@ -1041,6 +1041,18 @@ def test_ssh_ttl_unbounded_deny_removes_the_atom():
     assert CAP.SHELL not in _decide(grants).capabilities
 
 
+@pytest.mark.parametrize("ttl", [None, 60])
+def test_ssh_ttl_deny_never_grants(ttl: int | None):
+    # A deny only takes away: naming a capability that no grant covers must not
+    # introduce it, whether the deny is bounded or not.
+    grants = grant.Grants(
+        [_deny_boundary([_ssh(capabilities=["pty"], commands=[], ttl=ttl)])],
+        [role([_ssh(capabilities=["shell"], commands=[], ttl=3600)])],
+    )
+
+    assert _decide(grants).capabilities == {CAP.SHELL}
+
+
 def test_ssh_ttl_deny_is_scoped_by_username():
     grants = grant.Grants(
         [_deny_boundary([_ssh(usernames=["root"], capabilities=["shell"], commands=[], ttl=60)])],

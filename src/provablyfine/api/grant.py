@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import collections.abc
 import dataclasses
 import logging
 import typing
@@ -377,20 +378,77 @@ def _covers_username(p: model.grant.SSHPermission, username: str, unix_username:
     return username in resolved
 
 
-# Session TTL is an ordered dimension, so it does not follow the set
-# operations: grants raise the bound, ceilings and denies lower it. None means
-# unbounded, which is the top of the order -- so plain max/min will not do, and
-# None means something different again inside a deny (see decide).
-def _raise_ttl(a: int | None, b: int | None) -> int | None:
-    """Unbounded absorbs: an entry with no bound is the largest bound."""
-    return None if a is None or b is None else max(a, b)
+def _ttl_max(a: int | None, b: int | None) -> int | None:
+    if a is None:
+        return None
+    if b is None:
+        return None
+    return max(a, b)
 
 
-def _lower_ttl(a: int | None, b: int | None) -> int | None:
-    """Unbounded is the identity: it tightens nothing."""
+def _ttl_min(a: int | None, b: int | None) -> int | None:
     if a is None:
         return b
-    return a if b is None else min(a, b)
+    if b is None:
+        return a
+    return min(a, b)
+
+
+@dataclasses.dataclass(frozen=True)
+class CapabilityTtl(collections.abc.Mapping[model.grant.SSHCapability, int | None]):
+    """The session TTL bound of each granted capability.
+
+    A capability is granted if and only if it has an entry: absence is not a
+    None bound, which means unbounded. The bound is per capability because a
+    grant of port-forwarding for 8h alongside a grant of shell for 1h must not
+    give the shell session 8h.
+    """
+
+    _ttl: typing.Mapping[model.grant.SSHCapability, int | None]
+
+    def __getitem__(self, capability: model.grant.SSHCapability) -> int | None:
+        return self._ttl[capability]
+
+    def __iter__(self) -> typing.Iterator[model.grant.SSHCapability]:
+        return iter(self._ttl)
+
+    def __len__(self) -> int:
+        return len(self._ttl)
+
+    @classmethod
+    def allowed_by(cls, permissions: list[model.grant.SSHPermission]) -> CapabilityTtl:
+        """One allowing layer: a role's grants, or one boundary's ceiling.
+
+        The permissions of a layer union, and their bounds raise.
+        """
+        ttl: dict[model.grant.SSHCapability, int | None] = {}
+        for p in permissions:
+            for c in _capabilities(p):
+                ttl[c] = p.max_session_ttl_s if c not in ttl else _ttl_max(ttl[c], p.max_session_ttl_s)
+        return cls(ttl)
+
+    def intersect(self, ceiling: CapabilityTtl) -> CapabilityTtl:
+        """A ceiling: a capability survives only if the ceiling covers it too,
+        and its bound is lowered to the ceiling's. A ceiling is a bound, not a
+        grant, so it never raises a bound nor adds a capability.
+        """
+        return CapabilityTtl({c: _ttl_min(ttl, ceiling[c]) for c, ttl in self.items() if c in ceiling})
+
+    def subtract(self, permissions: list[model.grant.SSHPermission]) -> CapabilityTtl:
+        """One boundary's denies, applied in turn.
+
+        A deny with no bound covers the whole duration axis: it removes the
+        capability. A bounded deny denies only the excess, so the capability
+        survives with a tighter bound. Neither ever adds a capability.
+        """
+        ttl = dict(self._ttl)
+        for p in permissions:
+            for c in _capabilities(p) & ttl.keys():
+                if p.max_session_ttl_s is None:
+                    del ttl[c]
+                else:
+                    ttl[c] = _ttl_min(ttl[c], p.max_session_ttl_s)
+        return CapabilityTtl(ttl)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -409,7 +467,7 @@ def _raise_over(entries: list[_CommandEntry]) -> int | None:
     assert entries
     result = entries[0].ttl
     for entry in entries[1:]:
-        result = _raise_ttl(result, entry.ttl)
+        result = _ttl_max(result, entry.ttl)
     return result
 
 
@@ -441,10 +499,10 @@ class SSHCommandPermissions:
         result = _raise_over(self._covering(self._granted, command))
         for ceiling in self._ceilings:
             if ceiling is not None:
-                result = _lower_ttl(result, _raise_over(self._covering(ceiling, command)))
+                result = _ttl_min(result, _raise_over(self._covering(ceiling, command)))
         for entry in self._covering(self._denied, command):
             if entry.ttl is not None:
-                result = _lower_ttl(result, entry.ttl)
+                result = _ttl_min(result, entry.ttl)
         return result
 
     def candidates(self) -> tuple[list[str], bool]:
@@ -468,13 +526,7 @@ class SSHDecision:
     """
 
     commands: SSHCommandPermissions
-    """
-    TTL per capability: a grant of port-forwarding for 8h alongside
-    a grant of shell for 1h must not give the shell session 8h.
-    The keys are the granted capabilities: a capability is granted if and
-    only if it has a TTL.
-    """
-    capability_ttl: typing.Mapping[model.grant.SSHCapability, int | None]
+    capability_ttl: CapabilityTtl
 
     @property
     def capabilities(self) -> frozenset[model.grant.SSHCapability]:
@@ -511,23 +563,15 @@ class SSHChecker:
         ]
 
     def decide(self, username: str, unix_username: str | None) -> SSHDecision:
-        commands_granted: list[_CommandEntry] = []
         commands_ceilings: list[tuple[_CommandEntry, ...] | None] = []
         commands_denied: list[_CommandEntry] = []
-        # a capability is granted if and only if it has an entry here
-        ttl_by_cap: dict[model.grant.SSHCapability, int | None] = {}
 
         # role grants
+        granted: list[model.grant.SSHPermission] = []
         for role in self._roles:
-            granted = self._covering(role.grant_list, username, unix_username)
-            commands_granted += [_command_entry(p) for p in granted]
-            for p in granted:
-                for c in _capabilities(p):
-                    ttl_by_cap[c] = (
-                        p.max_session_ttl_s
-                        if c not in ttl_by_cap
-                        else _raise_ttl(ttl_by_cap[c], p.max_session_ttl_s)
-                    )
+            granted += self._covering(role.grant_list, username, unix_username)
+        commands_granted = [_command_entry(p) for p in granted]
+        ttl_by_cap = CapabilityTtl.allowed_by(granted)
 
         # boundary ceiling_list
         for boundary in self._boundaries:
@@ -535,31 +579,14 @@ class SSHChecker:
                 commands_ceilings.append(None)
             else:
                 covering = self._covering(boundary.ceiling_list, username, unix_username)
-                ceiling_ttl: dict[model.grant.SSHCapability, int | None] = {}
-                for p in covering:
-                    for c in _capabilities(p):
-                        ceiling_ttl[c] = (
-                            p.max_session_ttl_s
-                            if c not in ceiling_ttl
-                            else _raise_ttl(ceiling_ttl[c], p.max_session_ttl_s)
-                        )
-                ttl_by_cap = {
-                    c: _lower_ttl(ttl, ceiling_ttl[c]) for c, ttl in ttl_by_cap.items() if c in ceiling_ttl
-                }
+                ttl_by_cap = ttl_by_cap.intersect(CapabilityTtl.allowed_by(covering))
                 commands_ceilings.append(tuple(_command_entry(p) for p in covering))
 
         # boundary denied_list
         for boundary in self._boundaries:
-            for p in self._covering(boundary.denied_list, username, unix_username):
-                if p.max_session_ttl_s is None:
-                    # max_session_ttl_s = None in a denied_list means that any session
-                    # of any duration is not allowed so we remove the matching capabilities
-                    for c in _capabilities(p):
-                        ttl_by_cap.pop(c, None)
-                else:
-                    for c in _capabilities(p) & ttl_by_cap.keys():
-                        ttl_by_cap[c] = _lower_ttl(ttl_by_cap[c], p.max_session_ttl_s)
-                commands_denied.append(_command_entry(p))
+            covering = self._covering(boundary.denied_list, username, unix_username)
+            ttl_by_cap = ttl_by_cap.subtract(covering)
+            commands_denied += [_command_entry(p) for p in covering]
 
         if not ttl_by_cap and not commands_granted:
             logger.info(f"no ssh grant covers username={username}")
