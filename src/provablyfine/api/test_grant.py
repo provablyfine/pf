@@ -880,9 +880,31 @@ def test_ssh_decide_command_ceiling():
     assert decision.commands.permits("rm") is None
 
 
+def test_ssh_decide_command_ceiling_never_adds():
+    grants = grant.Grants(
+        [boundary([_ssh(capabilities=[], commands=["ls", "rm"])], [])],
+        [role([_ssh(capabilities=[], commands=["ls"])])],
+    )
+    decision = _decide(grants)
+
+    assert decision.commands.permits("ls") is not None
+    # The ceiling names it, but a ceiling is a bound, not a grant.
+    assert decision.commands.permits("rm") is None
+
+
+@pytest.mark.parametrize("ttl", [None, 60])
+def test_ssh_decide_command_deny_never_permits(ttl: int | None):
+    grants = grant.Grants(
+        [_deny_boundary([_ssh(capabilities=[], commands=["rm"], ttl=ttl)])],
+        [role([_ssh(capabilities=[], commands=["ls"], ttl=3600)])],
+    )
+    decision = _decide(grants)
+
+    assert decision.commands.permits("ls") is not None
+    assert decision.commands.permits("rm") is None
+
+
 def test_ssh_decide_order_independent():
-    # Compared by behavior, not by equality: SSHCommandPermission holds tuples, whose
-    # equality is order-sensitive.
     ceiling = [_ssh(capabilities=["shell", "pty"], commands=["ls"]), _ssh(capabilities=["user-rc"], commands=["df"])]
     denied = [_ssh(capabilities=["pty"], commands=[]), _ssh(capabilities=[], commands=["df"])]
     grants = grant.Grants([boundary(ceiling, denied)], [role([_ssh()])])
@@ -917,6 +939,18 @@ def test_ssh_candidate_commands_wildcard_is_not_enumerable():
 
     assert commands == []
     assert any_command
+
+
+def test_ssh_candidate_commands_narrowed_by_ceiling():
+    # A wildcard grant is not enumerable on its own, but a ceiling naming
+    # commands collapses it to exactly those: what is listed then matches what
+    # permits() allows.
+    grants = grant.Grants([boundary([_ssh(capabilities=[], commands=["ls"])], [])], [role([_ssh(commands=None)])])
+
+    commands, any_command = _decide(grants).commands.candidates()
+
+    assert commands == ["ls"]
+    assert not any_command
 
 
 def test_ssh_list_decisions():
