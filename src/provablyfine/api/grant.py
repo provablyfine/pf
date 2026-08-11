@@ -452,10 +452,23 @@ def _covered_deny(a: SSHCommandAllowed | None, ttl: int | None) -> SSHCommandAll
 
 @dataclasses.dataclass(frozen=True)
 class SSHCommandPermissions:
-    # A None value is a command named and not permitted; an absent key is a
-    # command no entry names at all, which falls back to _other. The two differ.
+    """Which commands may be run, and the session TTL bound of each.
+
+    A permission whose `command_list` is None allows every command, so the
+    permitted set can be infinite and cannot always be enumerated. It is
+    therefore stored as a catch-all (`_other`) plus the per-command exceptions
+    to it (`_named`).
+    """
+
+    # Per-command permission. A key mapped to None is a command that is
+    # explicitly denied. A key that is absent is a command this object says
+    # nothing specific about: it gets _other instead.
     _named: typing.Mapping[str, SSHCommandAllowed | None]
-    _other: SSHCommandAllowed | None  # every command _named does not list
+    # Permission for every command that is not a key of _named. None denies
+    # them all, so `_named={"ls": SSHCommandAllowed(3600)}, _other=None` permits
+    # `ls` and nothing else, while `_named={"ls": None}, _other=allowed` permits
+    # everything except `ls`.
+    _other: SSHCommandAllowed | None
 
     @classmethod
     def allowed_by(cls, permissions: list[model.grant.SSHPermission]) -> SSHCommandPermissions:
@@ -464,13 +477,12 @@ class SSHCommandPermissions:
         for p in permissions:
             allowed = SSHCommandAllowed(p.max_session_ttl_s)
             if p.command_list is None:
-                # The whole axis: it raises the commands already named too.
                 named = {c: _covered_union(a, allowed) for c, a in named.items()}
                 other = _covered_union(other, allowed)
             else:
                 for command in p.command_list:
                     # A command named here for the first time starts from what
-                    # the layer already allows for every unnamed command.
+                    # we already allow for every unnamed command.
                     named[command] = _covered_union(named.get(command, other), allowed)
         return cls(named, other)
 
