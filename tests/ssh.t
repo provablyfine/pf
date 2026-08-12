@@ -228,3 +228,15 @@ The boundary deny still applies to the wildcard grant
   $ pf -c wildcard.json ssh -n -o "Hostname=$SSHD_ADDRESS" -o "HostKeyAlias=host" -p $SSHD_PORT alice@host "whoami"
   User is not authorized to connect to host
   [2]
+
+A null command_list is the whole axis -- any command -- and is reported as "*".
+An empty details cell means the entry has no command axis at all, which is what
+a shell row shows, so the two must not render alike.
+  $ pfa -c config.json grant ssh --tag id=device --username dave --cmd-all | pfa -c config.json role grant -i $WILDCARD_ROLE_ID --add
+  $ pf -c wildcard.json hosts
+  host    type     username    details
+  ------  -------  ----------  ---------
+  host    shell    dave
+  host    shell    *
+  host    command  dave        *
+  host    command  *           /bin/true

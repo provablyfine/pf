@@ -20,8 +20,13 @@ def _hosts_function(args: argparse.Namespace) -> None:
     rows: list[tuple[str, str, str, str]] = []
     for entry in data.hosts:
         username_list = entry.username_list or ["*"]
-        command_list = entry.command_list or []
-        details = ", ".join(command_list)
+        # None is the whole axis, as it is in the grant. Only a command entry
+        # has a command axis, and there None means "any command" -- which must
+        # not render like the empty details cell of a shell entry.
+        if entry.type == "command":
+            details = "*" if entry.command_list is None else ", ".join(entry.command_list)
+        else:
+            details = ""
         for username in username_list:
             rows.append((entry.hostname, entry.type, username, details))
     if len(rows) > 0:
