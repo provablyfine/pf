@@ -50,7 +50,13 @@ class AuthRow(typing.NamedTuple):
     config: bytes
 
 
-auth = db.make_table("auth", metadata, AuthRow, sqlalchemy.UniqueConstraint("name", "client_type"))
+auth = db.make_table(
+    "auth",
+    metadata,
+    AuthRow,
+    sqlalchemy.UniqueConstraint("name", "client_type"),
+    sqlite_autoincrement=True,
+)
 
 
 class PublicKeyDenylistRow(typing.NamedTuple):
@@ -142,6 +148,7 @@ identity_boundary = db.make_table(
     metadata,
     IdentityBoundaryRow,
     sqlalchemy.UniqueConstraint("identity_id", "boundary_id", name="uix_identity_id_boundary_id"),
+    sqlite_autoincrement=True,
 )
 
 
@@ -156,6 +163,7 @@ identity_tag = db.make_table(
     metadata,
     IdentityTagRow,
     sqlalchemy.UniqueConstraint("identity_id", "tag_id", name="uix_identity_id_tag_id"),
+    sqlite_autoincrement=True,
 )
 
 
@@ -175,7 +183,7 @@ class RoleMemberRow(typing.NamedTuple):
     identity_id: int
 
 
-role_member = db.make_table("role_member", metadata, RoleMemberRow)
+role_member = db.make_table("role_member", metadata, RoleMemberRow, sqlite_autoincrement=True)
 
 
 class BoundaryRow(typing.NamedTuple):
@@ -211,7 +219,7 @@ class DefaultRow(typing.NamedTuple):
     id: typing.Annotated[int, db.Col(primary_key=True)]
 
 
-default = db.make_table("default", metadata, DefaultRow)
+default = db.make_table("default", metadata, DefaultRow, sqlite_autoincrement=True)
 
 
 class BastionRow(typing.NamedTuple):
@@ -242,6 +250,7 @@ audit_log = db.make_table(
     sqlalchemy.Index("idx_audit_log_type", "type"),
     sqlalchemy.Index("idx_audit_log_by_identity_id", "by_identity_id"),
     sqlalchemy.Index("idx_audit_log_at", "at"),
+    sqlite_autoincrement=True,
 )
 
 
