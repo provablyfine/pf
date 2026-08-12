@@ -1038,7 +1038,11 @@ def test_ssh_ttl_unbounded_grant_absorbs():
     # ttl=None is less restrictive than ttl=60
     grants = grant.Grants(
         [],
-        [role([_ssh(capabilities=["shell"], commands=[], ttl=60), _ssh(capabilities=["shell"], commands=[], ttl=None)])],
+        [
+            role(
+                [_ssh(capabilities=["shell"], commands=[], ttl=60), _ssh(capabilities=["shell"], commands=[], ttl=None)]
+            )
+        ],
     )
 
     assert _decide(grants).capability_ttl[CAP.SHELL] is None
