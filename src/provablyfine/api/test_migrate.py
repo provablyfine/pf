@@ -27,7 +27,7 @@ def test_tenant_migrations_match_model(tmp_path: pathlib.Path) -> None:
 
 
 def _tables_missing_autoincrement_ddl(url: str, metadata: sqlalchemy.MetaData) -> list[str]:
-    # compare_metadata() nor batch_alter_table cannot see sqlite_autoincrement as it's a dialect-level table construction option
+    # neither compare_metadata() nor batch_alter_table see sqlite_autoincrement as it's a table construction option
     engine = sqlalchemy.create_engine(url)
     missing = []
     with engine.connect() as connection:
