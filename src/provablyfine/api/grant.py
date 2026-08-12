@@ -454,20 +454,20 @@ def _covered_deny(a: SSHCommandAllowed | None, ttl: int | None) -> SSHCommandAll
 class SSHCommandPermissions:
     """Which commands may be run, and the session TTL bound of each.
 
-    A permission whose `command_list` is None allows every command, so the
-    permitted set can be infinite and cannot always be enumerated. It is
-    therefore stored as a catch-all (`_other`) plus the per-command exceptions
-    to it (`_named`).
+    We track this via two variables:
+    - `_named` tracks per-command permissions
+    - `_other` tracks default permissions that apply to commands not matched by `_named`.
+
+    Examples:
+    - `_named={"ls": SSHCommandAllowed(3600)}, _other=None` permits
+      `ls` and nothing else
+    - `_named={"ls": None}, _other=allowed` permits
+      everything except `ls`.
     """
 
-    # Per-command permission. A key mapped to None is a command that is
-    # explicitly denied. A key that is absent is a command this object says
-    # nothing specific about: it gets _other instead.
+    # None as a value means that the command is denied.
     _named: typing.Mapping[str, SSHCommandAllowed | None]
-    # Permission for every command that is not a key of _named. None denies
-    # them all, so `_named={"ls": SSHCommandAllowed(3600)}, _other=None` permits
-    # `ls` and nothing else, while `_named={"ls": None}, _other=allowed` permits
-    # everything except `ls`.
+    # None as a value means that all commands that do not match via _named are denied.
     _other: SSHCommandAllowed | None
 
     @classmethod
@@ -506,12 +506,9 @@ class SSHCommandPermissions:
         return self._named.get(command, self._other)
 
     def candidates(self) -> tuple[list[str], bool]:
-        """The permitted commands that can be enumerated, plus whether every
-        other command is permitted too (in which case the permitted set is
-        cofinite and cannot be listed).
-
-        Ordered rather than a set: `/ssh/hosts` displays these, and the order
-        entries name them in is what an administrator wrote.
+        """
+        Returns the list of allowed commands as first member and whether
+        or not all not-explicitely allowed commands are allowed or not
         """
         return [c for c, a in self._named.items() if a is not None], self._other is not None
 
@@ -543,20 +540,9 @@ class SSHChecker:
             return [g for g in _ssh_grants(grant_list) if triplet_match(g, identity_id, tag_id_list, boundary_id_list)]
 
         # The triplet filter does not depend on the username, so it is resolved
-        # once here instead of on every decide(). `/ssh/hosts` builds one
-        # checker per host and then calls decide() once per candidate
-        # username, and each call used to re-scan every grant of every role and
-        # every boundary -- including the non-ssh ones, which are the bulk of a
-        # real grant_list.
+        # once here instead of on every decide().
         self._granted = [g for role in roles for g in matching(role.grant_list)]
-        # Ceilings stay grouped by boundary: entries within one boundary are
-        # unioned, and the boundaries then intersect. A boundary that has a
-        # ceiling naming no ssh grant contributes an empty union, which denies
-        # everything -- hence the list is kept, not skipped.
         self._ceilings = [matching(b.ceiling_list) for b in boundaries if b.ceiling_list is not None]
-        # Denies need no grouping: each entry narrows the running result
-        # independently, so subtracting per boundary and subtracting the
-        # concatenation agree.
         self._denied = [g for b in boundaries for g in matching(b.denied_list)]
 
     @staticmethod
