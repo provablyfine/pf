@@ -1000,9 +1000,8 @@ def test_ssh_list_decisions_wildcard_group():
     assert CAP.AGENT_FORWARDING in by_username[None].capabilities
 
 
-def test_ssh_list_decisions_wildcard_avoids_named_usernames():
-    # "*" is a legal unix username, so the representative used for the wildcard
-    # group must not collide with a name any entry mentions.
+def test_ssh_list_decisions_wildcard_ignores_a_username_named_star():
+    # "*" is a legal unix username
     grants = grant.Grants(
         [_deny_boundary([_ssh(usernames=["*"], capabilities=["shell"], commands=[])])],
         [role([_ssh(usernames=None, capabilities=["shell"], commands=[])])],
@@ -1036,11 +1035,10 @@ def test_ssh_ttl_grants_raise():
 
 
 def test_ssh_ttl_unbounded_grant_absorbs():
-    # None is the top of the order, so it wins the max rather than being
-    # treated as a missing value.
+    # ttl=None is less restrictive than ttl=60
     grants = grant.Grants(
         [],
-        [role([_ssh(capabilities=["shell"], commands=[], ttl=60), _ssh(capabilities=["shell"], commands=[])])],
+        [role([_ssh(capabilities=["shell"], commands=[], ttl=60), _ssh(capabilities=["shell"], commands=[], ttl=None)])],
     )
 
     assert _decide(grants).capability_ttl[CAP.SHELL] is None
@@ -1071,8 +1069,7 @@ def test_ssh_ttl_ceiling_bounds_an_unbounded_grant():
 
 
 def test_ssh_ttl_bounded_deny_clamps_rather_than_removes():
-    # The one asymmetry on this axis: a deny naming a bound denies only the
-    # excess, so the capability survives with a tighter bound.
+    # deny a ttl means set an upper bound on ttl
     grants = grant.Grants(
         [_deny_boundary([_ssh(capabilities=["shell"], commands=[], ttl=60)])],
         [role([_ssh(capabilities=["shell"], commands=[], ttl=3600)])],
@@ -1084,10 +1081,9 @@ def test_ssh_ttl_bounded_deny_clamps_rather_than_removes():
 
 
 def test_ssh_ttl_unbounded_deny_removes_the_atom():
-    # null is the whole axis, and for a deny that is full removal -- identical
-    # to the discrete case, not "clamp to unbounded".
+    # deny of ttl=None means deny of matching capabilities.
     grants = grant.Grants(
-        [_deny_boundary([_ssh(capabilities=["shell"], commands=[])])],
+        [_deny_boundary([_ssh(capabilities=["shell"], commands=[], ttl=None)])],
         [role([_ssh(capabilities=["shell"], commands=[], ttl=3600)])],
     )
 
@@ -1096,8 +1092,7 @@ def test_ssh_ttl_unbounded_deny_removes_the_atom():
 
 @pytest.mark.parametrize("ttl", [None, 60])
 def test_ssh_ttl_deny_never_grants(ttl: int | None):
-    # A deny only takes away: naming a capability that no grant covers must not
-    # introduce it, whether the deny is bounded or not.
+    # deny something that is not granted
     grants = grant.Grants(
         [_deny_boundary([_ssh(capabilities=["pty"], commands=[], ttl=ttl)])],
         [role([_ssh(capabilities=["shell"], commands=[], ttl=3600)])],
@@ -1149,8 +1144,7 @@ def test_ssh_command_ttl():
     )
     decision = _decide(grants)
 
-    # The cofinite case: a bounded deny clamps the command it names and leaves
-    # every other command alone.
+    # a bounded deny clamps the command it names and leaves every other command alone
     assert decision.commands.permits("/bin/ls").ttl == 60
     assert decision.commands.permits("/bin/df").ttl == 3600
 
@@ -1182,7 +1176,7 @@ def test_ssh_ttl_order_independent():
 
 def test_ssh_ttl_across_two_boundaries():
     # One boundary clamps a capability, a later one removes it. The removal
-    # must win, and the resolved map must not keep a bound for an atom that is
+    # must win, and the resolved map must not keep a bound for a capability that is
     # no longer granted.
     clamps = _deny_boundary([_ssh(capabilities=["shell"], commands=[], ttl=60)])
     removes = types.SimpleNamespace(
