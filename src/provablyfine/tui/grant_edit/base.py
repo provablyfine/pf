@@ -52,10 +52,6 @@ class Field:
         return self.value.split() if self.active else None
 
     def ttl_perm(self) -> int | None:
-        """Inactive is unbounded. A checked box must hold a positive integer:
-        int_filter() would return None for a typo, and None means *unbounded*
-        on this field, so falling back to it would quietly widen the grant.
-        """
         if not self.active:
             return None
         value = self.value.strip()
@@ -64,10 +60,6 @@ class Field:
         return int(value)
 
     def capability_perm(self) -> list[pfc.schemas.SSHCapability] | None:
-        """An unrecognized capability is an error, not something to drop.
-        Dropping one from a boundary deny narrows the deny, which widens
-        access -- a typo must not do that silently.
-        """
         if not self.active:
             return None
         known = [c.value for c in pfc.schemas.SSHCapability]
