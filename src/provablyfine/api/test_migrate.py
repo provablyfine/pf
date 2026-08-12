@@ -24,3 +24,37 @@ def test_tenant_migrations_match_model(tmp_path: pathlib.Path) -> None:
     url = f"sqlite:///{tmp_path / 'tenant.db'}"
     migrate.upgrade_tenant(url)
     assert _diffs(url, app_db.metadata) == []
+
+
+def _tables_missing_autoincrement_ddl(url: str, metadata: sqlalchemy.MetaData) -> list[str]:
+    """Find tables declared with sqlite_autoincrement=True whose live DDL lacks AUTOINCREMENT.
+
+    compare_metadata() cannot see this: sqlite_autoincrement is a dialect-level table
+    construction option, not a column/constraint/index difference, so a batch_alter_table
+    rebuild that forgets to re-pass it produces a schema that still diffs clean.
+    """
+    engine = sqlalchemy.create_engine(url)
+    missing = []
+    with engine.connect() as connection:
+        for table in metadata.tables.values():
+            if not table.kwargs.get("sqlite_autoincrement"):
+                continue
+            sql = connection.execute(
+                sqlalchemy.text("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = :name"),
+                {"name": table.name},
+            ).scalar_one()
+            if "AUTOINCREMENT" not in sql:
+                missing.append(table.name)
+    return missing
+
+
+def test_registry_autoincrement_preserved(tmp_path: pathlib.Path) -> None:
+    url = f"sqlite:///{tmp_path / 'registry.db'}"
+    migrate.upgrade_registry(url)
+    assert _tables_missing_autoincrement_ddl(url, registry_db.metadata) == []
+
+
+def test_tenant_autoincrement_preserved(tmp_path: pathlib.Path) -> None:
+    url = f"sqlite:///{tmp_path / 'tenant.db'}"
+    migrate.upgrade_tenant(url)
+    assert _tables_missing_autoincrement_ddl(url, app_db.metadata) == []
