@@ -357,11 +357,26 @@ def _capabilities(p: model.grant.SSHPermission) -> frozenset[model.grant.SSHCapa
     return frozenset(p.capability_list)
 
 
+# Which entries apply to the session being decided. The username is the only
+# thing an entry can discriminate on, so decisions differ only in this.
+type _Covers = typing.Callable[[model.grant.SSHPermission], bool]
+
+
 def _covers_username(p: model.grant.SSHPermission, username: str, unix_username: str | None) -> bool:
     if p.username_list is None:
         return True
     resolved = [r for e in p.username_list if (r := resolve_username(e, unix_username)) is not None]
     return username in resolved
+
+
+def _covers_unnamed_username(p: model.grant.SSHPermission) -> bool:
+    """Coverage for the group of usernames no entry names.
+
+    An entry either names usernames or covers every one of them, so the only
+    entries that reach a username nobody names are the latter. This is why the
+    group resolves to a single exact decision rather than an approximation.
+    """
+    return p.username_list is None
 
 
 def _ttl_max(a: int | None, b: int | None) -> int | None:
@@ -546,31 +561,36 @@ class SSHChecker:
         self._denied = [g for b in boundaries for g in matching(b.denied_list)]
 
     @staticmethod
-    def _covering(
-        grants: list[model.grant.SSHGrant], username: str, unix_username: str | None
-    ) -> list[model.grant.SSHPermission]:
-        return [g.permission for g in grants if _covers_username(g.permission, username, unix_username)]
+    def _covering(grants: list[model.grant.SSHGrant], covers: _Covers) -> list[model.grant.SSHPermission]:
+        return [g.permission for g in grants if covers(g.permission)]
 
-    def decide(self, username: str, unix_username: str | None) -> SSHDecision:
+    def _decide(self, covers: _Covers, username: str | None) -> SSHDecision:
         # role grants
-        granted = self._covering(self._granted, username, unix_username)
+        granted = self._covering(self._granted, covers)
+        if not granted:
+            # None is the group of usernames no entry names
+            logger.info(f"no ssh grant covers username={'*' if username is None else username}")
         ttl_by_cap = CapabilityTtl.allowed_by(granted)
         commands = SSHCommandPermissions.allowed_by(granted)
 
         # boundary ceiling_list
         for ceiling in self._ceilings:
-            covering = self._covering(ceiling, username, unix_username)
+            covering = self._covering(ceiling, covers)
             ttl_by_cap = ttl_by_cap.intersect(CapabilityTtl.allowed_by(covering))
             commands = commands.intersect(SSHCommandPermissions.allowed_by(covering))
 
         # boundary denied_list
-        denied = self._covering(self._denied, username, unix_username)
+        denied = self._covering(self._denied, covers)
         ttl_by_cap = ttl_by_cap.subtract(denied)
         commands = commands.subtract(denied)
 
-        if not ttl_by_cap and not granted:
-            logger.info(f"no ssh grant covers username={username}")
         return SSHDecision(commands=commands, capability_ttl=ttl_by_cap)
+
+    def decide(self, username: str, unix_username: str | None) -> SSHDecision:
+        def covers(p: model.grant.SSHPermission) -> bool:
+            return _covers_username(p, username, unix_username)
+
+        return self._decide(covers, username)
 
     def _candidate_usernames(self, unix_username: str | None) -> tuple[list[str], bool]:
         """Usernames worth calling decide() on, plus whether a wildcard grant exists.
@@ -588,17 +608,6 @@ class SSHChecker:
                     usernames.append(resolved)
         return usernames, wildcard
 
-    def _named_usernames(self, unix_username: str | None) -> set[str]:
-        grants = [*self._granted, *self._denied]
-        for ceiling in self._ceilings:
-            grants += ceiling
-        names: set[str] = set()
-        for g in grants:
-            for entry in g.permission.username_list or []:
-                if (resolved := resolve_username(entry, unix_username)) is not None:
-                    names.add(resolved)
-        return names
-
     def list_decisions(self, unix_username: str | None) -> list[tuple[str | None, SSHDecision]]:
         """Decisions for enumeration: one per candidate username, plus one for
         "any other username" (key None) when a wildcard grant exists.
@@ -606,11 +615,7 @@ class SSHChecker:
         usernames, wildcard = self._candidate_usernames(unix_username)
         output: list[tuple[str | None, SSHDecision]] = [(u, self.decide(u, unix_username)) for u in usernames]
         if wildcard:
-            named = self._named_usernames(unix_username)
-            unnamed = "*"
-            while unnamed in named:
-                unnamed += "*"
-            output.append((None, self.decide(unnamed, unix_username)))
+            output.append((None, self._decide(_covers_unnamed_username, None)))
         return output
 
 
