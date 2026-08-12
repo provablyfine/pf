@@ -27,12 +27,7 @@ def test_tenant_migrations_match_model(tmp_path: pathlib.Path) -> None:
 
 
 def _tables_missing_autoincrement_ddl(url: str, metadata: sqlalchemy.MetaData) -> list[str]:
-    """Find tables declared with sqlite_autoincrement=True whose live DDL lacks AUTOINCREMENT.
-
-    compare_metadata() cannot see this: sqlite_autoincrement is a dialect-level table
-    construction option, not a column/constraint/index difference, so a batch_alter_table
-    rebuild that forgets to re-pass it produces a schema that still diffs clean.
-    """
+    # compare_metadata() nor batch_alter_table cannot see sqlite_autoincrement as it's a dialect-level table construction option
     engine = sqlalchemy.create_engine(url)
     missing = []
     with engine.connect() as connection:

@@ -17,8 +17,7 @@ depends_on: str | None = None
 
 def upgrade() -> None:
     """Upgrade schema."""
-    # tenant was never created with sqlite_autoincrement=True, so a deleted tenant's id could
-    # be reused by a later tenant. This migration changes no columns or data, it only adds
-    # real AUTOINCREMENT to the table.
+    # tenant were never created with sqlite_autoincrement=True, as a result deleted ids could be reused.
+    # This migration changes no columns or data, it only adds AUTOINCREMENT to the table.
     with op.batch_alter_table("tenant", schema=None, recreate="always", table_kwargs={"sqlite_autoincrement": True}):
         pass

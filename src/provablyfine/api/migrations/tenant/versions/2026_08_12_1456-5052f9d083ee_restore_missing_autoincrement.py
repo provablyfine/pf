@@ -17,10 +17,8 @@ depends_on: str | None = None
 
 def upgrade() -> None:
     """Upgrade schema."""
-    # auth, identity_boundary, identity_tag, role_member, default, and audit_log were never
-    # created with sqlite_autoincrement=True, unlike identity/role/boundary/tag/bastion/
-    # signing_key/oidc_key. This means their deleted ids could be reused. This migration
-    # changes no columns or data, it only adds real AUTOINCREMENT to these tables.
+    # Below table were never created with sqlite_autoincrement=True, as a result their deleted ids could be reused.
+    # This migration changes no columns or data, it only adds AUTOINCREMENT to these tables.
     for table in ("auth", "identity_boundary", "identity_tag", "role_member", "default", "audit_log"):
         with op.batch_alter_table(table, schema=None, recreate="always", table_kwargs={"sqlite_autoincrement": True}):
             pass
