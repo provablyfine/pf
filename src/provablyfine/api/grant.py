@@ -539,46 +539,48 @@ class SSHChecker:
         tag_id_list: list[int],
         boundary_id_list: list[int],
     ):
-        self._boundaries = boundaries
-        self._roles = roles
-        self._identity_id = identity_id
-        self._tag_id_list = tag_id_list
-        self._boundary_id_list = boundary_id_list
+        def matching(grant_list: list[model.grant.Grant]) -> list[model.grant.SSHGrant]:
+            return [g for g in _ssh_grants(grant_list) if triplet_match(g, identity_id, tag_id_list, boundary_id_list)]
 
-    def _matching(self, grant_list: list[model.grant.Grant]) -> list[model.grant.SSHGrant]:
-        return [
-            g
-            for g in _ssh_grants(grant_list)
-            if triplet_match(g, self._identity_id, self._tag_id_list, self._boundary_id_list)
-        ]
+        # The triplet filter does not depend on the username, so it is resolved
+        # once here instead of on every decide(). `/ssh/hosts` builds one
+        # checker per host and then calls decide() once per candidate
+        # username, and each call used to re-scan every grant of every role and
+        # every boundary -- including the non-ssh ones, which are the bulk of a
+        # real grant_list.
+        self._granted = [g for role in roles for g in matching(role.grant_list)]
+        # Ceilings stay grouped by boundary: entries within one boundary are
+        # unioned, and the boundaries then intersect. A boundary that has a
+        # ceiling naming no ssh grant contributes an empty union, which denies
+        # everything -- hence the list is kept, not skipped.
+        self._ceilings = [matching(b.ceiling_list) for b in boundaries if b.ceiling_list is not None]
+        # Denies need no grouping: each entry narrows the running result
+        # independently, so subtracting per boundary and subtracting the
+        # concatenation agree.
+        self._denied = [g for b in boundaries for g in matching(b.denied_list)]
 
+    @staticmethod
     def _covering(
-        self, grant_list: list[model.grant.Grant], username: str, unix_username: str | None
+        grants: list[model.grant.SSHGrant], username: str, unix_username: str | None
     ) -> list[model.grant.SSHPermission]:
-        return [
-            g.permission for g in self._matching(grant_list) if _covers_username(g.permission, username, unix_username)
-        ]
+        return [g.permission for g in grants if _covers_username(g.permission, username, unix_username)]
 
     def decide(self, username: str, unix_username: str | None) -> SSHDecision:
         # role grants
-        granted: list[model.grant.SSHPermission] = []
-        for role in self._roles:
-            granted += self._covering(role.grant_list, username, unix_username)
+        granted = self._covering(self._granted, username, unix_username)
         ttl_by_cap = CapabilityTtl.allowed_by(granted)
         commands = SSHCommandPermissions.allowed_by(granted)
 
         # boundary ceiling_list
-        for boundary in self._boundaries:
-            if boundary.ceiling_list is not None:
-                covering = self._covering(boundary.ceiling_list, username, unix_username)
-                ttl_by_cap = ttl_by_cap.intersect(CapabilityTtl.allowed_by(covering))
-                commands = commands.intersect(SSHCommandPermissions.allowed_by(covering))
+        for ceiling in self._ceilings:
+            covering = self._covering(ceiling, username, unix_username)
+            ttl_by_cap = ttl_by_cap.intersect(CapabilityTtl.allowed_by(covering))
+            commands = commands.intersect(SSHCommandPermissions.allowed_by(covering))
 
         # boundary denied_list
-        for boundary in self._boundaries:
-            covering = self._covering(boundary.denied_list, username, unix_username)
-            ttl_by_cap = ttl_by_cap.subtract(covering)
-            commands = commands.subtract(covering)
+        denied = self._covering(self._denied, username, unix_username)
+        ttl_by_cap = ttl_by_cap.subtract(denied)
+        commands = commands.subtract(denied)
 
         if not ttl_by_cap and not granted:
             logger.info(f"no ssh grant covers username={username}")
@@ -594,29 +596,25 @@ class SSHChecker:
         """
         usernames: list[str] = []
         wildcard = False
-        for role in self._roles:
-            for g in self._matching(role.grant_list):
-                if g.permission.username_list is None:
-                    wildcard = True
-                    continue
-                for entry in g.permission.username_list:
-                    resolved = resolve_username(entry, unix_username)
-                    if resolved is not None and resolved not in usernames:
-                        usernames.append(resolved)
+        for g in self._granted:
+            if g.permission.username_list is None:
+                wildcard = True
+                continue
+            for entry in g.permission.username_list:
+                resolved = resolve_username(entry, unix_username)
+                if resolved is not None and resolved not in usernames:
+                    usernames.append(resolved)
         return usernames, wildcard
 
     def _named_usernames(self, unix_username: str | None) -> set[str]:
-        grant_lists = [role.grant_list for role in self._roles]
-        for boundary in self._boundaries:
-            if boundary.ceiling_list is not None:
-                grant_lists.append(boundary.ceiling_list)
-            grant_lists.append(boundary.denied_list)
+        grants = [*self._granted, *self._denied]
+        for ceiling in self._ceilings:
+            grants += ceiling
         names: set[str] = set()
-        for grant_list in grant_lists:
-            for g in self._matching(grant_list):
-                for entry in g.permission.username_list or []:
-                    if (resolved := resolve_username(entry, unix_username)) is not None:
-                        names.add(resolved)
+        for g in grants:
+            for entry in g.permission.username_list or []:
+                if (resolved := resolve_username(entry, unix_username)) is not None:
+                    names.add(resolved)
         return names
 
     def list_decisions(self, unix_username: str | None) -> list[tuple[str | None, SSHDecision]]:

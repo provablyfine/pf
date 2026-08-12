@@ -920,6 +920,27 @@ def test_ssh_decide_order_independent():
     assert decision.commands.permits("df") is None
 
 
+def test_ssh_decide_denies_compose_across_boundaries():
+    # Each deny narrows independently, so the result does not depend on which
+    # boundary an entry sits in, nor on the order of the boundaries.
+    first = _deny_boundary([_ssh(capabilities=["shell"], commands=["/bin/ls"], ttl=600)])
+    second = types.SimpleNamespace(
+        id=2,
+        ceiling_list=None,
+        denied_list=_deserialize([_ssh(capabilities=["pty"], commands=["/bin/ls"], ttl=60)]),
+    )
+    granted = [_ssh(ttl=3600)]
+
+    for boundaries in ([first, second], [second, first]):
+        decision = _decide(grant.Grants(boundaries, [role(granted)]))
+
+        assert decision.capability_ttl[CAP.SHELL] == 600
+        assert decision.capability_ttl[CAP.PTY] == 60
+        assert decision.capability_ttl[CAP.USER_RC] == 3600  # named by neither deny
+        assert decision.commands.permits("/bin/ls").ttl == 60  # the tighter of the two
+        assert decision.commands.permits("/bin/df").ttl == 3600
+
+
 def test_ssh_candidate_commands_in_grant_order():
     grants = grant.Grants(
         [_deny_boundary([_ssh(capabilities=[], commands=["/bin/rm"])])],
