@@ -52,28 +52,29 @@ class Field:
         return self.value.split() if self.active else None
 
     def ttl_perm(self) -> int | None:
-        """Inactive is unbounded. Checked-but-unparseable returns 0, which the
-        server rejects (the field is gt=0), on purpose: int_filter() would
-        return None for a typo, and None means *unbounded* on this field. A
-        visible error beats silently widening the grant, and get_grant_data()
-        has no error channel of its own.
-
-        This depends on the client mirror of SSHPermission *not* carrying the
-        gt=0 constraint: if it did, constructing the grant here would raise a
-        ValidationError that _handle_exception does not convert, crashing the
-        app instead of notifying. The server rejects it and the notification
-        path handles that cleanly.
+        """Inactive is unbounded. A checked box must hold a positive integer:
+        int_filter() would return None for a typo, and None means *unbounded*
+        on this field, so falling back to it would quietly widen the grant.
         """
         if not self.active:
             return None
         value = self.value.strip()
-        return int(value) if value.isdigit() else 0
+        if not value.isdigit() or int(value) == 0:
+            raise pfc.exceptions.UI(f"Max session TTL must be a positive number of seconds, not '{value}'.")
+        return int(value)
 
     def capability_perm(self) -> list[pfc.schemas.SSHCapability] | None:
+        """An unrecognized capability is an error, not something to drop.
+        Dropping one from a boundary deny narrows the deny, which widens
+        access -- a typo must not do that silently.
+        """
         if not self.active:
             return None
-        valid = {c.value for c in pfc.schemas.SSHCapability}
-        return [pfc.schemas.SSHCapability(s) for s in self.value.split() if s in valid]
+        known = [c.value for c in pfc.schemas.SSHCapability]
+        unknown = [s for s in self.value.split() if s not in known]
+        if unknown:
+            raise pfc.exceptions.UI(f"Unknown capability: {' '.join(unknown)}. Choose from: {' '.join(known)}.")
+        return [pfc.schemas.SSHCapability(s) for s in self.value.split()]
 
     def name_filter(self) -> str | None:
         name = self.value.strip()
@@ -204,6 +205,9 @@ def new_grant(grant_type: str) -> pfc.schemas.Grant:
 
 class GrantEditWidget(textual.widget.Widget):
     def get_grant_data(self) -> pfc.schemas.Grant:
+        """Raises pfc.exceptions.UI when the fields do not describe a grant.
+        GrantEditScreen.action_confirm reports that and keeps the editor open.
+        """
         raise NotImplementedError
 
     def _read_field(self, widget_id: str) -> Field:

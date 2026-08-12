@@ -573,6 +573,60 @@ async def test_tui_ssh_grant_edit(api, ssh_agent):
 
 
 @pytest.mark.anyio
+async def test_tui_ssh_grant_edit_rejects_unknown_capability(api, ssh_agent):
+    """A mistyped capability is refused, not dropped: dropping one from a
+    boundary deny would narrow the deny and widen access. The editor stays
+    open and nothing reaches the server."""
+    with _setup_ssh_auth_sock(ssh_agent):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            auth = _setup(api, tmpdir, ssh_agent)
+
+            role_id = await _setup_role_with_grant(auth, provablyfine.tui.grant_edit.new_grant("ssh"))
+
+            app = provablyfine.tui.app.TuiApp(auth)
+            async with app.run_test(size=(200, 50)) as pilot:
+                await pilot.pause()  # app startup
+                await pilot.press("down", "down", "down", "down", "down")  # navigate to Roles
+                await pilot.press("enter")  # open RoleListScreen
+                await pilot.pause()  # screen transition
+                await pilot.pause()  # RoleListScreen.on_mount
+                await pilot.press("down")  # navigate to test-role (row 1)
+                await pilot.press("enter")  # open role view
+                await pilot.pause()  # screen transition
+                await pilot.pause()  # RoleViewScreen.on_mount
+                await pilot.press("tab", "tab", "tab")  # focus grants DataTable
+                await pilot.press("enter")
+                await pilot.pause()  # screen transition
+                await pilot.pause()  # SshGrantEditWidget.on_mount (3 APIs: identities, boundaries, bastions)
+
+                await pilot.click("#perm-username-list Input")
+                await pilot.pause()  # UI event settle
+                await pilot.press(*"alice")
+                await pilot.pause()  # UI event settle
+
+                # "agent-forwardng": one letter off, and the token argparse
+                # would have rejected outright on the pfa side.
+                await pilot.click("#perm-capability-list Input")
+                await pilot.pause()  # UI event settle
+                await pilot.press("end")
+                await pilot.press(*" agent-forwardng")
+                await pilot.pause()  # UI event settle
+
+                await pilot.press("ctrl+s")  # confirm grant edits
+                await pilot.pause()  # action_confirm
+
+                errors = [n for n in app._notifications if n.severity == "error"]
+                assert [n for n in errors if "agent-forwardng" in n.message]
+                # Still on the editor, so the edits survive the correction.
+                assert app.screen.id == "grant-edit"
+
+            grant = await _get_grant(auth, role_id)
+        # The server never saw it: the username typed above is absent too.
+        assert grant["permission"]["username_list"] == []
+        assert grant["permission"]["capability_list"] == ["shell", "pty", "user-rc"]
+
+
+@pytest.mark.anyio
 async def test_tui_tag_list(api, ssh_agent):
     """Add a tag via the TUI, verify it exists, then delete it."""
     with _setup_ssh_auth_sock(ssh_agent):

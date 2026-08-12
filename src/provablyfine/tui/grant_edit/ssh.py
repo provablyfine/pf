@@ -71,13 +71,26 @@ class SshGrantEditWidget(base.TripletFilterGrantEditWidget[pfc.schemas.SSHGrant]
         self.query_one("#perm-max-session-ttl", checkbox_input.CheckboxInput).set_candidates([])
 
     def get_grant_data(self) -> pfc.schemas.SSHGrant:
+        username_list = self._read_field("#perm-username-list").axis_perm()
+        capability_list = self._read_field("#perm-capability-list").capability_perm()
+        command_list = self._read_field("#perm-command-list").axis_perm()
+        max_session_ttl_s = self._read_field("#perm-max-session-ttl").ttl_perm()
+        # The same two rules `pfa grant ssh` enforces. The schema tolerates an
+        # empty list, because migrated rows may carry one, but an authoring
+        # surface should still refuse to write a grant that covers nothing.
+        if username_list == []:
+            raise pfc.exceptions.UI("Grant has no username. Name one, or uncheck Usernames for any.")
+        if capability_list == [] and command_list == []:
+            raise pfc.exceptions.UI(
+                "Grant is empty. Name a capability or a command, or uncheck one of those boxes for any."
+            )
         return pfc.schemas.SSHGrant(
             type="ssh",
             filter=self._filter_data(),
             permission=pfc.schemas.SSHPermission(
-                username_list=self._read_field("#perm-username-list").axis_perm(),
-                capability_list=self._read_field("#perm-capability-list").capability_perm(),
-                command_list=self._read_field("#perm-command-list").axis_perm(),
-                max_session_ttl_s=self._read_field("#perm-max-session-ttl").ttl_perm(),
+                username_list=username_list,
+                capability_list=capability_list,
+                command_list=command_list,
+                max_session_ttl_s=max_session_ttl_s,
             ),
         )

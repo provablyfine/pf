@@ -70,7 +70,14 @@ class GrantEditScreen(textual.screen.Screen[pfc.schemas.Grant | None]):
         widgets = list(self.query_one("#dynamic-grant-fields").query(base.GrantEditWidget))
         if not widgets:
             return
-        self.dismiss(widgets[0].get_grant_data())
+        try:
+            grant = widgets[0].get_grant_data()
+        except pfc.exceptions.UI as e:
+            # Report and stay: dismissing would throw away the edits the user
+            # now has to correct.
+            self.notify(str(e), severity="error")
+            return
+        self.dismiss(grant)
 
     def compose(self) -> textual.app.ComposeResult:
         yield header.AppHeader()
