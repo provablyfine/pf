@@ -106,9 +106,7 @@ Forwarding capabilities reach the certificate
   $ pfa -c config.json audit-log list --format json | jq -r "$CERT_EXTENSIONS"
   permit_agent_forwarding permit_pty permit_user_rc permit_x11_forwarding
 
-A boundary ceiling caps forwarding capabilities. This was impossible before the
-capability model: a ceiling was a boolean gate over username membership, so
-permit_agent_forwarding and permit_x11_forwarding always leaked through.
+A boundary ceiling caps forwarding capabilities.
   $ pfa -c config.json boundary create -n capped -d "shell without forwarding"
   $ CAPPED_ID=$(pfa -c config.json boundary list -n capped -q)
   $ pfa -c config.json boundary ceiling -i $CAPPED_ID --set <<EOF
@@ -137,14 +135,12 @@ The very same bob grant now yields a certificate with neither forwarding
   $ pfa -c config.json audit-log list --format json | jq -r "$CERT_EXTENSIONS"
   permit_pty permit_user_rc
 
-The ceiling covers no port-forwarding atom, so that capability is gone too
+The ceiling covers no port-forwarding , so that capability is gone too
   $ pf -c capped.json ssh -L 19904:localhost:22 -n -o "Hostname=$SSHD_ADDRESS" -o "HostKeyAlias=host" -p $SSHD_PORT root@host "echo ok"
   User is not authorized to connect to host
   [2]
 
-A deny is targeted: it removes only the atoms it covers. Denying X11 alone was
-inexpressible before -- the only way to reach a forwarding flag was to deny the
-whole shell for that username.
+A deny is targeted
   $ pfa -c config.json boundary create -n targeted -d "no X11 for bob"
   $ TARGETED_ID=$(pfa -c config.json boundary list -n targeted -q)
   $ pfa -c config.json boundary denied -i $TARGETED_ID --set <<EOF
@@ -229,9 +225,8 @@ The boundary deny still applies to the wildcard grant
   User is not authorized to connect to host
   [2]
 
-A null command_list is the whole axis -- any command -- and is reported as "*".
-An empty details cell means the entry has no command axis at all, which is what
-a shell row shows, so the two must not render alike.
+A null command_list matches all commands and is reported as "*".
+An empty details cell means the entry has no command axis at all
   $ pfa -c config.json grant ssh --tag id=device --username dave --cmd-all | pfa -c config.json role grant -i $WILDCARD_ROLE_ID --add
   $ pf -c wildcard.json hosts
   host    type     username    details
