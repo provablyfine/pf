@@ -574,11 +574,7 @@ class SSHChecker:
 
     def _candidate_usernames(self, unix_username: str | None) -> tuple[list[str], bool]:
         """Usernames worth calling decide() on, plus whether a wildcard grant exists.
-
-        Only role grants are considered, and boundaries are deliberately not
-        applied: this enumerates candidates, it does not authorize them. A
-        grant with username_list None cannot be enumerated at all, hence the
-        flag. Ordered by first appearance, because these end up on screen.
+        Ordered by first appearance, because these end up on screen.
         """
         usernames: list[str] = []
         wildcard = False
@@ -606,11 +602,6 @@ class SSHChecker:
     def list_decisions(self, unix_username: str | None) -> list[tuple[str | None, SSHDecision]]:
         """Decisions for enumeration: one per candidate username, plus one for
         "any other username" (key None) when a wildcard grant exists.
-
-        The wildcard decision is exact, not an approximation: the only
-        username-sensitivity in the algebra is exact membership in a resolved
-        username_list, so every username named by no entry -- in a grant, a
-        ceiling or a deny -- resolves identically.
         """
         usernames, wildcard = self._candidate_usernames(unix_username)
         output: list[tuple[str | None, SSHDecision]] = [(u, self.decide(u, unix_username)) for u in usernames]

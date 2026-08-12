@@ -798,9 +798,7 @@ def test_ssh_decide_uncovered_by_ceiling_is_denied():
 
 
 def test_ssh_decide_ceiling_caps_forwarding():
-    # The bug being fixed: under the legacy checker this same policy yields
-    # permit_agent_forwarding=True, because the ceiling is only a boolean gate
-    # over username membership.
+    # A ceiling that covers only a subset of the capabilities the role grants
     grants = grant.Grants(
         [boundary([_ssh(capabilities=["shell"], commands=[])], [])],
         [role([_ssh(capabilities=["shell", "agent-forwarding"], commands=[])])],
