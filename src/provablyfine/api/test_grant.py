@@ -1199,3 +1199,190 @@ def test_ssh_ttl_across_two_boundaries():
         assert decision.capability_ttl[CAP.PTY] == 3600
         with pytest.raises(KeyError):
             decision.capability_ttl[CAP.SHELL]
+
+
+######## CapabilityTtl ########
+
+# CapabilityTtl and SSHCommandPermissions combine permission lists directly:
+# neither reads username_list or filter, because SSHChecker has already
+# filtered on those. Building the lists here drops both dimensions.
+
+
+def _perm(capabilities: list[str] | None = None, commands: list[str] | None = None, ttl: int | None = None):
+    return model.grant.SSHPermission(**_ssh(capabilities=capabilities, commands=commands, ttl=ttl)["permission"])
+
+
+def _every_capability(ttl: int | None = None):
+    return grant.CapabilityTtl.allowed_by([_perm(capabilities=None, commands=[], ttl=ttl)])
+
+
+def test_capability_ttl_is_a_mapping_of_granted_capabilities():
+    ttl = grant.CapabilityTtl.allowed_by(
+        [
+            _perm(capabilities=["shell"], commands=[], ttl=60),
+            _perm(capabilities=["shell", "pty"], commands=[], ttl=None),
+        ]
+    )
+
+    # An unbounded grant absorbs a bounded one: the union of 60 and unbounded
+    # is unbounded. Compare through dict(): a frozen dataclass wrapping a
+    # Mapping is never == to a plain dict.
+    assert dict(ttl) == {CAP.SHELL: None, CAP.PTY: None}
+    assert len(ttl) == 2
+    assert CAP.USER_RC not in ttl
+
+
+def test_capability_ttl_allowed_by_is_order_independent():
+    permissions = [
+        _perm(capabilities=["shell"], commands=[], ttl=60),
+        _perm(capabilities=["shell"], commands=[], ttl=3600),
+        _perm(capabilities=["pty"], commands=[], ttl=None),
+    ]
+
+    forward = grant.CapabilityTtl.allowed_by(permissions)
+    backward = grant.CapabilityTtl.allowed_by(permissions[::-1])
+
+    assert dict(forward) == dict(backward) == {CAP.SHELL: 3600, CAP.PTY: None}
+
+
+def test_capability_ttl_intersect_keeps_only_shared_capabilities():
+    ceiling = grant.CapabilityTtl.allowed_by([_perm(capabilities=["shell", "pty"], commands=[], ttl=None)])
+
+    assert dict(_every_capability(3600).intersect(ceiling)) == {CAP.SHELL: 3600, CAP.PTY: 3600}
+    # Nothing is shared with a ceiling that grants nothing.
+    assert dict(_every_capability(3600).intersect(grant.CapabilityTtl.allowed_by([]))) == {}
+
+
+def test_capability_ttl_intersect_never_raises_a_bound():
+    def bound(granted: int | None, ceiling: int | None):
+        allowed = grant.CapabilityTtl.allowed_by([_perm(capabilities=["shell"], commands=[], ttl=granted)])
+        limit = grant.CapabilityTtl.allowed_by([_perm(capabilities=["shell"], commands=[], ttl=ceiling)])
+        return allowed.intersect(limit)[CAP.SHELL]
+
+    assert bound(60, 3600) == 60
+    assert bound(3600, 60) == 60
+    # Unbounded is the identity of the intersection, on either side.
+    assert bound(None, 3600) == 3600
+    assert bound(3600, None) == 3600
+    assert bound(None, None) is None
+
+
+def test_capability_ttl_subtract_clamps_or_removes():
+    base = _every_capability(3600)
+
+    clamped = base.subtract([_perm(capabilities=["shell"], commands=[], ttl=60)])
+    assert len(clamped) == len(base)
+    assert clamped[CAP.SHELL] == 60
+    assert clamped[CAP.PTY] == 3600
+
+    # An unbounded deny is a removal, not a bound of None.
+    removed = base.subtract([_perm(capabilities=["pty"], commands=[], ttl=None)])
+    assert len(removed) == len(base) - 1
+    with pytest.raises(KeyError):
+        removed[CAP.PTY]
+
+
+def test_capability_ttl_subtract_with_a_wildcard_capability_list_removes_everything():
+    denied = _every_capability(3600).subtract([_perm(capabilities=None, commands=[], ttl=None)])
+
+    assert dict(denied) == {}
+
+
+######## SSHCommandPermissions ########
+
+
+def test_command_permissions_empty_permits_nothing():
+    commands = grant.SSHCommandPermissions.allowed_by([])
+
+    assert commands.permits("ls") is None
+    assert commands.candidates() == ([], False)
+
+
+def test_command_permissions_named_command_inherits_the_wildcard_bound():
+    # Naming a command must not take away what a wildcard already allows for
+    # it, so the union is 60 rather than the 30 the naming entry carries.
+    permissions = [
+        _perm(capabilities=[], commands=None, ttl=60),
+        _perm(capabilities=[], commands=["ls"], ttl=30),
+    ]
+
+    for ordered in (permissions, permissions[::-1]):
+        commands = grant.SSHCommandPermissions.allowed_by(ordered)
+
+        assert commands.permits("ls").ttl == 60
+        assert commands.permits("df").ttl == 60
+
+
+def test_command_permissions_candidates_with_a_wildcard_and_named_commands():
+    commands = grant.SSHCommandPermissions.allowed_by(
+        [
+            _perm(capabilities=[], commands=None, ttl=3600),
+            _perm(capabilities=[], commands=["ls"], ttl=60),
+        ]
+    )
+
+    # "ls" is enumerated, but the wildcard still permits everything else, so
+    # the list is not the whole answer.
+    assert commands.candidates() == (["ls"], True)
+
+
+def test_command_permissions_intersect_falls_back_to_each_side_default():
+    named = grant.SSHCommandPermissions.allowed_by([_perm(capabilities=[], commands=["ls", "df"], ttl=3600)])
+    wildcard = grant.SSHCommandPermissions.allowed_by([_perm(capabilities=[], commands=None, ttl=60)])
+
+    # A command only one side names is still decided, against the other side's
+    # default: the intersection keeps every named command, unlike CapabilityTtl.
+    narrowed = named.intersect(wildcard)
+    assert narrowed.permits("ls").ttl == 60
+    assert narrowed.permits("df").ttl == 60
+    assert narrowed.permits("rm") is None
+
+    # The other way round is the same decision, reached from the other side:
+    # the wildcard collapses to exactly the commands the ceiling names.
+    lowered = wildcard.intersect(named)
+    assert lowered.permits("ls").ttl == 60
+    assert lowered.permits("rm") is None
+    assert lowered.candidates() == (["ls", "df"], False)
+
+
+def test_command_permissions_intersect_chains():
+    base = grant.SSHCommandPermissions.allowed_by([_perm(capabilities=[], commands=None, ttl=3600)])
+    first = grant.SSHCommandPermissions.allowed_by([_perm(capabilities=[], commands=["ls", "df"], ttl=1800)])
+    second = grant.SSHCommandPermissions.allowed_by([_perm(capabilities=[], commands=["ls"], ttl=600)])
+
+    for commands in (base.intersect(first).intersect(second), base.intersect(second).intersect(first)):
+        assert commands.permits("ls").ttl == 600
+        # Named by only one of the two ceilings, so denied by the other.
+        assert commands.permits("df") is None
+        assert commands.permits("rm") is None
+
+
+def test_command_permissions_subtract_names_a_command_the_base_left_unnamed():
+    base = grant.SSHCommandPermissions.allowed_by([_perm(capabilities=[], commands=None, ttl=3600)])
+
+    clamped = base.subtract([_perm(capabilities=[], commands=["rm"], ttl=600)])
+    assert clamped.permits("rm").ttl == 600
+    assert clamped.permits("ls").ttl == 3600
+
+    removed = base.subtract([_perm(capabilities=[], commands=["rm"], ttl=None)])
+    assert removed.permits("rm") is None
+    assert removed.permits("ls").ttl == 3600
+
+
+def test_command_permissions_subtract_with_a_wildcard_command_list():
+    base = grant.SSHCommandPermissions.allowed_by(
+        [
+            _perm(capabilities=[], commands=None, ttl=3600),
+            _perm(capabilities=[], commands=["ls"], ttl=None),
+        ]
+    )
+
+    # A deny naming no command reaches the named entries and the default alike.
+    clamped = base.subtract([_perm(capabilities=[], commands=None, ttl=600)])
+    assert clamped.permits("ls").ttl == 600
+    assert clamped.permits("df").ttl == 600
+
+    removed = base.subtract([_perm(capabilities=[], commands=None, ttl=None)])
+    assert removed.permits("ls") is None
+    assert removed.permits("df") is None
+    assert removed.candidates() == ([], False)
