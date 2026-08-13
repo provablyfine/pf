@@ -10,7 +10,7 @@ import textual.widget
 import textual.widgets
 import textual_autocomplete
 
-from .. import auto_complete, checkbox_input
+from .. import auto_complete, checkbox_input, duration
 
 
 class _TripletFilterGrant(typing.Protocol):
@@ -54,10 +54,12 @@ class Field:
     def ttl_perm(self) -> int | None:
         if not self.active:
             return None
-        value = self.value.strip()
-        if not value.isdigit() or int(value) == 0:
-            raise pfc.exceptions.UI(f"Max session TTL must be a positive number of seconds, not '{value}'.")
-        return int(value)
+        seconds = duration.parse(self.value)
+        if seconds is None:
+            raise pfc.exceptions.UI(
+                f"Max session TTL must be a duration like 8h, 90m or 1h30m, not '{self.value.strip()}'."
+            )
+        return seconds
 
     def capability_perm(self) -> list[pfc.schemas.SSHCapability] | None:
         if not self.active:

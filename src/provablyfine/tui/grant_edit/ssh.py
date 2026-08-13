@@ -5,10 +5,11 @@ import textual.containers
 import textual.widgets
 import textual_autocomplete
 
-from .. import checkbox_input
+from .. import auto_complete, checkbox_input, duration
 from . import base
 
 _CAPABILITIES = [c.value for c in pfc.schemas.SSHCapability]
+_TTL_PRESETS = ["5m", "15m", "30m", "1h", "2h", "4h", "8h", "12h", "24h"]
 
 
 class SshGrantEditWidget(base.TripletFilterGrantEditWidget[pfc.schemas.SSHGrant]):
@@ -27,7 +28,7 @@ class SshGrantEditWidget(base.TripletFilterGrantEditWidget[pfc.schemas.SSHGrant]
         command = base.Field.from_axis(p.command_list)
         ttl = base.Field(
             active=p.max_session_ttl_s is not None,
-            value="" if p.max_session_ttl_s is None else str(p.max_session_ttl_s),
+            value="" if p.max_session_ttl_s is None else duration.to_text(p.max_session_ttl_s),
         )
         yield from self._compose_filter()
         with textual.containers.VerticalGroup(classes="section"):
@@ -55,11 +56,15 @@ class SshGrantEditWidget(base.TripletFilterGrantEditWidget[pfc.schemas.SSHGrant]
                 id="perm-command-list",
             )
             yield checkbox_input.CheckboxInput(
-                "Max session TTL (s)",
+                "Max session TTL",
                 active=ttl.active,
                 value=ttl.value,
-                placeholder="Seconds, e.g. 3600",
+                placeholder="e.g. 8h, 90m, 1h30m",
                 id="perm-max-session-ttl",
+                # One duration, not a list: the default autocomplete completes
+                # the word after the last space.
+                autocomplete=auto_complete.MonoAutoComplete,
+                suggester=duration.Suggester(),
             )
 
     async def on_mount(self) -> None:
@@ -69,7 +74,9 @@ class SshGrantEditWidget(base.TripletFilterGrantEditWidget[pfc.schemas.SSHGrant]
             [textual_autocomplete.DropdownItem(main=c) for c in _CAPABILITIES]
         )
         self.query_one("#perm-command-list", checkbox_input.CheckboxInput).set_candidates([])
-        self.query_one("#perm-max-session-ttl", checkbox_input.CheckboxInput).set_candidates([])
+        self.query_one("#perm-max-session-ttl", checkbox_input.CheckboxInput).set_candidates(
+            [textual_autocomplete.DropdownItem(main=t) for t in _TTL_PRESETS]
+        )
 
     def get_grant_data(self) -> pfc.schemas.SSHGrant:
         username_list = self._read_field("#perm-username-list").axis_perm()

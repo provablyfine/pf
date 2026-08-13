@@ -553,7 +553,7 @@ async def test_tui_ssh_grant_edit(api, ssh_agent):
                 await pilot.pause()  # UI event settle
                 await pilot.click("#perm-max-session-ttl Input")
                 await pilot.pause()  # UI event settle
-                await pilot.press(*"3600")
+                await pilot.press(*"1h30m")
                 await pilot.pause()  # UI event settle
 
                 await pilot.press("ctrl+s")  # confirm grant edits
@@ -569,7 +569,7 @@ async def test_tui_ssh_grant_edit(api, ssh_agent):
         assert grant["permission"]["username_list"] == ["alice"]
         assert grant["permission"]["capability_list"] is None
         assert grant["permission"]["command_list"] == []
-        assert grant["permission"]["max_session_ttl_s"] == 3600
+        assert grant["permission"]["max_session_ttl_s"] == 5400
 
 
 @pytest.mark.anyio
