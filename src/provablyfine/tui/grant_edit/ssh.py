@@ -5,7 +5,7 @@ import textual.containers
 import textual.widgets
 import textual_autocomplete
 
-from .. import auto_complete, checkbox_input, duration
+from .. import auto_complete, checkbox_input, checkbox_list, duration
 from . import base
 
 _CAPABILITIES = [c.value for c in pfc.schemas.SSHCapability]
@@ -25,7 +25,6 @@ class SshGrantEditWidget(base.TripletFilterGrantEditWidget[pfc.schemas.SSHGrant]
         # any command. That is what null means in the stored grant.
         username = base.Field.from_axis(p.username_list)
         capability = base.Field.from_axis(p.capability_list)
-        command = base.Field.from_axis(p.command_list)
         ttl = base.Field(
             active=p.max_session_ttl_s is not None,
             value="" if p.max_session_ttl_s is None else duration.to_text(p.max_session_ttl_s),
@@ -48,11 +47,13 @@ class SshGrantEditWidget(base.TripletFilterGrantEditWidget[pfc.schemas.SSHGrant]
                 id="perm-capability-list",
                 suggester=checkbox_input.RemainingValuesSuggester(_CAPABILITIES),
             )
-            yield checkbox_input.CheckboxInput(
+            # A command is one exact string, spaces and all, so each one gets
+            # its own line rather than a share of a whitespace-split field.
+            yield checkbox_list.CheckboxList(
                 "Commands",
-                active=command.active,
-                value=command.value,
-                placeholder="Type a command",
+                active=p.command_list is not None,
+                values=p.command_list or [],
+                placeholder="Type a command, Enter for another",
                 id="perm-command-list",
             )
             yield checkbox_input.CheckboxInput(
@@ -73,7 +74,6 @@ class SshGrantEditWidget(base.TripletFilterGrantEditWidget[pfc.schemas.SSHGrant]
         self.query_one("#perm-capability-list", checkbox_input.CheckboxInput).set_candidates(
             [textual_autocomplete.DropdownItem(main=c) for c in _CAPABILITIES]
         )
-        self.query_one("#perm-command-list", checkbox_input.CheckboxInput).set_candidates([])
         self.query_one("#perm-max-session-ttl", checkbox_input.CheckboxInput).set_candidates(
             [textual_autocomplete.DropdownItem(main=t) for t in _TTL_PRESETS]
         )
@@ -81,7 +81,7 @@ class SshGrantEditWidget(base.TripletFilterGrantEditWidget[pfc.schemas.SSHGrant]
     def get_grant_data(self) -> pfc.schemas.SSHGrant:
         username_list = self._read_field("#perm-username-list").axis_perm()
         capability_list = self._read_field("#perm-capability-list").capability_perm()
-        command_list = self._read_field("#perm-command-list").axis_perm()
+        command_list = self._read_values("#perm-command-list")
         max_session_ttl_s = self._read_field("#perm-max-session-ttl").ttl_perm()
         # The same two rules `pfa grant ssh` enforces. The schema tolerates an
         # empty list, because migrated rows may carry one, but an authoring

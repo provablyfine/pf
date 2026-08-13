@@ -10,7 +10,7 @@ import textual.widget
 import textual.widgets
 import textual_autocomplete
 
-from .. import auto_complete, checkbox_input, duration
+from .. import auto_complete, checkbox_input, checkbox_list, duration
 
 
 class _TripletFilterGrant(typing.Protocol):
@@ -207,6 +207,14 @@ class GrantEditWidget(textual.widget.Widget):
     def _read_field(self, widget_id: str) -> Field:
         w = self.query_one(widget_id, checkbox_input.CheckboxInput)
         return Field(w.active, w.value)
+
+    def _read_values(self, widget_id: str) -> list[str] | None:
+        """`Field.axis_perm` for an axis whose values may contain spaces, and
+        so cannot be one whitespace-split string. Inactive still means the
+        whole axis, which the grant spells as null.
+        """
+        w = self.query_one(widget_id, checkbox_list.CheckboxList)
+        return w.values if w.active else None
 
 
 class TripletFilterGrantEditWidget[T: _TripletFilterGrant](GrantEditWidget):

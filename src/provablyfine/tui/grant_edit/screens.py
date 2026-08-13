@@ -17,6 +17,11 @@ class GrantEditScreen(textual.screen.Screen[pfc.schemas.Grant | None]):
     .sections {
         padding: 0 1;
     }
+    #dynamic-grant-fields {
+        /* Container is 1fr, which would fill .sections exactly and clip its
+           own overflow, leaving the scrollbar above it nothing to scroll. */
+        height: auto;
+    }
     .section {
         padding: 1 0 0 0;
     }
@@ -81,6 +86,12 @@ class GrantEditScreen(textual.screen.Screen[pfc.schemas.Grant | None]):
 
     def compose(self) -> textual.app.ComposeResult:
         yield header.AppHeader()
-        with textual.containers.VerticalGroup(classes="sections"):
+        # A grant with more commands than the terminal has lines must scroll
+        # rather than lose its tail. Not a focus stop of its own: up/down are
+        # the screen's focus chain, and moving along it scrolls the field that
+        # gains focus into view.
+        sections = textual.containers.VerticalScroll(classes="sections")
+        sections.can_focus = False
+        with sections:
             yield textual.containers.Container(id="dynamic-grant-fields")
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
