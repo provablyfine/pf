@@ -627,6 +627,57 @@ async def test_tui_ssh_grant_edit_rejects_unknown_capability(api, ssh_agent):
 
 
 @pytest.mark.anyio
+async def test_tui_ssh_grant_capability_hint(api, ssh_agent):
+    """The capabilities a grant does not use yet are named in the field itself.
+    The placeholder only covers an empty field, and a new grant is never empty:
+    it starts at "shell pty user-rc"."""
+    with _setup_ssh_auth_sock(ssh_agent):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            auth = _setup(api, tmpdir, ssh_agent)
+
+            await _setup_role_with_grant(auth, provablyfine.tui.grant_edit.new_grant("ssh"))
+
+            app = provablyfine.tui.app.TuiApp(auth)
+            async with app.run_test(size=(200, 50)) as pilot:
+                await pilot.pause()  # app startup
+                await pilot.press("down", "down", "down", "down", "down")  # navigate to Roles
+                await pilot.press("enter")  # open RoleListScreen
+                await pilot.pause()  # screen transition
+                await pilot.pause()  # RoleListScreen.on_mount
+                await pilot.press("down")  # navigate to test-role (row 1)
+                await pilot.press("enter")  # open role view
+                await pilot.pause()  # screen transition
+                await pilot.pause()  # RoleViewScreen.on_mount
+                await pilot.press("tab", "tab", "tab")  # focus grants DataTable
+                await pilot.press("enter")
+                await pilot.pause()  # screen transition
+                await pilot.pause()  # SshGrantEditWidget.on_mount (3 APIs: identities, boundaries, bastions)
+
+                await pilot.click("#perm-capability-list Input")
+                await pilot.press("end")
+                await pilot.pause()  # UI event settle
+                await pilot.pause()  # the suggester runs in a worker
+
+                inp = app.screen.query_one("#perm-capability-list Input", textual.widgets.Input)
+                assert inp.value == "shell pty user-rc"
+                assert "agent-forwarding x11-forwarding port-forwarding" in inp.render_line(0).text
+
+                # The hint is not a completion: `right` at the end of the line
+                # must not turn it into the value.
+                await pilot.press("right")
+                await pilot.pause()  # UI event settle
+                assert inp.value == "shell pty user-rc"
+
+                # Half-typed token: the dropdown completes it, so the field
+                # stops offering the rest of the set.
+                await pilot.press(*" a")
+                await pilot.pause()  # UI event settle
+                await pilot.pause()  # the suggester runs in a worker
+                assert inp.value == "shell pty user-rc a"
+                assert "x11-forwarding" not in inp.render_line(0).text
+
+
+@pytest.mark.anyio
 async def test_tui_tag_list(api, ssh_agent):
     """Add a tag via the TUI, verify it exists, then delete it."""
     with _setup_ssh_auth_sock(ssh_agent):

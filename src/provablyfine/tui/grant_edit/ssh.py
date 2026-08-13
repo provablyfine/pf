@@ -45,6 +45,7 @@ class SshGrantEditWidget(base.TripletFilterGrantEditWidget[pfc.schemas.SSHGrant]
                 value=capability.value,
                 placeholder=" ".join(_CAPABILITIES),
                 id="perm-capability-list",
+                suggester=checkbox_input.RemainingValuesSuggester(_CAPABILITIES),
             )
             yield checkbox_input.CheckboxInput(
                 "Commands",
