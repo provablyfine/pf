@@ -176,6 +176,8 @@ def test_cert_details(
         extensions=cert.Extensions(
             permit_agent_forwarding=True,
             permit_x11_forwarding=True,
+            session_deadline=1_500_000_000,
+            connection_id="3fa85f64-5717-4562-b3fc-2c963f66afa6",
         ),
         signer=signer,
     )
@@ -190,6 +192,33 @@ def test_cert_details(
     assert "verify-required" in out
     assert "permit-agent-forwarding" in out
     assert "permit-X11-forwarding" in out
+    # ssh-keygen -L cannot decode our custom extensions; it only prints the
+    # wire name plus a raw hex dump, so verify the values through our own
+    # decoder instead of scraping this output for them.
+    roundtripped = cert.Cert.from_openssh(c.to_openssh())
+    assert roundtripped.extensions.session_deadline == 1_500_000_000
+    assert roundtripped.extensions.connection_id == "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+
+
+@pytest.mark.skipif(not _ssh_keygen, reason="ssh-keygen not found")
+def test_cert_deadline_and_connection_id_absent_when_none(
+    ed25519_priv: jwk.Private,
+    signer: jwk.Private,
+) -> None:
+    c = cert.Cert.create_user(
+        public_key=ed25519_priv.public(),
+        serial_number=1,
+        identifier="user-test-id",
+        principals=["alice"],
+        valid_after=1_000_000_000,
+        valid_before=2_000_000_000,
+        critical_options=cert.CriticalOptions(),
+        extensions=cert.Extensions(),
+        signer=signer,
+    )
+    roundtripped = cert.Cert.from_openssh(c.to_openssh())
+    assert roundtripped.extensions.session_deadline is None
+    assert roundtripped.extensions.connection_id is None
 
 
 @pytest.mark.skipif(not _ssh_keygen, reason="ssh-keygen not found")

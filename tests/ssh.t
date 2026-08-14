@@ -102,7 +102,7 @@ Grant bob a shell with agent and X11 forwarding
 Forwarding capabilities reach the certificate
   $ pf -c user.json ssh -n -o "Hostname=$SSHD_ADDRESS" -o "HostKeyAlias=host" -p $SSHD_PORT bob@host "whoami"
   bob
-  $ CERT_EXTENSIONS="[.[] | select(.type==\"create-user-certificate\")] | last | .details.extensions | with_entries(select(.value)) | keys_unsorted | join(\" \")"
+  $ CERT_EXTENSIONS="[.[] | select(.type==\"create-user-certificate\")] | last | .details.extensions | with_entries(select(.value)) | del(.connection_id, .session_deadline) | keys_unsorted | join(\" \")"
   $ pfa -c config.json audit-log list --format json | jq -r "$CERT_EXTENSIONS"
   permit_agent_forwarding permit_pty permit_user_rc permit_x11_forwarding
 
@@ -235,3 +235,30 @@ An empty details cell means the entry has no command axis at all
   host    shell    *
   host    command  dave        *
   host    command  *           /bin/true
+
+A grant with a bounded max_session_ttl_s produces a certificate carrying a
+session deadline and a connection id, on its own role/identity so it cannot
+be affected by the earlier boundary denies against alice
+  $ pfa -c config.json role create -n ttl
+  $ TTL_ROLE_ID=$(pfa -c config.json role list -n ttl -q)
+  $ pfa -c config.json grant ssh --tag id=device --username alice --capability shell --max-session-ttl 3600 | pfa -c config.json role grant -i $TTL_ROLE_ID --set
+  $ pfa -c config.json identity create -n ttl-user
+  $ TTL_USER_ID=$(pfa -c config.json identity list -n ttl-user -q)
+  $ pfa -c config.json role member -i $TTL_ROLE_ID -a ttl-user
+  $ INVITATION=$(pfa -c config.json identity invite --manual -i $TTL_USER_ID)
+  $ ssh-keygen -t ed25519 -f ttl-account -N "" > /dev/null
+  $ pf -c ttl.json accept --invitation=$INVITATION --key ttl-account
+  $ ssh-keygen -t ed25519 -f ttl-session -N "" > /dev/null
+  $ pf -c ttl.json login --session-key ttl-session
+  $ pf -c ttl.json ssh -n -o "Hostname=$SSHD_ADDRESS" -o "HostKeyAlias=host" -p $SSHD_PORT alice@host "whoami"
+  alice
+
+The deadline (issued_at + ttl) and connection id land in the audit entry, and
+neither one leaks into the certificate's own short validity window
+  $ CERT_DETAILS="[.[] | select(.type==\"create-user-certificate\")] | last | .details"
+  $ pfa -c config.json audit-log list --format json | jq -r "$CERT_DETAILS | .extensions.connection_id"
+  [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12} (re)
+  $ pfa -c config.json audit-log list --format json | jq -r "$CERT_DETAILS | .extensions.session_deadline - .valid_after"
+  3610
+  $ pfa -c config.json audit-log list --format json | jq -r "$CERT_DETAILS | .valid_before - .valid_after"
+  70

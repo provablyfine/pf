@@ -1,6 +1,7 @@
 import logging
 import time
 import typing
+import uuid
 
 import fastapi
 import fastapi.responses
@@ -21,6 +22,20 @@ def _read_current(type: app_db.SigningKeyType, staging_period: int):
         ctx.app_db.signing_key.columns.valid_before > now,
         type=type,
     )
+
+
+def _deadline(now: int, ttl_list: list[int | None]) -> int | None:
+    """The absolute unix-seconds deadline for a cert embedding the given capability TTLs.
+
+    None entries are unbounded and skipped. If every entry is unbounded, the
+    session itself is unbounded, so the deadline extension is omitted (None).
+    Otherwise the tightest bound wins: the deadline governs the whole login
+    session, which hosts every embedded capability.
+    """
+    bounded = [ttl for ttl in ttl_list if ttl is not None]
+    if not bounded:
+        return None
+    return now + min(bounded)
 
 
 @router.post(
@@ -88,11 +103,29 @@ def sign_user_certificate(data: schemas.ssh.SSHUserCertificateRequest) -> schema
     signer = signers[0]
     serial_number = signer.serial_number
     now = int(time.time())
+    connection_id = str(uuid.uuid4())
 
     match data.action:
         case "shell":
             if model.grant.SSHCapability.SHELL not in decision.capabilities:
                 raise responses.ProblemHTTPException(responses.problem_response(status_code=403, title="Forbidden"))
+            permit_pty = model.grant.SSHCapability.PTY in decision.capabilities
+            permit_user_rc = model.grant.SSHCapability.USER_RC in decision.capabilities
+            permit_port_forwarding = model.grant.SSHCapability.PORT_FORWARDING in decision.capabilities
+            permit_x11_forwarding = model.grant.SSHCapability.X11_FORWARDING in decision.capabilities
+            permit_agent_forwarding = model.grant.SSHCapability.AGENT_FORWARDING in decision.capabilities
+            embedded_capabilities = {model.grant.SSHCapability.SHELL}
+            if permit_pty:
+                embedded_capabilities.add(model.grant.SSHCapability.PTY)
+            if permit_user_rc:
+                embedded_capabilities.add(model.grant.SSHCapability.USER_RC)
+            if permit_port_forwarding:
+                embedded_capabilities.add(model.grant.SSHCapability.PORT_FORWARDING)
+            if permit_x11_forwarding:
+                embedded_capabilities.add(model.grant.SSHCapability.X11_FORWARDING)
+            if permit_agent_forwarding:
+                embedded_capabilities.add(model.grant.SSHCapability.AGENT_FORWARDING)
+            deadline = _deadline(now, [decision.capability_ttl[c] for c in embedded_capabilities])
             cert = ssh.cert.Cert.create_user(
                 public_key=public_key,
                 serial_number=serial_number,
@@ -102,17 +135,20 @@ def sign_user_certificate(data: schemas.ssh.SSHUserCertificateRequest) -> schema
                 valid_before=now + ctx.config.user_certificate_lifetime,
                 critical_options=ssh.cert.CriticalOptions(force_command=None),
                 extensions=ssh.cert.Extensions(
-                    permit_pty=model.grant.SSHCapability.PTY in decision.capabilities,
-                    permit_user_rc=model.grant.SSHCapability.USER_RC in decision.capabilities,
-                    permit_port_forwarding=model.grant.SSHCapability.PORT_FORWARDING in decision.capabilities,
-                    permit_x11_forwarding=model.grant.SSHCapability.X11_FORWARDING in decision.capabilities,
-                    permit_agent_forwarding=model.grant.SSHCapability.AGENT_FORWARDING in decision.capabilities,
+                    permit_pty=permit_pty,
+                    permit_user_rc=permit_user_rc,
+                    permit_port_forwarding=permit_port_forwarding,
+                    permit_x11_forwarding=permit_x11_forwarding,
+                    permit_agent_forwarding=permit_agent_forwarding,
+                    session_deadline=deadline,
+                    connection_id=connection_id,
                 ),
                 signer=signer.key,
             )
         case "port-forwarding":
             if model.grant.SSHCapability.PORT_FORWARDING not in decision.capabilities:
                 raise responses.ProblemHTTPException(responses.problem_response(status_code=403, title="Forbidden"))
+            deadline = _deadline(now, [decision.capability_ttl[model.grant.SSHCapability.PORT_FORWARDING]])
             cert = ssh.cert.Cert.create_user(
                 public_key=public_key,
                 serial_number=serial_number,
@@ -127,6 +163,8 @@ def sign_user_certificate(data: schemas.ssh.SSHUserCertificateRequest) -> schema
                     permit_port_forwarding=True,
                     permit_x11_forwarding=False,
                     permit_agent_forwarding=False,
+                    session_deadline=deadline,
+                    connection_id=connection_id,
                 ),
                 signer=signer.key,
             )
@@ -138,6 +176,7 @@ def sign_user_certificate(data: schemas.ssh.SSHUserCertificateRequest) -> schema
             command_decision = decision.commands.permits(data.command)
             if command_decision is None:
                 raise responses.ProblemHTTPException(responses.problem_response(status_code=403, title="Forbidden"))
+            deadline = _deadline(now, [command_decision.ttl])
             cert = ssh.cert.Cert.create_user(
                 public_key=public_key,
                 serial_number=serial_number,
@@ -152,6 +191,8 @@ def sign_user_certificate(data: schemas.ssh.SSHUserCertificateRequest) -> schema
                     permit_port_forwarding=False,
                     permit_x11_forwarding=False,
                     permit_agent_forwarding=False,
+                    session_deadline=deadline,
+                    connection_id=connection_id,
                 ),
                 signer=signer.key,
             )
@@ -171,7 +212,9 @@ def sign_user_certificate(data: schemas.ssh.SSHUserCertificateRequest) -> schema
         critical_options=cert.critical_options.to_dict(),
     )
 
-    logger.info(f"Generated certificate for username={data.username} action={data.action}")
+    logger.info(
+        f"Generated certificate for username={data.username} action={data.action} connection_id={connection_id}"
+    )
 
     matching_bastions = model.bastion.read_matching()
     bastion_schema_list: list[schemas.bastion.Bastion] = []
