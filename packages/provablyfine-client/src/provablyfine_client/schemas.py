@@ -103,6 +103,7 @@ class SshCertBastion(_Base):
 
 class SshUserCertificateResponse(_Base):
     certificates: list[str]
+    connection_id: str
     bastion_list: list[SshCertBastion] = []
     ip_address_list: list[str] = []
 

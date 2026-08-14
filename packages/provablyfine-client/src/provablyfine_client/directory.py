@@ -68,6 +68,10 @@ class Directory:
         return self._load()["public_auth"]
 
     @property
+    def public_oidc(self) -> str:
+        return self._load()["public_oidc"]
+
+    @property
     def role(self) -> str:
         return self._load()["role"]
 

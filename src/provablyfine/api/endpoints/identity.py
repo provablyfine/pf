@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import logging
+import time
 import typing
+import uuid
 
 import fastapi
 import fastapi.responses
@@ -103,11 +105,33 @@ def read_self_bastions_endpoint() -> schemas.identity.IdentitySelfBastionListRes
     status_code=200,
     responses={400: responses.PROBLEM, 403: responses.PROBLEM, 404: responses.PROBLEM},
 )
-def read_self_token_endpoint(service: str, hostname: str) -> schemas.identity.IdentitySelfTokenResponse:
+def read_self_token_endpoint(
+    service: str, hostname: str, username: str | None = None, connection_id: str | None = None
+) -> schemas.identity.IdentitySelfTokenResponse:
     if service != "bastion":
         raise responses.ProblemHTTPException(responses.problem_response(status_code=403))
 
-    token = model.bastion.generate_token(hostname)
+    if connection_id is not None:
+        try:
+            uuid.UUID(connection_id)
+        except ValueError:
+            connection_id = None
+
+    deadline: int | None = None
+    if username is not None:
+        caller = model.identity.read_one(id=ctx.identity_id)
+        assert caller is not None  # because we are authenticated
+        host = model.identity.read_one(name=hostname)
+        if host is None:
+            raise responses.ProblemHTTPException(responses.problem_response(status_code=404, title="Unknown host"))
+        checker = grant.Grants.create().ssh(host.id, host.tag_id_list, host.boundary_id_list)
+        decision = checker.decide(username, caller.unix_username)
+        if model.grant.SSHCapability.PORT_FORWARDING not in decision.capabilities:
+            raise responses.ProblemHTTPException(responses.problem_response(status_code=403, title="Forbidden"))
+        now = int(time.time())
+        deadline = grant.deadline(now, [decision.capability_ttl[model.grant.SSHCapability.PORT_FORWARDING]])
+
+    token = model.bastion.generate_token(hostname, deadline=deadline, connection_id=connection_id)
     return schemas.identity.IdentitySelfTokenResponse(token=token)
 
 

@@ -1,8 +1,15 @@
 import shutil
+import socket
 
 import pytest
 
 from . import utils
+
+
+def _free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
 
 
 @pytest.mark.skipif(not shutil.which("ssh"), reason="ssh not found")
@@ -18,5 +25,6 @@ def test_bastion_ssh(api, frps, sshd, ssh_agent):
             "SSHD_CONTAINER_ID": sshd.container_id,
             "SSHD_KEYS_DIRECTORY": sshd.keys_directory,
             "SSH_AUTH_SOCK": ssh_agent.socket,
+            "LOCAL_FORWARD_PORT": str(_free_port()),
         },
     )

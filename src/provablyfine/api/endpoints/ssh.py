@@ -24,20 +24,6 @@ def _read_current(type: app_db.SigningKeyType, staging_period: int):
     )
 
 
-def _deadline(now: int, ttl_list: list[int | None]) -> int | None:
-    """The absolute unix-seconds deadline for a cert embedding the given capability TTLs.
-
-    None entries are unbounded and skipped. If every entry is unbounded, the
-    session itself is unbounded, so the deadline extension is omitted (None).
-    Otherwise the tightest bound wins: the deadline governs the whole login
-    session, which hosts every embedded capability.
-    """
-    bounded = [ttl for ttl in ttl_list if ttl is not None]
-    if not bounded:
-        return None
-    return now + min(bounded)
-
-
 @router.post(
     "/host/certificate",
     status_code=200,
@@ -125,7 +111,7 @@ def sign_user_certificate(data: schemas.ssh.SSHUserCertificateRequest) -> schema
                 embedded_capabilities.add(model.grant.SSHCapability.X11_FORWARDING)
             if permit_agent_forwarding:
                 embedded_capabilities.add(model.grant.SSHCapability.AGENT_FORWARDING)
-            deadline = _deadline(now, [decision.capability_ttl[c] for c in embedded_capabilities])
+            deadline = grant.deadline(now, [decision.capability_ttl[c] for c in embedded_capabilities])
             cert = ssh.cert.Cert.create_user(
                 public_key=public_key,
                 serial_number=serial_number,
@@ -148,7 +134,7 @@ def sign_user_certificate(data: schemas.ssh.SSHUserCertificateRequest) -> schema
         case "port-forwarding":
             if model.grant.SSHCapability.PORT_FORWARDING not in decision.capabilities:
                 raise responses.ProblemHTTPException(responses.problem_response(status_code=403, title="Forbidden"))
-            deadline = _deadline(now, [decision.capability_ttl[model.grant.SSHCapability.PORT_FORWARDING]])
+            deadline = grant.deadline(now, [decision.capability_ttl[model.grant.SSHCapability.PORT_FORWARDING]])
             cert = ssh.cert.Cert.create_user(
                 public_key=public_key,
                 serial_number=serial_number,
@@ -176,7 +162,7 @@ def sign_user_certificate(data: schemas.ssh.SSHUserCertificateRequest) -> schema
             command_decision = decision.commands.permits(data.command)
             if command_decision is None:
                 raise responses.ProblemHTTPException(responses.problem_response(status_code=403, title="Forbidden"))
-            deadline = _deadline(now, [command_decision.ttl])
+            deadline = grant.deadline(now, [command_decision.ttl])
             cert = ssh.cert.Cert.create_user(
                 public_key=public_key,
                 serial_number=serial_number,
@@ -233,6 +219,7 @@ def sign_user_certificate(data: schemas.ssh.SSHUserCertificateRequest) -> schema
 
     return schemas.ssh.SSHUserCertificateResponse(
         certificates=[converters.cert_to_schema(cert)],
+        connection_id=connection_id,
         bastion_list=bastion_schema_list,
         ip_address_list=ip_address_list,
     )

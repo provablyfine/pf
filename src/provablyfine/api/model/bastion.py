@@ -1,6 +1,7 @@
 import dataclasses
 import time
 import typing
+import uuid
 
 import jwt
 
@@ -116,20 +117,25 @@ def read_matching() -> list[Bastion]:
     return matching
 
 
-def generate_token(hostname: str) -> str:
+def generate_token(hostname: str, deadline: int | None = None, connection_id: str | None = None) -> str:
     private_key = oidc_key.get_private_key()
     assert private_key.type == jwk.KeyType.ED25519
     self_identity = identity.read_one(id=ctx.identity_id)
     assert self_identity is not None
     iss = f"{ctx.config.base_url}/pf/t/{ctx.tenant_name}/public/oidc"
     now = int(time.time())
-    claims = {
+    claims: dict[str, typing.Any] = {
         "sub": str(self_identity.id),
         "iss": iss,
         "aud": f"{hostname}-{ctx.tenant_id}",
         "iat": now,
         "exp": now + 60,
+        "jti": str(uuid.uuid4()),
         "name": self_identity.name,
         "tenant_id": ctx.tenant_id,
     }
+    if deadline is not None:
+        claims["deadline"] = deadline
+    if connection_id is not None:
+        claims["cid"] = connection_id
     return jwt.encode(claims, private_key.to_crypto(), algorithm="EdDSA", headers={"kid": private_key.thumbprint()})

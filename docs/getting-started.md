@@ -95,6 +95,11 @@ hook, which requires systemd/logind on the host. Hosts initialized before this f
 shipped need `host-init` re-run to pick up the PAM wiring. The hook logs to
 `/var/log/pf/session-deadline.log`, which the host is responsible for rotating.
 
+For hosts reached through a bastion (`pf bastion register`), the same session TTL is also
+enforced on port-forwarding connections (`ssh -L`/`-R`), which never open a PAM session
+and so are not covered by the hook above. Every tunnel through the relay must present a
+signed token; connections that don't are rejected.
+
 ## Connect to your new host
 
 First, you need to login under the `users` role:

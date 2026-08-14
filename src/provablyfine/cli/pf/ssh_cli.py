@@ -61,6 +61,7 @@ def _ssh_function(args: argparse.Namespace) -> None:
 
     certificates = cert_data.certificates
     assert len(certificates) == 1
+    connection_id = cert_data.connection_id
     bastion_list = cert_data.bastion_list
     ip_address_list = cert_data.ip_address_list
 
@@ -136,6 +137,8 @@ def _ssh_function(args: argparse.Namespace) -> None:
     for bastion in bastion_list:
         if bastion.url:
             proxy_cmd = f"pf -c {args.config} bastion connect --url={bastion.url} --hostname={host}"
+            if action == "port-forwarding":
+                proxy_cmd += f" --username={user} --connection-id={connection_id}"
             ssh_cmd = build_ssh_cmd(host, proxy_command=proxy_cmd)
             try:
                 os.execvp("/usr/bin/ssh", ssh_cmd)
