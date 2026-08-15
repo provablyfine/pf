@@ -10,7 +10,7 @@ import textual.widget
 import textual.widgets
 import textual_autocomplete
 
-from .. import auto_complete, checkbox_input
+from .. import auto_complete, checkbox_input, checkbox_list, duration
 
 
 class _TripletFilterGrant(typing.Protocol):
@@ -47,6 +47,29 @@ class Field:
     def invite_perm(self) -> list[str]:
         return [s for s in self.value.split() if s in ("email", "manual")] if self.active else []
 
+    def axis_perm(self) -> list[str] | None:
+        """Inactive means the whole axis, which the grant spells as null."""
+        return self.value.split() if self.active else None
+
+    def ttl_perm(self) -> int | None:
+        if not self.active:
+            return None
+        seconds = duration.parse(self.value)
+        if seconds is None:
+            raise pfc.exceptions.UI(
+                f"Max session TTL must be a duration like 8h, 90m or 1h30m, not '{self.value.strip()}'."
+            )
+        return seconds
+
+    def capability_perm(self) -> list[pfc.schemas.SSHCapability] | None:
+        if not self.active:
+            return None
+        known = [c.value for c in pfc.schemas.SSHCapability]
+        unknown = [s for s in self.value.split() if s not in known]
+        if unknown:
+            raise pfc.exceptions.UI(f"Unknown capability: {' '.join(unknown)}. Choose from: {' '.join(known)}.")
+        return [pfc.schemas.SSHCapability(s) for s in self.value.split()]
+
     def name_filter(self) -> str | None:
         name = self.value.strip()
         return name if (self.active and name) else None
@@ -79,6 +102,10 @@ class Field:
             active=boundary_list is not None,
             value=" ".join(boundary_list or []),
         )
+
+    @classmethod
+    def from_axis(cls, values: list[typing.Any] | None) -> Field:
+        return cls(active=values is not None, value=" ".join(str(v) for v in (values or [])))
 
     @classmethod
     def from_invite_list(cls, invite_list: list[str] | None) -> Field:
@@ -149,27 +176,22 @@ def new_grant(grant_type: str) -> pfc.schemas.Grant:
                     delete=False,
                 ),
             )
-        case "ssh-shell":
-            return pfc.schemas.SSHShellGrant(
-                type="ssh-shell",
+        case "ssh":
+            # Preselecting a shell is an editing-surface default, visible
+            # before saving, not a schema default.
+            return pfc.schemas.SSHGrant(
+                type="ssh",
                 filter=pfc.schemas.TripletFilter(name=None, tag_list=None, boundary_list=None),
-                permission=pfc.schemas.SSHShellPermission(
+                permission=pfc.schemas.SSHPermission(
                     username_list=[],
-                    permit_agent_forwarding=False,
-                    permit_x11_forwarding=False,
+                    capability_list=[
+                        pfc.schemas.SSHCapability.SHELL,
+                        pfc.schemas.SSHCapability.PTY,
+                        pfc.schemas.SSHCapability.USER_RC,
+                    ],
+                    command_list=[],
+                    max_session_ttl_s=None,
                 ),
-            )
-        case "ssh-port-forwarding":
-            return pfc.schemas.SSHPortForwardingGrant(
-                type="ssh-port-forwarding",
-                filter=pfc.schemas.TripletFilter(name=None, tag_list=None, boundary_list=None),
-                permission=pfc.schemas.SSHPortForwardingPermission(username_list=[]),
-            )
-        case "ssh-command":
-            return pfc.schemas.SSHCommandGrant(
-                type="ssh-command",
-                filter=pfc.schemas.TripletFilter(name=None, tag_list=None, boundary_list=None),
-                permission=pfc.schemas.SSHCommandPermission(username_list=[], command_list=[]),
             )
         case _:
             return pfc.schemas.InvalidGrant(type="invalid")
@@ -177,11 +199,22 @@ def new_grant(grant_type: str) -> pfc.schemas.Grant:
 
 class GrantEditWidget(textual.widget.Widget):
     def get_grant_data(self) -> pfc.schemas.Grant:
+        """Raises pfc.exceptions.UI when the fields do not describe a grant.
+        GrantEditScreen.action_confirm reports that and keeps the editor open.
+        """
         raise NotImplementedError
 
     def _read_field(self, widget_id: str) -> Field:
         w = self.query_one(widget_id, checkbox_input.CheckboxInput)
         return Field(w.active, w.value)
+
+    def _read_values(self, widget_id: str) -> list[str] | None:
+        """`Field.axis_perm` for an axis whose values may contain spaces, and
+        so cannot be one whitespace-split string. Inactive still means the
+        whole axis, which the grant spells as null.
+        """
+        w = self.query_one(widget_id, checkbox_list.CheckboxList)
+        return w.values if w.active else None
 
 
 class TripletFilterGrantEditWidget[T: _TripletFilterGrant](GrantEditWidget):

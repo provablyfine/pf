@@ -9,13 +9,18 @@ import textual.screen
 import textual.widgets
 
 from .. import header
-from . import base, boundary, identity, role, ssh_command, ssh_port_forward, ssh_shell, tag, tenant
+from . import base, boundary, identity, role, ssh, tag, tenant
 
 
 class GrantEditScreen(textual.screen.Screen[pfc.schemas.Grant | None]):
     DEFAULT_CSS = """
     .sections {
         padding: 0 1;
+    }
+    #dynamic-grant-fields {
+        /* Container is 1fr, which would fill .sections exactly and clip its
+           own overflow, leaving the scrollbar above it nothing to scroll. */
+        height: auto;
     }
     .section {
         padding: 1 0 0 0;
@@ -57,18 +62,8 @@ class GrantEditScreen(textual.screen.Screen[pfc.schemas.Grant | None]):
                 )
             case "tenant":
                 widget = tenant.TenantGrantEditWidget(self._auth, typing.cast(pfc.schemas.TenantGrant, self._grant))
-            case "ssh-shell":
-                widget = ssh_shell.SshShellGrantEditWidget(
-                    self._auth, typing.cast(pfc.schemas.SSHShellGrant, self._grant)
-                )
-            case "ssh-port-forwarding":
-                widget = ssh_port_forward.SshPortForwardingGrantEditWidget(
-                    self._auth, typing.cast(pfc.schemas.SSHPortForwardingGrant, self._grant)
-                )
-            case "ssh-command":
-                widget = ssh_command.SshCommandGrantEditWidget(
-                    self._auth, typing.cast(pfc.schemas.SSHCommandGrant, self._grant)
-                )
+            case "ssh":
+                widget = ssh.SshGrantEditWidget(self._auth, typing.cast(pfc.schemas.SSHGrant, self._grant))
             case _:
                 return
         await fields.mount(widget)
@@ -80,10 +75,23 @@ class GrantEditScreen(textual.screen.Screen[pfc.schemas.Grant | None]):
         widgets = list(self.query_one("#dynamic-grant-fields").query(base.GrantEditWidget))
         if not widgets:
             return
-        self.dismiss(widgets[0].get_grant_data())
+        try:
+            grant = widgets[0].get_grant_data()
+        except pfc.exceptions.UI as e:
+            # Report and stay: dismissing would throw away the edits the user
+            # now has to correct.
+            self.notify(str(e), severity="error")
+            return
+        self.dismiss(grant)
 
     def compose(self) -> textual.app.ComposeResult:
         yield header.AppHeader()
-        with textual.containers.VerticalGroup(classes="sections"):
+        # A grant with more commands than the terminal has lines must scroll
+        # rather than lose its tail. Not a focus stop of its own: up/down are
+        # the screen's focus chain, and moving along it scrolls the field that
+        # gains focus into view.
+        sections = textual.containers.VerticalScroll(classes="sections")
+        sections.can_focus = False
+        with sections:
             yield textual.containers.Container(id="dynamic-grant-fields")
         yield textual.widgets.Footer(compact=True, show_command_palette=False)

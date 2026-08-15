@@ -95,7 +95,7 @@ Child tenant (acme) CAN use SSH grants (pf hosts returns accessible hosts)
   $ pfa -c acme.json identity create -n acme-host -t $DEVICE_TAG
   $ pfa -c acme.json role create -n ssh-role
   $ ROLE_ID=$(pfa -c acme.json role list -n ssh-role -q)
-  $ pfa -c acme.json grant ssh-shell --tag type=device --username alice | pfa -c acme.json role grant -i $ROLE_ID --add
+  $ pfa -c acme.json grant ssh --tag type=device --username alice --capability shell pty user-rc | pfa -c acme.json role grant -i $ROLE_ID --add
   $ pfa -c acme.json identity create -n user1
   $ USER1_ID=$(pfa -c acme.json identity list -n user1 -q)
   $ pfa -c acme.json role member -i $ROLE_ID -a user1

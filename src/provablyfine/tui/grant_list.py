@@ -11,7 +11,7 @@ import textual.widgets
 
 from . import base, grant_edit, header
 
-GRANT_TYPES = ["identity", "tag", "role", "boundary", "tenant", "ssh-shell", "ssh-port-forwarding", "ssh-command"]
+GRANT_TYPES = ["identity", "tag", "role", "boundary", "tenant", "ssh"]
 
 
 class GrantTypeScreen(textual.screen.ModalScreen[str | None]):

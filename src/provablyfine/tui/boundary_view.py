@@ -12,14 +12,8 @@ import textual.widgets
 from . import base, grant_edit, grant_list, header
 
 
-class _DeniedTable(textual.widgets.DataTable[str]):
-    class RowSelected(textual.widgets.DataTable.RowSelected):
-        data_table: _DeniedTable
-
-
-class _CeilingTable(textual.widgets.DataTable[str]):
-    class RowSelected(textual.widgets.DataTable.RowSelected):
-        data_table: _CeilingTable
+class _GrantsTable(textual.widgets.DataTable[str]):
+    pass
 
 
 class BoundaryViewScreen(base.Screen):
@@ -67,18 +61,18 @@ class BoundaryViewScreen(base.Screen):
                 yield textual.widgets.Input(self._boundary.description, id="description", compact=True)
             with textual.containers.Container(classes="field") as container:
                 container.border_title = "Denied grants"
-                yield _DeniedTable(id="denied", cursor_type="row")
+                yield _GrantsTable(id="denied", cursor_type="row")
                 yield textual.widgets.Label("No denied grants — add one with 'a'", id="denied-placeholder")
             with textual.containers.Container(classes="field") as container:
                 container.border_title = "Ceiling grants"
-                yield _CeilingTable(id="ceiling", cursor_type="row")
+                yield _GrantsTable(id="ceiling", cursor_type="row")
                 yield textual.widgets.Label("No ceiling grants — add one with 'a'", id="ceiling-placeholder")
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
         self.sub_title = f"Boundaries > {self._boundary.name}"
-        self.query_one("#denied", _DeniedTable).add_columns("Type", "Filter", "Permissions")
-        self.query_one("#ceiling", _CeilingTable).add_columns("Type", "Filter", "Permissions")
+        self.query_one("#denied", _GrantsTable).add_columns("Type", "Filter", "Permissions")
+        self.query_one("#ceiling", _GrantsTable).add_columns("Type", "Filter", "Permissions")
         self._populate_denied()
         self._populate_ceiling()
 
@@ -89,7 +83,7 @@ class BoundaryViewScreen(base.Screen):
         self.refresh_bindings()
 
     def _populate_denied(self) -> None:
-        table = self.query_one("#denied", _DeniedTable)
+        table = self.query_one("#denied", _GrantsTable)
         table.clear(columns=False)
         for g in self._denied_list:
             grant_text = g.to_text()
@@ -97,7 +91,7 @@ class BoundaryViewScreen(base.Screen):
         self.query_one("#denied-placeholder").display = not bool(self._denied_list)
 
     def _populate_ceiling(self) -> None:
-        table = self.query_one("#ceiling", _CeilingTable)
+        table = self.query_one("#ceiling", _GrantsTable)
         table.clear(columns=False)
         ceiling = self._ceiling_list or []
         for g in ceiling:
@@ -105,11 +99,11 @@ class BoundaryViewScreen(base.Screen):
             table.add_row(grant_text.type, grant_text.filter, grant_text.permission)
         self.query_one("#ceiling-placeholder").display = not bool(ceiling)
 
-    @textual.on(_DeniedTable.RowSelected)
+    @textual.on(_GrantsTable.RowSelected, "#denied")
     def _on_denied_row_selected(self) -> None:
         self._edit_grant_in("denied")
 
-    @textual.on(_CeilingTable.RowSelected)
+    @textual.on(_GrantsTable.RowSelected, "#ceiling")
     def _on_ceiling_row_selected(self) -> None:
         self._edit_grant_in("ceiling")
 
@@ -141,13 +135,13 @@ class BoundaryViewScreen(base.Screen):
         if focused is None:
             return
         if focused.id == "denied":
-            table = self.query_one("#denied", _DeniedTable)
+            table = self.query_one("#denied", _GrantsTable)
             if not self._denied_list:
                 return
             self._denied_list.pop(table.cursor_row)
             self._populate_denied()
         elif focused.id == "ceiling":
-            table = self.query_one("#ceiling", _CeilingTable)
+            table = self.query_one("#ceiling", _GrantsTable)
             if not self._ceiling_list:
                 return
             self._ceiling_list.pop(table.cursor_row)
@@ -156,10 +150,10 @@ class BoundaryViewScreen(base.Screen):
     @textual.work
     async def _edit_grant_in(self, table_id: str) -> None:
         if table_id == "denied":
-            table = self.query_one("#denied", _DeniedTable)
+            table = self.query_one("#denied", _GrantsTable)
             grant_list_ref = self._denied_list
         else:
-            table = self.query_one("#ceiling", _CeilingTable)
+            table = self.query_one("#ceiling", _GrantsTable)
             grant_list_ref = self._ceiling_list or []
         if not grant_list_ref:
             return

@@ -39,7 +39,7 @@ Set up for {self} resolution test: host with device tag, role with {self} + lite
   $ pfa -c config.json identity create -n host -t $DEVICE_TAG_ID
   $ pfa -c config.json role create -n role
   $ ROLE_ID=$(pfa -c config.json role list -n role -q)
-  $ pfa -c config.json grant ssh-shell --tag id=device --username '{self}' deploy | pfa -c config.json role grant -i $ROLE_ID --add
+  $ pfa -c config.json grant ssh --tag id=device --username '{self}' deploy --capability shell pty user-rc | pfa -c config.json role grant -i $ROLE_ID --add
   $ pfa -c config.json role member -i $ROLE_ID -a user
   $ pfa -c config.json identity update -i $USER_ID --unix-username alice
 

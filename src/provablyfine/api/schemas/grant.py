@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import enum
 import typing
 
 import pydantic
@@ -102,37 +103,32 @@ class IdentityGrant(base.APIBase):
     permission: IdentityPermission
 
 
-class SSHShellPermission(base.APIBase):
-    username_list: list[str]
-    permit_agent_forwarding: bool = False
-    permit_x11_forwarding: bool = False
+class SSHCapability(enum.StrEnum):
+    SHELL = "shell"
+    PTY = "pty"
+    USER_RC = "user-rc"
+    AGENT_FORWARDING = "agent-forwarding"
+    X11_FORWARDING = "x11-forwarding"
+    PORT_FORWARDING = "port-forwarding"
 
 
-class SSHShellGrant(base.APIBase):
-    type: typing.Literal["ssh-shell"] = "ssh-shell"
+class SSHPermission(base.APIBase):
+    username_list: list[str] | None
+    capability_list: list[SSHCapability] | None
+    command_list: list[str] | None
+    max_session_ttl_s: int | None = pydantic.Field(gt=0)
+
+    @pydantic.model_validator(mode="after")
+    def _reject_empty(self) -> SSHPermission:
+        if self.capability_list == [] and self.command_list == []:
+            raise ValueError("capability_list and command_list must not both be empty")
+        return self
+
+
+class SSHGrant(base.APIBase):
+    type: typing.Literal["ssh"] = "ssh"
     filter: TripletFilter
-    permission: SSHShellPermission
-
-
-class SSHPortForwardingPermission(base.APIBase):
-    username_list: list[str]
-
-
-class SSHPortForwardingGrant(base.APIBase):
-    type: typing.Literal["ssh-port-forwarding"] = "ssh-port-forwarding"
-    filter: TripletFilter
-    permission: SSHPortForwardingPermission
-
-
-class SSHCommandPermission(base.APIBase):
-    username_list: list[str]
-    command_list: list[str]
-
-
-class SSHCommandGrant(base.APIBase):
-    type: typing.Literal["ssh-command"] = "ssh-command"
-    filter: TripletFilter
-    permission: SSHCommandPermission
+    permission: SSHPermission
 
 
 class TenantUpdatePermission(base.APIBase):
@@ -221,9 +217,7 @@ Grant = typing.Annotated[
     | TagGrant
     | RoleGrant
     | IdentityGrant
-    | SSHShellGrant
-    | SSHPortForwardingGrant
-    | SSHCommandGrant
+    | SSHGrant
     | TenantGrant
     | AuthGrant
     | BastionGrant

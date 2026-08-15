@@ -7,8 +7,8 @@ Create admin objects
   $ DEVICE_TAG_ID=$(pfa -c config.json tag list -n id -v device -q)
   $ pfa -c config.json role create -n role
   $ ROLE_ID=$(pfa -c config.json role list -n role -q)
-  $ pfa -c config.json grant ssh-shell --tag id=device --username root | pfa -c config.json role grant -i $ROLE_ID --add
-  $ pfa -c config.json grant ssh-shell --tag id=device --username alice | pfa -c config.json role grant -i $ROLE_ID --add
+  $ pfa -c config.json grant ssh --tag id=device --username root --capability shell pty user-rc | pfa -c config.json role grant -i $ROLE_ID --add
+  $ pfa -c config.json grant ssh --tag id=device --username alice --capability shell pty user-rc | pfa -c config.json role grant -i $ROLE_ID --add
 
 Create bastion
   $ pfa -c config.json bastion create --url http://127.0.0.1:$FRPS_CONNECT_PORT
