@@ -246,39 +246,21 @@ def _grant_to_schema(converter: GrantConverter, grant: model.grant.Grant) -> sch
                 invite_list=grant.permission.invite_list,
             )
             g = schemas.grant.IdentityGrant(filter=filter, permission=permission)
-        case "ssh-shell":
+        case "ssh":
             filter = schemas.grant.TripletFilter(
                 name=converter.to_identity(grant.filter.id),
                 tag_list=converter.to_tag_list(grant.filter.tag_id_list),
                 boundary_list=converter.to_boundary_list(grant.filter.boundary_id_list),
             )
-            permission = schemas.grant.SSHShellPermission(
+            permission = schemas.grant.SSHPermission(
                 username_list=grant.permission.username_list,
-                permit_agent_forwarding=grant.permission.permit_agent_forwarding,
-                permit_x11_forwarding=grant.permission.permit_x11_forwarding,
-            )
-            g = schemas.grant.SSHShellGrant(filter=filter, permission=permission)
-        case "ssh-port-forwarding":
-            filter = schemas.grant.TripletFilter(
-                name=converter.to_identity(grant.filter.id),
-                tag_list=converter.to_tag_list(grant.filter.tag_id_list),
-                boundary_list=converter.to_boundary_list(grant.filter.boundary_id_list),
-            )
-            permission = schemas.grant.SSHPortForwardingPermission(
-                username_list=grant.permission.username_list,
-            )
-            g = schemas.grant.SSHPortForwardingGrant(filter=filter, permission=permission)
-        case "ssh-command":
-            filter = schemas.grant.TripletFilter(
-                name=converter.to_identity(grant.filter.id),
-                tag_list=converter.to_tag_list(grant.filter.tag_id_list),
-                boundary_list=converter.to_boundary_list(grant.filter.boundary_id_list),
-            )
-            permission = schemas.grant.SSHCommandPermission(
-                username_list=grant.permission.username_list,
+                capability_list=None
+                if grant.permission.capability_list is None
+                else [schemas.grant.SSHCapability(c) for c in grant.permission.capability_list],
                 command_list=grant.permission.command_list,
+                max_session_ttl_s=grant.permission.max_session_ttl_s,
             )
-            g = schemas.grant.SSHCommandGrant(filter=filter, permission=permission)
+            g = schemas.grant.SSHGrant(filter=filter, permission=permission)
         case "tenant":
             filter = schemas.grant.TenantFilter(id=grant.filter.id)
             permission = schemas.grant.TenantPermission(
@@ -416,39 +398,21 @@ def _grant_from_schema(converter: GrantConverter, grant: schemas.grant.Grant) ->
                 invite_list=grant.permission.invite_list,
             )
             g = model.grant.IdentityGrant(filter=filter, permission=permission)
-        case "ssh-shell":
+        case "ssh":
             filter = model.grant.TripletFilter(
                 id=converter.from_identity(grant.filter.name),
                 tag_id_list=converter.from_tag_list(grant.filter.tag_list),
                 boundary_id_list=converter.from_boundary_list(grant.filter.boundary_list),
             )
-            permission = model.grant.SSHShellPermission(
+            permission = model.grant.SSHPermission(
                 username_list=grant.permission.username_list,
-                permit_agent_forwarding=grant.permission.permit_agent_forwarding,
-                permit_x11_forwarding=grant.permission.permit_x11_forwarding,
-            )
-            g = model.grant.SSHShellGrant(filter=filter, permission=permission)
-        case "ssh-port-forwarding":
-            filter = model.grant.TripletFilter(
-                id=converter.from_identity(grant.filter.name),
-                tag_id_list=converter.from_tag_list(grant.filter.tag_list),
-                boundary_id_list=converter.from_boundary_list(grant.filter.boundary_list),
-            )
-            permission = model.grant.SSHPortForwardingPermission(
-                username_list=grant.permission.username_list,
-            )
-            g = model.grant.SSHPortForwardingGrant(filter=filter, permission=permission)
-        case "ssh-command":
-            filter = model.grant.TripletFilter(
-                id=converter.from_identity(grant.filter.name),
-                tag_id_list=converter.from_tag_list(grant.filter.tag_list),
-                boundary_id_list=converter.from_boundary_list(grant.filter.boundary_list),
-            )
-            permission = model.grant.SSHCommandPermission(
-                username_list=grant.permission.username_list,
+                capability_list=None
+                if grant.permission.capability_list is None
+                else [model.grant.SSHCapability(c) for c in grant.permission.capability_list],
                 command_list=grant.permission.command_list,
+                max_session_ttl_s=grant.permission.max_session_ttl_s,
             )
-            g = model.grant.SSHCommandGrant(filter=filter, permission=permission)
+            g = model.grant.SSHGrant(filter=filter, permission=permission)
         case "tenant":
             filter = model.grant.TenantFilter(id=grant.filter.id)
             permission = model.grant.TenantPermission(

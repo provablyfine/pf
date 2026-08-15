@@ -1,5 +1,6 @@
 import logging
 import time
+import typing
 
 import fastapi
 import fastapi.responses
@@ -80,9 +81,8 @@ def sign_user_certificate(data: schemas.ssh.SSHUserCertificateRequest) -> schema
     if host is None:
         raise responses.ProblemHTTPException(responses.problem_response(status_code=404, title="Unknown host"))
 
-    ssh_shell_checker = grant.Grants.create().ssh_shell(host.id, host.tag_id_list, host.boundary_id_list)
-    ssh_port_forward_checker = grant.Grants.create().ssh_port_forward(host.id, host.tag_id_list, host.boundary_id_list)
-    ssh_command_checker = grant.Grants.create().ssh_command(host.id, host.tag_id_list, host.boundary_id_list)
+    checker = grant.Grants.create().ssh(host.id, host.tag_id_list, host.boundary_id_list)
+    decision = checker.decide(data.username, caller.unix_username)
     public_key = converters.public_from_schema(data.public_key)
     signers = _read_current(app_db.SigningKeyType.USER, ctx.config.user_key_staging_period)
     signer = signers[0]
@@ -91,8 +91,7 @@ def sign_user_certificate(data: schemas.ssh.SSHUserCertificateRequest) -> schema
 
     match data.action:
         case "shell":
-            perm = ssh_shell_checker.can(data.username, caller.unix_username)
-            if perm is None:
+            if model.grant.SSHCapability.SHELL not in decision.capabilities:
                 raise responses.ProblemHTTPException(responses.problem_response(status_code=403, title="Forbidden"))
             cert = ssh.cert.Cert.create_user(
                 public_key=public_key,
@@ -103,16 +102,16 @@ def sign_user_certificate(data: schemas.ssh.SSHUserCertificateRequest) -> schema
                 valid_before=now + ctx.config.user_certificate_lifetime,
                 critical_options=ssh.cert.CriticalOptions(force_command=None),
                 extensions=ssh.cert.Extensions(
-                    permit_pty=True,
-                    permit_user_rc=True,
-                    permit_port_forwarding=False,
-                    permit_x11_forwarding=perm.permit_x11_forwarding,
-                    permit_agent_forwarding=perm.permit_agent_forwarding,
+                    permit_pty=model.grant.SSHCapability.PTY in decision.capabilities,
+                    permit_user_rc=model.grant.SSHCapability.USER_RC in decision.capabilities,
+                    permit_port_forwarding=model.grant.SSHCapability.PORT_FORWARDING in decision.capabilities,
+                    permit_x11_forwarding=model.grant.SSHCapability.X11_FORWARDING in decision.capabilities,
+                    permit_agent_forwarding=model.grant.SSHCapability.AGENT_FORWARDING in decision.capabilities,
                 ),
                 signer=signer.key,
             )
         case "port-forwarding":
-            if not ssh_port_forward_checker.can(data.username, caller.unix_username):
+            if model.grant.SSHCapability.PORT_FORWARDING not in decision.capabilities:
                 raise responses.ProblemHTTPException(responses.problem_response(status_code=403, title="Forbidden"))
             cert = ssh.cert.Cert.create_user(
                 public_key=public_key,
@@ -136,7 +135,8 @@ def sign_user_certificate(data: schemas.ssh.SSHUserCertificateRequest) -> schema
                 raise responses.ProblemHTTPException(
                     responses.problem_response(status_code=400, title="command required for action=command")
                 )
-            if not ssh_command_checker.can(data.username, data.command, caller.unix_username):
+            command_decision = decision.commands.permits(data.command)
+            if command_decision is None:
                 raise responses.ProblemHTTPException(responses.problem_response(status_code=403, title="Forbidden"))
             cert = ssh.cert.Cert.create_user(
                 public_key=public_key,
@@ -195,6 +195,33 @@ def sign_user_certificate(data: schemas.ssh.SSHUserCertificateRequest) -> schema
     )
 
 
+def _capability_entries(
+    hostname: str,
+    entry_type: typing.Literal["shell", "port"],
+    capability: model.grant.SSHCapability,
+    decisions: list[tuple[str | None, grant.SSHDecision]],
+) -> list[schemas.ssh.SSHHostEntry]:
+    """Entries for one capability, merged across usernames.
+
+    A username of None means "any username the entries do not name", and the
+    client renders it as "*". It gets its own entry because username_list
+    cannot hold both concrete names and the wildcard.
+
+    A named username and the wildcard can both appear for the same capability.
+    That is deliberate: the two rows are not interchangeable, since a named
+    username may hold capabilities the wildcard does not, or be denied ones the
+    wildcard has. Neither row authorizes anything -- signing the certificate
+    does.
+    """
+    entries: list[schemas.ssh.SSHHostEntry] = []
+    named = [u for u, d in decisions if u is not None and capability in d.capabilities]
+    if named:
+        entries.append(schemas.ssh.SSHHostEntry(hostname=hostname, type=entry_type, username_list=named))
+    if any(u is None and capability in d.capabilities for u, d in decisions):
+        entries.append(schemas.ssh.SSHHostEntry(hostname=hostname, type=entry_type, username_list=None))
+    return entries
+
+
 @router.get(
     "/hosts",
     status_code=200,
@@ -203,33 +230,30 @@ def sign_user_certificate(data: schemas.ssh.SSHUserCertificateRequest) -> schema
 def list_hosts() -> schemas.ssh.SSHHostsResponse:
     caller = model.identity.read_one(id=ctx.identity_id)
     assert caller is not None
-    unix_username = caller.unix_username
     identities = model.identity.read_all()
     grants = grant.Grants.create()
     entries: list[schemas.ssh.SSHHostEntry] = []
     for identity in identities:
-        shell_checker = grants.ssh_shell(identity.id, identity.tag_id_list, identity.boundary_id_list)
-        for g in shell_checker.list_can():
-            ulist = [r for e in g.permission.username_list if (r := grant.resolve_username(e, unix_username))]
-            if ulist:
-                entries.append(schemas.ssh.SSHHostEntry(hostname=identity.name, type="shell", username_list=ulist))
-        port_forward_checker = grants.ssh_port_forward(identity.id, identity.tag_id_list, identity.boundary_id_list)
-        for g in port_forward_checker.list_can():
-            ulist = [r for e in g.permission.username_list if (r := grant.resolve_username(e, unix_username))]
-            if ulist:
-                entries.append(schemas.ssh.SSHHostEntry(hostname=identity.name, type="port", username_list=ulist))
-        command_checker = grants.ssh_command(identity.id, identity.tag_id_list, identity.boundary_id_list)
-        for g in command_checker.list_can():
-            ulist = [r for e in g.permission.username_list if (r := grant.resolve_username(e, unix_username))]
-            if ulist:
-                entries.append(
-                    schemas.ssh.SSHHostEntry(
-                        hostname=identity.name,
-                        type="command",
-                        username_list=ulist,
-                        command_list=g.permission.command_list,
-                    )
+        checker = grants.ssh(identity.id, identity.tag_id_list, identity.boundary_id_list)
+        decisions = checker.list_decisions(caller.unix_username)
+
+        entries += _capability_entries(identity.name, "shell", model.grant.SSHCapability.SHELL, decisions)
+        entries += _capability_entries(identity.name, "port", model.grant.SSHCapability.PORT_FORWARDING, decisions)
+
+        # Command entries carry the permitted commands, which differ per
+        # username, so they cannot be merged the way shell and port are.
+        for username, decision in decisions:
+            commands, any_command = decision.commands.candidates()
+            if not commands and not any_command:
+                continue
+            entries.append(
+                schemas.ssh.SSHHostEntry(
+                    hostname=identity.name,
+                    type="command",
+                    username_list=None if username is None else [username],
+                    command_list=None if any_command else commands,
                 )
+            )
     return schemas.ssh.SSHHostsResponse(hosts=entries)
 
 

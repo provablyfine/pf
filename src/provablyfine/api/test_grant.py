@@ -121,25 +121,6 @@ def _identity_create(tag_id_list: list[int] | None, boundary_id_list: list[int] 
     )
 
 
-def _ssh_shell(usernames: list[str]):
-    return {
-        "username_list": usernames,
-        "permit_agent_forwarding": False,
-        "permit_x11_forwarding": False,
-    }
-
-
-def _ssh_port_forwarding(usernames: list[str]):
-    return {"username_list": usernames}
-
-
-def _ssh_command(usernames: list[str], command_list: list[str]):
-    return {"username_list": usernames, "command_list": command_list}
-
-
-######## TAG ########
-
-
 def test_empty_tag():
     grants = grant.Grants([], [])
     assert not grants.tag(None).can_create()
@@ -743,54 +724,665 @@ def test_audit_log_with_denied():
 
 ######## SSH ########
 
-
-def test_empty_ssh():
-    grants = grant.Grants([], [])
-
-    assert grants.ssh_shell(1, [], []).can("hello", "unix_hello") is None
-    assert not grants.ssh_port_forward(1, [], []).can("hello", "unix_hello")
-    assert not grants.ssh_command(1, [], []).can("hello", "ls", "unix_hello")
+CAP = model.grant.SSHCapability
+ANY_FILTER = {"id": None, "tag_id_list": None, "boundary_id_list": None}
 
 
-def test_ssh_shell():
-    grants = single_grants(
-        {
-            "type": "ssh-shell",
-            "filter": {"id": None, "tag_id_list": None, "boundary_id_list": None},
-            "permission": _ssh_shell(["alice", "bob"]),
-        }
+def _ssh(
+    usernames: list[str] | None = None,
+    capabilities: list[str] | None = None,
+    commands: list[str] | None = None,
+    filter: dict | None = None,
+    ttl: int | None = None,
+):
+    return {
+        "type": "ssh",
+        "filter": ANY_FILTER if filter is None else filter,
+        "permission": {
+            "username_list": usernames,
+            "capability_list": capabilities,
+            "command_list": commands,
+            "max_session_ttl_s": ttl,
+        },
+    }
+
+
+def _deny_boundary(denied_list: list[dict]):
+    # boundary() cannot express "no ceiling": an empty ceiling_list is a
+    # ceiling that covers nothing, and therefore denies everything.
+    return types.SimpleNamespace(id=1, ceiling_list=None, denied_list=_deserialize(denied_list))
+
+
+def _decide(grants: grant.Grants, username: str = "alice", unix_username: str | None = "unix_alice"):
+    return grants.ssh(1, [], []).decide(username, unix_username)
+
+
+def test_ssh_decide_empty():
+    decision = _decide(grant.Grants([], []))
+
+    assert decision.capabilities == frozenset()
+    assert decision.commands.permits("ls") is None
+
+
+def test_ssh_decide_union_over_role_grants():
+    grants = grant.Grants(
+        [], [role([_ssh(capabilities=["shell"], commands=[]), _ssh(capabilities=["pty"], commands=[])])]
     )
 
-    assert grants.ssh_shell(1, [], []).can("hello", "unix_hello") is None
-    assert grants.ssh_shell(1, [], []).can("alice", "unix_alice") is not None
-    assert grants.ssh_shell(1, [], []).can("bob", "unix_bob") is not None
-    assert not grants.ssh_port_forward(1, [], []).can("alice", "unix_alice")
+    assert _decide(grants).capabilities == {CAP.SHELL, CAP.PTY}
 
 
-def test_ssh_port_forwarding():
-    grants = single_grants(
-        {
-            "type": "ssh-port-forwarding",
-            "filter": {"id": None, "tag_id_list": None, "boundary_id_list": None},
-            "permission": _ssh_port_forwarding(["alice"]),
-        }
+def test_ssh_decide_null_capability_list_is_every_capability():
+    grants = grant.Grants([], [role([_ssh()])])
+
+    assert _decide(grants).capabilities == frozenset(model.grant.SSHCapability)
+
+
+def test_ssh_decide_ceiling_intersects():
+    grants = grant.Grants(
+        [boundary([_ssh(capabilities=["shell", "pty"], commands=[])], [])],
+        [role([_ssh()])],
     )
 
-    assert grants.ssh_port_forward(1, [], []).can("alice", "alice")
-    assert not grants.ssh_port_forward(1, [], []).can("bob", "bob")
-    assert grants.ssh_shell(1, [], []).can("alice", "alice") is None
+    assert _decide(grants).capabilities == {CAP.SHELL, CAP.PTY}
 
 
-def test_ssh_command():
-    grants = single_grants(
-        {
-            "type": "ssh-command",
-            "filter": {"id": None, "tag_id_list": None, "boundary_id_list": None},
-            "permission": _ssh_command(["alice"], ["git-upload-pack /repo"]),
-        }
+def test_ssh_decide_uncovered_by_ceiling_is_denied():
+    # A ceiling that covers a different username, and a ceiling holding no SSH
+    # entry at all, both deny everything.
+    non_ssh = {"type": "tag", "filter": {"id": None}, "permission": _crd(create=True, read=True, delete=True)}
+    for ceiling in [[_ssh(usernames=["bob"])], [non_ssh]]:
+        grants = grant.Grants([boundary(ceiling, [])], [role([_ssh()])])
+
+        assert _decide(grants).capabilities == frozenset()
+
+
+def test_ssh_decide_ceiling_caps_forwarding():
+    # A ceiling that covers only a subset of the capabilities the role grants
+    grants = grant.Grants(
+        [boundary([_ssh(capabilities=["shell"], commands=[])], [])],
+        [role([_ssh(capabilities=["shell", "agent-forwarding"], commands=[])])],
     )
 
-    assert grants.ssh_command(1, [], []).can("alice", "git-upload-pack /repo", "alice")
-    assert not grants.ssh_command(1, [], []).can("alice", "rm -rf /", "alice")
-    assert not grants.ssh_command(1, [], []).can("bob", "git-upload-pack /repo", "bob")
-    assert grants.ssh_shell(1, [], []).can("alice", "alice") is None
+    assert _decide(grants).capabilities == {CAP.SHELL}
+
+
+def test_ssh_decide_deny_is_targeted():
+    grants = grant.Grants(
+        [_deny_boundary([_ssh(capabilities=["agent-forwarding"], commands=[])])],
+        [role([_ssh()])],
+    )
+    decision = _decide(grants)
+
+    assert CAP.AGENT_FORWARDING not in decision.capabilities
+    # The rest of the session survives: a deny is not all-or-nothing.
+    assert CAP.SHELL in decision.capabilities
+
+
+def test_ssh_decide_deny_scoped_by_username():
+    grants = grant.Grants([_deny_boundary([_ssh(usernames=["root"])])], [role([_ssh()])])
+
+    assert _decide(grants, username="root", unix_username="root").capabilities == frozenset()
+    assert _decide(grants, username="alice").capabilities == frozenset(model.grant.SSHCapability)
+
+
+def test_ssh_decide_username_matching():
+    grants = grant.Grants([], [role([_ssh(usernames=["{self}"], capabilities=["shell"], commands=[])])])
+
+    assert _decide(grants, username="unix_alice").capabilities == {CAP.SHELL}
+    assert _decide(grants, username="alice").capabilities == frozenset()
+    assert _decide(grants, username="alice", unix_username=None).capabilities == frozenset()
+
+    wildcard = grant.Grants([], [role([_ssh(capabilities=["shell"], commands=[])])])
+    assert _decide(wildcard, username="anyone").capabilities == {CAP.SHELL}
+
+
+def test_ssh_decide_triplet_filter():
+    tagged = {"id": None, "tag_id_list": [42], "boundary_id_list": None}
+
+    granted = grant.Grants([], [role([_ssh(filter=tagged)])])
+    assert granted.ssh(1, [], []).decide("alice", None).capabilities == frozenset()
+    assert granted.ssh(1, [42], []).decide("alice", None).capabilities == frozenset(model.grant.SSHCapability)
+
+    # A deny whose filter does not match must not deny.
+    denied = grant.Grants([_deny_boundary([_ssh(filter=tagged)])], [role([_ssh()])])
+    assert denied.ssh(1, [], []).decide("alice", None).capabilities == frozenset(model.grant.SSHCapability)
+    assert denied.ssh(1, [42], []).decide("alice", None).capabilities == frozenset()
+
+
+def test_ssh_decide_command_cofinite():
+    grants = grant.Grants(
+        [_deny_boundary([_ssh(capabilities=[], commands=["rm -rf /"])])],
+        [role([_ssh()])],
+    )
+    decision = _decide(grants)
+
+    assert decision.commands.permits("ls") is not None
+    assert decision.commands.permits("rm -rf /") is None
+
+
+def test_ssh_decide_command_is_exact_match():
+    grants = grant.Grants([], [role([_ssh(capabilities=[], commands=["git-upload-pack /repo"])])])
+    decision = _decide(grants)
+
+    assert decision.commands.permits("git-upload-pack /repo") is not None
+    assert decision.commands.permits("git-upload-pack /repo2") is None
+    assert decision.commands.permits("git-upload-pack") is None
+
+
+def test_ssh_decide_command_ceiling():
+    grants = grant.Grants([boundary([_ssh(capabilities=[], commands=["ls"])], [])], [role([_ssh()])])
+    decision = _decide(grants)
+
+    assert decision.commands.permits("ls") is not None
+    assert decision.commands.permits("rm") is None
+
+
+def test_ssh_decide_command_ceiling_never_adds():
+    grants = grant.Grants(
+        [boundary([_ssh(capabilities=[], commands=["ls", "rm"])], [])],
+        [role([_ssh(capabilities=[], commands=["ls"])])],
+    )
+    decision = _decide(grants)
+
+    assert decision.commands.permits("ls") is not None
+    # The ceiling names it, but a ceiling is a bound, not a grant.
+    assert decision.commands.permits("rm") is None
+
+
+@pytest.mark.parametrize("ttl", [None, 60])
+def test_ssh_decide_command_deny_never_permits(ttl: int | None):
+    grants = grant.Grants(
+        [_deny_boundary([_ssh(capabilities=[], commands=["rm"], ttl=ttl)])],
+        [role([_ssh(capabilities=[], commands=["ls"], ttl=3600)])],
+    )
+    decision = _decide(grants)
+
+    assert decision.commands.permits("ls") is not None
+    assert decision.commands.permits("rm") is None
+
+
+def test_ssh_decide_order_independent():
+    ceiling = [_ssh(capabilities=["shell", "pty"], commands=["ls"]), _ssh(capabilities=["user-rc"], commands=["df"])]
+    denied = [_ssh(capabilities=["pty"], commands=[]), _ssh(capabilities=[], commands=["df"])]
+    grants = grant.Grants([boundary(ceiling, denied)], [role([_ssh()])])
+    reversed_grants = grant.Grants([boundary(ceiling[::-1], denied[::-1])], [role([_ssh()])])
+
+    decision = _decide(grants)
+    other = _decide(reversed_grants)
+
+    assert decision.capabilities == other.capabilities == {CAP.SHELL, CAP.USER_RC}
+    for command in ["ls", "df", "rm"]:
+        assert decision.commands.permits(command) == other.commands.permits(command)
+    assert decision.commands.permits("ls") is not None
+    assert decision.commands.permits("df") is None
+
+
+def test_ssh_decide_denies_compose_across_boundaries():
+    # Each deny narrows independently, so the result does not depend on which
+    # boundary an entry sits in, nor on the order of the boundaries.
+    first = _deny_boundary([_ssh(capabilities=["shell"], commands=["/bin/ls"], ttl=600)])
+    second = types.SimpleNamespace(
+        id=2,
+        ceiling_list=None,
+        denied_list=_deserialize([_ssh(capabilities=["pty"], commands=["/bin/ls"], ttl=60)]),
+    )
+    granted = [_ssh(ttl=3600)]
+
+    for boundaries in ([first, second], [second, first]):
+        decision = _decide(grant.Grants(boundaries, [role(granted)]))
+
+        assert decision.capability_ttl[CAP.SHELL] == 600
+        assert decision.capability_ttl[CAP.PTY] == 60
+        assert decision.capability_ttl[CAP.USER_RC] == 3600  # named by neither deny
+        assert decision.commands.permits("/bin/ls").ttl == 60  # the tighter of the two
+        assert decision.commands.permits("/bin/df").ttl == 3600
+
+
+def test_ssh_candidate_commands_in_grant_order():
+    grants = grant.Grants(
+        [_deny_boundary([_ssh(capabilities=[], commands=["/bin/rm"])])],
+        [role([_ssh(capabilities=[], commands=["/bin/df", "/bin/ls", "/bin/rm"])])],
+    )
+
+    commands, any_command = _decide(grants).commands.candidates()
+
+    assert commands == ["/bin/df", "/bin/ls"]  # the denied one is dropped
+    assert not any_command
+
+
+def test_ssh_candidate_commands_wildcard_is_not_enumerable():
+    grants = grant.Grants([], [role([_ssh(commands=None)])])
+
+    commands, any_command = _decide(grants).commands.candidates()
+
+    assert commands == []
+    assert any_command
+
+
+def test_ssh_candidate_commands_narrowed_by_ceiling():
+    # A wildcard grant is not enumerable on its own, but a ceiling naming
+    # commands collapses it to exactly those: what is listed then matches what
+    # permits() allows.
+    grants = grant.Grants([boundary([_ssh(capabilities=[], commands=["ls"])], [])], [role([_ssh(commands=None)])])
+
+    commands, any_command = _decide(grants).commands.candidates()
+
+    assert commands == ["ls"]
+    assert not any_command
+
+
+def test_ssh_list_decisions():
+    grants = grant.Grants(
+        [],
+        [role([_ssh(usernames=["root"], capabilities=["shell"], commands=[]), _ssh(usernames=["bob"])])],
+    )
+
+    decisions = grants.ssh(1, [], []).list_decisions("unix_alice")
+
+    assert [u for u, _ in decisions] == ["root", "bob"]
+    assert dict(decisions)["root"].capabilities == {CAP.SHELL}
+
+
+def test_ssh_list_decisions_wildcard_group():
+    # The wildcard decision is exact: it must reflect a deny that names a
+    # different username without inheriting it.
+    grants = grant.Grants(
+        [_deny_boundary([_ssh(usernames=["root"], capabilities=["agent-forwarding"], commands=[])])],
+        [role([_ssh(usernames=["root"]), _ssh(usernames=None)])],
+    )
+
+    decisions = grants.ssh(1, [], []).list_decisions("unix_alice")
+    by_username = dict(decisions)
+
+    assert [u for u, _ in decisions] == ["root", None]
+    assert CAP.AGENT_FORWARDING not in by_username["root"].capabilities
+    assert CAP.AGENT_FORWARDING in by_username[None].capabilities
+
+
+def test_ssh_list_decisions_wildcard_ignores_a_username_named_star():
+    # "*" is a legal unix username
+    grants = grant.Grants(
+        [_deny_boundary([_ssh(usernames=["*"], capabilities=["shell"], commands=[])])],
+        [role([_ssh(usernames=None, capabilities=["shell"], commands=[])])],
+    )
+
+    by_username = dict(grants.ssh(1, [], []).list_decisions(None))
+
+    assert by_username[None].capabilities == {CAP.SHELL}
+
+
+######## SSH session TTL ########
+
+
+def test_ssh_ttl_unbounded_by_default():
+    grants = grant.Grants([], [role([_ssh(capabilities=["shell"], commands=[])])])
+
+    assert _decide(grants).capability_ttl[CAP.SHELL] is None
+
+
+def test_ssh_ttl_grants_raise():
+    grants = grant.Grants(
+        [],
+        [
+            role(
+                [_ssh(capabilities=["shell"], commands=[], ttl=60), _ssh(capabilities=["shell"], commands=[], ttl=3600)]
+            )
+        ],
+    )
+
+    assert _decide(grants).capability_ttl[CAP.SHELL] == 3600
+
+
+def test_ssh_ttl_unbounded_grant_absorbs():
+    # ttl=None is less restrictive than ttl=60
+    grants = grant.Grants(
+        [],
+        [
+            role(
+                [_ssh(capabilities=["shell"], commands=[], ttl=60), _ssh(capabilities=["shell"], commands=[], ttl=None)]
+            )
+        ],
+    )
+
+    assert _decide(grants).capability_ttl[CAP.SHELL] is None
+
+
+def test_ssh_ttl_ceiling_lowers_but_never_raises():
+    granted = _ssh(capabilities=["shell"], commands=[], ttl=3600)
+
+    tight = grant.Grants([boundary([_ssh(capabilities=["shell"], commands=[], ttl=60)], [])], [role([granted])])
+    assert _decide(tight).capability_ttl[CAP.SHELL] == 60
+
+    # A ceiling is a bound, not a grant: it cannot raise 3600 to 86400.
+    loose = grant.Grants([boundary([_ssh(capabilities=["shell"], commands=[], ttl=86400)], [])], [role([granted])])
+    assert _decide(loose).capability_ttl[CAP.SHELL] == 3600
+
+    # An unbounded ceiling tightens nothing.
+    unbounded = grant.Grants([boundary([_ssh(capabilities=["shell"], commands=[])], [])], [role([granted])])
+    assert _decide(unbounded).capability_ttl[CAP.SHELL] == 3600
+
+
+def test_ssh_ttl_ceiling_bounds_an_unbounded_grant():
+    grants = grant.Grants(
+        [boundary([_ssh(capabilities=["shell"], commands=[], ttl=60)], [])],
+        [role([_ssh(capabilities=["shell"], commands=[])])],
+    )
+
+    assert _decide(grants).capability_ttl[CAP.SHELL] == 60
+
+
+def test_ssh_ttl_bounded_deny_clamps_rather_than_removes():
+    # deny a ttl means set an upper bound on ttl
+    grants = grant.Grants(
+        [_deny_boundary([_ssh(capabilities=["shell"], commands=[], ttl=60)])],
+        [role([_ssh(capabilities=["shell"], commands=[], ttl=3600)])],
+    )
+    decision = _decide(grants)
+
+    assert CAP.SHELL in decision.capabilities
+    assert decision.capability_ttl[CAP.SHELL] == 60
+
+
+def test_ssh_ttl_unbounded_deny_removes_the_atom():
+    # deny of ttl=None means deny of matching capabilities.
+    grants = grant.Grants(
+        [_deny_boundary([_ssh(capabilities=["shell"], commands=[], ttl=None)])],
+        [role([_ssh(capabilities=["shell"], commands=[], ttl=3600)])],
+    )
+
+    assert CAP.SHELL not in _decide(grants).capabilities
+
+
+@pytest.mark.parametrize("ttl", [None, 60])
+def test_ssh_ttl_deny_never_grants(ttl: int | None):
+    # deny something that is not granted
+    grants = grant.Grants(
+        [_deny_boundary([_ssh(capabilities=["pty"], commands=[], ttl=ttl)])],
+        [role([_ssh(capabilities=["shell"], commands=[], ttl=3600)])],
+    )
+
+    assert _decide(grants).capabilities == {CAP.SHELL}
+
+
+def test_ssh_ttl_deny_is_scoped_by_username():
+    grants = grant.Grants(
+        [_deny_boundary([_ssh(usernames=["root"], capabilities=["shell"], commands=[], ttl=60)])],
+        [role([_ssh(capabilities=["shell"], commands=[], ttl=3600)])],
+    )
+
+    assert _decide(grants, username="root").capability_ttl[CAP.SHELL] == 60
+    assert _decide(grants, username="alice").capability_ttl[CAP.SHELL] == 3600
+
+
+def test_ssh_ttl_is_per_capability():
+    # A generous port-forwarding bound must not leak into the shell session.
+    grants = grant.Grants(
+        [],
+        [
+            role(
+                [
+                    _ssh(capabilities=["shell"], commands=[], ttl=3600),
+                    _ssh(capabilities=["port-forwarding"], commands=[], ttl=86400),
+                ]
+            )
+        ],
+    )
+    decision = _decide(grants)
+
+    assert decision.capability_ttl[CAP.SHELL] == 3600
+    assert decision.capability_ttl[CAP.PORT_FORWARDING] == 86400
+
+
+def test_ssh_ttl_raises_for_a_capability_not_granted():
+    grants = grant.Grants([], [role([_ssh(capabilities=["shell"], commands=[], ttl=60)])])
+
+    with pytest.raises(KeyError):
+        _decide(grants).capability_ttl[CAP.PTY]
+
+
+def test_ssh_command_ttl():
+    grants = grant.Grants(
+        [_deny_boundary([_ssh(capabilities=[], commands=["/bin/ls"], ttl=60)])],
+        [role([_ssh(capabilities=[], commands=None, ttl=3600)])],
+    )
+    decision = _decide(grants)
+
+    # a bounded deny clamps the command it names and leaves every other command alone
+    assert decision.commands.permits("/bin/ls").ttl == 60
+    assert decision.commands.permits("/bin/df").ttl == 3600
+
+
+def test_ssh_command_unbounded_deny_forbids():
+    grants = grant.Grants(
+        [_deny_boundary([_ssh(capabilities=[], commands=["/bin/ls"])])],
+        [role([_ssh(capabilities=[], commands=None, ttl=3600)])],
+    )
+    decision = _decide(grants)
+
+    assert decision.commands.permits("/bin/ls") is None
+    assert decision.commands.permits("/bin/df").ttl == 3600
+
+
+def test_ssh_ttl_order_independent():
+    ceiling = [_ssh(capabilities=["shell"], commands=[], ttl=7200), _ssh(capabilities=["shell"], commands=[], ttl=1800)]
+    denied = [_ssh(capabilities=["shell"], commands=[], ttl=600), _ssh(capabilities=["shell"], commands=[], ttl=900)]
+    granted = [_ssh(capabilities=["shell"], commands=[], ttl=3600)]
+
+    forward = grant.Grants([boundary(ceiling, denied)], [role(granted)])
+    backward = grant.Grants([boundary(ceiling[::-1], denied[::-1])], [role(granted)])
+
+    # ceiling union = 7200, lowered against granted 3600 -> 3600; denies clamp
+    # to the smallest, 600.
+    assert _decide(forward).capability_ttl[CAP.SHELL] == 600
+    assert _decide(backward).capability_ttl[CAP.SHELL] == 600
+
+
+def test_ssh_ttl_across_two_boundaries():
+    # One boundary clamps a capability, a later one removes it. The removal
+    # must win, and the resolved map must not keep a bound for a capability that is
+    # no longer granted.
+    clamps = _deny_boundary([_ssh(capabilities=["shell"], commands=[], ttl=60)])
+    removes = types.SimpleNamespace(
+        id=2,
+        ceiling_list=_deserialize([_ssh(capabilities=["pty"], commands=[])]),
+        denied_list=[],
+    )
+    granted = [_ssh(capabilities=["shell", "pty"], commands=[], ttl=3600)]
+
+    forward = grant.Grants([clamps, removes], [role(granted)])
+    backward = grant.Grants([removes, clamps], [role(granted)])
+
+    for grants in (forward, backward):
+        decision = _decide(grants)
+        assert decision.capabilities == {CAP.PTY}
+        assert decision.capability_ttl[CAP.PTY] == 3600
+        with pytest.raises(KeyError):
+            decision.capability_ttl[CAP.SHELL]
+
+
+######## CapabilityTtl ########
+
+# CapabilityTtl and SSHCommandPermissions combine permission lists directly:
+# neither reads username_list or filter, because SSHChecker has already
+# filtered on those. Building the lists here drops both dimensions.
+
+
+def _perm(capabilities: list[str] | None = None, commands: list[str] | None = None, ttl: int | None = None):
+    return model.grant.SSHPermission(**_ssh(capabilities=capabilities, commands=commands, ttl=ttl)["permission"])
+
+
+def _every_capability(ttl: int | None = None):
+    return grant.CapabilityTtl.allowed_by([_perm(capabilities=None, commands=[], ttl=ttl)])
+
+
+def test_capability_ttl_is_a_mapping_of_granted_capabilities():
+    ttl = grant.CapabilityTtl.allowed_by(
+        [
+            _perm(capabilities=["shell"], commands=[], ttl=60),
+            _perm(capabilities=["shell", "pty"], commands=[], ttl=None),
+        ]
+    )
+
+    # An unbounded grant absorbs a bounded one: the union of 60 and unbounded
+    # is unbounded. Compare through dict(): a frozen dataclass wrapping a
+    # Mapping is never == to a plain dict.
+    assert dict(ttl) == {CAP.SHELL: None, CAP.PTY: None}
+    assert len(ttl) == 2
+    assert CAP.USER_RC not in ttl
+
+
+def test_capability_ttl_allowed_by_is_order_independent():
+    permissions = [
+        _perm(capabilities=["shell"], commands=[], ttl=60),
+        _perm(capabilities=["shell"], commands=[], ttl=3600),
+        _perm(capabilities=["pty"], commands=[], ttl=None),
+    ]
+
+    forward = grant.CapabilityTtl.allowed_by(permissions)
+    backward = grant.CapabilityTtl.allowed_by(permissions[::-1])
+
+    assert dict(forward) == dict(backward) == {CAP.SHELL: 3600, CAP.PTY: None}
+
+
+def test_capability_ttl_intersect_keeps_only_shared_capabilities():
+    ceiling = grant.CapabilityTtl.allowed_by([_perm(capabilities=["shell", "pty"], commands=[], ttl=None)])
+
+    assert dict(_every_capability(3600).intersect(ceiling)) == {CAP.SHELL: 3600, CAP.PTY: 3600}
+    # Nothing is shared with a ceiling that grants nothing.
+    assert dict(_every_capability(3600).intersect(grant.CapabilityTtl.allowed_by([]))) == {}
+
+
+def test_capability_ttl_intersect_never_raises_a_bound():
+    def bound(granted: int | None, ceiling: int | None):
+        allowed = grant.CapabilityTtl.allowed_by([_perm(capabilities=["shell"], commands=[], ttl=granted)])
+        limit = grant.CapabilityTtl.allowed_by([_perm(capabilities=["shell"], commands=[], ttl=ceiling)])
+        return allowed.intersect(limit)[CAP.SHELL]
+
+    assert bound(60, 3600) == 60
+    assert bound(3600, 60) == 60
+    # Unbounded is the identity of the intersection, on either side.
+    assert bound(None, 3600) == 3600
+    assert bound(3600, None) == 3600
+    assert bound(None, None) is None
+
+
+def test_capability_ttl_subtract_clamps_or_removes():
+    base = _every_capability(3600)
+
+    clamped = base.subtract([_perm(capabilities=["shell"], commands=[], ttl=60)])
+    assert len(clamped) == len(base)
+    assert clamped[CAP.SHELL] == 60
+    assert clamped[CAP.PTY] == 3600
+
+    # An unbounded deny is a removal, not a bound of None.
+    removed = base.subtract([_perm(capabilities=["pty"], commands=[], ttl=None)])
+    assert len(removed) == len(base) - 1
+    with pytest.raises(KeyError):
+        removed[CAP.PTY]
+
+
+def test_capability_ttl_subtract_with_a_wildcard_capability_list_removes_everything():
+    denied = _every_capability(3600).subtract([_perm(capabilities=None, commands=[], ttl=None)])
+
+    assert dict(denied) == {}
+
+
+######## SSHCommandPermissions ########
+
+
+def test_command_permissions_empty_permits_nothing():
+    commands = grant.SSHCommandPermissions.allowed_by([])
+
+    assert commands.permits("ls") is None
+    assert commands.candidates() == ([], False)
+
+
+def test_command_permissions_named_command_inherits_the_wildcard_bound():
+    # Naming a command must not take away what a wildcard already allows for
+    # it, so the union is 60 rather than the 30 the naming entry carries.
+    permissions = [
+        _perm(capabilities=[], commands=None, ttl=60),
+        _perm(capabilities=[], commands=["ls"], ttl=30),
+    ]
+
+    for ordered in (permissions, permissions[::-1]):
+        commands = grant.SSHCommandPermissions.allowed_by(ordered)
+
+        assert commands.permits("ls").ttl == 60
+        assert commands.permits("df").ttl == 60
+
+
+def test_command_permissions_candidates_with_a_wildcard_and_named_commands():
+    commands = grant.SSHCommandPermissions.allowed_by(
+        [
+            _perm(capabilities=[], commands=None, ttl=3600),
+            _perm(capabilities=[], commands=["ls"], ttl=60),
+        ]
+    )
+
+    # "ls" is enumerated, but the wildcard still permits everything else, so
+    # the list is not the whole answer.
+    assert commands.candidates() == (["ls"], True)
+
+
+def test_command_permissions_intersect_falls_back_to_each_side_default():
+    named = grant.SSHCommandPermissions.allowed_by([_perm(capabilities=[], commands=["ls", "df"], ttl=3600)])
+    wildcard = grant.SSHCommandPermissions.allowed_by([_perm(capabilities=[], commands=None, ttl=60)])
+
+    # A command only one side names is still decided, against the other side's
+    # default: the intersection keeps every named command, unlike CapabilityTtl.
+    narrowed = named.intersect(wildcard)
+    assert narrowed.permits("ls").ttl == 60
+    assert narrowed.permits("df").ttl == 60
+    assert narrowed.permits("rm") is None
+
+    # The other way round is the same decision, reached from the other side:
+    # the wildcard collapses to exactly the commands the ceiling names.
+    lowered = wildcard.intersect(named)
+    assert lowered.permits("ls").ttl == 60
+    assert lowered.permits("rm") is None
+    assert lowered.candidates() == (["ls", "df"], False)
+
+
+def test_command_permissions_intersect_chains():
+    base = grant.SSHCommandPermissions.allowed_by([_perm(capabilities=[], commands=None, ttl=3600)])
+    first = grant.SSHCommandPermissions.allowed_by([_perm(capabilities=[], commands=["ls", "df"], ttl=1800)])
+    second = grant.SSHCommandPermissions.allowed_by([_perm(capabilities=[], commands=["ls"], ttl=600)])
+
+    for commands in (base.intersect(first).intersect(second), base.intersect(second).intersect(first)):
+        assert commands.permits("ls").ttl == 600
+        # Named by only one of the two ceilings, so denied by the other.
+        assert commands.permits("df") is None
+        assert commands.permits("rm") is None
+
+
+def test_command_permissions_subtract_names_a_command_the_base_left_unnamed():
+    base = grant.SSHCommandPermissions.allowed_by([_perm(capabilities=[], commands=None, ttl=3600)])
+
+    clamped = base.subtract([_perm(capabilities=[], commands=["rm"], ttl=600)])
+    assert clamped.permits("rm").ttl == 600
+    assert clamped.permits("ls").ttl == 3600
+
+    removed = base.subtract([_perm(capabilities=[], commands=["rm"], ttl=None)])
+    assert removed.permits("rm") is None
+    assert removed.permits("ls").ttl == 3600
+
+
+def test_command_permissions_subtract_with_a_wildcard_command_list():
+    base = grant.SSHCommandPermissions.allowed_by(
+        [
+            _perm(capabilities=[], commands=None, ttl=3600),
+            _perm(capabilities=[], commands=["ls"], ttl=None),
+        ]
+    )
+
+    # A deny naming no command reaches the named entries and the default alike.
+    clamped = base.subtract([_perm(capabilities=[], commands=None, ttl=600)])
+    assert clamped.permits("ls").ttl == 600
+    assert clamped.permits("df").ttl == 600
+
+    removed = base.subtract([_perm(capabilities=[], commands=None, ttl=None)])
+    assert removed.permits("ls") is None
+    assert removed.permits("df") is None
+    assert removed.candidates() == ([], False)

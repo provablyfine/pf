@@ -167,49 +167,26 @@ def _identity_function(args: argparse.Namespace) -> None:
     _output(args, identity)
 
 
-def _ssh_shell_function(args: argparse.Namespace) -> None:
+def _ssh_function(args: argparse.Namespace) -> None:
+    username_list = _all_or(args.username_all, args.username)
+    capability_list = _all_or(args.capability_all, args.capability)
+    command_list = _all_or(args.cmd_all, args.cmd)
+    if username_list == []:
+        raise pfc.exceptions.UI("Grant has no username. Pass --username or --username-all.")
+    if capability_list == [] and command_list == []:
+        raise pfc.exceptions.UI("Grant is empty. Pass --capability, --cmd, or one of their --*-all forms.")
     grant = {
-        "type": "ssh-shell",
+        "type": "ssh",
         "filter": {
             "name": args.name,
             "tag_list": _tag_list(args.tag),
             "boundary_list": args.boundary,
         },
         "permission": {
-            "username_list": args.username,
-            "permit_agent_forwarding": args.permit_agent_forwarding,
-            "permit_x11_forwarding": args.permit_x11_forwarding,
-        },
-    }
-    _output(args, grant)
-
-
-def _ssh_port_forwarding_function(args: argparse.Namespace) -> None:
-    grant = {
-        "type": "ssh-port-forwarding",
-        "filter": {
-            "name": args.name,
-            "tag_list": _tag_list(args.tag),
-            "boundary_list": args.boundary,
-        },
-        "permission": {
-            "username_list": args.username,
-        },
-    }
-    _output(args, grant)
-
-
-def _ssh_command_function(args: argparse.Namespace) -> None:
-    grant = {
-        "type": "ssh-command",
-        "filter": {
-            "name": args.name,
-            "tag_list": _tag_list(args.tag),
-            "boundary_list": args.boundary,
-        },
-        "permission": {
-            "username_list": args.username,
-            "command_list": args.cmd,
+            "username_list": username_list,
+            "capability_list": capability_list,
+            "command_list": command_list,
+            "max_session_ttl_s": args.max_session_ttl,
         },
     }
     _output(args, grant)
@@ -343,38 +320,23 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
     group.add_argument("--invite", default=[], nargs="*", choices=["email", "manual"])
     identity_parser.set_defaults(func=_identity_function)
 
-    ssh_shell_parser = subparsers.add_parser("ssh-shell", help="SSH Shell permission")
-    ssh_shell_parser.add_argument("-f", "--format", choices=["yaml", "json"], default="yaml")
-    group = ssh_shell_parser.add_argument_group("filter")
+    ssh_parser = subparsers.add_parser("ssh", help="SSH permission")
+    ssh_parser.add_argument("-f", "--format", choices=["yaml", "json"], default="yaml")
+    group = ssh_parser.add_argument_group("filter")
     group.add_argument("--name", default=None)
     group.add_argument("--tag", default=None, nargs="*")
     group.add_argument("--boundary", default=None, nargs="*")
-    group = ssh_shell_parser.add_argument_group("permission")
+    group = ssh_parser.add_argument_group("permission")
     group.add_argument("--username", nargs="*", default=[])
-    group.add_argument("--permit-agent-forwarding", action="store_true")
-    group.add_argument("--permit-x11-forwarding", action="store_true")
-    ssh_shell_parser.set_defaults(func=_ssh_shell_function)
-
-    ssh_port_forwarding_parser = subparsers.add_parser("ssh-port", help="SSH Port Forwarding permission")
-    ssh_port_forwarding_parser.add_argument("-f", "--format", choices=["yaml", "json"], default="yaml")
-    group = ssh_port_forwarding_parser.add_argument_group("filter")
-    group.add_argument("--name", default=None)
-    group.add_argument("--tag", default=None, nargs="*")
-    group.add_argument("--boundary", default=None, nargs="*")
-    group = ssh_port_forwarding_parser.add_argument_group("permission")
-    group.add_argument("--username", nargs="*", default=[])
-    ssh_port_forwarding_parser.set_defaults(func=_ssh_port_forwarding_function)
-
-    ssh_command_parser = subparsers.add_parser("ssh-command", help="SSH Command permission")
-    ssh_command_parser.add_argument("-f", "--format", choices=["yaml", "json"], default="yaml")
-    group = ssh_command_parser.add_argument_group("filter")
-    group.add_argument("--name", default=None)
-    group.add_argument("--tag", default=None, nargs="*")
-    group.add_argument("--boundary", default=None, nargs="*")
-    group = ssh_command_parser.add_argument_group("permission")
-    group.add_argument("--username", nargs="*", default=[])
+    group.add_argument("--username-all", action="store_true", help="Any username")
+    group.add_argument("--capability", nargs="*", default=[], choices=[c.value for c in pfc.schemas.SSHCapability])
+    group.add_argument("--capability-all", action="store_true", help="Every capability, present and future")
     group.add_argument("--cmd", nargs="*", default=[])
-    ssh_command_parser.set_defaults(func=_ssh_command_function)
+    group.add_argument("--cmd-all", action="store_true", help="Any command")
+    # Omitted means null, i.e. unbounded -- there is no empty-list state for a
+    # scalar, so no --*-all counterpart is needed.
+    group.add_argument("--max-session-ttl", type=int, default=None, metavar="SECONDS")
+    ssh_parser.set_defaults(func=_ssh_function)
 
     audit_log_parser = subparsers.add_parser("audit-log", help="Audit log permission")
     audit_log_parser.add_argument("-f", "--format", choices=["yaml", "json"], default="yaml")
