@@ -97,7 +97,14 @@ def _identity_create_function(args: argparse.Namespace) -> None:
     boundary_name_list = [b for b in args.boundary if not b.isdigit()]
     tag_id_list = [int(t) for t in args.tag if t.isdigit()]
     tag_name_value_list = [_parse_tag(t) for t in args.tag if not t.isdigit()]
-    sc.create_identity(args.name, boundary_id_list, boundary_name_list, tag_id_list, tag_name_value_list)
+    sc.create_identity(
+        args.name,
+        boundary_id_list,
+        boundary_name_list,
+        tag_id_list,
+        tag_name_value_list,
+        unix_username=args.unix_username,
+    )
 
 
 def _identity_invite_function(args: argparse.Namespace) -> None:
@@ -202,6 +209,9 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
         "-b", "--boundary", help="Boundary to enforce on newly-created identity", nargs="*", default=[]
     )
     create_parser.add_argument("-t", "--tag", help="Tag to apply on the newly-created identity", nargs="*", default=[])
+    create_parser.add_argument(
+        "--unix-username", default=None, help="Set Unix username for the newly-created identity"
+    )
     create_parser.set_defaults(func=_identity_create_function)
 
     invite_parser = subparsers.add_parser("invite", help="Invite an identity")

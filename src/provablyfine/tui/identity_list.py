@@ -17,7 +17,12 @@ class _IdentitiesTable(textual.widgets.DataTable[str]):
         data_table: _IdentitiesTable
 
 
-class _IdentityCreateScreen(textual.screen.ModalScreen[str | None]):
+class _IdentityFormResult(typing.TypedDict):
+    name: str
+    unix_username: str | None
+
+
+class _IdentityCreateScreen(textual.screen.ModalScreen[_IdentityFormResult | None]):
     DEFAULT_CSS = """
     _IdentityCreateScreen {
         align: center middle;
@@ -36,6 +41,7 @@ class _IdentityCreateScreen(textual.screen.ModalScreen[str | None]):
         with textual.containers.VerticalGroup() as container:
             container.border_title = "Add an identity"
             yield textual.widgets.Input(placeholder="name", id="name", compact=True)
+            yield textual.widgets.Input(placeholder="unix_username (optional)", id="unix_username", compact=True)
 
     def action_cancel(self) -> None:
         self.dismiss(None)
@@ -45,7 +51,13 @@ class _IdentityCreateScreen(textual.screen.ModalScreen[str | None]):
         name = self.query_one("#name", textual.widgets.Input).value.strip()
         if not name:
             return
-        self.dismiss(name)
+        unix_username = self.query_one("#unix_username", textual.widgets.Input).value.strip() or None
+        self.dismiss(
+            {
+                "name": name,
+                "unix_username": unix_username,
+            }
+        )
 
 
 class _InviteMethodScreen(textual.screen.ModalScreen[str | None]):
@@ -151,7 +163,7 @@ class IdentityListScreen(base.Screen):
 
     async def on_mount(self) -> None:
         table = self.query_one(_IdentitiesTable)
-        table.add_columns("Name", "Tags", "Boundaries")
+        table.add_columns("Name", "Unix username", "Tags", "Boundaries")
         self._identities = (await self._auth.list_identities()).identities
         self._populate_table(table)
 
@@ -165,6 +177,7 @@ class IdentityListScreen(base.Screen):
         for identity in self._identities:
             table.add_row(
                 identity.name,
+                identity.unix_username or "",
                 str(len(identity.tags)),
                 str(len(identity.boundaries)),
             )
@@ -182,10 +195,12 @@ class IdentityListScreen(base.Screen):
 
     @textual.work
     async def action_add_identity(self) -> None:
-        name = await self.app.push_screen_wait(_IdentityCreateScreen())
-        if name is None:
+        result = await self.app.push_screen_wait(_IdentityCreateScreen())
+        if result is None:
             return
-        identity = await self._auth.create_identity(name, [], [], [], [])
+        identity = await self._auth.create_identity(
+            result["name"], [], [], [], [], unix_username=result["unix_username"]
+        )
         self._identities.append(identity)
         table = self.query_one(_IdentitiesTable)
         self._populate_table(table)

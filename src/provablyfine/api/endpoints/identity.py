@@ -175,9 +175,14 @@ def create_endpoint(data: schemas.identity.IdentityCreateRequest) -> schemas.ide
             responses.problem_response(status_code=400, title="Request contains invalid fields")
         )
     try:
-        identity_id = model.identity.create(name=data.name, boundary_id_list=identity_boundary_ids, tag_id_list=tag_ids)
+        identity_id = model.identity.create(
+            name=data.name,
+            boundary_id_list=identity_boundary_ids,
+            tag_id_list=tag_ids,
+            unix_username=data.unix_username,
+        )
     except sqlalchemy.exc.IntegrityError as e:
-        raise _identity_uniqueness_conflict(e, name=data.name, unix_username=None)
+        raise _identity_uniqueness_conflict(e, name=data.name, unix_username=data.unix_username)
 
     identity = model.identity.read_one(id=identity_id)
     assert identity is not None

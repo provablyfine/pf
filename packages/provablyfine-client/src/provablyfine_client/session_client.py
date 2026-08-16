@@ -518,6 +518,7 @@ class SessionClient:
         boundary_name_list: list[str],
         tag_id_list: list[int],
         tag_name_value_list: list[dict[str, str]],
+        unix_username: str | None = None,
     ) -> schemas.Identity:
         response = self._session.post(
             self._directory.identity,
@@ -528,6 +529,7 @@ class SessionClient:
                 "boundary_name_list": boundary_name_list,
                 "tag_id_list": tag_id_list,
                 "tag_name_value_list": tag_name_value_list,
+                "unix_username": unix_username,
             },
         )
         if response.status_code != 201:

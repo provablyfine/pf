@@ -6,6 +6,21 @@ Create a user identity
   $ pfa -c config.json identity create -n user
   $ USER_ID=$(pfa -c config.json identity list -n user -q)
 
+Unix username can be set at creation time
+  $ pfa -c config.json identity create -n user-create-posix --unix-username bob
+  $ USER_CREATE_ID=$(pfa -c config.json identity list -n user-create-posix -q)
+  $ pfa -c config.json identity read -i $USER_CREATE_ID
+  id             [0-9]+ (re)
+  name           user-create-posix
+  boundary       root
+  unix_username  bob
+
+Unix username must be unique across identities, even at creation time
+  $ pfa -c config.json identity create -n user-create-posix-dup --unix-username bob
+  Identity already exists. "unix_username" must be unique. bob
+  [2]
+  $ pfa -c config.json identity delete -i $USER_CREATE_ID
+
 Set unix_username (manual mode: admin sets it directly)
   $ pfa -c config.json identity update -i $USER_ID --unix-username alice
   $ pfa -c config.json identity read -i $USER_ID

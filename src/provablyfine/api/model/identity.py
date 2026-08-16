@@ -16,16 +16,23 @@ class Identity:
     unix_username: str | None
 
 
-def create(name: str, boundary_id_list: list[int], tag_id_list: list[int]) -> int:
+def create(
+    name: str, boundary_id_list: list[int], tag_id_list: list[int], unix_username: str | None = None
+) -> int:
     now = int(time.time())
-    identity_id = ctx.app_db.identity.create(name=name, created_at=now)
+    identity_id = ctx.app_db.identity.create(name=name, created_at=now, unix_username=unix_username)
     assert identity_id is not None
     for boundary_id in boundary_id_list:
         ctx.app_db.identity_boundary.create(identity_id=identity_id, boundary_id=boundary_id)
     for tag_id in tag_id_list:
         ctx.app_db.identity_tag.create(tag_id=tag_id, identity_id=identity_id)
     audit_log.create(
-        "identity-create", id=identity_id, name=name, boundary_id_list=boundary_id_list, tag_id_list=tag_id_list
+        "identity-create",
+        id=identity_id,
+        name=name,
+        boundary_id_list=boundary_id_list,
+        tag_id_list=tag_id_list,
+        unix_username=unix_username,
     )
     return identity_id
 

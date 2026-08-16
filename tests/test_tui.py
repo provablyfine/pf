@@ -1017,6 +1017,76 @@ async def test_tui_identity_add_tag(api, ssh_agent):
 
 
 @pytest.mark.anyio
+async def test_tui_identity_create_with_unix_username(api, ssh_agent):
+    """Create an identity with a unix_username set via the TUI's create modal."""
+    with _setup_ssh_auth_sock(ssh_agent):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            auth = _setup(api, tmpdir, ssh_agent)
+            app = provablyfine.tui.app.TuiApp(auth)
+
+            async with app.run_test(size=(200, 50)) as pilot:
+                await pilot.pause()  # app startup
+                await pilot.press("down")  # navigate to Identities (index 1)
+                await pilot.press("enter")  # open IdentityListScreen
+                await pilot.pause()  # screen transition
+                await pilot.pause()  # IdentityListScreen.on_mount calls list_identities()
+
+                await pilot.press("a")  # open add modal via action_add_identity worker
+                await pilot.pause()  # screen transition
+                await pilot.pause()  # _IdentityCreateScreen.on_mount (no API)
+                await pilot.press(*"bob")  # type name into Input#name
+                await pilot.press("tab")  # move to Input#unix_username
+                await pilot.press(*"bob-unix")  # type unix_username
+                await pilot.press("enter")  # submit
+                await _wait(pilot, app)  # action_add_identity worker posts identity
+
+            assert not [n for n in app._notifications if n.severity == "error"]
+
+            resp = await auth.list_identities()
+            bob = next(i for i in resp.identities if i.name == "bob")
+            assert bob.unix_username == "bob-unix"
+
+
+@pytest.mark.anyio
+async def test_tui_identity_edit_unix_username(api, ssh_agent):
+    """Set an identity's unix_username via IdentityViewScreen and save."""
+    with _setup_ssh_auth_sock(ssh_agent):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            auth = _setup(api, tmpdir, ssh_agent)
+
+            # create a non-root identity so we can PATCH it (patching self is not allowed)
+            alice = await auth.create_identity("alice", [], [], [], [])
+            alice_id = alice.id
+
+            app = provablyfine.tui.app.TuiApp(auth)
+
+            async with app.run_test(size=(200, 50)) as pilot:
+                await pilot.pause()  # app startup
+                await pilot.press("down")  # navigate to Identities (index 1)
+                await pilot.press("enter")  # open IdentityListScreen
+                await pilot.pause()  # screen transition
+                await pilot.pause()  # IdentityListScreen.on_mount
+
+                # identity list: root=row0, alice=row1
+                await pilot.press("down")
+                await pilot.press("enter")  # open alice's IdentityViewScreen
+                await pilot.pause()  # screen transition
+                await pilot.pause()  # IdentityViewScreen.on_mount (no API)
+
+                # IdentityViewScreen: Input#name is focused; tab to Input#unix_username
+                await pilot.press("tab")
+                await pilot.press(*"alice-unix")
+
+                await pilot.press("ctrl+s")  # save identity
+                await _wait(pilot, app)  # action_save worker patches identity
+
+            assert not [n for n in app._notifications if n.severity == "error"]
+
+            identity = await auth.get_identity(alice_id)
+            assert identity.unix_username == "alice-unix"
+
+
+@pytest.mark.anyio
 async def test_tui_relogin_single_role(api, ssh_agent):
     """ReloginScreen auto-selects the only role without prompting."""
     with _setup_ssh_auth_sock(ssh_agent):

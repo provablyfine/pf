@@ -39,6 +39,7 @@ class IdentityCreateRequest(base.APIBase):
     tag_name_value_list: list[tag.TagNameValue] = pydantic.Field(default_factory=list[tag.TagNameValue])
     boundary_id_list: list[int] = pydantic.Field(default_factory=list[int])
     boundary_name_list: list[str] = pydantic.Field(default_factory=list[str])
+    unix_username: str | None = None
 
     @pydantic.model_validator(mode="after")
     def validate_tags_and_boundaries(self):

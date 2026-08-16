@@ -76,6 +76,7 @@ class IdentityViewScreen(base.Screen):
         self._identity = identity
         self._tags: list[pfc.schemas.TagNameValue] = list(identity.tags)
         self._saved_name: str = identity.name
+        self._saved_unix_username: str | None = identity.unix_username
         self._saved_tags: list[pfc.schemas.TagNameValue] = list(identity.tags)
 
     def compose(self) -> textual.app.ComposeResult:
@@ -84,6 +85,14 @@ class IdentityViewScreen(base.Screen):
             with textual.containers.HorizontalGroup(classes="field") as container:
                 container.border_title = "Name"
                 yield textual.widgets.Input(self._identity.name, id="name", compact=True)
+            with textual.containers.HorizontalGroup(classes="field") as container:
+                container.border_title = "Unix username"
+                yield textual.widgets.Input(
+                    self._identity.unix_username or "",
+                    placeholder="(optional)",
+                    id="unix_username",
+                    compact=True,
+                )
             with textual.containers.Container(classes="field") as container:
                 container.border_title = "Tags"
                 yield textual.widgets.ListView(id="tags")
@@ -153,8 +162,9 @@ class IdentityViewScreen(base.Screen):
     @textual.work
     async def action_save(self) -> None:
         name = self.query_one("#name", textual.widgets.Input).value
+        unix_username = self.query_one("#unix_username", textual.widgets.Input).value.strip() or None
 
-        if name == self._saved_name and self._tags == self._saved_tags:
+        if name == self._saved_name and unix_username == self._saved_unix_username and self._tags == self._saved_tags:
             self.notify("No changes")
             return
 
@@ -162,6 +172,8 @@ class IdentityViewScreen(base.Screen):
 
         if name != self._saved_name:
             update_params["name"] = name
+        if unix_username != self._saved_unix_username:
+            update_params["unix_username"] = unix_username
         if self._tags != self._saved_tags:
             all_tags = {(t.name, t.value): t.id for t in (await self._auth.list_tags()).tags}
             tag_id_list = [all_tags[(t.name, t.value)] for t in self._tags if (t.name, t.value) in all_tags]
