@@ -1,7 +1,7 @@
 """restore_missing_autoincrement
 
 Revision ID: 5052f9d083ee
-Revises: 5045f5101bb7
+Revises: b8f3c07d9e14
 Create Date: 2026-08-12 14:56:00.000000
 
 """
@@ -10,7 +10,7 @@ import alembic.op as op
 
 # revision identifiers, used by Alembic.
 revision: str = "5052f9d083ee"
-down_revision: str | None = "5045f5101bb7"
+down_revision: str | None = "b8f3c07d9e14"
 branch_labels: str | None = None
 depends_on: str | None = None
 

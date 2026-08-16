@@ -66,8 +66,8 @@ Create an oidc auth config
   $ pfa -c config.json auth create oidc -n google --client-type cli --issuer https://accounts.google.com --client-id my-client-id
 
 Read the oidc auth config
-  $ pfa -c config.json auth read -i 3
-  id            3
+  $ pfa -c config.json auth read -i 4
+  id            4
   name          google
   client_type   cli
   type          oidc
@@ -149,10 +149,10 @@ Public discovery endpoint returns 404 for unknown name
   404
 
 Public discovery endpoint returns 404 for disabled auth config
-  $ pfa -c config.json auth update -i 3 --disable
+  $ pfa -c config.json auth update -i 4 --disable
   $ curl -s -o /dev/null -w "%{http_code}\n" "http://127.0.0.1:$API_PORT/pf/t/root/public/auth/google?client_type=cli"
   404
-  $ pfa -c config.json auth update -i 3 --enable
+  $ pfa -c config.json auth update -i 4 --enable
 
 Read a non-existent auth config
   $ pfa -c config.json auth read -i 999
@@ -168,7 +168,7 @@ Delete an auth config
   $ pfa -c config.json auth delete -i 2
   $ pfa -c config.json auth list -q
   1
-  3
+  4
 
 Delete a non-existent auth config
   $ pfa -c config.json auth delete -i 999
