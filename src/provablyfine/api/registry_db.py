@@ -32,7 +32,7 @@ class TenantRow(typing.NamedTuple):
     created_at: int
 
 
-tenant = db.make_table("tenant", metadata, TenantRow)
+tenant = db.make_table("tenant", metadata, TenantRow, sqlite_autoincrement=True)
 
 
 # ============================================================================
