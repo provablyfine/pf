@@ -113,10 +113,12 @@ source_paths = [
   "src/provablyfine/api/signature.py",
   "src/provablyfine/api/grant.py",
   "src/provablyfine/jwk.py",
+  "src/provablyfine/ssh/cert.py",
 ]
 pytest_add_cli_args_test_selection = [
   "src/provablyfine/api/",
   "src/provablyfine/test_jwk.py",
+  "src/provablyfine/ssh/test_ssh_keygen.py",
 ]
 also_copy = [ "src/provablyfine/" ]
 # Error message text/status codes on these lines aren't asserted on by callers;
@@ -139,6 +141,14 @@ do_not_mutate_patterns = [
   # "# pragma: no mutate" comments elsewhere in jwk.py — can actually take
   # effect: mutmut has no pragma support for MatchCase nodes at all.)
   "^\\s*assert False$",
+  # "utf-8" is codec-name-case-insensitive (verified: codecs.lookup('utf-8') is
+  # codecs.lookup('UTF-8')), same reasoning as jwk.py's rfc7638_thumbprint/
+  # ssh_fingerprint. cert.py has several .encode("utf-8") call sites (key_id,
+  # principals, critical option values) each on their own line with nothing
+  # else to mutate, so one pattern covers all of them.
+  "\\.encode\\(\"utf-8\"\\)",
+  # cert.py's exceptions.Error(...) message text isn't asserted on by any test.
+  "exceptions\\.Error\\(",
 ]
 
 [tool.codespell]

@@ -403,11 +403,17 @@ class Private:
         return Private(key)
 
     def to_openssh(self, passphrase: bytes | None = None) -> bytes:
-        encryption: cryptography.hazmat.primitives.serialization.KeySerializationEncryption = (
-            cryptography.hazmat.primitives.serialization.BestAvailableEncryption(passphrase)
-            if passphrase
-            else cryptography.hazmat.primitives.serialization.NoEncryption()
-        )
+        # Untestable today: BestAvailableEncryption requires the `bcrypt` package,
+        # which isn't installed (nor a project dependency) — calling this branch
+        # with a real passphrase currently raises UnsupportedAlgorithm. Known bug,
+        # tracked separately; not fixed here since it's out of scope for mutation
+        # testing. See cli/common.py's login() for the affected user-facing path.
+        encryption: cryptography.hazmat.primitives.serialization.KeySerializationEncryption
+        if passphrase:
+            best_available = cryptography.hazmat.primitives.serialization.BestAvailableEncryption  # pragma: no mutate
+            encryption = best_available(passphrase)  # pragma: no mutate
+        else:
+            encryption = cryptography.hazmat.primitives.serialization.NoEncryption()
         return self._key.private_bytes(
             encoding=cryptography.hazmat.primitives.serialization.Encoding.PEM,
             format=cryptography.hazmat.primitives.serialization.PrivateFormat.OpenSSH,
