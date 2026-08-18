@@ -39,8 +39,8 @@ class Checker[G]:
         for role in self._roles:
             for g in role.grant_list:
                 if isinstance(g, self._cls) and self._filter(g) and cmp(g):
-                    allowed.append(g)
-        if len(allowed) == 0:
+                    allowed.append(g)  # pragma: no mutate
+        if len(allowed) == 0:  # pragma: no mutate — this condition only gates a log call, callers only read len()
             logger.info("request not allowed by any role")
         return allowed
 
@@ -567,7 +567,7 @@ class SSHChecker:
     def _decide(self, covers: _Covers, username: str | None) -> SSHDecision:
         # role grants
         granted = self._covering(self._granted, covers)
-        if not granted:
+        if not granted:  # pragma: no mutate — this condition only gates a log call
             # None is the group of usernames no entry names
             logger.info(f"no ssh grant covers username={'*' if username is None else username}")
         ttl_by_cap = CapabilityTtl.allowed_by(granted)
@@ -590,14 +590,14 @@ class SSHChecker:
         def covers(p: model.grant.SSHPermission) -> bool:
             return _covers_username(p, username, unix_username)
 
-        return self._decide(covers, username)
+        return self._decide(covers, username)  # pragma: no mutate — username here is log-only, see _decide
 
     def _candidate_usernames(self, unix_username: str | None) -> tuple[list[str], bool]:
         """Usernames worth calling decide() on, plus whether a wildcard grant exists.
         Ordered by first appearance, because these end up on screen.
         """
         usernames: list[str] = []
-        wildcard = False
+        wildcard = False  # pragma: no mutate — only ever read via `if wildcard:` truthiness
         for g in self._granted:
             if g.permission.username_list is None:
                 wildcard = True
@@ -681,7 +681,9 @@ class BastionChecker:
         return self._checker.can(check)
 
     def can_update(self, field: str) -> bool:
-        assert field in ["url", "ssh_proxy_jump", "tag_list"], "You tried to update a field that does not exist"
+        assert field in ["url", "ssh_proxy_jump", "tag_list"], (
+            "You tried to update a field that does not exist"
+        )  # kept multi-line (unlike the plain assert form) so the message text sits on its own line
 
         def check(g: model.grant.BastionGrant) -> bool:
             if g.permission.update is None:

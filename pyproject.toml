@@ -109,7 +109,10 @@ commands = pytest {posargs}
 """
 
 [tool.mutmut]
-source_paths = [ "src/provablyfine/api/signature.py" ]
+source_paths = [
+  "src/provablyfine/api/signature.py",
+  "src/provablyfine/api/grant.py",
+]
 pytest_add_cli_args_test_selection = [ "src/provablyfine/api/" ]
 also_copy = [ "src/provablyfine/" ]
 # Error message text/status codes on these lines aren't asserted on by callers;
@@ -119,6 +122,12 @@ do_not_mutate_patterns = [
   # typing.cast()'s type argument is erased at runtime (cast is a no-op that
   # returns its value unchanged), so mutating it can never affect a test.
   "typing\\.cast\\(",
+  # Log message text isn't asserted on by any test.
+  "logger\\.(debug|info|warning|error)\\(",
+  # assert message text for can_update()'s field-name check; the field list
+  # itself (on a separate line from the message in every case) is asserted
+  # per-field by the corresponding test_filter_*/test_empty_* tests.
+  "\"You tried to update a field that does not exist\"",
 ]
 
 [tool.codespell]

@@ -29,12 +29,12 @@ def _crd(create: bool, read: bool, delete: bool):
     }
 
 
-def _role_update(name: bool, description: bool):
+def _role_update(name: bool, description: bool, member_list: bool = False, grant_list: bool = False):
     return {
         "name": name,
         "description": description,
-        "grant_list": False,
-        "member_list": False,
+        "grant_list": grant_list,
+        "member_list": member_list,
     }
 
 
@@ -309,6 +309,8 @@ def test_empty_role():
         (True, True, None, True),
         (True, False, None, True),
         (False, True, _role_update(True, False), True),
+        (False, False, _role_update(False, False, member_list=True), False),
+        (False, False, _role_update(False, False, grant_list=True), False),
     ],
 )
 def test_filter_all_role(create, read, update, delete):
@@ -325,6 +327,8 @@ def test_filter_all_role(create, read, update, delete):
         assert grants.role(role_id).can_delete() == delete
         assert grants.role(role_id).can_update("name") == (update is None or update["name"])
         assert grants.role(role_id).can_update("description") == (update is None or update["description"])
+        assert grants.role(role_id).can_update("member_list") == (update is None or update["member_list"])
+        assert grants.role(role_id).can_update("grant_list") == (update is None or update["grant_list"])
 
 
 @pytest.mark.parametrize(
@@ -419,6 +423,21 @@ def test_filter_one_boundary(update):
             assert grants.boundary(boundary_id).can_update("beurk")
 
 
+@pytest.mark.parametrize("create", [False, True])
+def test_boundary_can_create_with_matching_filter(create):
+    # A boundary_id that mismatches the grant's filter short-circuits before
+    # the create predicate is ever invoked, so this needs a matching id.
+    grants = single_grants(
+        {
+            "type": "boundary",
+            "filter": {"id": 2},
+            "permission": _crud(create=create, read=False, update=None, delete=False),
+        }
+    )
+    assert grants.boundary(2).can_create() == create
+    assert not grants.boundary(1).can_create()
+
+
 ######## IDENTITY ########
 
 
@@ -461,6 +480,28 @@ def test_identity_add_tag():
     assert not grants.identity(2, [2], []).can_add_tag(1)
     assert not grants.identity(2, [1], []).can_add_tag(1)
     assert grants.identity(2, [1, 2], []).can_add_tag(1)
+
+
+def test_identity_add_tag_permission_none_is_unrestricted():
+    grants = single_grants(
+        {
+            "type": "identity",
+            "filter": {"id": None, "tag_id_list": None, "boundary_id_list": None},
+            "permission": _identity(
+                create_allowed=False,
+                create_tag_id_list=None,
+                create_boundary_id_list=None,
+                read=False,
+                update=None,
+                delete=False,
+                add_tag_id_list=None,
+                del_tag_id_list=[],
+                invite_list=[],
+            ),
+        }
+    )
+    assert grants.identity().can_add_tag(1)
+    assert grants.identity().can_add_tag(999)
 
 
 def test_identity_add_tag_ceiling_and_denied():
@@ -514,6 +555,156 @@ def test_identity_create(tag_id_list, boundary_id_list, expected1, expected2):
 
     assert grants.identity().can_create([1], [1]) == expected1
     assert grants.identity().can_create([1, 2], [1, 2]) == expected2
+
+
+def test_identity_create_permission_none_is_unrestricted():
+    grants = single_grants(
+        {
+            "type": "identity",
+            "filter": {"id": None, "tag_id_list": None, "boundary_id_list": None},
+            "permission": {
+                "create": None,
+                "read": False,
+                "update": None,
+                "delete": False,
+                "add_tag_id_list": [],
+                "del_tag_id_list": [],
+                "invite_list": [],
+            },
+        }
+    )
+    assert grants.identity().can_create([1], [1])
+
+
+def test_identity_create_requires_allowed():
+    grants = single_grants(
+        {
+            "type": "identity",
+            "filter": {"id": None, "tag_id_list": None, "boundary_id_list": None},
+            "permission": _identity(
+                create_allowed=False,
+                create_tag_id_list=None,
+                create_boundary_id_list=None,
+                read=False,
+                update=None,
+                delete=False,
+                add_tag_id_list=[],
+                del_tag_id_list=[],
+                invite_list=[],
+            ),
+        }
+    )
+    assert not grants.identity().can_create([1], [1])
+
+
+def test_identity_filter_requires_tag_and_boundary_lists_when_filter_scopes_them():
+    grants = single_grants(
+        {
+            "type": "identity",
+            "filter": {"id": None, "tag_id_list": [1], "boundary_id_list": None},
+            "permission": _identity_add_tag([1]),
+        }
+    )
+    assert not grants.identity(None, None, []).can_add_tag(1)
+    assert grants.identity(None, [1], []).can_add_tag(1)
+
+    grants = single_grants(
+        {
+            "type": "identity",
+            "filter": {"id": None, "tag_id_list": None, "boundary_id_list": [1]},
+            "permission": _identity_add_tag([1]),
+        }
+    )
+    assert not grants.identity(None, [], None).can_add_tag(1)
+    assert not grants.identity(None, [], [2]).can_add_tag(1)
+    assert grants.identity(None, [], [1]).can_add_tag(1)
+
+
+def test_empty_identity_read_update_delete():
+    grants = grant.Grants([], [])
+
+    assert not grants.identity(1, [], []).can_read()
+    assert not grants.identity(1, [], []).can_update("unix_username")
+    assert not grants.identity(1, [], []).can_delete()
+
+
+@pytest.mark.parametrize(
+    "read,update,delete",
+    [
+        (False, {"name": False, "unix_username": False}, False),
+        (True, {"name": False, "unix_username": False}, False),
+        (False, {"name": True, "unix_username": False}, False),
+        (False, {"name": False, "unix_username": True}, False),
+        (False, {"name": False, "unix_username": False}, True),
+        (True, {"name": True, "unix_username": True}, True),
+        (True, None, True),
+    ],
+)
+def test_filter_all_identity(read, update, delete):
+    grants = single_grants(
+        {
+            "type": "identity",
+            "filter": {"id": None, "tag_id_list": None, "boundary_id_list": None},
+            "permission": _identity(
+                create_allowed=False,
+                create_tag_id_list=None,
+                create_boundary_id_list=None,
+                read=read,
+                update=update,
+                delete=delete,
+                add_tag_id_list=[],
+                del_tag_id_list=[],
+                invite_list=[],
+            ),
+        }
+    )
+    for identity_id in [1, 2, 3]:
+        assert grants.identity(identity_id, [], []).can_read() == read
+        assert grants.identity(identity_id, [], []).can_delete() == delete
+        assert grants.identity(identity_id, [], []).can_update("name") == (update is None or update["name"])
+        assert grants.identity(identity_id, [], []).can_update("unix_username") == (
+            update is None or update["unix_username"]
+        )
+
+
+@pytest.mark.parametrize(
+    "read,update,delete",
+    [
+        (False, {"name": False, "unix_username": False}, False),
+        (True, {"name": False, "unix_username": False}, False),
+        (False, {"name": True, "unix_username": False}, False),
+        (False, {"name": False, "unix_username": True}, False),
+        (False, {"name": False, "unix_username": False}, True),
+        (True, None, True),
+    ],
+)
+def test_filter_one_identity(read, update, delete):
+    grants = single_grants(
+        {
+            "type": "identity",
+            "filter": {"id": 2, "tag_id_list": None, "boundary_id_list": None},
+            "permission": _identity(
+                create_allowed=False,
+                create_tag_id_list=None,
+                create_boundary_id_list=None,
+                read=read,
+                update=update,
+                delete=delete,
+                add_tag_id_list=[],
+                del_tag_id_list=[],
+                invite_list=[],
+            ),
+        }
+    )
+    for identity_id in [1, 2, 3]:
+        assert grants.identity(identity_id, [], []).can_read() == (identity_id == 2 and read)
+        assert grants.identity(identity_id, [], []).can_delete() == (identity_id == 2 and delete)
+        assert grants.identity(identity_id, [], []).can_update("name") == (
+            identity_id == 2 and (update is None or update["name"])
+        )
+        assert grants.identity(identity_id, [], []).can_update("unix_username") == (
+            identity_id == 2 and (update is None or update["unix_username"])
+        )
 
 
 ######## TENANT ########
@@ -850,6 +1041,18 @@ def test_ssh_decide_triplet_filter():
     assert denied.ssh(1, [42], []).decide("alice", None).capabilities == frozenset()
 
 
+def test_ssh_decide_triplet_filter_identity_and_boundary():
+    id_filtered = {"id": 7, "tag_id_list": None, "boundary_id_list": None}
+    granted = grant.Grants([], [role([_ssh(filter=id_filtered)])])
+    assert granted.ssh(1, [], []).decide("alice", None).capabilities == frozenset()
+    assert granted.ssh(7, [], []).decide("alice", None).capabilities == frozenset(model.grant.SSHCapability)
+
+    boundary_filtered = {"id": None, "tag_id_list": None, "boundary_id_list": [99]}
+    granted = grant.Grants([], [role([_ssh(filter=boundary_filtered)])])
+    assert granted.ssh(1, [], []).decide("alice", None).capabilities == frozenset()
+    assert granted.ssh(1, [], [99]).decide("alice", None).capabilities == frozenset(model.grant.SSHCapability)
+
+
 def test_ssh_decide_command_cofinite():
     grants = grant.Grants(
         [_deny_boundary([_ssh(capabilities=[], commands=["rm -rf /"])])],
@@ -997,6 +1200,52 @@ def test_ssh_list_decisions_wildcard_group():
 
     assert [u for u, _ in decisions] == ["root", None]
     assert CAP.AGENT_FORWARDING not in by_username["root"].capabilities
+    assert CAP.AGENT_FORWARDING in by_username[None].capabilities
+
+
+def test_ssh_list_decisions_enumerates_each_username_once_and_respects_grant_order():
+    # A wildcard grant appearing before named grants must not stop the named
+    # grants from still being enumerated, "{self}" entries must resolve
+    # through the real unix_username, and repeated entries must not duplicate.
+    grants = grant.Grants(
+        [],
+        [
+            role(
+                [
+                    _ssh(usernames=None, capabilities=["shell"], commands=[]),
+                    _ssh(usernames=["{self}"]),
+                    _ssh(usernames=["{self}"]),
+                ]
+            )
+        ],
+    )
+
+    decisions = grants.ssh(1, [], []).list_decisions("unix_alice")
+
+    assert [u for u, _ in decisions] == ["unix_alice", None]
+
+
+def test_ssh_list_decisions_threads_the_real_unix_username_into_each_decision():
+    # The capability comes from a wildcard grant (unaffected by username
+    # resolution) while the deny is scoped to "{self}", so the deny is only
+    # observed to apply if list_decisions correctly threads the real
+    # unix_username into each per-candidate decide() call.
+    grants = grant.Grants(
+        [_deny_boundary([_ssh(usernames=["{self}"], capabilities=["agent-forwarding"], commands=[])])],
+        [
+            role(
+                [
+                    _ssh(usernames=None, capabilities=["shell", "agent-forwarding"], commands=[]),
+                    _ssh(usernames=["{self}"], capabilities=["shell"], commands=[]),
+                ]
+            )
+        ],
+    )
+
+    decisions = grants.ssh(1, [], []).list_decisions("unix_alice")
+    by_username = dict(decisions)
+
+    assert CAP.AGENT_FORWARDING not in by_username["unix_alice"].capabilities
     assert CAP.AGENT_FORWARDING in by_username[None].capabilities
 
 
