@@ -1,0 +1,46 @@
+#!/usr/bin/env -S uv run -q --script
+import os
+import shutil
+import subprocess
+import sys
+
+
+def main() -> int:
+    uv = shutil.which("uv")
+    if uv is None:
+        print("uv not found on PATH")
+        return 1
+
+    env = os.environ.copy()
+    env["PYTEST_ADDOPTS"] = "-n0"
+
+    # mutmut's incremental cache can go stale relative to test-suite changes: a
+    # test that used to kill a mutant can be deleted/broken without the cached
+    # result being invalidated, silently reporting 0 survived. Force a clean
+    # run every time so the gate can't be defeated by cache staleness.
+    shutil.rmtree("mutants", ignore_errors=True)
+
+    run_result = subprocess.run([uv, "run", "mutmut", "run"], env=env, capture_output=True, text=True)  # noqa: S603
+    if run_result.returncode != 0:
+        print(run_result.stdout)
+        print(run_result.stderr, file=sys.stderr)
+        print("mutmut run failed unexpectedly")
+        return 1
+
+    results = subprocess.run(  # noqa: S603
+        [uv, "run", "mutmut", "results"], env=env, check=True, capture_output=True, text=True
+    ).stdout
+
+    survived = [line.strip() for line in results.splitlines() if line.strip().endswith(": survived")]
+    if survived:
+        print("Mutation testing baseline broken — surviving mutants:")
+        print("\n".join(survived))
+        print("\nRun `uv run mutmut show <id>` to inspect each one, then either add a test")
+        print("that kills it or, if it's equivalent, extend do_not_mutate_patterns in")
+        print("pyproject.toml (see the [tool.mutmut] comment for the existing categories).")
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

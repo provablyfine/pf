@@ -20,6 +20,14 @@ from .context import ctx
 # Signatures older than this are rejected, regardless of nonce tracking.
 FRESHNESS_WINDOW_SECONDS = 300
 
+# Header names are pulled out as constants (rather than inline literals) so that
+# mutation testing's string-case mutants land on these lines alone: HTTP header
+# lookups are case-insensitive, so case-mutated variants are unkillable noise,
+# but the comparisons that use these constants below are not.
+_CONTENT_DIGEST_HEADER = "Content-Digest"  # pragma: no mutate
+_SIGNATURE_HEADER = "Signature"  # pragma: no mutate
+_SIGNATURE_INPUT_HEADER = "Signature-Input"  # pragma: no mutate
+
 
 class NonceStore:
     """In-memory TTL set of (key_id, nonce) pairs used to reject replayed signatures."""
@@ -120,22 +128,22 @@ def _build_signature_base(
 
 def verify(request: fastapi.requests.Request, key_id: str, key: jwk.Symmetric | jwk.Public) -> None:
     content_digest = str(http_sfv.Dictionary({"sha-256": hashlib.sha256(request.state.body).digest()}))
-    if request.headers["Content-Digest"] != content_digest:
+    if request.headers[_CONTENT_DIGEST_HEADER] != content_digest:
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=400, title="Content hash does not match Content-Digest header")
         )
 
-    if "Signature" not in request.headers:
+    if _SIGNATURE_HEADER not in request.headers:
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=400, title="Missing Signature header")
         )
-    if "Signature-Input" not in request.headers:
+    if _SIGNATURE_INPUT_HEADER not in request.headers:
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=400, title="Missing Signature-Input header")
         )
 
-    keyid_by_label = _parse_signature_input(request.headers["Signature-Input"])
-    signature_by_label = _parse_signature(request.headers["Signature"])
+    keyid_by_label = _parse_signature_input(request.headers[_SIGNATURE_INPUT_HEADER])
+    signature_by_label = _parse_signature(request.headers[_SIGNATURE_HEADER])
 
     label_by_keyid = {keyid: (label, inner) for label, (keyid, inner) in keyid_by_label.items()}
     if key_id not in label_by_keyid:

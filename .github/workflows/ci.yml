@@ -19,6 +19,14 @@ jobs:
         with:
           extra_args: --all-files
 
+  mutation-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v8.1.0
+      - name: Mutation testing baseline (signature.py)
+        run: scripts/check-mutation-baseline
+
   test:
     runs-on: ubuntu-latest
     strategy:
