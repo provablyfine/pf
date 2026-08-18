@@ -112,8 +112,12 @@ commands = pytest {posargs}
 source_paths = [
   "src/provablyfine/api/signature.py",
   "src/provablyfine/api/grant.py",
+  "src/provablyfine/jwk.py",
 ]
-pytest_add_cli_args_test_selection = [ "src/provablyfine/api/" ]
+pytest_add_cli_args_test_selection = [
+  "src/provablyfine/api/",
+  "src/provablyfine/test_jwk.py",
+]
 also_copy = [ "src/provablyfine/" ]
 # Error message text/status codes on these lines aren't asserted on by callers;
 # excluded so mutation noise doesn't drown out logic-relevant survivors.
@@ -128,6 +132,13 @@ do_not_mutate_patterns = [
   # itself (on a separate line from the message in every case) is asserted
   # per-field by the corresponding test_filter_*/test_empty_* tests.
   "\"You tried to update a field that does not exist\"",
+  # Bare "assert False" exhaustiveness-guard bodies (else:/case _: fallbacks)
+  # in jwk.py — unreachable by any legitimately constructed value, so no test
+  # can (or should) hit them. (jwk.py's dispatch methods use if/elif/else
+  # rather than match/case specifically so this pattern — and the per-branch
+  # "# pragma: no mutate" comments elsewhere in jwk.py — can actually take
+  # effect: mutmut has no pragma support for MatchCase nodes at all.)
+  "^\\s*assert False$",
 ]
 
 [tool.codespell]

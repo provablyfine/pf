@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import base64
 import secrets
 
+import cryptography.hazmat.primitives.hashes
+import cryptography.hazmat.primitives.serialization
 import pytest
 
 from . import base64url, jwk
@@ -46,6 +49,21 @@ def test_rfc7638_thumbprint_different_input() -> None:
     data1 = {"kty": "oct", "k": base64url.encode(b"\x00" * 32)}
     data2 = {"kty": "oct", "k": base64url.encode(b"\xff" * 32)}
     assert jwk.rfc7638_thumbprint(data1) != jwk.rfc7638_thumbprint(data2)
+
+
+def test_rfc7638_thumbprint_rsa_known_answer() -> None:
+    # RFC 7638 Appendix A.1/A.2 example key and its published thumbprint.
+    data = {
+        "kty": "RSA",
+        "n": (
+            "0vx7agoebGcQSuuPiLJXZptN9nndrQmbXEps2aiAFbWhM78LhWx4cbbfAAtVT86zwu1RK7aPFFxuhDR1L6tSoc_BJECPebWKRXjB"
+            "ZCiFV4n3oknjhMstn64tZ_2W-5JsGY4Hc5n9yBXArwl93lqt7_RN5w6Cf0h4QyQ5v-65YGjQR0_FDW2QvzqY368QQMicAtaSqzs"
+            "8KJZgnYb9c7d0zgdAZHzu6qMQvRL5hajrn1n91CbOpbISD08qNLyrdkt-bFTWhAI4vMQFh6WeZu0fM4lFd2NcRwr3XPksINHaQ-"
+            "G_xBniIqbw0Ls1jF44-csFCur-kEgU8awapJzKnqDKgw"
+        ),
+        "e": "AQAB",
+    }
+    assert jwk.rfc7638_thumbprint(data) == "NzbLsXh8uDCcd-6MNwXF4W_7noWXFZAfHkxZsRGC9Xs"
 
 
 # ── Symmetric ────────────────────────────────────────────────────────────────
@@ -160,6 +178,18 @@ def test_public_ssh_fingerprint_format(ed25519_private: jwk.Private) -> None:
     assert pub.ssh_fingerprint().startswith("SHA256:")
 
 
+def test_public_ssh_fingerprint_matches_independent_computation(ed25519_private: jwk.Private) -> None:
+    # Recomputes the fingerprint via a separate code path (not calling
+    # ssh_fingerprint() at all) so a broken implementation can't pass by
+    # comparing its own output against itself.
+    pub = ed25519_private.public()
+    h = cryptography.hazmat.primitives.serialization.ssh_key_fingerprint(
+        pub.to_crypto(), cryptography.hazmat.primitives.hashes.SHA256()
+    )
+    expected = f"SHA256:{base64.b64encode(h).rstrip(b'=').decode('ascii')}"
+    assert pub.ssh_fingerprint() == expected
+
+
 def test_public_match_ssh_fingerprint(ed25519_private: jwk.Private) -> None:
     pub = ed25519_private.public()
     assert pub.match_ssh_fingerprint(pub.ssh_fingerprint())
@@ -173,7 +203,7 @@ def test_public_match_ssh_fingerprint_wrong(ed25519_private: jwk.Private) -> Non
 def test_public_match_ssh_fingerprint_md5_raises(ed25519_private: jwk.Private) -> None:
     pub = ed25519_private.public()
     with pytest.raises(ValueError, match="MD5"):
-        pub.match_ssh_fingerprint("MD5:somefingerprint")
+        pub.match_ssh_fingerprint("MD5:aa:bb:cc:dd:ee:ff:00:11:22:33:44:55:66:77:88:99")
 
 
 # ── Private ──────────────────────────────────────────────────────────────────
