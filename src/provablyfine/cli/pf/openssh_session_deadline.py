@@ -50,7 +50,7 @@ def _trusted_fingerprints(ca_pub_path: str) -> set[str]:
         try:
             fingerprints.add(jwk.Public.from_openssh(line).ssh_fingerprint())
         except Exception:
-            logger.warning(f"unparseable line in CA public key file={ca_pub_path}", exc_info=True)
+            logger.warning(f"unparsable line in CA public key file={ca_pub_path}", exc_info=True)
     return fingerprints
 
 

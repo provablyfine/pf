@@ -39,7 +39,7 @@ class SingleIssuerVerifier:
         try:
             unverified = jwt.decode_complete(token, options={"verify_signature": False, "require": ["iss"]})
         except jwt.exceptions.InvalidTokenError as e:
-            logger.debug(f"token: unparseable: {e}")
+            logger.debug(f"token: unparsable: {e}")
             return None
         kid = unverified["header"].get("kid")
         if kid is None:
