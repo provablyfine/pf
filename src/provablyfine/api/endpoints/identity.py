@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import time
 import typing
-import uuid
 
 import fastapi
 import fastapi.responses
@@ -103,35 +102,41 @@ def read_self_bastions_endpoint() -> schemas.identity.IdentitySelfBastionListRes
 @router.get(
     "/self/token",
     status_code=200,
-    responses={400: responses.PROBLEM, 403: responses.PROBLEM, 404: responses.PROBLEM},
+    responses={400: responses.PROBLEM, 403: responses.PROBLEM},
 )
 def read_self_token_endpoint(
-    service: str, hostname: str, username: str | None = None, connection_id: str | None = None
+    service: str,
+    hostname: str,
+    purpose: typing.Literal["connect", "register"],
+    connection_id: str | None = None,
 ) -> schemas.identity.IdentitySelfTokenResponse:
     if service != "bastion":
         raise responses.ProblemHTTPException(responses.problem_response(status_code=403))
 
-    if connection_id is not None:
-        try:
-            uuid.UUID(connection_id)
-        except ValueError:
-            connection_id = None
-
     deadline: int | None = None
-    if username is not None:
+    cid: str | None = None
+    if purpose == "connect":
+        if connection_id is None:
+            raise responses.ProblemHTTPException(
+                responses.problem_response(status_code=400, title="connection_id required")
+            )
+        # The deadline is mirrored from the row recorded when the certificate was
+        # signed, never recomputed here: the bastion relay and the target host's
+        # PAM hook must agree on the same absolute instant, and a later reconnect
+        # must not extend the session.
+        row = ctx.app_db.ssh_connection.read_one(connection_id=connection_id)
+        now = int(time.time())
+        if row is None or row.identity_id != ctx.identity_id or row.hostname != hostname or row.valid_before < now:
+            raise responses.ProblemHTTPException(responses.problem_response(status_code=403, title="Forbidden"))
+        deadline = row.deadline
+        cid = row.connection_id
+    else:
         caller = model.identity.read_one(id=ctx.identity_id)
         assert caller is not None  # because we are authenticated
-        host = model.identity.read_one(name=hostname)
-        if host is None:
-            raise responses.ProblemHTTPException(responses.problem_response(status_code=404, title="Unknown host"))
-        checker = grant.Grants.create().ssh(host.id, host.tag_id_list, host.boundary_id_list)
-        decision = checker.decide(username, caller.unix_username)
-        if model.grant.SSHCapability.PORT_FORWARDING not in decision.capabilities:
+        if caller.name != hostname:
             raise responses.ProblemHTTPException(responses.problem_response(status_code=403, title="Forbidden"))
-        now = int(time.time())
-        deadline = grant.deadline(now, [decision.capability_ttl[model.grant.SSHCapability.PORT_FORWARDING]])
 
-    token = model.bastion.generate_token(hostname, deadline=deadline, connection_id=connection_id)
+    token = model.bastion.generate_token(hostname, purpose, deadline=deadline, connection_id=cid)
     return schemas.identity.IdentitySelfTokenResponse(token=token)
 
 

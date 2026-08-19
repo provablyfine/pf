@@ -90,11 +90,13 @@ class SessionClient:
         return schemas.IdentitySelfBastionListResponse.model_validate(response.json())
 
     def get_self_token(
-        self, service: str, hostname: str, username: str | None = None, connection_id: str | None = None
+        self,
+        service: str,
+        hostname: str,
+        purpose: typing.Literal["connect", "register"],
+        connection_id: str | None = None,
     ) -> schemas.IdentitySelfTokenResponse:
-        params: dict[str, str] = {"service": service, "hostname": hostname}
-        if username is not None:
-            params["username"] = username
+        params: dict[str, str] = {"service": service, "hostname": hostname, "purpose": purpose}
         if connection_id is not None:
             params["connection_id"] = connection_id
         response = self._session.get(

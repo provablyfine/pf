@@ -117,7 +117,12 @@ def read_matching() -> list[Bastion]:
     return matching
 
 
-def generate_token(hostname: str, deadline: int | None = None, connection_id: str | None = None) -> str:
+def generate_token(
+    hostname: str,
+    purpose: typing.Literal["connect", "register"],
+    deadline: int | None = None,
+    connection_id: str | None = None,
+) -> str:
     private_key = oidc_key.get_private_key()
     assert private_key.type == jwk.KeyType.ED25519
     self_identity = identity.read_one(id=ctx.identity_id)
@@ -133,6 +138,7 @@ def generate_token(hostname: str, deadline: int | None = None, connection_id: st
         "jti": str(uuid.uuid4()),
         "name": self_identity.name,
         "tenant_id": ctx.tenant_id,
+        "use": purpose,
     }
     if deadline is not None:
         claims["deadline"] = deadline

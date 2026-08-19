@@ -17,6 +17,7 @@ import ssl
 import struct
 import sys
 import time
+import typing
 import urllib.parse
 
 import cryptography.hazmat.decrepit.ciphers.modes
@@ -325,8 +326,12 @@ async def _handshake_token(
         await _frp_write(send, None, _HANDSHAKE_ACCEPT_TAG, {"ok": False, "reason": "token handshake required"})
         return None
     token = msg.get("token")
-    verified = verifier.verify(str(token), expected_audience, now) if isinstance(token, str) else None
-    if verified is None:
+    verified = (
+        verifier.verify(str(token), expected_audience, now, expected_use="connect") if isinstance(token, str) else None
+    )
+    # The token endpoint issues a cid with every connect token, so its absence
+    # means the token was not minted for this handshake.
+    if verified is None or verified.cid is None:
         await _frp_write(send, None, _HANDSHAKE_ACCEPT_TAG, {"ok": False, "reason": "invalid or unauthorized token"})
         return None
     await _frp_write(send, None, _HANDSHAKE_ACCEPT_TAG, {"ok": True})
@@ -421,7 +426,7 @@ async def _run_frp_client(
     while not stop_event.is_set():
         # Refresh token on each (re)connect attempt.
         try:
-            token_response = await session.get_self_token("bastion", hostname=identity_name)
+            token_response = await session.get_self_token("bastion", hostname=identity_name, purpose="register")
             jwt_token = token_response.token
             frpc_user = _jwt_audience(jwt_token)
         except Exception as e:
@@ -596,8 +601,10 @@ class _ManagedSession:
             await self._renew()
             return await fn()
 
-    async def get_self_token(self, service: str, hostname: str) -> pfc.schemas.IdentitySelfTokenResponse:
-        return await self._call(lambda: self.sc.get_self_token(service, hostname=hostname))
+    async def get_self_token(
+        self, service: str, hostname: str, purpose: typing.Literal["connect", "register"]
+    ) -> pfc.schemas.IdentitySelfTokenResponse:
+        return await self._call(lambda: self.sc.get_self_token(service, hostname=hostname, purpose=purpose))
 
     async def list_self_bastions(self) -> pfc.schemas.IdentitySelfBastionListResponse:
         return await self._call(lambda: self.sc.list_self_bastions())
@@ -681,8 +688,7 @@ async def connect_async(
     url: str,
     hostname: str,
     sc: pfc.AsyncSessionClient,
-    username: str | None = None,
-    connection_id: str | None = None,
+    connection_id: str,
 ) -> None:
     u = urllib.parse.urlsplit(url)
     host = u.hostname or url
@@ -697,7 +703,7 @@ async def connect_async(
         ssl_context = ssl.create_default_context()
 
     token_response = await sc.get_self_token(
-        "bastion", hostname=hostname, username=username, connection_id=connection_id
+        "bastion", hostname=hostname, purpose="connect", connection_id=connection_id
     )
     frpc_user = _jwt_audience(token_response.token)
 
@@ -799,7 +805,7 @@ def _connect_function(args: argparse.Namespace) -> None:
 
     async def _run() -> None:
         sc = factory.async_session()
-        await connect_async(args.url, args.hostname, sc, args.username, args.connection_id)
+        await connect_async(args.url, args.hostname, sc, args.connection_id)
 
     asyncio.run(_run())
 
@@ -830,11 +836,8 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
     connect_parser.add_argument("--url", required=True, help="Bastion URL")
     connect_parser.add_argument("--hostname", required=True, help="Target hostname")
     connect_parser.add_argument(
-        "--username", default=None, help="Target unix username (port-forwarding connections only)"
-    )
-    connect_parser.add_argument(
         "--connection-id",
-        default=None,
-        help="Connection id shared with the SSH cert (port-forwarding connections only)",
+        required=True,
+        help="Connection id shared with the SSH cert",
     )
     connect_parser.set_defaults(func=_connect_function)

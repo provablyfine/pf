@@ -91,5 +91,23 @@ backward-compatibility check
   $ kill -0 $ALICE_FWD_PID
   $ kill $ALICE_FWD_PID 2>/dev/null; true
 
+Shell sessions are enforced at the relay too, not just by the PAM hook. This
+sshd container is built with UsePAM no, so nothing host-side can terminate the
+session -- if the tunnel dies on time it is the relay's doing. bob gets a
+bounded shell grant; the 60s remote command must not outlive the 10s TTL.
+  $ pfa -c config.json grant ssh --tag id=device --username bob --capability shell --max-session-ttl 10 | pfa -c config.json role grant -i $ROLE_ID --add
+  $ pf -c user.json ssh -n bob@host "sleep 60" >/dev/null 2>&1 &
+  $ BOB_SHELL_PID=$!
+  $ sleep 3
+  $ kill -0 $BOB_SHELL_PID
+  $ sleep 12
+  $ kill -0 $BOB_SHELL_PID 2>/dev/null
+  [1]
+The relay logged the close, so the session ended because of the deadline and
+not because the remote command finished or the transport broke. Count is 2:
+root's port-forwarding tunnel above closed the same way.
+  $ grep -c "deadline reached, closing tunnel" $PF_LOG_DIRECTORY/pf.bastion.register.$REGISTER_PID.log
+  2
+
 Cleanup
   $ kill $REGISTER_PID 2>/dev/null; true

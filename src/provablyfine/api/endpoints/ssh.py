@@ -186,6 +186,18 @@ def sign_user_certificate(data: schemas.ssh.SSHUserCertificateRequest) -> schema
     serial_number += 1
     model.signing_key.update(signer.id, serial_number=serial_number)
 
+    # Record the connection so the bastion token endpoint can later mirror the
+    # exact deadline embedded in this certificate. Expired rows are swept
+    # opportunistically: past valid_before the certificate itself is unusable.
+    ctx.app_db.ssh_connection.delete(ctx.app_db.ssh_connection.columns.valid_before < now)
+    ctx.app_db.ssh_connection.create(
+        connection_id=connection_id,
+        identity_id=ctx.identity_id,
+        hostname=data.hostname,
+        deadline=deadline,
+        valid_before=now + ctx.config.user_certificate_lifetime,
+    )
+
     model.audit_log.create(
         "create-user-certificate",
         signing_key_id=signer.id,

@@ -35,7 +35,7 @@ class SingleIssuerVerifier:
         for j in expired:
             del self._seen_jti[j]
 
-    def verify(self, token: str, expected_audience: str, now: int) -> VerifiedToken | None:
+    def verify(self, token: str, expected_audience: str, now: int, expected_use: str) -> VerifiedToken | None:
         try:
             unverified = jwt.decode_complete(token, options={"verify_signature": False, "require": ["iss"]})
         except jwt.exceptions.InvalidTokenError as e:
@@ -58,10 +58,14 @@ class SingleIssuerVerifier:
                 algorithms=["EdDSA"],
                 issuer=self._issuer,
                 audience=expected_audience,
-                options={"require": ["sub", "name", "jti", "exp"]},
+                options={"require": ["sub", "name", "jti", "exp", "use"]},
             )
         except jwt.exceptions.InvalidTokenError as e:
             logger.debug(f"token: rejected: {e}")
+            return None
+
+        if payload["use"] != expected_use:
+            logger.debug(f"token: wrong purpose: {payload['use']}")
             return None
 
         jti = payload["jti"]
