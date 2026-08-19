@@ -248,6 +248,45 @@ def _with_nonce_length(raw: bytes, nonce_length: int) -> bytes:
     return type_str + b" " + base64.b64encode(w.to_bytes())
 
 
+def _cert_with_validity(valid_after: int, valid_before: int) -> cert.Cert:
+    signer = jwk.Private.generate_ed25519()
+    return cert.Cert.create_host(
+        public_key=jwk.Private.generate_ed25519().public(),
+        serial_number=1,
+        identifier="validity-test",
+        principals=["host.test"],
+        valid_after=valid_after,
+        valid_before=valid_before,
+        signer=signer,
+    )
+
+
+def test_cert_is_valid_within_window(monkeypatch: pytest.MonkeyPatch) -> None:
+    c = _cert_with_validity(1_000_000_000, 2_000_000_000)
+    monkeypatch.setattr(cert.time, "time", lambda: 1_500_000_000.0)
+    assert c.is_valid()
+
+
+def test_cert_is_valid_before_window(monkeypatch: pytest.MonkeyPatch) -> None:
+    c = _cert_with_validity(1_000_000_000, 2_000_000_000)
+    monkeypatch.setattr(cert.time, "time", lambda: 1_000_000_000.0 - 1)
+    assert not c.is_valid()
+
+
+def test_cert_is_valid_after_window(monkeypatch: pytest.MonkeyPatch) -> None:
+    c = _cert_with_validity(1_000_000_000, 2_000_000_000)
+    monkeypatch.setattr(cert.time, "time", lambda: 2_000_000_000.0 + 1)
+    assert not c.is_valid()
+
+
+def test_cert_is_valid_at_exact_boundaries(monkeypatch: pytest.MonkeyPatch) -> None:
+    c = _cert_with_validity(1_000_000_000, 2_000_000_000)
+    monkeypatch.setattr(cert.time, "time", lambda: 1_000_000_000.0)
+    assert c.is_valid()
+    monkeypatch.setattr(cert.time, "time", lambda: 2_000_000_000.0)
+    assert c.is_valid()
+
+
 def test_cert_nonce_exactly_16_bytes_is_accepted() -> None:
     signer = jwk.Private.generate_ed25519()
     c = cert.Cert.create_host(

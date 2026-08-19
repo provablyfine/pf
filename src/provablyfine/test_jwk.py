@@ -169,6 +169,34 @@ def test_public_openssh_roundtrip(pub_fixture: str, request: pytest.FixtureReque
     assert pub2.type == pub.type
 
 
+@pytest.mark.parametrize("pub_fixture", PUB_FIXTURES)
+def test_private_pem_roundtrip(pub_fixture: str, request: pytest.FixtureRequest) -> None:
+    priv: jwk.Private = request.getfixturevalue(pub_fixture)
+    priv2 = jwk.Private.from_pem(priv.to_pem())
+    assert priv2.type == priv.type
+
+
+def test_private_pem_roundtrip_with_password(ed25519_private: jwk.Private) -> None:
+    # jwk.Private.to_pem() never encrypts (hardcodes NoEncryption), so an
+    # encrypted PEM has to be built directly via cryptography to exercise the
+    # password= argument of from_pem at all.
+    data = ed25519_private.to_crypto().private_bytes(
+        encoding=cryptography.hazmat.primitives.serialization.Encoding.PEM,
+        format=cryptography.hazmat.primitives.serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=cryptography.hazmat.primitives.serialization.BestAvailableEncryption(b"hunter22"),
+    )
+    priv2 = jwk.Private.from_pem(data, password=b"hunter22")
+    assert priv2.type == ed25519_private.type
+    with pytest.raises(TypeError):
+        jwk.Private.from_pem(data)
+
+
+def test_public_crypto_roundtrip_ed25519(ed25519_private: jwk.Private) -> None:
+    pub = ed25519_private.public()
+    pub2 = jwk.Public.from_crypto(pub.to_crypto())
+    assert pub2.type == pub.type
+
+
 def test_public_thumbprint_consistency(ed25519_private: jwk.Private) -> None:
     pub = ed25519_private.public()
     assert pub.thumbprint() == jwk.rfc7638_thumbprint(pub.to_dict())

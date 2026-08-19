@@ -58,6 +58,10 @@ def _bastion_update(url: bool, ssh_proxy_jump: bool, tag_list: bool):
     return {"url": url, "ssh_proxy_jump": ssh_proxy_jump, "tag_list": tag_list}
 
 
+def _auth_update(name: bool, description: bool, is_enabled: bool, config: bool):
+    return {"name": name, "description": description, "is_enabled": is_enabled, "config": config}
+
+
 def _crud(create: bool, read: bool, update: dict[str, bool] | None, delete: bool):
     return {
         "create": create,
@@ -104,6 +108,34 @@ def _identity_add_tag(add_tag_id_list: list[int] | None):
         add_tag_id_list=add_tag_id_list,
         del_tag_id_list=[],
         invite_list=[],
+    )
+
+
+def _identity_del_tag(del_tag_id_list: list[int] | None):
+    return _identity(
+        create_allowed=False,
+        create_tag_id_list=[],
+        create_boundary_id_list=[],
+        read=False,
+        update=None,
+        delete=False,
+        add_tag_id_list=[],
+        del_tag_id_list=del_tag_id_list,
+        invite_list=[],
+    )
+
+
+def _identity_invite(invite_list: list[str] | None):
+    return _identity(
+        create_allowed=False,
+        create_tag_id_list=[],
+        create_boundary_id_list=[],
+        read=False,
+        update=None,
+        delete=False,
+        add_tag_id_list=[],
+        del_tag_id_list=[],
+        invite_list=invite_list,
     )
 
 
@@ -504,6 +536,61 @@ def test_identity_add_tag_permission_none_is_unrestricted():
     assert grants.identity().can_add_tag(999)
 
 
+def test_identity_del_tag():
+    grants = single_grants(
+        {
+            "type": "identity",
+            "filter": {"id": 2, "tag_id_list": [], "boundary_id_list": []},
+            "permission": _identity_del_tag([1, 2]),
+        }
+    )
+    assert not grants.identity(1, [], []).can_del_tag(1)
+    assert not grants.identity(1, [], []).can_del_tag(2)
+    assert not grants.identity(1, [], []).can_del_tag(3)
+    assert grants.identity(2, [], []).can_del_tag(1)
+    assert grants.identity(2, [], []).can_del_tag(2)
+    assert not grants.identity(2, [], []).can_del_tag(3)
+
+
+def test_identity_del_tag_permission_none_is_unrestricted():
+    grants = single_grants(
+        {
+            "type": "identity",
+            "filter": {"id": None, "tag_id_list": None, "boundary_id_list": None},
+            "permission": _identity_del_tag(None),
+        }
+    )
+    assert grants.identity().can_del_tag(1)
+    assert grants.identity().can_del_tag(999)
+
+
+def test_identity_invite():
+    grants = single_grants(
+        {
+            "type": "identity",
+            "filter": {"id": 2, "tag_id_list": [], "boundary_id_list": []},
+            "permission": _identity_invite(["email", "sms"]),
+        }
+    )
+    assert not grants.identity(1, [], []).can_invite("email")
+    assert not grants.identity(1, [], []).can_invite("sms")
+    assert grants.identity(2, [], []).can_invite("email")
+    assert grants.identity(2, [], []).can_invite("sms")
+    assert not grants.identity(2, [], []).can_invite("slack")
+
+
+def test_identity_invite_permission_none_is_unrestricted():
+    grants = single_grants(
+        {
+            "type": "identity",
+            "filter": {"id": None, "tag_id_list": None, "boundary_id_list": None},
+            "permission": _identity_invite(None),
+        }
+    )
+    assert grants.identity().can_invite("email")
+    assert grants.identity().can_invite("carrier-pigeon")
+
+
 def test_identity_add_tag_ceiling_and_denied():
     def _all_filter():
         return {"id": None, "tag_id_list": None, "boundary_id_list": None}
@@ -785,6 +872,96 @@ def test_filter_one_tenant(read, update, delete):
         assert grants.tenant(tenant_id).can_update("is_enabled") == (
             tenant_id == 2 and (update is None or update["is_enabled"])
         )
+
+
+######## AUTH ########
+
+
+def test_empty_auth():
+    grants = grant.Grants([], [])
+
+    assert not grants.auth(None).can_create()
+    assert not grants.auth(1).can_read()
+    assert not grants.auth(1).can_update("name")
+    assert not grants.auth(1).can_update("description")
+    assert not grants.auth(1).can_update("is_enabled")
+    assert not grants.auth(1).can_update("config")
+    assert not grants.auth(1).can_delete()
+    with pytest.raises(AssertionError):
+        assert not grants.auth(1).can_update("beurk")
+
+
+@pytest.mark.parametrize(
+    "create,read,update,delete",
+    [
+        (False, False, _auth_update(False, False, False, False), False),
+        (True, False, _auth_update(False, False, False, False), False),
+        (False, True, _auth_update(False, False, False, False), False),
+        (False, False, _auth_update(True, False, False, False), False),
+        (False, False, _auth_update(False, True, False, False), False),
+        (False, False, _auth_update(False, False, True, False), False),
+        (False, False, _auth_update(False, False, False, True), False),
+        (False, False, _auth_update(False, False, False, False), True),
+        (True, True, _auth_update(True, True, True, True), True),
+        (True, True, None, True),
+        (True, False, None, True),
+        (False, True, _auth_update(True, False, False, False), True),
+    ],
+)
+def test_filter_all_auth(create, read, update, delete):
+    grants = single_grants(
+        {
+            "type": "auth",
+            "filter": {"id": None},
+            "permission": _crud(create=create, read=read, update=update, delete=delete),
+        }
+    )
+    assert grants.auth(None).can_create() == create
+    for auth_id in [1, 2, 3]:
+        assert grants.auth(auth_id).can_read() == read
+        assert grants.auth(auth_id).can_delete() == delete
+        assert grants.auth(auth_id).can_update("name") == (update is None or update["name"])
+        assert grants.auth(auth_id).can_update("description") == (update is None or update["description"])
+        assert grants.auth(auth_id).can_update("is_enabled") == (update is None or update["is_enabled"])
+        assert grants.auth(auth_id).can_update("config") == (update is None or update["config"])
+
+
+@pytest.mark.parametrize(
+    "read,update,delete",
+    [
+        (False, _auth_update(False, False, False, False), False),
+        (True, _auth_update(False, False, False, False), False),
+        (False, _auth_update(True, False, False, False), False),
+        (False, _auth_update(False, True, False, False), False),
+        (False, _auth_update(False, False, True, False), False),
+        (False, _auth_update(False, False, False, True), False),
+        (False, _auth_update(False, False, False, False), True),
+        (True, _auth_update(True, True, True, True), True),
+        (True, None, True),
+        (False, None, True),
+        (True, _auth_update(True, False, False, False), True),
+    ],
+)
+def test_filter_one_auth(read, update, delete):
+    grants = single_grants(
+        {
+            "type": "auth",
+            "filter": {"id": 2},
+            "permission": _crud(create=False, read=read, update=update, delete=delete),
+        }
+    )
+    assert not grants.auth(None).can_create()
+    for auth_id in [1, 2, 3]:
+        assert grants.auth(auth_id).can_read() == (auth_id == 2 and read)
+        assert grants.auth(auth_id).can_delete() == (auth_id == 2 and delete)
+        assert grants.auth(auth_id).can_update("name") == (auth_id == 2 and (update is None or update["name"]))
+        assert grants.auth(auth_id).can_update("description") == (
+            auth_id == 2 and (update is None or update["description"])
+        )
+        assert grants.auth(auth_id).can_update("is_enabled") == (
+            auth_id == 2 and (update is None or update["is_enabled"])
+        )
+        assert grants.auth(auth_id).can_update("config") == (auth_id == 2 and (update is None or update["config"]))
 
 
 ######## BASTION ########

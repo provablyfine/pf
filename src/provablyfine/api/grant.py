@@ -322,22 +322,6 @@ def triplet_match(
     return True
 
 
-class IdentityFilterChecker[G: model.grant.TripletGrant](Checker[G]):
-    def __init__(
-        self,
-        boundaries: list[model.boundary.Boundary],
-        roles: list[model.role.Role],
-        identity_id: int,
-        tag_id_list: list[int],
-        boundary_id_list: list[int],
-        cls: type[G],
-    ):
-        def cmp(g: G) -> bool:
-            return triplet_match(g, identity_id, tag_id_list, boundary_id_list)
-
-        super().__init__(boundaries, roles, cmp, cls)
-
-
 def resolve_username(entry: str, unix_username: str | None) -> str | None:
     if entry == "{self}":
         return unix_username
