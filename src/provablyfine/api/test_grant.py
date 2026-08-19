@@ -1877,6 +1877,7 @@ def test_deadline_shell_one_hour_port_forwarding_eight_hours():
 def test_deadline_shell_eight_hours_port_forwarding_one_hour():
     assert grant.deadline(1000, [8 * 3600, 3600]) == 4600
 
+
 ######## Grants.create (real DB) ########
 
 
