@@ -230,11 +230,11 @@ def verify(request: fastapi.requests.Request, key_id: str, key: jwk.Symmetric | 
 
 
 def _get_keyid(request: fastapi.requests.Request, prefix: str) -> str:
-    if "Signature-Input" not in request.headers:
+    if _SIGNATURE_INPUT_HEADER not in request.headers:
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=401, title="Missing Signature-Input header")
         )
-    keyid_by_label = _parse_signature_input(request.headers["Signature-Input"])
+    keyid_by_label = _parse_signature_input(request.headers[_SIGNATURE_INPUT_HEADER])
     for _label, (keyid, _signature_input) in keyid_by_label.items():
         if not keyid.startswith(f"{prefix}:"):
             continue
