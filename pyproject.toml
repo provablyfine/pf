@@ -50,6 +50,9 @@ dependencies = [
   "alembic>=1.18.4",
 ]
 
+[project.optional-dependencies]
+bcrypt = ["bcrypt"]
+
 [project.urls]
 Documentation = "https://docs.provablyfine.net"
 Repository = "https://github.com/provablyfine/pf.git"
@@ -75,6 +78,7 @@ sigterm = true
 
 [dependency-groups]
 dev = [
+    "bcrypt",
     "coverage>=7.13.4",
     "hatchling",
     "jinja2>=3.1.6",
@@ -96,6 +100,7 @@ dev = [
     "mike",
     "codespell>=2.4.2",
     "towncrier>=24.0.0",
+    "mutmut>=3.7.0",
 ]
 
 [tool.tox]
@@ -106,6 +111,60 @@ env_list = py312, py313, py314
 runner = uv-venv-lock-runner
 commands = pytest {posargs}
 """
+
+[tool.mutmut]
+source_paths = [
+  "src/provablyfine/api/signature.py",
+  "src/provablyfine/api/grant.py",
+  "src/provablyfine/jwk.py",
+  "src/provablyfine/ssh/cert.py",
+  "src/provablyfine/ssh/serde.py",
+  "src/provablyfine/ssh/buffer.py",
+]
+pytest_add_cli_args_test_selection = [
+  "src/provablyfine/api/",
+  "src/provablyfine/test_jwk.py",
+  "src/provablyfine/ssh/test_ssh_keygen.py",
+  "src/provablyfine/ssh/test_serde.py",
+  "src/provablyfine/ssh/test_buffer.py",
+]
+also_copy = [ "src/provablyfine/" ]
+# Error message text/status codes on these lines aren't asserted on by callers;
+# excluded so mutation noise doesn't drown out logic-relevant survivors.
+do_not_mutate_patterns = [
+  "responses\\.(problem_response|ProblemHTTPException)\\(",
+  # typing.cast()'s type argument is erased at runtime (cast is a no-op that
+  # returns its value unchanged), so mutating it can never affect a test.
+  "typing\\.cast\\(",
+  # Log message text isn't asserted on by any test.
+  "logger\\.(debug|info|warning|error)\\(",
+  # assert message text for can_update()'s field-name check; the field list
+  # itself (on a separate line from the message in every case) is asserted
+  # per-field by the corresponding test_filter_*/test_empty_* tests.
+  "\"You tried to update a field that does not exist\"",
+  # Bare "assert False" exhaustiveness-guard bodies (else:/case _: fallbacks)
+  # in jwk.py — unreachable by any legitimately constructed value, so no test
+  # can (or should) hit them. (jwk.py's dispatch methods use if/elif/else
+  # rather than match/case specifically so this pattern — and the per-branch
+  # "# pragma: no mutate" comments elsewhere in jwk.py — can actually take
+  # effect: mutmut has no pragma support for MatchCase nodes at all.)
+  "^\\s*assert False$",
+  # codecs.lookup() is case-insensitive for codec names (verified:
+  # codecs.lookup('utf-8') is codecs.lookup('UTF-8'), same for 'ascii'), so a
+  # case-mutated literal argument to .encode()/.decode() can never be
+  # observed. Scoped to the two codec names actually used in the codebase
+  # (utf-8, ascii) rather than any codec name: an argument-dropped mutation
+  # (e.g. .encode("latin-1") -> .encode(), which defaults to utf-8) would NOT
+  # be equivalent for a codec other than utf-8/ascii on non-ASCII-safe data,
+  # so widening this to an arbitrary codec name would silently swallow real
+  # mutants on any future call site using a different one.
+  "\\.(encode|decode)\\(\"(utf-8|ascii)\"\\)",
+  # cert.py's exceptions.Error(...) message text isn't asserted on by any test.
+  "exceptions\\.Error\\(",
+  # jwk.py's BcryptRequiredError(...) message text isn't asserted on by any test
+  # (only the exception type and a truncated "bcrypt" match= substring are).
+  "BcryptRequiredError\\(",
+]
 
 [tool.codespell]
 skip = "*.min.js,*.min.css"

@@ -61,14 +61,14 @@ class Cert:
 
     @property
     def role(self) -> Role:
-        match self._cert.type:
-            case cryptography.hazmat.primitives.serialization.SSHCertificateType.HOST:
-                role = Role.HOST
-            case cryptography.hazmat.primitives.serialization.SSHCertificateType.USER:
-                role = Role.USER
-            case _:
-                assert False
-        return role
+        # if/elif, not match/case: mutmut has no pragma support for MatchCase nodes,
+        # so the exhaustiveness check below would be a permanent unfixable survivor.
+        if self._cert.type == cryptography.hazmat.primitives.serialization.SSHCertificateType.HOST:
+            return Role.HOST
+        elif self._cert.type == cryptography.hazmat.primitives.serialization.SSHCertificateType.USER:
+            return Role.USER
+        else:
+            assert False
 
     @property
     def identifier(self) -> str:

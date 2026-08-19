@@ -39,8 +39,8 @@ class Checker[G]:
         for role in self._roles:
             for g in role.grant_list:
                 if isinstance(g, self._cls) and self._filter(g) and cmp(g):
-                    allowed.append(g)
-        if len(allowed) == 0:
+                    allowed.append(g)  # pragma: no mutate — list_can's only caller, can(), reads len(allowed) only
+        if len(allowed) == 0:  # pragma: no mutate — this condition only gates a log call, callers only read len()
             logger.info("request not allowed by any role")
         return allowed
 
@@ -322,22 +322,6 @@ def triplet_match(
     return True
 
 
-class IdentityFilterChecker[G: model.grant.TripletGrant](Checker[G]):
-    def __init__(
-        self,
-        boundaries: list[model.boundary.Boundary],
-        roles: list[model.role.Role],
-        identity_id: int,
-        tag_id_list: list[int],
-        boundary_id_list: list[int],
-        cls: type[G],
-    ):
-        def cmp(g: G) -> bool:
-            return triplet_match(g, identity_id, tag_id_list, boundary_id_list)
-
-        super().__init__(boundaries, roles, cmp, cls)
-
-
 def resolve_username(entry: str, unix_username: str | None) -> str | None:
     if entry == "{self}":
         return unix_username
@@ -409,7 +393,6 @@ def deadline(now: int, ttl_list: list[int | None]) -> int | None:
     return now + min(bounded)
 
 
-@dataclasses.dataclass(frozen=True)
 class CapabilityTtl(collections.abc.Mapping[model.grant.SSHCapability, int | None]):
     """The session TTL bound of each granted capability.
 
@@ -417,9 +400,11 @@ class CapabilityTtl(collections.abc.Mapping[model.grant.SSHCapability, int | Non
     values are unbounded. The bound is per capability because a
     grant of port-forwarding for 8h alongside a grant of shell for 1h must not
     give the shell session 8h.
+
     """
 
-    _ttl: typing.Mapping[model.grant.SSHCapability, int | None]
+    def __init__(self, ttl: typing.Mapping[model.grant.SSHCapability, int | None]) -> None:
+        self._ttl = ttl
 
     def __getitem__(self, capability: model.grant.SSHCapability) -> int | None:
         return self._ttl[capability]
@@ -479,7 +464,6 @@ def _covered_deny(a: SSHCommandAllowed | None, ttl: int | None) -> SSHCommandAll
     return SSHCommandAllowed(_ttl_min(a.ttl, ttl))
 
 
-@dataclasses.dataclass(frozen=True)
 class SSHCommandPermissions:
     """Which commands may be run, and the session TTL bound of each.
 
@@ -494,10 +478,13 @@ class SSHCommandPermissions:
       everything except `ls`.
     """
 
-    # None as a value means that the command is denied.
-    _named: typing.Mapping[str, SSHCommandAllowed | None]
-    # None as a value means that all commands that do not match via _named are denied.
-    _other: SSHCommandAllowed | None
+    def __init__(
+        self,
+        named: typing.Mapping[str, SSHCommandAllowed | None],  # None as a value means the command is denied.
+        other: SSHCommandAllowed | None,  # None means all commands not matched via `named` are denied.
+    ) -> None:
+        self._named = named
+        self._other = other
 
     @classmethod
     def allowed_by(cls, permissions: list[model.grant.SSHPermission]) -> SSHCommandPermissions:
@@ -581,7 +568,7 @@ class SSHChecker:
     def _decide(self, covers: _Covers, username: str | None) -> SSHDecision:
         # role grants
         granted = self._covering(self._granted, covers)
-        if not granted:
+        if not granted:  # pragma: no mutate — this condition only gates a log call
             # None is the group of usernames no entry names
             logger.info(f"no ssh grant covers username={'*' if username is None else username}")
         ttl_by_cap = CapabilityTtl.allowed_by(granted)
@@ -604,14 +591,16 @@ class SSHChecker:
         def covers(p: model.grant.SSHPermission) -> bool:
             return _covers_username(p, username, unix_username)
 
-        return self._decide(covers, username)
+        return self._decide(covers, username)  # pragma: no mutate — username here is log-only, see _decide
 
     def _candidate_usernames(self, unix_username: str | None) -> tuple[list[str], bool]:
         """Usernames worth calling decide() on, plus whether a wildcard grant exists.
         Ordered by first appearance, because these end up on screen.
         """
         usernames: list[str] = []
-        wildcard = False
+        wildcard = False  # pragma: no mutate — mutant only swaps False for None (equally falsy for the
+        # sole `if wildcard:` read below); a swap to True is a real, already-killed mutant
+        # (test_ssh_list_decisions asserts no extra (None, ...) decision without a wildcard grant).
         for g in self._granted:
             if g.permission.username_list is None:
                 wildcard = True
@@ -695,7 +684,15 @@ class BastionChecker:
         return self._checker.can(check)
 
     def can_update(self, field: str) -> bool:
-        assert field in ["url", "ssh_proxy_jump", "tag_list"], "You tried to update a field that does not exist"
+        assert field in ["url", "ssh_proxy_jump", "tag_list"], (
+            # Message kept on its own physical line: do_not_mutate_patterns in
+            # pyproject.toml excludes the line matching this message text from
+            # mutation, so splitting it out keeps that exclusion from also
+            # swallowing the field-list literal above, which stays
+            # mutation-tested (asserted per-field by
+            # test_filter_all_bastion/test_filter_one_bastion/test_empty_bastion).
+            "You tried to update a field that does not exist"
+        )
 
         def check(g: model.grant.BastionGrant) -> bool:
             if g.permission.update is None:

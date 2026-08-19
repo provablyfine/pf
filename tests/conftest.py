@@ -341,7 +341,13 @@ class SshAgent:
 def ssh_agent(request):
     if not shutil.which("ssh-agent"):
         pytest.skip("ssh-agent not found")
-    completed = subprocess.run(["ssh-agent", "-s"], capture_output=True)
+    # Pin an explicit, short socket path via -a rather than letting ssh-agent
+    # pick its own: some distros (e.g. Fedora) default to $HOME/.ssh/agent/
+    # instead of $TMPDIR, and a long $HOME (as under some sandboxed/CI test
+    # runs, where it can vary run-to-run) pushes the socket path past
+    # AF_UNIX's ~108-byte sun_path limit, making ssh-agent refuse to start.
+    agent_socket_path = tempfile.mktemp(prefix="pf-ssh-agent-", suffix=".sock", dir="/tmp")
+    completed = subprocess.run(["ssh-agent", "-s", "-a", agent_socket_path], capture_output=True)
     assert completed.returncode == 0
     pid = None
     socket = None
