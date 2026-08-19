@@ -379,7 +379,6 @@ def _ttl_min(a: int | None, b: int | None) -> int | None:
     return min(a, b)
 
 
-@dataclasses.dataclass(frozen=True)
 class CapabilityTtl(collections.abc.Mapping[model.grant.SSHCapability, int | None]):
     """The session TTL bound of each granted capability.
 
@@ -387,9 +386,11 @@ class CapabilityTtl(collections.abc.Mapping[model.grant.SSHCapability, int | Non
     values are unbounded. The bound is per capability because a
     grant of port-forwarding for 8h alongside a grant of shell for 1h must not
     give the shell session 8h.
+
     """
 
-    _ttl: typing.Mapping[model.grant.SSHCapability, int | None]
+    def __init__(self, ttl: typing.Mapping[model.grant.SSHCapability, int | None]) -> None:
+        self._ttl = ttl
 
     def __getitem__(self, capability: model.grant.SSHCapability) -> int | None:
         return self._ttl[capability]
@@ -449,7 +450,6 @@ def _covered_deny(a: SSHCommandAllowed | None, ttl: int | None) -> SSHCommandAll
     return SSHCommandAllowed(_ttl_min(a.ttl, ttl))
 
 
-@dataclasses.dataclass(frozen=True)
 class SSHCommandPermissions:
     """Which commands may be run, and the session TTL bound of each.
 
@@ -464,10 +464,13 @@ class SSHCommandPermissions:
       everything except `ls`.
     """
 
-    # None as a value means that the command is denied.
-    _named: typing.Mapping[str, SSHCommandAllowed | None]
-    # None as a value means that all commands that do not match via _named are denied.
-    _other: SSHCommandAllowed | None
+    def __init__(
+        self,
+        named: typing.Mapping[str, SSHCommandAllowed | None],  # None as a value means the command is denied.
+        other: SSHCommandAllowed | None,  # None means all commands not matched via `named` are denied.
+    ) -> None:
+        self._named = named
+        self._other = other
 
     @classmethod
     def allowed_by(cls, permissions: list[model.grant.SSHPermission]) -> SSHCommandPermissions:

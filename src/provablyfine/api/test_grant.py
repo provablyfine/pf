@@ -1743,6 +1743,38 @@ def test_command_permissions_named_command_inherits_the_wildcard_bound():
         assert commands.permits("df").ttl == 60
 
 
+def test_command_permissions_wildcard_does_not_shrink_a_larger_named_bound():
+    # Symmetric to the case above: a wildcard applied on top of a command
+    # already named with a LARGER ttl must not shrink it down. (A wildcard
+    # ttl of 60 alone would give the same 60 either way, so that case alone
+    # can't distinguish "union with the existing bound" from "just use the
+    # new wildcard bound" — this needs the existing bound to actually win.)
+    permissions = [
+        _perm(capabilities=[], commands=["ls"], ttl=9999),
+        _perm(capabilities=[], commands=None, ttl=60),
+    ]
+    commands = grant.SSHCommandPermissions.allowed_by(permissions)
+    assert commands.permits("ls").ttl == 9999
+
+
+def test_command_permissions_wildcard_accumulates_across_multiple_grants():
+    permissions = [
+        _perm(capabilities=[], commands=None, ttl=9999),
+        _perm(capabilities=[], commands=None, ttl=60),
+    ]
+    commands = grant.SSHCommandPermissions.allowed_by(permissions)
+    assert commands.permits("anything").ttl == 9999
+
+
+def test_command_permissions_named_command_accumulates_across_multiple_grants():
+    permissions = [
+        _perm(capabilities=[], commands=["ls"], ttl=9999),
+        _perm(capabilities=[], commands=["ls"], ttl=60),
+    ]
+    commands = grant.SSHCommandPermissions.allowed_by(permissions)
+    assert commands.permits("ls").ttl == 9999
+
+
 def test_command_permissions_candidates_with_a_wildcard_and_named_commands():
     commands = grant.SSHCommandPermissions.allowed_by(
         [
@@ -1773,6 +1805,18 @@ def test_command_permissions_intersect_falls_back_to_each_side_default():
     assert lowered.permits("ls").ttl == 60
     assert lowered.permits("rm") is None
     assert lowered.candidates() == (["ls", "df"], False)
+
+
+def test_command_permissions_intersect_combines_both_wildcard_defaults():
+    # Every other intersect test has at least one side with no wildcard (an
+    # unset _other), so the intersection of the two defaults is trivially
+    # None on both sides regardless of how it's computed. This needs both
+    # sides to actually carry a wildcard bound to exercise the real
+    # min-of-both-defaults combination.
+    a = grant.SSHCommandPermissions.allowed_by([_perm(capabilities=[], commands=None, ttl=3600)])
+    b = grant.SSHCommandPermissions.allowed_by([_perm(capabilities=[], commands=None, ttl=60)])
+    combined = a.intersect(b)
+    assert combined.permits("anything").ttl == 60
 
 
 def test_command_permissions_intersect_chains():
