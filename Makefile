@@ -11,9 +11,12 @@ cov-report:
 	uv run coverage html -d cov --rcfile $(shell pwd)/pyproject.toml
 	uv run coverage report
 
+mutants:
+	./scripts/check-mutation-baseline
+
 lint:
 	uv run pre-commit run -a
 
-check: lint tests
+check: lint tests mutants
 
-.PHONY: tests cov cov-report lint check
+.PHONY: tests cov cov-report lint check mutants

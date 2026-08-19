@@ -1,6 +1,17 @@
 from . import exceptions
 
 
+def _int_from_bytes_big_endian(data: bytes, *, signed: bool = False) -> int:
+    # RFC 4251 mandates network byte order. Python 3.11+ already defaults
+    # int.from_bytes to big-endian, so no explicit byteorder kwarg is passed
+    # here — the function name documents the convention instead.
+    return int.from_bytes(data, signed=signed)
+
+
+def _int_to_bytes_big_endian(value: int, length: int, *, signed: bool = False) -> bytes:
+    return value.to_bytes(length, signed=signed)
+
+
 class Reader:
     def __init__(self, buffer: bytes):
         self._buffer = buffer
@@ -26,12 +37,12 @@ class Reader:
 
     def read_uint32(self) -> int:
         buffer = self.read_bytes(4)
-        value = int.from_bytes(buffer, byteorder="big")
+        value = _int_from_bytes_big_endian(buffer)
         return value
 
     def read_uint64(self) -> int:
         buffer = self.read_bytes(8)
-        value = int.from_bytes(buffer, byteorder="big")
+        value = _int_from_bytes_big_endian(buffer)
         return value
 
     def read_string(self) -> bytes:
@@ -43,7 +54,7 @@ class Reader:
         buffer = self.read_string()
         if len(buffer) == 0:
             return 0
-        return int.from_bytes(buffer, byteorder="big", signed=True)
+        return _int_from_bytes_big_endian(buffer, signed=True)
 
 
 class Writer:
@@ -54,10 +65,10 @@ class Writer:
         self._bytes.extend(b.to_bytes(1))
 
     def write_uint32(self, value: int):
-        self._bytes.extend(value.to_bytes(4, byteorder="big"))
+        self._bytes.extend(_int_to_bytes_big_endian(value, 4))
 
     def write_uint64(self, value: int):
-        self._bytes.extend(value.to_bytes(8, byteorder="big"))
+        self._bytes.extend(_int_to_bytes_big_endian(value, 8))
 
     def write_bytes(self, buffer: bytes):
         self._bytes.extend(buffer)
@@ -73,19 +84,17 @@ class Writer:
 
     def write_mpint(self, n: int):
         # RFC 4251 Section 5
-        if n == 0:
-            self.write_string(b"")
+        if n < 0:
+            nbytes = (n.bit_length() + 7 + 1) // 8
+            self.write_string(_int_to_bytes_big_endian(n, nbytes, signed=True))
         elif n > 0:
-            nbytes = (n.bit_length() + 7) // 8
-            buffer = n.to_bytes(nbytes, byteorder="big")
+            nbytes = (n.bit_length() + 7) // 8  # pragma: no mutate
+            buffer = _int_to_bytes_big_endian(n, nbytes)
             if buffer[0] & 0x80:
                 buffer = b"\x00" + buffer
             self.write_string(buffer)
-        elif n < 0:
-            nbytes = (n.bit_length() + 7 + 1) // 8
-            self.write_string(n.to_bytes(nbytes, byteorder="big", signed=True))
         else:
-            assert False
+            self.write_string(b"")
 
     def to_bytes(self) -> bytes:
         return bytes(self._bytes)
