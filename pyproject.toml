@@ -118,11 +118,13 @@ source_paths = [
   "src/provablyfine/api/grant.py",
   "src/provablyfine/jwk.py",
   "src/provablyfine/ssh/cert.py",
+  "src/provablyfine/ssh/serde.py",
 ]
 pytest_add_cli_args_test_selection = [
   "src/provablyfine/api/",
   "src/provablyfine/test_jwk.py",
   "src/provablyfine/ssh/test_ssh_keygen.py",
+  "src/provablyfine/ssh/test_serde.py",
 ]
 also_copy = [ "src/provablyfine/" ]
 # Error message text/status codes on these lines aren't asserted on by callers;
