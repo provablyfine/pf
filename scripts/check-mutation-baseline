@@ -31,15 +31,32 @@ def main() -> int:
         [uv, "run", "mutmut", "results"], env=env, check=True, capture_output=True, text=True
     ).stdout
 
-    survived = [line.strip() for line in results.splitlines() if line.strip().endswith(": survived")]
+    lines = [line.strip() for line in results.splitlines() if line.strip()]
+    survived = [line for line in lines if line.endswith(": survived")]
+    no_tests = [line for line in lines if line.endswith(": no tests")]
+
+    ok = True
     if survived:
+        ok = False
         print("Mutation testing baseline broken — surviving mutants:")
         print("\n".join(survived))
         print("\nRun `uv run mutmut show <id>` to inspect each one, then either add a test")
         print("that kills it or, if it's equivalent, extend do_not_mutate_patterns in")
         print("pyproject.toml (see the [tool.mutmut] comment for the existing categories).")
-        return 1
-    return 0
+
+    if no_tests:
+        ok = False
+        if survived:
+            print()
+        print("Mutation testing baseline broken — mutants with no covering test:")
+        print("\n".join(no_tests))
+        print("\nRun `uv run mutmut show <id>` to inspect each one, then either add a unit")
+        print("test that exercises it, or — if it's genuinely only reachable through the")
+        print("e2e/subprocess-based API server (needs ctx.app_db/ctx.identity_id with no")
+        print("lighter fixture available) — remove the containing file from source_paths in")
+        print("pyproject.toml instead of leaving it silently uncovered.")
+
+    return 0 if ok else 1
 
 
 if __name__ == "__main__":

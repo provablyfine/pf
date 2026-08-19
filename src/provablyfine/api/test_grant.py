@@ -1,8 +1,12 @@
+import collections.abc
+import pathlib
 import types
 
 import pytest
+import sqlalchemy
 
-from . import grant, model
+from . import app_db, grant, migrate, model
+from .context import ctx
 
 
 def _deserialize(items: list[dict]) -> list[model.grant.Grant]:
@@ -1812,3 +1816,53 @@ def test_command_permissions_subtract_with_a_wildcard_command_list():
     assert removed.permits("ls") is None
     assert removed.permits("df") is None
     assert removed.candidates() == ([], False)
+
+
+######## Grants.create (real DB) ########
+
+
+@pytest.fixture
+def real_app_db(tmp_path: pathlib.Path) -> collections.abc.Iterator[app_db.AppDb]:
+    """A real (sqlite-backed, migrated) AppDb wired into ctx, not a mock.
+
+    Grants.create() reads through ctx.app_db/ctx.identity_id/ctx.active_role_id,
+    which the rest of this file's fake boundary()/role() SimpleNamespace helpers
+    can't reach.
+    """
+    url = f"sqlite:///{tmp_path / 'tenant.db'}"
+    migrate.create_tenant(url)
+    engine = sqlalchemy.create_engine(url)
+    with engine.connect() as connection:
+        db = app_db.create(connection)
+        with ctx.set_app_db(db):
+            yield db
+
+
+def test_grants_create_with_active_role(real_app_db: app_db.AppDb) -> None:
+    boundary_id = model.boundary.create(name="b", description="", ceiling_list=None, denied_list=[])
+    role_id = model.role.create(name="r", description="", grant_list=[])
+    identity_id = model.identity.create(name="alice", boundary_id_list=[boundary_id], tag_id_list=[])
+
+    with ctx.set_identity_id(identity_id), ctx.set_active_role_id(role_id):
+        grants = grant.Grants.create()
+
+    assert [b.id for b in grants._boundaries] == [boundary_id]
+    assert [r.id for r in grants._roles] == [role_id]
+
+
+def test_grants_create_requires_at_least_one_boundary(real_app_db: app_db.AppDb) -> None:
+    identity_id = model.identity.create(name="alice", boundary_id_list=[], tag_id_list=[])
+
+    with ctx.set_identity_id(identity_id), ctx.set_active_role_id(None), pytest.raises(AssertionError):
+        grant.Grants.create()
+
+
+def test_grants_create_without_active_role(real_app_db: app_db.AppDb) -> None:
+    boundary_id = model.boundary.create(name="b", description="", ceiling_list=None, denied_list=[])
+    identity_id = model.identity.create(name="alice", boundary_id_list=[boundary_id], tag_id_list=[])
+
+    with ctx.set_identity_id(identity_id), ctx.set_active_role_id(None):
+        grants = grant.Grants.create()
+
+    assert [b.id for b in grants._boundaries] == [boundary_id]
+    assert grants._roles == []
