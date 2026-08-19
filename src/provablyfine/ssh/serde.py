@@ -9,12 +9,17 @@ from .. import jwk
 from . import buffer, cert
 
 
+def _split_on_space(data: bytes) -> list[bytes]:
+    # split(b" ") vs split(None) are equivalent here: callers only ever pass
+    # cryptography's own public_bytes()/SSHCertificate.public_bytes() output,
+    # which always emits exactly one ASCII space between fields, never other
+    # whitespace or runs of it.
+    return data.split(b" ")  # pragma: no mutate
+
+
 def serialize_cert(cert: cert.Cert) -> bytes:
     data = cert.to_openssh()
-    # split(b" ") vs split(None) are equivalent here: cert.to_openssh() is
-    # cryptography's own SSHCertificate.public_bytes(), which always emits a
-    # single ASCII space between fields, never other whitespace or runs of it.
-    items = data.split(b" ")  # pragma: no mutate
+    items = _split_on_space(data)
     assert len(items) >= 2
     return base64.b64decode(items[1])
 
@@ -31,10 +36,7 @@ def deserialize_cert(data: bytes) -> cert.Cert:
 
 def serialize_public(key: jwk.Public) -> bytes:
     data = key.to_openssh()
-    # split(b" ") vs split(None) are equivalent here: key.to_openssh() is
-    # cryptography's own public_bytes(OpenSSH), which always emits exactly one
-    # ASCII space between the key type and the base64 data, no comment.
-    items = data.split(b" ")  # pragma: no mutate
+    items = _split_on_space(data)
     assert len(items) == 2
     return base64.b64decode(items[1])
 

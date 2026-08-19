@@ -149,12 +149,16 @@ do_not_mutate_patterns = [
   # "# pragma: no mutate" comments elsewhere in jwk.py — can actually take
   # effect: mutmut has no pragma support for MatchCase nodes at all.)
   "^\\s*assert False$",
-  # "utf-8" is codec-name-case-insensitive (verified: codecs.lookup('utf-8') is
-  # codecs.lookup('UTF-8')), same reasoning as jwk.py's rfc7638_thumbprint/
-  # ssh_fingerprint. cert.py has several .encode("utf-8") call sites (key_id,
-  # principals, critical option values) each on their own line with nothing
-  # else to mutate, so one pattern covers all of them.
-  "\\.encode\\(\"utf-8\"\\)",
+  # codecs.lookup() is case-insensitive for codec names (verified:
+  # codecs.lookup('utf-8') is codecs.lookup('UTF-8'), same for 'ascii'), so a
+  # case-mutated literal argument to .encode()/.decode() can never be
+  # observed. Scoped to the two codec names actually used in the codebase
+  # (utf-8, ascii) rather than any codec name: an argument-dropped mutation
+  # (e.g. .encode("latin-1") -> .encode(), which defaults to utf-8) would NOT
+  # be equivalent for a codec other than utf-8/ascii on non-ASCII-safe data,
+  # so widening this to an arbitrary codec name would silently swallow real
+  # mutants on any future call site using a different one.
+  "\\.(encode|decode)\\(\"(utf-8|ascii)\"\\)",
   # cert.py's exceptions.Error(...) message text isn't asserted on by any test.
   "exceptions\\.Error\\(",
   # jwk.py's BcryptRequiredError(...) message text isn't asserted on by any test

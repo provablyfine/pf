@@ -75,7 +75,7 @@ def rfc7638_thumbprint(data: dict[str, str]) -> str:
     }
     d = {k: data[k] for k in needed[data["kty"]]}
     compact = json.dumps(d, separators=(",", ":"))
-    encoded = compact.encode("utf-8")  # pragma: no mutate — "utf-8" is codec-name-case-insensitive
+    encoded = compact.encode("utf-8")
     h = hashlib.sha256(encoded).digest()
     return base64url.encode(h)
 
@@ -179,12 +179,8 @@ class Public:
             self.to_crypto(),
             cryptography.hazmat.primitives.hashes.SHA256(),
         )
-        # rstrip(b"XX=XX") only differs from rstrip(b"=") if the digest's base64
-        # happens to end in a literal "X" (~1/64 chance per key, not a real logic
-        # bug); the argument-dropped/lstrip/None mutants on this same line are
-        # independently killed by test_public_ssh_fingerprint_matches_independent_computation.
-        stripped = base64.b64encode(h).rstrip(b"=")  # pragma: no mutate
-        fingerprint = stripped.decode("ascii")  # pragma: no mutate — "ascii" is codec-name-case-insensitive
+        stripped = base64.b64encode(h).split(b"=")[0]
+        fingerprint = stripped.decode("ascii")
         return f"SHA256:{fingerprint}"
 
     def to_dict(self) -> dict[str, str]:

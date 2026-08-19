@@ -39,7 +39,7 @@ class Checker[G]:
         for role in self._roles:
             for g in role.grant_list:
                 if isinstance(g, self._cls) and self._filter(g) and cmp(g):
-                    allowed.append(g)  # pragma: no mutate
+                    allowed.append(g)  # pragma: no mutate — list_can's only caller, can(), reads len(allowed) only
         if len(allowed) == 0:  # pragma: no mutate — this condition only gates a log call, callers only read len()
             logger.info("request not allowed by any role")
         return allowed
@@ -581,7 +581,9 @@ class SSHChecker:
         Ordered by first appearance, because these end up on screen.
         """
         usernames: list[str] = []
-        wildcard = False  # pragma: no mutate — only ever read via `if wildcard:` truthiness
+        wildcard = False  # pragma: no mutate — mutant only swaps False for None (equally falsy for the
+        # sole `if wildcard:` read below); a swap to True is a real, already-killed mutant
+        # (test_ssh_list_decisions asserts no extra (None, ...) decision without a wildcard grant).
         for g in self._granted:
             if g.permission.username_list is None:
                 wildcard = True
@@ -666,8 +668,14 @@ class BastionChecker:
 
     def can_update(self, field: str) -> bool:
         assert field in ["url", "ssh_proxy_jump", "tag_list"], (
+            # Message kept on its own physical line: do_not_mutate_patterns in
+            # pyproject.toml excludes the line matching this message text from
+            # mutation, so splitting it out keeps that exclusion from also
+            # swallowing the field-list literal above, which stays
+            # mutation-tested (asserted per-field by
+            # test_filter_all_bastion/test_filter_one_bastion/test_empty_bastion).
             "You tried to update a field that does not exist"
-        )  # kept multi-line (unlike the plain assert form) so the message text sits on its own line
+        )
 
         def check(g: model.grant.BastionGrant) -> bool:
             if g.permission.update is None:
