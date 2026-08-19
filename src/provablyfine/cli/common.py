@@ -33,7 +33,10 @@ def generate_and_save_key() -> tuple[jwk.Private, str]:
         print("Passphrases do not match, try again.", flush=True)
 
     passphrase = pw.encode() if pw else None
-    data = key.to_openssh(passphrase)
+    try:
+        data = key.to_openssh(passphrase)
+    except jwk.BcryptRequiredError as e:
+        raise pfc.exceptions.UI(str(e)) from e
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     try:
         os.write(fd, data)

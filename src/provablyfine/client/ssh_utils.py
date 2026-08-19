@@ -29,5 +29,7 @@ def load_private_key(data: bytes, password: bytes | None = None) -> jwk.Private:
         return jwk.Private.from_openssh(data, password)
     except TypeError:
         raise
+    except jwk.BcryptRequiredError as e:
+        raise pfc.exceptions.UI(str(e)) from e
     except Exception:
         raise pfc.exceptions.UI("Unable to load key as either a PEM or an OpenSSH-formatted private key")

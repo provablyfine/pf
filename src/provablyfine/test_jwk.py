@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import secrets
+import sys
 
 import cryptography.hazmat.primitives.hashes
 import cryptography.hazmat.primitives.serialization
@@ -281,3 +282,43 @@ def test_public_rsa3072_jwk_fields(rsa3072_private: jwk.Private) -> None:
     assert d["kty"] == "RSA"
     assert "e" in d
     assert "n" in d
+
+
+def test_private_openssh_roundtrip_no_passphrase(ed25519_private: jwk.Private) -> None:
+    data = ed25519_private.to_openssh()
+    priv2 = jwk.Private.from_openssh(data)
+    assert priv2.public().to_dict() == ed25519_private.public().to_dict()
+
+
+@pytest.mark.skipif(not jwk._HAS_BCRYPT, reason="bcrypt not installed")
+def test_private_openssh_passphrase_roundtrip(ed25519_private: jwk.Private) -> None:
+    data = ed25519_private.to_openssh(passphrase=b"hunter22")
+    priv2 = jwk.Private.from_openssh(data, password=b"hunter22")
+    assert priv2.public().to_dict() == ed25519_private.public().to_dict()
+
+
+@pytest.mark.skipif(not jwk._HAS_BCRYPT, reason="bcrypt not installed")
+def test_private_openssh_wrong_passphrase_raises(ed25519_private: jwk.Private) -> None:
+    data = ed25519_private.to_openssh(passphrase=b"hunter22")
+    with pytest.raises(ValueError, match="checksum"):
+        jwk.Private.from_openssh(data, password=b"wrong-passphrase")
+
+
+def test_private_to_openssh_without_bcrypt_raises(
+    ed25519_private: jwk.Private, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setitem(sys.modules, "bcrypt", None)
+    monkeypatch.setattr(jwk, "_HAS_BCRYPT", False)
+    with pytest.raises(jwk.BcryptRequiredError, match="bcrypt"):
+        ed25519_private.to_openssh(passphrase=b"hunter22")
+
+
+@pytest.mark.skipif(not jwk._HAS_BCRYPT, reason="bcrypt not installed")
+def test_private_from_openssh_without_bcrypt_raises(
+    ed25519_private: jwk.Private, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    data = ed25519_private.to_openssh(passphrase=b"hunter22")
+    monkeypatch.setitem(sys.modules, "bcrypt", None)
+    monkeypatch.setattr(jwk, "_HAS_BCRYPT", False)
+    with pytest.raises(jwk.BcryptRequiredError, match="bcrypt"):
+        jwk.Private.from_openssh(data, password=b"hunter22")

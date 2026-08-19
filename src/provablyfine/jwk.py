@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import enum
 import hashlib
+import importlib.util
 import json
 import secrets
 
@@ -13,6 +14,12 @@ import cryptography.hazmat.primitives.hashes
 import cryptography.hazmat.primitives.serialization
 
 from . import base64url
+
+_HAS_BCRYPT = importlib.util.find_spec("bcrypt") is not None
+
+
+class BcryptRequiredError(Exception):
+    pass
 
 
 @enum.unique
@@ -403,17 +410,17 @@ class Private:
         return Private(key)
 
     def to_openssh(self, passphrase: bytes | None = None) -> bytes:
-        # Untestable today: BestAvailableEncryption requires the `bcrypt` package,
-        # which isn't installed (nor a project dependency) — calling this branch
-        # with a real passphrase currently raises UnsupportedAlgorithm. Known bug,
-        # tracked separately; not fixed here since it's out of scope for mutation
-        # testing. See cli/common.py's login() for the affected user-facing path.
-        encryption: cryptography.hazmat.primitives.serialization.KeySerializationEncryption
-        if passphrase:
-            best_available = cryptography.hazmat.primitives.serialization.BestAvailableEncryption  # pragma: no mutate
-            encryption = best_available(passphrase)  # pragma: no mutate
-        else:
-            encryption = cryptography.hazmat.primitives.serialization.NoEncryption()
+        if passphrase and not _HAS_BCRYPT:
+            raise BcryptRequiredError(
+                "Encrypting an OpenSSH private key with a passphrase requires the optional "
+                "'bcrypt' package. Install it with: pip install provablyfine[bcrypt] "
+                "(or: pip install bcrypt)"
+            )
+        encryption: cryptography.hazmat.primitives.serialization.KeySerializationEncryption = (
+            cryptography.hazmat.primitives.serialization.BestAvailableEncryption(passphrase)
+            if passphrase
+            else cryptography.hazmat.primitives.serialization.NoEncryption()
+        )
         return self._key.private_bytes(
             encoding=cryptography.hazmat.primitives.serialization.Encoding.PEM,
             format=cryptography.hazmat.primitives.serialization.PrivateFormat.OpenSSH,
@@ -422,6 +429,12 @@ class Private:
 
     @classmethod
     def from_openssh(cls, data: bytes, password: bytes | None = None) -> Private:
+        if password and not _HAS_BCRYPT:
+            raise BcryptRequiredError(
+                "Decrypting a password-protected OpenSSH private key requires the optional "
+                "'bcrypt' package. Install it with: pip install provablyfine[bcrypt] "
+                "(or: pip install bcrypt)"
+            )
         key = cryptography.hazmat.primitives.serialization.load_ssh_private_key(data, password=password)
         assert isinstance(key, CryptographyPrivateKey)
         return Private(key)
