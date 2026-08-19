@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import enum
 import hashlib
+import importlib.util
 import json
 import secrets
 
@@ -13,6 +14,12 @@ import cryptography.hazmat.primitives.hashes
 import cryptography.hazmat.primitives.serialization
 
 from . import base64url
+
+_HAS_BCRYPT = importlib.util.find_spec("bcrypt") is not None
+
+
+class BcryptRequiredError(Exception):
+    pass
 
 
 @enum.unique
@@ -392,6 +399,12 @@ class Private:
         return Private(key)
 
     def to_openssh(self, passphrase: bytes | None = None) -> bytes:
+        if passphrase and not _HAS_BCRYPT:
+            raise BcryptRequiredError(
+                "Encrypting an OpenSSH private key with a passphrase requires the optional "
+                "'bcrypt' package. Install it with: pip install provablyfine[bcrypt] "
+                "(or: pip install bcrypt)"
+            )
         encryption: cryptography.hazmat.primitives.serialization.KeySerializationEncryption = (
             cryptography.hazmat.primitives.serialization.BestAvailableEncryption(passphrase)
             if passphrase
@@ -405,6 +418,12 @@ class Private:
 
     @classmethod
     def from_openssh(cls, data: bytes, password: bytes | None = None) -> Private:
+        if password and not _HAS_BCRYPT:
+            raise BcryptRequiredError(
+                "Decrypting a password-protected OpenSSH private key requires the optional "
+                "'bcrypt' package. Install it with: pip install provablyfine[bcrypt] "
+                "(or: pip install bcrypt)"
+            )
         key = cryptography.hazmat.primitives.serialization.load_ssh_private_key(data, password=password)
         assert isinstance(key, CryptographyPrivateKey)
         return Private(key)

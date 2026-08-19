@@ -50,6 +50,9 @@ dependencies = [
   "alembic>=1.18.4",
 ]
 
+[project.optional-dependencies]
+bcrypt = ["bcrypt"]
+
 [project.urls]
 Documentation = "https://docs.provablyfine.net"
 Repository = "https://github.com/provablyfine/pf.git"
@@ -75,6 +78,7 @@ sigterm = true
 
 [dependency-groups]
 dev = [
+    "bcrypt",
     "coverage>=7.13.4",
     "hatchling",
     "jinja2>=3.1.6",
