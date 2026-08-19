@@ -153,6 +153,9 @@ do_not_mutate_patterns = [
   "\\.encode\\(\"utf-8\"\\)",
   # cert.py's exceptions.Error(...) message text isn't asserted on by any test.
   "exceptions\\.Error\\(",
+  # jwk.py's BcryptRequiredError(...) message text isn't asserted on by any test
+  # (only the exception type and a truncated "bcrypt" match= substring are).
+  "BcryptRequiredError\\(",
 ]
 
 [tool.codespell]
