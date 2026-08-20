@@ -1862,6 +1862,22 @@ def test_command_permissions_subtract_with_a_wildcard_command_list():
     assert removed.candidates() == ([], False)
 
 
+def test_deadline_all_unbounded_is_unbounded():
+    assert grant.deadline(1000, [None, None]) is None
+
+
+def test_deadline_tightest_bound_wins():
+    assert grant.deadline(1000, [3600, 600, None]) == 1600
+
+
+def test_deadline_shell_one_hour_port_forwarding_eight_hours():
+    assert grant.deadline(1000, [3600, 8 * 3600]) == 4600
+
+
+def test_deadline_shell_eight_hours_port_forwarding_one_hour():
+    assert grant.deadline(1000, [8 * 3600, 3600]) == 4600
+
+
 ######## Grants.create (real DB) ########
 
 

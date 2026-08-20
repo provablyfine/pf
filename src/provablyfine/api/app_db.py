@@ -271,6 +271,22 @@ class OidcNonceRow(typing.NamedTuple):
 oidc_nonce = db.make_table("oidc_nonce", metadata, OidcNonceRow)
 
 
+class SshConnectionRow(typing.NamedTuple):
+    connection_id: typing.Annotated[str, db.Col(primary_key=True)]
+    identity_id: int
+    hostname: str
+    deadline: int | None
+    valid_before: int
+
+
+ssh_connection = db.make_table(
+    "ssh_connection",
+    metadata,
+    SshConnectionRow,
+    sqlalchemy.Index("idx_ssh_connection_valid_before", "valid_before"),
+)
+
+
 # ============================================================================
 # Typed DAO
 # ============================================================================
@@ -354,6 +370,10 @@ class AppDb(db.Dao):
     @property
     def oidc_nonce(self) -> db.Table[OidcNonceRow]:
         return self._get(oidc_nonce)
+
+    @property
+    def ssh_connection(self) -> db.Table[SshConnectionRow]:
+        return self._get(ssh_connection)
 
 
 def create(connection: sqlalchemy.engine.Connection) -> AppDb:

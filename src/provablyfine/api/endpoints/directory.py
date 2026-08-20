@@ -17,6 +17,7 @@ def directory_endpoint(tenant_name: str) -> schemas.directory.DirectoryReadRespo
         login_oidc=f"{p}/auth/oidc/login",
         auth=f"{p}/auth",
         public_auth=f"{p}/public/auth",
+        public_oidc=f"{p}/public/oidc",
         boundary=f"{p}/boundary",
         tag=f"{p}/tag",
         role=f"{p}/role",

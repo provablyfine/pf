@@ -59,5 +59,42 @@ User connects via bastion
   $ pf -c user.json ssh -n alice@host "whoami"
   alice
 
+Grant a 10s ssh port forwarding to root@host
+  $ pfa -c config.json grant ssh --tag id=device --username root --capability port-forwarding --max-session-ttl 10 | pfa -c config.json role grant -i $ROLE_ID --add
+
+Port forwarding for root does not survive more than 10s
+  $ pf -c user.json ssh -n -o SessionType=none -L $LOCAL_FORWARD_PORT:127.0.0.1:22 root@host >/dev/null 2>&1 &
+  $ ROOT_FWD_PID=$!
+  $ sleep 3
+  $ kill -0 $ROOT_FWD_PID
+  $ sleep 12
+  $ kill -0 $ROOT_FWD_PID 2>/dev/null
+  [1]
+  $ grep -c "deadline reached, closing tunnel" $PF_LOG_DIRECTORY/pf.bastion.register.$REGISTER_PID.log
+  1
+
+Grant an unbounded duration ssh port forwarding to alice@host
+  $ pfa -c config.json grant ssh --tag id=device --username alice --capability port-forwarding | pfa -c config.json role grant -i $ROLE_ID --add
+
+
+Port forwarding for alice survives more than 10s
+  $ pf -c user.json ssh -n -o SessionType=none -L $LOCAL_FORWARD_PORT:127.0.0.1:22 alice@host >/dev/null 2>&1 &
+  $ ALICE_FWD_PID=$!
+  $ sleep 3
+  $ kill -0 $ALICE_FWD_PID
+  $ sleep 12
+  $ kill -0 $ALICE_FWD_PID
+  $ kill $ALICE_FWD_PID 2>/dev/null; true
+
+Grant a 10s shell to bob@host
+  $ pfa -c config.json grant ssh --tag id=device --username bob --capability shell --max-session-ttl 10 | pfa -c config.json role grant -i $ROLE_ID --add
+  $ pf -c user.json ssh -n bob@host "sleep 60" >/dev/null 2>&1 &
+  $ BOB_SHELL_PID=$!
+  $ sleep 3
+  $ kill -0 $BOB_SHELL_PID
+  $ sleep 12
+  $ kill -0 $BOB_SHELL_PID 2>/dev/null
+  [1]
+
 Cleanup
   $ kill $REGISTER_PID 2>/dev/null; true

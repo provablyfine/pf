@@ -75,3 +75,6 @@ class Factory:
 
     def async_public(self) -> pfc.AsyncPublicClient:
         return pfc.AsyncPublicClient(self.public())
+
+    def public_oidc_issuer(self) -> str:
+        return self._directory.public_oidc

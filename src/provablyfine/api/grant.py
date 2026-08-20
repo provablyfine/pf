@@ -379,6 +379,20 @@ def _ttl_min(a: int | None, b: int | None) -> int | None:
     return min(a, b)
 
 
+def deadline(now: int, ttl_list: list[int | None]) -> int | None:
+    """The absolute unix-seconds deadline for a credential embedding the given capability TTLs.
+
+    None entries are unbounded and skipped. If every entry is unbounded, the
+    session itself is unbounded, so the deadline is omitted (None).
+    Otherwise the tightest bound wins: the deadline governs the whole
+    session, which hosts every embedded capability.
+    """
+    bounded = [ttl for ttl in ttl_list if ttl is not None]
+    if not bounded:
+        return None
+    return now + min(bounded)
+
+
 class CapabilityTtl(collections.abc.Mapping[model.grant.SSHCapability, int | None]):
     """The session TTL bound of each granted capability.
 
