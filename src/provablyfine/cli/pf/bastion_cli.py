@@ -780,7 +780,11 @@ async def connect_async(
             # case this exists for), the buffer never drains and the fd, and
             # so the pipe ssh reads as its transport, never actually closes.
             # abort() discards any unflushed buffer and closes the fd now.
-            stdout_transport.abort()
+            # Skip it if the transport already closed itself (broken pipe
+            # once ssh has exited -- the SIGHUP case): abort() is not
+            # idempotent and raises on a fully-closed transport.
+            if not stdout_transport.is_closing():
+                stdout_transport.abort()
 
     async def _run_both() -> None:
         await asyncio.gather(forward_stdin(), forward_stdout())
@@ -792,6 +796,7 @@ async def connect_async(
 
     loop.add_signal_handler(signal.SIGTERM, signal_handler)
     loop.add_signal_handler(signal.SIGINT, signal_handler)
+    loop.add_signal_handler(signal.SIGHUP, signal_handler)
     try:
         await gather_task
     except asyncio.CancelledError:

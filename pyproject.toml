@@ -70,7 +70,7 @@ source = [
     "/usr/local/lib/python3.14/site-packages/provablyfine",
 ]
 parallel = true
-patch = ["subprocess", "_exit"]
+patch = ["subprocess", "_exit", "execv"]
 # uvicorn re-raises SIGTERM on itself after a graceful shutdown, so the server
 # subprocess dies from the signal and atexit (hence coverage's auto-save) never
 # runs. This makes coverage save its data from its own SIGTERM handler instead.
