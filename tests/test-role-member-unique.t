@@ -8,16 +8,15 @@ Create a role
 
 Create an identity
   $ pfa -c config.json identity create -n test-identity
-  $ IDENTITY_ID=$(pfa -c config.json identity list -n test-identity -q)
 
 Add the identity as a member to the role
-  $ pfa -c config.json role add-members -i $ROLE_ID -m $IDENTITY_ID
+  $ pfa -c config.json role member -i $ROLE_ID -a test-identity
 
 Verify the member was added
-  $ pfa -c config.json role read -i $ROLE_ID | grep member_id_list
-  member_id_list   .* (re)
+  $ pfa -c config.json role read -i $ROLE_ID | grep member
+  member *test-identity (re)
 
 Attempt to add the same identity again should fail
-  $ pfa -c config.json role add-members -i $ROLE_ID -m $IDENTITY_ID
+  $ pfa -c config.json role member -i $ROLE_ID -a test-identity
   .* (re)
   [2]
