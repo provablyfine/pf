@@ -1,11 +1,3 @@
-Host-side coverage boundary: this container runs `sshd -D` as PID 1 with no
-systemd/logind, so `loginctl terminate-session` and the `systemd-run
---on-active` timer it schedules are not exercised end-to-end here -- only
-that `pf openssh session-deadline` (wired into /etc/pam.d/sshd via UsePAM,
-mirroring what `pf openssh host-init` generates) correctly decodes the
-session_deadline and connection_id extensions off the certificate it
-authenticated with.
-
 Initialize server and login
   $ bash $TESTDIR/fixture.sh
   .* (re)
@@ -46,24 +38,14 @@ Provision new user
   $ ssh-keygen -t ed25519 -f user-session -N "" > /dev/null
   $ pf -c user.json login --session-key user-session
 
-An unbounded grant is an ordinary login: the PAM hook must stay silent and
-not disturb logins that carry no session_deadline extension
+Root has unbounded shell sessions
   $ pf -c user.json ssh -n -o "Hostname=$SSHD_ADDRESS" -o "HostKeyAlias=host" -p $SSHD_PORT root@host "whoami"
   root
   $ podman exec $SSHD_CONTAINER_ID sh -c "grep -c 'session_deadline decoded' /var/log/pf/session-deadline.log || true"
   0
 
-A bounded max_session_ttl_s grant makes the host-side hook decode a
-session_deadline and a connection_id from the certificate it authenticated
-with
+Alice has bounded shell sessions
   $ pf -c user.json ssh -n -o "Hostname=$SSHD_ADDRESS" -o "HostKeyAlias=host" -p $SSHD_PORT alice@host "whoami"
   alice
   $ podman exec $SSHD_CONTAINER_ID grep -o "session_deadline decoded connection_id=[0-9a-f-]* deadline=[0-9]*" /var/log/pf/session-deadline.log
   session_deadline decoded connection_id=[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12} deadline=[0-9]+ (re)
-
-sftp/scp are named in the phase title, but `pf` has no `-s`/subsystem
-support at all today (see `src/pf/cli/pf/ssh_cli.py`): the CLI is
-`pf ssh [user@]host [cmd]`, with no way to hand sftp the ssh(1)-compatible
-`-s host sftp` invocation it needs to drive through a custom ssh command.
-Since sftp/scp cannot go through pf's certificate-issuance path at all
-today, they are out of scope for this hook rather than silently untested.

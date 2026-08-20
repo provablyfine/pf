@@ -91,7 +91,7 @@ Add command-only grant for charlie
 Command fallback: charlie has command(/bin/true) but not shell — shell cert rejected, command cert accepted
   $ pf -c user.json ssh -n -o "Hostname=$SSHD_ADDRESS" -o "HostKeyAlias=host" -p $SSHD_PORT charlie@host "/bin/true"
 
-Command fallback fails: /bin/ls not in charlie's allowed command list
+Command fallback fails: /bin/ls not in the allowed command list of charlie
   $ pf -c user.json ssh -n -o "Hostname=$SSHD_ADDRESS" -o "HostKeyAlias=host" -p $SSHD_PORT charlie@host "/bin/ls"
   User is not authorized to connect to host
   [2]
@@ -191,8 +191,7 @@ Denying every capability for alice drops only her
   host    command  root        /bin/df, /bin/ls
   host    command  charlie     /bin/true
 
-An "ssh" grant with a wildcard username applies to any username and is
-reported as "*", since a wildcard cannot be enumerated
+An "ssh" grant with a None username_list applies to any username
   $ pfa -c config.json role create -n wildcard
   $ WILDCARD_ROLE_ID=$(pfa -c config.json role list -n wildcard -q)
   $ pfa -c config.json role grant -i $WILDCARD_ROLE_ID --set <<EOF
@@ -236,9 +235,7 @@ An empty details cell means the entry has no command axis at all
   host    command  dave        *
   host    command  *           /bin/true
 
-A grant with a bounded max_session_ttl_s produces a certificate carrying a
-session deadline and a connection id, on its own role/identity so it cannot
-be affected by the earlier boundary denies against alice
+Grant access to alice@host with a bounded ttl
   $ pfa -c config.json role create -n ttl
   $ TTL_ROLE_ID=$(pfa -c config.json role list -n ttl -q)
   $ pfa -c config.json grant ssh --tag id=device --username alice --capability shell --max-session-ttl 3600 | pfa -c config.json role grant -i $TTL_ROLE_ID --set
@@ -253,8 +250,7 @@ be affected by the earlier boundary denies against alice
   $ pf -c ttl.json ssh -n -o "Hostname=$SSHD_ADDRESS" -o "HostKeyAlias=host" -p $SSHD_PORT alice@host "whoami"
   alice
 
-The deadline (issued_at + ttl) and connection id land in the audit entry, and
-neither one leaks into the certificate's own short validity window
+The deadline (issued_at + ttl) and connection id land in the audit entry
   $ CERT_DETAILS="[.[] | select(.type==\"create-user-certificate\")] | last | .details"
   $ pfa -c config.json audit-log list --format json | jq -r "$CERT_DETAILS | .extensions.connection_id"
   [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12} (re)
