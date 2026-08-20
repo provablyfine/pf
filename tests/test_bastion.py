@@ -7,6 +7,9 @@ from . import utils
 
 
 def _free_port() -> int:
+    # This is potentially unreliable since if multiple tests
+    # did this, they all could try to use the same unix local port
+    # in practice, though, it does not seem to be a problem
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
