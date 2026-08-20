@@ -307,14 +307,18 @@ def update_endpoint(identity_id: int, data: schemas.identity.IdentityUpdateReque
                 )
             )
         if data.unix_username is not None:
-            if not unix_account.is_valid(username):
-                raise responses.ProblemHTTPException(
-                    responses.problem_response(status_code=400, title="Invalid unix_username", detail=username)
-                )
-            if unix_account.is_privileged(username, ctx.config.privileged_unix_usernames):
+            if not unix_account.is_valid(data.unix_username):
                 raise responses.ProblemHTTPException(
                     responses.problem_response(
-                        status_code=400, title="Not allowed to use a privileged unix_username", detail=username
+                        status_code=400, title="Invalid unix_username", detail=data.unix_username
+                    )
+                )
+            if unix_account.is_privileged(data.unix_username, ctx.config.privileged_unix_usernames):
+                raise responses.ProblemHTTPException(
+                    responses.problem_response(
+                        status_code=400,
+                        title="Not allowed to use a privileged unix_username",
+                        detail=data.unix_username,
                     )
                 )
         update_params["unix_username"] = data.unix_username
