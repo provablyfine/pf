@@ -68,9 +68,7 @@ def _handle_open_session(ca_pub_path: str) -> None:
         return
     deadline = cert.extensions.session_deadline
     if deadline is None:
-        # Unbounded grant: the common case, and the entire compatibility
-        # story for hosts and grants that predate this feature. Checked
-        # before the CA lookup below so this path stays cheap and silent.
+        # Unbounded grant
         return
     if cert.signer_public_key.ssh_fingerprint() not in _trusted_fingerprints(ca_pub_path):
         # sshd already validated the certificate's signature against
