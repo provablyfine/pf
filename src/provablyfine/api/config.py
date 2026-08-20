@@ -7,6 +7,8 @@ import typing
 import pydantic
 import yaml
 
+from . import unix_account
+
 
 class DefaultBastion(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(extra="forbid")
@@ -49,6 +51,9 @@ class Config(pydantic.BaseModel):
     tenants_dir: str = "tenants"
     kek_filename: str = "kek.key"
     session_duration_s: int = 3600
+    privileged_unix_usernames: list[str] = pydantic.Field(
+        default_factory=lambda: list(unix_account.DEFAULT_PRIVILEGED_USERNAMES)
+    )
 
     host_key_staging_period: int = 12 * 3600
     host_key_rotation_period: int = 24 * 3600

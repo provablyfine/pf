@@ -8,7 +8,7 @@ import fastapi
 import fastapi.responses
 import sqlalchemy.exc
 
-from .. import converters, grant, mailer, model, responses, schemas, signature
+from .. import converters, grant, mailer, model, responses, schemas, signature, unix_account
 from ..context import ctx
 
 logger = logging.getLogger(__name__)
@@ -278,7 +278,7 @@ def _check_del_tags(permission_request: grant.IdentityChecker, tag_id_list: list
     responses={400: responses.PROBLEM, 403: responses.PROBLEM, 404: responses.PROBLEM},
 )
 def update_endpoint(identity_id: int, data: schemas.identity.IdentityUpdateRequest) -> schemas.identity.Identity:
-    if identity_id == ctx.identity_id:
+    if identity_id == ctx.identity_id and len(data.model_fields_set - {"unix_username"}) > 0:
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=403, title="Not allowed to update self")
         )
@@ -306,6 +306,17 @@ def update_endpoint(identity_id: int, data: schemas.identity.IdentityUpdateReque
                     status_code=403, title="Not allowed to update identity field", detail="unix_username"
                 )
             )
+        if data.unix_username is not None:
+            if not unix_account.is_valid(username):
+                raise responses.ProblemHTTPException(
+                    responses.problem_response(status_code=400, title="Invalid unix_username", detail=username)
+                )
+            if unix_account.is_privileged(username, ctx.config.privileged_unix_usernames):
+                raise responses.ProblemHTTPException(
+                    responses.problem_response(
+                        status_code=400, title="Not allowed to use a privileged unix_username", detail=username
+                    )
+                )
         update_params["unix_username"] = data.unix_username
 
     if "tags" in data.model_fields_set:
