@@ -166,7 +166,13 @@ class RoleRow(typing.NamedTuple):
     grant_list: list[SerializedGrant]
 
 
-role = db.make_table("role", metadata, RoleRow, sqlite_autoincrement=True)
+role = db.make_table(
+    "role",
+    metadata,
+    RoleRow,
+    sqlalchemy.UniqueConstraint("name", name="uix_role_name"),
+    sqlite_autoincrement=True,
+)
 
 
 class RoleMemberRow(typing.NamedTuple):
@@ -186,7 +192,13 @@ class BoundaryRow(typing.NamedTuple):
     denied_list: list[SerializedGrant]
 
 
-boundary = db.make_table("boundary", metadata, BoundaryRow, sqlite_autoincrement=True)
+boundary = db.make_table(
+    "boundary",
+    metadata,
+    BoundaryRow,
+    sqlalchemy.UniqueConstraint("name", name="uix_boundary_name"),
+    sqlite_autoincrement=True,
+)
 
 
 class SigningKeyRow(typing.NamedTuple):
