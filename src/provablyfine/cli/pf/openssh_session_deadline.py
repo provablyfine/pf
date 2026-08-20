@@ -79,6 +79,7 @@ def _handle_open_session(ca_pub_path: str) -> None:
         return
     connection_id = cert.extensions.connection_id
     if connection_id is None:
+        logger.warning("We have a deadline but no connection_id. This certificate is invalid.")
         return
     logger.info(f"session_deadline decoded connection_id={connection_id} deadline={deadline}")
 
