@@ -17,3 +17,11 @@ def test_boundary_name_uniqueness(api):
         "tests/test-boundary-unique-name.t",
         {"API_PORT": str(api.port), "API_LOG": str(api.log)},
     )
+
+
+def test_role_member_uniqueness(api):
+    """Test that the same identity cannot be added multiple times to a role."""
+    utils.run_cram(
+        "tests/test-role-member-unique.t",
+        {"API_PORT": str(api.port), "API_LOG": str(api.log)},
+    )

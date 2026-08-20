@@ -181,7 +181,12 @@ class RoleMemberRow(typing.NamedTuple):
     identity_id: int
 
 
-role_member = db.make_table("role_member", metadata, RoleMemberRow)
+role_member = db.make_table(
+    "role_member",
+    metadata,
+    RoleMemberRow,
+    sqlalchemy.UniqueConstraint("role_id", "identity_id", name="uix_role_id_identity_id"),
+)
 
 
 class BoundaryRow(typing.NamedTuple):
