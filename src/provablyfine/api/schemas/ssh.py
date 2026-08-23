@@ -28,6 +28,7 @@ class SSHUserCertificateRequest(base.APIBase):
 
 
 class SSHUserCertificateResponse(SSHCertificateResponse):
+    connection_id: str
     bastion_list: list[bastion.Bastion] = pydantic.Field(default_factory=list[bastion.Bastion])
     ip_address_list: list[str] = pydantic.Field(default_factory=list[str])
 

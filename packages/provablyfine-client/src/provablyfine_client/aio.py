@@ -66,8 +66,14 @@ class AsyncSessionClient:
     async def list_self_bastions(self) -> schemas.IdentitySelfBastionListResponse:
         return await self._run(self._inner.list_self_bastions)
 
-    async def get_self_token(self, service: str, hostname: str) -> schemas.IdentitySelfTokenResponse:
-        return await self._run(lambda: self._inner.get_self_token(service, hostname))
+    async def get_self_token(
+        self,
+        service: str,
+        hostname: str,
+        purpose: typing.Literal["connect", "register"],
+        connection_id: str | None = None,
+    ) -> schemas.IdentitySelfTokenResponse:
+        return await self._run(lambda: self._inner.get_self_token(service, hostname, purpose, connection_id))
 
     async def list_tags(
         self,

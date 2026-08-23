@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import os
 import shutil
 import subprocess
@@ -8,7 +9,7 @@ import tempfile
 import pytest
 
 from .. import jwk
-from . import cert, serde
+from . import buffer, cert, exceptions, serde
 
 _ssh_keygen = shutil.which("ssh-keygen")
 
@@ -176,6 +177,8 @@ def test_cert_details(
         extensions=cert.Extensions(
             permit_agent_forwarding=True,
             permit_x11_forwarding=True,
+            session_deadline=1_500_000_000,
+            connection_id="3fa85f64-5717-4562-b3fc-2c963f66afa6",
         ),
         signer=signer,
     )
@@ -190,6 +193,159 @@ def test_cert_details(
     assert "verify-required" in out
     assert "permit-agent-forwarding" in out
     assert "permit-X11-forwarding" in out
+    # ssh-keygen -L cannot decode our custom extensions; it only prints the
+    # wire name plus a raw hex dump, so verify the values through our own
+    # decoder instead of scraping this output for them.
+    roundtripped = cert.Cert.from_openssh(c.to_openssh())
+    assert roundtripped.extensions.session_deadline == 1_500_000_000
+    assert roundtripped.extensions.connection_id == "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+
+
+@pytest.mark.skipif(not _ssh_keygen, reason="ssh-keygen not found")
+def test_cert_deadline_and_connection_id_absent_when_none(
+    ed25519_priv: jwk.Private,
+    signer: jwk.Private,
+) -> None:
+    c = cert.Cert.create_user(
+        public_key=ed25519_priv.public(),
+        serial_number=1,
+        identifier="user-test-id",
+        principals=["alice"],
+        valid_after=1_000_000_000,
+        valid_before=2_000_000_000,
+        critical_options=cert.CriticalOptions(),
+        extensions=cert.Extensions(),
+        signer=signer,
+    )
+    roundtripped = cert.Cert.from_openssh(c.to_openssh())
+    assert roundtripped.extensions.session_deadline is None
+    assert roundtripped.extensions.connection_id is None
+
+
+def test_cert_extensions_and_critical_options_round_trip() -> None:
+    # Round-trips through the real cryptography library (not ssh-keygen text
+    # matching — a substring check like "verify-required" in out would still
+    # pass even if the underlying option name were subtly wrong) with every
+    # critical option and extension flag set, so a wrong/typo'd byte-string
+    # key or a clobbered builder reference is caught precisely.
+    signer = jwk.Private.generate_ed25519()
+    critical_options = cert.CriticalOptions(
+        force_command="/bin/true",
+        source_address=["10.0.0.1", "10.0.0.2"],
+        verify_required=True,
+    )
+    extensions = cert.Extensions(
+        no_touch_required=True,
+        permit_agent_forwarding=True,
+        permit_port_forwarding=True,
+        permit_pty=True,
+        permit_user_rc=True,
+        permit_x11_forwarding=True,
+    )
+    c = cert.Cert.create_user(
+        public_key=jwk.Private.generate_ed25519().public(),
+        serial_number=1,
+        identifier="round-trip",
+        principals=["alice"],
+        valid_after=1_000_000_000,
+        valid_before=2_000_000_000,
+        critical_options=critical_options,
+        extensions=extensions,
+        signer=signer,
+    )
+    reloaded = cert.Cert.from_openssh(c.to_openssh())
+    assert reloaded.critical_options == critical_options
+    assert reloaded.extensions == extensions
+
+
+def _with_nonce_length(raw: bytes, nonce_length: int) -> bytes:
+    # cryptography's SSHCertificateBuilder always produces a 32-byte nonce and
+    # gives no way to control its length, so to test from_openssh()'s nonce-length
+    # boundary check we truncate a real cert's nonce field directly in the wire
+    # format. load_ssh_public_identity() doesn't verify the signature at parse
+    # time, so the now-invalid signature doesn't stop the nonce check from running.
+    type_str, b64, *_ = raw.split(b" ", 2)
+    blob = base64.b64decode(b64)
+    r = buffer.Reader(blob)
+    cert_type = r.read_string()
+    nonce = r.read_string()
+    rest = blob[r.offset :]
+    w = buffer.Writer()
+    w.write_string(cert_type)
+    w.write_string(nonce[:nonce_length])
+    w.write_bytes(rest)
+    return type_str + b" " + base64.b64encode(w.to_bytes())
+
+
+def _cert_with_validity(valid_after: int, valid_before: int) -> cert.Cert:
+    signer = jwk.Private.generate_ed25519()
+    return cert.Cert.create_host(
+        public_key=jwk.Private.generate_ed25519().public(),
+        serial_number=1,
+        identifier="validity-test",
+        principals=["host.test"],
+        valid_after=valid_after,
+        valid_before=valid_before,
+        signer=signer,
+    )
+
+
+def test_cert_is_valid_within_window(monkeypatch: pytest.MonkeyPatch) -> None:
+    c = _cert_with_validity(1_000_000_000, 2_000_000_000)
+    monkeypatch.setattr(cert.time, "time", lambda: 1_500_000_000.0)
+    assert c.is_valid()
+
+
+def test_cert_is_valid_before_window(monkeypatch: pytest.MonkeyPatch) -> None:
+    c = _cert_with_validity(1_000_000_000, 2_000_000_000)
+    monkeypatch.setattr(cert.time, "time", lambda: 1_000_000_000.0 - 1)
+    assert not c.is_valid()
+
+
+def test_cert_is_valid_after_window(monkeypatch: pytest.MonkeyPatch) -> None:
+    c = _cert_with_validity(1_000_000_000, 2_000_000_000)
+    monkeypatch.setattr(cert.time, "time", lambda: 2_000_000_000.0 + 1)
+    assert not c.is_valid()
+
+
+def test_cert_is_valid_at_exact_boundaries(monkeypatch: pytest.MonkeyPatch) -> None:
+    c = _cert_with_validity(1_000_000_000, 2_000_000_000)
+    monkeypatch.setattr(cert.time, "time", lambda: 1_000_000_000.0)
+    assert c.is_valid()
+    monkeypatch.setattr(cert.time, "time", lambda: 2_000_000_000.0)
+    assert c.is_valid()
+
+
+def test_cert_nonce_exactly_16_bytes_is_accepted() -> None:
+    signer = jwk.Private.generate_ed25519()
+    c = cert.Cert.create_host(
+        public_key=jwk.Private.generate_ed25519().public(),
+        serial_number=1,
+        identifier="nonce-test",
+        principals=["host.test"],
+        valid_after=1_000_000_000,
+        valid_before=2_000_000_000,
+        signer=signer,
+    )
+    truncated = _with_nonce_length(c.to_openssh(), 16)
+    reloaded = cert.Cert.from_openssh(truncated)
+    assert len(reloaded._cert.nonce) == 16
+
+
+def test_cert_nonce_15_bytes_is_rejected() -> None:
+    signer = jwk.Private.generate_ed25519()
+    c = cert.Cert.create_host(
+        public_key=jwk.Private.generate_ed25519().public(),
+        serial_number=1,
+        identifier="nonce-test",
+        principals=["host.test"],
+        valid_after=1_000_000_000,
+        valid_before=2_000_000_000,
+        signer=signer,
+    )
+    truncated = _with_nonce_length(c.to_openssh(), 15)
+    with pytest.raises(exceptions.Error, match="Nonce must be bigger than 16 bytes"):
+        cert.Cert.from_openssh(truncated)
 
 
 @pytest.mark.skipif(not _ssh_keygen, reason="ssh-keygen not found")
@@ -278,8 +434,6 @@ def test_serde_private_agent_blob_consistent(
     request: pytest.FixtureRequest,
     tmp_path: tempfile.TemporaryDirectory,
 ) -> None:
-    from . import buffer
-
     priv: jwk.Private = request.getfixturevalue(key_fixture)
     pub = priv.public()
     pub_path = str(tmp_path / "k.pub")

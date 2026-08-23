@@ -10,6 +10,7 @@ class DirectoryReadResponse(base.APIBase):
     login_oidc: str
     auth: str
     public_auth: str
+    public_oidc: str
     boundary: str
     tag: str
     role: str

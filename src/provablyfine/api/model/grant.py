@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import enum
 import logging
 import typing
 
@@ -135,34 +136,66 @@ class IdentityGrant(TripletGrant):
     permission: IdentityPermission
 
 
-class SSHShellPermission(DBBase):
-    username_list: list[str]
-    permit_agent_forwarding: bool = False
-    permit_x11_forwarding: bool = False
+class SSHCapability(enum.StrEnum):
+    """
+    Represent "capabilities" for an SSH certificate:
+    - SHELL: the certificate itself
+    - PTY: permit_pty certificate extension
+    - USER_RC: permit_user_rc certificate extension
+    - AGENT_FORWARDING: permit_agent_forwarding certificate extension
+    - X11_FORWARDING: permit_x11_forwarding certificate extension
+    - PORT_FORWARDING: permit_port_forwarding certificate extension
+    """
+
+    SHELL = "shell"
+    PTY = "pty"
+    USER_RC = "user-rc"
+    AGENT_FORWARDING = "agent-forwarding"
+    X11_FORWARDING = "x11-forwarding"
+    PORT_FORWARDING = "port-forwarding"
 
 
-class SSHShellGrant(TripletGrant):
-    type: typing.Literal["ssh-shell"] = "ssh-shell"
-    permission: SSHShellPermission
+class SSHPermission(DBBase):
+    """
+    Every field is required and nullable: `None` always denotes the whole set
+    of possible values, including future ones. The exact semantics of each
+    field depend on whether this permission lives in a boundary denied or ceiling
+    or in a role grant.
+
+    For example, in a role grant:
+    - username_list = None means that sessions with any username are allowed.
+    - username_list = [] means that sessions are not allowed. Effectively, a useless entry.
+    - username_list = ["root", "{self}", "alice"] means that sessions can be created
+      for either root, alice, or the user's unix_username.
+
+    For example, in a boundary ceiling grant:
+    - username_list = None means that sessions with any username are allowed. Effectively, a useless entry.
+    - username_list = [] means that sessions are not allowed.
+    - username_list = ["root", "{self}", "alice"] means that sessions can be created
+      for either root, alice, or the user's unix_username.
+
+    For example, in a boundary denied grant:
+    - username_list = None means that sessions with any username are disallowed.
+    - username_list = [] means that no sessions are disallowed. Effectively, a useless entry.
+    - username_list = ["root", "{self}", "alice"] means that sessions cannot be created
+      for either root, alice, or the user's unix_username.
+    """
+
+    username_list: list[str] | None
+    capability_list: list[SSHCapability] | None
+    command_list: list[str] | None
+    max_session_ttl_s: int | None = pydantic.Field(gt=0)
+
+    @pydantic.model_validator(mode="after")
+    def _reject_empty(self) -> SSHPermission:
+        if self.capability_list == [] and self.command_list == []:
+            raise ValueError("capability_list and command_list must not both be empty")
+        return self
 
 
-class SSHPortForwardingPermission(DBBase):
-    username_list: list[str]
-
-
-class SSHPortForwardingGrant(TripletGrant):
-    type: typing.Literal["ssh-port-forwarding"] = "ssh-port-forwarding"
-    permission: SSHPortForwardingPermission
-
-
-class SSHCommandPermission(DBBase):
-    username_list: list[str]
-    command_list: list[str]
-
-
-class SSHCommandGrant(TripletGrant):
-    type: typing.Literal["ssh-command"] = "ssh-command"
-    permission: SSHCommandPermission
+class SSHGrant(TripletGrant):
+    type: typing.Literal["ssh"] = "ssh"
+    permission: SSHPermission
 
 
 class TenantUpdatePermission(DBBase):
@@ -247,9 +280,7 @@ Grant = typing.Annotated[
     | TagGrant
     | RoleGrant
     | IdentityGrant
-    | SSHShellGrant
-    | SSHPortForwardingGrant
-    | SSHCommandGrant
+    | SSHGrant
     | TenantGrant
     | AuthGrant
     | BastionGrant

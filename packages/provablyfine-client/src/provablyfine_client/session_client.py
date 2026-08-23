@@ -89,11 +89,20 @@ class SessionClient:
             raise exceptions.UI(_problem_title(response, "Failed to get bastions"))
         return schemas.IdentitySelfBastionListResponse.model_validate(response.json())
 
-    def get_self_token(self, service: str, hostname: str) -> schemas.IdentitySelfTokenResponse:
+    def get_self_token(
+        self,
+        service: str,
+        hostname: str,
+        purpose: typing.Literal["connect", "register"],
+        connection_id: str | None = None,
+    ) -> schemas.IdentitySelfTokenResponse:
+        params: dict[str, str] = {"service": service, "hostname": hostname, "purpose": purpose}
+        if connection_id is not None:
+            params["connection_id"] = connection_id
         response = self._session.get(
             f"{self._directory.identity}/self/token",
             auth=self._auth(),
-            params={"service": service, "hostname": hostname},
+            params=params,
         )
         if response.status_code != 200:
             raise exceptions.UI(_problem_title(response, "Failed to get token"))

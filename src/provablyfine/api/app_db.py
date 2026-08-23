@@ -174,7 +174,13 @@ class RoleRow(typing.NamedTuple):
     grant_list: list[SerializedGrant]
 
 
-role = db.make_table("role", metadata, RoleRow, sqlite_autoincrement=True)
+role = db.make_table(
+    "role",
+    metadata,
+    RoleRow,
+    sqlalchemy.UniqueConstraint("name", name="uix_role_name"),
+    sqlite_autoincrement=True,
+)
 
 
 class RoleMemberRow(typing.NamedTuple):
@@ -183,7 +189,13 @@ class RoleMemberRow(typing.NamedTuple):
     identity_id: int
 
 
-role_member = db.make_table("role_member", metadata, RoleMemberRow, sqlite_autoincrement=True)
+role_member = db.make_table(
+    "role_member",
+    metadata,
+    RoleMemberRow,
+    sqlalchemy.UniqueConstraint("role_id", "identity_id", name="uix_role_id_identity_id"),
+    sqlite_autoincrement=True,
+)
 
 
 class BoundaryRow(typing.NamedTuple):
@@ -194,7 +206,13 @@ class BoundaryRow(typing.NamedTuple):
     denied_list: list[SerializedGrant]
 
 
-boundary = db.make_table("boundary", metadata, BoundaryRow, sqlite_autoincrement=True)
+boundary = db.make_table(
+    "boundary",
+    metadata,
+    BoundaryRow,
+    sqlalchemy.UniqueConstraint("name", name="uix_boundary_name"),
+    sqlite_autoincrement=True,
+)
 
 
 class SigningKeyRow(typing.NamedTuple):
@@ -213,13 +231,6 @@ signing_key = db.make_table(
     sqlalchemy.Index("idx_valid_before_valid_after", "valid_before", "valid_after"),
     sqlite_autoincrement=True,
 )
-
-
-class DefaultRow(typing.NamedTuple):
-    id: typing.Annotated[int, db.Col(primary_key=True)]
-
-
-default = db.make_table("default", metadata, DefaultRow, sqlite_autoincrement=True)
 
 
 class BastionRow(typing.NamedTuple):
@@ -278,6 +289,22 @@ class OidcNonceRow(typing.NamedTuple):
 
 
 oidc_nonce = db.make_table("oidc_nonce", metadata, OidcNonceRow)
+
+
+class SshConnectionRow(typing.NamedTuple):
+    connection_id: typing.Annotated[str, db.Col(primary_key=True)]
+    identity_id: int
+    hostname: str
+    deadline: int | None
+    valid_before: int
+
+
+ssh_connection = db.make_table(
+    "ssh_connection",
+    metadata,
+    SshConnectionRow,
+    sqlalchemy.Index("idx_ssh_connection_valid_before", "valid_before"),
+)
 
 
 # ============================================================================
@@ -345,10 +372,6 @@ class AppDb(db.Dao):
         return self._get(signing_key)
 
     @property
-    def default(self) -> db.Table[DefaultRow]:
-        return self._get(default)
-
-    @property
     def bastion(self) -> db.Table[BastionRow]:
         return self._get(bastion)
 
@@ -363,6 +386,10 @@ class AppDb(db.Dao):
     @property
     def oidc_nonce(self) -> db.Table[OidcNonceRow]:
         return self._get(oidc_nonce)
+
+    @property
+    def ssh_connection(self) -> db.Table[SshConnectionRow]:
+        return self._get(ssh_connection)
 
 
 def create(connection: sqlalchemy.engine.Connection) -> AppDb:

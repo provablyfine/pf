@@ -37,6 +37,10 @@ class Extensions:
     permit_pty: bool | None = None
     permit_user_rc: bool | None = None
     permit_x11_forwarding: bool | None = None
+    # provablyfine-specific extensions, appended last so their presence/absence
+    # cannot perturb the key order of the six standard fields above in to_dict().
+    session_deadline: int | None = None
+    connection_id: str | None = None
 
     def to_dict(self):
         return dataclasses.asdict(self)
@@ -57,14 +61,14 @@ class Cert:
 
     @property
     def role(self) -> Role:
-        match self._cert.type:
-            case cryptography.hazmat.primitives.serialization.SSHCertificateType.HOST:
-                role = Role.HOST
-            case cryptography.hazmat.primitives.serialization.SSHCertificateType.USER:
-                role = Role.USER
-            case _:
-                assert False
-        return role
+        # if/elif, not match/case: mutmut has no pragma support for MatchCase nodes,
+        # so the exhaustiveness check below would be a permanent unfixable survivor.
+        if self._cert.type == cryptography.hazmat.primitives.serialization.SSHCertificateType.HOST:
+            return Role.HOST
+        elif self._cert.type == cryptography.hazmat.primitives.serialization.SSHCertificateType.USER:
+            return Role.USER
+        else:
+            assert False
 
     @property
     def identifier(self) -> str:
@@ -106,6 +110,19 @@ class Cert:
         permit_user_rc = self._cert.extensions.get(b"permit-user-rc") == b""
         permit_x11_forwarding = self._cert.extensions.get(b"permit-X11-forwarding") == b""
 
+        session_deadline: int | None = None
+        raw_deadline = self._cert.extensions.get(b"pf-session-deadline@provablyfine.net")
+        if raw_deadline is not None:
+            try:
+                session_deadline = int(raw_deadline)
+            except ValueError:
+                session_deadline = None
+
+        connection_id: str | None = None
+        raw_connection_id = self._cert.extensions.get(b"pf-connection-id@provablyfine.net")
+        if raw_connection_id is not None:
+            connection_id = raw_connection_id.decode("utf-8", errors="replace")
+
         return Extensions(
             no_touch_required=no_touch_required,
             permit_agent_forwarding=permit_agent_forwarding,
@@ -113,6 +130,8 @@ class Cert:
             permit_pty=permit_pty,
             permit_user_rc=permit_user_rc,
             permit_x11_forwarding=permit_x11_forwarding,
+            session_deadline=session_deadline,
+            connection_id=connection_id,
         )
 
     @property
@@ -192,6 +211,14 @@ class Cert:
             builder = builder.add_extension(b"permit-user-rc", b"")
         if extensions.permit_x11_forwarding:
             builder = builder.add_extension(b"permit-X11-forwarding", b"")
+        if extensions.session_deadline is not None:
+            builder = builder.add_extension(
+                b"pf-session-deadline@provablyfine.net", str(extensions.session_deadline).encode("ascii")
+            )
+        if extensions.connection_id is not None:
+            builder = builder.add_extension(
+                b"pf-connection-id@provablyfine.net", extensions.connection_id.encode("ascii")
+            )
         cert = builder.sign(signer.to_crypto())
         return Cert(cert)
 

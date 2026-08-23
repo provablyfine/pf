@@ -218,6 +218,44 @@ RUN useradd -m -s /bin/bash alice && \\
     return image_id
 
 
+@pytest.fixture(scope="session")
+def sshd_pam_image(tmp_path_factory):
+    """Build an SSH server container image with UsePAM and the pf session-deadline
+    PAM hook wired in, once per worker session.
+
+    Kept as a separate image (rather than a use_pam toggle on `sshd_image`) so the
+    plain image's runtime is unaffected: this exercises the openssh.host_init PAM
+    wiring, which most tests never need.
+    """
+    _require_podman()
+    pam_line = (
+        "session optional pam_exec.so /usr/bin/pf -d -d "
+        "--log-filename=/var/log/pf/session-deadline.log "
+        "openssh session-deadline --ca-pub-path=/etc/ssh/keys/user-ca.pub"
+    )
+    containerfile = _containerfile(
+        packages=[],
+        setup=f"""\
+RUN useradd -m -s /bin/bash alice && \\
+    passwd -d alice && \\
+    passwd -d root
+RUN echo '{pam_line}' >> /etc/pam.d/sshd
+RUN install -d -m 755 /var/log/pf
+""",
+        sshd_config=_sshd_config(permit_root_login=True, use_pam=True),
+    )
+    tmp_path = tmp_path_factory.getbasetemp().parent
+    with tempfile.NamedTemporaryFile(mode="w+", dir=tmp_path, delete=False) as container_file:
+        container_file.write(containerfile)
+        container_file.flush()
+
+        stdout = _run(["podman", "build", "--quiet", "--file", container_file.name, tld()], tmp_path)
+        image_id = stdout.strip("\n")
+        if "\n" in image_id:
+            assert False, image_id
+    return image_id
+
+
 def _run_sshd_container(
     request: pytest.FixtureRequest,
     image_id: str,
@@ -287,6 +325,13 @@ def sshd(request: pytest.FixtureRequest, sshd_image: str, tmp_path: pathlib.Path
     yield from _run_sshd_container(request, sshd_image, tmp_path)
 
 
+@pytest.fixture
+def sshd_pam(
+    request: pytest.FixtureRequest, sshd_pam_image: str, tmp_path: pathlib.Path
+) -> typing.Generator[SshD, None, None]:
+    yield from _run_sshd_container(request, sshd_pam_image, tmp_path)
+
+
 @dataclasses.dataclass(frozen=True)
 class SshAgent:
     socket: str
@@ -296,7 +341,13 @@ class SshAgent:
 def ssh_agent(request):
     if not shutil.which("ssh-agent"):
         pytest.skip("ssh-agent not found")
-    completed = subprocess.run(["ssh-agent", "-s"], capture_output=True)
+    # Pin an explicit, short socket path via -a rather than letting ssh-agent
+    # pick its own: some distros (e.g. Fedora) default to $HOME/.ssh/agent/
+    # instead of $TMPDIR, and a long $HOME (as under some sandboxed/CI test
+    # runs, where it can vary run-to-run) pushes the socket path past
+    # AF_UNIX's ~108-byte sun_path limit, making ssh-agent refuse to start.
+    agent_socket_path = tempfile.mktemp(prefix="pf-ssh-agent-", suffix=".sock", dir="/tmp")
+    completed = subprocess.run(["ssh-agent", "-s", "-a", agent_socket_path], capture_output=True)
     assert completed.returncode == 0
     pid = None
     socket = None

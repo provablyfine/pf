@@ -19,3 +19,4 @@ src/provablyfine/licenses/
 .cache/
 tests/tmp*.t
 src/nss/libnss_provablyfine/target/
+mutants/**

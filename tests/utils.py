@@ -22,7 +22,11 @@ def run_cram(filename: str, env: dict[str, str]):
             rendered = template.render()
             tmp.write(rendered)
             tmp.flush()
-            completed = subprocess.run(["uv", "run", "cram", "--shell", "/bin/bash", tmp.name], env=environ)
+            completed = subprocess.run(
+                ["uv", "run", "cram", "--shell", "/bin/bash", tmp.name], env=environ, start_new_session=True
+            )
     else:
-        completed = subprocess.run(["uv", "run", "cram", "--shell", "/bin/bash", filename], env=environ)
+        completed = subprocess.run(
+            ["uv", "run", "cram", "--shell", "/bin/bash", filename], env=environ, start_new_session=True
+        )
     assert completed.returncode == 0

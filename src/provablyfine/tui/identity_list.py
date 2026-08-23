@@ -13,8 +13,7 @@ from . import base, clipboard, header, identity_view
 
 
 class _IdentitiesTable(textual.widgets.DataTable[str]):
-    class RowSelected(textual.widgets.DataTable.RowSelected):
-        data_table: _IdentitiesTable
+    pass
 
 
 class _IdentityFormResult(typing.TypedDict):

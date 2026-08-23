@@ -1,10 +1,8 @@
 import argparse
 import dataclasses
 import getpass
-import importlib.resources
 import os
 import os.path
-import pathlib
 import sys
 import traceback
 import urllib.parse
@@ -33,7 +31,10 @@ def generate_and_save_key() -> tuple[jwk.Private, str]:
         print("Passphrases do not match, try again.", flush=True)
 
     passphrase = pw.encode() if pw else None
-    data = key.to_openssh(passphrase)
+    try:
+        data = key.to_openssh(passphrase)
+    except jwk.BcryptRequiredError as e:
+        raise pfc.exceptions.UI(str(e)) from e
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     try:
         os.write(fd, data)
@@ -64,23 +65,11 @@ def version_function(args: argparse.Namespace) -> None:
     print(__version__)
 
 
-def _print_frpc_license() -> None:
-    licenses = importlib.resources.files("provablyfine").joinpath("licenses")
-    for filename, label in [("frpc-NOTICE", "NOTICE"), ("frpc-LICENSE", "LICENSE")]:
-        p = pathlib.Path(str(licenses.joinpath(filename)))
-        if p.is_file():
-            print(f"--- frpc ({label}) ---")
-            print(p.read_text())
-
-
 def license_function(args: argparse.Namespace) -> None:
     print("provablyfine")
     print("Copyright (C) 2024 Mathieu Lacage <mathieu.lacage@cutebugs.net>")
     print("License: GNU Affero General Public License v3 (AGPL-3.0-only)")
     print("Full text: https://www.gnu.org/licenses/agpl-3.0.txt")
-    print()
-    print("This distribution includes frpc from fatedier/frp (Apache 2.0).")
-    _print_frpc_license()
 
 
 def setup_license_subparser(parser: argparse.ArgumentParser) -> None:

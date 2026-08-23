@@ -122,8 +122,9 @@ def _role_member_function(args: argparse.Namespace) -> None:
     ]
 
     for added in args.add:
-        if not any(m.name == added for m in member_list):
-            member_list.append(pfc.schemas.RoleMemberUpdateRequest(name=added))
+        if any(m.name == added for m in member_list):
+            raise pfc.exceptions.UI(f"'{added}' is already a member of this role")
+        member_list.append(pfc.schemas.RoleMemberUpdateRequest(name=added))
 
     for deleted in args.delete:
         member_list = [m for m in member_list if not m.name == deleted]
