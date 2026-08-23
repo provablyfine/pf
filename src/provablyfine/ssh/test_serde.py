@@ -168,3 +168,30 @@ def test_private_cert_blob_ec(fix: str, ed25519_cert: cert.Cert, request: pytest
     assert cert_blob == serde.serialize_cert(ec_cert)
     d = r.read_mpint()
     assert d == priv.to_crypto().private_numbers().private_value
+
+
+def test_private_cert_blob_rsa(rsa3072_priv: jwk.Private, ed25519_signer: jwk.Private) -> None:
+    rsa_cert = cert.Cert.create_host(
+        public_key=rsa3072_priv.public(),
+        serial_number=7,
+        identifier="host.rsa",
+        principals=["host.rsa"],
+        valid_after=1_000_000_000,
+        valid_before=2_000_000_000,
+        signer=ed25519_signer,
+    )
+    data = serde.serialize_private_certificate(rsa3072_priv, rsa_cert)
+    r = buffer.Reader(data)
+    key_type = r.read_string()
+    assert key_type == b"ssh-rsa-cert-v01@openssh.com"
+    cert_blob = r.read_string()
+    assert cert_blob == serde.serialize_cert(rsa_cert)
+    d = r.read_mpint()
+    iqmp = r.read_mpint()
+    p = r.read_mpint()
+    q = r.read_mpint()
+    priv_nums = rsa3072_priv.to_crypto().private_numbers()
+    assert d == priv_nums.d
+    assert iqmp == priv_nums.iqmp
+    assert p == priv_nums.p
+    assert q == priv_nums.q

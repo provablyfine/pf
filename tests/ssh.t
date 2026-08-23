@@ -91,7 +91,7 @@ Add command-only grant for charlie
 Command fallback: charlie has command(/bin/true) but not shell — shell cert rejected, command cert accepted
   $ pf -c user.json ssh -n -o "Hostname=$SSHD_ADDRESS" -o "HostKeyAlias=host" -p $SSHD_PORT charlie@host "/bin/true"
 
-Command fallback fails: /bin/ls not in charlie's allowed command list
+Command fallback fails: /bin/ls not in the allowed command list of charlie
   $ pf -c user.json ssh -n -o "Hostname=$SSHD_ADDRESS" -o "HostKeyAlias=host" -p $SSHD_PORT charlie@host "/bin/ls"
   User is not authorized to connect to host
   [2]
@@ -102,7 +102,7 @@ Grant bob a shell with agent and X11 forwarding
 Forwarding capabilities reach the certificate
   $ pf -c user.json ssh -n -o "Hostname=$SSHD_ADDRESS" -o "HostKeyAlias=host" -p $SSHD_PORT bob@host "whoami"
   bob
-  $ CERT_EXTENSIONS="[.[] | select(.type==\"create-user-certificate\")] | last | .details.extensions | with_entries(select(.value)) | keys_unsorted | join(\" \")"
+  $ CERT_EXTENSIONS="[.[] | select(.type==\"create-user-certificate\")] | last | .details.extensions | with_entries(select(.value)) | del(.connection_id, .session_deadline) | keys_unsorted | join(\" \")"
   $ pfa -c config.json audit-log list --format json | jq -r "$CERT_EXTENSIONS"
   permit_agent_forwarding permit_pty permit_user_rc permit_x11_forwarding
 
@@ -191,8 +191,7 @@ Denying every capability for alice drops only her
   host    command  root        /bin/df, /bin/ls
   host    command  charlie     /bin/true
 
-An "ssh" grant with a wildcard username applies to any username and is
-reported as "*", since a wildcard cannot be enumerated
+An "ssh" grant with a None username_list applies to any username
   $ pfa -c config.json role create -n wildcard
   $ WILDCARD_ROLE_ID=$(pfa -c config.json role list -n wildcard -q)
   $ pfa -c config.json role grant -i $WILDCARD_ROLE_ID --set <<EOF
@@ -235,3 +234,27 @@ An empty details cell means the entry has no command axis at all
   host    shell    *
   host    command  dave        *
   host    command  *           /bin/true
+
+Grant access to alice@host with a bounded ttl
+  $ pfa -c config.json role create -n ttl
+  $ TTL_ROLE_ID=$(pfa -c config.json role list -n ttl -q)
+  $ pfa -c config.json grant ssh --tag id=device --username alice --capability shell --max-session-ttl 3600 | pfa -c config.json role grant -i $TTL_ROLE_ID --set
+  $ pfa -c config.json identity create -n ttl-user
+  $ TTL_USER_ID=$(pfa -c config.json identity list -n ttl-user -q)
+  $ pfa -c config.json role member -i $TTL_ROLE_ID -a ttl-user
+  $ INVITATION=$(pfa -c config.json identity invite --manual -i $TTL_USER_ID)
+  $ ssh-keygen -t ed25519 -f ttl-account -N "" > /dev/null
+  $ pf -c ttl.json accept --invitation=$INVITATION --key ttl-account
+  $ ssh-keygen -t ed25519 -f ttl-session -N "" > /dev/null
+  $ pf -c ttl.json login --session-key ttl-session
+  $ pf -c ttl.json ssh -n -o "Hostname=$SSHD_ADDRESS" -o "HostKeyAlias=host" -p $SSHD_PORT alice@host "whoami"
+  alice
+
+The deadline (issued_at + ttl) and connection id land in the audit entry
+  $ CERT_DETAILS="[.[] | select(.type==\"create-user-certificate\")] | last | .details"
+  $ pfa -c config.json audit-log list --format json | jq -r "$CERT_DETAILS | .extensions.connection_id"
+  [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12} (re)
+  $ pfa -c config.json audit-log list --format json | jq -r "$CERT_DETAILS | .extensions.session_deadline - .valid_after"
+  3610
+  $ pfa -c config.json audit-log list --format json | jq -r "$CERT_DETAILS | .valid_before - .valid_after"
+  70

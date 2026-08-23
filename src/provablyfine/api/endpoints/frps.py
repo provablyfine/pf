@@ -53,17 +53,21 @@ def frps_plugin_endpoint(request: fastapi.Request, data: _PluginRequest) -> _Plu
         return _PluginResponse(reject=True, reject_reason="unknown issuer or invalid jwt")
 
     try:
-        jwt.decode(
+        payload = jwt.decode(
             jwt_token,
             trusted_key.key,
             algorithms=["EdDSA"],
             audience=user,
             issuer=trusted_key.issuer,
-            options={"require": ["sub", "name", "tenant_id"]},
+            options={"require": ["sub", "name", "tenant_id", "use"]},
         )
     except jwt.exceptions.InvalidTokenError as e:
         logger.debug(f"frps plugin: jwt validation failed: {e}")
         return _PluginResponse(reject=True, reject_reason=str(e))
+
+    if payload["use"] != "register":
+        logger.debug(f"frps plugin: wrong token purpose: {payload['use']}")
+        return _PluginResponse(reject=True, reject_reason="wrong token purpose")
 
     timestamp = str(data.content["timestamp"]).encode()
     expected_key = hashlib.md5(timestamp, usedforsecurity=False).hexdigest()

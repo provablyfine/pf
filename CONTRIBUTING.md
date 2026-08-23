@@ -53,6 +53,24 @@ $ make cov-report
 TOTAL                                          5167    685    87%
 ```
 
+## Mutation testing
+
+We use [mutmut](https://mutmut.readthedocs.io/) to check that tests actually catch
+bugs, not just that they run. A subset of security- and logic-critical files are
+covered (`[tool.mutmut]` in `pyproject.toml`) and are expected to stay at zero
+surviving mutants and zero mutants with no covering test:
+
+```console
+$ rm -rf mutants && PYTEST_ADDOPTS="-n0" uv run mutmut run
+$ uv run mutmut results   # list any non-killed mutants
+$ uv run mutmut show <id> # inspect a specific one
+```
+
+If your change touches a covered file and leaves a gap,
+`scripts/check-mutation-baseline` (also run in CI) will fail — run it locally to
+reproduce, then either add a test that kills the mutant or, if it's a true equivalent
+mutant, extend `do_not_mutate_patterns` in `pyproject.toml`.
+
 ## Submitting
 
 Make sure any PR you submit and/or any commit that fixes an issue also creates a file in changelog.d/*.

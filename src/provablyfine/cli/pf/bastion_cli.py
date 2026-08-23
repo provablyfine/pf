@@ -17,6 +17,7 @@ import ssl
 import struct
 import sys
 import time
+import typing
 import urllib.parse
 
 import cryptography.hazmat.decrepit.ciphers.modes
@@ -26,7 +27,7 @@ import provablyfine_client as pfc
 
 from ... import client
 from .. import http as cli_http
-from .. import login
+from .. import login, token_verify
 
 logger = logging.getLogger(__name__)
 
@@ -145,6 +146,23 @@ class _FrpReader:
         result = bytes(self._buf[:n])
         del self._buf[:n]
         return result
+
+    async def read_some(self, n: int = 65536) -> bytes:
+        """Drain any buffered bytes first, then fall back to a fresh recv().
+
+        Used once a handshake read is done and the connection switches to raw
+        splicing: readexactly() may have buffered more than one frame's worth
+        of bytes in a single recv() call, and a naive switch to raw recv()
+        would silently drop them.
+        """
+        if self._buf:
+            result = bytes(self._buf[:n])
+            del self._buf[:n]
+            return result
+        data = await self._recv()
+        if self._cipher is not None:
+            data = self._cipher.decrypt(data)
+        return data
 
 
 async def _frp_read(frp_reader: _FrpReader) -> tuple[str, dict[str, object]]:
@@ -292,6 +310,34 @@ def _local_arch() -> str:
     return {"x86_64": "amd64", "aarch64": "arm64"}.get(m, m)
 
 
+_HANDSHAKE_TAG = "T"
+_HANDSHAKE_ACCEPT_TAG = "A"
+
+
+async def _handshake_token(
+    frp_reader: _FrpReader,
+    send: _SendFn,
+    verifier: token_verify.SingleIssuerVerifier,
+    expected_audience: str,
+    now: int,
+) -> token_verify.VerifiedToken | None:
+    tag, msg = await _frp_read(frp_reader)
+    if tag != _HANDSHAKE_TAG:
+        await _frp_write(send, None, _HANDSHAKE_ACCEPT_TAG, {"ok": False, "reason": "token handshake required"})
+        return None
+    token = msg.get("token")
+    verified = (
+        verifier.verify(str(token), expected_audience, now, expected_use="connect") if isinstance(token, str) else None
+    )
+    # The token endpoint issues a cid with every connect token, so its absence
+    # means the token was not minted for this handshake.
+    if verified is None or verified.cid is None:
+        await _frp_write(send, None, _HANDSHAKE_ACCEPT_TAG, {"ok": False, "reason": "invalid or unauthorized token"})
+        return None
+    await _frp_write(send, None, _HANDSHAKE_ACCEPT_TAG, {"ok": True})
+    return verified
+
+
 async def _handle_work_conn(
     host: str,
     port: int,
@@ -299,6 +345,8 @@ async def _handle_work_conn(
     run_id: str,
     local_ip: str,
     local_port: int,
+    frpc_user: str,
+    verifier: token_verify.SingleIssuerVerifier,
 ) -> None:
     try:
         async with _open_transport(host, port, ssl_ctx) as (recv, send):
@@ -313,12 +361,16 @@ async def _handle_work_conn(
                 logger.debug(f"work conn: rejected: {msg['error']}")
                 return
 
+            verified = await _handshake_token(frp_reader, send, verifier, frpc_user, int(time.time()))
+            if verified is None:
+                return
+
             local_reader, local_writer = await asyncio.open_connection(local_ip, local_port)
 
             async def frps_to_local() -> None:
                 try:
                     while True:
-                        data = await recv()
+                        data = await frp_reader.read_some()
                         if not data:
                             break
                         local_writer.write(data)
@@ -336,7 +388,15 @@ async def _handle_work_conn(
                     pass
 
             try:
-                await asyncio.gather(frps_to_local(), local_to_frps())
+                gather_coro = asyncio.gather(frps_to_local(), local_to_frps())
+                if verified.deadline is not None:
+                    remaining = max(0, verified.deadline - int(time.time()))
+                    try:
+                        await asyncio.wait_for(gather_coro, timeout=remaining)
+                    except TimeoutError:
+                        logger.info(f"work conn: deadline reached, closing tunnel (connection_id={verified.cid})")
+                else:
+                    await gather_coro
             finally:
                 local_writer.close()
     except Exception as e:
@@ -355,6 +415,7 @@ async def _run_frp_client(
     address: str,
     port: int,
     stop_event: asyncio.Event,
+    verifier: token_verify.SingleIssuerVerifier,
     frps_bind_port: int | None = None,
 ) -> None:
     u = urllib.parse.urlsplit(bastion_url)
@@ -365,7 +426,7 @@ async def _run_frp_client(
     while not stop_event.is_set():
         # Refresh token on each (re)connect attempt.
         try:
-            token_response = await session.get_self_token("bastion", hostname=identity_name)
+            token_response = await session.get_self_token("bastion", hostname=identity_name, purpose="register")
             jwt_token = token_response.token
             frpc_user = _jwt_audience(jwt_token)
         except Exception as e:
@@ -393,6 +454,7 @@ async def _run_frp_client(
                     address=address,
                     port=port,
                     stop_event=stop_event,
+                    verifier=verifier,
                 )
         except Exception as e:
             if connected:
@@ -421,6 +483,7 @@ async def _frp_session(
     address: str,
     port: int,
     stop_event: asyncio.Event,
+    verifier: token_verify.SingleIssuerVerifier,
 ) -> None:
     # --- Login ---
     login_msg: dict[str, object] = {
@@ -471,7 +534,7 @@ async def _frp_session(
     def spawn_work_conn() -> None:
         logger.info("work connection created")
         t: asyncio.Task[None] = asyncio.create_task(
-            _handle_work_conn(host, server_port, ssl_ctx, run_id, address, port)
+            _handle_work_conn(host, server_port, ssl_ctx, run_id, address, port, frpc_user, verifier)
         )
         background_tasks.add(t)
         t.add_done_callback(background_tasks.discard)
@@ -538,8 +601,10 @@ class _ManagedSession:
             await self._renew()
             return await fn()
 
-    async def get_self_token(self, service: str, hostname: str) -> pfc.schemas.IdentitySelfTokenResponse:
-        return await self._call(lambda: self.sc.get_self_token(service, hostname=hostname))
+    async def get_self_token(
+        self, service: str, hostname: str, purpose: typing.Literal["connect", "register"]
+    ) -> pfc.schemas.IdentitySelfTokenResponse:
+        return await self._call(lambda: self.sc.get_self_token(service, hostname=hostname, purpose=purpose))
 
     async def list_self_bastions(self) -> pfc.schemas.IdentitySelfBastionListResponse:
         return await self._call(lambda: self.sc.list_self_bastions())
@@ -555,6 +620,7 @@ def _register_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     factory = client.Factory(c, timeout=args.timeout)
     login.ensure_session(c, factory)
+    verifier = token_verify.SingleIssuerVerifier(factory.public_oidc_issuer())
 
     async def _run() -> None:
         loop = asyncio.get_running_loop()
@@ -596,7 +662,8 @@ def _register_function(args: argparse.Namespace) -> None:
                             args.address,
                             args.port,
                             stop_event,
-                            args.frps_bind_port,
+                            verifier,
+                            frps_bind_port=args.frps_bind_port,
                         )
                     )
                     active_tasks[bastion_id] = task
@@ -617,7 +684,12 @@ def _register_function(args: argparse.Namespace) -> None:
     asyncio.run(_run())
 
 
-async def connect_async(url: str, hostname: str, sc: pfc.AsyncSessionClient) -> None:
+async def connect_async(
+    url: str,
+    hostname: str,
+    sc: pfc.AsyncSessionClient,
+    connection_id: str,
+) -> None:
     u = urllib.parse.urlsplit(url)
     host = u.hostname or url
     scheme_port = 443 if u.scheme == "https" else 80 if u.scheme == "http" else None
@@ -630,7 +702,9 @@ async def connect_async(url: str, hostname: str, sc: pfc.AsyncSessionClient) -> 
     if u.scheme == "https":
         ssl_context = ssl.create_default_context()
 
-    token_response = await sc.get_self_token("bastion", hostname=hostname)
+    token_response = await sc.get_self_token(
+        "bastion", hostname=hostname, purpose="connect", connection_id=connection_id
+    )
     frpc_user = _jwt_audience(token_response.token)
 
     reader, writer = await asyncio.open_connection(host, port, ssl=ssl_context)
@@ -652,11 +726,33 @@ async def connect_async(url: str, hostname: str, sc: pfc.AsyncSessionClient) -> 
     if response.status_code != 200:
         raise pfc.exceptions.UI(f"Unable to reach bastion: status_code={response.status_code}")
 
+    async def raw_send(data: bytes) -> None:
+        writer.write(data)
+        await writer.drain()
+
+    async def raw_recv() -> bytes:
+        return await reader.read(65536)
+
+    await _frp_write(raw_send, None, _HANDSHAKE_TAG, {"token": token_response.token})
+    frame_reader = _FrpReader(raw_recv, cipher=None)
+    tag, resp = await _frp_read(frame_reader)
+    if tag != _HANDSHAKE_ACCEPT_TAG or not resp.get("ok"):
+        reason = resp.get("reason", "rejected") if tag == _HANDSHAKE_ACCEPT_TAG else f"unexpected response tag={tag!r}"
+        writer.close()
+        raise pfc.exceptions.UI(f"Bastion rejected connection: {reason}")
+
     loop = asyncio.get_running_loop()
 
     stdin_reader = asyncio.StreamReader()
     await loop.connect_read_pipe(lambda: asyncio.StreamReaderProtocol(stdin_reader), sys.stdin.buffer)
-    stdout_transport, _ = await loop.connect_write_pipe(asyncio.BaseProtocol, sys.stdout.buffer)
+    # Not sys.stdout.buffer directly: CPython opens the standard streams with
+    # closefd=False (fd 1 is considered owned by the runtime, not by the io
+    # object), so closing/aborting a transport built on it never actually
+    # closes fd 1 -- ssh, reading the other end of that pipe, would never see
+    # EOF. Wrapping our own fd 1 in a fresh file object (closefd defaults to
+    # True for fd-based open()) gives us a transport we can really close.
+    stdout_pipe = open(sys.stdout.fileno(), "wb")
+    stdout_transport, _ = await loop.connect_write_pipe(asyncio.BaseProtocol, stdout_pipe)
 
     async def forward_stdin() -> None:
         while True:
@@ -671,11 +767,24 @@ async def connect_async(url: str, hostname: str, sc: pfc.AsyncSessionClient) -> 
             writer.close()
 
     async def forward_stdout() -> None:
-        while True:
-            data = await reader.read(4096)
-            if not data:
-                break
-            stdout_transport.write(data)
+        try:
+            while True:
+                data = await frame_reader.read_some(4096)
+                if not data:
+                    break
+                stdout_transport.write(data)
+        finally:
+            # Not .close(): that calls write_eof(), which only closes the fd
+            # once its internal write buffer has fully drained -- if ssh
+            # stops reading around when the relay closes on us (the deadline
+            # case this exists for), the buffer never drains and the fd, and
+            # so the pipe ssh reads as its transport, never actually closes.
+            # abort() discards any unflushed buffer and closes the fd now.
+            # Skip it if the transport already closed itself (broken pipe
+            # once ssh has exited -- the SIGHUP case): abort() is not
+            # idempotent and raises on a fully-closed transport.
+            if not stdout_transport.is_closing():
+                stdout_transport.abort()
 
     async def _run_both() -> None:
         await asyncio.gather(forward_stdin(), forward_stdout())
@@ -687,6 +796,7 @@ async def connect_async(url: str, hostname: str, sc: pfc.AsyncSessionClient) -> 
 
     loop.add_signal_handler(signal.SIGTERM, signal_handler)
     loop.add_signal_handler(signal.SIGINT, signal_handler)
+    loop.add_signal_handler(signal.SIGHUP, signal_handler)
     try:
         await gather_task
     except asyncio.CancelledError:
@@ -700,7 +810,7 @@ def _connect_function(args: argparse.Namespace) -> None:
 
     async def _run() -> None:
         sc = factory.async_session()
-        await connect_async(args.url, args.hostname, sc)
+        await connect_async(args.url, args.hostname, sc, args.connection_id)
 
     asyncio.run(_run())
 
@@ -730,4 +840,9 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
     connect_parser = sub.add_parser("connect", help="Connect via bastion")
     connect_parser.add_argument("--url", required=True, help="Bastion URL")
     connect_parser.add_argument("--hostname", required=True, help="Target hostname")
+    connect_parser.add_argument(
+        "--connection-id",
+        required=True,
+        help="Connection id shared with the SSH cert",
+    )
     connect_parser.set_defaults(func=_connect_function)

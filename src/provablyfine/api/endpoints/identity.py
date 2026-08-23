@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import logging
+import time
 import typing
 
 import fastapi
 import fastapi.responses
 import sqlalchemy.exc
 
-from .. import converters, grant, mailer, model, responses, schemas, signature
+from .. import converters, grant, mailer, model, responses, schemas, signature, unix_account
 from ..context import ctx
 
 logger = logging.getLogger(__name__)
@@ -101,13 +102,41 @@ def read_self_bastions_endpoint() -> schemas.identity.IdentitySelfBastionListRes
 @router.get(
     "/self/token",
     status_code=200,
-    responses={400: responses.PROBLEM, 403: responses.PROBLEM, 404: responses.PROBLEM},
+    responses={400: responses.PROBLEM, 403: responses.PROBLEM},
 )
-def read_self_token_endpoint(service: str, hostname: str) -> schemas.identity.IdentitySelfTokenResponse:
+def read_self_token_endpoint(
+    service: str,
+    hostname: str,
+    purpose: typing.Literal["connect", "register"],
+    connection_id: str | None = None,
+) -> schemas.identity.IdentitySelfTokenResponse:
     if service != "bastion":
         raise responses.ProblemHTTPException(responses.problem_response(status_code=403))
 
-    token = model.bastion.generate_token(hostname)
+    deadline: int | None = None
+    cid: str | None = None
+    if purpose == "connect":
+        if connection_id is None:
+            raise responses.ProblemHTTPException(
+                responses.problem_response(status_code=400, title="connection_id required")
+            )
+        # The deadline is mirrored from the row recorded when the certificate was
+        # signed, never recomputed here: the bastion relay and the target host's
+        # PAM hook must agree on the same absolute instant, and a later reconnect
+        # must not extend the session.
+        row = ctx.app_db.ssh_connection.read_one(connection_id=connection_id)
+        now = int(time.time())
+        if row is None or row.identity_id != ctx.identity_id or row.hostname != hostname or row.valid_before < now:
+            raise responses.ProblemHTTPException(responses.problem_response(status_code=403, title="Forbidden"))
+        deadline = row.deadline
+        cid = row.connection_id
+    else:
+        caller = model.identity.read_one(id=ctx.identity_id)
+        assert caller is not None  # because we are authenticated
+        if caller.name != hostname:
+            raise responses.ProblemHTTPException(responses.problem_response(status_code=403, title="Forbidden"))
+
+    token = model.bastion.generate_token(hostname, purpose, deadline=deadline, connection_id=cid)
     return schemas.identity.IdentitySelfTokenResponse(token=token)
 
 
@@ -249,7 +278,7 @@ def _check_del_tags(permission_request: grant.IdentityChecker, tag_id_list: list
     responses={400: responses.PROBLEM, 403: responses.PROBLEM, 404: responses.PROBLEM},
 )
 def update_endpoint(identity_id: int, data: schemas.identity.IdentityUpdateRequest) -> schemas.identity.Identity:
-    if identity_id == ctx.identity_id:
+    if identity_id == ctx.identity_id and len(data.model_fields_set - {"unix_username"}) > 0:
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=403, title="Not allowed to update self")
         )
@@ -277,6 +306,21 @@ def update_endpoint(identity_id: int, data: schemas.identity.IdentityUpdateReque
                     status_code=403, title="Not allowed to update identity field", detail="unix_username"
                 )
             )
+        if data.unix_username is not None:
+            if not unix_account.is_valid(data.unix_username):
+                raise responses.ProblemHTTPException(
+                    responses.problem_response(
+                        status_code=400, title="Invalid unix_username", detail=data.unix_username
+                    )
+                )
+            if unix_account.is_privileged(data.unix_username, ctx.config.privileged_unix_usernames):
+                raise responses.ProblemHTTPException(
+                    responses.problem_response(
+                        status_code=400,
+                        title="Not allowed to use a privileged unix_username",
+                        detail=data.unix_username,
+                    )
+                )
         update_params["unix_username"] = data.unix_username
 
     if "tags" in data.model_fields_set:

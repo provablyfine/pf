@@ -110,6 +110,7 @@ for _pf_d in TrustedUserCAKeys AuthorizedPrincipalsCommand; do
 done
 
 install -d -m 700 /var/lib/pf
+install -d -m 755 /var/log/pf
 openssl genpkey -algorithm ed25519 | systemd-creds encrypt --name=account - /var/lib/pf/account.cred
 
 cat > /var/lib/pf/config.json << 'PFEOF'
@@ -135,6 +136,18 @@ AuthorizedPrincipalsCommand $_pf_bin openssh auth-principals \\
   --certificate=%k
 AuthorizedPrincipalsCommandUser {auth_user}
 PubkeyAuthentication yes
+PFEOF
+
+if grep -q '^# BEGIN pf$' /etc/pam.d/sshd 2>/dev/null; then
+  echo 'pf PAM block already present in /etc/pam.d/sshd; remove before re-running host-init' >&2
+  exit 1
+fi
+
+cat >> /etc/pam.d/sshd << PFEOF
+# BEGIN pf
+session optional pam_exec.so $_pf_bin -d -d --log-filename=/var/log/pf/session-deadline.log \\
+  openssh session-deadline --ca-pub-path={ca_pub_path}
+# END pf
 PFEOF
 
 cat > /etc/systemd/system/pf-host-refresh.service << PFEOF
@@ -234,6 +247,9 @@ def host_uninit_function(args: argparse.Namespace) -> None:
         "rm -f /etc/systemd/system/pf-host-bastion.service",
         "rm -f /etc/NetworkManager/dispatcher.d/pf-host-refresh",
         "systemctl daemon-reload",
+        "",
+        "systemctl stop 'pf-deadline-*.timer' 2>/dev/null || true",
+        "sed -i '/^# BEGIN pf$/,/^# END pf$/d' /etc/pam.d/sshd 2>/dev/null || true",
         "",
         f"rm -f {args.sshd_config_drop_in}",
         f"rm -f {args.ca_pub_path}",

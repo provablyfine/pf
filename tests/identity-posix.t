@@ -5,6 +5,48 @@ Initialize server and login
 Create a user identity
   $ pfa -c config.json identity create -n user
   $ USER_ID=$(pfa -c config.json identity list -n user -q)
+  $ ROOT_ID=$(pfa -c config.json identity list -n root -q)
+
+Admin can set her own unix_username even though self-updates are forbidden
+  $ pfa -c config.json identity update -i $ROOT_ID --unix-username mathieu
+  $ pfa -c config.json identity read -i $ROOT_ID
+  id             [0-9]+ (re)
+  name           root
+  boundary       root
+  unix_username  mathieu
+  $ pfa -c config.json identity update -i $ROOT_ID --unix-username ""
+
+Other self-updates are still forbidden
+  $ pfa -c config.json identity update -i $ROOT_ID -n newroot
+  Not allowed to update self
+  [2]
+  $ pfa -c config.json identity update -i $ROOT_ID --unix-username mathieu -n newroot
+  Not allowed to update self
+  [2]
+
+Privileged unix_username values are rejected, case-insensitively
+  $ pfa -c config.json identity update -i $USER_ID --unix-username root
+  Not allowed to use a privileged unix_username root
+  [2]
+  $ pfa -c config.json identity update -i $USER_ID --unix-username postgres
+  Not allowed to use a privileged unix_username postgres
+  [2]
+
+Invalid unix_username values are rejected
+  $ pfa -c config.json identity update -i $USER_ID --unix-username Alice
+  Invalid unix_username Alice
+  [2]
+  $ pfa -c config.json identity update -i $USER_ID --unix-username 1alice
+  Invalid unix_username 1alice
+  [2]
+  $ pfa -c config.json identity update -i $USER_ID --unix-username 'al ice'
+  Invalid unix_username al ice
+  [2]
+  $ pfa -c config.json identity update -i $USER_ID --unix-username $(python3 -c 'print("a"*33)')
+  Invalid unix_username a{33} (re)
+  [2]
+  $ pfa -c config.json identity update -i $USER_ID --unix-username $(python3 -c 'print("a"*32)')
+  $ pfa -c config.json identity update -i $USER_ID --unix-username ""
 
 Set unix_username (manual mode: admin sets it directly)
   $ pfa -c config.json identity update -i $USER_ID --unix-username alice
