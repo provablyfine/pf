@@ -1395,9 +1395,9 @@ async def test_tui_identity_add_tag(api, ssh_agent):
                 await pilot.pause()  # screen transition
                 await pilot.pause()  # IdentityViewScreen.on_mount (no API)
 
-                # IdentityViewScreen: Input#name is focused; tab to ListView#tags
+                # IdentityViewScreen: Input#name is focused; tab past Input#unix_username to ListView#tags
                 # (action_add_tag requires #tags to have focus)
-                await pilot.press("tab")
+                await pilot.press("tab", "tab")
                 await pilot.press("a")  # action_add_tag → _TagAddScreen opens via worker
                 await pilot.pause()  # screen transition
                 await pilot.pause()  # _TagAddScreen.on_mount calls list_tags()
@@ -1411,10 +1411,8 @@ async def test_tui_identity_add_tag(api, ssh_agent):
 
             assert not [n for n in app._notifications if n.severity == "error"]
 
-            await auth.get_identity(alice_id)
-
-
-#        assert any(t.name == "env" and t.value == "prod" for t in identity.tags)
+            identity = await auth.get_identity(alice_id)
+            assert any(t.name == "env" and t.value == "prod" for t in identity.tags)
 
 
 @pytest.mark.anyio

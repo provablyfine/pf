@@ -203,6 +203,20 @@ def create_endpoint(data: schemas.identity.IdentityCreateRequest) -> schemas.ide
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=400, title="Request contains invalid fields")
         )
+    if data.unix_username is not None:
+        if not unix_account.is_valid(data.unix_username):
+            raise responses.ProblemHTTPException(
+                responses.problem_response(status_code=400, title="Invalid unix_username", detail=data.unix_username)
+            )
+        if unix_account.is_privileged(data.unix_username, ctx.config.privileged_unix_usernames):
+            raise responses.ProblemHTTPException(
+                responses.problem_response(
+                    status_code=400,
+                    title="Not allowed to use a privileged unix_username",
+                    detail=data.unix_username,
+                )
+            )
+
     try:
         identity_id = model.identity.create(
             name=data.name,

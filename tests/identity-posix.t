@@ -63,6 +63,16 @@ Unix username must be unique across identities, even at creation time
   [2]
   $ pfa -c config.json identity delete -i $USER_CREATE_ID
 
+Invalid and privileged unix_username values are rejected at creation time too
+  $ pfa -c config.json identity create -n user-create-invalid --unix-username Bob
+  Invalid unix_username Bob
+  [2]
+  $ pfa -c config.json identity create -n user-create-privileged --unix-username root
+  Not allowed to use a privileged unix_username root
+  [2]
+  $ pfa -c config.json identity list -n user-create-invalid
+  $ pfa -c config.json identity list -n user-create-privileged
+
 Set unix_username (manual mode: admin sets it directly)
   $ pfa -c config.json identity update -i $USER_ID --unix-username alice
   $ pfa -c config.json identity read -i $USER_ID
