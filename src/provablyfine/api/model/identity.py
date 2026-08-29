@@ -16,9 +16,7 @@ class Identity:
     unix_username: str | None
 
 
-def create(
-    name: str, boundary_id_list: list[int], tag_id_list: list[int], unix_username: str | None = None
-) -> int:
+def create(name: str, boundary_id_list: list[int], tag_id_list: list[int], unix_username: str | None = None) -> int:
     now = int(time.time())
     identity_id = ctx.app_db.identity.create(name=name, created_at=now, unix_username=unix_username)
     assert identity_id is not None

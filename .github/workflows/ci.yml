@@ -51,6 +51,35 @@ jobs:
           name: test-logs-${{ matrix.python-version }}
           path: /tmp/pf-test-logs/
 
+  test-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v8.1.0
+        with:
+          python-version: "3.12"
+      - name: Install podman and jq
+        run: brew install podman jq
+      - name: Start podman machine
+        # Best-effort: GitHub-hosted macOS runners don't support the nested
+        # virtualization podman machine needs (vfkit/Virtualization.framework
+        # fails there), so this is expected to fail in hosted CI. When it
+        # does, the podman/sshd-container-based e2e tests skip themselves via
+        # conftest.py's _require_podman() rather than failing the job.
+        continue-on-error: true
+        run: |
+          podman machine init
+          podman machine start
+          podman info
+      - name: Run tests
+        run: uv run pytest --basetemp=/tmp/pf-test-logs
+      - name: Upload test logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs-macos
+          path: /tmp/pf-test-logs/
+
   docs:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'

@@ -209,9 +209,7 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
         "-b", "--boundary", help="Boundary to enforce on newly-created identity", nargs="*", default=[]
     )
     create_parser.add_argument("-t", "--tag", help="Tag to apply on the newly-created identity", nargs="*", default=[])
-    create_parser.add_argument(
-        "--unix-username", default=None, help="Set Unix username for the newly-created identity"
-    )
+    create_parser.add_argument("--unix-username", default=None, help="Set Unix username for the newly-created identity")
     create_parser.set_defaults(func=_identity_create_function)
 
     invite_parser = subparsers.add_parser("invite", help="Invite an identity")
