@@ -7,8 +7,8 @@ Login without --session-key: SSH agent is available, fingerprint stored
   $ pf -c config.json login
   $ python3 -c "import json; c=json.load(open('config.json')); fp=c.get('session_key_fingerprint'); print(fp is not None, c.get('session_key_file'), c.get('session_key_pem'))"
   True None None
-  $ stat -c "%a" config.json
-  600
+  $ ls -l config.json | cut -c1-10
+  -rw-------
 
 Verify subsequent command works with agent session
   $ pfa -c config.json auth list -q

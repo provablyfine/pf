@@ -1,5 +1,6 @@
 import copy
 import dataclasses
+import hashlib
 import json
 import logging
 import os
@@ -517,6 +518,35 @@ _FRPC_SHA256: dict[str, str] = {
 }
 
 
+def _download_frps_tarball(target: str, tarball_name: str, tarball_path: pathlib.Path) -> None:
+    """Download and verify the frp release tarball (holds both frpc and frps) into the shared .cache/."""
+    url = f"https://github.com/fatedier/frp/releases/download/v{_FRPC_VERSION}/{tarball_name}"
+    tarball_path.parent.mkdir(exist_ok=True)
+    try:
+        response = requests.get(url, stream=True, timeout=30)
+        response.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        pytest.skip(f"Unable to download frps from {url}: {e}")
+
+    logger.info(f"Downloading {tarball_name} from {url}")
+    fd, tmp_name = tempfile.mkstemp(dir=tarball_path.parent, suffix=".tmp")
+    tmp_path = pathlib.Path(tmp_name)
+    try:
+        with os.fdopen(fd, "wb") as f:
+            for chunk in response.iter_content(chunk_size=1 << 16):
+                f.write(chunk)
+
+        digest = hashlib.sha256(tmp_path.read_bytes()).hexdigest()
+        if digest != _FRPC_SHA256[target]:
+            raise Error(f"SHA256 mismatch for {tarball_name}: expected {_FRPC_SHA256[target]}, got {digest}")
+        # Atomic on POSIX; if another worker won a concurrent download, both
+        # copies are hash-verified identical so the replace is a harmless no-op.
+        os.replace(tmp_path, tarball_path)
+    except BaseException:
+        tmp_path.unlink(missing_ok=True)
+        raise
+
+
 def _find_frps(tmp_path: pathlib.Path) -> str:
     frps_in_path = shutil.which("frps")
     if frps_in_path:
@@ -535,7 +565,7 @@ def _find_frps(tmp_path: pathlib.Path) -> str:
     tarball_path = pathlib.Path(tld()) / ".cache" / tarball_name
 
     if not tarball_path.exists():
-        pytest.skip(f"frps tarball not found at {tarball_path}; run 'uv build' first to download it")
+        _download_frps_tarball(target, tarball_name, tarball_path)
 
     frps_path = tmp_path / "frps"
     with tarfile.open(tarball_path) as tf:

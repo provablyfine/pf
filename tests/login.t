@@ -8,8 +8,8 @@ Case 1: login with explicit session key file
   $ pf -c config.json login --session-key session
   $ python3 -c "import json; c=json.load(open('config.json')); print(c['session_key_file'], c.get('session_key_fingerprint'), c.get('session_key_pem'))"
   session None None
-  $ stat -c "%a" config.json
-  600
+  $ ls -l config.json | cut -c1-10
+  -rw-------
 
 Verify subsequent command works with file session key
   $ pfa -c config.json auth list -q
