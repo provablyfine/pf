@@ -61,6 +61,12 @@ jobs:
       - name: Install podman and jq
         run: brew install podman jq
       - name: Start podman machine
+        # Best-effort: GitHub-hosted macOS runners don't support the nested
+        # virtualization podman machine needs (vfkit/Virtualization.framework
+        # fails there), so this is expected to fail in hosted CI. When it
+        # does, the podman/sshd-container-based e2e tests skip themselves via
+        # conftest.py's _require_podman() rather than failing the job.
+        continue-on-error: true
         run: |
           podman machine init
           podman machine start
