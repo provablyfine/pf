@@ -1,8 +1,11 @@
+import shutil
+
 import pytest
 
 from . import utils
 
 
+@pytest.mark.skipif(not shutil.which("jq"), reason="jq not found")
 @pytest.mark.parametrize(
     "filename",
     [
