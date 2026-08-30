@@ -39,6 +39,14 @@ Both unit tests and end-to-end tests can be run with pytest:
 $ uv run pytest
 ```
 
+Some end-to-end tests have extra prerequisites and are skipped when they're missing:
+
+- `podman` (rootless, with `/etc/subuid`/`/etc/subgid` entries for your user) — used
+  to spin up a real sshd container to `ssh`/`pf ssh` against.
+- `jq` — used by many cram scripts (`tests/*.t`, `tests/*.t.jinja`) to parse
+  `pfa ... --format json` output.
+- `ssh` — the OpenSSH client, used to drive the sshd container above.
+
 The pre-release test process requires a test across multiple python versions:
 ```console
 $ uv run tox
