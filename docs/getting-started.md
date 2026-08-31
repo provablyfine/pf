@@ -14,6 +14,22 @@ $ pf --version
 {{pf_version}}
 ```
 
+### Native Windows
+
+On Windows, you can instead download `pf-setup.exe` from the
+[latest release](https://github.com/provablyfine/pf/releases/latest) and run
+it — it installs `pf` for your user only, no administrator rights needed.
+The installer is currently unsigned, so Windows SmartScreen will warn you on
+first run; choose "More info" then "Run anyway" to proceed.
+
+`pf ssh` needs a running SSH agent. Windows' built-in OpenSSH Authentication
+Agent service ships disabled by default — if `pf` reports that no agent was
+found, enable it once in an elevated PowerShell:
+```powershell
+Set-Service ssh-agent -StartupType Automatic
+Start-Service ssh-agent
+```
+
 ## Create your first tenant
 
 The fastest way to create your first tenant is to use our

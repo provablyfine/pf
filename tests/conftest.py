@@ -25,6 +25,8 @@ import pytest
 import requests
 
 import provablyfine.api.log_filter
+import provablyfine.ssh.agent
+import provablyfine.ssh.exceptions
 
 logger = logging.getLogger(__name__)
 
@@ -340,6 +342,16 @@ class SshAgent:
 
 @pytest.fixture
 def ssh_agent(request):
+    if sys.platform == "win32":
+        # There's no POSIX-style `-a <path>` agent on Windows: real users get
+        # the OpenSSH Authentication Agent service on its well-known pipe, so
+        # that's what this fixture exercises too.
+        try:
+            provablyfine.ssh.agent.Client()
+        except provablyfine.ssh.exceptions.Error as e:
+            pytest.skip(str(e))
+        yield SshAgent(provablyfine.ssh.agent.WELL_KNOWN_PIPE)
+        return
     if not shutil.which("ssh-agent"):
         pytest.skip("ssh-agent not found")
     # Pin an explicit, short socket path via -a rather than letting ssh-agent
@@ -347,7 +359,7 @@ def ssh_agent(request):
     # instead of $TMPDIR, and a long $HOME (as under some sandboxed/CI test
     # runs, where it can vary run-to-run) pushes the socket path past
     # AF_UNIX's ~108-byte sun_path limit, making ssh-agent refuse to start.
-    agent_socket_path = tempfile.mktemp(prefix="pf-ssh-agent-", suffix=".sock", dir="/tmp")
+    agent_socket_path = tempfile.mktemp(prefix="pf-ssh-agent-", suffix=".sock", dir=tempfile.gettempdir())
     completed = subprocess.run(["ssh-agent", "-s", "-a", agent_socket_path], capture_output=True)
     assert completed.returncode == 0
     pid = None
@@ -417,27 +429,53 @@ def api(request, tmp_path):
     env = copy.copy(os.environ)
     env["PF_API_CONFIG"] = str(api_config)
     api_log_file = open(api_log, "w+")
-    popen = subprocess.Popen(
-        [
-            sys.executable,
-            "-m",
-            "uvicorn",
-            "--fd",
-            str(api_sock.fileno()),
-            "--log-config",
-            str(api_log_config),
-            "--log-level",
-            "info",
-            "--factory",
-            "provablyfine.api.app:factory",
-        ],
-        stdout=api_log_file,
-        stderr=subprocess.STDOUT,
-        text=True,
-        env=env,
-        pass_fds=(api_sock.fileno(),),
-    )
-    api_sock.close()
+    if sys.platform == "win32":
+        # subprocess.pass_fds (and uvicorn's --fd) aren't available on Windows;
+        # bind only to pick a free port, then hand it to uvicorn directly.
+        api_sock.close()
+        popen = subprocess.Popen(
+            [
+                sys.executable,
+                "-m",
+                "uvicorn",
+                "--host",
+                api_host,
+                "--port",
+                str(api_port),
+                "--log-config",
+                str(api_log_config),
+                "--log-level",
+                "info",
+                "--factory",
+                "provablyfine.api.app:factory",
+            ],
+            stdout=api_log_file,
+            stderr=subprocess.STDOUT,
+            text=True,
+            env=env,
+        )
+    else:
+        popen = subprocess.Popen(
+            [
+                sys.executable,
+                "-m",
+                "uvicorn",
+                "--fd",
+                str(api_sock.fileno()),
+                "--log-config",
+                str(api_log_config),
+                "--log-level",
+                "info",
+                "--factory",
+                "provablyfine.api.app:factory",
+            ],
+            stdout=api_log_file,
+            stderr=subprocess.STDOUT,
+            text=True,
+            env=env,
+            pass_fds=(api_sock.fileno(),),
+        )
+        api_sock.close()
 
     pf_start_timeout = 10
     start = time.time()
@@ -645,3 +683,83 @@ def frps(api: Api, tmp_path: pathlib.Path, request: pytest.FixtureRequest) -> ty
         frps_log_file.close()
         if hasattr(request.node, "rep_call") and request.node.rep_call.failed:
             print(f"frps log: {frps_log}")
+
+
+class SshdNative:
+    """Controls a foreground Windows sshd.exe, started only once its host
+    certificate is ready — sidesteps needing any reload/HUP step."""
+
+    def __init__(self, keys_directory: str, host_key_path: str, port: int) -> None:
+        self.keys_directory = keys_directory
+        self.host_key_path = host_key_path
+        self.host_pubkey_path = host_key_path + ".pub"
+        self.host_cert_path = host_key_path + ".cert"
+        self.port = port
+        self._popen: subprocess.Popen | None = None
+        self._log_file: typing.IO[str] | None = None
+
+    def start(self, sshd_config_path: str, log_path: str) -> None:
+        sshd_exe = shutil.which("sshd")
+        assert sshd_exe is not None
+        self._log_file = open(log_path, "w+")
+        self._popen = subprocess.Popen(
+            [sshd_exe, "-D", "-e", "-f", sshd_config_path],
+            stdout=self._log_file,
+            stderr=subprocess.STDOUT,
+        )
+        start = time.time()
+        ready = False
+        while time.time() - start < 10:
+            try:
+                with socket.create_connection(("127.0.0.1", self.port), timeout=0.5):
+                    ready = True
+                    break
+            except OSError:
+                time.sleep(0.1)
+        if not ready:
+            self.stop()
+            with open(log_path) as f:
+                print(f.read())
+            raise Exception("sshd_native failed to start")
+
+    def stop(self) -> None:
+        if self._popen is not None:
+            self._popen.terminate()
+            self._popen.wait()
+            self._popen = None
+        if self._log_file is not None:
+            self._log_file.close()
+            self._log_file = None
+
+
+@pytest.fixture
+def sshd_native(tmp_path: pathlib.Path) -> typing.Generator[SshdNative, None, None]:
+    sshd_exe = shutil.which("sshd")
+    if sshd_exe is None:
+        pytest.skip("sshd.exe not found (OpenSSH Server Windows capability not installed)")
+    ssh_keygen = shutil.which("ssh-keygen")
+    assert ssh_keygen is not None
+
+    keys_directory = tmp_path / "sshd_keys"
+    keys_directory.mkdir()
+    host_key_path = keys_directory / "ssh_host_ed25519_key"
+    subprocess.run(
+        [ssh_keygen, "-t", "ed25519", "-f", str(host_key_path), "-N", ""],
+        check=True,
+        capture_output=True,
+    )
+    # sshd enforces host-key file permissions unconditionally (unlike StrictModes,
+    # which only covers the connecting user's files) — tmp_path's inherited ACLs
+    # are too open for it, so restrict the key to the current user only.
+    subprocess.run(
+        ["icacls", str(host_key_path), "/inheritance:r", "/grant:r", f"{os.environ['USERNAME']}:F"],
+        check=True,
+        capture_output=True,
+    )
+    port = _free_port()
+
+    sshd = SshdNative(keys_directory=str(keys_directory), host_key_path=str(host_key_path), port=port)
+    try:
+        yield sshd
+    finally:
+        sshd.stop()

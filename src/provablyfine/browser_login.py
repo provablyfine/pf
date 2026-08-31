@@ -48,8 +48,8 @@ def has_valid_session(config: client.Config) -> bool:
 def generate_session_key() -> tuple[jwk.Private, str]:
     try:
         agent = ssh.agent.Client()
-    except Exception:
-        raise pfc.exceptions.UI("Unable to connect to user's SSH agent")
+    except Exception as e:
+        raise pfc.exceptions.UI(f"Unable to connect to user's SSH agent: {e}") from e
     session_key = jwk.Private.generate_ed25519()
     agent.add(session_key, comment="pf-session", lifetime=1800)
     return session_key, session_key.public().ssh_fingerprint()
