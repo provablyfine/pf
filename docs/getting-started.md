@@ -182,7 +182,7 @@ $ pfat
     AsciinemaPlayer.create(
       "../assets/tui-tour-quick.cast",
       document.getElementById("tour-quick"),
-      {cols: 100, rows: 30, speed: 0.2, loop: true, preload: true, autoplay: true}
+      {cols: 100, rows: 30, idleTimeLimit: 2, loop: true, preload: true, autoplay: true, keystrokeOverlay: true, controls: true}
     );
   });
 </script>

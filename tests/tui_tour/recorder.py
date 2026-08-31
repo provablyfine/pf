@@ -44,6 +44,7 @@ class PtyRecorder:
         self._width = width
         self._height = height
         self._events: list[tuple[float, bytes]] = []
+        self._input_events: list[tuple[float, bytes]] = []
         self._markers: list[tuple[float, str]] = []
         self._screen = pyte.Screen(width, height)
         self._stream = pyte.Stream(self._screen)
@@ -81,7 +82,7 @@ class PtyRecorder:
         self._stream.feed(data.decode("utf-8", errors="replace"))
         return True
 
-    def wait_for(self, text: str, timeout: float = 5.0, settle: float = 0.4) -> None:
+    def wait_for(self, text: str, timeout: float = 5.0, settle: float = 2.4) -> None:
         deadline = time.monotonic() + timeout
         matched = False
         while time.monotonic() < deadline:
@@ -95,10 +96,21 @@ class PtyRecorder:
             raise TourTimeoutError(f"timed out waiting for {text!r}; screen:\n" + "\n".join(self._screen.display))
         # A match can land mid-transition (e.g. a screen push still settling
         # focus after its first paint): keep draining until output goes quiet
-        # so the next send() isn't racing an in-flight render.
-        settle_deadline = time.monotonic() + settle
-        while time.monotonic() < settle_deadline:
-            if not self._drain(timeout=max(0.0, settle_deadline - time.monotonic())):
+        # so the next send() isn't racing an in-flight render. The default is
+        # deliberately longer than rendering needs, so it also paces the
+        # recording itself, giving a viewer time to read each screen before
+        # the next action fires (independent of the player's speed setting).
+        self.idle(settle)
+
+    def idle(self, seconds: float) -> None:
+        """Keep draining without waiting for any particular text. Used after
+        a settle-free match (see wait_for) and after inputs with no text to
+        wait for (e.g. a plain focus change via tab) so a state transition
+        that doesn't touch the screen still gets time to land before the
+        next input is sent, instead of racing it."""
+        deadline = time.monotonic() + seconds
+        while time.monotonic() < deadline:
+            if not self._drain(timeout=max(0.0, deadline - time.monotonic())):
                 break
 
     def mark(self, label: str) -> None:
@@ -110,6 +122,7 @@ class PtyRecorder:
         for key in keys:
             data = _KEYS.get(key, key.encode())
             os.write(self._master_fd, data)
+            self._input_events.append((time.monotonic() - self._start, data))
             self._drain(timeout=0.05)  # give the app a moment to react, keep draining
 
     def close(self, timeout: float = 5.0) -> None:
@@ -127,11 +140,13 @@ class PtyRecorder:
             os.waitpid(self._pid, 0)
         os.close(self._master_fd)
 
-    def write_cast(self, path: str, max_gap: float = 1.2) -> None:
-        """Serialize the recorded events (output and markers, merged in
-        chronological order) as an asciinema v2 cast. Any single inter-event
-        gap is capped at max_gap so a slow API call during recording doesn't
-        produce dead air in playback."""
+    def write_cast(self, path: str, max_gap: float = 2.4) -> None:
+        """Serialize the recorded events (output, input and markers, merged
+        in chronological order) as an asciinema v2 cast. Any single
+        inter-event gap is capped at max_gap so a slow API call during
+        recording doesn't produce dead air in playback. Input ("i") events
+        are what drives the player's keystrokeOverlay option — without them
+        the overlay renders nothing."""
         header = {
             "version": 2,
             "width": self._width,
@@ -142,6 +157,7 @@ class PtyRecorder:
         events: list[tuple[float, str, str]] = [
             (elapsed, "o", data.decode("utf-8", errors="replace")) for elapsed, data in self._events
         ]
+        events += [(elapsed, "i", data.decode("utf-8", errors="replace")) for elapsed, data in self._input_events]
         events += [(elapsed, "m", label) for elapsed, label in self._markers]
         events.sort(key=lambda event: event[0])
 

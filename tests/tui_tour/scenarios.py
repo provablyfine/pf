@@ -17,6 +17,11 @@ def run_scenario(rec: recorder.PtyRecorder, steps: list[Step]) -> None:
             rec.send(*step.keys)
         if step.wait_for is not None:
             rec.wait_for(step.wait_for, timeout=step.timeout)
+        elif step.keys:
+            # No text to confirm against (e.g. a plain focus-moving tab):
+            # give the state transition time to land so it isn't racing the
+            # next step's input.
+            rec.idle(0.6)
         if step.label is not None:
             rec.mark(step.label)
 
