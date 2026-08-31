@@ -1,3 +1,31 @@
+## 0.7.4 - 2026-08-31
+
+### Added
+
+- Add per-grant max ttl session duration field and enforce it for every SSH session type. ([#75](https://github.com/provablyfine/pf/issues/75))
+- New SSH Grant type which replaces the 3 previous ssh grant types. It allows the expression of policies that could not be expressed before. ([#81](https://github.com/provablyfine/pf/issues/81))
+- Quick tour and extended tour screencast of TUI ([#98](https://github.com/provablyfine/pf/issues/98))
+
+### Fixed
+
+- Stop displaying frpc license in "pf license" since frpc binaries are not distributed ([#68](https://github.com/provablyfine/pf/issues/68))
+- Add identity.unix_username used by {self} usernames in ssh grant's username_list ([#71](https://github.com/provablyfine/pf/issues/71))
+- Return 401 Unauthorized instead of 403 Forbidden for expired, revoked, or missing session, account, and invitation credentials, so clients can tell "please re-authenticate" apart from "not permitted". ([#73](https://github.com/provablyfine/pf/issues/73))
+- Enforce unique constraint on role and boundary names within each tenant ([#76](https://github.com/provablyfine/pf/issues/76))
+- Enforce unique constraint on role and member identity pairs to prevent duplicate role memberships ([#77](https://github.com/provablyfine/pf/issues/77))
+- Track coverage of "pf bastion connect" ([#78](https://github.com/provablyfine/pf/issues/78))
+- Delete all references when deleting an identity. ([#79](https://github.com/provablyfine/pf/issues/79))
+- Make sure the same tags aren't specified more than once and raise an error if it's the case when creating or updating an identity. ([#80](https://github.com/provablyfine/pf/issues/80))
+- Introduce .containerignore to minimize the size of the podman context and resolve podman build failures during tests ([#83](https://github.com/provablyfine/pf/issues/83))
+- Add sqlite_autoincrement to auth, identity_boundary, identity_tag, role_member, audit_log, role, boundary, and tenant so deleted ids can't be reused. Drop the unused `default` table, which was never read or written by any model or endpoint. ([#85](https://github.com/provablyfine/pf/issues/85))
+- Use mutation testing to verify our unit test coverage for security critical code ([#90](https://github.com/provablyfine/pf/issues/90))
+- Display a meaningful error message when bcrypt is not here and we need to encrypt or decrypt a key ([#91](https://github.com/provablyfine/pf/issues/91))
+- Use an explicit path in tmp for ssh-agent sockets to avoid random e2e test failures ([#93](https://github.com/provablyfine/pf/issues/93))
+- Allow an identity to set its own unix_username, and reject invalid or privileged unix_username values. ([#94](https://github.com/provablyfine/pf/issues/94))
+- Make full testsuite pass on MACOS ([#95](https://github.com/provablyfine/pf/issues/95))
+- Make TUI breadcrumb consistent across screens ([#99](https://github.com/provablyfine/pf/issues/99))
+
+
 ## 0.7.3 - 2026-07-27
 
 ### Fixed
