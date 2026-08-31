@@ -101,6 +101,7 @@ dev = [
     "codespell>=2.4.2",
     "towncrier>=24.0.0",
     "mutmut>=3.7.0",
+    "pyte>=0.8.2",
 ]
 
 [tool.tox]

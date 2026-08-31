@@ -167,6 +167,28 @@ laptop-ml-perso  shell   root
 laptop-ml-perso  shell   mathieu
 ```
 
+## Prefer a terminal UI?
+
+Every `pfa` command above (and more) is also available from `pfat`, a
+terminal UI for administrators:
+
+```console
+$ pfat
+```
+
+<div id="tour-quick"></div>
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    AsciinemaPlayer.create(
+      "../assets/tui-tour-quick.cast",
+      document.getElementById("tour-quick"),
+      {cols: 100, rows: 30, speed: 0.2, loop: true, preload: true, autoplay: true}
+    );
+  });
+</script>
+
+See the [Admin TUI](admin/tui.md) page for a full walkthrough of every screen.
+
 ## Next steps
 
 The setup we have completed is pretty basic. A more realistic setup would

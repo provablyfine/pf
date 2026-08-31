@@ -15,6 +15,12 @@ plugins:
 extra_javascript:
   - js/clipboard.js
   - javascripts/version-banner.js
+  # asciinema-player 3.17.0, vendored (Apache-2.0). To update: bump the
+  # version in this comment and re-run the curl commands in CONTRIBUTING.md.
+  - js/vendor/asciinema-player.min.js
+
+extra_css:
+  - css/vendor/asciinema-player.css
 
 markdown_extensions:
   - admonition
@@ -35,6 +41,7 @@ nav:
   - General administration:
       - Auditing: admin/audit.md
       - Tenants: admin/tenants.md
+      - Admin TUI: admin/tui.md
   - Self-hosting:
       - API Server: self-hosting/api-server.md
       - Bastion: self-hosting/bastion.md
