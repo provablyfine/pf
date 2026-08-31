@@ -297,11 +297,6 @@ def _check_del_tags(permission_request: grant.IdentityChecker, tag_id_list: list
     responses={400: responses.PROBLEM, 403: responses.PROBLEM, 404: responses.PROBLEM},
 )
 def update_endpoint(identity_id: int, data: schemas.identity.IdentityUpdateRequest) -> schemas.identity.Identity:
-    if identity_id == ctx.identity_id and len(data.model_fields_set - {"unix_username"}) > 0:
-        raise responses.ProblemHTTPException(
-            responses.problem_response(status_code=403, title="Not allowed to update self")
-        )
-
     identity = model.identity.read_one(id=identity_id)
     if identity is None:
         raise responses.ProblemHTTPException(
