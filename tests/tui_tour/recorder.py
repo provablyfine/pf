@@ -44,6 +44,7 @@ class PtyRecorder:
         self._width = width
         self._height = height
         self._events: list[tuple[float, bytes]] = []
+        self._markers: list[tuple[float, str]] = []
         self._screen = pyte.Screen(width, height)
         self._stream = pyte.Stream(self._screen)
         self._start = time.monotonic()
@@ -100,6 +101,11 @@ class PtyRecorder:
             if not self._drain(timeout=max(0.0, settle_deadline - time.monotonic())):
                 break
 
+    def mark(self, label: str) -> None:
+        """Record a chapter marker at the current point in the recording,
+        rendered by asciinema-player as a clickable, timestamped label."""
+        self._markers.append((time.monotonic() - self._start, label))
+
     def send(self, *keys: str) -> None:
         for key in keys:
             data = _KEYS.get(key, key.encode())
@@ -122,9 +128,10 @@ class PtyRecorder:
         os.close(self._master_fd)
 
     def write_cast(self, path: str, max_gap: float = 1.2) -> None:
-        """Serialize the recorded events as an asciinema v2 cast. Any single
-        inter-event gap is capped at max_gap so a slow API call during
-        recording doesn't produce dead air in playback."""
+        """Serialize the recorded events (output and markers, merged in
+        chronological order) as an asciinema v2 cast. Any single inter-event
+        gap is capped at max_gap so a slow API call during recording doesn't
+        produce dead air in playback."""
         header = {
             "version": 2,
             "width": self._width,
@@ -132,13 +139,19 @@ class PtyRecorder:
             "timestamp": int(time.time()),
             "env": {"TERM": "xterm-256color", "SHELL": "/bin/bash"},
         }
+        events: list[tuple[float, str, str]] = [
+            (elapsed, "o", data.decode("utf-8", errors="replace")) for elapsed, data in self._events
+        ]
+        events += [(elapsed, "m", label) for elapsed, label in self._markers]
+        events.sort(key=lambda event: event[0])
+
         with open(path, "w") as f:
             f.write(json.dumps(header) + "\n")
             prev_elapsed = 0.0
             cursor = 0.0
-            for elapsed, data in self._events:
+            for elapsed, kind, payload in events:
                 gap = min(elapsed - prev_elapsed, max_gap)
                 cursor += max(gap, 0.0)
                 prev_elapsed = elapsed
-                row = [round(cursor, 6), "o", data.decode("utf-8", errors="replace")]
+                row = [round(cursor, 6), kind, payload]
                 f.write(json.dumps(row) + "\n")
