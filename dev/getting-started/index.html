@@ -49,6 +49,8 @@
       
     
     
+      <link rel="stylesheet" href="../css/vendor/asciinema-player.css">
+    
     <script>__md_scope=new URL("..",location),__md_scope.pathname.endsWith("/")||(__md_scope=new URL(__md_scope.pathname+"/",location)),__md_hash=e=>[...e].reduce(((e,t)=>(e<<5)-e+t.charCodeAt(0)),0),__md_get=(e,t=localStorage,_=__md_scope)=>JSON.parse(t.getItem(_.pathname+"."+e)),__md_set=(e,t,_=localStorage,a=__md_scope)=>{try{_.setItem(a.pathname+"."+e,JSON.stringify(t))}catch(e){}},document.documentElement.setAttribute("data-platform",navigator.platform)</script>
     
       
@@ -487,6 +489,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#prefer-a-terminal-ui" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Prefer a terminal UI?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#next-steps" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -760,6 +773,33 @@
     
   
   Tenants
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../admin/tui/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Admin TUI
 
     
   </span>
@@ -1129,6 +1169,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#prefer-a-terminal-ui" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Prefer a terminal UI?
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#next-steps" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -1267,6 +1318,23 @@ before coming back to the terminal:</p>
 <span class="go">laptop-ml-perso  shell   root</span>
 <span class="go">laptop-ml-perso  shell   mathieu</span>
 </code></pre></div></p>
+<h2 id="prefer-a-terminal-ui">Prefer a terminal UI?</h2>
+<p>Every <code>pfa</code> command above (and more) is also available from <code>pfat</code>, a
+terminal UI for administrators:</p>
+<div class="highlight"><pre><span></span><code><span class="gp">$ </span>pfat
+</code></pre></div>
+<div id="tour-quick"></div>
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    AsciinemaPlayer.create(
+      "../assets/tui-tour-quick.cast",
+      document.getElementById("tour-quick"),
+      {cols: 100, rows: 30, speed: 0.2, loop: true, preload: true, autoplay: true}
+    );
+  });
+</script>
+
+<p>See the <a href="../admin/tui/">Admin TUI</a> page for a full walkthrough of every screen.</p>
 <h2 id="next-steps">Next steps</h2>
 <p>The setup we have completed is pretty basic. A more realistic setup would
 require a clear mapping of your security policy (who can access which hosts)
@@ -1334,6 +1402,8 @@ tenant, ideally so that it happens when hosts are provisionned.</p>
         <script src="../js/clipboard.js"></script>
       
         <script src="../javascripts/version-banner.js"></script>
+      
+        <script src="../js/vendor/asciinema-player.min.js"></script>
       
     
   </body>

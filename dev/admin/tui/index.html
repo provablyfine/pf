@@ -9,26 +9,28 @@
       
       
       
+        <link rel="prev" href="../tenants.md">
       
-        <link rel="next" href="./getting-started/">
+      
+        <link rel="next" href="../../self-hosting/api-server.md">
       
       
         
       
       
-      <link rel="icon" href="./assets/images/favicon.png">
+      <link rel="icon" href="../../assets/images/favicon.png">
       <meta name="generator" content="zensical-0.0.57">
     
     
       
-        <title>SSH Access Control - Your infrastructure, Provably Fine</title>
+        <title>Admin TUI - Your infrastructure, Provably Fine</title>
       
     
     
       
         
       
-      <link rel="stylesheet" href="./assets/stylesheets/modern/main.5da3a30f.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/modern/main.5da3a30f.min.css">
       
       
 
@@ -47,9 +49,9 @@
       
     
     
-      <link rel="stylesheet" href="./css/vendor/asciinema-player.css">
+      <link rel="stylesheet" href="../../css/vendor/asciinema-player.css">
     
-    <script>__md_scope=new URL(".",location),__md_scope.pathname.endsWith("/")||(__md_scope=new URL(__md_scope.pathname+"/",location)),__md_hash=e=>[...e].reduce(((e,t)=>(e<<5)-e+t.charCodeAt(0)),0),__md_get=(e,t=localStorage,_=__md_scope)=>JSON.parse(t.getItem(_.pathname+"."+e)),__md_set=(e,t,_=localStorage,a=__md_scope)=>{try{_.setItem(a.pathname+"."+e,JSON.stringify(t))}catch(e){}},document.documentElement.setAttribute("data-platform",navigator.platform)</script>
+    <script>__md_scope=new URL("../..",location),__md_scope.pathname.endsWith("/")||(__md_scope=new URL(__md_scope.pathname+"/",location)),__md_hash=e=>[...e].reduce(((e,t)=>(e<<5)-e+t.charCodeAt(0)),0),__md_get=(e,t=localStorage,_=__md_scope)=>JSON.parse(t.getItem(_.pathname+"."+e)),__md_set=(e,t,_=localStorage,a=__md_scope)=>{try{_.setItem(a.pathname+"."+e,JSON.stringify(t))}catch(e){}},document.documentElement.setAttribute("data-platform",navigator.platform)</script>
     
       
 
@@ -67,7 +69,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#ssh-access-control" class="md-skip">
+        <a href="#admin-tui" class="md-skip">
           Skip to content
         </a>
       
@@ -87,7 +89,7 @@
 
 <header class="md-header md-header--shadow" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="" title="Your infrastructure, Provably Fine" class="md-header__button md-logo" aria-label="Your infrastructure, Provably Fine" data-md-component="logo">
+    <a href="../.." title="Your infrastructure, Provably Fine" class="md-header__button md-logo" aria-label="Your infrastructure, Provably Fine" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-book-open" viewBox="0 0 24 24"><path d="M12 5v16M20.001 19A2 2 0 0 0 22 17V5a2 2 0 0 0-1.999-2L16 3.002A5 5 0 0 0 12 5a5 5 0 0 0-4-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 1.999 2H8a5 5 0 0 1 4 2 5 5 0 0 1 4-2z"/></svg>
@@ -107,7 +109,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              SSH Access Control
+              Admin TUI
             
           </span>
         </div>
@@ -160,7 +162,7 @@
 
 <nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="" title="Your infrastructure, Provably Fine" class="md-nav__button md-logo" aria-label="Your infrastructure, Provably Fine" data-md-component="logo">
+    <a href="../.." title="Your infrastructure, Provably Fine" class="md-nav__button md-logo" aria-label="Your infrastructure, Provably Fine" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-book-open" viewBox="0 0 24 24"><path d="M12 5v16M20.001 19A2 2 0 0 0 22 17V5a2 2 0 0 0-1.999-2L16 3.002A5 5 0 0 0 12 5a5 5 0 0 0-4-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 1.999 2H8a5 5 0 0 1 4 2 5 5 0 0 1 4-2z"/></svg>
@@ -175,36 +177,10 @@
       
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-  Home
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
         
   
   
@@ -219,60 +195,6 @@
   
 
       </a>
-      
-        
-
-
-<nav class="md-nav md-nav--secondary" aria-label="On this page">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      On this page
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#open-source" class="md-nav__link">
-    <span class="md-ellipsis">
-      <span class="md-typeset">
-        Open Source
-      </span>
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#goals" class="md-nav__link">
-    <span class="md-ellipsis">
-      <span class="md-typeset">
-        Goals
-      </span>
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#we-are-still-young" class="md-nav__link">
-    <span class="md-ellipsis">
-      <span class="md-typeset">
-        We are still young
-      </span>
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -329,7 +251,7 @@
   
   
     <li class="md-nav__item">
-      <a href="./getting-started/" class="md-nav__link">
+      <a href="../../getting-started/" class="md-nav__link">
         
   
   
@@ -356,7 +278,7 @@
   
   
     <li class="md-nav__item">
-      <a href="./getting-started-self-hosted.md" class="md-nav__link">
+      <a href="../../getting-started-self-hosted.md" class="md-nav__link">
         
   
   
@@ -435,7 +357,7 @@
   
   
     <li class="md-nav__item">
-      <a href="./access-control/identities-tags.md" class="md-nav__link">
+      <a href="../../access-control/identities-tags.md" class="md-nav__link">
         
   
   
@@ -462,7 +384,7 @@
   
   
     <li class="md-nav__item">
-      <a href="./access-control/permissions.md" class="md-nav__link">
+      <a href="../../access-control/permissions.md" class="md-nav__link">
         
   
   
@@ -489,7 +411,7 @@
   
   
     <li class="md-nav__item">
-      <a href="./access-control/authentication.md" class="md-nav__link">
+      <a href="../../access-control/authentication.md" class="md-nav__link">
         
   
   
@@ -520,18 +442,20 @@
       
   
   
+    
   
   
+  
     
     
     
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
         
           
           <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
@@ -551,7 +475,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
@@ -568,7 +492,7 @@
   
   
     <li class="md-nav__item">
-      <a href="./admin/audit.md" class="md-nav__link">
+      <a href="../audit.md" class="md-nav__link">
         
   
   
@@ -595,7 +519,7 @@
   
   
     <li class="md-nav__item">
-      <a href="./admin/tenants.md" class="md-nav__link">
+      <a href="../tenants.md" class="md-nav__link">
         
   
   
@@ -619,10 +543,36 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="./admin/tui/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Admin TUI
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="././" class="md-nav__link md-nav__link--active">
         
   
   
@@ -637,6 +587,38 @@
   
 
       </a>
+      
+        
+
+
+<nav class="md-nav md-nav--secondary" aria-label="On this page">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      On this page
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#navigation" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Navigation
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -701,7 +683,7 @@
   
   
     <li class="md-nav__item">
-      <a href="./self-hosting/api-server.md" class="md-nav__link">
+      <a href="../../self-hosting/api-server.md" class="md-nav__link">
         
   
   
@@ -728,7 +710,7 @@
   
   
     <li class="md-nav__item">
-      <a href="./self-hosting/bastion.md" class="md-nav__link">
+      <a href="../../self-hosting/bastion.md" class="md-nav__link">
         
   
   
@@ -762,7 +744,7 @@
   
   
     <li class="md-nav__item">
-      <a href="./changelog/" class="md-nav__link">
+      <a href="../../changelog/" class="md-nav__link">
         
   
   
@@ -822,32 +804,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#open-source" class="md-nav__link">
+  <a href="#navigation" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Open Source
-      </span>
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#goals" class="md-nav__link">
-    <span class="md-ellipsis">
-      <span class="md-typeset">
-        Goals
-      </span>
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#we-are-still-young" class="md-nav__link">
-    <span class="md-ellipsis">
-      <span class="md-typeset">
-        We are still young
+        Navigation
       </span>
     </span>
   </a>
@@ -869,35 +829,67 @@
                 
                   
 
-<h1 id="ssh-access-control">SSH Access Control</h1>
-<div class="admonition warning">
-<p class="admonition-title">Warning</p>
-<p>This version is <strong>NOT READY FOR PRODUCTION USE</strong>.</p>
-</div>
-<p><code>pf</code> provides a collection of tools to implement centralized access control for your SSH servers to:</p>
-<ul>
-<li>maintain a centralized database of users, hosts and access grants</li>
-<li>check that each user is allowed to reach a host upon each connection attempt</li>
-<li>provide access to SSH servers that do not have public IP addresses</li>
-<li>review access logs easily</li>
-<li>allow administrators to decide how users should authenticate, via private keys, or OIDC SSOs</li>
-</ul>
-<h2 id="open-source">Open Source</h2>
-<p><code>pf</code> is open source, released under the <a href="https://www.gnu.org/licenses/agpl-3.0.en.html">AGPL</a>:
-this software is free to download and use, for both personal and commercial use, provided any
-changes you make are redistributed to your users.</p>
-<h2 id="goals">Goals</h2>
-<p>Our long-term objective is to build high-quality, production-ready, battle tested,
-software to manage infrastructure on-prem or on-cloud.</p>
-<p>Our short-term objective is to start with SSH access control because existing solutions
-often lack polish or robustness or are encumbered with licences that restrict their
-for use in ways that we are not comfortable with.</p>
-<h2 id="we-are-still-young">We are still young</h2>
-<p>Our long-term objective is ambitious. We are not quite there yet but we believe <code>pf</code> is
-already quite usable for small-scale lab-style deployments. Production deployments
-on large-scale systems where the security stakes are high are not encouraged.</p>
-<p>If you do use <code>pf</code>, we welcome feedback, discussions on features you feel are lacking,
-bugs you found, or security issues you want to report.</p>
+<h1 id="admin-tui">Admin TUI</h1>
+<p><code>pfat</code> is a terminal UI for administrators. It covers the same ground as the
+<code>pfa</code> CLI — tenants, identities, bastions, boundaries, tags, roles and their
+grants, authentication methods, and the audit log — without needing to
+remember individual subcommands.</p>
+<div class="highlight"><pre><span></span><code><span class="gp">$ </span>pfat
+</code></pre></div>
+<p>The recording below is a full walkthrough: logging in, then creating a
+tenant, an identity (and inviting it), a bastion, a boundary, a tag, a role
+with two grants, and an authentication method, finishing on the audit log
+that records everything that just happened.</p>
+<div id="tour-thorough"></div>
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    AsciinemaPlayer.create(
+      "../../assets/tui-tour-thorough.cast",
+      document.getElementById("tour-thorough"),
+      {cols: 100, rows: 30, speed: 0.2, loop: true, preload: true, autoplay: true}
+    );
+  });
+</script>
+
+<h2 id="navigation">Navigation</h2>
+<p>The TUI is keyboard-driven throughout:</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>↑</code> / <code>↓</code></td>
+<td>move the selection</td>
+</tr>
+<tr>
+<td><code>enter</code></td>
+<td>open / select</td>
+</tr>
+<tr>
+<td><code>escape</code></td>
+<td>back (or quit, from the Home screen)</td>
+</tr>
+<tr>
+<td><code>a</code></td>
+<td>add</td>
+</tr>
+<tr>
+<td><code>d</code></td>
+<td>delete</td>
+</tr>
+<tr>
+<td><code>ctrl+s</code></td>
+<td>save</td>
+</tr>
+</tbody>
+</table>
+<p>From the Home screen, each resource (Tenants, Identities, Bastions,
+Boundaries, Tags, Roles, Auths, Audit Log) opens into its own list, and each
+list opens into a detail view for the selected row.</p>
 
 
 
@@ -949,16 +941,16 @@ bugs you found, or security issues you want to report.</p>
     
       
       
-      <script id="__config" type="application/json">{"annotate":null,"base":".","features":["content.code.copy"],"search":"./assets/javascripts/workers/search.7d14d953.min.js","tags":null,"translations":{"clipboard.copied":"Copied to clipboard","clipboard.copy":"Copy to clipboard","search.result.more.one":"1 more on this page","search.result.more.other":"# more on this page","search.result.none":"No matching documents","search.result.one":"1 matching document","search.result.other":"# matching documents","search.result.placeholder":"Type to start searching","search.result.term.missing":"Missing","select.version":"Select version"},"version":{"alias":true,"provider":"mike"}}</script>
+      <script id="__config" type="application/json">{"annotate":null,"base":"../..","features":["content.code.copy"],"search":"../../assets/javascripts/workers/search.7d14d953.min.js","tags":null,"translations":{"clipboard.copied":"Copied to clipboard","clipboard.copy":"Copy to clipboard","search.result.more.one":"1 more on this page","search.result.more.other":"# more on this page","search.result.none":"No matching documents","search.result.one":"1 matching document","search.result.other":"# matching documents","search.result.placeholder":"Type to start searching","search.result.term.missing":"Missing","select.version":"Select version"},"version":{"alias":true,"provider":"mike"}}</script>
     
     
-      <script src="./assets/javascripts/bundle.49251538.min.js"></script>
+      <script src="../../assets/javascripts/bundle.49251538.min.js"></script>
       
-        <script src="./js/clipboard.js"></script>
+        <script src="../../js/clipboard.js"></script>
       
-        <script src="./javascripts/version-banner.js"></script>
+        <script src="../../javascripts/version-banner.js"></script>
       
-        <script src="./js/vendor/asciinema-player.min.js"></script>
+        <script src="../../js/vendor/asciinema-player.min.js"></script>
       
     
   </body>
