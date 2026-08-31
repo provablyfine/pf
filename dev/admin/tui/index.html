@@ -846,7 +846,7 @@ that records everything that just happened.</p>
     AsciinemaPlayer.create(
       "../../assets/tui-tour-thorough.cast",
       document.getElementById("tour-thorough"),
-      {cols: 100, rows: 30, speed: 0.2, loop: true, preload: true, autoplay: true}
+      {cols: 100, rows: 30, idleTimeLimit: 2, loop: true, preload: true, autoplay: true, keystrokeOverlay: true, controls: true}
     );
   });
 </script>
