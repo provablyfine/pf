@@ -62,7 +62,7 @@ class AuthViewScreen(base.Screen):
 
     @textual.work
     async def on_mount(self) -> None:
-        self.sub_title = f"Auths > {self._a.name}"
+        self.set_breadcrumb(base.BREADCRUMB_AUTHS, self._a.name)
 
     @textual.work
     async def action_save(self) -> None:

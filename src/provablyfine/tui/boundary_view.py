@@ -70,7 +70,7 @@ class BoundaryViewScreen(base.Screen):
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
-        self.sub_title = f"Boundaries > {self._boundary.name}"
+        self.set_breadcrumb(base.BREADCRUMB_BOUNDARIES, self._boundary.name)
         self.query_one("#denied", _GrantsTable).add_columns("Type", "Filter", "Permissions")
         self.query_one("#ceiling", _GrantsTable).add_columns("Type", "Filter", "Permissions")
         self._populate_denied()
@@ -117,7 +117,11 @@ class BoundaryViewScreen(base.Screen):
             if grant_type is None:
                 return
             new_grant = grant_edit.new_grant(grant_type)
-            updated_grant = await self.app.push_screen_wait(grant_edit.GrantEditScreen(self._auth, new_grant))
+            updated_grant = await self.app.push_screen_wait(
+                grant_edit.GrantEditScreen(
+                    self._auth, new_grant, base.format_breadcrumb(base.BREADCRUMB_BOUNDARIES, self._boundary.name)
+                )
+            )
             if updated_grant is None:
                 return
             if focused.id == "denied":
@@ -158,7 +162,13 @@ class BoundaryViewScreen(base.Screen):
         if not grant_list_ref:
             return
         index = table.cursor_row
-        updated_grant = await self.app.push_screen_wait(grant_edit.GrantEditScreen(self._auth, grant_list_ref[index]))
+        updated_grant = await self.app.push_screen_wait(
+            grant_edit.GrantEditScreen(
+                self._auth,
+                grant_list_ref[index],
+                base.format_breadcrumb(base.BREADCRUMB_BOUNDARIES, self._boundary.name),
+            )
+        )
         if updated_grant is None:
             return
         grant_list_ref[index] = updated_grant

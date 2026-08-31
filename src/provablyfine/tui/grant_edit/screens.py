@@ -8,6 +8,7 @@ import textual.reactive
 import textual.screen
 import textual.widgets
 
+from .. import base as tui_base
 from .. import header
 from . import base, boundary, identity, role, ssh, tag, tenant
 
@@ -37,14 +38,15 @@ class GrantEditScreen(textual.screen.Screen[pfc.schemas.Grant | None]):
     ]
     grant_type: textual.reactive.Reactive[str] = textual.reactive.Reactive("")
 
-    def __init__(self, auth: pfc.AsyncSessionClient, grant: pfc.schemas.Grant):
+    def __init__(self, auth: pfc.AsyncSessionClient, grant: pfc.schemas.Grant, parent_breadcrumb: str):
         super().__init__(id="grant-edit")
         self._auth = auth
         self._grant = grant
+        self._parent_breadcrumb = parent_breadcrumb
         self.grant_type = grant.type
 
     async def watch_grant_type(self, value: str) -> None:
-        self.sub_title = f"Edit {value} grant"
+        self.sub_title = tui_base.format_breadcrumb(self._parent_breadcrumb, f"Edit {value} grant")
         fields = self.query_one("#dynamic-grant-fields")
         await fields.query("*").remove()
         match value:

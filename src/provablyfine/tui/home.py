@@ -20,14 +20,14 @@ from . import (
 )
 
 _RESOURCES: list[tuple[str, collections.abc.Callable[[pfc.AsyncSessionClient], base.Screen]]] = [
-    ("Tenants", tenant_list.TenantListScreen),
-    ("Identities", identity_list.IdentityListScreen),
-    ("Bastions", bastion_list.BastionListScreen),
-    ("Boundaries", boundary_list.BoundaryListScreen),
-    ("Tags", tag_list.TagListScreen),
-    ("Roles", role_list.RoleListScreen),
-    ("Auths", auth_list.AuthListScreen),
-    ("Audit Log", audit_log_list.AuditLogListScreen),
+    (base.BREADCRUMB_TENANTS, tenant_list.TenantListScreen),
+    (base.BREADCRUMB_IDENTITIES, identity_list.IdentityListScreen),
+    (base.BREADCRUMB_BASTIONS, bastion_list.BastionListScreen),
+    (base.BREADCRUMB_BOUNDARIES, boundary_list.BoundaryListScreen),
+    (base.BREADCRUMB_TAGS, tag_list.TagListScreen),
+    (base.BREADCRUMB_ROLES, role_list.RoleListScreen),
+    (base.BREADCRUMB_AUTHS, auth_list.AuthListScreen),
+    (base.BREADCRUMB_AUDIT_LOG, audit_log_list.AuditLogListScreen),
 ]
 
 

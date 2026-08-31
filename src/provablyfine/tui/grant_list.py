@@ -116,7 +116,9 @@ class GrantListScreen(base.Screen):
         if grant_type is None:
             return
         new_grant = grant_edit.new_grant(grant_type)
-        updated_grant = await self.app.push_screen_wait(grant_edit.GrantEditScreen(self._auth, new_grant))
+        updated_grant = await self.app.push_screen_wait(
+            grant_edit.GrantEditScreen(self._auth, new_grant, self._sub_title)
+        )
         if updated_grant is None:
             return
         self._grant_list.append(updated_grant)
@@ -145,7 +147,9 @@ class GrantListScreen(base.Screen):
         if not self._grant_list:
             return
         index = table.cursor_row
-        updated_grant = await self.app.push_screen_wait(grant_edit.GrantEditScreen(self._auth, self._grant_list[index]))
+        updated_grant = await self.app.push_screen_wait(
+            grant_edit.GrantEditScreen(self._auth, self._grant_list[index], self._sub_title)
+        )
         if updated_grant is None:
             return
         self._grant_list[index] = updated_grant

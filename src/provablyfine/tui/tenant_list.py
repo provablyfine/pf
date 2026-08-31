@@ -64,6 +64,7 @@ class TenantListScreen(base.Screen):
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
+        self.set_breadcrumb(base.BREADCRUMB_TENANTS)
         table = self.query_one(self._StrDataTable)
         table.add_columns("Name", "Display Name", "Enabled")
         self._tenants = (await self._auth.list_tenants()).tenants

@@ -104,7 +104,7 @@ class IdentityViewScreen(base.Screen):
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
-        self.sub_title = f"Identities > {self._identity.name}"
+        self.set_breadcrumb(base.BREADCRUMB_IDENTITIES, self._identity.name)
         await self._populate_tags()
         await self._populate_boundaries()
 

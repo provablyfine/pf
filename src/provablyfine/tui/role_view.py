@@ -70,7 +70,7 @@ class RoleViewScreen(base.Screen):
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
-        self.sub_title = f"Roles > {self._role.name}"
+        self.set_breadcrumb(base.BREADCRUMB_ROLES, self._role.name)
         self.query_one("#grants", _GrantsTable).add_columns("Type", "Filter", "Permissions")
         await self._populate_members()
         self._populate_grants()
@@ -125,7 +125,11 @@ class RoleViewScreen(base.Screen):
             if grant_type is None:
                 return
             new_grant = grant_edit.new_grant(grant_type)
-            updated_grant = await self.app.push_screen_wait(grant_edit.GrantEditScreen(self._auth, new_grant))
+            updated_grant = await self.app.push_screen_wait(
+                grant_edit.GrantEditScreen(
+                    self._auth, new_grant, base.format_breadcrumb(base.BREADCRUMB_ROLES, self._role.name)
+                )
+            )
             if updated_grant is None:
                 return
             self._grant_list.append(updated_grant)
@@ -156,7 +160,11 @@ class RoleViewScreen(base.Screen):
         if not self._grant_list:
             return
         index = table.cursor_row
-        updated_grant = await self.app.push_screen_wait(grant_edit.GrantEditScreen(self._auth, self._grant_list[index]))
+        updated_grant = await self.app.push_screen_wait(
+            grant_edit.GrantEditScreen(
+                self._auth, self._grant_list[index], base.format_breadcrumb(base.BREADCRUMB_ROLES, self._role.name)
+            )
+        )
         if updated_grant is None:
             return
         self._grant_list[index] = updated_grant

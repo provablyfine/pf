@@ -23,6 +23,7 @@ class AuditLogListScreen(base.Screen):
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
+        self.set_breadcrumb(base.BREADCRUMB_AUDIT_LOG)
         table = self.query_one(textual.widgets.DataTable[str])
         table.add_columns("Time", "Level", "Type", "By")
         response = await self._auth.list_audit_log()

@@ -161,6 +161,7 @@ class IdentityListScreen(base.Screen):
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
+        self.set_breadcrumb(base.BREADCRUMB_IDENTITIES)
         table = self.query_one(_IdentitiesTable)
         table.add_columns("Name", "Unix username", "Tags", "Boundaries")
         self._identities = (await self._auth.list_identities()).identities

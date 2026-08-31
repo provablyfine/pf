@@ -60,6 +60,7 @@ class BoundaryListScreen(base.Screen):
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
+        self.set_breadcrumb(base.BREADCRUMB_BOUNDARIES)
         table = self.query_one(textual.widgets.DataTable[str])
         table.add_columns("Name", "Description", "Denied", "Ceiling")
         self._boundaries = (await self._auth.list_boundaries()).boundaries

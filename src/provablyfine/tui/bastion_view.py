@@ -95,7 +95,7 @@ class BastionViewScreen(base.Screen):
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
-        self.sub_title = f"Bastions > {self._bastion.url}"
+        self.set_breadcrumb(base.BREADCRUMB_BASTIONS, self._bastion.url)
         await self._populate_tags()
 
     def on_descendant_focus(self, event: textual.events.DescendantFocus) -> None:
