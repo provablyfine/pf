@@ -1,3 +1,11 @@
+## 0.7.5 - 2026-08-31
+
+### Fixed
+
+- Detect the name of the ssh service to restart it ([#101](https://github.com/provablyfine/pf/issues/101))
+- Remove hardcoded rule "not allowed to update self" for identities. ([#102](https://github.com/provablyfine/pf/issues/102))
+
+
 ## 0.7.4 - 2026-08-31
 
 ### Added
