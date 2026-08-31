@@ -7,7 +7,7 @@ Create a user identity
   $ USER_ID=$(pfa -c config.json identity list -n user -q)
   $ ROOT_ID=$(pfa -c config.json identity list -n root -q)
 
-Admin can set her own unix_username even though self-updates are forbidden
+Admin can update her own unix_username
   $ pfa -c config.json identity update -i $ROOT_ID --unix-username mathieu
   $ pfa -c config.json identity read -i $ROOT_ID
   id             [0-9]+ (re)
@@ -16,13 +16,13 @@ Admin can set her own unix_username even though self-updates are forbidden
   unix_username  mathieu
   $ pfa -c config.json identity update -i $ROOT_ID --unix-username ""
 
-Other self-updates are still forbidden
+Self-updates are allowed
   $ pfa -c config.json identity update -i $ROOT_ID -n newroot
-  Not allowed to update self
-  [2]
-  $ pfa -c config.json identity update -i $ROOT_ID --unix-username mathieu -n newroot
-  Not allowed to update self
-  [2]
+  $ pfa -c config.json identity read -i $ROOT_ID
+  id        [0-9]+ (re)
+  name      newroot
+  boundary  root
+  $ pfa -c config.json identity update -i $ROOT_ID --unix-username mathieu -n root
 
 Privileged unix_username values are rejected, case-insensitively
   $ pfa -c config.json identity update -i $USER_ID --unix-username root

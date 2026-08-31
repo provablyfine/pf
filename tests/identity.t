@@ -11,8 +11,11 @@ List existing identities (there is one)
   You cannot delete yourself
   [2]
   $ pfa -c config.json identity update -i 1 -n hello
-  Not allowed to update self
-  [2]
+  $ pfa -c config.json identity list
+    id  name      ntags    nboundaries
+  ----  ------  -------  -------------
+     1  hello         0              1
+  $ pfa -c config.json identity update -i 1 -n root
 
 Create a boundary to be able to create an identity with it
   $ pfa -c config.json boundary create -n boundary1
