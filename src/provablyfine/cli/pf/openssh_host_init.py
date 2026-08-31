@@ -175,10 +175,16 @@ PFEOF
 
 systemctl daemon-reload
 systemctl enable --now pf-host-refresh.timer
-if systemctl is-active sshd; then
-  systemctl reload sshd
+# The SSH daemon unit is 'sshd.service' on Fedora, 'ssh.service' on Debian/Ubuntu
+if systemctl list-unit-files --no-legend sshd.service 2>/dev/null | grep -q '^sshd\\.service'; then
+  _sshd_unit=sshd
 else
-  systemctl enable --now sshd
+  _sshd_unit=ssh
+fi
+if systemctl is-active "$_sshd_unit"; then
+  systemctl reload "$_sshd_unit"
+else
+  systemctl enable --now "$_sshd_unit"
 fi
 
 _ssh_port=$(sshd -T 2>/dev/null | awk '/^port /{{print $2}}')
@@ -256,11 +262,32 @@ def host_uninit_function(args: argparse.Namespace) -> None:
         f"rm -f {args.host_keys_dir}/ssh_host_*_key.cert",
         "rm -rf /var/lib/pf",
         "",
-        "if systemctl is-active sshd; then",
-        "  systemctl reload sshd",
+        # The SSH daemon unit is 'sshd.service' on Fedora, 'ssh.service' on Debian/Ubuntu
+        "if systemctl list-unit-files --no-legend sshd.service 2>/dev/null | grep -q '^sshd\\.service'; then",
+        "  _sshd_unit=sshd",
+        "else",
+        "  _sshd_unit=ssh",
+        "fi",
+        'if systemctl is-active "$_sshd_unit"; then',
+        '  systemctl reload "$_sshd_unit"',
         "fi",
     ]
     sys.stdout.write("\n".join(lines) + "\n")
+
+
+def _sshd_unit() -> str:
+    """Unit name of the local SSH daemon: 'sshd' on Fedora, 'ssh' on Debian/Ubuntu."""
+    result = subprocess.run(
+        ["/usr/bin/systemctl", "list-unit-files", "--no-legend", "sshd.service"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        for line in result.stdout.splitlines():
+            if line.startswith("sshd.service"):
+                return "sshd"
+    return "ssh"
 
 
 def host_refresh_function(args: argparse.Namespace) -> None:
@@ -270,4 +297,4 @@ def host_refresh_function(args: argparse.Namespace) -> None:
     login.ensure_session(c, factory)
     _do_refresh(c, args.host_keys_dir, args.ca_pub_path)
     if not args.no_sshd_reload:
-        subprocess.run(["/usr/bin/systemctl", "reload", "sshd"], check=True, capture_output=True)
+        subprocess.run(["/usr/bin/systemctl", "reload", _sshd_unit()], check=True, capture_output=True)  # noqa: S603
