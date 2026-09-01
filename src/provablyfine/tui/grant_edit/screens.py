@@ -9,12 +9,21 @@ import textual.screen
 import textual.widgets
 
 from .. import base as tui_base
-from .. import header
 from . import base, boundary, identity, role, ssh, tag, tenant
 
 
-class GrantEditScreen(textual.screen.Screen[pfc.schemas.Grant | None]):
+class GrantEditScreen(textual.screen.ModalScreen[pfc.schemas.Grant | None]):
     DEFAULT_CSS = """
+    GrantEditScreen {
+        align: center middle;
+    }
+    #grant-edit-box {
+        width: 80%;
+        max-width: 100;
+        height: 80%;
+        background: $surface;
+        border: thick $primary;
+    }
     .sections {
         padding: 0 1;
     }
@@ -46,7 +55,9 @@ class GrantEditScreen(textual.screen.Screen[pfc.schemas.Grant | None]):
         self.grant_type = grant.type
 
     async def watch_grant_type(self, value: str) -> None:
-        self.sub_title = tui_base.format_breadcrumb(self._parent_breadcrumb, f"Edit {value} grant")
+        self.query_one("#grant-edit-box").border_title = tui_base.format_breadcrumb(
+            self._parent_breadcrumb, f"Edit {value} grant"
+        )
         fields = self.query_one("#dynamic-grant-fields")
         await fields.query("*").remove()
         match value:
@@ -87,13 +98,16 @@ class GrantEditScreen(textual.screen.Screen[pfc.schemas.Grant | None]):
         self.dismiss(grant)
 
     def compose(self) -> textual.app.ComposeResult:
-        yield header.AppHeader()
-        # A grant with more commands than the terminal has lines must scroll
-        # rather than lose its tail. Not a focus stop of its own: up/down are
-        # the screen's focus chain, and moving along it scrolls the field that
-        # gains focus into view.
-        sections = textual.containers.VerticalScroll(classes="sections")
-        sections.can_focus = False
-        with sections:
-            yield textual.containers.Container(id="dynamic-grant-fields")
-        yield textual.widgets.Footer(compact=True, show_command_palette=False)
+        with textual.containers.Vertical(id="grant-edit-box"):
+            # A grant with more commands than the terminal has lines must
+            # scroll rather than lose its tail. Not a focus stop of its own:
+            # up/down are the screen's focus chain, and moving along it
+            # scrolls the field that gains focus into view.
+            sections = textual.containers.VerticalScroll(classes="sections")
+            sections.can_focus = False
+            with sections:
+                yield textual.containers.Container(id="dynamic-grant-fields")
+            # Footer's own `dock: bottom` resolves relative to its nearest
+            # container — nesting it in the box pins it to the box's bottom
+            # edge rather than the screen's.
+            yield textual.widgets.Footer(compact=True, show_command_palette=False)

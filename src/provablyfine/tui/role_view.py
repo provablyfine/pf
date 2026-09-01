@@ -9,7 +9,7 @@ import textual.containers
 import textual.events
 import textual.widgets
 
-from . import base, grant_edit, grant_list, header, member_list
+from . import base, grant_edit, grant_list, member_list
 
 
 class _GrantsTable(textual.widgets.DataTable[str]):
@@ -30,9 +30,12 @@ class RoleViewScreen(base.Screen):
     .label {
         padding: 0 2 0 0;
     }
-    .field {
-        border: solid;
-        height: auto;
+    .field-label {
+        text-style: bold;
+        padding: 1 0 0 0;
+    }
+    .field-label.-first {
+        padding-top: 0;
     }
     #description, #members {
         height: auto;
@@ -51,26 +54,20 @@ class RoleViewScreen(base.Screen):
         self._saved_grant_list: list[pfc.schemas.Grant] = list(role.grant_list)
 
     def compose(self) -> textual.app.ComposeResult:
-        yield header.AppHeader()
         with textual.containers.Vertical():
-            with textual.containers.HorizontalGroup(classes="field") as container:
-                container.border_title = "Name"
-                yield textual.widgets.Input(self._role.name, id="name", compact=True)
-            with textual.containers.Horizontal(classes="field") as container:
-                container.border_title = "Description"
-                yield textual.widgets.Input(self._role.description, id="description", compact=True)
-            with textual.containers.Container(classes="field") as container:
-                container.border_title = "Members"
-                yield textual.widgets.ListView(id="members")
-                yield textual.widgets.Label("No members — add one with 'a'", id="members-placeholder")
-            with textual.containers.Container(classes="field") as container:
-                container.border_title = "Grants"
-                yield _GrantsTable(id="grants", cursor_type="row")
-                yield textual.widgets.Label("No grants — add one with 'a'", id="grants-placeholder")
+            yield textual.widgets.Label("Name", classes="field-label -first")
+            yield base.Input(self._role.name, id="name", compact=True)
+            yield textual.widgets.Label("Description", classes="field-label")
+            yield base.Input(self._role.description, id="description", compact=True)
+            yield textual.widgets.Label("Members", classes="field-label")
+            yield textual.widgets.ListView(id="members")
+            yield textual.widgets.Label("No members — add one with 'a'", id="members-placeholder")
+            yield textual.widgets.Label("Grants", classes="field-label")
+            yield _GrantsTable(id="grants", cursor_type="row")
+            yield textual.widgets.Label("No grants — add one with 'a'", id="grants-placeholder")
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
-        self.set_breadcrumb(base.BREADCRUMB_ROLES, self._role.name)
         self.query_one("#grants", _GrantsTable).add_columns("Type", "Filter", "Permissions")
         await self._populate_members()
         self._populate_grants()

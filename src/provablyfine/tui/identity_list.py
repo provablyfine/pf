@@ -9,7 +9,7 @@ import textual.containers
 import textual.screen
 import textual.widgets
 
-from . import base, clipboard, header, identity_view
+from . import base, clipboard, identity_view
 
 
 class _IdentitiesTable(textual.widgets.DataTable[str]):
@@ -39,8 +39,8 @@ class _IdentityCreateScreen(textual.screen.ModalScreen[_IdentityFormResult | Non
     def compose(self) -> textual.app.ComposeResult:
         with textual.containers.VerticalGroup() as container:
             container.border_title = "Add an identity"
-            yield textual.widgets.Input(placeholder="name", id="name", compact=True)
-            yield textual.widgets.Input(placeholder="unix_username (optional)", id="unix_username", compact=True)
+            yield base.Input(placeholder="name", id="name", compact=True)
+            yield base.Input(placeholder="unix_username (optional)", id="unix_username", compact=True)
 
     def action_cancel(self) -> None:
         self.dismiss(None)
@@ -126,7 +126,7 @@ class _InviteSecretScreen(base.ModalScreen[None]):
     def compose(self) -> textual.app.ComposeResult:
         with textual.containers.VerticalGroup() as container:
             container.border_title = "Invitation secret"
-            yield textual.widgets.Input(self._secret, id="secret", compact=True)
+            yield base.Input(self._secret, id="secret", compact=True)
 
     @textual.work
     async def on_mount(self) -> None:
@@ -156,12 +156,10 @@ class IdentityListScreen(base.Screen):
         self._identities: list[pfc.schemas.Identity] = []
 
     def compose(self) -> textual.app.ComposeResult:
-        yield header.AppHeader()
         yield _IdentitiesTable(cursor_type="row")
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
-        self.set_breadcrumb(base.BREADCRUMB_IDENTITIES)
         table = self.query_one(_IdentitiesTable)
         table.add_columns("Name", "Unix username", "Tags", "Boundaries")
         self._identities = (await self._auth.list_identities()).identities

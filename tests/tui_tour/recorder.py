@@ -20,9 +20,11 @@ _KEYS: dict[str, bytes] = {
     "enter": b"\r",
     "escape": b"\x1b",
     "tab": b"\t",
+    "shift+tab": b"\x1b[Z",
     "space": b" ",
     "backspace": b"\x7f",
     "ctrl+s": b"\x13",
+    "ctrl+q": b"\x11",
 }
 
 

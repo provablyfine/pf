@@ -3,8 +3,11 @@ from __future__ import annotations
 import dataclasses
 import json
 import os
+import re
 
 import provablyfine_client as pfc
+
+_TENANT_URL_RE = re.compile(r"/pf/t/([^/]+)/")
 
 
 @dataclasses.dataclass
@@ -23,6 +26,13 @@ class Config:
     def __post_init__(self) -> None:
         self.ephemeral: bool = False
         self.session_expires_at: int | None = None
+
+    @property
+    def tenant_name(self) -> str:
+        """Tenant slug embedded in `directory_url` (`.../pf/t/<slug>/directory`), or
+        `""` if the URL doesn't follow that shape."""
+        match = _TENANT_URL_RE.search(self.directory_url)
+        return match.group(1) if match else ""
 
     @staticmethod
     def load(filename: str) -> Config:

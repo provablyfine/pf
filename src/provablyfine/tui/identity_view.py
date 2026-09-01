@@ -9,7 +9,7 @@ import textual.screen
 import textual.widgets
 import textual_autocomplete
 
-from . import auto_complete, base, header
+from . import auto_complete, base
 
 
 class _TagAddScreen(textual.screen.ModalScreen[pfc.schemas.TagNameValue | None]):
@@ -35,7 +35,7 @@ class _TagAddScreen(textual.screen.ModalScreen[pfc.schemas.TagNameValue | None])
         candidates = [textual_autocomplete.DropdownItem(main=label) for label in self._tags]
         with textual.containers.VerticalGroup() as container:
             container.border_title = "Add tag"
-            yield textual.widgets.Input(placeholder="name=value", compact=True, id="tag-input")
+            yield base.Input(placeholder="name=value", compact=True, id="tag-input")
         yield auto_complete.MonoAutoComplete("#tag-input", candidates=candidates)
 
     def action_cancel(self) -> None:
@@ -61,9 +61,12 @@ class IdentityViewScreen(base.Screen):
     Vertical {
         height: auto;
     }
-    .field {
-        border: solid;
-        height: auto;
+    .field-label {
+        text-style: bold;
+        padding: 1 0 0 0;
+    }
+    .field-label.-first {
+        padding-top: 0;
     }
     #tags, #boundaries {
         height: auto;
@@ -80,31 +83,25 @@ class IdentityViewScreen(base.Screen):
         self._saved_tags: list[pfc.schemas.TagNameValue] = list(identity.tags)
 
     def compose(self) -> textual.app.ComposeResult:
-        yield header.AppHeader()
         with textual.containers.Vertical():
-            with textual.containers.HorizontalGroup(classes="field") as container:
-                container.border_title = "Name"
-                yield textual.widgets.Input(self._identity.name, id="name", compact=True)
-            with textual.containers.HorizontalGroup(classes="field") as container:
-                container.border_title = "Unix username"
-                yield textual.widgets.Input(
-                    self._identity.unix_username or "",
-                    placeholder="(optional)",
-                    id="unix_username",
-                    compact=True,
-                )
-            with textual.containers.Container(classes="field") as container:
-                container.border_title = "Tags"
-                yield textual.widgets.ListView(id="tags")
-                yield textual.widgets.Label("No tags — add one with 'a'", id="tags-placeholder")
-            with textual.containers.Container(classes="field") as container:
-                container.border_title = "Boundaries"
-                yield textual.widgets.ListView(id="boundaries")
-                yield textual.widgets.Label("No boundaries", id="boundaries-placeholder")
+            yield textual.widgets.Label("Name", classes="field-label -first")
+            yield base.Input(self._identity.name, id="name", compact=True)
+            yield textual.widgets.Label("Unix username", classes="field-label")
+            yield base.Input(
+                self._identity.unix_username or "",
+                placeholder="(optional)",
+                id="unix_username",
+                compact=True,
+            )
+            yield textual.widgets.Label("Tags", classes="field-label")
+            yield textual.widgets.ListView(id="tags")
+            yield textual.widgets.Label("No tags — add one with 'a'", id="tags-placeholder")
+            yield textual.widgets.Label("Boundaries", classes="field-label")
+            yield textual.widgets.ListView(id="boundaries")
+            yield textual.widgets.Label("No boundaries", id="boundaries-placeholder")
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
-        self.set_breadcrumb(base.BREADCRUMB_IDENTITIES, self._identity.name)
         await self._populate_tags()
         await self._populate_boundaries()
 

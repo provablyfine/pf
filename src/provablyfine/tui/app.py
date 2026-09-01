@@ -8,7 +8,7 @@ import textual
 import textual.worker
 
 from .. import client, log
-from . import base, home, relogin, setup
+from . import base, nav_pane, relogin, sections, setup
 
 _DEFAULT_CONFIG = os.path.join(os.path.expanduser("~"), ".config", "provablyfine", "config.json")
 
@@ -40,16 +40,36 @@ class TuiApp(base.App):
         self.auth = auth
 
     def on_mount(self) -> None:
-        self.push_screen(home.HomeScreen(self.auth))
+        self.current_section_id = sections.SECTIONS[0].id
+        self.push_screen(sections.SECTIONS[0].factory(self.auth))
         self._load_whoami()
+        self.tenant_name = self._cfg.tenant_name if self._cfg is not None else ""
+
+    def switch_to_section(self, section_id: str) -> None:
+        if self.current_section_id == section_id:
+            return
+        self.current_section_id = section_id
+        # `screen_stack[0]` is Textual's own implicit default screen, beneath
+        # whatever `on_mount` pushed — never popped, so the target depth is 2
+        # (default screen + the section root), not 1.
+        while len(self.screen_stack) > 2:
+            self.pop_screen()
+        self.switch_screen(sections.factory_for(section_id)(self.auth))  # pyright: ignore[reportUnknownMemberType]
+
+    @textual.on(nav_pane.NavPane.Activated)
+    def _on_nav_activated(self, event: nav_pane.NavPane.Activated) -> None:
+        self.switch_to_section(event.section_id)
 
     @textual.work
     async def _load_whoami(self) -> None:
         identity = await self.auth.get_self()
+        self.identity_name = identity.name
         if identity.active_role is not None:
             self.whoami = f"{identity.name} [{identity.active_role.name}]"
+            self.role = identity.active_role.name
         else:
             self.whoami = identity.name
+            self.role = ""
 
     def _handle_exception(self, error: Exception) -> None:
         if self._cfg is not None and self._config_path is not None:
@@ -68,7 +88,6 @@ class TuiApp(base.App):
     def _on_relogin(self, _: None) -> None:
         assert self._cfg is not None
         self.auth = client.Factory(self._cfg).async_session()
-        self.query_one(home.HomeScreen).refresh_auth(self.auth)
 
 
 def _has_session(cfg: client.Config) -> bool:

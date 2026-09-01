@@ -118,7 +118,7 @@ class SetupChoiceScreen(base.Screen):
     BINDINGS: typing.ClassVar = [("escape", "quit", "Quit")]
     DEFAULT_CSS = """
     SetupChoiceScreen ListView {
-        border: solid $primary;
+        border: round $primary;
         width: 40;
         height: auto;
         margin: 1 2;
@@ -154,11 +154,11 @@ class NewServerSetupScreen(base.Screen):
     BINDINGS: typing.ClassVar = [("escape", "app.pop_screen", "Back")]
     DEFAULT_CSS = """
     NewServerSetupScreen Input {
-        border: solid $primary;
+        border: round $primary;
         margin: 1 2;
     }
     NewServerSetupScreen ListView {
-        border: solid $primary;
+        border: round $primary;
         height: auto;
         max-height: 10;
         margin: 1 2;
@@ -174,9 +174,7 @@ class NewServerSetupScreen(base.Screen):
         self._keys: list[tuple[str, str]] = []
 
     def compose(self) -> textual.app.ComposeResult:
-        url_input = textual.widgets.Input(
-            placeholder="https://example.com/pf/t/tenant/directory", id="url", compact=True
-        )
+        url_input = base.Input(placeholder="https://example.com/pf/t/tenant/directory", id="url", compact=True)
         url_input.border_title = "Directory URL"
         yield url_input
         lv = textual.widgets.ListView(id="keys")
@@ -243,7 +241,7 @@ class ConnectScreen(base.Screen):
     BINDINGS: typing.ClassVar = [("escape", "app.pop_screen", "Back")]
     DEFAULT_CSS = """
     ConnectScreen Input {
-        border: solid $primary;
+        border: round $primary;
         margin: 1 2;
     }
     ConnectScreen #status {
@@ -256,7 +254,7 @@ class ConnectScreen(base.Screen):
         self._config_path = config_path
 
     def compose(self) -> textual.app.ComposeResult:
-        url_input = textual.widgets.Input(
+        url_input = base.Input(
             placeholder="https://example.com/pf/t/tenant/directory?invitation=...&auth=...",
             id="url",
             compact=True,

@@ -1,14 +1,18 @@
 import os
 import tempfile
+import typing
 
 import provablyfine_client as pfc
 import pytest
+import textual.pilot
 import textual.widgets
 
 import provablyfine.client
 import provablyfine.tui.app
+import provablyfine.tui.base
 import provablyfine.tui.checkbox_input
 import provablyfine.tui.grant_edit
+import provablyfine.tui.nav_pane
 import provablyfine.tui.relogin
 
 from . import tui_support
@@ -17,6 +21,23 @@ _wait = tui_support._wait
 _run = tui_support._run
 _setup_ssh_auth_sock = tui_support._setup_ssh_auth_sock
 _setup = tui_support._setup
+
+
+async def _goto(pilot: textual.pilot.Pilot[None], section_id: str) -> None:
+    """Navigate to `section_id` via the nav pane, the way a real user would:
+    `shift+tab` reaches it (it's always last in the screen's tab-focus
+    chain, regardless of how many focusable fields a given screen's own
+    content has before it), then arrow from wherever its cursor currently
+    sits. A no-op if `section_id` is already the active section.
+    """
+    app = typing.cast(provablyfine.tui.base.App, pilot.app)
+    if app.current_section_id == section_id:
+        return
+    order = [id_ for id_, _ in provablyfine.tui.nav_pane.NAV_ITEMS]
+    delta = order.index(section_id) - order.index(app.current_section_id)
+    await pilot.press("shift+tab")
+    await pilot.press(*(["down"] * delta if delta > 0 else ["up"] * -delta))
+    await pilot.press("enter")
 
 
 @pytest.mark.anyio
@@ -33,8 +54,7 @@ async def test_tui_grant_edit_identity_fails(api, ssh_agent):
 
         async with app.run_test(size=(200, 50)) as pilot:
             await pilot.pause()  # app startup (no HTTP)
-            await pilot.press("down", "down", "down", "down", "down")  # navigate to Roles
-            await pilot.press("enter")  # open RoleListScreen
+            await _goto(pilot, "roles")  # navigate to Roles
             await pilot.pause()  # screen transition
             await pilot.pause()  # RoleListScreen.on_mount calls list_roles()
 
@@ -103,8 +123,7 @@ async def test_tui_role_grant_edit(api, ssh_agent):
             app = provablyfine.tui.app.TuiApp(auth)
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup
-                await pilot.press("down", "down", "down", "down", "down")  # navigate to Roles
-                await pilot.press("enter")  # open RoleListScreen
+                await _goto(pilot, "roles")  # navigate to Roles
                 await pilot.pause()  # screen transition
                 await pilot.pause()  # RoleListScreen.on_mount calls list_roles()
                 await pilot.press("down", "down")  # navigate to test-role (row 2)
@@ -167,8 +186,7 @@ async def test_tui_identity_grant_edit_filters(api, ssh_agent):
             app = provablyfine.tui.app.TuiApp(auth)
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup
-                await pilot.press("down", "down", "down", "down", "down")  # navigate to Roles
-                await pilot.press("enter")  # open RoleListScreen
+                await _goto(pilot, "roles")  # navigate to Roles
                 await pilot.pause()  # screen transition
                 await pilot.pause()  # RoleListScreen.on_mount
                 await pilot.press("down")  # navigate to test-role (row 1)
@@ -228,8 +246,7 @@ async def test_tui_identity_grant_edit_permissions(api, ssh_agent):
             app = provablyfine.tui.app.TuiApp(auth)
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup
-                await pilot.press("down", "down", "down", "down", "down")  # navigate to Roles
-                await pilot.press("enter")  # open RoleListScreen
+                await _goto(pilot, "roles")  # navigate to Roles
                 await pilot.pause()  # screen transition
                 await pilot.pause()  # RoleListScreen.on_mount
                 await pilot.press("down")  # navigate to test-role (row 1)
@@ -316,8 +333,7 @@ async def test_tui_tag_grant_edit(api, ssh_agent):
             app = provablyfine.tui.app.TuiApp(auth)
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup
-                await pilot.press("down", "down", "down", "down", "down")  # navigate to Roles
-                await pilot.press("enter")  # open RoleListScreen
+                await _goto(pilot, "roles")  # navigate to Roles
                 await pilot.pause()  # screen transition
                 await pilot.pause()  # RoleListScreen.on_mount
                 await pilot.press("down")  # navigate to test-role (row 1)
@@ -367,8 +383,7 @@ async def test_tui_boundary_grant_edit(api, ssh_agent):
             app = provablyfine.tui.app.TuiApp(auth)
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup
-                await pilot.press("down", "down", "down", "down", "down")  # navigate to Roles
-                await pilot.press("enter")  # open RoleListScreen
+                await _goto(pilot, "roles")  # navigate to Roles
                 await pilot.pause()  # screen transition
                 await pilot.pause()  # RoleListScreen.on_mount
                 await pilot.press("down")  # navigate to test-role (row 1)
@@ -421,8 +436,7 @@ async def test_tui_tenant_grant_edit(api, ssh_agent):
             app = provablyfine.tui.app.TuiApp(auth)
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup
-                await pilot.press("down", "down", "down", "down", "down")  # navigate to Roles
-                await pilot.press("enter")  # open RoleListScreen
+                await _goto(pilot, "roles")  # navigate to Roles
                 await pilot.pause()  # screen transition
                 await pilot.pause()  # RoleListScreen.on_mount
                 await pilot.press("down")  # navigate to test-role (row 1)
@@ -469,8 +483,7 @@ async def test_tui_ssh_grant_edit(api, ssh_agent):
             app = provablyfine.tui.app.TuiApp(auth)
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup
-                await pilot.press("down", "down", "down", "down", "down")  # navigate to Roles
-                await pilot.press("enter")  # open RoleListScreen
+                await _goto(pilot, "roles")  # navigate to Roles
                 await pilot.pause()  # screen transition
                 await pilot.pause()  # RoleListScreen.on_mount
                 await pilot.press("down")  # navigate to test-role (row 1)
@@ -536,8 +549,7 @@ async def test_tui_ssh_grant_edit_rejects_unknown_capability(api, ssh_agent):
             app = provablyfine.tui.app.TuiApp(auth)
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup
-                await pilot.press("down", "down", "down", "down", "down")  # navigate to Roles
-                await pilot.press("enter")  # open RoleListScreen
+                await _goto(pilot, "roles")  # navigate to Roles
                 await pilot.pause()  # screen transition
                 await pilot.pause()  # RoleListScreen.on_mount
                 await pilot.press("down")  # navigate to test-role (row 1)
@@ -590,8 +602,7 @@ async def test_tui_ssh_grant_capability_hint(api, ssh_agent):
             app = provablyfine.tui.app.TuiApp(auth)
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup
-                await pilot.press("down", "down", "down", "down", "down")  # navigate to Roles
-                await pilot.press("enter")  # open RoleListScreen
+                await _goto(pilot, "roles")  # navigate to Roles
                 await pilot.pause()  # screen transition
                 await pilot.pause()  # RoleListScreen.on_mount
                 await pilot.press("down")  # navigate to test-role (row 1)
@@ -641,10 +652,9 @@ def _ssh_grant(command_list: list[str], username_list: list[str]) -> dict:
 
 
 async def _open_grant_editor(pilot):
-    """Home → Roles → test-role → its first grant."""
+    """Roles → test-role → its first grant."""
     await pilot.pause()  # app startup
-    await pilot.press("down", "down", "down", "down", "down")  # navigate to Roles
-    await pilot.press("enter")  # open RoleListScreen
+    await _goto(pilot, "roles")  # navigate to Roles
     await pilot.pause()  # screen transition
     await pilot.pause()  # RoleListScreen.on_mount
     await pilot.press("down")  # navigate to test-role (row 1)
@@ -847,8 +857,7 @@ async def test_tui_tag_list(api, ssh_agent):
 
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup
-                await pilot.press("down", "down", "down", "down")  # navigate to Tag (index 4)
-                await pilot.press("enter")  # open TagListScreen
+                await _goto(pilot, "tags")  # navigate to Tags
                 await pilot.pause()  # screen transition
                 await pilot.pause()  # TagListScreen.on_mount calls list_tags()
 
@@ -878,8 +887,7 @@ async def test_tui_tag_delete(api, ssh_agent):
 
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup
-                await pilot.press("down", "down", "down", "down")  # navigate to Tag (index 4)
-                await pilot.press("enter")  # open TagListScreen
+                await _goto(pilot, "tags")  # navigate to Tags
                 await pilot.pause()  # screen transition
                 await pilot.pause()  # TagListScreen.on_mount
 
@@ -904,8 +912,7 @@ async def test_tui_boundary_list(api, ssh_agent):
 
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup
-                await pilot.press("down", "down", "down")  # navigate to Boundary (index 3)
-                await pilot.press("enter")  # open BoundaryListScreen
+                await _goto(pilot, "boundaries")  # navigate to Boundaries
                 await pilot.pause()  # screen transition
                 await pilot.pause()  # BoundaryListScreen.on_mount calls list_boundaries()
 
@@ -935,8 +942,7 @@ async def test_tui_boundary_delete(api, ssh_agent):
 
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup
-                await pilot.press("down", "down", "down")  # navigate to Boundary (index 3)
-                await pilot.press("enter")  # open BoundaryListScreen
+                await _goto(pilot, "boundaries")  # navigate to Boundaries
                 await pilot.pause()  # screen transition
                 await pilot.pause()  # BoundaryListScreen.on_mount
 
@@ -963,8 +969,7 @@ async def test_tui_bastion_list(api, ssh_agent):
 
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup
-                await pilot.press("down", "down")  # navigate to Bastions (index 2)
-                await pilot.press("enter")  # open BastionListScreen
+                await _goto(pilot, "bastions")  # navigate to Bastions
                 await pilot.pause()  # screen transition
                 await pilot.pause()  # BastionListScreen.on_mount calls list_bastions()
 
@@ -1000,8 +1005,7 @@ async def test_tui_bastion_delete(api, ssh_agent):
 
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup
-                await pilot.press("down", "down")  # navigate to Bastions (index 2)
-                await pilot.press("enter")  # open BastionListScreen
+                await _goto(pilot, "bastions")  # navigate to Bastions
                 await pilot.pause()  # screen transition
                 await pilot.pause()  # BastionListScreen.on_mount
 
@@ -1035,8 +1039,7 @@ async def test_tui_bastion_add_tag(api, ssh_agent):
 
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup
-                await pilot.press("down", "down")  # navigate to Bastions (index 2)
-                await pilot.press("enter")  # open BastionListScreen
+                await _goto(pilot, "bastions")  # navigate to Bastions
                 await pilot.pause()  # screen transition
                 await pilot.pause()  # BastionListScreen.on_mount
 
@@ -1075,8 +1078,7 @@ async def test_tui_identity_list(api, ssh_agent):
 
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup
-                await pilot.press("down")  # navigate to Identities (index 1)
-                await pilot.press("enter")  # open IdentityListScreen
+                await _goto(pilot, "identities")  # navigate to Identities
                 await pilot.pause()  # screen transition
                 await pilot.pause()  # IdentityListScreen.on_mount calls list_identities()
 
@@ -1105,7 +1107,7 @@ async def test_tui_tenant_list(api, ssh_agent):
 
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup
-                await pilot.press("enter")  # open TenantListScreen (index 0, no down needed)
+                await _goto(pilot, "tenants")  # navigate to Tenants
                 await pilot.pause()  # screen transition
                 await pilot.pause()  # TenantListScreen.on_mount calls list_tenants()
 
@@ -1137,8 +1139,7 @@ async def test_tui_role_delete(api, ssh_agent):
 
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup
-                await pilot.press("down", "down", "down", "down", "down")  # navigate to Roles (index 4)
-                await pilot.press("enter")  # open RoleListScreen
+                await _goto(pilot, "roles")  # navigate to Roles (index 4)
                 await pilot.pause()  # screen transition
                 await pilot.pause()  # RoleListScreen.on_mount
 
@@ -1166,8 +1167,7 @@ async def test_tui_identity_delete(api, ssh_agent):
 
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup
-                await pilot.press("down")  # navigate to Identities (index 1)
-                await pilot.press("enter")  # open IdentityListScreen
+                await _goto(pilot, "identities")  # navigate to Identities
                 await pilot.pause()  # screen transition
                 await pilot.pause()  # IdentityListScreen.on_mount
 
@@ -1197,7 +1197,7 @@ async def test_tui_tenant_delete(api, ssh_agent):
 
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup
-                await pilot.press("enter")  # open TenantListScreen (index 0, no down needed)
+                await _goto(pilot, "tenants")  # navigate to Tenants
                 await pilot.pause()  # screen transition
                 await pilot.pause()  # TenantListScreen.on_mount
 
@@ -1219,8 +1219,7 @@ async def test_tui_boundary_edit_description(api, ssh_agent):
 
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup
-                await pilot.press("down", "down", "down")  # navigate to Boundary (index 3)
-                await pilot.press("enter")  # open BoundaryListScreen
+                await _goto(pilot, "boundaries")  # navigate to Boundaries
                 await pilot.pause()  # screen transition
                 await pilot.pause()  # BoundaryListScreen.on_mount
 
@@ -1265,8 +1264,7 @@ async def test_tui_boundary_grant_list_edit(api, ssh_agent):
             app = provablyfine.tui.app.TuiApp(auth)
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup
-                await pilot.press("down", "down", "down")  # navigate to Boundary (index 3)
-                await pilot.press("enter")  # open BoundaryListScreen
+                await _goto(pilot, "boundaries")  # navigate to Boundaries
                 await pilot.pause()  # screen transition
                 await pilot.pause()  # BoundaryListScreen.on_mount
 
@@ -1333,8 +1331,7 @@ async def test_tui_identity_add_tag(api, ssh_agent):
 
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup
-                await pilot.press("down")  # navigate to Identities (index 1)
-                await pilot.press("enter")  # open IdentityListScreen
+                await _goto(pilot, "identities")  # navigate to Identities
                 await pilot.pause()  # screen transition
                 await pilot.pause()  # IdentityListScreen.on_mount
 
@@ -1374,8 +1371,7 @@ async def test_tui_identity_create_with_unix_username(api, ssh_agent):
 
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup
-                await pilot.press("down")  # navigate to Identities (index 1)
-                await pilot.press("enter")  # open IdentityListScreen
+                await _goto(pilot, "identities")  # navigate to Identities
                 await pilot.pause()  # screen transition
                 await pilot.pause()  # IdentityListScreen.on_mount calls list_identities()
 
@@ -1410,8 +1406,7 @@ async def test_tui_identity_edit_unix_username(api, ssh_agent):
 
             async with app.run_test(size=(200, 50)) as pilot:
                 await pilot.pause()  # app startup
-                await pilot.press("down")  # navigate to Identities (index 1)
-                await pilot.press("enter")  # open IdentityListScreen
+                await _goto(pilot, "identities")  # navigate to Identities
                 await pilot.pause()  # screen transition
                 await pilot.pause()  # IdentityListScreen.on_mount
 

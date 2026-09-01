@@ -8,7 +8,7 @@ import textual.containers
 import textual.screen
 import textual.widgets
 
-from . import auth_view, base, header
+from . import auth_view, base
 
 
 @dataclasses.dataclass
@@ -91,12 +91,12 @@ class _AuthParamsScreen(textual.screen.ModalScreen[_AuthParamsResult | None]):
     def compose(self) -> textual.app.ComposeResult:
         with textual.containers.VerticalGroup() as container:
             container.border_title = f"New {self._type} auth"
-            yield textual.widgets.Input(placeholder="name", id="name", compact=True)
-            yield textual.widgets.Input(placeholder="client_type (cli or web)", id="client_type", compact=True)
+            yield base.Input(placeholder="name", id="name", compact=True)
+            yield base.Input(placeholder="client_type (cli or web)", id="client_type", compact=True)
             if self._type == "oidc":
-                yield textual.widgets.Input(placeholder="issuer", id="issuer", compact=True)
-                yield textual.widgets.Input(placeholder="client_id", id="client_id", compact=True)
-                yield textual.widgets.Input(
+                yield base.Input(placeholder="issuer", id="issuer", compact=True)
+                yield base.Input(placeholder="client_id", id="client_id", compact=True)
+                yield base.Input(
                     placeholder="client_secret (optional)", id="client_secret", compact=True, password=True
                 )
 
@@ -143,12 +143,10 @@ class AuthListScreen(base.Screen):
         self._auths: list[pfc.schemas.Auth] = []
 
     def compose(self) -> textual.app.ComposeResult:
-        yield header.AppHeader()
         yield self._StrDataTable(cursor_type="row")
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
-        self.set_breadcrumb(base.BREADCRUMB_AUTHS)
         table = self.query_one(self._StrDataTable)
         table.add_columns("Name", "Client Type", "Type", "Enabled")
         self._auths = (await self._auth.list_auths()).auths
