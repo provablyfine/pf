@@ -4,23 +4,15 @@ import provablyfine_client as pfc
 import textual
 import textual.app
 import textual.containers
-import textual.screen
 import textual.widgets
 
 from . import base
 
 
-class _TagCreateScreen(textual.screen.ModalScreen[pfc.schemas.TagNameValue | None]):
+class _TagCreateScreen(base.ModalScreen[pfc.schemas.TagNameValue | None]):
     DEFAULT_CSS = """
-    _TagCreateScreen {
-        align: center middle;
-    }
     _TagCreateScreen > VerticalGroup {
         width: 40;
-        height: auto;
-        padding: 1 2;
-        background: $surface;
-        border: thick $primary;
     }
     """
     BINDINGS: typing.ClassVar = [("escape", "cancel", "Cancel")]
@@ -28,8 +20,8 @@ class _TagCreateScreen(textual.screen.ModalScreen[pfc.schemas.TagNameValue | Non
     def compose(self) -> textual.app.ComposeResult:
         with textual.containers.VerticalGroup() as container:
             container.border_title = "Add a tag"
-            yield base.Input(placeholder="name", id="name", compact=True)
-            yield base.Input(placeholder="value", id="value", compact=True)
+            yield base.Input(placeholder="Name", id="name", compact=True)
+            yield base.Input(placeholder="Value", id="value", compact=True)
 
     def action_cancel(self) -> None:
         self.dismiss(None)
@@ -57,6 +49,7 @@ class TagListScreen(base.Screen):
 
     def compose(self) -> textual.app.ComposeResult:
         yield textual.widgets.DataTable(cursor_type="row")
+        yield textual.widgets.Label("No tags — add one with 'a'", id="tags-placeholder")
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
@@ -69,6 +62,7 @@ class TagListScreen(base.Screen):
         table.clear(columns=False)
         for tag in self._tags:
             table.add_row(tag.name, tag.value)
+        self.query_one("#tags-placeholder").display = not bool(self._tags)
 
     @textual.work
     async def action_add_tag(self) -> None:

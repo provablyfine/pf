@@ -4,23 +4,15 @@ import provablyfine_client as pfc
 import textual
 import textual.app
 import textual.containers
-import textual.screen
 import textual.widgets
 
 from . import _utils, base, role_view
 
 
-class _RoleNameScreen(textual.screen.ModalScreen[str | None]):
+class _RoleNameScreen(base.ModalScreen[str | None]):
     DEFAULT_CSS = """
-    _RoleNameScreen {
-        align: center middle;
-    }
     _RoleNameScreen > VerticalGroup {
         width: 40;
-        height: auto;
-        padding: 1 2;
-        background: $surface;
-        border: thick $primary;
     }
     """
     BINDINGS: typing.ClassVar = [("escape", "cancel", "Cancel")]
@@ -28,7 +20,7 @@ class _RoleNameScreen(textual.screen.ModalScreen[str | None]):
     def compose(self) -> textual.app.ComposeResult:
         with textual.containers.VerticalGroup() as container:
             container.border_title = "Add a role"
-            yield base.Input(placeholder="name", id="name", compact=True)
+            yield base.Input(placeholder="Name", id="name", compact=True)
 
     def action_cancel(self) -> None:
         self.dismiss(None)
@@ -42,7 +34,6 @@ class _RoleNameScreen(textual.screen.ModalScreen[str | None]):
 
 
 class RoleListScreen(base.Screen):
-    TITLE = "Provably Fine"
     BINDINGS: typing.ClassVar = [
         ("enter", "view_role", "View"),
         ("a", "add_role", "Add"),
@@ -57,6 +48,7 @@ class RoleListScreen(base.Screen):
 
     def compose(self) -> textual.app.ComposeResult:
         yield textual.widgets.DataTable(cursor_type="row")
+        yield textual.widgets.Label("No roles — add one with 'a'", id="roles-placeholder")
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
@@ -79,6 +71,7 @@ class RoleListScreen(base.Screen):
                 str(len(role.member_list)),
                 str(len(role.grant_list)),
             )
+        self.query_one("#roles-placeholder").display = not bool(self._roles)
 
     @textual.on(textual.widgets.DataTable.RowSelected)
     def _on_row_selected(self) -> None:

@@ -5,23 +5,17 @@ import typing
 import textual
 import textual.app
 import textual.containers
-import textual.screen
 import textual.widgets
+
+from . import base
 
 GRANT_TYPES = ["identity", "tag", "role", "boundary", "tenant", "ssh"]
 
 
-class GrantTypeScreen(textual.screen.ModalScreen[str | None]):
+class GrantTypeScreen(base.ModalScreen[str | None]):
     DEFAULT_CSS = """
-    GrantTypeScreen {
-        align: center middle;
-    }
     GrantTypeScreen > VerticalGroup {
         width: auto;
-        height: auto;
-        padding: 1 2;
-        background: $surface;
-        border: thick $primary;
     }
     #popup ListView {
         height: auto;

@@ -24,19 +24,6 @@ class RoleViewScreen(base.Screen):
         ("d", "delete", "Delete"),
     ]
     DEFAULT_CSS = """
-    Vertical {
-        height: auto;
-    }
-    .label {
-        padding: 0 2 0 0;
-    }
-    .field-label {
-        text-style: bold;
-        padding: 1 0 0 0;
-    }
-    .field-label.-first {
-        padding-top: 0;
-    }
     #description, #members {
         height: auto;
     }

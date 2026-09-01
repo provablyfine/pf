@@ -16,18 +16,6 @@ class AuthViewScreen(base.Screen):
         ("ctrl+s", "save", "Save"),
         ("escape", "app.pop_screen", "Back"),
     ]
-    DEFAULT_CSS = """
-    Vertical {
-        height: auto;
-    }
-    .field-label {
-        text-style: bold;
-        padding: 1 0 0 0;
-    }
-    .field-label.-first {
-        padding-top: 0;
-    }
-    """
 
     def __init__(self, auth: pfc.AsyncSessionClient, a: pfc.schemas.Auth) -> None:
         super().__init__()

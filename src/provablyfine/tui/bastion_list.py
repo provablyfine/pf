@@ -4,7 +4,6 @@ import provablyfine_client as pfc
 import textual
 import textual.app
 import textual.containers
-import textual.screen
 import textual.widgets
 
 from . import base, bastion_view
@@ -15,17 +14,10 @@ class _BastionFormResult(typing.TypedDict):
     ssh_proxy_jump: str | None
 
 
-class _BastionCreateScreen(textual.screen.ModalScreen[_BastionFormResult | None]):
+class _BastionCreateScreen(base.ModalScreen[_BastionFormResult | None]):
     DEFAULT_CSS = """
-    _BastionCreateScreen {
-        align: center middle;
-    }
     _BastionCreateScreen > VerticalGroup {
         width: 50;
-        height: auto;
-        padding: 1 2;
-        background: $surface;
-        border: thick $primary;
     }
     """
     BINDINGS: typing.ClassVar = [("escape", "cancel", "Cancel")]
@@ -33,8 +25,8 @@ class _BastionCreateScreen(textual.screen.ModalScreen[_BastionFormResult | None]
     def compose(self) -> textual.app.ComposeResult:
         with textual.containers.VerticalGroup() as container:
             container.border_title = "Add a bastion"
-            yield base.Input(placeholder="url", id="url", compact=True)
-            yield base.Input(placeholder="ssh_proxy_jump (optional)", id="ssh_proxy_jump", compact=True)
+            yield base.Input(placeholder="URL", id="url", compact=True)
+            yield base.Input(placeholder="SSH proxy jump (optional)", id="ssh_proxy_jump", compact=True)
 
     def action_cancel(self) -> None:
         self.dismiss(None)
@@ -71,6 +63,7 @@ class BastionListScreen(base.Screen):
 
     def compose(self) -> textual.app.ComposeResult:
         yield self._StrDataTable(cursor_type="row")
+        yield textual.widgets.Label("No bastions — add one with 'a'", id="bastions-placeholder")
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
@@ -92,6 +85,7 @@ class BastionListScreen(base.Screen):
                 bastion.ssh_proxy_jump or "",
                 str(len(bastion.tag_list)),
             )
+        self.query_one("#bastions-placeholder").display = not bool(self._bastions)
 
     @textual.on(textual.widgets.DataTable.RowSelected)
     def _on_row_selected(self) -> None:

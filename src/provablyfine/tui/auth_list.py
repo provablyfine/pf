@@ -5,7 +5,6 @@ import provablyfine_client as pfc
 import textual
 import textual.app
 import textual.containers
-import textual.screen
 import textual.widgets
 
 from . import auth_view, base
@@ -29,17 +28,10 @@ class _OidcParams:
 _AuthParamsResult = _HttpSigParams | _OidcParams
 
 
-class _AuthTypeScreen(textual.screen.ModalScreen[str | None]):
+class _AuthTypeScreen(base.ModalScreen[str | None]):
     DEFAULT_CSS = """
-    _AuthTypeScreen {
-        align: center middle;
-    }
     _AuthTypeScreen > VerticalGroup {
         width: auto;
-        height: auto;
-        padding: 1 2;
-        background: $surface;
-        border: thick $primary;
     }
     _AuthTypeScreen ListView {
         height: auto;
@@ -69,17 +61,10 @@ class _AuthTypeScreen(textual.screen.ModalScreen[str | None]):
         self.dismiss(event.item.id)
 
 
-class _AuthParamsScreen(textual.screen.ModalScreen[_AuthParamsResult | None]):
+class _AuthParamsScreen(base.ModalScreen[_AuthParamsResult | None]):
     DEFAULT_CSS = """
-    _AuthParamsScreen {
-        align: center middle;
-    }
     _AuthParamsScreen > VerticalGroup {
         width: 60;
-        height: auto;
-        padding: 1 2;
-        background: $surface;
-        border: thick $primary;
     }
     """
     BINDINGS: typing.ClassVar = [("escape", "cancel", "Cancel")]
@@ -91,13 +76,13 @@ class _AuthParamsScreen(textual.screen.ModalScreen[_AuthParamsResult | None]):
     def compose(self) -> textual.app.ComposeResult:
         with textual.containers.VerticalGroup() as container:
             container.border_title = f"New {self._type} auth"
-            yield base.Input(placeholder="name", id="name", compact=True)
-            yield base.Input(placeholder="client_type (cli or web)", id="client_type", compact=True)
+            yield base.Input(placeholder="Name", id="name", compact=True)
+            yield base.Input(placeholder="Client type (cli or web)", id="client_type", compact=True)
             if self._type == "oidc":
-                yield base.Input(placeholder="issuer", id="issuer", compact=True)
-                yield base.Input(placeholder="client_id", id="client_id", compact=True)
+                yield base.Input(placeholder="Issuer", id="issuer", compact=True)
+                yield base.Input(placeholder="Client ID", id="client_id", compact=True)
                 yield base.Input(
-                    placeholder="client_secret (optional)", id="client_secret", compact=True, password=True
+                    placeholder="Client secret (optional)", id="client_secret", compact=True, password=True
                 )
 
     def action_cancel(self) -> None:
@@ -144,6 +129,7 @@ class AuthListScreen(base.Screen):
 
     def compose(self) -> textual.app.ComposeResult:
         yield self._StrDataTable(cursor_type="row")
+        yield textual.widgets.Label("No auths — add one with 'a'", id="auths-placeholder")
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
@@ -160,7 +146,8 @@ class AuthListScreen(base.Screen):
     def _populate_table(self, table: "AuthListScreen._StrDataTable") -> None:
         table.clear(columns=False)
         for a in self._auths:
-            table.add_row(a.name, a.client_type, a.config.type, str(a.is_enabled))
+            table.add_row(a.name, a.client_type, a.config.type, "yes" if a.is_enabled else "no")
+        self.query_one("#auths-placeholder").display = not bool(self._auths)
 
     @textual.on(textual.widgets.DataTable.RowSelected)
     def _on_row_selected(self) -> None:

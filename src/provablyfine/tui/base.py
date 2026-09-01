@@ -76,6 +76,16 @@ class Screen(textual.screen.Screen[None]):
         border: round $primary;
         height: 1fr;
     }
+    Screen Vertical {
+        height: auto;
+    }
+    Screen .field-label {
+        text-style: bold;
+        padding: 1 0 0 0;
+    }
+    Screen .field-label.-first {
+        padding-top: 0;
+    }
     """
 
     @property
@@ -105,6 +115,18 @@ class Screen(textual.screen.Screen[None]):
 
 
 class ModalScreen[T](textual.screen.ModalScreen[T]):
+    DEFAULT_CSS = """
+    ModalScreen {
+        align: center middle;
+    }
+    ModalScreen > VerticalGroup {
+        height: auto;
+        padding: 1 2;
+        background: $surface;
+        border: thick $primary;
+    }
+    """
+
     @property
     def app(self) -> App:
         return super().app  # type: ignore

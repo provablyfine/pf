@@ -6,7 +6,6 @@ import provablyfine_client as pfc
 import textual
 import textual.app
 import textual.containers
-import textual.screen
 import textual.widgets
 
 from . import base, clipboard, identity_view
@@ -21,17 +20,10 @@ class _IdentityFormResult(typing.TypedDict):
     unix_username: str | None
 
 
-class _IdentityCreateScreen(textual.screen.ModalScreen[_IdentityFormResult | None]):
+class _IdentityCreateScreen(base.ModalScreen[_IdentityFormResult | None]):
     DEFAULT_CSS = """
-    _IdentityCreateScreen {
-        align: center middle;
-    }
     _IdentityCreateScreen > VerticalGroup {
         width: 40;
-        height: auto;
-        padding: 1 2;
-        background: $surface;
-        border: thick $primary;
     }
     """
     BINDINGS: typing.ClassVar = [("escape", "cancel", "Cancel")]
@@ -39,8 +31,8 @@ class _IdentityCreateScreen(textual.screen.ModalScreen[_IdentityFormResult | Non
     def compose(self) -> textual.app.ComposeResult:
         with textual.containers.VerticalGroup() as container:
             container.border_title = "Add an identity"
-            yield base.Input(placeholder="name", id="name", compact=True)
-            yield base.Input(placeholder="unix_username (optional)", id="unix_username", compact=True)
+            yield base.Input(placeholder="Name", id="name", compact=True)
+            yield base.Input(placeholder="Unix username (optional)", id="unix_username", compact=True)
 
     def action_cancel(self) -> None:
         self.dismiss(None)
@@ -59,17 +51,10 @@ class _IdentityCreateScreen(textual.screen.ModalScreen[_IdentityFormResult | Non
         )
 
 
-class _InviteMethodScreen(textual.screen.ModalScreen[str | None]):
+class _InviteMethodScreen(base.ModalScreen[str | None]):
     DEFAULT_CSS = """
-    _InviteMethodScreen {
-        align: center middle;
-    }
     _InviteMethodScreen > VerticalGroup {
         width: auto;
-        height: auto;
-        padding: 1 2;
-        background: $surface;
-        border: thick $primary;
     }
     _InviteMethodScreen ListView {
         height: auto;
@@ -101,15 +86,8 @@ class _InviteMethodScreen(textual.screen.ModalScreen[str | None]):
 
 class _InviteSecretScreen(base.ModalScreen[None]):
     DEFAULT_CSS = """
-    _InviteSecretScreen {
-        align: center middle;
-    }
     _InviteSecretScreen > VerticalGroup {
         width: 60;
-        height: auto;
-        padding: 1 2;
-        background: $surface;
-        border: thick $primary;
     }
     #secret {
         width: 1fr;
@@ -157,6 +135,7 @@ class IdentityListScreen(base.Screen):
 
     def compose(self) -> textual.app.ComposeResult:
         yield _IdentitiesTable(cursor_type="row")
+        yield textual.widgets.Label("No identities — add one with 'a'", id="identities-placeholder")
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
@@ -179,6 +158,7 @@ class IdentityListScreen(base.Screen):
                 str(len(identity.tags)),
                 str(len(identity.boundaries)),
             )
+        self.query_one("#identities-placeholder").display = not bool(self._identities)
 
     @textual.on(_IdentitiesTable.RowSelected)
     def _on_row_selected(self) -> None:

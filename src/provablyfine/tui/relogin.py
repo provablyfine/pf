@@ -22,9 +22,8 @@ def has_valid_session(config: client.Config) -> bool:
 class _RoleSelectScreen(base.ModalScreen[int | None]):
     BINDINGS: typing.ClassVar = [("escape", "cancel", "Cancel")]
     DEFAULT_CSS = """
-    _RoleSelectScreen { align: center middle; }
     _RoleSelectScreen > VerticalGroup {
-        width: 40; height: auto; background: $surface; border: thick $primary;
+        width: 40;
     }
     _RoleSelectScreen ListView { height: auto; max-height: 10; }
     """

@@ -8,7 +8,6 @@ import requests
 import textual
 import textual.app
 import textual.containers
-import textual.screen
 import textual.widgets
 
 from .. import client, ssh
@@ -34,16 +33,10 @@ def _list_ssh_keys() -> list[tuple[str, str]]:
     return keys
 
 
-class _KeySelectScreen(textual.screen.ModalScreen[str | None]):
+class _KeySelectScreen(base.ModalScreen[str | None]):
     DEFAULT_CSS = """
-    _KeySelectScreen {
-        align: center middle;
-    }
     _KeySelectScreen > VerticalGroup {
         width: 72;
-        height: auto;
-        background: $surface;
-        border: thick $primary;
     }
     _KeySelectScreen ListView {
         height: auto;
@@ -74,16 +67,10 @@ class _KeySelectScreen(textual.screen.ModalScreen[str | None]):
         self.dismiss(self._keys[index][1])
 
 
-class _AuthMethodSelectScreen(textual.screen.ModalScreen[pfc.schemas.AuthPublicSummary | None]):
+class _AuthMethodSelectScreen(base.ModalScreen[pfc.schemas.AuthPublicSummary | None]):
     DEFAULT_CSS = """
-    _AuthMethodSelectScreen {
-        align: center middle;
-    }
     _AuthMethodSelectScreen > VerticalGroup {
         width: 40;
-        height: auto;
-        background: $surface;
-        border: thick $primary;
     }
     _AuthMethodSelectScreen ListView {
         height: auto;

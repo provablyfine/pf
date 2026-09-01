@@ -5,24 +5,16 @@ import textual
 import textual.app
 import textual.containers
 import textual.events
-import textual.screen
 import textual.widgets
 import textual_autocomplete
 
 from . import auto_complete, base
 
 
-class _TagAddScreen(textual.screen.ModalScreen[pfc.schemas.TagNameValue | None]):
+class _TagAddScreen(base.ModalScreen[pfc.schemas.TagNameValue | None]):
     DEFAULT_CSS = """
-    _TagAddScreen {
-        align: center middle;
-    }
     _TagAddScreen > VerticalGroup {
         width: 50;
-        height: auto;
-        padding: 1 2;
-        background: $surface;
-        border: thick $primary;
     }
     """
     BINDINGS: typing.ClassVar = [("escape", "cancel", "Cancel")]
@@ -58,16 +50,6 @@ class BastionViewScreen(base.Screen):
         ("d", "delete_tag", "Delete tag"),
     ]
     DEFAULT_CSS = """
-    Vertical {
-        height: auto;
-    }
-    .field-label {
-        text-style: bold;
-        padding: 1 0 0 0;
-    }
-    .field-label.-first {
-        padding-top: 0;
-    }
     #tags {
         height: auto;
     }

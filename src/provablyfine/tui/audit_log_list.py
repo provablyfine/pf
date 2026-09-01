@@ -19,6 +19,7 @@ class AuditLogListScreen(base.Screen):
 
     def compose(self) -> textual.app.ComposeResult:
         yield textual.widgets.DataTable(cursor_type="row")
+        yield textual.widgets.Label("No audit log entries", id="audit-log-placeholder")
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
@@ -37,6 +38,7 @@ class AuditLogListScreen(base.Screen):
     def _populate_table(self, table: textual.widgets.DataTable[str]) -> None:
         table.clear(columns=False)
         for entry in self._entries:
-            level = "WARN" if entry.level == 2 else "INFO"
+            level = "[bold red]WARN[/]" if entry.level == 2 else "INFO"
             at = datetime.datetime.fromtimestamp(entry.at).strftime("%Y-%m-%d %H:%M:%S")
             table.add_row(at, level, entry.type, entry.by_identity_id or "")
+        self.query_one("#audit-log-placeholder").display = not bool(self._entries)

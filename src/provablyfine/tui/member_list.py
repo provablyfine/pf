@@ -3,24 +3,16 @@ import typing
 import textual
 import textual.app
 import textual.containers
-import textual.screen
 import textual.widgets
 import textual_autocomplete
 
 from . import auto_complete, base
 
 
-class MemberAddScreen(textual.screen.ModalScreen[str | None]):
+class MemberAddScreen(base.ModalScreen[str | None]):
     DEFAULT_CSS = """
-    MemberAddScreen {
-        align: center middle;
-    }
     MemberAddScreen > VerticalGroup {
         width: 40;
-        height: auto;
-        padding: 1 2;
-        background: $surface;
-        border: thick $primary;
     }
     """
     BINDINGS: typing.ClassVar = [("escape", "cancel", "Cancel")]
