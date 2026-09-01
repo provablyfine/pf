@@ -520,7 +520,7 @@ async def _frp_session(
 
     # --- Register proxy ---
     proxy_msg: dict[str, object] = {
-        "proxy_name": "ssh",
+        "proxy_name": frpc_user,
         "proxy_type": "tcpmux",
         "multiplexer": "httpconnect",
         "local_ip": address,
