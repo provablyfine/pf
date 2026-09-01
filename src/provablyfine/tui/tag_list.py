@@ -7,7 +7,7 @@ import textual.containers
 import textual.screen
 import textual.widgets
 
-from . import base, header
+from . import base
 
 
 class _TagCreateScreen(textual.screen.ModalScreen[pfc.schemas.TagNameValue | None]):
@@ -56,12 +56,10 @@ class TagListScreen(base.Screen):
         self._tags: list[pfc.schemas.Tag] = []
 
     def compose(self) -> textual.app.ComposeResult:
-        yield header.AppHeader()
         yield textual.widgets.DataTable(cursor_type="row")
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
-        self.set_breadcrumb(base.BREADCRUMB_TAGS)
         table = self.query_one(textual.widgets.DataTable[str])
         table.add_columns("Name", "Value")
         self._tags = (await self._auth.list_tags()).tags

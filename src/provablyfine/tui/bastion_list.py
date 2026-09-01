@@ -7,7 +7,7 @@ import textual.containers
 import textual.screen
 import textual.widgets
 
-from . import base, bastion_view, header
+from . import base, bastion_view
 
 
 class _BastionFormResult(typing.TypedDict):
@@ -70,12 +70,10 @@ class BastionListScreen(base.Screen):
         self._bastions: list[pfc.schemas.Bastion] = []
 
     def compose(self) -> textual.app.ComposeResult:
-        yield header.AppHeader()
         yield self._StrDataTable(cursor_type="row")
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
-        self.set_breadcrumb(base.BREADCRUMB_BASTIONS)
         table = self.query_one(self._StrDataTable)
         table.add_columns("URL", "SSH Proxy Jump", "Tags")
         self._bastions = (await self._auth.list_bastions()).bastions

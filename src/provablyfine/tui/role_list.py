@@ -7,7 +7,7 @@ import textual.containers
 import textual.screen
 import textual.widgets
 
-from . import _utils, base, header, role_view
+from . import _utils, base, role_view
 
 
 class _RoleNameScreen(textual.screen.ModalScreen[str | None]):
@@ -56,12 +56,10 @@ class RoleListScreen(base.Screen):
         self._roles: list[pfc.schemas.Role] = []
 
     def compose(self) -> textual.app.ComposeResult:
-        yield header.AppHeader()
         yield textual.widgets.DataTable(cursor_type="row")
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
-        self.set_breadcrumb(base.BREADCRUMB_ROLES)
         table = self.query_one(textual.widgets.DataTable[str])
         table.add_columns("Name", "Description", "Members", "Grants")
         self._roles = (await self._auth.list_roles()).roles

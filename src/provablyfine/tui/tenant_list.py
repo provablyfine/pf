@@ -7,7 +7,7 @@ import textual.containers
 import textual.screen
 import textual.widgets
 
-from . import base, header
+from . import base
 
 
 class _TenantCreateScreen(textual.screen.ModalScreen[dict[str, str] | None]):
@@ -59,12 +59,10 @@ class TenantListScreen(base.Screen):
         self._tenants: list[pfc.schemas.Tenant] = []
 
     def compose(self) -> textual.app.ComposeResult:
-        yield header.AppHeader()
         yield self._StrDataTable(cursor_type="row")
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
-        self.set_breadcrumb(base.BREADCRUMB_TENANTS)
         table = self.query_one(self._StrDataTable)
         table.add_columns("Name", "Display Name", "Enabled")
         self._tenants = (await self._auth.list_tenants()).tenants

@@ -64,17 +64,15 @@ class NavColumn(textual.widget.Widget):
     the default vertical layout to stack normally within this column.
 
     `dock: left` reserves this column against the *whole* screen regardless
-    of other docked siblings, which is why an unmargined `NavColumn` would
-    overlap `AppHeader`'s docked-top row. The top margin below clears it — it
-    assumes the header is its normal single-row height, which doesn't hold
-    while `AppHeader` is toggled to its tall (3-row) state."""
+    of other docked siblings, which is why `NavColumn` needs no top margin of
+    its own: `AppHeader` always renders at `height: 0` (invisible, reserving
+    no rows), so there is nothing for this column to clear."""
 
     DEFAULT_CSS = """
     NavColumn {
         dock: left;
         width: 24;
         height: auto;
-        margin: 0 0;
     }
     """
 

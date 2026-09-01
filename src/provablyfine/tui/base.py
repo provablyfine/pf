@@ -82,28 +82,25 @@ class Screen(textual.screen.Screen[None]):
     def app(self) -> App:
         return super().app  # type: ignore
 
-    def set_breadcrumb(self, *parts: str) -> None:
-        self.sub_title = format_breadcrumb(*parts)
-
     def _extend_compose(self, widgets: list[textual.widget.Widget]) -> None:
         super()._extend_compose(widgets)
         section_id = self.app.current_section_id
         if section_id is None:
             return
         label = next((label for id_, label in nav_pane.NAV_ITEMS if id_ == section_id), None)
-        # Every screen in this app composes, in order: `AppHeader` (index 0),
-        # its own content, then optionally a `Footer` last. Framing "its own
-        # content" in a titled border means slicing those two out generically
-        # here rather than each screen wrapping its own `compose()` body.
-        if label is not None and len(widgets) >= 2:
+        # Every screen in this app composes its own content, then optionally
+        # a `Footer` last. Framing "its own content" in a titled border means
+        # slicing the footer out generically here rather than each screen
+        # wrapping its own `compose()` body.
+        if label is not None and widgets:
             has_footer = isinstance(widgets[-1], textual.widgets.Footer)
             content_end = len(widgets) - 1 if has_footer else len(widgets)
-            content = widgets[1:content_end]
+            content = widgets[:content_end]
             if content:
                 frame = textual.containers.Container(*content)
                 frame.border_title = label
                 frame.add_class("-content-frame")
-                widgets[1:content_end] = [frame]
+                widgets[:content_end] = [frame]
         widgets.append(nav_pane.NavColumn(active_id=section_id))
 
 
@@ -152,11 +149,5 @@ def format_breadcrumb(*parts: str) -> str:
     return " > ".join(parts)
 
 
-BREADCRUMB_TENANTS = "Tenants"
-BREADCRUMB_IDENTITIES = "Identities"
-BREADCRUMB_BASTIONS = "Bastions"
 BREADCRUMB_BOUNDARIES = "Boundaries"
-BREADCRUMB_TAGS = "Tags"
 BREADCRUMB_ROLES = "Roles"
-BREADCRUMB_AUTHS = "Auths"
-BREADCRUMB_AUDIT_LOG = "Audit Log"

@@ -7,7 +7,7 @@ import textual.containers
 import textual.screen
 import textual.widgets
 
-from . import _utils, base, boundary_view, header
+from . import _utils, base, boundary_view
 
 
 class _BoundaryCreateScreen(textual.screen.ModalScreen[str | None]):
@@ -55,12 +55,10 @@ class BoundaryListScreen(base.Screen):
         self._boundaries: list[pfc.schemas.Boundary] = []
 
     def compose(self) -> textual.app.ComposeResult:
-        yield header.AppHeader()
         yield textual.widgets.DataTable(cursor_type="row")
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
-        self.set_breadcrumb(base.BREADCRUMB_BOUNDARIES)
         table = self.query_one(textual.widgets.DataTable[str])
         table.add_columns("Name", "Description", "Denied", "Ceiling")
         self._boundaries = (await self._auth.list_boundaries()).boundaries

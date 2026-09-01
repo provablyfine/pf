@@ -8,7 +8,7 @@ import textual.containers
 import textual.screen
 import textual.widgets
 
-from . import auth_view, base, header
+from . import auth_view, base
 
 
 @dataclasses.dataclass
@@ -143,12 +143,10 @@ class AuthListScreen(base.Screen):
         self._auths: list[pfc.schemas.Auth] = []
 
     def compose(self) -> textual.app.ComposeResult:
-        yield header.AppHeader()
         yield self._StrDataTable(cursor_type="row")
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
-        self.set_breadcrumb(base.BREADCRUMB_AUTHS)
         table = self.query_one(self._StrDataTable)
         table.add_columns("Name", "Client Type", "Type", "Enabled")
         self._auths = (await self._auth.list_auths()).auths

@@ -9,7 +9,7 @@ import textual.containers
 import textual.events
 import textual.widgets
 
-from . import base, grant_edit, grant_list, header, member_list
+from . import base, grant_edit, grant_list, member_list
 
 
 class _GrantsTable(textual.widgets.DataTable[str]):
@@ -54,7 +54,6 @@ class RoleViewScreen(base.Screen):
         self._saved_grant_list: list[pfc.schemas.Grant] = list(role.grant_list)
 
     def compose(self) -> textual.app.ComposeResult:
-        yield header.AppHeader()
         with textual.containers.Vertical():
             yield textual.widgets.Label("Name", classes="field-label -first")
             yield base.Input(self._role.name, id="name", compact=True)
@@ -69,7 +68,6 @@ class RoleViewScreen(base.Screen):
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
-        self.set_breadcrumb(base.BREADCRUMB_ROLES, self._role.name)
         self.query_one("#grants", _GrantsTable).add_columns("Type", "Filter", "Permissions")
         await self._populate_members()
         self._populate_grants()

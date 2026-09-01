@@ -9,7 +9,7 @@ import textual.screen
 import textual.widgets
 import textual_autocomplete
 
-from . import auto_complete, base, header
+from . import auto_complete, base
 
 
 class _TagAddScreen(textual.screen.ModalScreen[pfc.schemas.TagNameValue | None]):
@@ -83,7 +83,6 @@ class IdentityViewScreen(base.Screen):
         self._saved_tags: list[pfc.schemas.TagNameValue] = list(identity.tags)
 
     def compose(self) -> textual.app.ComposeResult:
-        yield header.AppHeader()
         with textual.containers.Vertical():
             yield textual.widgets.Label("Name", classes="field-label -first")
             yield base.Input(self._identity.name, id="name", compact=True)
@@ -103,7 +102,6 @@ class IdentityViewScreen(base.Screen):
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
-        self.set_breadcrumb(base.BREADCRUMB_IDENTITIES, self._identity.name)
         await self._populate_tags()
         await self._populate_boundaries()
 

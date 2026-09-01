@@ -9,7 +9,7 @@ import textual.containers
 import textual.screen
 import textual.widgets
 
-from . import base, clipboard, header, identity_view
+from . import base, clipboard, identity_view
 
 
 class _IdentitiesTable(textual.widgets.DataTable[str]):
@@ -156,12 +156,10 @@ class IdentityListScreen(base.Screen):
         self._identities: list[pfc.schemas.Identity] = []
 
     def compose(self) -> textual.app.ComposeResult:
-        yield header.AppHeader()
         yield _IdentitiesTable(cursor_type="row")
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
-        self.set_breadcrumb(base.BREADCRUMB_IDENTITIES)
         table = self.query_one(_IdentitiesTable)
         table.add_columns("Name", "Unix username", "Tags", "Boundaries")
         self._identities = (await self._auth.list_identities()).identities

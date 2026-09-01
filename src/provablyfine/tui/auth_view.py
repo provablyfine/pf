@@ -8,7 +8,7 @@ import textual.app
 import textual.containers
 import textual.widgets
 
-from . import base, header
+from . import base
 
 
 class AuthViewScreen(base.Screen):
@@ -38,7 +38,6 @@ class AuthViewScreen(base.Screen):
         self._saved_enabled: bool = a.is_enabled
 
     def compose(self) -> textual.app.ComposeResult:
-        yield header.AppHeader()
         with textual.containers.Vertical():
             yield textual.widgets.Label("Name", classes="field-label -first")
             yield base.Input(self._a.name, id="name", compact=True)
@@ -56,10 +55,6 @@ class AuthViewScreen(base.Screen):
                     "", placeholder="unchanged", id="client_secret", compact=True, password=True, disabled=True
                 )
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
-
-    @textual.work
-    async def on_mount(self) -> None:
-        self.set_breadcrumb(base.BREADCRUMB_AUTHS, self._a.name)
 
     @textual.work
     async def action_save(self) -> None:

@@ -9,7 +9,7 @@ import textual.screen
 import textual.widgets
 import textual_autocomplete
 
-from . import auto_complete, base, header
+from . import auto_complete, base
 
 
 class _TagAddScreen(textual.screen.ModalScreen[pfc.schemas.TagNameValue | None]):
@@ -83,7 +83,6 @@ class BastionViewScreen(base.Screen):
         self._saved_tags: list[pfc.schemas.TagNameValue] = list(bastion.tag_list)
 
     def compose(self) -> textual.app.ComposeResult:
-        yield header.AppHeader()
         with textual.containers.Vertical():
             yield textual.widgets.Label("URL", classes="field-label -first")
             yield base.Input(self._bastion.url, id="url", compact=True)
@@ -95,7 +94,6 @@ class BastionViewScreen(base.Screen):
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
-        self.set_breadcrumb(base.BREADCRUMB_BASTIONS, self._bastion.url)
         await self._populate_tags()
 
     def on_descendant_focus(self, event: textual.events.DescendantFocus) -> None:

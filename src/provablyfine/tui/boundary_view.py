@@ -9,7 +9,7 @@ import textual.containers
 import textual.events
 import textual.widgets
 
-from . import base, grant_edit, grant_list, header
+from . import base, grant_edit, grant_list
 
 
 class _GrantsTable(textual.widgets.DataTable[str]):
@@ -54,7 +54,6 @@ class BoundaryViewScreen(base.Screen):
         self._saved_ceiling_list = list(boundary.ceiling_list) if boundary.ceiling_list is not None else None
 
     def compose(self) -> textual.app.ComposeResult:
-        yield header.AppHeader()
         with textual.containers.Vertical():
             yield textual.widgets.Label("Name", classes="field-label -first")
             yield base.Input(self._boundary.name, id="name", compact=True)
@@ -69,7 +68,6 @@ class BoundaryViewScreen(base.Screen):
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
-        self.set_breadcrumb(base.BREADCRUMB_BOUNDARIES, self._boundary.name)
         self.query_one("#denied", _GrantsTable).add_columns("Type", "Filter", "Permissions")
         self.query_one("#ceiling", _GrantsTable).add_columns("Type", "Filter", "Permissions")
         self._populate_denied()
