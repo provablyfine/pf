@@ -69,8 +69,25 @@ class Screen(textual.screen.Screen[None]):
     # same token `AppHeader` uses — so the two blend together with nothing
     # to mark where the header ends and the screen's own content begins.
     DEFAULT_CSS = """
+    Screen DataTable {
+        background: transparent;
+    }
+    Screen DataTable:focus {
+        /* `DataTable`'s own `:focus` rule only tints its background (see
+           `.-highlight`/`.datatable--cursor`), which needs an opaque
+           background under it to be visible. Transparent otherwise, so an
+           empty or short table doesn't paint a block of unused panel color
+           down to the content frame's border. */
+        background: $surface;
+    }
     Screen DataTable > .datatable--header {
         background: $boost;
+    }
+    Screen ListView {
+        background: transparent;
+    }
+    Screen ListView:focus {
+        background: $surface;
     }
     Screen > .-content-frame {
         border: round $primary;

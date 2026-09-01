@@ -99,7 +99,6 @@ class NavPane(textual.widget.Widget):
         height: auto;
     }
     NavPane ListView {
-        background: transparent;
         border: round $primary;
         height: auto;
         padding: 0 0;
