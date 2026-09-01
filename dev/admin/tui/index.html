@@ -836,9 +836,9 @@ grants, authentication methods, and the audit log — without needing to
 remember individual subcommands.</p>
 <div class="highlight"><pre><span></span><code><span class="gp">$ </span>pfat
 </code></pre></div>
-<p>The recording below is a full walkthrough: logging in, then creating a
-tenant, an identity (and inviting it), a bastion, a boundary, a tag, a role
-with two grants, and an authentication method, finishing on the audit log
+<p>The recording below is a full walkthrough: logging in, then creating an
+identity (and inviting it), a tag, a role with two grants, a boundary, an
+authentication method, a bastion, and a tenant, finishing on the audit log
 that records everything that just happened.</p>
 <div id="tour-thorough"></div>
 <script>
@@ -871,7 +871,11 @@ that records everything that just happened.</p>
 </tr>
 <tr>
 <td><code>escape</code></td>
-<td>back (or quit, from the Home screen)</td>
+<td>back a level, or refocus the nav pane from a top-level list</td>
+</tr>
+<tr>
+<td><code>tab</code> / <code>shift+tab</code></td>
+<td>cycle focus, including into the nav pane</td>
 </tr>
 <tr>
 <td><code>a</code></td>
@@ -885,11 +889,18 @@ that records everything that just happened.</p>
 <td><code>ctrl+s</code></td>
 <td>save</td>
 </tr>
+<tr>
+<td><code>ctrl+q</code></td>
+<td>quit</td>
+</tr>
 </tbody>
 </table>
-<p>From the Home screen, each resource (Tenants, Identities, Bastions,
-Boundaries, Tags, Roles, Auths, Audit Log) opens into its own list, and each
-list opens into a detail view for the selected row.</p>
+<p>A navigation pane stays visible in the top-left corner of every screen,
+grouping the same resources (Identities, Tags, Roles, Boundaries under
+Access Control; Authentication, Bastions, Tenants under Admin; the Audit Log
+under Audit) into a list you can jump to from anywhere with <code>shift+tab</code> then
+<code>↑</code>/<code>↓</code>/<code>enter</code> — no need to back out of whatever you're doing first. Each
+resource's list then opens into a detail view for the selected row.</p>
 
 
 
