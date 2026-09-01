@@ -17,9 +17,12 @@ from . import nav_pane
 
 class App(textual.app.App[None]):
     whoami: textual.reactive.Reactive[str] = textual.reactive.Reactive("")
+    identity_name: textual.reactive.Reactive[str] = textual.reactive.Reactive("")
+    role: textual.reactive.Reactive[str] = textual.reactive.Reactive("")
+    tenant_name: textual.reactive.Reactive[str] = textual.reactive.Reactive("")
     current_section_id: str | None = None
     """Set by `TuiApp.switch_to_section`; read by `Screen._extend_compose`
-    to decide whether (and with what active item) to inject a `NavPane`.
+    to decide whether (and with what active item) to inject a `NavColumn`.
     Stays `None` for `SetupApp` screens (login/setup, before any section
     exists), so they never get one."""
 
@@ -101,7 +104,7 @@ class Screen(textual.screen.Screen[None]):
                 frame.border_title = label
                 frame.add_class("-content-frame")
                 widgets[1:content_end] = [frame]
-        widgets.append(nav_pane.NavPane(active_id=section_id))
+        widgets.append(nav_pane.NavColumn(active_id=section_id))
 
 
 class ModalScreen[T](textual.screen.ModalScreen[T]):

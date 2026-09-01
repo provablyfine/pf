@@ -43,6 +43,7 @@ class TuiApp(base.App):
         self.current_section_id = sections.SECTIONS[0].id
         self.push_screen(sections.SECTIONS[0].factory(self.auth))
         self._load_whoami()
+        self.tenant_name = self._cfg.tenant_name if self._cfg is not None else ""
 
     def switch_to_section(self, section_id: str) -> None:
         if self.current_section_id == section_id:
@@ -62,10 +63,13 @@ class TuiApp(base.App):
     @textual.work
     async def _load_whoami(self) -> None:
         identity = await self.auth.get_self()
+        self.identity_name = identity.name
         if identity.active_role is not None:
             self.whoami = f"{identity.name} [{identity.active_role.name}]"
+            self.role = identity.active_role.name
         else:
             self.whoami = identity.name
+            self.role = ""
 
     def _handle_exception(self, error: Exception) -> None:
         if self._cfg is not None and self._config_path is not None:

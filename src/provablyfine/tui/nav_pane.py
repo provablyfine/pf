@@ -2,6 +2,7 @@ import dataclasses
 
 import textual
 import textual.app
+import textual.containers
 import textual.message
 import textual.widget
 import textual.widgets
@@ -53,37 +54,59 @@ def _item_id(section_id: str) -> str:
     return f"nav-{section_id}"
 
 
-class NavPane(textual.widget.Widget):
-    """Persistent, top-left, vertical navigation list. `base.Screen`
-    injects one into every screen via `_extend_compose`, so individual
-    screens never need to know it exists. A plain `ListView` is used so it
-    needs no custom focus bindings: it's already part of Textual's default
-    Tab/Shift+Tab chain. Group headings are `disabled=True` `ListItem`s —
-    `ListView` already skips disabled items on up/down and never selects
-    them, so no custom "non-selectable row" handling is needed.
+class NavColumn(textual.widget.Widget):
+    """Docked left column holding `NavPane` (the navigation list) followed by
+    `SessionPane` (the inert tenant/role/identity panel). Only this outer
+    widget docks — Textual places every docked widget from its container's
+    own edge independently (it doesn't stack same-edge docks into a frame the
+    way a browser's CSS would), so two separately-docked children here would
+    both start at the top and overlap. `NavPane`/`SessionPane` instead rely on
+    the default vertical layout to stack normally within this column.
 
-    `dock: left` reserves its column against the *whole* screen regardless
-    of other docked siblings (Textual doesn't stack simultaneous docks into
-    a frame the way a browser's CSS would), which is why an unmargined
-    `NavPane` would overlap `AppHeader`'s docked-top row. The top margin
-    below clears it — it assumes the header is its normal single-row
-    height, which doesn't hold while `AppHeader` is toggled to its tall
-    (3-row) state."""
+    `dock: left` reserves this column against the *whole* screen regardless
+    of other docked siblings, which is why an unmargined `NavColumn` would
+    overlap `AppHeader`'s docked-top row. The top margin below clears it — it
+    assumes the header is its normal single-row height, which doesn't hold
+    while `AppHeader` is toggled to its tall (3-row) state."""
 
     DEFAULT_CSS = """
-    NavPane {
+    NavColumn {
         dock: left;
         width: 24;
         height: auto;
         margin: 0 0;
     }
+    """
+
+    def __init__(self, active_id: str | None) -> None:
+        super().__init__()
+        self._active_id = active_id
+
+    def compose(self) -> textual.app.ComposeResult:
+        yield NavPane(active_id=self._active_id)
+        yield SessionPane()
+
+
+class NavPane(textual.widget.Widget):
+    """Persistent navigation list, the top child of `NavColumn`. A plain
+    `ListView` is used so it needs no custom focus bindings: it's already
+    part of Textual's default Tab/Shift+Tab chain. Group headings are
+    `disabled=True` `ListItem`s — `ListView` already skips disabled items on
+    up/down and never selects them, so no custom "non-selectable row"
+    handling is needed."""
+
+    DEFAULT_CSS = """
+    NavPane {
+        width: 100%;
+        height: auto;
+    }
     NavPane ListView {
+        background: transparent;
         border: round $primary;
         height: auto;
         padding: 0 0;
     }
     NavPane ListItem.-heading Label {
-        text-style: bold italic;
         color: $text-muted;
     }
     NavPane ListItem .-marker {
@@ -126,7 +149,6 @@ class NavPane(textual.widget.Widget):
                     yield item
 
     def on_mount(self) -> None:
-        self.watch(self.app, "whoami", self._set_subtitle)
         if self._active_id is None:
             return
         lv = self.query_one(textual.widgets.ListView)
@@ -135,12 +157,60 @@ class NavPane(textual.widget.Widget):
                 lv.index = index
                 break
 
-    def _set_subtitle(self, whoami: str) -> None:
-        self.query_one(textual.widgets.ListView).border_subtitle = whoami or None
-
     @textual.on(textual.widgets.ListView.Selected)
     def _on_selected(self, event: textual.widgets.ListView.Selected) -> None:
         item_id = event.item.id
         if item_id is None or not item_id.startswith("nav-"):
             return
         self.post_message(self.Activated(item_id.removeprefix("nav-")))
+
+
+class SessionPane(textual.widget.Widget):
+    """Inert panel below `NavPane`, the bottom child of `NavColumn`, showing
+    the current tenant, role, and identity. Deliberately *not* a
+    `ListView`/focusable control: nothing here can be selected today, and even
+    once tenant/role switching exists it's planned as a global keybinding
+    rather than a navigable row, so this stays a plain, inert container."""
+
+    DEFAULT_CSS = """
+    SessionPane {
+        width: 100%;
+        height: auto;
+    }
+    SessionPane > Vertical {
+        border: round $primary;
+        height: auto;
+    }
+    SessionPane Static {
+        color: $text-muted;
+        width: 100%;
+    }
+    """
+
+    can_focus = False
+
+    @property
+    def app(self) -> textual.app.App[None]:
+        return super().app  # type: ignore
+
+    def compose(self) -> textual.app.ComposeResult:
+        with textual.containers.Vertical() as v:
+            v.border_title = "Session"
+            yield textual.widgets.Static(id="session-tenant")
+            yield textual.widgets.Static(id="session-role")
+            yield textual.widgets.Static(id="session-identity")
+
+    def on_mount(self) -> None:
+        self.watch(self.app, "tenant_name", self._set_tenant)
+        self.watch(self.app, "role", self._set_role)
+        self.watch(self.app, "identity_name", self._set_identity)
+
+    def _set_tenant(self, tenant_name: str) -> None:
+        text = f"Tenant: {tenant_name}" if tenant_name else ""
+        self.query_one("#session-tenant", textual.widgets.Static).update(text)
+
+    def _set_role(self, role: str) -> None:
+        self.query_one("#session-role", textual.widgets.Static).update(f"Role: {role}" if role else "")
+
+    def _set_identity(self, identity_name: str) -> None:
+        self.query_one("#session-identity", textual.widgets.Static).update(identity_name)
