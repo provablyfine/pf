@@ -8,7 +8,7 @@ import textual.app
 import textual.containers
 import textual.widgets
 
-from . import base, clipboard, identity_view
+from . import _utils, base, clipboard, identity_view
 
 
 class _IdentitiesTable(textual.widgets.DataTable[str]):
@@ -152,11 +152,13 @@ class IdentityListScreen(base.Screen):
     def _populate_table(self, table: _IdentitiesTable) -> None:
         table.clear(columns=False)
         for identity in self._identities:
+            tags = ", ".join(f"{t.name}={t.value}" for t in identity.tags)
+            boundaries = ", ".join(b.name for b in identity.boundaries)
             table.add_row(
                 identity.name,
                 identity.unix_username or "",
-                str(len(identity.tags)),
-                str(len(identity.boundaries)),
+                _utils.ellipsize(tags, 40),
+                _utils.ellipsize(boundaries, 40),
             )
         self.query_one("#identities-placeholder").display = not bool(self._identities)
 
