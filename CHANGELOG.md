@@ -1,3 +1,11 @@
+## 0.7.6 - 2026-09-01
+
+### Fixed
+
+- Rework TUI navigation ([#103](https://github.com/provablyfine/pf/issues/103))
+- Ensure proxy_name is globally unique within a bastion to allow more than one client to register with a bastion ([#106](https://github.com/provablyfine/pf/issues/106))
+
+
 ## 0.7.5 - 2026-08-31
 
 ### Fixed
