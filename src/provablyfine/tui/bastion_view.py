@@ -65,6 +65,9 @@ class BastionViewScreen(base.Screen):
         text-style: bold;
         padding: 1 0 0 0;
     }
+    .field-label.-first {
+        padding-top: 0;
+    }
     #tags {
         height: auto;
     }
@@ -82,7 +85,7 @@ class BastionViewScreen(base.Screen):
     def compose(self) -> textual.app.ComposeResult:
         yield header.AppHeader()
         with textual.containers.Vertical():
-            yield textual.widgets.Label("URL", classes="field-label")
+            yield textual.widgets.Label("URL", classes="field-label -first")
             yield base.Input(self._bastion.url, id="url", compact=True)
             yield textual.widgets.Label("SSH Proxy Jump", classes="field-label")
             yield base.Input(self._bastion.ssh_proxy_jump or "", id="ssh_proxy_jump", compact=True)

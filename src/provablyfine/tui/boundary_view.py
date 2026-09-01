@@ -31,6 +31,9 @@ class BoundaryViewScreen(base.Screen):
         text-style: bold;
         padding: 1 0 0 0;
     }
+    .field-label.-first {
+        padding-top: 0;
+    }
     #description {
         height: auto;
     }
@@ -53,7 +56,7 @@ class BoundaryViewScreen(base.Screen):
     def compose(self) -> textual.app.ComposeResult:
         yield header.AppHeader()
         with textual.containers.Vertical():
-            yield textual.widgets.Label("Name", classes="field-label")
+            yield textual.widgets.Label("Name", classes="field-label -first")
             yield base.Input(self._boundary.name, id="name", compact=True)
             yield textual.widgets.Label("Description", classes="field-label")
             yield base.Input(self._boundary.description, id="description", compact=True)

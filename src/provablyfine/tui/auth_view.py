@@ -24,6 +24,9 @@ class AuthViewScreen(base.Screen):
         text-style: bold;
         padding: 1 0 0 0;
     }
+    .field-label.-first {
+        padding-top: 0;
+    }
     """
 
     def __init__(self, auth: pfc.AsyncSessionClient, a: pfc.schemas.Auth) -> None:
@@ -37,7 +40,7 @@ class AuthViewScreen(base.Screen):
     def compose(self) -> textual.app.ComposeResult:
         yield header.AppHeader()
         with textual.containers.Vertical():
-            yield textual.widgets.Label("Name", classes="field-label")
+            yield textual.widgets.Label("Name", classes="field-label -first")
             yield base.Input(self._a.name, id="name", compact=True)
             yield textual.widgets.Label("Description", classes="field-label")
             yield base.Input(self._a.description, id="description", compact=True)
