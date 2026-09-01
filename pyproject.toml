@@ -168,7 +168,7 @@ do_not_mutate_patterns = [
 ]
 
 [tool.codespell]
-skip = "*.min.js,*.min.css"
+skip = "*.min.js,*.min.css,*.cast"
 count = true
 quiet-level = 3
 ignore-words-list = "iTerm"
