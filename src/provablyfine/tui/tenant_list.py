@@ -28,8 +28,8 @@ class _TenantCreateScreen(textual.screen.ModalScreen[dict[str, str] | None]):
     def compose(self) -> textual.app.ComposeResult:
         with textual.containers.VerticalGroup() as container:
             container.border_title = "Add a tenant"
-            yield textual.widgets.Input(placeholder="name", id="name", compact=True)
-            yield textual.widgets.Input(placeholder="display name", id="display_name", compact=True)
+            yield base.Input(placeholder="name", id="name", compact=True)
+            yield base.Input(placeholder="display name", id="display_name", compact=True)
 
     def action_cancel(self) -> None:
         self.dismiss(None)

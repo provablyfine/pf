@@ -28,8 +28,8 @@ class _TagCreateScreen(textual.screen.ModalScreen[pfc.schemas.TagNameValue | Non
     def compose(self) -> textual.app.ComposeResult:
         with textual.containers.VerticalGroup() as container:
             container.border_title = "Add a tag"
-            yield textual.widgets.Input(placeholder="name", id="name", compact=True)
-            yield textual.widgets.Input(placeholder="value", id="value", compact=True)
+            yield base.Input(placeholder="name", id="name", compact=True)
+            yield base.Input(placeholder="value", id="value", compact=True)
 
     def action_cancel(self) -> None:
         self.dismiss(None)

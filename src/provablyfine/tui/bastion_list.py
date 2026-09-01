@@ -33,8 +33,8 @@ class _BastionCreateScreen(textual.screen.ModalScreen[_BastionFormResult | None]
     def compose(self) -> textual.app.ComposeResult:
         with textual.containers.VerticalGroup() as container:
             container.border_title = "Add a bastion"
-            yield textual.widgets.Input(placeholder="url", id="url", compact=True)
-            yield textual.widgets.Input(placeholder="ssh_proxy_jump (optional)", id="ssh_proxy_jump", compact=True)
+            yield base.Input(placeholder="url", id="url", compact=True)
+            yield base.Input(placeholder="ssh_proxy_jump (optional)", id="ssh_proxy_jump", compact=True)
 
     def action_cancel(self) -> None:
         self.dismiss(None)

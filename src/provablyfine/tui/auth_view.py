@@ -20,9 +20,9 @@ class AuthViewScreen(base.Screen):
     Vertical {
         height: auto;
     }
-    .field {
-        border: solid;
-        height: auto;
+    .field-label {
+        text-style: bold;
+        padding: 1 0 0 0;
     }
     """
 
@@ -37,27 +37,21 @@ class AuthViewScreen(base.Screen):
     def compose(self) -> textual.app.ComposeResult:
         yield header.AppHeader()
         with textual.containers.Vertical():
-            with textual.containers.HorizontalGroup(classes="field") as c:
-                c.border_title = "Name"
-                yield textual.widgets.Input(self._a.name, id="name", compact=True)
-            with textual.containers.HorizontalGroup(classes="field") as c:
-                c.border_title = "Description"
-                yield textual.widgets.Input(self._a.description, id="description", compact=True)
-            with textual.containers.HorizontalGroup(classes="field") as c:
-                c.border_title = "Enabled"
-                yield textual.widgets.Checkbox(value=self._a.is_enabled, id="is_enabled", compact=True)
+            yield textual.widgets.Label("Name", classes="field-label")
+            yield base.Input(self._a.name, id="name", compact=True)
+            yield textual.widgets.Label("Description", classes="field-label")
+            yield base.Input(self._a.description, id="description", compact=True)
+            yield textual.widgets.Label("Enabled", classes="field-label")
+            yield textual.widgets.Checkbox(value=self._a.is_enabled, id="is_enabled", compact=True)
             if isinstance(self._a.config, pfc.schemas.OidcConfig):
-                with textual.containers.HorizontalGroup(classes="field") as c:
-                    c.border_title = "Issuer"
-                    yield textual.widgets.Input(self._a.config.issuer, id="issuer", compact=True, disabled=True)
-                with textual.containers.HorizontalGroup(classes="field") as c:
-                    c.border_title = "Client ID"
-                    yield textual.widgets.Input(self._a.config.client_id, id="client_id", compact=True, disabled=True)
-                with textual.containers.HorizontalGroup(classes="field") as c:
-                    c.border_title = "Client secret"
-                    yield textual.widgets.Input(
-                        "", placeholder="unchanged", id="client_secret", compact=True, password=True, disabled=True
-                    )
+                yield textual.widgets.Label("Issuer", classes="field-label")
+                yield base.Input(self._a.config.issuer, id="issuer", compact=True, disabled=True)
+                yield textual.widgets.Label("Client ID", classes="field-label")
+                yield base.Input(self._a.config.client_id, id="client_id", compact=True, disabled=True)
+                yield textual.widgets.Label("Client secret", classes="field-label")
+                yield base.Input(
+                    "", placeholder="unchanged", id="client_secret", compact=True, password=True, disabled=True
+                )
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     @textual.work

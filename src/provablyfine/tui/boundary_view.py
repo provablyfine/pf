@@ -27,9 +27,9 @@ class BoundaryViewScreen(base.Screen):
     Vertical {
         height: auto;
     }
-    .field {
-        border: solid;
-        height: auto;
+    .field-label {
+        text-style: bold;
+        padding: 1 0 0 0;
     }
     #description {
         height: auto;
@@ -53,20 +53,16 @@ class BoundaryViewScreen(base.Screen):
     def compose(self) -> textual.app.ComposeResult:
         yield header.AppHeader()
         with textual.containers.Vertical():
-            with textual.containers.HorizontalGroup(classes="field") as container:
-                container.border_title = "Name"
-                yield textual.widgets.Input(self._boundary.name, id="name", compact=True)
-            with textual.containers.Horizontal(classes="field") as container:
-                container.border_title = "Description"
-                yield textual.widgets.Input(self._boundary.description, id="description", compact=True)
-            with textual.containers.Container(classes="field") as container:
-                container.border_title = "Denied grants"
-                yield _GrantsTable(id="denied", cursor_type="row")
-                yield textual.widgets.Label("No denied grants — add one with 'a'", id="denied-placeholder")
-            with textual.containers.Container(classes="field") as container:
-                container.border_title = "Ceiling grants"
-                yield _GrantsTable(id="ceiling", cursor_type="row")
-                yield textual.widgets.Label("No ceiling grants — add one with 'a'", id="ceiling-placeholder")
+            yield textual.widgets.Label("Name", classes="field-label")
+            yield base.Input(self._boundary.name, id="name", compact=True)
+            yield textual.widgets.Label("Description", classes="field-label")
+            yield base.Input(self._boundary.description, id="description", compact=True)
+            yield textual.widgets.Label("Denied grants", classes="field-label")
+            yield _GrantsTable(id="denied", cursor_type="row")
+            yield textual.widgets.Label("No denied grants — add one with 'a'", id="denied-placeholder")
+            yield textual.widgets.Label("Ceiling grants", classes="field-label")
+            yield _GrantsTable(id="ceiling", cursor_type="row")
+            yield textual.widgets.Label("No ceiling grants — add one with 'a'", id="ceiling-placeholder")
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:

@@ -35,7 +35,7 @@ class _TagAddScreen(textual.screen.ModalScreen[pfc.schemas.TagNameValue | None])
         candidates = [textual_autocomplete.DropdownItem(main=label) for label in self._tags]
         with textual.containers.VerticalGroup() as container:
             container.border_title = "Add tag"
-            yield textual.widgets.Input(placeholder="name=value", compact=True, id="tag-input")
+            yield base.Input(placeholder="name=value", compact=True, id="tag-input")
         yield auto_complete.MonoAutoComplete("#tag-input", candidates=candidates)
 
     def action_cancel(self) -> None:
@@ -61,9 +61,9 @@ class BastionViewScreen(base.Screen):
     Vertical {
         height: auto;
     }
-    .field {
-        border: solid;
-        height: auto;
+    .field-label {
+        text-style: bold;
+        padding: 1 0 0 0;
     }
     #tags {
         height: auto;
@@ -82,16 +82,13 @@ class BastionViewScreen(base.Screen):
     def compose(self) -> textual.app.ComposeResult:
         yield header.AppHeader()
         with textual.containers.Vertical():
-            with textual.containers.HorizontalGroup(classes="field") as container:
-                container.border_title = "URL"
-                yield textual.widgets.Input(self._bastion.url, id="url", compact=True)
-            with textual.containers.HorizontalGroup(classes="field") as container:
-                container.border_title = "SSH Proxy Jump"
-                yield textual.widgets.Input(self._bastion.ssh_proxy_jump or "", id="ssh_proxy_jump", compact=True)
-            with textual.containers.Container(classes="field") as container:
-                container.border_title = "Tags"
-                yield textual.widgets.ListView(id="tags")
-                yield textual.widgets.Label("No tags — add one with 'a'", id="tags-placeholder")
+            yield textual.widgets.Label("URL", classes="field-label")
+            yield base.Input(self._bastion.url, id="url", compact=True)
+            yield textual.widgets.Label("SSH Proxy Jump", classes="field-label")
+            yield base.Input(self._bastion.ssh_proxy_jump or "", id="ssh_proxy_jump", compact=True)
+            yield textual.widgets.Label("Tags", classes="field-label")
+            yield textual.widgets.ListView(id="tags")
+            yield textual.widgets.Label("No tags — add one with 'a'", id="tags-placeholder")
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:

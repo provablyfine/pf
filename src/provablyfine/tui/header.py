@@ -39,7 +39,7 @@ class AppHeader(base.Widget):
         width: 100%;
         background: $panel;
         color: $foreground;
-        height: 1;
+        height: 0;
     }
     AppHeader.-tall {
         height: 3;

@@ -91,12 +91,12 @@ class _AuthParamsScreen(textual.screen.ModalScreen[_AuthParamsResult | None]):
     def compose(self) -> textual.app.ComposeResult:
         with textual.containers.VerticalGroup() as container:
             container.border_title = f"New {self._type} auth"
-            yield textual.widgets.Input(placeholder="name", id="name", compact=True)
-            yield textual.widgets.Input(placeholder="client_type (cli or web)", id="client_type", compact=True)
+            yield base.Input(placeholder="name", id="name", compact=True)
+            yield base.Input(placeholder="client_type (cli or web)", id="client_type", compact=True)
             if self._type == "oidc":
-                yield textual.widgets.Input(placeholder="issuer", id="issuer", compact=True)
-                yield textual.widgets.Input(placeholder="client_id", id="client_id", compact=True)
-                yield textual.widgets.Input(
+                yield base.Input(placeholder="issuer", id="issuer", compact=True)
+                yield base.Input(placeholder="client_id", id="client_id", compact=True)
+                yield base.Input(
                     placeholder="client_secret (optional)", id="client_secret", compact=True, password=True
                 )
 

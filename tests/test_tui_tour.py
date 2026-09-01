@@ -33,8 +33,9 @@ def _assert_valid_cast(path: str) -> None:
 
 
 def test_record_quick_tour(api, ssh_agent, tmp_path):
-    """Browse-only tour, pre-authenticated at Home: no login flow, no
-    creation. Runs the TuiApp directly (bypassing SetupApp/ReloginScreen),
+    """Browse-only tour, pre-authenticated (boots straight into the
+    Identities list): no login flow, no creation. Runs the TuiApp directly
+    (bypassing SetupApp/ReloginScreen),
     same as the existing test_tui.py tests do via TuiApp(auth).run_test()."""
     tmpdir = str(tmp_path)
     tui_support._setup(api, tmpdir, ssh_agent)

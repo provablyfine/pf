@@ -39,8 +39,8 @@ class _IdentityCreateScreen(textual.screen.ModalScreen[_IdentityFormResult | Non
     def compose(self) -> textual.app.ComposeResult:
         with textual.containers.VerticalGroup() as container:
             container.border_title = "Add an identity"
-            yield textual.widgets.Input(placeholder="name", id="name", compact=True)
-            yield textual.widgets.Input(placeholder="unix_username (optional)", id="unix_username", compact=True)
+            yield base.Input(placeholder="name", id="name", compact=True)
+            yield base.Input(placeholder="unix_username (optional)", id="unix_username", compact=True)
 
     def action_cancel(self) -> None:
         self.dismiss(None)
@@ -126,7 +126,7 @@ class _InviteSecretScreen(base.ModalScreen[None]):
     def compose(self) -> textual.app.ComposeResult:
         with textual.containers.VerticalGroup() as container:
             container.border_title = "Invitation secret"
-            yield textual.widgets.Input(self._secret, id="secret", compact=True)
+            yield base.Input(self._secret, id="secret", compact=True)
 
     @textual.work
     async def on_mount(self) -> None:

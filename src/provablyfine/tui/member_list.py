@@ -7,7 +7,7 @@ import textual.screen
 import textual.widgets
 import textual_autocomplete
 
-from . import auto_complete
+from . import auto_complete, base
 
 
 class MemberAddScreen(textual.screen.ModalScreen[str | None]):
@@ -32,7 +32,7 @@ class MemberAddScreen(textual.screen.ModalScreen[str | None]):
     def compose(self) -> textual.app.ComposeResult:
         candidates = [textual_autocomplete.DropdownItem(main=n) for n in self._identity_names]
         with textual.containers.VerticalGroup():
-            yield textual.widgets.Input(placeholder="name", compact=True, id="member-name")
+            yield base.Input(placeholder="name", compact=True, id="member-name")
         yield auto_complete.MonoAutoComplete("#member-name", candidates=candidates)
 
     def on_mount(self) -> None:
