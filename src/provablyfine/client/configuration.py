@@ -71,4 +71,4 @@ class Config:
         fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "w") as f:
             json.dump(dataclasses.asdict(self), f)
-        os.rename(tmp, filename)
+        os.replace(tmp, filename)

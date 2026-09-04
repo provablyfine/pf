@@ -2,6 +2,7 @@ import argparse
 import base64
 import logging
 import os
+import shutil
 import tempfile
 
 import provablyfine_client as pfc
@@ -67,10 +68,16 @@ def _ssh_function(args: argparse.Namespace) -> None:
 
     try:
         ssh_agent = ssh.agent.Client()
-    except Exception:
-        raise pfc.exceptions.UI("Unable to connect to user's SSH agent")
+    except Exception as e:
+        raise pfc.exceptions.UI(f"Unable to connect to user's SSH agent: {e}") from e
 
     ssh_agent.add(user_key, comment=host, lifetime=60)
+    # Close our own connection before spawning ssh: os.execvp on Windows spawns a
+    # child and waits rather than replacing the process image, so a still-open
+    # connection here would contend with the child's own connection to the same
+    # named pipe (observed: ssh's get_agent_identities fails with "Device or
+    # resource busy" if we don't release it first).
+    ssh_agent.close()
 
     decoded = base64.b64decode(certificates[0])
     certfd, certfile = tempfile.mkstemp(suffix=".cert")
@@ -85,6 +92,10 @@ def _ssh_function(args: argparse.Namespace) -> None:
     khfd, khfile = tempfile.mkstemp(suffix=".known_hosts")
     with os.fdopen(khfd, "wb") as f:
         f.write(c.known_hosts.encode("utf-8") if c.known_hosts else b"")
+
+    ssh_path = shutil.which("ssh")
+    if ssh_path is None:
+        raise pfc.exceptions.UI("ssh not found on PATH")
 
     def build_ssh_cmd(
         target_host: str,
@@ -142,21 +153,21 @@ def _ssh_function(args: argparse.Namespace) -> None:
             )
             ssh_cmd = build_ssh_cmd(host, proxy_command=proxy_cmd)
             try:
-                os.execvp("/usr/bin/ssh", ssh_cmd)
+                os.execvp(ssh_path, ssh_cmd)
             except Exception as e:
                 last_error = e
 
         if bastion.ssh_proxy_jump:
             ssh_cmd = build_ssh_cmd(host, proxy_jump=bastion.ssh_proxy_jump)
             try:
-                os.execvp("/usr/bin/ssh", ssh_cmd)
+                os.execvp(ssh_path, ssh_cmd)
             except Exception as e:
                 last_error = e
 
     for ip in ip_address_list:
         ssh_cmd = build_ssh_cmd(host, ip_address=ip)
         try:
-            os.execvp("/usr/bin/ssh", ssh_cmd)
+            os.execvp(ssh_path, ssh_cmd)
         except Exception as e:
             last_error = e
 

@@ -115,6 +115,27 @@ jobs:
           name: wheel-provablyfine
           path: dist/*.whl
 
+  build-windows:
+    needs: [lint, test]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+      - name: Build pf.exe
+        run: |
+          uv sync --group windows-build
+          uv run --group windows-build pyinstaller packaging/windows/pf.spec
+      - name: Build installer
+        run: |
+          $version = uv version --short
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DMyAppVersion=$version" packaging\windows\pf.iss
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: dist/pf-setup.exe
+
   publish-pypi:
     needs: [build-client, build-sdist, build-wheels, docs]
     runs-on: ubuntu-latest
@@ -129,13 +150,13 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
 
   github-release:
-    needs: [publish-pypi]
+    needs: [publish-pypi, build-windows]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          pattern: '{wheel-*,sdist-*}'
+          pattern: '{wheel-*,sdist-*,windows-installer}'
           merge-multiple: true
           path: dist/
       - name: Extract release notes

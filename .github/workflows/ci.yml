@@ -80,6 +80,29 @@ jobs:
           name: test-logs-macos
           path: /tmp/pf-test-logs/
 
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v8.1.0
+      - name: Build pf.exe
+        run: |
+          uv sync --group windows-build
+          uv run --group windows-build pyinstaller packaging/windows/pf.spec
+      - name: Smoke-test the packaged binary
+        run: dist/pf/pf.exe --version
+      - name: Enable OpenSSH Authentication Agent service
+        run: |
+          Set-Service ssh-agent -StartupType Manual
+          Start-Service ssh-agent
+      - name: Enable OpenSSH Server capability
+        run: Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
+      - name: Run native Windows smoke test
+        # Currently xfail (strict=False) — see tests/test_windows_smoke.py's
+        # module docstring for the open issue. Wired in now so it starts
+        # reporting XPASS in this job once that's resolved.
+        run: uv run pytest tests/test_windows_smoke.py -v
+
   docs:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'

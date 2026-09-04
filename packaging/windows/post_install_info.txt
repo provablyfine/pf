@@ -1,0 +1,10 @@
+pf has been installed.
+
+If "pf ssh" reports that no SSH agent was found, Windows' built-in OpenSSH
+Authentication Agent service is disabled by default. Enable it once, in an
+elevated PowerShell:
+
+  Set-Service ssh-agent -StartupType Automatic
+  Start-Service ssh-agent
+
+You may need to open a new terminal for the updated PATH to take effect.
