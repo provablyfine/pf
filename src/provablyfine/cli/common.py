@@ -9,14 +9,14 @@ import urllib.parse
 
 import provablyfine_client as pfc
 
-from .. import __version__, client, jwk, log, ssh
+from .. import __version__, client, jwk, log
 from . import login
 
 DEFAULT_CONFIG = os.path.join(os.path.expanduser("~"), ".config", "provablyfine", "config.json")
 
 
 def generate_and_save_key() -> tuple[jwk.Private, str]:
-    """Generate ed25519 key, prompt passphrase, save encrypted to ~/.ssh/, add to agent for 60s."""
+    """Generate ed25519 key, prompt passphrase, save encrypted to ~/.ssh/."""
     key = jwk.Private.generate_ed25519()
     fingerprint = key.public().ssh_fingerprint()
 
@@ -41,13 +41,15 @@ def generate_and_save_key() -> tuple[jwk.Private, str]:
     finally:
         os.close(fd)
 
-    print(f"Account key saved to {path}", flush=True)
-
+    # A .pub sibling lets later invocations (e.g. 'pf login') locate this key
+    # on disk from its fingerprint alone, without ever touching the agent.
+    pub_fd = os.open(f"{path}.pub", os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
     try:
-        ssh_agent = ssh.agent.Client()
-        ssh_agent.add(key, comment="pf-account", lifetime=60)
-    except Exception:
-        print(f"SSH agent unavailable; run: ssh-add {path}", flush=True)
+        os.write(pub_fd, key.public().to_openssh() + b"\n")
+    finally:
+        os.close(pub_fd)
+
+    print(f"Account key saved to {path}", flush=True)
 
     return key, fingerprint
 

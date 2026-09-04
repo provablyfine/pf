@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import abc
 import getpass
+import glob
 import logging
 import os.path
 import typing
@@ -67,8 +68,41 @@ def hmac_signer(prefix: str, key: str) -> pfc.Signer:
     return pfc.HmacSigner(prefix, base64url.decode(key))
 
 
+def _find_account_key_path(fingerprint: str) -> str | None:
+    """Locate an on-disk private key file matching an account key fingerprint.
+
+    Returns None if no matching file is found (e.g. --transient-key, whose
+    key lives only in the real ssh-agent by design).
+    """
+    ssh_dir = os.path.expanduser("~/.ssh")
+    for pub_path in sorted(glob.glob(os.path.join(ssh_dir, "*.pub"))):
+        try:
+            with open(pub_path, "rb") as f:
+                pub = jwk.Public.from_openssh(f.read())
+        except Exception:
+            # Not every *.pub file in ~/.ssh is one of ours (or even parseable
+            # by us, e.g. RSA/ECDSA keys) -- skip anything we can't read.
+            logger.debug("Skipping unreadable/unparseable public key %s", pub_path, exc_info=True)
+            continue
+        if not pub.match_ssh_fingerprint(fingerprint):
+            continue
+        private_path = pub_path.removesuffix(".pub")
+        if os.path.isfile(private_path):
+            return private_path
+    return None
+
+
 @ssh_utils.exception
 def agent_signer(prefix: str, fingerprint: str) -> PrivateSigner:
+    if prefix == "account":
+        # The account key is the most sensitive credential pf handles, so it
+        # is never proactively pushed into the real ssh-agent (any same-user
+        # process can read from it). Sign in-memory from the on-disk file
+        # whenever one exists; fall back to the agent only for
+        # --transient-key, which has no file by design.
+        key_path = _find_account_key_path(fingerprint)
+        if key_path is not None:
+            return file_signer(prefix, key_path)
     ssh_agent = ssh.agent.Client()
     for identity in ssh_agent.list_identities():
         if identity.comment == fingerprint or identity.public_key.match_ssh_fingerprint(fingerprint):
@@ -86,11 +120,11 @@ def file_signer(prefix: str, path: str) -> PrivateSigner:
     except TypeError:
         passphrase = getpass.getpass(f"Passphrase for {path}: ").encode()
         key = ssh_utils.load_private_key(data, password=passphrase)
-        try:
-            lifetime = 60 if prefix == "account" else 1800
-            ssh.agent.Client().add(key, comment=f"pf-{prefix}", lifetime=lifetime)
-        except Exception:
-            pass
+        if prefix != "account":
+            try:
+                ssh.agent.Client().add(key, comment=f"pf-{prefix}", lifetime=1800)
+            except Exception:
+                pass
     except pfc.exceptions.UI:
         raise pfc.exceptions.UI("Unable to parse data either as PEM or SSH format")
     if key.type != jwk.KeyType.ED25519:
@@ -113,14 +147,7 @@ def private_key_signer(prefix: str, filename: str | None) -> PrivateSigner:
     if os.path.exists(filename):
         return file_signer(prefix, filename)
 
-    ssh_agent = ssh.agent.Client()
-    for identity in ssh_agent.list_identities():
-        if identity.comment == filename or identity.public_key.match_ssh_fingerprint(filename):
-            if identity.public_key.type != jwk.KeyType.ED25519:
-                raise pfc.exceptions.UI(f"Unsupported: {identity.public_key.type}")
-            return AgentSigner(prefix, identity.public_key)
-
-    raise pfc.exceptions.KeyExpired(prefix)
+    return agent_signer(prefix, filename)
 
 
 class HttpClient:
