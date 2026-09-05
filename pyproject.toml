@@ -175,12 +175,15 @@ ignore-words-list = "iTerm"
 
 [tool.pytest.ini_options]
 minversion = "6.0"
-addopts = "--tb=short -n auto"
+addopts = "--tb=short -n auto --dist=loadgroup"
 testpaths = [
     "src/provablyfine",
     "tests",
 ]
 timeout = 240
+markers = [
+    "real_session_oracle: exercises the real session-key oracle end-to-end; serialized against its siblings under xdist (see conftest.py's pytest_collection_modifyitems)",
+]
 
 [tool.pytest_env]
 HTTP_PROXY = { unset = true }

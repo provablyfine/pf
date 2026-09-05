@@ -1,16 +1,12 @@
-import shutil
-
-import pytest
-
 from . import utils
 
 
-@pytest.mark.skipif(not shutil.which("ssh-agent"), reason="ssh-agent not found")
-def test_login_agent(api, ssh_agent):
+def test_login_agent(api):
+    """`pf login` with no --session-key: the session key is generated and
+    kept alive by the peer-credential oracle (browser_login.generate_session_key()),
+    not pushed into a real ssh-agent -- see login_agent.t.
+    """
     utils.run_cram(
         "tests/login_agent.t",
-        {
-            "API_PORT": str(api.port),
-            "SSH_AUTH_SOCK": ssh_agent.socket,
-        },
+        {"API_PORT": str(api.port)},
     )

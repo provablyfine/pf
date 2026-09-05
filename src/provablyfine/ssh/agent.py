@@ -5,6 +5,7 @@ import dataclasses
 import getpass
 import os
 import socket
+import types
 
 from .. import jwk
 from . import buffer, cert, exceptions, serde
@@ -36,11 +37,26 @@ class Client:
     SSH_AGENT_CONSTRAIN_CONFIRM = 2
     SSH_AGENT_FAILURE = 5
 
-    def __init__(self):
-        path = os.environ["SSH_AUTH_SOCK"]
+    def __init__(self, path: str | None = None):
+        if path is None:
+            path = os.environ["SSH_AUTH_SOCK"]
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         sock.connect(path.encode("ascii"))
         self._sock = sock
+
+    def close(self) -> None:
+        self._sock.close()
+
+    def __enter__(self) -> Client:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: types.TracebackType | None,
+    ) -> None:
+        self.close()
 
     def _send_request(self, type: int, data: bytes):
         request = buffer.Writer()

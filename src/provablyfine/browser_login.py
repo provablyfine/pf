@@ -1,5 +1,6 @@
 import hashlib
 import http.server
+import logging
 import secrets
 import subprocess
 import sys
@@ -12,6 +13,8 @@ import provablyfine_client as pfc
 import requests
 
 from . import base64url, client, jwk, ssh
+
+logger = logging.getLogger(__name__)
 
 
 def open_browser(url: str) -> None:
@@ -36,22 +39,28 @@ def has_valid_session(config: client.Config) -> bool:
     if not config.session_key_fingerprint:
         return False
     try:
-        agent = ssh.agent.Client()
+        path = ssh.oracle.session.current_socket_path()
+        agent = ssh.agent.Client(path)
         for identity in agent.list_identities():
             if identity.public_key.match_ssh_fingerprint(config.session_key_fingerprint):
                 return True
     except Exception:
-        pass
+        # Deliberately broad and swallowed: a wrong-terminal oracle refusal,
+        # a genuinely expired/TTL'd-out oracle, and a bug in
+        # current_socket_path() all look identical from here -- "not logged
+        # in, run pf login" is the correct *user-facing* outcome for all
+        # three. Logged at debug so the distinction is still recoverable
+        # when diagnosing why a session that should be valid isn't.
+        logger.debug("has_valid_session: oracle check failed", exc_info=True)
     return False
 
 
 def generate_session_key() -> tuple[jwk.Private, str]:
-    try:
-        agent = ssh.agent.Client()
-    except Exception:
-        raise pfc.exceptions.UI("Unable to connect to user's SSH agent")
     session_key = jwk.Private.generate_ed25519()
-    agent.add(session_key, comment="pf-session", lifetime=1800)
+    try:
+        ssh.oracle.session.spawn_oracle(session_key, ttl=1800)
+    except (ssh.exceptions.Error, OSError) as e:
+        raise pfc.exceptions.UI(f"Unable to start session-key signing oracle: {e}") from e
     return session_key, session_key.public().ssh_fingerprint()
 
 
