@@ -43,6 +43,27 @@ def pytest_xdist_auto_num_workers(config):
     return physical_cores or 1  # Fallback to 1 if detection fails
 
 
+@pytest.hookimpl(tryfirst=True)
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    # xdist workers that run PYTHON-written e2e tests that call the
+    # oracle will collide with each other because they share one parent process
+    # (the pytest xdist controller), which is what the oracle's socket path
+    # is derived from.
+    # To avoid potential race conditions, we make sure all such tests belong
+    # to the same xdist group so that their execution is serialized.
+    #
+    # tryfirst=True is required, not stylistic: xdist's own
+    # pytest_collection_modifyitems (xdist/remote.py) reads each item's
+    # xdist_group marker in this same hook to compute the nodeid suffix its
+    # scheduler groups on. Without tryfirst, hook order is unspecified and
+    # xdist's implementation can run before this one, in which case the
+    # marker we're about to add doesn't exist yet and grouping silently does
+    # nothing
+    for item in items:
+        if item.get_closest_marker("real_session_oracle") is not None:
+            item.add_marker(pytest.mark.xdist_group(name="pf-session-oracle"))
+
+
 def tld():
     return os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 

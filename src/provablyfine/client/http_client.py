@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import abc
+import collections.abc
 import getpass
+import glob
 import logging
 import os.path
 import typing
@@ -43,9 +45,17 @@ class FileSigner(PrivateSigner):
 
 
 class AgentSigner(PrivateSigner):
-    def __init__(self, prefix: str, key: jwk.Public) -> None:
+    def __init__(
+        self,
+        prefix: str,
+        key: jwk.Public,
+        path: str | None,
+        unreachable: collections.abc.Callable[[OSError], Exception],
+    ) -> None:
         super().__init__(prefix)
         self._key = key
+        self._path = path
+        self._unreachable = unreachable
 
     def public_key(self) -> jwk.Public:
         return self._key
@@ -55,7 +65,10 @@ class AgentSigner(PrivateSigner):
 
     def sign(self, data: bytes) -> bytes:
         fingerprint = self._key.ssh_fingerprint()
-        ssh_agent = ssh.agent.Client()
+        try:
+            ssh_agent = ssh.agent.Client(self._path)
+        except OSError as e:
+            raise self._unreachable(e) from e
         for identity in ssh_agent.list_identities():
             if identity.public_key.match_ssh_fingerprint(fingerprint):
                 assert identity.public_key.type == jwk.KeyType.ED25519
@@ -67,18 +80,103 @@ def hmac_signer(prefix: str, key: str) -> pfc.Signer:
     return pfc.HmacSigner(prefix, base64url.decode(key))
 
 
-@ssh_utils.exception
-def agent_signer(prefix: str, fingerprint: str) -> PrivateSigner:
-    ssh_agent = ssh.agent.Client()
+def _find_account_key_path(fingerprint: str) -> str | None:
+    """Locate an on-disk private key file matching an account key fingerprint.
+
+    Returns None if no matching file is found (e.g. --transient-key, whose
+    key lives only in the real ssh-agent by design).
+    """
+    ssh_dir = os.path.expanduser("~/.ssh")
+    for pub_path in sorted(glob.glob(os.path.join(ssh_dir, "*.pub"))):
+        try:
+            with open(pub_path, "rb") as f:
+                pub = jwk.Public.from_openssh(f.read())
+        except Exception:
+            # Not every *.pub file in ~/.ssh is one of ours (or even parseable
+            # by us, e.g. RSA/ECDSA keys) -- skip anything we can't read.
+            logger.debug("Skipping unreadable/unparsable public key %s", pub_path, exc_info=True)
+            continue
+        if not pub.match_ssh_fingerprint(fingerprint):
+            continue
+        private_path = pub_path.removesuffix(".pub")
+        if os.path.isfile(private_path):
+            return private_path
+    return None
+
+
+def _lookup_agent_identity(fingerprint: str, path: str | None) -> jwk.Public | None:
+    """Look up `fingerprint` among the identities served at `path` (the real
+    ssh-agent when `path` is None). Returns None if reachable but the
+    fingerprint isn't listed there.
+
+    A connection failure (nothing listening at `path` at all) propagates as
+    a raw `OSError` rather than being turned into a message here: `path`
+    points at two very differently-behaved endpoints depending on the
+    caller -- the real, always-there host ssh-agent for an account key, or
+    pf's own session oracle, whose absence specifically means "log in
+    again" -- and only the caller (`account_key_signer`/`session_key_signer`
+    below) knows which, and so what to actually tell the user.
+    """
+    ssh_agent = ssh.agent.Client(path)
     for identity in ssh_agent.list_identities():
         if identity.comment == fingerprint or identity.public_key.match_ssh_fingerprint(fingerprint):
             if identity.public_key.type != jwk.KeyType.ED25519:
                 raise pfc.exceptions.UI(f"Unsupported: {identity.public_key.type}")
-            return AgentSigner(prefix, identity.public_key)
-    raise pfc.exceptions.KeyExpired(prefix)
+            return identity.public_key
+    return None
 
 
-def file_signer(prefix: str, path: str) -> PrivateSigner:
+@ssh_utils.exception
+def account_key_signer(identifier: str | None) -> PrivateSigner:
+    """Resolve the account key from `identifier`: a config-supplied file
+    path, or (if that's not a real path) a fingerprint to look up.
+    """
+    if identifier is None:
+        raise pfc.exceptions.UI("Did you forget to login ?")
+    if os.path.exists(identifier):
+        return account_file_signer(identifier)
+    key_path = _find_account_key_path(identifier)
+    if key_path is not None:
+        return account_file_signer(key_path)
+    message = (
+        f"Account key {identifier} not found on disk or in your ssh-agent. "
+        "If you lost it, you need to accept a new invitation."
+    )
+    unreachable: OSError | None = None
+    try:
+        key = _lookup_agent_identity(identifier, path=None)
+    except OSError as e:
+        key, unreachable = None, e
+    if key is None:
+        raise pfc.exceptions.UI(message) from unreachable
+    return AgentSigner("account", key, path=None, unreachable=lambda _e: pfc.exceptions.UI(message))
+
+
+@ssh_utils.exception
+def session_key_signer(identifier: str | None) -> PrivateSigner:
+    """Resolve the session key from `identifier`: a config-supplied file
+    path, or (if that's not a real path) a fingerprint to look up in pf's
+    own peer-credential-gated oracle.
+    """
+    if identifier is None:
+        raise pfc.exceptions.UI("Did you forget to login ?")
+    if os.path.exists(identifier):
+        return session_file_signer(identifier)
+    path = ssh.oracle.session.current_socket_path()
+    unreachable: OSError | None = None
+    try:
+        key = _lookup_agent_identity(identifier, path)
+    except OSError as e:
+        key, unreachable = None, e
+    if key is None:
+        raise pfc.exceptions.KeyExpired("session") from unreachable
+    return AgentSigner("session", key, path, unreachable=lambda _e: pfc.exceptions.KeyExpired("session"))
+
+
+def account_file_signer(path: str) -> PrivateSigner:
+    """Load the account key from an on-disk file, prompting for a
+    passphrase if it's encrypted.
+    """
     with open(path, "rb") as f:
         data = f.read()
     try:
@@ -86,16 +184,26 @@ def file_signer(prefix: str, path: str) -> PrivateSigner:
     except TypeError:
         passphrase = getpass.getpass(f"Passphrase for {path}: ").encode()
         key = ssh_utils.load_private_key(data, password=passphrase)
-        try:
-            lifetime = 60 if prefix == "account" else 1800
-            ssh.agent.Client().add(key, comment=f"pf-{prefix}", lifetime=lifetime)
-        except Exception:
-            pass
     except pfc.exceptions.UI:
         raise pfc.exceptions.UI("Unable to parse data either as PEM or SSH format")
     if key.type != jwk.KeyType.ED25519:
         raise pfc.exceptions.UI(f"Unsupported: {key.type}")
-    return FileSigner(prefix, key)
+    return FileSigner("account", key)
+
+
+def session_file_signer(path: str) -> PrivateSigner:
+    """Load the session key from an on-disk file."""
+    with open(path, "rb") as f:
+        data = f.read()
+    try:
+        key = ssh_utils.load_private_key(data, password=None)
+    except TypeError as e:
+        raise pfc.exceptions.UI(f"Session key {path} is passphrase-protected; session keys must not be") from e
+    except pfc.exceptions.UI:
+        raise pfc.exceptions.UI("Unable to parse data either as PEM or SSH format")
+    if key.type != jwk.KeyType.ED25519:
+        raise pfc.exceptions.UI(f"Unsupported: {key.type}")
+    return FileSigner("session", key)
 
 
 def pem_signer(prefix: str, pem: str) -> PrivateSigner:
@@ -103,24 +211,6 @@ def pem_signer(prefix: str, pem: str) -> PrivateSigner:
     if key.type != jwk.KeyType.ED25519:
         raise pfc.exceptions.UI(f"Unsupported: {key.type}")
     return FileSigner(prefix, key)
-
-
-@ssh_utils.exception
-def private_key_signer(prefix: str, filename: str | None) -> PrivateSigner:
-    if filename is None:
-        raise pfc.exceptions.UI("Did you forget to login ?")
-
-    if os.path.exists(filename):
-        return file_signer(prefix, filename)
-
-    ssh_agent = ssh.agent.Client()
-    for identity in ssh_agent.list_identities():
-        if identity.comment == filename or identity.public_key.match_ssh_fingerprint(filename):
-            if identity.public_key.type != jwk.KeyType.ED25519:
-                raise pfc.exceptions.UI(f"Unsupported: {identity.public_key.type}")
-            return AgentSigner(prefix, identity.public_key)
-
-    raise pfc.exceptions.KeyExpired(prefix)
 
 
 class HttpClient:
@@ -185,7 +275,7 @@ class Client:
         return self._config
 
     def session_auth(self, session: str | None) -> HttpClient:
-        signer = private_key_signer("session", session)
+        signer = session_key_signer(session)
         return HttpClient(self._pf_session, self._pf_directory, pfc.Auth([signer]))
 
     def session_auth_with_key(self, session: jwk.Private) -> HttpClient:
@@ -194,8 +284,8 @@ class Client:
 
     def login_auth(self, account: str | None, session: str | None) -> HttpClient:
         signers: list[pfc.Signer] = [
-            private_key_signer("account", account),
-            private_key_signer("session", session),
+            account_key_signer(account),
+            session_key_signer(session),
         ]
         return HttpClient(self._pf_session, self._pf_directory, pfc.Auth(signers))
 

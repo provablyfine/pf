@@ -65,14 +65,20 @@ def _ssh_function(args: argparse.Namespace) -> None:
     bastion_list = cert_data.bastion_list
     ip_address_list = cert_data.ip_address_list
 
-    try:
-        ssh_agent = ssh.agent.Client()
-    except Exception:
-        raise pfc.exceptions.UI("Unable to connect to user's SSH agent")
-
-    ssh_agent.add(user_key, comment=host, lifetime=60)
-
     decoded = base64.b64decode(certificates[0])
+
+    # `decoded` is the OpenSSH *text* format ("ssh-ed25519-cert-v01@openssh.com
+    # AAAA...") -- exactly what CertificateFile below expects, but not what an
+    # SSH_AGENT_IDENTITIES_ANSWER identity blob is: that field is the raw
+    # binary wire encoding. Round-trip through Cert/serde to get that.
+    cert_blob = ssh.serde.serialize_cert(ssh.cert.Cert.from_openssh(decoded))
+    connection_pidfd = os.pidfd_open(os.getpid())
+    try:
+        oracle_path = ssh.oracle.connection.spawn_oracle(user_key, cert_blob, connection_pidfd, ttl=60)
+    except (ssh.exceptions.Error, OSError) as e:
+        raise pfc.exceptions.UI(f"Unable to start connection-key signing oracle: {e}") from e
+    os.environ["SSH_AUTH_SOCK"] = oracle_path
+
     certfd, certfile = tempfile.mkstemp(suffix=".cert")
     with os.fdopen(certfd, "wb") as f:
         f.write(decoded)
