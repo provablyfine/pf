@@ -1,4 +1,4 @@
-"""Tests for the session-key oracle's authorization model and spawn/lookup plumbing. """
+"""Tests for the session-key oracle's authorization model and spawn/lookup plumbing."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from ... import jwk
 from .. import agent
 from . import peercred, session
 
-pytestmark = pytest.mark.skipif(sys.platform != "linux", reason="oracle is Linux-only")
+pytestmark = pytest.mark.skipif(sys.platform not in ("linux", "darwin"), reason="oracle only supports Linux and macOS")
 
 
 def _cleanup(path: str) -> None:
@@ -65,9 +65,9 @@ def test_spawn_and_sign_from_the_same_shell() -> None:
 def test_authorize_accepts_a_descendant_of_the_anchor() -> None:
     # Our own process's parent stands in for "the login shell" here -- the
     # test process itself is a real, kernel-verifiable descendant of it.
-    anchor_pidfd = os.pidfd_open(os.getppid())
+    anchor = peercred.open_anchor(os.getppid())
     try:
-        authorize = session.authorize(anchor_pidfd, session_id=None, tty_dev=None)
+        authorize = session.authorize(anchor, session_id=None, tty_dev=None)
         a, b = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
         try:
             assert authorize(a)
@@ -75,15 +75,15 @@ def test_authorize_accepts_a_descendant_of_the_anchor() -> None:
             a.close()
             b.close()
     finally:
-        os.close(anchor_pidfd)
+        peercred.close_anchor(anchor)
 
 
 def test_authorize_rejects_an_unrelated_anchor() -> None:
     unrelated = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
     try:
-        anchor_pidfd = os.pidfd_open(unrelated.pid)
+        anchor = peercred.open_anchor(unrelated.pid)
         try:
-            authorize = session.authorize(anchor_pidfd, session_id=None, tty_dev=None)
+            authorize = session.authorize(anchor, session_id=None, tty_dev=None)
             a, b = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
             try:
                 assert not authorize(a)
@@ -91,18 +91,18 @@ def test_authorize_rejects_an_unrelated_anchor() -> None:
                 a.close()
                 b.close()
         finally:
-            os.close(anchor_pidfd)
+            peercred.close_anchor(anchor)
     finally:
         unrelated.terminate()
         unrelated.wait(timeout=5)
 
 
 def test_authorize_enforces_session_id_when_anchor_has_one() -> None:
-    anchor_pidfd = os.pidfd_open(os.getppid())
+    anchor = peercred.open_anchor(os.getppid())
     try:
         # A session id that cannot possibly match ours forces rejection even
         # though the parent-process factor alone would pass.
-        authorize = session.authorize(anchor_pidfd, session_id=0x7FFFFFFE, tty_dev=None)
+        authorize = session.authorize(anchor, session_id=0x7FFFFFFE, tty_dev=None)
         a, b = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
         try:
             assert not authorize(a)
@@ -110,12 +110,34 @@ def test_authorize_enforces_session_id_when_anchor_has_one() -> None:
             a.close()
             b.close()
     finally:
-        os.close(anchor_pidfd)
+        peercred.close_anchor(anchor)
+
+
+def test_authorize_accepts_when_session_id_matches() -> None:
+    # The socketpair peer below is *this* process, so its own session id
+    # (peer_session_facts() reads it fresh off the connection at accept
+    # time) is what must be matched here -- distinguishes "asid comparison
+    # rejects everything" from "asid comparison actually accepts a real
+    # match", which the mismatch-only test above can't tell apart.
+    own_session_id = peercred.parent_session_id(os.getpid())
+    if own_session_id is None:
+        pytest.skip("no audit session id in this environment (bare container/CI shell)")
+    anchor = peercred.open_anchor(os.getppid())
+    try:
+        authorize = session.authorize(anchor, session_id=own_session_id, tty_dev=None)
+        a, b = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            assert authorize(a)
+        finally:
+            a.close()
+            b.close()
+    finally:
+        peercred.close_anchor(anchor)
 
 
 def test_audit_session_id_unset_is_none_or_a_real_value() -> None:
     # Just confirms the primitive doesn't blow up and returns a sane type --
     # whether it's set at all depends on the environment this test runs in
     # (PAM-managed login vs. a bare container/CI shell).
-    value = peercred.audit_session_id(os.getpid())
+    value = peercred.parent_session_id(os.getpid())
     assert value is None or isinstance(value, int)

@@ -23,9 +23,9 @@ import pytest
 
 from ... import jwk
 from .. import agent, serde
-from . import connection
+from . import connection, peercred
 
-pytestmark = pytest.mark.skipif(sys.platform != "linux", reason="oracle is Linux-only")
+pytestmark = pytest.mark.skipif(sys.platform not in ("linux", "darwin"), reason="oracle only supports Linux and macOS")
 
 _UNAUTHORIZED_PROBE = """
 import socket
@@ -58,8 +58,8 @@ def test_lists_and_signs_both_identities() -> None:
     second_identity_key = jwk.Private.generate_ed25519()
     second_identity_blob = serde.serialize_public(second_identity_key.public())
 
-    anchor_pidfd = os.pidfd_open(os.getpid())
-    path = connection.spawn_oracle(key, second_identity_blob, anchor_pidfd, ttl=10)
+    anchor = peercred.open_anchor(os.getpid())
+    path = connection.spawn_oracle(key, second_identity_blob, anchor, ttl=10)
     try:
         client = agent.Client(path)
         try:
@@ -80,8 +80,8 @@ def test_lists_and_signs_both_identities() -> None:
 def test_rejects_an_unrelated_peer() -> None:
     key = jwk.Private.generate_ed25519()
     cert_blob = serde.serialize_public(key.public())
-    anchor_pidfd = os.pidfd_open(os.getpid())
-    path = connection.spawn_oracle(key, cert_blob, anchor_pidfd, ttl=10)
+    anchor = peercred.open_anchor(os.getpid())
+    path = connection.spawn_oracle(key, cert_blob, anchor, ttl=10)
     try:
         result = subprocess.run(  # noqa: S603
             [sys.executable, "-c", _UNAUTHORIZED_PROBE, path],
@@ -102,8 +102,8 @@ def test_survives_a_zero_length_message() -> None:
     """
     key = jwk.Private.generate_ed25519()
     cert_blob = serde.serialize_public(key.public())
-    anchor_pidfd = os.pidfd_open(os.getpid())
-    path = connection.spawn_oracle(key, cert_blob, anchor_pidfd, ttl=10)
+    anchor = peercred.open_anchor(os.getpid())
+    path = connection.spawn_oracle(key, cert_blob, anchor, ttl=10)
     try:
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         sock.connect(path)
@@ -123,9 +123,9 @@ def test_survives_a_zero_length_message() -> None:
 
 
 def test_authorize_accepts_the_anchored_process_itself() -> None:
-    anchor_pidfd = os.pidfd_open(os.getpid())
+    anchor = peercred.open_anchor(os.getpid())
     try:
-        authorize = connection.authorize(anchor_pidfd)
+        authorize = connection.authorize(anchor)
         a, b = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
         try:
             assert authorize(a)
@@ -133,4 +133,4 @@ def test_authorize_accepts_the_anchored_process_itself() -> None:
             a.close()
             b.close()
     finally:
-        os.close(anchor_pidfd)
+        peercred.close_anchor(anchor)

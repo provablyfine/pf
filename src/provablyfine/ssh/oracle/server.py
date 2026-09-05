@@ -43,7 +43,7 @@ def serve_forever(
     identities: list[Identity],
     *,
     ttl_deadline: float,
-    anchor_pidfd: int,
+    anchor: peercred.Anchor,
 ) -> None:
     """Run the oracle's accept loop until TTL expires or the anchor process exits.
 
@@ -57,18 +57,18 @@ def serve_forever(
             if remaining <= 0:
                 logger.debug("Oracle TTL expired, shutting down")
                 return
-            if not peercred.pidfd_is_alive(anchor_pidfd):
+            if not peercred.is_alive(anchor):
                 logger.debug("Oracle anchor process has exited, shutting down")
                 return
-            readable, _, _ = select.select([sock, anchor_pidfd], [], [], min(remaining, 1.0))
-            if anchor_pidfd in readable:
+            readable, _, _ = select.select([sock, anchor.fd], [], [], min(remaining, 1.0))
+            if anchor.fd in readable:
                 logger.debug("Oracle anchor process has exited, shutting down")
                 return
             if sock not in readable:
                 continue
             conn, _ = sock.accept()
             try:
-                _handle_connection(conn, authorize, identities, ttl_deadline=ttl_deadline, anchor_pidfd=anchor_pidfd)
+                _handle_connection(conn, authorize, identities, ttl_deadline=ttl_deadline, anchor=anchor)
             except (exceptions.Error, OSError):
                 logger.debug("Oracle connection error", exc_info=True)
             finally:
@@ -83,7 +83,7 @@ def _handle_connection(
     identities: list[Identity],
     *,
     ttl_deadline: float,
-    anchor_pidfd: int,
+    anchor: peercred.Anchor,
 ) -> None:
     if not authorize(conn):
         logger.debug("Oracle rejected an unauthorized peer")
@@ -109,11 +109,11 @@ def _handle_connection(
         if remaining <= 0:
             logger.debug("Oracle TTL expired mid-connection, shutting down")
             return
-        if not peercred.pidfd_is_alive(anchor_pidfd):
+        if not peercred.is_alive(anchor):
             logger.debug("Oracle anchor process has exited mid-connection, shutting down")
             return
-        readable, _, _ = select.select([conn, anchor_pidfd], [], [], min(remaining, 1.0))
-        if anchor_pidfd in readable:
+        readable, _, _ = select.select([conn, anchor.fd], [], [], min(remaining, 1.0))
+        if anchor.fd in readable:
             logger.debug("Oracle anchor process has exited mid-connection, shutting down")
             return
         if conn not in readable:

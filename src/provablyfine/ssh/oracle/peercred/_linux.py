@@ -1,25 +1,32 @@
-"""Kernel-verified peer-process identity for the oracle's UNIX-socket peers.
+"""Kernel-verified peer-process identity for the oracle's UNIX-socket peers,
+on Linux.
 
-Pure, server-independent primitives, no socket-protocol knowledge -- just
-"who is on the other end of this connection, and is it who we think it is."
-
-Linux only. `SO_PEERCRED`, `os.pidfd_open()`, and `/proc` (all load-bearing
-here) are Linux-specific; macOS has no direct equivalent to any of the three
-(it would need `LOCAL_PEERCRED` under `SOL_LOCAL` plus an entirely different,
-not-yet-designed process-handle primitive).
+`SO_PEERCRED`, `os.pidfd_open()`, and `/proc` (all load-bearing here) are
+Linux-specific -- see `_darwin.py` for the equivalent primitives there.
 """
 
 from __future__ import annotations
 
 import dataclasses
 import os
-import select
 import socket
 import struct
 
-from .. import exceptions
+from ... import exceptions
 
 _AUDIT_SESSION_UNSET = 0xFFFFFFFF
+
+
+@dataclasses.dataclass(frozen=True)
+class Anchor:
+    """A pinned, kernel-verified process instance, watchable for exit.
+
+    `fd` is a pidfd: select()-able (readable the instant the process exits)
+    and comparable via `os.fstat()` (two pidfds referencing the same process
+    compare equal on `(st_dev, st_ino)` even when opened independently).
+    """
+
+    fd: int
 
 
 @dataclasses.dataclass(frozen=True)
@@ -43,7 +50,11 @@ def peer_identity(conn: socket.socket) -> PeerIdentity:
     return PeerIdentity(pid=pid, pidfd=pidfd)
 
 
-def pidfd_file_identity(pidfd: int) -> tuple[int, int]:
+def close_peer_identity(peer: PeerIdentity) -> None:
+    os.close(peer.pidfd)
+
+
+def _pidfd_file_identity(pidfd: int) -> tuple[int, int]:
     """A pidfd's own (st_dev, st_ino) -- a stable, comparable process identity.
 
     Two pidfds referencing the same process compare equal here even when
@@ -55,19 +66,8 @@ def pidfd_file_identity(pidfd: int) -> tuple[int, int]:
     return (st.st_dev, st.st_ino)
 
 
-def pidfd_same_process(a: int, b: int) -> bool:
-    return pidfd_file_identity(a) == pidfd_file_identity(b)
-
-
-def pidfd_is_alive(pidfd: int) -> bool:
-    """True while the referenced process is still running.
-
-    A pidfd becomes readable (POLLIN) the instant its process exits -- this
-    is what lets the oracle's accept loop wait on both a TTL deadline and
-    "has my anchor process died" without polling.
-    """
-    readable, _, _ = select.select([pidfd], [], [], 0)
-    return len(readable) == 0
+def same_process(peer: PeerIdentity, anchor: Anchor) -> bool:
+    return _pidfd_file_identity(peer.pidfd) == _pidfd_file_identity(anchor.fd)
 
 
 def _proc_stat_fields(pid: int) -> list[bytes]:
@@ -118,6 +118,33 @@ def audit_session_id(pid: int) -> int | None:
     return value
 
 
+def peer_session_facts(_conn: socket.socket, peer: PeerIdentity) -> tuple[int | None, int | None]:
+    """(audit session id, controlling tty device) for `peer`, or None each
+    when unavailable.
+
+    Re-reads /proc/<peer.pid>/{sessionid,stat} by raw PID rather than through
+    the already-pinned peer.pidfd -- there is no pidfd-scoped way to read
+    these two facts. Same class of tight TOCTOU window as peer_identity()'s
+    own SO_PEERCRED->pidfd_open gap above: the peer would have to exit and
+    have its PID reassigned to a new process within the few Python bytecode
+    instructions between here and the caller's ancestry check. Not closed to
+    zero, judged acceptable.
+    """
+    return audit_session_id(peer.pid), controlling_tty_dev(peer.pid)
+
+
+def parent_session_id(pid: int) -> int | None:
+    """`audit_session_id(pid)` under the name `session.py` calls at
+    spawn/pin time -- distinct from `peer_session_facts()` only in when it
+    runs (before any connection exists) and what it's about (the anchor
+    itself, not a connecting peer)."""
+    return audit_session_id(pid)
+
+
+def parent_tty_dev(pid: int) -> int | None:
+    return controlling_tty_dev(pid)
+
+
 def read_ppid(pid: int) -> int | None:
     """Parent PID of `pid`, or None if the process is already gone -- a
     normal race at the leaf of an ancestry walk, not an error."""
@@ -131,8 +158,8 @@ def read_ppid(pid: int) -> int | None:
     raise exceptions.Error(f"/proc/{pid}/status has no PPid field")
 
 
-def is_descendant_of(pid: int, anchor_pidfd: int, *, max_depth: int = 64) -> bool:
-    """Walk `pid`'s ancestors looking for the process pinned by `anchor_pidfd`.
+def is_descendant_of(pid: int, anchor: Anchor, *, max_depth: int = 64) -> bool:
+    """Walk `pid`'s ancestors looking for the process pinned by `anchor`.
 
     Each ancestor's pidfd is opened the instant its PID is read from its
     child's /proc/<pid>/status -- before anything else happens with that PID
@@ -142,9 +169,10 @@ def is_descendant_of(pid: int, anchor_pidfd: int, *, max_depth: int = 64) -> boo
     root, loses the trail (a process exits mid-walk), or exceeds max_depth.
 
     Does not check `pid` itself against the anchor -- callers that want
-    "anchor or a descendant of it" should check pidfd_same_process()
-    separately first.
+    "anchor or a descendant of it" should check same_process() separately
+    first.
     """
+    anchor_identity = _pidfd_file_identity(anchor.fd)
     current = pid
     for _ in range(max_depth):
         ppid = read_ppid(current)
@@ -155,9 +183,50 @@ def is_descendant_of(pid: int, anchor_pidfd: int, *, max_depth: int = 64) -> boo
         except ProcessLookupError:
             return False
         try:
-            if pidfd_same_process(candidate_pidfd, anchor_pidfd):
+            if _pidfd_file_identity(candidate_pidfd) == anchor_identity:
                 return True
         finally:
             os.close(candidate_pidfd)
         current = ppid
     return False
+
+
+def open_anchor(pid: int) -> Anchor:
+    return Anchor(fd=os.pidfd_open(pid))
+
+
+def close_anchor(anchor: Anchor) -> None:
+    os.close(anchor.fd)
+
+
+def anchor_extra_fds(anchor: Anchor) -> tuple[int, ...]:
+    """A *duplicate* of this anchor's pidfd, to ride along via `pass_fds`
+    into a spawned oracle subprocess -- see spawn.py.
+
+    Deliberately a dup, not `anchor.fd` itself: spawn.py owns closing
+    whatever `anchor_extra_fds()` hands back (its own copy, handed to the
+    child) independently of `close_anchor()` (which releases the Anchor's
+    own fd) -- sharing one fd number between both closers would double-close
+    it in the common case where `_dup_above_stdio` doesn't need to relocate
+    anything.
+    """
+    return (os.dup(anchor.fd),)
+
+
+def anchor_spawn_token(_anchor: Anchor, extra_fds: tuple[int, ...]) -> str:
+    """argv token encoding `anchor`, given `extra_fds` -- the *final*,
+    already pass_fds-safe fd numbers corresponding 1:1 to
+    `anchor_extra_fds(anchor)` -- since a pidfd's fd number is itself the
+    entire identity that needs to cross the process boundary."""
+    (fd,) = extra_fds
+    return f"fd:{fd}"
+
+
+def reconstruct_anchor(token: str) -> Anchor:
+    """Rebuild the `Anchor` a spawning process encoded with
+    `anchor_spawn_token()`, from inside the spawned child -- see
+    _runner.py. The fd number in `token` is already valid in this process:
+    `pass_fds` preserves fd numbers as-is across fork+exec."""
+    kind, value = token.split(":", 1)
+    assert kind == "fd", f"unexpected anchor token kind on Linux: {kind!r}"
+    return Anchor(fd=int(value))

@@ -1,9 +1,10 @@
-"""Pure unit tests for peercred.py's ancestry walk """
+"""Pure unit tests for peercred's ancestry walk and anchor primitives."""
 
 from __future__ import annotations
 
 import os
 import pathlib
+import socket
 import subprocess
 import sys
 import time
@@ -12,7 +13,7 @@ import pytest
 
 from . import peercred
 
-pytestmark = pytest.mark.skipif(sys.platform != "linux", reason="peercred is Linux-only")
+pytestmark = pytest.mark.skipif(sys.platform not in ("linux", "darwin"), reason="oracle only supports Linux and macOS")
 
 _HELPER = pathlib.Path(__file__).with_name("_test_ancestry_helper.py")
 
@@ -32,11 +33,11 @@ def test_is_descendant_of_matches_a_real_3_deep_descendant(tmp_path: pathlib.Pat
         _wait_for(ready_file)
         leaf_pid = int(pid_file.read_text())
 
-        anchor_pidfd = os.pidfd_open(os.getpid())
+        anchor = peercred.open_anchor(os.getpid())
         try:
-            assert peercred.is_descendant_of(leaf_pid, anchor_pidfd)
+            assert peercred.is_descendant_of(leaf_pid, anchor)
         finally:
-            os.close(anchor_pidfd)
+            peercred.close_anchor(anchor)
     finally:
         proc.terminate()
         proc.wait(timeout=5)
@@ -50,11 +51,11 @@ def test_is_descendant_of_rejects_an_unrelated_sibling_process() -> None:
         # other, neither an ancestor of the other -- so pinning sibling_a as
         # the anchor must not match sibling_b's ancestry (which is: this test
         # process, the pytest runner, ..., not sibling_a).
-        anchor_pidfd = os.pidfd_open(sibling_a.pid)
+        anchor = peercred.open_anchor(sibling_a.pid)
         try:
-            assert not peercred.is_descendant_of(sibling_b.pid, anchor_pidfd)
+            assert not peercred.is_descendant_of(sibling_b.pid, anchor)
         finally:
-            os.close(anchor_pidfd)
+            peercred.close_anchor(anchor)
     finally:
         sibling_a.terminate()
         sibling_b.terminate()
@@ -62,41 +63,55 @@ def test_is_descendant_of_rejects_an_unrelated_sibling_process() -> None:
         sibling_b.wait(timeout=5)
 
 
-def test_pidfd_same_process_identity() -> None:
-    a = os.pidfd_open(os.getpid())
-    b = os.pidfd_open(os.getpid())
+def test_same_process_identity() -> None:
+    anchor = peercred.open_anchor(os.getpid())
     try:
-        assert peercred.pidfd_same_process(a, b)
+        a, b = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            peer = peercred.peer_identity(a)
+            try:
+                assert peercred.same_process(peer, anchor)
+            finally:
+                peercred.close_peer_identity(peer)
+        finally:
+            a.close()
+            b.close()
     finally:
-        os.close(a)
-        os.close(b)
+        peercred.close_anchor(anchor)
 
 
-def test_pidfd_same_process_rejects_different_processes() -> None:
+def test_same_process_rejects_different_processes() -> None:
     other = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
     try:
-        mine = os.pidfd_open(os.getpid())
-        theirs = os.pidfd_open(other.pid)
+        theirs = peercred.open_anchor(other.pid)
         try:
-            assert not peercred.pidfd_same_process(mine, theirs)
+            a, b = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
+            try:
+                peer = peercred.peer_identity(a)  # this is *our own* identity, not `other`'s
+                try:
+                    assert not peercred.same_process(peer, theirs)
+                finally:
+                    peercred.close_peer_identity(peer)
+            finally:
+                a.close()
+                b.close()
         finally:
-            os.close(mine)
-            os.close(theirs)
+            peercred.close_anchor(theirs)
     finally:
         other.terminate()
         other.wait(timeout=5)
 
 
-def test_pidfd_is_alive() -> None:
+def test_is_alive() -> None:
     proc = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
-    pidfd = os.pidfd_open(proc.pid)
+    anchor = peercred.open_anchor(proc.pid)
     try:
-        assert peercred.pidfd_is_alive(pidfd)
+        assert peercred.is_alive(anchor)
         proc.terminate()
         proc.wait(timeout=5)
         deadline = time.monotonic() + 5
-        while peercred.pidfd_is_alive(pidfd) and time.monotonic() < deadline:
+        while peercred.is_alive(anchor) and time.monotonic() < deadline:
             time.sleep(0.05)
-        assert not peercred.pidfd_is_alive(pidfd)
+        assert not peercred.is_alive(anchor)
     finally:
-        os.close(pidfd)
+        peercred.close_anchor(anchor)

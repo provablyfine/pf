@@ -72,9 +72,9 @@ def _ssh_function(args: argparse.Namespace) -> None:
     # SSH_AGENT_IDENTITIES_ANSWER identity blob is: that field is the raw
     # binary wire encoding. Round-trip through Cert/serde to get that.
     cert_blob = ssh.serde.serialize_cert(ssh.cert.Cert.from_openssh(decoded))
-    connection_pidfd = os.pidfd_open(os.getpid())
+    connection_anchor = ssh.oracle.peercred.open_anchor(os.getpid())
     try:
-        oracle_path = ssh.oracle.connection.spawn_oracle(user_key, cert_blob, connection_pidfd, ttl=60)
+        oracle_path = ssh.oracle.connection.spawn_oracle(user_key, cert_blob, connection_anchor, ttl=60)
     except (ssh.exceptions.Error, OSError) as e:
         raise pfc.exceptions.UI(f"Unable to start connection-key signing oracle: {e}") from e
     os.environ["SSH_AUTH_SOCK"] = oracle_path

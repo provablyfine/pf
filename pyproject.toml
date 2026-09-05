@@ -200,7 +200,19 @@ exclude = [
 "**/__pycache__",
 "tests/**",
 "**/test_*.py",
+# Darwin-only: typeshed only exposes select.kqueue()/KQ_*/etc. under
+# pythonPlatform "Darwin", so this file can't be checked together with the
+# rest of the (Linux-targeted) tree. Check it on its own with:
+#   uv run pyright --pythonplatform Darwin src/provablyfine/ssh/oracle/peercred/_darwin.py
+"src/provablyfine/ssh/oracle/peercred/_darwin.py",
 ]
+# Pinned rather than left to infer from the host: leaving it unset makes the
+# default check silently platform-dependent (a Linux CI runner and a
+# developer on macOS would type-check different code with the exact same
+# command), and the oracle's peercred package specifically has real
+# platform-conditional code (see peercred/_linux.py vs. _darwin.py) where
+# that difference matters.
+pythonPlatform = "Linux"
 typeCheckingMode = "strict"
 
 [tool.ruff]

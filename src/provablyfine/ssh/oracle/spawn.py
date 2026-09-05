@@ -4,16 +4,19 @@ Sequence, used identically by connection.py and session.py:
 1. Caller creates+binds+listens the UNIX socket (`bind_socket`) *before*
    spawning -- eliminates any "is the oracle up yet" race: the socket is
    already accept-ready before the parent proceeds.
-2. Caller computes its authorization anchor (a pidfd) *before* calling here.
+2. Caller computes its authorization anchor (a `peercred.Anchor`) *before*
+   calling here.
 3. `spawn_subprocess` writes the private key and identity blobs to a pipe,
    then `subprocess.Popen`s a fresh interpreter running `_runner.py` as
-   `__main__`, with the listening socket, the anchor pidfd, and the read end
-   of that pipe passed via `pass_fds`. The runner reconstructs everything
-   from those fds plus argv and runs the accept loop -- see `_runner.py`'s
-   module docstring for the wire format.
+   `__main__`, with the listening socket and the read end of that pipe
+   passed via `pass_fds`, plus whatever `peercred.anchor_extra_fds()` says
+   the anchor itself needs (a pidfd on Linux; nothing on Darwin -- see
+   `peercred/_darwin.py`'s module docstring for why). The runner
+   reconstructs everything from those fds plus argv and runs the accept
+   loop -- see `_runner.py`'s module docstring for the wire format.
 4. In the parent, `spawn_subprocess` closes its own copies of the socket,
-   the anchor pidfd, and the pipe fds, and returns immediately -- callers
-   don't manage any of their lifetimes themselves.
+   the anchor, and the pipe fds, and returns immediately -- callers don't
+   manage any of their lifetimes themselves.
 
 Why subprocess, not `os.fork()`: this package's callers can be running with
 other threads alive at the moment a key is minted -- Textual's worker
@@ -29,9 +32,8 @@ inherited lock state could ever be touched by the new program.
 The tradeoff: the private key can no longer ride along as a shared Python
 object the way it would across a fork (a `Popen`-spawned child is a fresh
 interpreter, not a copy of this process's memory) -- it crosses through a
-pipe instead, `pass_fds`'d exactly like the listening socket and the anchor
-pidfd. Still kernel-buffered only, never touches disk, same guarantee as
-before.
+pipe instead, `pass_fds`'d exactly like the listening socket. Still
+kernel-buffered only, never touches disk, same guarantee as before.
 """
 
 from __future__ import annotations
@@ -46,22 +48,23 @@ import typing
 
 from ... import jwk
 from .. import buffer, exceptions
-from . import server
+from . import peercred, server
+
+_SUPPORTED_PLATFORMS = ("linux", "darwin")
 
 
-def require_linux() -> None:
-    """Raise a clear, catchable error on any platform other than Linux.
+def require_platform_supported() -> None:
+    """Raise a clear, catchable error on any platform without a peercred backend.
 
     Called at the top of every oracle entry point (`connection.spawn_oracle`,
     `session.spawn_oracle`, `session.current_socket_path`) rather than at
     module-import time, so that merely importing `provablyfine.ssh` -- which
-    happens on every platform, including ones the oracle doesn't support yet
-    -- never crashes. See `peercred.py`'s module docstring for why the
-    underlying primitives (SO_PEERCRED, pidfd, /proc) don't port to macOS as
-    implemented.
+    happens on every platform, including ones the oracle doesn't support --
+    never crashes. See `peercred/_linux.py` and `peercred/_darwin.py`'s
+    module docstrings for the platform-specific primitives each is built on.
     """
-    if sys.platform != "linux":
-        raise exceptions.Error("The peer-credential signing oracle is Linux-only for now")
+    if sys.platform not in _SUPPORTED_PLATFORMS:
+        raise exceptions.Error("The peer-credential signing oracle only supports Linux and macOS")
 
 
 def bind_socket(path: str, *, replace: bool = False) -> socket.socket:
@@ -143,7 +146,7 @@ def spawn_subprocess(
     socket_path: str,
     key: jwk.Private,
     identities: list[server.Identity],
-    anchor_pidfd: int,
+    anchor: peercred.Anchor,
     ttl: float,
     mode: typing.Literal["connection", "session"],
     *,
@@ -157,6 +160,11 @@ def spawn_subprocess(
     `mode` is `"connection"` or `"session"` -- which of `connection.authorize`
     / `session.authorize` the runner reconstructs and uses; `session_id`/
     `tty_dev` are only meaningful (and required) for `"session"`.
+
+    How `anchor` crosses into the child is platform-dependent (a pidfd rides
+    along via `pass_fds` on Linux; nothing does on Darwin, which re-derives
+    its own watch from a plain `(pid, start_key)` argv token instead) -- see
+    `peercred.anchor_extra_fds()`/`anchor_spawn_token()`/`reconstruct_anchor()`.
     """
     ttl_deadline = time.monotonic() + ttl
     read_fd, write_fd = os.pipe()
@@ -174,7 +182,8 @@ def spawn_subprocess(
         family, sock_type = sock.family, sock.type
         old_fd = sock.detach()
         sock = socket.socket(family, sock_type, fileno=_dup_above_stdio(old_fd))
-    anchor_pidfd = _dup_above_stdio(anchor_pidfd)
+    anchor_fds = tuple(_dup_above_stdio(fd) for fd in peercred.anchor_extra_fds(anchor))
+    anchor_token = peercred.anchor_spawn_token(anchor, anchor_fds)
     read_fd = _dup_above_stdio(read_fd)
 
     argv = [
@@ -183,7 +192,7 @@ def spawn_subprocess(
         "provablyfine.ssh.oracle._runner",
         mode,
         str(sock.fileno()),
-        str(anchor_pidfd),
+        anchor_token,
         str(read_fd),
         str(ttl_deadline),
         socket_path,
@@ -192,7 +201,7 @@ def spawn_subprocess(
     ]
     subprocess.Popen(  # noqa: S603
         argv,
-        pass_fds=(sock.fileno(), anchor_pidfd, read_fd),
+        pass_fds=(sock.fileno(), *anchor_fds, read_fd),
         start_new_session=True,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
@@ -200,5 +209,7 @@ def spawn_subprocess(
         close_fds=True,
     )
     sock.close()
-    os.close(anchor_pidfd)
+    for fd in anchor_fds:
+        os.close(fd)
+    peercred.close_anchor(anchor)
     os.close(read_fd)
