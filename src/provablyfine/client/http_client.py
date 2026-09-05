@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import abc
+import collections.abc
 import getpass
 import glob
 import logging
@@ -44,10 +45,17 @@ class FileSigner(PrivateSigner):
 
 
 class AgentSigner(PrivateSigner):
-    def __init__(self, prefix: str, key: jwk.Public, path: str | None = None) -> None:
+    def __init__(
+        self,
+        prefix: str,
+        key: jwk.Public,
+        path: str | None,
+        unreachable: collections.abc.Callable[[OSError], Exception],
+    ) -> None:
         super().__init__(prefix)
         self._key = key
         self._path = path
+        self._unreachable = unreachable
 
     def public_key(self) -> jwk.Public:
         return self._key
@@ -57,7 +65,10 @@ class AgentSigner(PrivateSigner):
 
     def sign(self, data: bytes) -> bytes:
         fingerprint = self._key.ssh_fingerprint()
-        ssh_agent = ssh.agent.Client(self._path)
+        try:
+            ssh_agent = ssh.agent.Client(self._path)
+        except OSError as e:
+            raise self._unreachable(e) from e
         for identity in ssh_agent.list_identities():
             if identity.public_key.match_ssh_fingerprint(fingerprint):
                 assert identity.public_key.type == jwk.KeyType.ED25519
@@ -127,17 +138,18 @@ def account_key_signer(identifier: str | None) -> PrivateSigner:
     key_path = _find_account_key_path(identifier)
     if key_path is not None:
         return account_file_signer(key_path)
+    message = (
+        f"Account key {identifier} not found on disk or in your ssh-agent. "
+        "If you lost it, you need to accept a new invitation."
+    )
     unreachable: OSError | None = None
     try:
         key = _lookup_agent_identity(identifier, path=None)
     except OSError as e:
         key, unreachable = None, e
     if key is None:
-        raise pfc.exceptions.UI(
-            f"Account key {identifier} not found on disk or in your ssh-agent."
-            "If you lost it, you need to accept a new invitation."
-        ) from unreachable
-    return AgentSigner("account", key, path=None)
+        raise pfc.exceptions.UI(message) from unreachable
+    return AgentSigner("account", key, path=None, unreachable=lambda _e: pfc.exceptions.UI(message))
 
 
 @ssh_utils.exception
@@ -158,7 +170,7 @@ def session_key_signer(identifier: str | None) -> PrivateSigner:
         key, unreachable = None, e
     if key is None:
         raise pfc.exceptions.KeyExpired("session") from unreachable
-    return AgentSigner("session", key, path)
+    return AgentSigner("session", key, path, unreachable=lambda _e: pfc.exceptions.KeyExpired("session"))
 
 
 def account_file_signer(path: str) -> PrivateSigner:

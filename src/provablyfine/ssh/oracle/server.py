@@ -68,7 +68,7 @@ def serve_forever(
                 continue
             conn, _ = sock.accept()
             try:
-                _handle_connection(conn, authorize, identities)
+                _handle_connection(conn, authorize, identities, ttl_deadline=ttl_deadline, anchor_pidfd=anchor_pidfd)
             except (exceptions.Error, OSError):
                 logger.debug("Oracle connection error", exc_info=True)
             finally:
@@ -81,12 +81,43 @@ def _handle_connection(
     conn: socket.socket,
     authorize: collections.abc.Callable[[socket.socket], bool],
     identities: list[Identity],
+    *,
+    ttl_deadline: float,
+    anchor_pidfd: int,
 ) -> None:
     if not authorize(conn):
         logger.debug("Oracle rejected an unauthorized peer")
         return
     wire = protocol.Connection(conn)
     while True:
+        # Mirrors the outer accept loop: poll for a new message with the same
+        # TTL/anchor-liveness rechecking, rather than a blind blocking recv().
+        # Without this, a connection that's authorized but then simply never
+        # sends anything (idle or hung peer) parks this loop in recv()
+        # forever, starving the shutdown checks of ever running again. Once a
+        # message actually starts arriving, recv_message()/send_message() are
+        # allowed to block until fully read/written -- a real `ssh` client can
+        # legitimately pause well over a second between agent requests while
+        # it talks to the remote sshd, so nothing here may cut off a message
+        # in progress. Residual gap: a peer that trickles a partial frame (or
+        # never reads our response) can still starve these checks once
+        # select() has called it readable/writable -- accepted here since
+        # such a peer is by definition already authorized (it has signing
+        # access either way) and TTL/anchor-death still bound every other
+        # connection's ability to keep the oracle alive.
+        remaining = ttl_deadline - time.monotonic()
+        if remaining <= 0:
+            logger.debug("Oracle TTL expired mid-connection, shutting down")
+            return
+        if not peercred.pidfd_is_alive(anchor_pidfd):
+            logger.debug("Oracle anchor process has exited mid-connection, shutting down")
+            return
+        readable, _, _ = select.select([conn, anchor_pidfd], [], [], min(remaining, 1.0))
+        if anchor_pidfd in readable:
+            logger.debug("Oracle anchor process has exited mid-connection, shutting down")
+            return
+        if conn not in readable:
+            continue
         try:
             message = wire.recv_message()
         except exceptions.Error:

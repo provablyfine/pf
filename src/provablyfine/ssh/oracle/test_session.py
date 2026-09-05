@@ -1,20 +1,4 @@
-"""Tests for the session-key oracle's authorization model and spawn/lookup
-plumbing -- real sockets and processes, no mocks.
-
-The connection-key oracle's tests (test_connection.py) already cover the
-shared server/wire-protocol machinery end-to-end (list_identities/sign, and
-rejection of a genuinely unrelated peer via a real subprocess). What's
-specific to the session oracle -- deterministic path derivation and the
-3-factor (degrading to 1-factor) ancestry authorization -- is what these
-tests focus on. A full "unrelated peer" rejection test analogous to
-test_connection.py's is not meaningful here the same way: any subprocess
-spawned from *within* this test process is, by construction, also a
-descendant of this test process's own parent (the anchor the session oracle
-binds to), so it would legitimately authorize -- the anchor's whole point is
-"this shell and its descendants", which a same-process-tree subprocess
-always is. `authorize()` is exercised directly with a deliberately
-unrelated anchor instead, which does let a genuine rejection be constructed.
-"""
+"""Tests for the session-key oracle's authorization model and spawn/lookup plumbing. """
 
 from __future__ import annotations
 

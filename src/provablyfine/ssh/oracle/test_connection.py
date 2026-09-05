@@ -94,6 +94,34 @@ def test_rejects_an_unrelated_peer() -> None:
         _cleanup(path)
 
 
+def test_survives_a_zero_length_message() -> None:
+    """A wire-legal 4-byte length prefix of 0 used to crash the whole oracle
+    subprocess (`payload[0]` on an empty payload raised an uncaught
+    IndexError) -- verify it now just drops that one connection and the
+    oracle keeps serving later ones.
+    """
+    key = jwk.Private.generate_ed25519()
+    cert_blob = serde.serialize_public(key.public())
+    anchor_pidfd = os.pidfd_open(os.getpid())
+    path = connection.spawn_oracle(key, cert_blob, anchor_pidfd, ttl=10)
+    try:
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.connect(path)
+        try:
+            sock.sendall((0).to_bytes(4, byteorder="big"))
+            assert sock.recv(1) == b""  # connection dropped, not a crash
+        finally:
+            sock.close()
+
+        client = agent.Client(path)
+        try:
+            assert len(list(client.list_identities())) == 2
+        finally:
+            client.close()
+    finally:
+        _cleanup(path)
+
+
 def test_authorize_accepts_the_anchored_process_itself() -> None:
     anchor_pidfd = os.pidfd_open(os.getpid())
     try:

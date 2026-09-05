@@ -14,31 +14,19 @@ recorded:
   3. The parent's controlling TTY device number, when it has one.
 
 Factors 2 and 3 are *omitted*, not treated as always-matching, when
-unavailable -- e.g. under a test harness, CI runner, or `su`/container shell
+unavailable. e.g. under a test harness, CI runner, or `su`/container shell
 with no PAM-assigned session and no controlling terminal, this degrades to
-factor 1 alone. The design this module implements went through the same
-question in public elsewhere: systemd's `run0` (a `sudo` replacement) and its
-underlying `polkit` authorization framework converged on binding to session +
-parent process + TTY (all three, pidfd-verified) rather than session-wide
-trust, and a Windows analysis of the same problem for `pf` found no
-TTY-equivalent there at all and still shipped 2-factor rather than refusing
-to run -- this module's degrade-not-refuse behavior follows that same
-precedent.
+factor 1 alone. 
 
-**Real tradeoff, accepted deliberately**: when factors 2/3 *are* available,
-this ties the session key to the specific terminal `pf login` ran in for the
-whole TTL. A second terminal opened mid-session fails the parent-process/TTY
-check and needs its own `pf login` -- a real UX change from "signed once,
-usable from anywhere in the session," and the same tradeoff sudo's default
-and systemd's `run0` make on purpose, for the same reason.
+The design this module implements was inspired by the approach discussed in public 
+elsewhere: systemd's `run0` (a `sudo` replacement) and its underlying `polkit` 
+authorization framework converged on binding to session + parent process + TTY 
+(all three, pidfd-verified) rather than session-wide trust.
 
-The socket path is derived from the parent process's PID and start time
-(not from the session id or TTY, which can both legitimately be absent) --
-this is addressing only, not a security boundary: a guessed or colliding path
-buys an attacker nothing without also passing the ancestry walk at accept().
-Any later invocation in the same shell recomputes the same path with no
-config write; a different shell recomputes a different path and correctly
-finds nothing listening.
+This trust model should be compared to the ssh-agent model where trust
+is given to processes who are able to read and write the user's agent unix
+socket. i.e., any process owned by this user.
+
 """
 
 from __future__ import annotations
@@ -55,6 +43,12 @@ from . import peercred, server, spawn
 
 
 def socket_path(parent_pid: int, parent_starttime: int) -> str:
+    """The socket path is derived from the parent process's PID and start time.
+
+    The requirement is merely to be deterministic. no security issue here since
+    any user would need to pass the access control check implemented in the oracle
+    """
+
     material = f"{parent_pid}:{parent_starttime}".encode()
     digest = hashlib.sha256(material).hexdigest()[:16]
     return os.path.join(tempfile.gettempdir(), f"pf-session-oracle-{digest}", "s")
@@ -119,7 +113,6 @@ def authorize(
             # the peer would have to exit and have its PID reassigned to a new
             # process within the few Python bytecode instructions between here
             # and the ancestry check above. Not closed to zero, judged acceptable
-            # for the same reason that gap is.
             if session_id is not None and peercred.audit_session_id(peer.pid) != session_id:
                 return False
             if tty_dev is not None and peercred.controlling_tty_dev(peer.pid) != tty_dev:
