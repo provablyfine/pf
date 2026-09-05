@@ -1,5 +1,4 @@
-"""Pure unit tests for peercred.py's ancestry walk -- real subprocess chains,
-no mocks, no server involved (per CLAUDE.md's "avoid the use of mocks")."""
+"""Pure unit tests for peercred.py's ancestry walk """
 
 from __future__ import annotations
 

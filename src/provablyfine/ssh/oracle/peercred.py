@@ -6,27 +6,7 @@ Pure, server-independent primitives, no socket-protocol knowledge -- just
 Linux only. `SO_PEERCRED`, `os.pidfd_open()`, and `/proc` (all load-bearing
 here) are Linux-specific; macOS has no direct equivalent to any of the three
 (it would need `LOCAL_PEERCRED` under `SOL_LOCAL` plus an entirely different,
-not-yet-designed process-handle primitive). The wider oracle design is
-documented as "same conceptual shape, untested" on macOS; this module is
-honest that, as implemented, it's simply Linux-only rather than pretending to
-be portable. It does not guard against being imported elsewhere (so that
-merely importing `provablyfine.ssh` -- which every platform does -- doesn't
-crash); the actual platform check lives at the oracle's call-time entry
-points (`connection.spawn_oracle`, `session.spawn_oracle`,
-`session.current_socket_path`), via `spawn.require_linux()`.
-
-**Residual TOCTOU window, not fully closed**: `SO_PEERPIDFD` (kernel 6.5+,
-returns the peer's pidfd directly from `accept()`, closing this window
-entirely) is not implemented -- CPython's socket module has no support for a
-getsockopt() that returns a file descriptor rather than a byte buffer, and
-reaching for ctypes/SCM_RIGHTS tricks was judged not worth the complexity for
-a race this small. Instead, `peer_identity()` reads the peer's PID via
-`SO_PEERCRED` and immediately calls `os.pidfd_open(pid)` on it. Between those
-two kernel calls, that PID could in principle have exited and been recycled
-by an unrelated process, which `pidfd_open` would then happily pin instead.
-This is a few kernel instructions wide, far tighter than "no pidfd
-verification at all" (where the equivalent window is the full lifetime of
-other processes on the system), but it is not zero.
+not-yet-designed process-handle primitive).
 """
 
 from __future__ import annotations
@@ -51,9 +31,8 @@ class PeerIdentity:
 def peer_identity(conn: socket.socket) -> PeerIdentity:
     """Kernel-verified (pid, pidfd) for the process on the other end of `conn`.
 
-    Should be called as soon as possible after accept() -- see the TOCTOU
-    note in the module docstring. Callers own the returned pidfd and must
-    close it once done.
+    Ideally, we would use SO_PEERPIDFD (kernel 6.5+) to close the TOCTOU
+    window that opens after SO_PEERCRED returns and before pidfd_open is called.
     """
     raw = conn.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize("3i"))
     pid, _uid, _gid = struct.unpack("3i", raw)
