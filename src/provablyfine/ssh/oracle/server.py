@@ -22,8 +22,8 @@ import time
 import cryptography.hazmat.primitives.asymmetric.ed25519
 
 from ... import jwk
-from .. import buffer, exceptions
-from . import peercred, protocol
+from .. import buffer, exceptions, wire
+from . import peercred
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +88,7 @@ def _handle_connection(
     if not authorize(conn):
         logger.debug("Oracle rejected an unauthorized peer")
         return
-    wire = protocol.Connection(conn)
+    framed = wire.WireSocket(conn)
     while True:
         # Mirrors the outer accept loop: poll for a new message with the same
         # TTL/anchor-liveness rechecking, rather than a blind blocking recv().
@@ -119,27 +119,27 @@ def _handle_connection(
         if conn not in readable:
             continue
         try:
-            message = wire.recv_message()
+            message = framed.recv_message()
         except exceptions.Error:
             return
-        if message.type == protocol.SSH_AGENTC_REQUEST_IDENTITIES:
-            _handle_list_identities(wire, identities)
-        elif message.type == protocol.SSH_AGENTC_SIGN_REQUEST:
-            _handle_sign(wire, message.contents, identities)
+        if message.type == wire.SSH_AGENTC_REQUEST_IDENTITIES:
+            _handle_list_identities(framed, identities)
+        elif message.type == wire.SSH_AGENTC_SIGN_REQUEST:
+            _handle_sign(framed, message.contents, identities)
         else:
-            wire.send_message(protocol.SSH_AGENT_FAILURE, b"")
+            framed.send_message(wire.SSH_AGENT_FAILURE, b"")
 
 
-def _handle_list_identities(wire: protocol.Connection, identities: list[Identity]) -> None:
+def _handle_list_identities(framed: wire.WireSocket, identities: list[Identity]) -> None:
     response = buffer.Writer()
     response.write_uint32(len(identities))
     for identity in identities:
         response.write_string(identity.raw)
         response.write_string(b"")
-    wire.send_message(protocol.SSH_AGENT_IDENTITIES_ANSWER, response.to_bytes())
+    framed.send_message(wire.SSH_AGENT_IDENTITIES_ANSWER, response.to_bytes())
 
 
-def _handle_sign(wire: protocol.Connection, contents: bytes, identities: list[Identity]) -> None:
+def _handle_sign(framed: wire.WireSocket, contents: bytes, identities: list[Identity]) -> None:
     request = buffer.Reader(contents)
     raw_key = request.read_string()
     data = request.read_string()
@@ -155,6 +155,6 @@ def _handle_sign(wire: protocol.Connection, contents: bytes, identities: list[Id
         inner.write_string(signature)
         outer = buffer.Writer()
         outer.write_string(inner.to_bytes())
-        wire.send_message(protocol.SSH_AGENT_SIGN_RESPONSE, outer.to_bytes())
+        framed.send_message(wire.SSH_AGENT_SIGN_RESPONSE, outer.to_bytes())
         return
-    wire.send_message(protocol.SSH_AGENT_FAILURE, b"")
+    framed.send_message(wire.SSH_AGENT_FAILURE, b"")

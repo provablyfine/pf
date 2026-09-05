@@ -1,3 +1,3 @@
-from . import connection, peercred, protocol, server, session, spawn
+from . import connection, peercred, server, session, spawn
 
-__all__ = ["connection", "peercred", "protocol", "server", "session", "spawn"]
+__all__ = ["connection", "peercred", "server", "session", "spawn"]

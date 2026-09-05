@@ -1,7 +1,7 @@
-"""Shared ssh-agent-wire framing: a 4-byte big-endian length prefix, a 1-byte
-message type, then the payload -- used by both `agent.Client` (the connecting
-side, talking to a real ssh-agent or the oracle) and `oracle.protocol.Connection`
-(the accepting side, talking to a client).
+"""Shared ssh-agent-wire protocol: framing (a 4-byte big-endian length
+prefix, a 1-byte message type, then the payload) and message-type constants
+-- used by both `agent.Client` (the connecting side, talking to a real
+ssh-agent or the oracle) and `oracle.server` (the accepting side).
 """
 
 from __future__ import annotations
@@ -12,6 +12,19 @@ import types
 import typing
 
 from . import buffer, exceptions
+
+# https://datatracker.ietf.org/doc/html/draft-miller-ssh-agent
+SSH_AGENTC_REQUEST_IDENTITIES = 11
+SSH_AGENT_IDENTITIES_ANSWER = 12
+SSH_AGENTC_SIGN_REQUEST = 13
+SSH_AGENT_SIGN_RESPONSE = 14
+SSH_AGENTC_ADD_IDENTITY = 17
+SSH_AGENTC_REMOVE_IDENTITY = 18
+SSH_AGENTC_REMOVE_ALL_IDENTITIES = 19
+SSH_AGENTC_ADD_ID_CONSTRAINED = 25
+SSH_AGENT_CONSTRAIN_LIFETIME = 1
+SSH_AGENT_CONSTRAIN_CONFIRM = 2
+SSH_AGENT_FAILURE = 5
 
 
 @dataclasses.dataclass

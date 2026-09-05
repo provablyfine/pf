@@ -18,18 +18,6 @@ class Identity:
 
 
 class Client(wire.WireSocket):
-    # https://datatracker.ietf.org/doc/html/draft-miller-ssh-agent
-    SSH_AGENTC_REQUEST_IDENTITIES = 11
-    SSH_AGENT_IDENTITIES_ANSWER = 12
-    SSH_AGENTC_SIGN_REQUEST = 13
-    SSH_AGENTC_ADD_IDENTITY = 17
-    SSH_AGENTC_REMOVE_IDENTITY = 18
-    SSH_AGENTC_REMOVE_ALL_IDENTITIES = 19
-    SSH_AGENTC_ADD_ID_CONSTRAINED = 25
-    SSH_AGENT_CONSTRAIN_LIFETIME = 1
-    SSH_AGENT_CONSTRAIN_CONFIRM = 2
-    SSH_AGENT_FAILURE = 5
-
     def __init__(self, path: str | None = None):
         if path is None:
             path = os.environ.get("SSH_AUTH_SOCK")
@@ -40,9 +28,9 @@ class Client(wire.WireSocket):
         super().__init__(sock)
 
     def list_identities(self) -> collections.abc.Generator[Identity]:
-        self.send_message(Client.SSH_AGENTC_REQUEST_IDENTITIES, b"")
+        self.send_message(wire.SSH_AGENTC_REQUEST_IDENTITIES, b"")
         rx = self.recv_message()
-        assert rx.type == Client.SSH_AGENT_IDENTITIES_ANSWER
+        assert rx.type == wire.SSH_AGENT_IDENTITIES_ANSWER
         assert len(rx.contents) >= 4
         response = buffer.Reader(rx.contents)
         nkeys = response.read_uint32()
@@ -57,9 +45,9 @@ class Client(wire.WireSocket):
         request.write_string(identity.raw)
         request.write_string(data)
         request.write_uint32(flags)
-        self.send_message(Client.SSH_AGENTC_SIGN_REQUEST, request.to_bytes())
+        self.send_message(wire.SSH_AGENTC_SIGN_REQUEST, request.to_bytes())
         message = self.recv_message()
-        if message.type == Client.SSH_AGENT_FAILURE:
+        if message.type == wire.SSH_AGENT_FAILURE:
             raise exceptions.Error(f"Unable to obtain signature from agent: {message.contents}")
         response = buffer.Reader(message.contents)
         _length = response.read_uint32()
@@ -87,29 +75,29 @@ class Client(wire.WireSocket):
         request = buffer.Writer()
         request.write_bytes(key)
         request.write_string(comment.encode("utf-8"))
-        request_id = Client.SSH_AGENTC_ADD_IDENTITY
+        request_id = wire.SSH_AGENTC_ADD_IDENTITY
         if lifetime is not None:
-            request_id = Client.SSH_AGENTC_ADD_ID_CONSTRAINED
-            request.write_byte(Client.SSH_AGENT_CONSTRAIN_LIFETIME)
+            request_id = wire.SSH_AGENTC_ADD_ID_CONSTRAINED
+            request.write_byte(wire.SSH_AGENT_CONSTRAIN_LIFETIME)
             request.write_uint32(lifetime)
         if require_confirmation:
-            request_id = Client.SSH_AGENTC_ADD_ID_CONSTRAINED
-            request.write_byte(Client.SSH_AGENT_CONSTRAIN_CONFIRM)
+            request_id = wire.SSH_AGENTC_ADD_ID_CONSTRAINED
+            request.write_byte(wire.SSH_AGENT_CONSTRAIN_CONFIRM)
         self.send_message(request_id, request.to_bytes())
         message = self.recv_message()
-        if message.type == Client.SSH_AGENT_FAILURE:
+        if message.type == wire.SSH_AGENT_FAILURE:
             raise exceptions.Error(f"Unable to add key to agent: {message.contents}")
 
     def remove_all(self):
-        self.send_message(Client.SSH_AGENTC_REMOVE_ALL_IDENTITIES, b"")
+        self.send_message(wire.SSH_AGENTC_REMOVE_ALL_IDENTITIES, b"")
         message = self.recv_message()
-        if message.type == Client.SSH_AGENT_FAILURE:
+        if message.type == wire.SSH_AGENT_FAILURE:
             raise exceptions.Error(f"Unable to remove keys from agent: {message.contents}")
 
     def remove(self, identity: Identity):
         request = buffer.Writer()
         request.write_string(identity.raw)
-        self.send_message(Client.SSH_AGENTC_REMOVE_IDENTITY, request.to_bytes())
+        self.send_message(wire.SSH_AGENTC_REMOVE_IDENTITY, request.to_bytes())
         message = self.recv_message()
-        if message.type == Client.SSH_AGENT_FAILURE:
+        if message.type == wire.SSH_AGENT_FAILURE:
             raise exceptions.Error(f"Unable to remove key from agent: {message.contents}")
