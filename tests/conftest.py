@@ -58,8 +58,7 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
     # scheduler groups on. Without tryfirst, hook order is unspecified and
     # xdist's implementation can run before this one, in which case the
     # marker we're about to add doesn't exist yet and grouping silently does
-    # nothing -- reproduced directly: without this decorator, the two oracle
-    # tests landed on 5 different workers and failed.
+    # nothing
     for item in items:
         if item.get_closest_marker("real_session_oracle") is not None:
             item.add_marker(pytest.mark.xdist_group(name="pf-session-oracle"))
