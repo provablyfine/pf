@@ -18,59 +18,27 @@ import select
 import sys
 
 if sys.platform == "linux":
-    from ._linux import (
-        Anchor,
-        PeerIdentity,
-        anchor_extra_fds,
-        anchor_spawn_token,
-        close_anchor,
-        close_peer_identity,
-        is_descendant_of,
-        open_anchor,
-        parent_session_id,
-        parent_tty_dev,
-        peer_identity,
-        peer_session_facts,
-        process_starttime,
-        reconstruct_anchor,
-        same_process,
-    )
+    from . import _linux as _impl
 elif sys.platform == "darwin":
-    from ._darwin import (
-        Anchor,
-        PeerIdentity,
-        anchor_extra_fds,
-        anchor_spawn_token,
-        close_anchor,
-        close_peer_identity,
-        is_descendant_of,
-        open_anchor,
-        parent_session_id,
-        parent_tty_dev,
-        peer_identity,
-        peer_session_facts,
-        process_starttime,
-        reconstruct_anchor,
-        same_process,
-    )
+    from . import _darwin as _impl
 else:
-    from ._unsupported import (
-        Anchor,
-        PeerIdentity,
-        anchor_extra_fds,
-        anchor_spawn_token,
-        close_anchor,
-        close_peer_identity,
-        is_descendant_of,
-        open_anchor,
-        parent_session_id,
-        parent_tty_dev,
-        peer_identity,
-        peer_session_facts,
-        process_starttime,
-        reconstruct_anchor,
-        same_process,
-    )
+    from . import _unsupported as _impl
+
+Anchor = _impl.Anchor
+PeerIdentity = _impl.PeerIdentity
+anchor_extra_fds = _impl.anchor_extra_fds
+anchor_spawn_token = _impl.anchor_spawn_token
+close_anchor = _impl.close_anchor
+close_peer_identity = _impl.close_peer_identity
+is_descendant_of = _impl.is_descendant_of
+open_anchor = _impl.open_anchor
+parent_session_id = _impl.parent_session_id
+parent_tty_dev = _impl.parent_tty_dev
+peer_identity = _impl.peer_identity
+peer_session_facts = _impl.peer_session_facts
+process_starttime = _impl.process_starttime
+reconstruct_anchor = _impl.reconstruct_anchor
+same_process = _impl.same_process
 
 __all__ = [
     "Anchor",
