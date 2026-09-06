@@ -1,0 +1,9 @@
+{
+  "extends": "./pyrightconfig.json",
+  "include": [
+    "src/provablyfine/**/*win32*",
+    "src/provablyfine/cli/pf/bastion_cli.py"
+  ],
+  "exclude": ["**/__pycache__", "**/test_*.py", "**/_test_*.py"],
+  "pythonPlatform": "Windows"
+}

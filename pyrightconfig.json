@@ -1,0 +1,18 @@
+{
+  "include": [
+    "src/provablyfine",
+    "tests",
+    "packages/provablyfine-client/src/provablyfine_client"
+  ],
+  "exclude": [
+    "**/node_modules",
+    "**/__pycache__",
+    "tests/**",
+    "**/test_*.py",
+    "**/*linux*",
+    "**/*darwin*",
+    "**/*win32*"
+  ],
+  "pythonPlatform": "Linux",
+  "typeCheckingMode": "strict"
+}

@@ -28,6 +28,7 @@ import provablyfine_client as pfc
 from ... import client
 from .. import http as cli_http
 from .. import login, token_verify
+from . import _win32_stdio
 
 logger = logging.getLogger(__name__)
 
@@ -615,6 +616,26 @@ class _ManagedSession:
 # ---------------------------------------------------------------------------
 
 
+def _install_signal_handlers(
+    loop: asyncio.AbstractEventLoop,
+    callback: collections.abc.Callable[[], None],
+) -> None:
+    """Run `callback` on the loop when a termination signal arrives.
+
+    POSIX keeps `loop.add_signal_handler`, which raises `NotImplementedError` on
+    the Proactor loop. Windows registers an ordinary `signal.signal` handler and
+    hops to the loop thread from it.
+    """
+    if sys.platform == "win32":
+        # Two hardcoded sets: `SIGHUP` does not exist on Windows at all. `SIGTERM`
+        # does, and accepts a handler, but nothing can deliver it there
+        for sig in (signal.SIGINT,):
+            signal.signal(sig, lambda _signum, _frame: loop.call_soon_threadsafe(callback))
+    else:
+        for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+            loop.add_signal_handler(sig, callback)
+
+
 @client.ssh_utils.exception
 def _register_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
@@ -629,8 +650,7 @@ def _register_function(args: argparse.Namespace) -> None:
         def signal_handler() -> None:
             stop_event.set()
 
-        loop.add_signal_handler(signal.SIGTERM, signal_handler)
-        loop.add_signal_handler(signal.SIGINT, signal_handler)
+        _install_signal_handlers(loop, signal_handler)
 
         session = _ManagedSession(c, factory)
         identity = await session.sc.get_self()
@@ -743,16 +763,19 @@ async def connect_async(
 
     loop = asyncio.get_running_loop()
 
-    stdin_reader = asyncio.StreamReader()
-    await loop.connect_read_pipe(lambda: asyncio.StreamReaderProtocol(stdin_reader), sys.stdin.buffer)
-    # Not sys.stdout.buffer directly: CPython opens the standard streams with
-    # closefd=False (fd 1 is considered owned by the runtime, not by the io
-    # object), so closing/aborting a transport built on it never actually
-    # closes fd 1 -- ssh, reading the other end of that pipe, would never see
-    # EOF. Wrapping our own fd 1 in a fresh file object (closefd defaults to
-    # True for fd-based open()) gives us a transport we can really close.
-    stdout_pipe = open(sys.stdout.fileno(), "wb")
-    stdout_transport, _ = await loop.connect_write_pipe(asyncio.BaseProtocol, stdout_pipe)
+    stdin_reader: asyncio.StreamReader | _win32_stdio.StdinReader
+    stdout_transport: asyncio.WriteTransport | _win32_stdio.StdoutTransport
+    if sys.platform == "win32":
+        # asyncio cannot drive ssh's pipes here at all; `_win32_stdio` explains why
+        stdin_reader, stdout_transport = _win32_stdio.make_stdio(loop)
+    else:
+        stdin_reader = asyncio.StreamReader()
+        await loop.connect_read_pipe(lambda: asyncio.StreamReaderProtocol(stdin_reader), sys.stdin.buffer)
+        # We do not use sys.stdout.buffer to make sure that when the object is close()d
+        # the underlying fd is closed which propagates close() to ssh.
+        # i.e., sys.stdout is opened by CPython with closefd=False
+        stdout_pipe = open(sys.stdout.fileno(), "wb")
+        stdout_transport, _ = await loop.connect_write_pipe(asyncio.BaseProtocol, stdout_pipe)
 
     async def forward_stdin() -> None:
         while True:
@@ -774,16 +797,13 @@ async def connect_async(
                     break
                 stdout_transport.write(data)
         finally:
-            # Not .close(): that calls write_eof(), which only closes the fd
-            # once its internal write buffer has fully drained -- if ssh
-            # stops reading around when the relay closes on us (the deadline
-            # case this exists for), the buffer never drains and the fd, and
-            # so the pipe ssh reads as its transport, never actually closes.
-            # abort() discards any unflushed buffer and closes the fd now.
-            # Skip it if the transport already closed itself (broken pipe
+            # Skip if the transport already closed itself (broken pipe
             # once ssh has exited -- the SIGHUP case): abort() is not
             # idempotent and raises on a fully-closed transport.
             if not stdout_transport.is_closing():
+                # abort() discards any unflushed buffer and closes the
+                # fd now while close() would write_eof() and then close
+                # after the internal buffer is fully drained.
                 stdout_transport.abort()
 
     async def _run_both() -> None:
@@ -794,9 +814,7 @@ async def connect_async(
     def signal_handler() -> None:
         gather_task.cancel()
 
-    loop.add_signal_handler(signal.SIGTERM, signal_handler)
-    loop.add_signal_handler(signal.SIGINT, signal_handler)
-    loop.add_signal_handler(signal.SIGHUP, signal_handler)
+    _install_signal_handlers(loop, signal_handler)
     try:
         await gather_task
     except asyncio.CancelledError:

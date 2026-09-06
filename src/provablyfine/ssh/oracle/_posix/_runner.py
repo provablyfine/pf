@@ -80,6 +80,10 @@ def main() -> None:
             os.unlink(socket_path)
         except OSError:
             pass
+        try:
+            os.rmdir(os.path.dirname(socket_path))
+        except OSError:
+            pass
 
 
 if __name__ == "__main__":

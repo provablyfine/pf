@@ -5,6 +5,8 @@ import dataclasses
 import getpass
 import os
 import socket
+import sys
+import typing
 
 from .. import jwk
 from . import buffer, cert, exceptions, serde, wire
@@ -17,15 +19,57 @@ class Identity:
     raw: bytes
 
 
+class _PipeTransport:
+    """`wire.Transport` over a Windows named pipe.
+
+    On Windows an agent endpoint is a named pipe, not a UNIX socket -- both
+    the system ssh-agent (`\\\\.\\pipe\\openssh-ssh-agent`) and pf's own
+    oracle. A pipe opened this way reads and writes like an ordinary
+    binary file, so no ctypes is needed here.
+    """
+
+    def __init__(self, name: str) -> None:
+        # `open()` raises `FileNotFoundError` when nothing is listening:
+        # `client/http_client.py` takes advantage of that to distinguish "the
+        # oracle is gone, log in again" from every other failure by catching
+        # `OSError`
+        self._stream: typing.BinaryIO = open(name, "r+b", buffering=0)
+
+    def recv(self, size: int) -> bytes:
+        return self._stream.read(size) or b""
+
+    def send(self, data: bytes) -> int:
+        return self._stream.write(data) or 0
+
+    def close(self) -> None:
+        self._stream.close()
+
+
+# Where Windows' OpenSSH agent listens. Unlike POSIX, there is no environment
+# variable pointing at it by convention: the pipe name is fixed and clients
+# are expected to know it.
+_WINDOWS_AGENT_PIPE = r"\\.\pipe\openssh-ssh-agent"
+
+
+def _connect(path: str) -> wire.Transport:
+    if sys.platform == "win32":
+        return _PipeTransport(path)
+    else:
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.connect(path.encode("ascii"))
+        return sock
+
+
 class Client(wire.WireSocket):
     def __init__(self, path: str | None = None):
         if path is None:
-            path = os.environ.get("SSH_AUTH_SOCK")
-            if path is None:
-                raise OSError("SSH_AUTH_SOCK is not set")
-        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        sock.connect(path.encode("ascii"))
-        super().__init__(sock)
+            if sys.platform == "win32":
+                path = _WINDOWS_AGENT_PIPE
+            else:
+                path = os.environ.get("SSH_AUTH_SOCK")
+                if path is None:
+                    raise OSError("SSH_AUTH_SOCK is not set")
+        super().__init__(_connect(path))
 
     def list_identities(self) -> collections.abc.Generator[Identity]:
         self.send_message(wire.SSH_AGENTC_REQUEST_IDENTITIES, b"")

@@ -30,6 +30,11 @@ logger = logging.getLogger(__name__)
 
 pytest_plugins = ["tests.mock_oidc"]
 
+# Not a skipif: `tui_tour` imports fcntl/pty/termios at module scope, so on
+# Windows this module cannot even be *imported*, and a collection error there
+# aborts the entire run rather than skipping one file.
+collect_ignore = ["test_tui_tour.py"] if sys.platform == "win32" else []
+
 
 class Error(BaseException):
     pass
@@ -278,16 +283,42 @@ RUN install -d -m 755 /var/log/pf
     return image_id
 
 
+def _open_up_ssh_keys_directory(directory: str) -> None:
+    """Let the container write and read the bind-mounted key directory.
+
+    The container generates its host keys into this directory at startup and
+    then reads them back as `nobody` for AuthorizedPrincipalsCommand, so a
+    private-by-default directory breaks it.
+
+    On Windows this is an ACL, not a mode. `tempfile.mkdtemp` creates an
+    owner-only directory there, which WSL presents to the container as
+    `d--x--x--x` -- traverse but neither read nor write, and being root in the
+    container does not override it. Granting Everyone full control makes it
+    `drwxrwxrwx`, matching what the POSIX branch achieves with chmod. The
+    Everyone group is named by SID rather than by name because the name is
+    localized.
+    """
+    if sys.platform == "win32":
+        subprocess.run(
+            ["icacls", directory, "/grant", "*S-1-1-0:(OI)(CI)F"],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            check=True,
+        )
+        return
+    # Make sure "nobody" can read this directory
+    fd = os.open(directory, 0)
+    os.chmod(fd, 0o755)
+    os.close(fd)
+
+
 def _run_sshd_container(
     request: pytest.FixtureRequest,
     image_id: str,
     tmp_path: pathlib.Path,
 ) -> typing.Generator[SshD, None, None]:
     with tempfile.TemporaryDirectory(dir=tld()) as ssh_keys_directory:
-        # Make sure "nobody" can read this directory
-        fd = os.open(ssh_keys_directory, 0)
-        os.chmod(fd, 0o755)
-        os.close(fd)
+        _open_up_ssh_keys_directory(ssh_keys_directory)
 
         stdout = _run(
             [
@@ -361,6 +392,10 @@ class SshAgent:
 
 @pytest.fixture
 def ssh_agent(request):
+    if sys.platform == "win32":
+        # No obvious way to start and stop a temporary user-specific ssh-agent
+        # service on win32
+        pytest.skip("no per-test ssh-agent on Windows; the system agent is shared")
     if not shutil.which("ssh-agent"):
         pytest.skip("ssh-agent not found")
     # Pin an explicit, short socket path via -a rather than letting ssh-agent
@@ -438,13 +473,24 @@ def api(request, tmp_path):
     env = copy.copy(os.environ)
     env["PF_API_CONFIG"] = str(api_config)
     api_log_file = open(api_log, "w+")
+    # Handing uvicorn the already-bound socket is what makes this race-free:
+    # the port cannot be taken between our bind and uvicorn's listen, because
+    # there is no second bind. `pass_fds` is POSIX-only, so Windows has to give
+    # up the socket and name the port instead, and lives with that window --
+    # the readiness poll below is what covers it.
+    if sys.platform == "win32":
+        bind_args = ["--host", api_host, "--port", str(api_port)]
+        pass_fds: tuple[int, ...] = ()
+        api_sock.close()
+    else:
+        bind_args = ["--fd", str(api_sock.fileno())]
+        pass_fds = (api_sock.fileno(),)
     popen = subprocess.Popen(
         [
             sys.executable,
             "-m",
             "uvicorn",
-            "--fd",
-            str(api_sock.fileno()),
+            *bind_args,
             "--log-config",
             str(api_log_config),
             "--log-level",
@@ -456,9 +502,10 @@ def api(request, tmp_path):
         stderr=subprocess.STDOUT,
         text=True,
         env=env,
-        pass_fds=(api_sock.fileno(),),
+        pass_fds=pass_fds,
     )
-    api_sock.close()
+    if sys.platform != "win32":
+        api_sock.close()
 
     pf_start_timeout = 10
     start = time.time()

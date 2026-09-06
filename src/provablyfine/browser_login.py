@@ -40,10 +40,10 @@ def has_valid_session(config: client.Config) -> bool:
         return False
     try:
         path = ssh.oracle.session.current_socket_path()
-        agent = ssh.agent.Client(path)
-        for identity in agent.list_identities():
-            if identity.public_key.match_ssh_fingerprint(config.session_key_fingerprint):
-                return True
+        with ssh.agent.Client(path) as agent:
+            for identity in agent.list_identities():
+                if identity.public_key.match_ssh_fingerprint(config.session_key_fingerprint):
+                    return True
     except Exception:
         # Deliberately broad and swallowed: a wrong-terminal oracle refusal,
         # a genuinely expired/TTL'd-out oracle, and a bug in

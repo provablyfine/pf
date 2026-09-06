@@ -69,10 +69,11 @@ class AgentSigner(PrivateSigner):
             ssh_agent = ssh.agent.Client(self._path)
         except OSError as e:
             raise self._unreachable(e) from e
-        for identity in ssh_agent.list_identities():
-            if identity.public_key.match_ssh_fingerprint(fingerprint):
-                assert identity.public_key.type == jwk.KeyType.ED25519
-                return ssh_agent.sign(identity, data, 0)
+        with ssh_agent:
+            for identity in ssh_agent.list_identities():
+                if identity.public_key.match_ssh_fingerprint(fingerprint):
+                    assert identity.public_key.type == jwk.KeyType.ED25519
+                    return ssh_agent.sign(identity, data, 0)
         raise pfc.exceptions.UI(f"Unable to find requested key={fingerprint}")
 
 
@@ -117,12 +118,12 @@ def _lookup_agent_identity(fingerprint: str, path: str | None) -> jwk.Public | N
     again" -- and only the caller (`account_key_signer`/`session_key_signer`
     below) knows which, and so what to actually tell the user.
     """
-    ssh_agent = ssh.agent.Client(path)
-    for identity in ssh_agent.list_identities():
-        if identity.comment == fingerprint or identity.public_key.match_ssh_fingerprint(fingerprint):
-            if identity.public_key.type != jwk.KeyType.ED25519:
-                raise pfc.exceptions.UI(f"Unsupported: {identity.public_key.type}")
-            return identity.public_key
+    with ssh.agent.Client(path) as ssh_agent:
+        for identity in ssh_agent.list_identities():
+            if identity.comment == fingerprint or identity.public_key.match_ssh_fingerprint(fingerprint):
+                if identity.public_key.type != jwk.KeyType.ED25519:
+                    raise pfc.exceptions.UI(f"Unsupported: {identity.public_key.type}")
+                return identity.public_key
     return None
 
 

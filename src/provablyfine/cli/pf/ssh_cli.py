@@ -1,7 +1,11 @@
 import argparse
 import base64
+import contextlib
 import logging
 import os
+import shlex
+import subprocess
+import sys
 import tempfile
 
 import provablyfine_client as pfc
@@ -9,7 +13,36 @@ import provablyfine_client as pfc
 from ... import client, jwk, ssh
 from .. import login
 
+if sys.platform == "win32":
+    from . import _win32_process
+
 logger = logging.getLogger(__name__)
+
+
+def _unlink_quietly(path: str) -> None:
+    with contextlib.suppress(OSError):
+        os.unlink(path)
+
+
+def _quote_proxy_command(argv: list[str]) -> str:
+    """Render `argv` as a `ProxyCommand` string, quoted for whoever runs it."""
+    if sys.platform == "win32":
+        # theoretically private but in practice, it's been stable for 20+ years now
+        output = subprocess.list2cmdline(argv)
+    else:
+        output = shlex.join(argv)
+    # ssh runs percent_expand over ProxyCommand before the shell sees it
+    # so we quote to make sure nothing is ever interpreted as an ssh percent
+    # token (`man 5 ssh_config` -> TOKENS)
+    return output.replace("%", "%%")
+
+
+def _exec_ssh(ssh_cmd: list[str]) -> None:
+    """Hand over to `ssh`. Returns only if `ssh` could not be started at all."""
+    if sys.platform == "win32":
+        _win32_process.run_ssh([_win32_process.ssh_binary(), *ssh_cmd[1:]])
+    else:
+        os.execvp("/usr/bin/ssh", ssh_cmd)
 
 
 @client.ssh_utils.exception
@@ -140,31 +173,45 @@ def _ssh_function(args: argparse.Namespace) -> None:
 
     last_error: Exception | None = None
 
-    for bastion in bastion_list:
-        if bastion.url:
-            proxy_cmd = (
-                f"pf -c {args.config} bastion connect --url={bastion.url}"
-                f" --hostname={host} --connection-id={connection_id}"
-            )
-            ssh_cmd = build_ssh_cmd(host, proxy_command=proxy_cmd)
+    with contextlib.ExitStack() as cleanup:
+        if sys.platform == "win32":
+            # Only reached on Windows, and only once `ssh` has exited
+            for path in (certfile, pubkeyfile, khfile):
+                cleanup.callback(_unlink_quietly, path)
+
+        for bastion in bastion_list:
+            if bastion.url:
+                proxy_cmd = _quote_proxy_command(
+                    [
+                        "pf",
+                        "-c",
+                        args.config,
+                        "bastion",
+                        "connect",
+                        f"--url={bastion.url}",
+                        f"--hostname={host}",
+                        f"--connection-id={connection_id}",
+                    ]
+                )
+                ssh_cmd = build_ssh_cmd(host, proxy_command=proxy_cmd)
+                try:
+                    _exec_ssh(ssh_cmd)
+                except Exception as e:
+                    last_error = e
+
+            if bastion.ssh_proxy_jump:
+                ssh_cmd = build_ssh_cmd(host, proxy_jump=bastion.ssh_proxy_jump)
+                try:
+                    _exec_ssh(ssh_cmd)
+                except Exception as e:
+                    last_error = e
+
+        for ip in ip_address_list:
+            ssh_cmd = build_ssh_cmd(host, ip_address=ip)
             try:
-                os.execvp("/usr/bin/ssh", ssh_cmd)
+                _exec_ssh(ssh_cmd)
             except Exception as e:
                 last_error = e
-
-        if bastion.ssh_proxy_jump:
-            ssh_cmd = build_ssh_cmd(host, proxy_jump=bastion.ssh_proxy_jump)
-            try:
-                os.execvp("/usr/bin/ssh", ssh_cmd)
-            except Exception as e:
-                last_error = e
-
-    for ip in ip_address_list:
-        ssh_cmd = build_ssh_cmd(host, ip_address=ip)
-        try:
-            os.execvp("/usr/bin/ssh", ssh_cmd)
-        except Exception as e:
-            last_error = e
 
     raise pfc.exceptions.UI(f"Failed to connect via any bastion or direct IP: {last_error}")
 

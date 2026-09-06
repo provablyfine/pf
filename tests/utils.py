@@ -2,15 +2,20 @@ import copy
 import os
 import os.path
 import subprocess
+import sys
 import tempfile
 
 import jinja2
+import pytest
 
 
 def run_cram(filename: str, env: dict[str, str]):
+    """Run a cram `.t` script."""
+    if sys.platform == "win32":
+        pytest.skip("cram is posix only. Not supported on Windows; Windows coverage uses tests/cli.py")
     environ = copy.copy(os.environ)
     path = os.path.abspath(os.path.join(os.getcwd(), "scripts"))
-    environ["PATH"] = f"{path}:{environ['PATH']}"
+    environ["PATH"] = f"{path}{os.pathsep}{environ['PATH']}"
     environ.update(env)
     if filename.endswith(".t.jinja"):
         directory = os.path.dirname(filename)
@@ -22,11 +27,15 @@ def run_cram(filename: str, env: dict[str, str]):
             rendered = template.render()
             tmp.write(rendered)
             tmp.flush()
-            completed = subprocess.run(
-                ["uv", "run", "cram", "--shell", "/bin/bash", tmp.name], env=environ, start_new_session=True
-            )
+            completed = _run_cram_command(tmp.name, environ)
     else:
-        completed = subprocess.run(
-            ["uv", "run", "cram", "--shell", "/bin/bash", filename], env=environ, start_new_session=True
-        )
+        completed = _run_cram_command(filename, environ)
     assert completed.returncode == 0
+
+
+def _run_cram_command(filename: str, environ: dict[str, str]) -> subprocess.CompletedProcess[bytes]:
+    return subprocess.run(
+        ["uv", "run", "cram", "--shell", "/bin/bash", filename],
+        env=environ,
+        start_new_session=True,
+    )

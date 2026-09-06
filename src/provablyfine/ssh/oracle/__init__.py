@@ -4,9 +4,7 @@
 sharing no code with each other. They can't reasonably be unified: `_posix`
 is built on UNIX sockets, `select()`, `pass_fds` and pidfd/kqueue process
 handles; `_win32` is built on named pipes, overlapped I/O,
-`WaitForMultipleObjects` and Win32 process HANDLEs. What they share is the
-*interface* below -- callers reach `connection`, `session`, `peercred` etc.
-through this module and never name a platform themselves.
+`WaitForMultipleObjects` and Win32 process HANDLEs.
 
 Within `_posix`, a second, narrower dispatch picks the Linux or Darwin
 peercred backend (see `_posix/peercred/__init__.py`) -- those two are close
@@ -19,8 +17,8 @@ from __future__ import annotations
 import sys
 
 if sys.platform == "win32":
-    from ._win32 import connection, peercred, server, session, spawn
+    from ._win32 import connection, peercred, session
 else:
-    from ._posix import connection, peercred, server, session, spawn
+    from ._posix import connection, peercred, session
 
-__all__ = ["connection", "peercred", "server", "session", "spawn"]
+__all__ = ["connection", "peercred", "session"]

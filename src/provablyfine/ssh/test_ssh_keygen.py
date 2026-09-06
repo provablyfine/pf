@@ -4,6 +4,7 @@ import base64
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 
 import pytest
@@ -20,6 +21,49 @@ def _ssh(args: list[str]) -> subprocess.CompletedProcess[str]:
         check=True,
         capture_output=True,
         text=True,
+    )
+
+
+def _restrict_private_key(path: str) -> None:
+    """Give `path` permissions OpenSSH will accept on a private key.
+
+    On POSIX that is a mode. On Windows it is a DACL, which `os.chmod` cannot
+    express so the file keeps whatever it inherited from its directory. For
+    `tmp_path` that directory is under `%LOCALAPPDATA%\\Temp`, whose default
+    ACL grants SYSTEM, Administrators and *OWNER RIGHTS* (S-1-3-4), and
+    OpenSSH rejects that last one outright:
+
+        Bad permissions. Try removing permissions for user: \\\\OWNER RIGHTS
+        (S-1-3-4) on file C:/Users/.../Temp/.../k
+
+    When stderr is a file, ssh-keygen writes the warning above and
+    exits 255;
+
+    When stderr is a pipe -- which is what `capture_output=True` in `_ssh` builds
+    -- the process simply never exits, still alive after 12s, having written
+    nothing.
+
+    `/inheritance:r` is what drops the inherited OWNER RIGHTS ACE; it wipes the
+    whole DACL, so the `/grant:r` putting the current user back has to be in the
+    same invocation. The user is named by SID because account names are
+    localized and domain-qualified.
+    """
+    if sys.platform != "win32":
+        os.chmod(path, 0o600)
+        return
+    whoami = subprocess.run(
+        ["whoami", "/user", "/fo", "csv", "/nh"],  # noqa: S607  # codespell:ignore=fo
+        check=True,
+        capture_output=True,
+        text=True,
+        stdin=subprocess.DEVNULL,
+    )
+    sid = whoami.stdout.strip().rsplit(",", 1)[1].strip().strip('"')
+    subprocess.run(  # noqa: S603
+        ["icacls", path, "/inheritance:r", "/grant:r", f"*{sid}:F"],  # noqa: S607
+        check=True,
+        capture_output=True,
+        stdin=subprocess.DEVNULL,
     )
 
 
@@ -114,7 +158,7 @@ def test_private_openssh_roundtrip(
     priv_path = str(tmp_path / "k")
     with open(priv_path, "wb") as f:
         f.write(priv.to_openssh())
-    os.chmod(priv_path, 0o600)
+    _restrict_private_key(priv_path)
     out = _ssh(["-y", "-f", priv_path]).stdout.strip()
     reconstructed = jwk.Public.from_openssh(out.encode())
     assert reconstructed.type == priv.type

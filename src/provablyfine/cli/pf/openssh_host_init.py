@@ -4,28 +4,11 @@ import json
 import os
 import subprocess
 import sys
-import tempfile
+
+import provablyfine_client as pfc
 
 from ... import client, jwk, ssh
 from .. import common, login
-
-
-def _write_file_atomic(filepath: str, content: bytes | str, mode: str = "wb") -> None:
-    dirname = os.path.dirname(filepath) or "."
-    os.makedirs(dirname, exist_ok=True)
-
-    fd, tmp_path = tempfile.mkstemp(dir=dirname)
-    try:
-        with os.fdopen(fd, mode) as f:
-            f.write(content)
-        os.chmod(tmp_path, 0o644)
-        os.rename(tmp_path, filepath)
-    except Exception:
-        try:
-            os.unlink(tmp_path)
-        except Exception:
-            pass
-        raise
 
 
 def _sign_host_certificates_with_auth(auth_http: client.http_client.HttpClient, host_keys_dir: str) -> None:
@@ -58,7 +41,7 @@ def _sign_host_certificates_with_auth(auth_http: client.http_client.HttpClient, 
         cert = ssh.cert.Cert.from_openssh(openssh_cert)
         pubkey_path = filename_from_fingerprint[cert.public_key.ssh_fingerprint()]
         cert_path = pubkey_path.rstrip(".pub") + ".cert"
-        _write_file_atomic(cert_path, openssh_cert + b"\n", mode="wb")
+        client.configuration.write_file_atomic(cert_path, openssh_cert + b"\n", mode="wb")
 
 
 def _do_refresh(c: client.Config, host_keys_dir: str, ca_pub_path: str) -> None:
@@ -68,7 +51,7 @@ def _do_refresh(c: client.Config, host_keys_dir: str, ca_pub_path: str) -> None:
     http = client.http_client.Client(c)
     _sign_host_certificates_with_auth(http.session_auth_with_key(session_key), host_keys_dir)
     ca_pubkey = factory.public().get_user_trusted_keys_public()
-    _write_file_atomic(ca_pub_path, ca_pubkey, mode="w")
+    client.configuration.write_file_atomic(ca_pub_path, ca_pubkey, mode="w")
 
 
 def _print_init_script(
@@ -224,8 +207,14 @@ fi
 """)
 
 
+def _require_linux() -> None:
+    if sys.platform != "linux":
+        raise pfc.exceptions.UI("This command is not supported on native Windows or MacOS")
+
+
 def host_init_daemon_function(args: argparse.Namespace) -> None:
     """Print a shell script to stdout that sets up pf on this host."""
+    _require_linux()
 
     invitation = common.parse_invitation(args.invitation)
 
@@ -241,6 +230,7 @@ def host_init_daemon_function(args: argparse.Namespace) -> None:
 
 def host_uninit_function(args: argparse.Namespace) -> None:
     """Print a shell script to stdout that undoes host-init."""
+    _require_linux()
     lines = [
         "#!/bin/sh",
         "set -eu",
@@ -292,6 +282,7 @@ def _sshd_unit() -> str:
 
 def host_refresh_function(args: argparse.Namespace) -> None:
     """Refresh host SSH certificates and CA public key."""
+    _require_linux()
     c = client.configuration.Config.load(args.config)
     factory = client.Factory(c)
     login.ensure_session(c, factory)

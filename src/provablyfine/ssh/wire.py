@@ -1,13 +1,14 @@
 """Shared ssh-agent-wire protocol: framing (a 4-byte big-endian length
 prefix, a 1-byte message type, then the payload) and message-type constants
--- used by both `agent.Client` (the connecting side, talking to a real
-ssh-agent or the oracle) and `oracle.server` (the accepting side).
+
+This protocol is used by both `agent.Client` (the connecting side, talking to a real
+ssh-agent or the oracle) and `oracle`'s accepting side.
 """
 
 from __future__ import annotations
 
+import contextlib
 import dataclasses
-import socket
 import types
 import typing
 
@@ -33,14 +34,46 @@ class Message:
     contents: bytes
 
 
+class Transport(typing.Protocol):
+    """The bytes-in/bytes-out surface `WireSocket` needs.
+
+    `socket.socket` satisfies this as-is. So do the two thin adapters the
+    Windows oracle needs -- one over the file object you get from opening a
+    named pipe (`agent.py`, the connecting side), one over a raw connected
+    pipe HANDLE (`oracle._win32.server`, the accepting side). Stated as a
+    Protocol rather than hardcoding `socket.socket` purely so those two don't
+    have to restate the framing below; the transport differs per platform, the
+    bytes do not.
+
+    `recv` returning `b""` means the peer is gone. An adapter over an API that
+    signals that some other way -- a Windows pipe read fails with
+    ERROR_BROKEN_PIPE rather than returning zero bytes -- must translate.
+    """
+
+    def recv(self, size: int, /) -> bytes: ...
+
+    def send(self, data: bytes, /) -> int: ...
+
+    def close(self) -> None: ...
+
+
 class WireSocket:
-    def __init__(self, sock: socket.socket) -> None:
+    def __init__(self, sock: Transport) -> None:
         self._sock = sock
 
     def close(self) -> None:
         self._sock.close()
 
+    def __del__(self) -> None:
+        # try super hard to always close the underlying resource
+        with contextlib.suppress(Exception):
+            self.close()
+
     def __enter__(self) -> typing.Self:
+        # It's important to use an explicit context manager to control
+        # the lifetime of these objects because on Windows the
+        # endpoint is a named pipe that serves one client at a time, so holding
+        # it open past here can lock out the next opener
         return self
 
     def __exit__(
