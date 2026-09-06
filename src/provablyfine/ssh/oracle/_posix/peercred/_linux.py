@@ -12,7 +12,7 @@ import os
 import socket
 import struct
 
-from ... import exceptions
+from .... import exceptions
 
 _AUDIT_SESSION_UNSET = 0xFFFFFFFF
 

@@ -12,8 +12,8 @@ import time
 
 import pytest
 
-from ... import jwk
-from .. import serde
+from .... import jwk
+from ... import serde
 from . import peercred, server
 
 pytestmark = pytest.mark.skipif(sys.platform not in ("linux", "darwin"), reason="oracle only supports Linux and macOS")

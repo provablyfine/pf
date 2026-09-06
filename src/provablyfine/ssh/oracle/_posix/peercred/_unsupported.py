@@ -11,7 +11,7 @@ from __future__ import annotations
 import dataclasses
 import socket
 
-from ... import exceptions
+from .... import exceptions
 
 _MESSAGE = "The peer-credential signing oracle only supports Linux and macOS"
 

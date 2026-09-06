@@ -203,8 +203,8 @@ exclude = [
 # Darwin-only: typeshed only exposes select.kqueue()/KQ_*/etc. under
 # pythonPlatform "Darwin", so this file can't be checked together with the
 # rest of the (Linux-targeted) tree. Check it on its own with:
-#   uv run pyright --pythonplatform Darwin src/provablyfine/ssh/oracle/peercred/_darwin.py
-"src/provablyfine/ssh/oracle/peercred/_darwin.py",
+#   uv run pyright --pythonplatform Darwin src/provablyfine/ssh/oracle/_posix/peercred/_darwin.py
+"src/provablyfine/ssh/oracle/_posix/peercred/_darwin.py",
 ]
 # Pinned rather than left to infer from the host: leaving it unset makes the
 # default check silently platform-dependent (a Linux CI runner and a

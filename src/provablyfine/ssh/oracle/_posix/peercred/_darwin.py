@@ -38,7 +38,7 @@ import select
 import socket
 import struct
 
-from ... import exceptions
+from .... import exceptions
 
 _SOL_LOCAL = 0
 _LOCAL_PEERTOKEN = 0x006

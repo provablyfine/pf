@@ -21,8 +21,8 @@ import time
 
 import cryptography.hazmat.primitives.asymmetric.ed25519
 
-from ... import jwk
-from .. import buffer, exceptions, wire
+from .... import jwk
+from ... import buffer, exceptions, wire
 from . import peercred
 
 logger = logging.getLogger(__name__)

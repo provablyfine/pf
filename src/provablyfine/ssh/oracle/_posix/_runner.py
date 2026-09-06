@@ -1,4 +1,4 @@
-"""Oracle subprocess entry point -- run as `python -m provablyfine.ssh.oracle._runner`.
+"""Oracle subprocess entry point -- run as `python -m provablyfine.ssh.oracle._posix._runner`.
 
 Never invoked directly; `spawn.spawn_subprocess()` execs into this via
 `subprocess.Popen`. Everything the oracle needs -- the listening socket, the
@@ -32,8 +32,8 @@ import os
 import socket
 import sys
 
-from ... import jwk
-from .. import buffer
+from .... import jwk
+from ... import buffer
 from . import connection, peercred, server, session
 
 

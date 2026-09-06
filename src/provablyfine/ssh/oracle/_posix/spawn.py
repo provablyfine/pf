@@ -46,8 +46,8 @@ import sys
 import time
 import typing
 
-from ... import jwk
-from .. import buffer, exceptions
+from .... import jwk
+from ... import buffer, exceptions
 from . import peercred, server
 
 _SUPPORTED_PLATFORMS = ("linux", "darwin")
@@ -189,7 +189,7 @@ def spawn_subprocess(
     argv = [
         sys.executable,
         "-m",
-        "provablyfine.ssh.oracle._runner",
+        "provablyfine.ssh.oracle._posix._runner",
         mode,
         str(sock.fileno()),
         anchor_token,

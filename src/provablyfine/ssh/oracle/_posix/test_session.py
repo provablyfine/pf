@@ -9,8 +9,8 @@ import sys
 
 import pytest
 
-from ... import jwk
-from .. import agent
+from .... import jwk
+from ... import agent
 from . import peercred, session
 
 pytestmark = pytest.mark.skipif(sys.platform not in ("linux", "darwin"), reason="oracle only supports Linux and macOS")
