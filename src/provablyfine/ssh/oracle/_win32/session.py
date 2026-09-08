@@ -8,7 +8,9 @@ shell are recorded, and every later caller is checked against both:
 1. A mandatory anchor pinned to the login shell itself. A caller
    must *be* that exact process or a kernel-verified descendant of it (walked
    with pinned handles, not raw pid comparison).
-2. Optionally, the shell's Windows session id, when readable.
+2. Optionally, the shell's logon SID, when readable. A caller must share it:
+   this is what keeps a `runas` child -- a descendant of the shell that
+   inherited the process tree but not the token -- from being authorized.
 
 The trust model to compare this against is real ssh-agent's, where any process
 running as the same user can ask the agent to sign.
@@ -99,7 +101,7 @@ def _spawn(key: jwk.Private, ttl: float, anchor_pid: int) -> str:
             ttl,
             mode="session",
             event_name=event_name,
-            session_id=peercred.session_id(anchor.pid),
+            logon_sid=peercred.logon_sid(anchor),
         )
     finally:
         _win32api.close_handle(handle)
@@ -132,12 +134,17 @@ def _create_pipe_on_new_login(name: str, event_name: str) -> int:
         time.sleep(0.05)
 
 
-def authorize(anchor: peercred.Anchor, session_id: int | None) -> collections.abc.Callable[[int], bool]:
+def authorize(anchor: peercred.Anchor, logon_sid: str | None) -> collections.abc.Callable[[int], bool]:
     """Build the accept-time check the oracle subprocess runs on every peer.
 
     Reconstructed by `_runner.py` inside the child from the same anchor passed
     down through argv -- not called by `_spawn` above, since a spawned child is
     a fresh interpreter and no Python closure survives into it.
+
+    The logon-SID factor is *omitted*, not treated as always-matching, when the
+    anchor's SID could not be read at spawn: it degrades to factor 1 alone.
+    When it is present, an unreadable peer SID is a rejection -- we could not
+    verify the second factor, so we must not grant.
     """
 
     def authorize(pipe_handle: int) -> bool:
@@ -147,6 +154,8 @@ def authorize(anchor: peercred.Anchor, session_id: int | None) -> collections.ab
             return False
         if not (peercred.same_process(peer, anchor) or peercred.is_descendant_of(peer.pid, anchor)):
             return False
-        return session_id is None or peercred.session_id(peer.pid) == session_id
+        if logon_sid is None:
+            return True
+        return peercred.logon_sid_of(peer.pid) == logon_sid
 
     return authorize

@@ -19,7 +19,7 @@ def spawn_subprocess(
     *,
     mode: str,
     event_name: str | None = None,
-    session_id: int | None = None,
+    logon_sid: str | None = None,
 ) -> None:
     """Start `_runner.py` in a fresh interpreter and return immediately.
 
@@ -49,7 +49,7 @@ def spawn_subprocess(
         peercred.anchor_spawn_token(anchor),
         str(ttl),
         "-" if event_name is None else event_name,
-        "-" if session_id is None else str(session_id),
+        "-" if logon_sid is None else logon_sid,
     ]
     child = subprocess.Popen(  # noqa: S603
         argv,

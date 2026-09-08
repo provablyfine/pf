@@ -52,6 +52,7 @@ CREATE_NEW_PROCESS_GROUP = 0x00000200
 
 _TOKEN_QUERY = 0x0008
 _TOKEN_USER_CLASS = 1
+_TOKEN_LOGON_SID_CLASS = 28
 _SDDL_REVISION_1 = 1
 
 
@@ -69,6 +70,11 @@ class _SidAndAttributes(ctypes.Structure):
 
 class _TokenUser(ctypes.Structure):
     _fields_ = (("User", _SidAndAttributes),)
+
+
+class _TokenGroups(ctypes.Structure):
+    # `TokenLogonSid` returns exactly one group, so a length-1 array is enough.
+    _fields_ = (("GroupCount", ctypes.wintypes.DWORD), ("Groups", _SidAndAttributes * 1))
 
 
 class _ProcessBasicInformation(ctypes.Structure):
@@ -160,8 +166,6 @@ _k32.QueryFullProcessImageNameW.argtypes = (
     _LPDWORD,
 )
 _k32.QueryFullProcessImageNameW.restype = ctypes.wintypes.BOOL
-_k32.ProcessIdToSessionId.argtypes = (ctypes.wintypes.DWORD, _LPDWORD)
-_k32.ProcessIdToSessionId.restype = ctypes.wintypes.BOOL
 _k32.LocalFree.argtypes = (ctypes.wintypes.HLOCAL,)
 _k32.LocalFree.restype = ctypes.wintypes.HLOCAL
 
@@ -234,26 +238,70 @@ class OwnedSecurityAttributes:
     descriptor: ctypes.wintypes.LPVOID = dataclasses.field(repr=False)
 
 
+def _token_sid_string(process_token: int, token_class: int, sid_offset: int, buffer_size: int) -> str:
+    """Read the SID from a single-SID token class and render it as a string.
+
+    Both `TokenUser` and `TokenLogonSid` return a single `SID_AND_ATTRIBUTES`
+    (at the head of the token's structure), so a buffer of `buffer_size` bytes
+    and the byte offset of the `Sid` pointer inside it cover both. The offset
+    differs: `_TokenUser`'s SID is at 0, while `_TokenGroups`'s sits after the
+    leading `GroupCount` DWORD.
+    """
+    size = ctypes.wintypes.DWORD()
+    # The sizing call is *expected* to fail with ERROR_INSUFFICIENT_BUFFER and
+    # fill `size`; that is how the required length is learned.
+    _adv.GetTokenInformation(process_token, token_class, None, 0, ctypes.byref(size))
+    # The SID lives *inside* this buffer, so it has to stay alive across the
+    # ConvertSidToStringSidW call below.
+    buffer = ctypes.create_string_buffer(max(size.value, buffer_size))
+    if not _adv.GetTokenInformation(process_token, token_class, buffer, len(buffer), ctypes.byref(size)):
+        raise_last_error("GetTokenInformation")
+    sid = ctypes.cast(ctypes.byref(buffer, sid_offset), ctypes.POINTER(ctypes.wintypes.LPVOID)).contents
+    string_sid = ctypes.wintypes.LPWSTR()
+    if not _adv.ConvertSidToStringSidW(sid, ctypes.byref(string_sid)):
+        raise_last_error("ConvertSidToStringSidW")
+    try:
+        return string_sid.value or ""
+    finally:
+        _k32.LocalFree(ctypes.cast(string_sid, ctypes.wintypes.HLOCAL))
+
+
 def _current_user_sid_string() -> str:
     process_token = ctypes.wintypes.HANDLE()
     if not _adv.OpenProcessToken(_k32.GetCurrentProcess(), _TOKEN_QUERY, ctypes.byref(process_token)):
         raise_last_error("OpenProcessToken")
     try:
-        size = ctypes.wintypes.DWORD()
-        _adv.GetTokenInformation(process_token, _TOKEN_USER_CLASS, None, 0, ctypes.byref(size))
-        # The SID lives *inside* this buffer, so it has to stay alive across
-        # the ConvertSidToStringSidW call below.
-        buffer = ctypes.create_string_buffer(size.value)
-        if not _adv.GetTokenInformation(process_token, _TOKEN_USER_CLASS, buffer, size, ctypes.byref(size)):
-            raise_last_error("GetTokenInformation")
-        token_user = ctypes.cast(buffer, ctypes.POINTER(_TokenUser)).contents
-        string_sid = ctypes.wintypes.LPWSTR()
-        if not _adv.ConvertSidToStringSidW(token_user.User.Sid, ctypes.byref(string_sid)):
-            raise_last_error("ConvertSidToStringSidW")
-        try:
-            return string_sid.value or ""
-        finally:
-            _k32.LocalFree(ctypes.cast(string_sid, ctypes.wintypes.HLOCAL))
+        # The `Sid` pointer is the first field of the `_SidAndAttributes`.
+        return _token_sid_string(process_token.value or 0, _TOKEN_USER_CLASS, 0, ctypes.sizeof(_TokenUser))
+    finally:
+        close_handle(process_token.value or 0)
+
+
+def logon_sid(process_handle: int) -> str | None:
+    """The logon SID of `process_handle`, or None if it cannot be read.
+
+    Returns None rather than raising so callers can decide how to degrade: the
+    anchor's SID is optional (fall back to anchor-only binding), while a peer's
+    SID failing to read is a rejection. `OpenProcessToken` accepts the same
+    `PROCESS_QUERY_LIMITED_INFORMATION` handle `open_process` returns.
+    """
+    process_token = ctypes.wintypes.HANDLE()
+    if not _adv.OpenProcessToken(process_handle, _TOKEN_QUERY, ctypes.byref(process_token)):
+        return None
+    try:
+        return _token_sid_string(
+            process_token.value or 0,
+            _TOKEN_LOGON_SID_CLASS,
+            # The Groups array is aligned to its own element alignment, so its
+            # offset is GroupCount's size rounded up to that alignment. This
+            # avoids `ctypes.offsetof`, which typeshed does not declare.
+            (ctypes.sizeof(ctypes.wintypes.DWORD) + ctypes.alignment(_SidAndAttributes) - 1)
+            // ctypes.alignment(_SidAndAttributes)
+            * ctypes.alignment(_SidAndAttributes),
+            ctypes.sizeof(_TokenGroups),
+        )
+    except exceptions.Error:
+        return None
     finally:
         close_handle(process_token.value or 0)
 
@@ -487,10 +535,3 @@ def process_parent_pid(handle: int) -> int:
     if status != 0:
         raise exceptions.Error(f"NtQueryInformationProcess failed with NTSTATUS 0x{status & 0xFFFFFFFF:08x}")
     return int(information.InheritedFromUniqueProcessId or 0)
-
-
-def process_session_id(pid: int) -> int | None:
-    session_id = ctypes.wintypes.DWORD()
-    if not _k32.ProcessIdToSessionId(pid, ctypes.byref(session_id)):
-        return None
-    return int(session_id.value)

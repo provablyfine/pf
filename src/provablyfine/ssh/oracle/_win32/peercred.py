@@ -22,14 +22,14 @@ from __future__ import annotations
 
 import dataclasses
 import os
-import sys
+import re
 
 from ... import exceptions
 from . import _win32api
 
-# `login_shell_identity()`'s walk only has to climb past the interpreter and
-# the console-script launcher -- measured at 3 hops. 8 is slack, and bounds a
-# walk that would otherwise be at the mercy of a cyclic ppid report.
+# `login_shell_identity()`'s walk only has to climb past the interpreter, a
+# venv shim, and `uv` -- measured at 3 hops. 8 is slack, and bounds a walk that
+# would otherwise be at the mercy of a cyclic ppid report.
 _MAX_LAUNCHER_HOPS = 8
 
 
@@ -96,17 +96,34 @@ def same_process(peer: PeerIdentity, anchor: Anchor) -> bool:
     return peer.pid == anchor.pid and peer.creation_time == anchor.creation_time
 
 
-def session_id(pid: int) -> int | None:
-    """The Windows (Terminal Services) session id.
+def logon_sid(anchor: Anchor) -> str | None:
+    """The login of the anchored process, or None when it cannot be read.
 
-    This is a *desktop login*, not a shell: every console under one login
-    shares it, so on its own it is far too broad to authorize with. It is only
-    ever the second factor, behind the anchored parent process.
-
-    Windows has no third factor to add. Two independently-opened consoles under
-    one login share their session id and nothing else
+    The second factor behind the anchored parent: a peer must share the
+    anchor's login, not just sit under it in the process tree. The logon SID
+    is kernel-assigned and unforgeable -- the one thing that separates a
+    normal child of the shell from a `runas` child that inherited the tree but
+    not the token. None means "unreadable", which callers treat as a missing
+    (not a matching) factor.
     """
-    return _win32api.process_session_id(pid)
+    return _win32api.logon_sid(anchor.handle)
+
+
+def logon_sid_of(pid: int) -> str | None:
+    """The logon SID of an arbitrary peer process, or None if it cannot be read.
+
+    Used at authorize time to check a connecting peer against the anchor's
+    login. The peer is a descendant of our own shell, so opening it with the
+    usual limited access should succeed; None means "could not verify", which
+    the caller treats as a rejection rather than a match.
+    """
+    handle = _win32api.open_process(pid)
+    if handle is None:
+        return None
+    try:
+        return _win32api.logon_sid(handle)
+    finally:
+        _win32api.close_handle(handle)
 
 
 def is_descendant_of(pid: int, anchor: Anchor, *, max_depth: int = 64) -> bool:
@@ -203,43 +220,66 @@ def reconstruct_anchor(token: str) -> Anchor:
     return _pin(int(pid_text), expected_creation_time=int(creation_text))
 
 
-def _same_file(left: str, right: str) -> bool:
-    return os.path.normcase(os.path.realpath(left)) == os.path.normcase(os.path.realpath(right))
+def _is_launcher(image: str) -> bool:
+    stem = os.path.basename(image).lower()
+    if stem.endswith(".exe"):
+        stem = stem[:-4]
 
-
-def _under(path: str, root: str) -> bool:
-    return os.path.normcase(os.path.realpath(path)).startswith(os.path.normcase(os.path.realpath(root)) + os.sep)
-
-
-def _is_our_own_python(image: str, own_image: str) -> bool:
-    """True if `image` is part of the Python installation running this code.
-
-    Two tests, because neither covers the other. The exact-file test catches
-    the interpreter itself; the prefix test catches the console-script launcher
-    and the venv shim, which live beside the interpreter in `Scripts\\` -- and it
-    covers both the venv layout and a system-wide `C:\\Python312\\Scripts\\pf.exe`
-    install, where `sys.executable` and the launcher are in *different*
-    directories and a "same directory as sys.executable" test would miss it.
-    """
-    base_executable = getattr(sys, "_base_executable", None)
-    exact = [own_image, sys.executable]
-    if isinstance(base_executable, str):
-        exact.append(base_executable)
-    if any(_same_file(image, candidate) for candidate in exact):
+    # The Python interpreter, plain or windowed: `python.exe` / `pythonw.exe`.
+    if stem == "python" or stem == "pythonw":
         return True
-    return _under(image, sys.prefix) or _under(image, sys.base_prefix)
+
+    # A versioned interpreter: `python3.exe`, `python312.exe`, `python3.12.exe`.
+    # "python" plus digits and dots only.
+    if stem.startswith("python") and _is_versioned_suffix(stem[len("python") :]):
+        return True
+
+    # PyPy: `pypy.exe`, and versioned `pypy3.exe` / `pypy3.10.exe`.
+    if stem == "pypy":
+        return True
+    if stem.startswith("pypy") and _is_versioned_suffix(stem[len("pypy") :]):
+        return True
+
+    # The `py` / `pyw` launcher.
+    if stem == "py" or stem == "pyw":
+        return True
+
+    # `uv` and its tool runner `uvx`.
+    if stem == "uv" or stem == "uvx":
+        return True
+
+    return False
+
+
+_VERSIONED_SUFFIX_RE = re.compile(r"[0-9.]+")
+
+
+def _is_versioned_suffix(suffix: str) -> bool:
+    """Whether the part after a `python`/`pypy` prefix is only digits and dots
+    (a version, e.g. `.12`, `3`, `3.12`)."""
+    return _VERSIONED_SUFFIX_RE.fullmatch(suffix) is not None
 
 
 def login_shell_identity() -> tuple[int, int]:
     """The `(pid, creation_time)` of the shell to anchor the session oracle on.
 
-        python3.12.exe            <- us, the real interpreter
-        venv\\Scripts\\python.exe   <- the venv shim, == sys.executable
-        pf.exe                    <- the console-script launcher
-        cmd.exe                   <- the shell we actually want
+        python3.12.exe            <- us, the real interpreter (a launcher)
+        venv\\Scripts\\python.exe   <- the venv shim (a launcher)
+        uv.exe                    <- a launcher (e.g. `uv run`)
+        cmd.exe                   <- the shell: stop, anchor here
 
-    So: climb past anything belonging to our own Python installation and anchor
-    on the first ancestor that does not.
+    This process is a launcher by construction -- `login_shell_identity()`
+    runs inside the Python interpreter, whether that interpreter was started
+    as `python.exe`, a `venv` shim, or a `console_scripts` copy renamed to
+    `pf.exe`. So we skip ourselves and climb while an *ancestor* is still a
+    launcher, stopping at the first non-launcher: the shell that every later
+    `pf`/`pfa` invocation from the same login shares, and which lives for the
+    whole login. That is exactly what POSIX gets from `getppid()`.
+
+    The first non-Python ancestor is *not* the shell: under `uv run` it is the
+    short-lived `uv.exe` launcher, which exits before the session oracle has
+    finished serving (killing the oracle via its anchor-exit watchdog). Hence
+    the skip past `uv` too.
 
     Returns both values off the single handle the walk already holds, rather
     than a bare pid, so callers don't re-open the process for the creation time
@@ -247,7 +287,6 @@ def login_shell_identity() -> tuple[int, int]:
     """
     handle = _open_or_fail(os.getpid(), "Own")
     try:
-        own_image = _win32api.process_image_path(handle)
         current = os.getpid()
         for _ in range(_MAX_LAUNCHER_HOPS):
             parent = _win32api.process_parent_pid(handle)
@@ -261,17 +300,19 @@ def login_shell_identity() -> tuple[int, int]:
             except exceptions.Error:
                 _win32api.close_handle(parent_handle)
                 break
-            if not _is_our_own_python(image, own_image):
-                try:
-                    return parent, _win32api.process_creation_time(parent_handle)
-                finally:
-                    _win32api.close_handle(parent_handle)
-            _win32api.close_handle(handle)
-            handle, current = parent_handle, parent
-        # Ran out of ancestors while still inside our own installation (a
-        # bare `python -m ...` from something we can't see, a detached
-        # process). Anchoring on ourselves still gives a stable, correct --
-        # just narrower -- binding: only this process and its descendants.
+            if _is_launcher(image):
+                _win32api.close_handle(handle)
+                handle, current = parent_handle, parent
+                continue
+            try:
+                # The parent is not a launcher: it is the shell we anchor on.
+                return parent, _win32api.process_creation_time(parent_handle)
+            finally:
+                _win32api.close_handle(parent_handle)
+        # Every ancestor we could see was a launcher (a deep `python` nesting,
+        # a detached process). Anchoring on the deepest process we reached
+        # still gives a stable, correct -- just narrower -- binding: this
+        # process and its descendants.
         return current, _win32api.process_creation_time(handle)
     finally:
         _win32api.close_handle(handle)

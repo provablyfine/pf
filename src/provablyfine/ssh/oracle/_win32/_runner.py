@@ -5,7 +5,7 @@ oracle needs crosses via an inherited HANDLE, argv, and stdin, since this is a
 fresh interpreter rather than a forked copy of the spawning process's memory:
 there is no shared memory for a Python object to arrive through.
 
-argv: mode pipe_handle anchor_token ttl new_login_event_name session_id
+argv: mode pipe_handle anchor_token ttl new_login_event_name logon_sid
   - mode: "connection" or "session" -- which of connection.authorize /
     session.authorize to reconstruct and run.
   - pipe_handle: the listening pipe, already created and inheritable in the
@@ -13,7 +13,7 @@ argv: mode pipe_handle anchor_token ttl new_login_event_name session_id
   - anchor_token: `pidstart:<pid>:<creation_time>`, read by
     `peercred.reconstruct_anchor()`.
   - ttl: seconds.
-  - new_login_event_name, session_id: "-" for None. Both are always "-" for
+  - new_login_event_name, logon_sid: "-" for None. Both are always "-" for
     mode "connection".
 
 The private key and identity blobs arrive on stdin: one `buffer.Writer` payload
@@ -54,7 +54,7 @@ def main() -> None:
     anchor_token = sys.argv[3]
     ttl = float(sys.argv[4])
     new_login_event_name = None if sys.argv[5] == "-" else sys.argv[5]
-    session_id = None if sys.argv[6] == "-" else int(sys.argv[6])
+    logon_sid = None if sys.argv[6] == "-" else sys.argv[6]
 
     key, raws = _read_key_material()
     identities = [server.Identity(raw=raw, key=key) for raw in raws]
@@ -63,7 +63,7 @@ def main() -> None:
     if mode == "connection":
         authorize = connection.authorize(anchor)
     elif mode == "session":
-        authorize = session.authorize(anchor, session_id)
+        authorize = session.authorize(anchor, logon_sid)
     else:
         raise ValueError(f"unknown oracle mode: {mode}")
 

@@ -129,6 +129,30 @@ def test_login_shell_identity_skips_our_own_python_and_is_stable() -> None:
     assert int(first[0]) == proc.pid, "anchored on our own python instead of the shell"
 
 
+def test_logon_sid_is_readable_and_shared_within_a_login(tmp_path: pathlib.Path) -> None:
+    """The second factor has to be computable for both the anchor and a peer in
+    the same login, and they have to agree.
+
+    Reads through the two distinct paths the oracle uses: the anchor's own
+    HANDLE at spawn time and a peer's pid at authorize time. A child chain is
+    used so the peer is a *separate* process from the anchor, not this one."""
+    pid_file = str(tmp_path / "leaf.pid")
+    chain = _spawn_child_chain(depth=1, pid_file=pid_file)
+    try:
+        leaf_pid = _read_pid_file(pid_file)
+        anchor = peercred.open_anchor(chain.pid)
+        try:
+            anchor_sid = peercred.logon_sid(anchor)
+        finally:
+            peercred.close_anchor(anchor)
+        peer_sid = peercred.logon_sid_of(leaf_pid)
+        assert anchor_sid is not None, "could not read the anchor's logon SID"
+        assert peer_sid == anchor_sid, "two processes in one login disagreed on the logon SID"
+    finally:
+        chain.kill()
+        chain.wait(timeout=30)
+
+
 def test_lists_and_signs(self_anchored_oracle: str, key: jwk.Private) -> None:
     client = agent.Client(self_anchored_oracle)
     try:
