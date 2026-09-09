@@ -47,17 +47,33 @@ from .... import jwk
 from ... import exceptions, serde
 from . import peercred, server, spawn
 
+# AF_UNIX sun_path is 104 bytes on macOS (108 on Linux). Use the tighter one.
+_SUN_PATH_MAX = 104
+
 
 def socket_path(parent_pid: int, parent_starttime: int) -> str:
     """The socket path is derived from the parent process's PID and start time.
 
     The requirement is merely to be deterministic. no security issue here since
-    any user would need to pass the access control check implemented in the oracle
+    any user would need to pass the access control check implemented in the oracle.
+
+    The name must stay short on purpose: an AF_UNIX socket path is limited to
+    `_SUN_PATH_MAX` bytes, and the appended subdirectory name is ~24 bytes, so a
+    tempdir that leaves no room would make bind() fail with a cryptic "AF_UNIX
+    path too long". A rough upper-bound check here turns a misconfigured $TMPDIR
+    into a clear error instead.
     """
+
+    tempdir = tempfile.gettempdir()
+    if len(tempdir) >= _SUN_PATH_MAX - 30:
+        raise exceptions.InvalidConfiguration(
+            f"$TMPDIR is too long to hold a pf session-oracle socket ({tempdir!r}); "
+            "unset it or point it at a shorter path"
+        )
 
     material = f"{parent_pid}:{parent_starttime}".encode()
     digest = hashlib.sha256(material).hexdigest()[:16]
-    return os.path.join(tempfile.gettempdir(), f"pf-session-oracle-{digest}", "s")
+    return os.path.join(tempdir, f"pf-so-{digest}", "s")
 
 
 def current_socket_path() -> str:

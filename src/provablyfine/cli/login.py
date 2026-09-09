@@ -9,7 +9,6 @@
 # Config.save() enforces this at runtime by raising if the config is marked ephemeral.
 
 import os
-import sys
 
 import provablyfine_client as pfc
 
@@ -101,29 +100,11 @@ def http_sig_login(
         _select_role(result.roles, sc.session_with_private_key(session_key), role)
         return
 
-    try:
-        session_key, fingerprint = browser_login.generate_session_key()
-        result = sc.account_with_session_key(c, session_key).login_http_sig(session_key.public().to_dict())
-        c.session_key_fingerprint = fingerprint
-        c.session_key_file = None
-        c.session_key_pem = None
-        _select_role(result.roles, sc.session_with_private_key(session_key), role)
-        return
-    except pfc.exceptions.UI:
-        pass
-
-    print("Warning: no SSH agent available. Session key will be stored as cleartext in the config file.")
-    print("Store session key as cleartext? [Y/n]:", flush=True)
-    answer = sys.stdin.readline().strip().lower()
-    if answer not in ("", "y", "yes"):
-        raise pfc.exceptions.UI("Aborted. Start an SSH agent and retry.")
-
-    session_key = jwk.Private.generate_ed25519()
-    pem = session_key.to_openssh(passphrase=None).decode()
+    session_key, fingerprint = browser_login.generate_session_key()
     result = sc.account_with_session_key(c, session_key).login_http_sig(session_key.public().to_dict())
-    c.session_key_fingerprint = None
+    c.session_key_fingerprint = fingerprint
     c.session_key_file = None
-    c.session_key_pem = pem
+    c.session_key_pem = None
     _select_role(result.roles, sc.session_with_private_key(session_key), role)
 
 
