@@ -29,8 +29,26 @@ repos:
         language: system
         types: [python]
       - id: pyright
-        name: Type checking for python
+        name: Type checking for python (neutral)
         entry: uv run pyright
+        language: system
+        types: [python]
+        pass_filenames: false
+      - id: pyright-linux
+        name: Type checking for python (Linux)
+        entry: uv run pyright --project pyrightconfig.linux.json
+        language: system
+        types: [python]
+        pass_filenames: false
+      - id: pyright-darwin
+        name: Type checking for python (macOS)
+        entry: uv run pyright --project pyrightconfig.darwin.json
+        language: system
+        types: [python]
+        pass_filenames: false
+      - id: pyright-windows
+        name: Type checking for python (Windows)
+        entry: uv run pyright --project pyrightconfig.windows.json
         language: system
         types: [python]
         pass_filenames: false

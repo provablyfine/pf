@@ -5,9 +5,11 @@ import dataclasses
 import getpass
 import os
 import socket
+import sys
+import typing
 
 from .. import jwk
-from . import buffer, cert, exceptions, serde
+from . import buffer, cert, exceptions, serde, wire
 
 
 @dataclasses.dataclass
@@ -17,60 +19,62 @@ class Identity:
     raw: bytes
 
 
-@dataclasses.dataclass
-class Message:
-    type: int
-    contents: bytes
+class _PipeTransport:
+    """`wire.Transport` over a Windows named pipe.
+
+    On Windows an agent endpoint is a named pipe, not a UNIX socket -- both
+    the system ssh-agent (`\\\\.\\pipe\\openssh-ssh-agent`) and pf's own
+    oracle. A pipe opened this way reads and writes like an ordinary
+    binary file, so no ctypes is needed here.
+    """
+
+    def __init__(self, name: str) -> None:
+        # `open()` raises `FileNotFoundError` when nothing is listening:
+        # `client/http_client.py` takes advantage of that to distinguish "the
+        # oracle is gone, log in again" from every other failure by catching
+        # `OSError`
+        self._stream: typing.BinaryIO = open(name, "r+b", buffering=0)
+
+    def recv(self, size: int) -> bytes:
+        return self._stream.read(size) or b""
+
+    def send(self, data: bytes) -> int:
+        return self._stream.write(data) or 0
+
+    def close(self) -> None:
+        self._stream.close()
 
 
-class Client:
-    # https://datatracker.ietf.org/doc/html/draft-miller-ssh-agent
-    SSH_AGENTC_REQUEST_IDENTITIES = 11
-    SSH_AGENT_IDENTITIES_ANSWER = 12
-    SSH_AGENTC_SIGN_REQUEST = 13
-    SSH_AGENTC_ADD_IDENTITY = 17
-    SSH_AGENTC_REMOVE_IDENTITY = 18
-    SSH_AGENTC_REMOVE_ALL_IDENTITIES = 19
-    SSH_AGENTC_ADD_ID_CONSTRAINED = 25
-    SSH_AGENT_CONSTRAIN_LIFETIME = 1
-    SSH_AGENT_CONSTRAIN_CONFIRM = 2
-    SSH_AGENT_FAILURE = 5
+# Where Windows' OpenSSH agent listens. Unlike POSIX, there is no environment
+# variable pointing at it by convention: the pipe name is fixed and clients
+# are expected to know it.
+_WINDOWS_AGENT_PIPE = r"\\.\pipe\openssh-ssh-agent"
 
-    def __init__(self):
-        path = os.environ["SSH_AUTH_SOCK"]
+
+def _connect(path: str) -> wire.Transport:
+    if sys.platform == "win32":
+        return _PipeTransport(path)
+    else:
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         sock.connect(path.encode("ascii"))
-        self._sock = sock
+        return sock
 
-    def _send_request(self, type: int, data: bytes):
-        request = buffer.Writer()
-        request.write_uint32(len(data) + 1)
-        request.write_byte(type)
-        request.write_bytes(data)
-        written = self._sock.send(request.to_bytes())
-        assert written == len(request)
 
-    def _recv_bytes(self, n: int) -> bytes:
-        remaining = n
-        data: list[bytes] = []
-        while remaining > 0:
-            partial = self._sock.recv(remaining)
-            if len(partial) == 0:
-                raise exceptions.Error("Unable to read SSH Agent response")
-            remaining -= len(partial)
-            data.append(partial)
-        return b"".join(data)
-
-    def _recv_message(self):
-        length = self._recv_bytes(4)
-        length = int.from_bytes(length, byteorder="big")
-        payload = self._recv_bytes(length)
-        return Message(type=payload[0], contents=payload[1:])
+class Client(wire.WireSocket):
+    def __init__(self, path: str | None = None):
+        if path is None:
+            if sys.platform == "win32":
+                path = _WINDOWS_AGENT_PIPE
+            else:
+                path = os.environ.get("SSH_AUTH_SOCK")
+                if path is None:
+                    raise OSError("SSH_AUTH_SOCK is not set")
+        super().__init__(_connect(path))
 
     def list_identities(self) -> collections.abc.Generator[Identity]:
-        self._send_request(Client.SSH_AGENTC_REQUEST_IDENTITIES, b"")
-        rx = self._recv_message()
-        assert rx.type == Client.SSH_AGENT_IDENTITIES_ANSWER
+        self.send_message(wire.SSH_AGENTC_REQUEST_IDENTITIES, b"")
+        rx = self.recv_message()
+        assert rx.type == wire.SSH_AGENT_IDENTITIES_ANSWER
         assert len(rx.contents) >= 4
         response = buffer.Reader(rx.contents)
         nkeys = response.read_uint32()
@@ -85,9 +89,9 @@ class Client:
         request.write_string(identity.raw)
         request.write_string(data)
         request.write_uint32(flags)
-        self._send_request(Client.SSH_AGENTC_SIGN_REQUEST, request.to_bytes())
-        message = self._recv_message()
-        if message.type == Client.SSH_AGENT_FAILURE:
+        self.send_message(wire.SSH_AGENTC_SIGN_REQUEST, request.to_bytes())
+        message = self.recv_message()
+        if message.type == wire.SSH_AGENT_FAILURE:
             raise exceptions.Error(f"Unable to obtain signature from agent: {message.contents}")
         response = buffer.Reader(message.contents)
         _length = response.read_uint32()
@@ -115,29 +119,29 @@ class Client:
         request = buffer.Writer()
         request.write_bytes(key)
         request.write_string(comment.encode("utf-8"))
-        request_id = Client.SSH_AGENTC_ADD_IDENTITY
+        request_id = wire.SSH_AGENTC_ADD_IDENTITY
         if lifetime is not None:
-            request_id = Client.SSH_AGENTC_ADD_ID_CONSTRAINED
-            request.write_byte(Client.SSH_AGENT_CONSTRAIN_LIFETIME)
+            request_id = wire.SSH_AGENTC_ADD_ID_CONSTRAINED
+            request.write_byte(wire.SSH_AGENT_CONSTRAIN_LIFETIME)
             request.write_uint32(lifetime)
         if require_confirmation:
-            request_id = Client.SSH_AGENTC_ADD_ID_CONSTRAINED
-            request.write_byte(Client.SSH_AGENT_CONSTRAIN_CONFIRM)
-        self._send_request(request_id, request.to_bytes())
-        message = self._recv_message()
-        if message.type == Client.SSH_AGENT_FAILURE:
+            request_id = wire.SSH_AGENTC_ADD_ID_CONSTRAINED
+            request.write_byte(wire.SSH_AGENT_CONSTRAIN_CONFIRM)
+        self.send_message(request_id, request.to_bytes())
+        message = self.recv_message()
+        if message.type == wire.SSH_AGENT_FAILURE:
             raise exceptions.Error(f"Unable to add key to agent: {message.contents}")
 
     def remove_all(self):
-        self._send_request(Client.SSH_AGENTC_REMOVE_ALL_IDENTITIES, b"")
-        message = self._recv_message()
-        if message.type == Client.SSH_AGENT_FAILURE:
+        self.send_message(wire.SSH_AGENTC_REMOVE_ALL_IDENTITIES, b"")
+        message = self.recv_message()
+        if message.type == wire.SSH_AGENT_FAILURE:
             raise exceptions.Error(f"Unable to remove keys from agent: {message.contents}")
 
     def remove(self, identity: Identity):
         request = buffer.Writer()
         request.write_string(identity.raw)
-        self._send_request(Client.SSH_AGENTC_REMOVE_IDENTITY, request.to_bytes())
-        message = self._recv_message()
-        if message.type == Client.SSH_AGENT_FAILURE:
+        self.send_message(wire.SSH_AGENTC_REMOVE_IDENTITY, request.to_bytes())
+        message = self.recv_message()
+        if message.type == wire.SSH_AGENT_FAILURE:
             raise exceptions.Error(f"Unable to remove key from agent: {message.contents}")

@@ -18,11 +18,11 @@ def _list_ssh_keys() -> list[tuple[str, str]]:
     """List SSH keys from agent and ~/.ssh. Returns list of (label, identifier) tuples."""
     keys: list[tuple[str, str]] = []
     try:
-        agent = ssh.agent.Client()
-        for identity in agent.list_identities():
-            fp = identity.public_key.ssh_fingerprint()
-            comment = identity.comment or fp
-            keys.append((f"{fp} ({comment})", fp))
+        with ssh.agent.Client() as agent:
+            for identity in agent.list_identities():
+                fp = identity.public_key.ssh_fingerprint()
+                comment = identity.comment or fp
+                keys.append((f"{fp} ({comment})", fp))
     except Exception:
         pass
     ssh_dir = os.path.expanduser("~/.ssh")

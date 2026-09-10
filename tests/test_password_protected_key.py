@@ -1,7 +1,4 @@
 import pathlib
-import shutil
-
-import pytest
 
 from . import utils
 
@@ -13,8 +10,7 @@ def test_password_protected_key_read(api):
     )
 
 
-@pytest.mark.skipif(not shutil.which("ssh-agent"), reason="ssh-agent not found")
-def test_password_protected_key_create(api, ssh_agent, tmp_path: pathlib.Path):
+def test_password_protected_key_create(api, tmp_path: pathlib.Path):
     home = tmp_path / "home"
     (home / ".ssh").mkdir(parents=True)
     utils.run_cram(
@@ -22,6 +18,5 @@ def test_password_protected_key_create(api, ssh_agent, tmp_path: pathlib.Path):
         {
             "API_PORT": str(api.port),
             "HOME": str(home),
-            "SSH_AUTH_SOCK": ssh_agent.socket,
         },
     )

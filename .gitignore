@@ -3,6 +3,8 @@
 **/*.swp
 **/*.db
 **/*.json
+!/pyrightconfig.json
+!/pyrightconfig.*.json
 **/*.key
 **/*.pub
 **/*.orig

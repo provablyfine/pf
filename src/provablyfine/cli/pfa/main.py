@@ -3,6 +3,8 @@ import os
 import signal
 import sys
 
+import provablyfine_client as pfc
+
 from ... import client, jwk, ssh
 from .. import common
 from . import audit_log_cli, auth_cli, bastion_cli, boundary_cli, grant_cli, identity_cli, role_cli, tag_cli, tenant_cli
@@ -15,10 +17,17 @@ def _initialize_function(args: argparse.Namespace) -> None:
         # This is a convenient way to generate transient keys that never touch
         # the disk. i.e., ssh-keygen + ssh-add make this more difficult than
         # it should be
+        if sys.platform == "win32":
+            # Windows' OpenSSH agent rejects SSH_AGENTC_ADD_ID_CONSTRAINED
+            # outright, so the lifetime below cannot be honoured.
+            raise pfc.exceptions.UI(
+                "--transient-key is not supported on Windows: its OpenSSH agent does not accept "
+                "keys with a lifetime. Use --key with a key file instead."
+            )
         key = jwk.Private.generate_ed25519()
         account_key_id = key.public().ssh_fingerprint()
-        ssh_agent = ssh.agent.Client()
-        ssh_agent.add(key, comment="pf-account", lifetime=60)
+        with ssh.agent.Client() as ssh_agent:
+            ssh_agent.add(key, comment="pf-account", lifetime=60)
         c.account_key_fingerprint = account_key_id
         c.account_key_file = None
     elif args.key is None:

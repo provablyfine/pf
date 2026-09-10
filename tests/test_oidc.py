@@ -2,7 +2,6 @@
 
 import dataclasses
 import json
-import os
 import threading
 import time
 import typing
@@ -22,13 +21,13 @@ import provablyfine.ssh.agent
 from . import mock_oidc
 
 
-def _create_session_key() -> tuple[provablyfine.jwk.Private, str]:
-    """Create a session key, add to SSH agent, return (key, fingerprint)."""
-    session_key = provablyfine.jwk.Private.generate_ed25519()
-    ssh_agent = provablyfine.ssh.agent.Client()
-    ssh_agent.add(session_key, comment="test-session", lifetime=300)
-    session_fingerprint = session_key.public().ssh_fingerprint()
-    return session_key, session_fingerprint
+def _create_session_key() -> provablyfine.jwk.Private:
+    """Create a session key for use as a direct in-memory signer.
+
+    This allows us to make sure we do not use the oracle for signing
+    so these tests exercise only the oidc part.
+    """
+    return provablyfine.jwk.Private.generate_ed25519()
 
 
 @dataclasses.dataclass
@@ -41,74 +40,61 @@ class OidcEnv:
 
 
 @pytest.fixture
-def oidc_env(api, mock_oidc, ssh_agent, tmp_path) -> typing.Iterator[OidcEnv]:
-    """Set up OIDC test environment: tenant initialized, auth config, identity, SSH agent."""
-    # Set SSH_AUTH_SOCK early so SSH agent is available for key operations
-    old_ssh_auth_sock = os.environ.get("SSH_AUTH_SOCK")
-    os.environ["SSH_AUTH_SOCK"] = ssh_agent.socket
+def oidc_env(api, mock_oidc, tmp_path) -> typing.Iterator[OidcEnv]:
+    """Set up OIDC test environment: tenant initialized, auth config, identity."""
+    # Write temporary account key file
+    account_key_obj = provablyfine.jwk.Private.generate_ed25519()
+    account_key_file = tmp_path / "account_key"
+    account_key_file.write_bytes(account_key_obj.to_pem())
 
-    try:
-        # Write temporary account key file
-        account_key_obj = provablyfine.jwk.Private.generate_ed25519()
-        account_key_file = tmp_path / "account_key"
-        account_key_file.write_bytes(account_key_obj.to_pem())
+    # Initialize Config pointing to the API (no session key yet)
+    config = provablyfine.client.Config(
+        directory_url=f"http://127.0.0.1:{api.port}/pf/t/root/directory",
+        account_key_file=str(account_key_file),
+    )
 
-        # Initialize Config pointing to the API (no session key yet)
-        config = provablyfine.client.Config(
-            directory_url=f"http://127.0.0.1:{api.port}/pf/t/root/directory",
-            account_key_file=str(account_key_file),
-        )
+    # Create factory and initialize tenant
+    sc = provablyfine.client.Factory(config)
+    sc.invitation(sc.public().initialize(), str(account_key_file)).accept_invitation()
 
-        # Create factory and initialize tenant
-        sc = provablyfine.client.Factory(config)
-        sc.invitation(sc.public().initialize(), str(account_key_file)).accept_invitation()
+    # Generate session key and login via http_sig
+    session_key_obj = provablyfine.jwk.Private.generate_ed25519()
+    session_key_file = tmp_path / "session_key"
+    session_key_file.write_bytes(session_key_obj.to_pem())
+    session_fingerprint = str(session_key_file)  # Full path for http_sig_login
 
-        # Generate session key and login via http_sig
-        session_key_obj = provablyfine.jwk.Private.generate_ed25519()
-        session_key_file = tmp_path / "session_key"
-        session_key_file.write_bytes(session_key_obj.to_pem())
-        session_fingerprint = str(session_key_file)  # Full path for http_sig_login
+    result = sc.account(str(account_key_file), session_fingerprint).login_http_sig(session_key_obj.public().to_dict())
+    if result.roles:
+        sc.session_with_private_key(session_key_obj).update_session(result.roles[0].id)
 
-        result = sc.account(str(account_key_file), session_fingerprint).login_http_sig(
-            session_key_obj.public().to_dict()
-        )
-        if result.roles:
-            sc.session_with_private_key(session_key_obj).update_session(result.roles[0].id)
+    # Update config to include session key so subsequent calls work
+    config = provablyfine.client.Config(
+        directory_url=config.directory_url,
+        account_key_file=config.account_key_file,
+        session_key_file=str(session_key_file),
+    )
+    sc = provablyfine.client.Factory(config)
 
-        # Update config to include session key so subsequent calls work
-        config = provablyfine.client.Config(
-            directory_url=config.directory_url,
-            account_key_file=config.account_key_file,
-            session_key_file=str(session_key_file),
-        )
-        sc = provablyfine.client.Factory(config)
+    # Create OIDC auth config pointing to mock OIDC provider
+    sc.session().create_auth_oidc(
+        name="oidc-test",
+        client_type="cli",
+        description="Test OIDC provider",
+        issuer=mock_oidc.issuer,
+        client_id=mock_oidc.client_id,
+        client_secret=None,
+    )
 
-        # Create OIDC auth config pointing to mock OIDC provider
-        sc.session().create_auth_oidc(
-            name="oidc-test",
-            client_type="cli",
-            description="Test OIDC provider",
-            issuer=mock_oidc.issuer,
-            client_id=mock_oidc.client_id,
-            client_secret=None,
-        )
+    # Create identity with email matching the mock token
+    sc.session().create_identity(
+        name="user@example.com",
+        boundary_id_list=[],
+        boundary_name_list=[],
+        tag_id_list=[],
+        tag_name_value_list=[],
+    )
 
-        # Create identity with email matching the mock token
-        sc.session().create_identity(
-            name="user@example.com",
-            boundary_id_list=[],
-            boundary_name_list=[],
-            tag_id_list=[],
-            tag_name_value_list=[],
-        )
-
-        yield OidcEnv(config=config, sc=sc, mock=mock_oidc)
-    finally:
-        # Cleanup SSH_AUTH_SOCK
-        if old_ssh_auth_sock is None:
-            os.environ.pop("SSH_AUTH_SOCK", None)
-        else:
-            os.environ["SSH_AUTH_SOCK"] = old_ssh_auth_sock
+    yield OidcEnv(config=config, sc=sc, mock=mock_oidc)
 
 
 # =============================================================================
@@ -120,9 +106,9 @@ def test_endpoint_rs256(oidc_env: OidcEnv) -> None:
     """Valid RS256 token succeeds."""
     nonce = "test-nonce-rs256"
     id_token = oidc_env.mock.issue_token("user@example.com", alg="RS256", nonce=nonce)
-    session_key, session_fingerprint = _create_session_key()
+    session_key = _create_session_key()
 
-    oidc_env.sc.session_with_key(session_fingerprint).login_oidc(
+    oidc_env.sc.session_with_private_key(session_key).login_oidc(
         auth_name="oidc-test",
         client_type="cli",
         id_token=id_token,
@@ -135,9 +121,9 @@ def test_endpoint_es256(oidc_env: OidcEnv) -> None:
     """Valid ES256 token succeeds."""
     nonce = "test-nonce-es256"
     id_token = oidc_env.mock.issue_token("user@example.com", alg="ES256", nonce=nonce)
-    session_key, session_fingerprint = _create_session_key()
+    session_key = _create_session_key()
 
-    oidc_env.sc.session_with_key(session_fingerprint).login_oidc(
+    oidc_env.sc.session_with_private_key(session_key).login_oidc(
         auth_name="oidc-test",
         client_type="cli",
         id_token=id_token,
@@ -149,10 +135,10 @@ def test_endpoint_es256(oidc_env: OidcEnv) -> None:
 def test_endpoint_expired(oidc_env: OidcEnv) -> None:
     """Expired token is rejected."""
     id_token = oidc_env.mock.issue_token("user@example.com", expired=True)
-    session_key, session_fingerprint = _create_session_key()
+    session_key = _create_session_key()
 
     with pytest.raises(pfc.exceptions.UI):
-        oidc_env.sc.session_with_key(session_fingerprint).login_oidc(
+        oidc_env.sc.session_with_private_key(session_key).login_oidc(
             auth_name="oidc-test",
             client_type="cli",
             id_token=id_token,
@@ -164,10 +150,10 @@ def test_endpoint_expired(oidc_env: OidcEnv) -> None:
 def test_endpoint_not_yet_valid(oidc_env: OidcEnv) -> None:
     """Token with nbf in the future is rejected."""
     id_token = oidc_env.mock.issue_token("user@example.com", nbf=int(time.time()) + 3600)
-    session_key, session_fingerprint = _create_session_key()
+    session_key = _create_session_key()
 
     with pytest.raises(pfc.exceptions.UI):
-        oidc_env.sc.session_with_key(session_fingerprint).login_oidc(
+        oidc_env.sc.session_with_private_key(session_key).login_oidc(
             auth_name="oidc-test",
             client_type="cli",
             id_token=id_token,
@@ -179,10 +165,10 @@ def test_endpoint_not_yet_valid(oidc_env: OidcEnv) -> None:
 def test_endpoint_wrong_issuer(oidc_env: OidcEnv) -> None:
     """Token with wrong issuer is rejected."""
     id_token = oidc_env.mock.issue_token("user@example.com", issuer="https://evil.example.com")
-    session_key, session_fingerprint = _create_session_key()
+    session_key = _create_session_key()
 
     with pytest.raises(pfc.exceptions.UI):
-        oidc_env.sc.session_with_key(session_fingerprint).login_oidc(
+        oidc_env.sc.session_with_private_key(session_key).login_oidc(
             auth_name="oidc-test",
             client_type="cli",
             id_token=id_token,
@@ -194,10 +180,10 @@ def test_endpoint_wrong_issuer(oidc_env: OidcEnv) -> None:
 def test_endpoint_wrong_audience(oidc_env: OidcEnv) -> None:
     """Token with wrong audience is rejected."""
     id_token = oidc_env.mock.issue_token("user@example.com", audience="wrong-client")
-    session_key, session_fingerprint = _create_session_key()
+    session_key = _create_session_key()
 
     with pytest.raises(pfc.exceptions.UI):
-        oidc_env.sc.session_with_key(session_fingerprint).login_oidc(
+        oidc_env.sc.session_with_private_key(session_key).login_oidc(
             auth_name="oidc-test",
             client_type="cli",
             id_token=id_token,
@@ -229,10 +215,10 @@ def test_endpoint_missing_email(oidc_env: OidcEnv) -> None:
     signature_b64 = mock_oidc._b64url_encode(signature)
     id_token = f"{header_b64}.{payload_b64}.{signature_b64}"
 
-    session_key, session_fingerprint = _create_session_key()
+    session_key = _create_session_key()
 
     with pytest.raises(pfc.exceptions.UI):
-        oidc_env.sc.session_with_key(session_fingerprint).login_oidc(
+        oidc_env.sc.session_with_private_key(session_key).login_oidc(
             auth_name="oidc-test",
             client_type="cli",
             id_token=id_token,
@@ -244,10 +230,10 @@ def test_endpoint_missing_email(oidc_env: OidcEnv) -> None:
 def test_endpoint_missing_kid(oidc_env: OidcEnv) -> None:
     """Token without a kid in its header is rejected rather than validated against a random JWK."""
     id_token = oidc_env.mock.issue_token("user@example.com", alg="RS256", no_kid=True)
-    session_key, session_fingerprint = _create_session_key()
+    session_key = _create_session_key()
 
     with pytest.raises(pfc.exceptions.UI):
-        oidc_env.sc.session_with_key(session_fingerprint).login_oidc(
+        oidc_env.sc.session_with_private_key(session_key).login_oidc(
             auth_name="oidc-test",
             client_type="cli",
             id_token=id_token,
@@ -259,10 +245,10 @@ def test_endpoint_missing_kid(oidc_env: OidcEnv) -> None:
 def test_endpoint_unknown_auth(oidc_env: OidcEnv) -> None:
     """Login with unknown auth config fails."""
     id_token = oidc_env.mock.issue_token("user@example.com")
-    session_key, session_fingerprint = _create_session_key()
+    session_key = _create_session_key()
 
     with pytest.raises(pfc.exceptions.UI):
-        oidc_env.sc.session_with_key(session_fingerprint).login_oidc(
+        oidc_env.sc.session_with_private_key(session_key).login_oidc(
             auth_name="no-such-auth",
             client_type="cli",
             id_token=id_token,
@@ -274,10 +260,10 @@ def test_endpoint_unknown_auth(oidc_env: OidcEnv) -> None:
 def test_endpoint_missing_nonce(oidc_env: OidcEnv) -> None:
     """Token without nonce claim is rejected."""
     id_token = oidc_env.mock.issue_token("user@example.com")
-    session_key, session_fingerprint = _create_session_key()
+    session_key = _create_session_key()
 
     with pytest.raises(pfc.exceptions.UI):
-        oidc_env.sc.session_with_key(session_fingerprint).login_oidc(
+        oidc_env.sc.session_with_private_key(session_key).login_oidc(
             auth_name="oidc-test",
             client_type="cli",
             id_token=id_token,
@@ -289,10 +275,10 @@ def test_endpoint_missing_nonce(oidc_env: OidcEnv) -> None:
 def test_endpoint_wrong_nonce(oidc_env: OidcEnv) -> None:
     """Token whose nonce does not match the submitted nonce is rejected."""
     id_token = oidc_env.mock.issue_token("user@example.com", nonce="real-nonce")
-    session_key, session_fingerprint = _create_session_key()
+    session_key = _create_session_key()
 
     with pytest.raises(pfc.exceptions.UI):
-        oidc_env.sc.session_with_key(session_fingerprint).login_oidc(
+        oidc_env.sc.session_with_private_key(session_key).login_oidc(
             auth_name="oidc-test",
             client_type="cli",
             id_token=id_token,
@@ -305,9 +291,9 @@ def test_endpoint_replay_nonce(oidc_env: OidcEnv) -> None:
     """Replaying the same id_token with the same nonce is rejected on the second attempt."""
     nonce = "replay-test-nonce"
     id_token = oidc_env.mock.issue_token("user@example.com", nonce=nonce)
-    session_key1, session_fingerprint1 = _create_session_key()
+    session_key1 = _create_session_key()
 
-    oidc_env.sc.session_with_key(session_fingerprint1).login_oidc(
+    oidc_env.sc.session_with_private_key(session_key1).login_oidc(
         auth_name="oidc-test",
         client_type="cli",
         id_token=id_token,
@@ -315,9 +301,9 @@ def test_endpoint_replay_nonce(oidc_env: OidcEnv) -> None:
         session_public_key=session_key1.public().to_dict(),
     )
 
-    session_key2, session_fingerprint2 = _create_session_key()
+    session_key2 = _create_session_key()
     with pytest.raises(pfc.exceptions.UI):
-        oidc_env.sc.session_with_key(session_fingerprint2).login_oidc(
+        oidc_env.sc.session_with_private_key(session_key2).login_oidc(
             auth_name="oidc-test",
             client_type="cli",
             id_token=id_token,
@@ -331,6 +317,7 @@ def test_endpoint_replay_nonce(oidc_env: OidcEnv) -> None:
 # =============================================================================
 
 
+@pytest.mark.real_session_oracle
 def test_full_oidc_login_flow(oidc_env: OidcEnv, monkeypatch) -> None:
     """Complete OIDC login flow: discovery → PKCE → authorize → callback → token → server login."""
 
@@ -352,6 +339,7 @@ def test_full_oidc_login_flow(oidc_env: OidcEnv, monkeypatch) -> None:
     assert oidc_env.config.session_key_fingerprint  # fingerprint stored in config
 
 
+@pytest.mark.real_session_oracle
 def test_full_oidc_login_flow_callback_error(oidc_env: OidcEnv, monkeypatch) -> None:
     """Authorization server rejects the request; callback receives error instead of code."""
     oidc_env.mock.set_authorize_error("access_denied")
@@ -389,74 +377,63 @@ class OidcDeviceCodeEnv:
 
 
 @pytest.fixture
-def oidc_device_code_env(api, mock_oidc, ssh_agent, tmp_path) -> typing.Iterator[OidcDeviceCodeEnv]:
+def oidc_device_code_env(api, mock_oidc, tmp_path) -> typing.Iterator[OidcDeviceCodeEnv]:
     """Set up oidc-device-code test environment."""
-    old_ssh_auth_sock = os.environ.get("SSH_AUTH_SOCK")
-    os.environ["SSH_AUTH_SOCK"] = ssh_agent.socket
+    account_key_obj = provablyfine.jwk.Private.generate_ed25519()
+    account_key_file = tmp_path / "account_key"
+    account_key_file.write_bytes(account_key_obj.to_pem())
 
-    try:
-        account_key_obj = provablyfine.jwk.Private.generate_ed25519()
-        account_key_file = tmp_path / "account_key"
-        account_key_file.write_bytes(account_key_obj.to_pem())
+    config = provablyfine.client.Config(
+        directory_url=f"http://127.0.0.1:{api.port}/pf/t/root/directory",
+        account_key_file=str(account_key_file),
+    )
 
-        config = provablyfine.client.Config(
-            directory_url=f"http://127.0.0.1:{api.port}/pf/t/root/directory",
-            account_key_file=str(account_key_file),
-        )
+    sc = provablyfine.client.Factory(config)
+    sc.invitation(sc.public().initialize(), str(account_key_file)).accept_invitation()
 
-        sc = provablyfine.client.Factory(config)
-        sc.invitation(sc.public().initialize(), str(account_key_file)).accept_invitation()
+    session_key_obj = provablyfine.jwk.Private.generate_ed25519()
+    session_key_file = tmp_path / "session_key"
+    session_key_file.write_bytes(session_key_obj.to_pem())
+    session_fingerprint = str(session_key_file)
 
-        session_key_obj = provablyfine.jwk.Private.generate_ed25519()
-        session_key_file = tmp_path / "session_key"
-        session_key_file.write_bytes(session_key_obj.to_pem())
-        session_fingerprint = str(session_key_file)
+    result = sc.account(str(account_key_file), session_fingerprint).login_http_sig(session_key_obj.public().to_dict())
+    if result.roles:
+        sc.session_with_private_key(session_key_obj).update_session(result.roles[0].id)
 
-        result = sc.account(str(account_key_file), session_fingerprint).login_http_sig(
-            session_key_obj.public().to_dict()
-        )
-        if result.roles:
-            sc.session_with_private_key(session_key_obj).update_session(result.roles[0].id)
+    config = provablyfine.client.Config(
+        directory_url=config.directory_url,
+        account_key_file=config.account_key_file,
+        session_key_file=str(session_key_file),
+    )
+    sc = provablyfine.client.Factory(config)
 
-        config = provablyfine.client.Config(
-            directory_url=config.directory_url,
-            account_key_file=config.account_key_file,
-            session_key_file=str(session_key_file),
-        )
-        sc = provablyfine.client.Factory(config)
+    sc.session().create_auth_oidc_device_code(
+        name="oidc-dc-test",
+        client_type="cli",
+        description="Test OIDC device code provider",
+        issuer=mock_oidc.issuer,
+        client_id=mock_oidc.client_id,
+        client_secret=None,
+    )
 
-        sc.session().create_auth_oidc_device_code(
-            name="oidc-dc-test",
-            client_type="cli",
-            description="Test OIDC device code provider",
-            issuer=mock_oidc.issuer,
-            client_id=mock_oidc.client_id,
-            client_secret=None,
-        )
+    sc.session().create_identity(
+        name="user@example.com",
+        boundary_id_list=[],
+        boundary_name_list=[],
+        tag_id_list=[],
+        tag_name_value_list=[],
+    )
 
-        sc.session().create_identity(
-            name="user@example.com",
-            boundary_id_list=[],
-            boundary_name_list=[],
-            tag_id_list=[],
-            tag_name_value_list=[],
-        )
-
-        yield OidcDeviceCodeEnv(config=config, sc=sc, mock=mock_oidc)
-    finally:
-        if old_ssh_auth_sock is None:
-            os.environ.pop("SSH_AUTH_SOCK", None)
-        else:
-            os.environ["SSH_AUTH_SOCK"] = old_ssh_auth_sock
+    yield OidcDeviceCodeEnv(config=config, sc=sc, mock=mock_oidc)
 
 
 def test_device_code_endpoint_success(oidc_device_code_env: OidcDeviceCodeEnv) -> None:
     """Server endpoint accepts oidc-device-code auth config type."""
     nonce = "test-nonce-device-code"
     id_token = oidc_device_code_env.mock.issue_token("user@example.com", alg="RS256", nonce=nonce)
-    session_key, session_fingerprint = _create_session_key()
+    session_key = _create_session_key()
 
-    oidc_device_code_env.sc.session_with_key(session_fingerprint).login_oidc(
+    oidc_device_code_env.sc.session_with_private_key(session_key).login_oidc(
         auth_name="oidc-dc-test",
         client_type="cli",
         id_token=id_token,
@@ -469,10 +446,10 @@ def test_device_code_endpoint_expired_token(oidc_device_code_env: OidcDeviceCode
     """Expired token is rejected for oidc-device-code auth config."""
     nonce = "test-nonce-expired"
     id_token = oidc_device_code_env.mock.issue_token("user@example.com", alg="RS256", expired=True, nonce=nonce)
-    session_key, session_fingerprint = _create_session_key()
+    session_key = _create_session_key()
 
     with pytest.raises(pfc.exceptions.UI, match="Unable to login via OIDC"):
-        oidc_device_code_env.sc.session_with_key(session_fingerprint).login_oidc(
+        oidc_device_code_env.sc.session_with_private_key(session_key).login_oidc(
             auth_name="oidc-dc-test",
             client_type="cli",
             id_token=id_token,
@@ -481,6 +458,7 @@ def test_device_code_endpoint_expired_token(oidc_device_code_env: OidcDeviceCode
         )
 
 
+@pytest.mark.real_session_oracle
 def test_full_device_code_login_flow(oidc_device_code_env: OidcDeviceCodeEnv, monkeypatch: pytest.MonkeyPatch) -> None:
     """Complete device code login flow: device auth → poll → user completes → token → server login."""
     monkeypatch.setattr("provablyfine.browser_login.open_browser", lambda url: None)

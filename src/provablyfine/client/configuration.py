@@ -4,10 +4,40 @@ import dataclasses
 import json
 import os
 import re
+import tempfile
 
 import provablyfine_client as pfc
 
 _TENANT_URL_RE = re.compile(r"/pf/t/([^/]+)/")
+
+
+def write_file_atomic(
+    filepath: str,
+    content: bytes | str,
+    mode: str = "wb",
+    *,
+    permissions: int = 0o644,
+) -> None:
+    """Write `content` to `filepath`, atomically replacing any existing file.
+
+    os.replace, not os.rename: identical on POSIX, but os.rename refuses an
+    existing destination on Windows (WinError 183)
+    """
+    dirname = os.path.dirname(filepath) or "."
+    os.makedirs(dirname, exist_ok=True)
+
+    fd, tmp_path = tempfile.mkstemp(dir=dirname)
+    try:
+        with os.fdopen(fd, mode) as f:
+            f.write(content)
+        os.chmod(tmp_path, permissions)
+        os.replace(tmp_path, filepath)
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except Exception:
+            pass
+        raise
 
 
 @dataclasses.dataclass
@@ -65,10 +95,4 @@ class Config:
             )
         if filename == os.devnull:
             return
-        dirname = os.path.dirname(os.path.abspath(filename))
-        os.makedirs(dirname, exist_ok=True)
-        tmp = filename + ".tmp"
-        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, "w") as f:
-            json.dump(dataclasses.asdict(self), f)
-        os.rename(tmp, filename)
+        write_file_atomic(filename, json.dumps(dataclasses.asdict(self)), mode="w", permissions=0o600)

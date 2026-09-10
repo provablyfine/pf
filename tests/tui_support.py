@@ -17,7 +17,13 @@ async def _wait(pilot, app=None):
     await pilot.pause()  # let pending events dispatch and workers start
     target = app if app is not None else pilot.app
     try:
-        await target.workers.wait_for_complete()  # wait for save/add/delete
+        # wait_for_complete() snapshots the worker set when it is called; a
+        # worker that spawns a child as its final act (e.g.
+        # ReloginScreen.on_mount starting the thread _login worker) can slip
+        # past that snapshot and be left un-awaited. Loop until the worker set
+        # drains so such children are awaited too, or the run would race.
+        while len(target.workers) > 0:
+            await target.workers.wait_for_complete()  # wait for save/add/delete
     except (textual.worker.WorkerFailed, textual.worker.WorkerCancelled):
         pass  # errors already handled by app._handle_exception → notify()
     await pilot.pause()  # let UI re-render (notifications, table updates)
@@ -44,9 +50,9 @@ def _setup_ssh_auth_sock(ssh_agent):
     return SshAuthSockContext()
 
 
-def _setup(api, tmpdir, ssh_agent):
+def _setup(api, tmpdir):
     scripts = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "scripts"))
-    env = {**os.environ, "PATH": f"{scripts}:{os.environ['PATH']}", "SSH_AUTH_SOCK": ssh_agent.socket}
+    env = {**os.environ, "PATH": f"{scripts}:{os.environ['PATH']}"}
     directory_url = f"http://127.0.0.1:{api.port}/pf/t/root/directory"
     config_file = os.path.join(tmpdir, "config.json")
 
@@ -62,11 +68,11 @@ def _setup(api, tmpdir, ssh_agent):
     return provablyfine.client.Factory(cfg).async_session()
 
 
-def _seed_named_identities(api, tmpdir, ssh_agent, names: list[str]) -> None:
+def _seed_named_identities(api, tmpdir, names: list[str]) -> None:
     """Create additional named identities via the pfa CLI, for tour recordings
     that browse pre-existing data instead of creating their own."""
     scripts = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "scripts"))
-    env = {**os.environ, "PATH": f"{scripts}:{os.environ['PATH']}", "SSH_AUTH_SOCK": ssh_agent.socket}
+    env = {**os.environ, "PATH": f"{scripts}:{os.environ['PATH']}"}
     config_file = os.path.join(tmpdir, "config.json")
     for name in names:
         _run(["pfa", "-c", config_file, "identity", "create", "-n", name], env)

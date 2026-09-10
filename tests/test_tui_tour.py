@@ -19,9 +19,9 @@ _WIDTH = 100
 _HEIGHT = 30
 
 
-def _pfat_env(tmpdir: str, ssh_agent) -> dict[str, str]:
+def _pfat_env(tmpdir: str) -> dict[str, str]:
     scripts = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "scripts"))
-    return {**os.environ, "PATH": f"{scripts}:{os.environ['PATH']}", "SSH_AUTH_SOCK": ssh_agent.socket}
+    return {**os.environ, "PATH": f"{scripts}:{os.environ['PATH']}"}
 
 
 def _assert_valid_cast(path: str) -> None:
@@ -32,14 +32,14 @@ def _assert_valid_cast(path: str) -> None:
     assert header["height"] == _HEIGHT
 
 
-def test_record_quick_tour(api, ssh_agent, tmp_path):
+def test_record_quick_tour(api, tmp_path):
     """Browse-only tour, pre-authenticated (boots straight into the
     Identities list): no login flow, no creation. Runs the TuiApp directly
     (bypassing SetupApp/ReloginScreen),
     same as the existing test_tui.py tests do via TuiApp(auth).run_test()."""
     tmpdir = str(tmp_path)
-    tui_support._setup(api, tmpdir, ssh_agent)
-    tui_support._seed_named_identities(api, tmpdir, ssh_agent, ["alice", "bob", "carol"])
+    tui_support._setup(api, tmpdir)
+    tui_support._seed_named_identities(api, tmpdir, ["alice", "bob", "carol"])
     config_file = os.path.join(tmpdir, "config.json")
 
     run_home = os.path.join(os.path.dirname(__file__), "tui_tour", "run_home.py")
@@ -56,15 +56,17 @@ def test_record_quick_tour(api, ssh_agent, tmp_path):
     _assert_valid_cast(output)
 
 
-def test_record_thorough_tour(api, ssh_agent, tmp_path):
-    """Full tour: real pfat CLI entrypoint (Setup/Relogin login flow), then
-    every resource section, each creating its own demo data live."""
+def test_record_thorough_tour(api, tmp_path):
+    """Full tour: real pfat CLI entrypoint (Relogin flow, since _setup()
+    above already wrote a valid config -- pfat's SetupChoiceScreen only
+    shows when the config file doesn't exist yet), then every resource
+    section, each creating its own demo data live."""
     tmpdir = str(tmp_path)
-    tui_support._setup(api, tmpdir, ssh_agent)
+    tui_support._setup(api, tmpdir)
     config_file = os.path.join(tmpdir, "config.json")
 
     argv = ["pfat", "-c", config_file]
-    env = _pfat_env(tmpdir, ssh_agent)
+    env = _pfat_env(tmpdir)
 
     os.makedirs(_ASSETS_DIR, exist_ok=True)
     output = os.path.join(_ASSETS_DIR, "tui-tour-thorough.cast")

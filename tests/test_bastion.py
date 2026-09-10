@@ -16,7 +16,7 @@ def _free_port() -> int:
 
 
 @pytest.mark.skipif(not shutil.which("ssh"), reason="ssh not found")
-def test_bastion_ssh(api, frps, sshd, ssh_agent):
+def test_bastion_ssh(api, frps, sshd):
     utils.run_cram(
         "tests/bastion.t",
         {
@@ -27,7 +27,6 @@ def test_bastion_ssh(api, frps, sshd, ssh_agent):
             "SSHD_ADDRESS": str(sshd.host_address),
             "SSHD_CONTAINER_ID": sshd.container_id,
             "SSHD_KEYS_DIRECTORY": sshd.keys_directory,
-            "SSH_AUTH_SOCK": ssh_agent.socket,
             "LOCAL_FORWARD_PORT": str(_free_port()),
         },
     )

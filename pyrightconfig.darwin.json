@@ -1,0 +1,6 @@
+{
+  "extends": "./pyrightconfig.json",
+  "include": ["src/provablyfine/**/*darwin*"],
+  "exclude": ["**/__pycache__", "**/test_*.py", "**/_test_*.py"],
+  "pythonPlatform": "Darwin"
+}
