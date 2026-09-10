@@ -118,7 +118,10 @@ ssh-keygen -t rsa -f /etc/ssh/keys/ssh_host_rsa_key -N "" > /dev/null
 
 
 def _require_podman() -> None:
-    result = subprocess.run(["podman", "info"], stdin=subprocess.DEVNULL, capture_output=True)
+    try:
+        result = subprocess.run(["podman", "info"], stdin=subprocess.DEVNULL, capture_output=True)
+    except FileNotFoundError:
+        pytest.skip("podman not installed")
     if result.returncode != 0:
         pytest.skip("podman not available or not configured for rootless containers")
 
