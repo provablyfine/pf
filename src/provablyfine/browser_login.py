@@ -56,6 +56,8 @@ def has_valid_session(config: client.Config) -> bool:
 
 
 def generate_session_key() -> tuple[jwk.Private, str]:
+    if ssh.oracle.peercred.parent_is_launcher():
+        sys.stderr.write("pf was launched by uv/uvx. This is not supported.\nInstall pf or setup a venv")
     session_key = jwk.Private.generate_ed25519()
     try:
         ssh.oracle.session.spawn_oracle(session_key, ttl=1800)

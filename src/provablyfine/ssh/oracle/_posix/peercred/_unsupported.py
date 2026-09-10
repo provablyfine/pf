@@ -50,6 +50,10 @@ def parent_tty_dev(_pid: int) -> int | None:
     raise exceptions.Error(_MESSAGE)
 
 
+def parent_is_launcher() -> bool:
+    return False
+
+
 def is_descendant_of(_pid: int, _anchor: Anchor, *, max_depth: int = 64) -> bool:
     raise exceptions.Error(_MESSAGE)
 

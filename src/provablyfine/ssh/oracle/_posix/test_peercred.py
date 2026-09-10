@@ -102,6 +102,19 @@ def test_same_process_rejects_different_processes() -> None:
         other.wait(timeout=5)
 
 
+def test_is_launcher_name() -> None:
+    launchers = [
+        "uv",
+        "uvx",
+        "/usr/bin/uv",
+    ]
+    non_launchers = ["bash", "sh", "fish", "zsh", "ksh", "dash", "sshd", "cmd", "tmux", "screen"]
+    for name in launchers:
+        assert peercred._linux.is_launcher_name(name), f"{name!r} should be a launcher"
+    for name in non_launchers:
+        assert not peercred._linux.is_launcher_name(name), f"{name!r} should not be a launcher"
+
+
 def test_is_alive() -> None:
     proc = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
     anchor = peercred.open_anchor(proc.pid)

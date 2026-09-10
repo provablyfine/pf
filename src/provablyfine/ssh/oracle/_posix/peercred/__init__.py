@@ -32,6 +32,7 @@ close_anchor = _impl.close_anchor
 close_peer_identity = _impl.close_peer_identity
 is_descendant_of = _impl.is_descendant_of
 open_anchor = _impl.open_anchor
+parent_is_launcher = _impl.parent_is_launcher
 parent_session_id = _impl.parent_session_id
 parent_tty_dev = _impl.parent_tty_dev
 peer_identity = _impl.peer_identity
@@ -50,6 +51,7 @@ __all__ = [
     "is_alive",
     "is_descendant_of",
     "open_anchor",
+    "parent_is_launcher",
     "parent_session_id",
     "parent_tty_dev",
     "peer_identity",

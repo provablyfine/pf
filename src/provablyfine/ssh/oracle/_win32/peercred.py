@@ -316,3 +316,10 @@ def login_shell_identity() -> tuple[int, int]:
         return current, _win32api.process_creation_time(handle)
     finally:
         _win32api.close_handle(handle)
+
+
+def parent_is_launcher() -> bool:
+    """Always False on Windows: `login_shell_identity()` already climbs past
+    launchers (uv included), so the session oracle survives `uv run` here and
+    no warning is needed."""
+    return False

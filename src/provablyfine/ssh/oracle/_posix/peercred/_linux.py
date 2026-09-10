@@ -17,6 +17,36 @@ from .... import exceptions
 _AUDIT_SESSION_UNSET = 0xFFFFFFFF
 
 
+def is_launcher_name(image: str) -> bool:
+    """Whether `image` names a known dev launcher (uv/uvx/python-family).
+
+    A heuristic for a dev-facing warning, *not* kernel-verified identity.
+    The session oracle anchors on our parent; when that parent is a
+    short-lived launcher (e.g. `uv run pf login`), it exits as soon as `pf`
+    does and takes the oracle down with it which means that the session secrets
+    never survive the scope of the `pf login` command.
+    """
+    stem = os.path.basename(image).lower()
+    if stem == "uv" or stem == "uvx":
+        return True
+    return False
+
+
+def parent_is_launcher() -> bool:
+    """True if our immediate parent is a known dev launcher (uv/uvx/python).
+
+    Best-effort: any read failure (parent already gone, /proc unavailable) is
+    False -- "no warning" -- never an error. See `is_launcher_name`.
+    """
+    ppid = os.getppid()
+    try:
+        with open(f"/proc/{ppid}/comm", "rb") as f:
+            name = f.read().strip().decode()
+    except OSError:
+        return False
+    return is_launcher_name(name)
+
+
 @dataclasses.dataclass(frozen=True)
 class Anchor:
     """A pinned, kernel-verified process instance, watchable for exit.

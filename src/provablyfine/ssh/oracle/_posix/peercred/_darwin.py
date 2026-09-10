@@ -39,6 +39,7 @@ import socket
 import struct
 
 from .... import exceptions
+from . import _linux
 
 _SOL_LOCAL = 0
 _LOCAL_PEERTOKEN = 0x006
@@ -242,6 +243,19 @@ def parent_tty_dev(pid: int) -> int | None:
     """Unlike the audit session id, a controlling tty is readable for any
     same-user pid via `proc_pidinfo` -- no privilege restriction here."""
     return _controlling_tty_dev(pid)
+
+
+def parent_is_launcher() -> bool:
+    """True if our immediate parent is a known dev launcher (uv/uvx/python).
+
+    Best-effort: any failure to read the parent's comm (parent already gone,
+    a permission/EPERM) is False -- "no warning" -- never an error. See
+    `is_launcher_name`.
+    """
+    try:
+        return _linux.is_launcher_name(_bsdinfo(os.getppid()).pbi_comm.decode())
+    except (OSError, exceptions.Error):
+        return False
 
 
 def is_descendant_of(pid: int, anchor: Anchor, *, max_depth: int = 64) -> bool:
