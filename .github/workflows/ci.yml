@@ -80,6 +80,32 @@ jobs:
           name: test-logs-macos
           path: /tmp/pf-test-logs/
 
+  test-win32:
+    runs-on: windows-latest
+    strategy:
+      max-parallel: 1
+      matrix:
+        python-version: ["3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v8.1.0
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Run tests
+        # Windows-native OpenSSH (ssh-keygen/ssh-agent) is already on the
+        # runner at SystemRoot\System32\OpenSSH; podman is not available, so the
+        # container-based e2e tests (test_ssh_win32 et al.) skip themselves via
+        # conftest.py's _require_podman() rather than failing the job. Cram `.t`
+        # tests skip on win32 by design (utils.run_cram); Windows coverage is
+        # the pytest-native tests/cli.py path.
+        run: uv run pytest -v --basetemp="${{ runner.temp }}\pf-test-logs"
+      - name: Upload test logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs-win32-${{ matrix.python-version }}
+          path: ${{ runner.temp }}\pf-test-logs\
+
   docs:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
