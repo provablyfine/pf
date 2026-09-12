@@ -46,7 +46,9 @@ class PublicClient:
         """Fetch a one-time invitation key to bootstrap a new server."""
         response = self._session.post(self._directory.initialize)
         if response.status_code == 204:
-            raise exceptions.UI("Unable to initialize app: it is already initialized.")
+            raise exceptions.UI(
+                "Unable to initialize app: it is already initialized. Connect to the existing server instead."
+            )
         if response.status_code != 200:
             raise exceptions.UI(f"Unable to initialize app. Unexpected error: {response.status_code}.")
         return str(response.json()["key"]["k"])

@@ -185,8 +185,6 @@ def account_file_signer(path: str) -> PrivateSigner:
     except TypeError:
         passphrase = getpass.getpass(f"Passphrase for {path}: ").encode()
         key = ssh_utils.load_private_key(data, password=passphrase)
-    except pfc.exceptions.UI:
-        raise pfc.exceptions.UI("Unable to parse data either as PEM or SSH format")
     if key.type != jwk.KeyType.ED25519:
         raise pfc.exceptions.UI(f"Unsupported: {key.type}")
     return FileSigner("account", key)
@@ -200,8 +198,6 @@ def session_file_signer(path: str) -> PrivateSigner:
         key = ssh_utils.load_private_key(data, password=None)
     except TypeError as e:
         raise pfc.exceptions.UI(f"Session key {path} is passphrase-protected; session keys must not be") from e
-    except pfc.exceptions.UI:
-        raise pfc.exceptions.UI("Unable to parse data either as PEM or SSH format")
     if key.type != jwk.KeyType.ED25519:
         raise pfc.exceptions.UI(f"Unsupported: {key.type}")
     return FileSigner("session", key)

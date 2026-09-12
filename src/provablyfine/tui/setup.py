@@ -199,29 +199,30 @@ class NewServerSetupScreen(base.Screen):
 
         set_status("Connecting...")
         try:
-            resp = requests.get(url, timeout=5)
+            try:
+                resp = requests.get(url, timeout=5)
+            except requests.RequestException as e:
+                raise pfc.exceptions.UI("Unable to connect to server") from e
             if resp.status_code != 200:
                 raise pfc.exceptions.UI(f"Unable to read directory: {resp.status_code}")
             directory_data = resp.json()
             c = client.Config(directory_url=url, directory=directory_data)
 
             set_status("Initializing...")
-            try:
-                f = client.Factory(c)
-                f.invitation(f.public().initialize(), account_key).accept_invitation()
-            except pfc.exceptions.UI as e:
-                if "already initialized" in str(e):
-                    raise pfc.exceptions.UI("Server already initialized — use 'Connect to existing server'")
-                raise
+            f = client.Factory(c)
+            f.invitation(f.public().initialize(), account_key).accept_invitation()
 
             c.account_key_fingerprint = account_key
             c.account_key_file = None
             c.auth_name = "default"
             c.save(self._config_path)
             self.app.call_from_thread(self.app.exit)
-        except pfc.exceptions.UI as e:
-            self.notify(str(e), severity="error")
+        except Exception:
+            # Cleanup then re-raise: the exception itself reaches
+            # `App._handle_exception`, which reports it; the status label
+            # must not keep pointing at a step that no longer runs.
             set_status("Enter URL then select account key")
+            raise
 
 
 class ConnectScreen(base.Screen):
@@ -269,85 +270,64 @@ class ConnectScreen(base.Screen):
         invitation = params.get("invitation", [None])[0]
         auth_name = params.get("auth", [None])[0]
 
-        status.update("Connecting...")
         try:
-            resp = await asyncio.to_thread(requests.get, clean_url, timeout=5)
-        except Exception:
-            self.notify("Unable to connect to server", severity="error")
-            status.update("Paste invitation URL or directory URL")
-            return
-        if resp.status_code != 200:
-            self.notify(f"Unable to read directory ({resp.status_code})", severity="error")
-            status.update("Paste invitation URL or directory URL")
-            return
-        directory_data = resp.json()
-        c = client.Config(directory_url=clean_url, directory=directory_data)
-        factory = client.Factory(c)
-
-        account_key: str | None = None
-
-        if invitation:
-            keys = await asyncio.to_thread(_list_ssh_keys)
-            if not keys:
-                self.notify("No SSH keys found — cannot accept invitation", severity="error")
-                status.update("Paste invitation URL or directory URL")
-                return
-            account_key = await self.app.push_screen_wait(_KeySelectScreen(keys))
-            if account_key is None:
-                status.update("Paste invitation URL or directory URL")
-                return
-
-            status.update("Accepting invitation...")
+            status.update("Connecting...")
             try:
+                resp = await asyncio.to_thread(requests.get, clean_url, timeout=5)
+            except requests.RequestException as e:
+                raise pfc.exceptions.UI("Unable to connect to server") from e
+            if resp.status_code != 200:
+                self.notify(f"Unable to read directory ({resp.status_code})", severity="error")
+                return
+            directory_data = resp.json()
+            c = client.Config(directory_url=clean_url, directory=directory_data)
+            factory = client.Factory(c)
+
+            account_key: str | None = None
+
+            if invitation:
+                keys = await asyncio.to_thread(_list_ssh_keys)
+                if not keys:
+                    self.notify("No SSH keys found — cannot accept invitation", severity="error")
+                    return
+                account_key = await self.app.push_screen_wait(_KeySelectScreen(keys))
+                if account_key is None:
+                    return
+
+                status.update("Accepting invitation...")
                 await asyncio.to_thread(factory.invitation(invitation, account_key).accept_invitation)
-            except pfc.exceptions.UI as e:
-                self.notify(str(e), severity="error")
-                status.update("Paste invitation URL or directory URL")
-                return
-            c.account_key_fingerprint = account_key
-            c.account_key_file = None
+                c.account_key_fingerprint = account_key
+                c.account_key_file = None
 
-        if auth_name is None:
-            status.update("Fetching auth methods...")
-            try:
+            if auth_name is None:
+                status.update("Fetching auth methods...")
                 auths = await factory.async_public().list_public_auths(client_type="cli")
-            except pfc.exceptions.UI as e:
-                self.notify(str(e), severity="error")
-                status.update("Paste invitation URL or directory URL")
-                return
-            if len(auths) == 0:
-                self.notify("No auth methods available", severity="error")
-                status.update("Paste invitation URL or directory URL")
-                return
-            selected = await self.app.push_screen_wait(_AuthMethodSelectScreen(auths))
-            if selected is None:
-                status.update("Paste invitation URL or directory URL")
-                return
-            auth_name = selected.name
-            auth_type = selected.type
-        else:
-            try:
+                if len(auths) == 0:
+                    self.notify("No auth methods available", severity="error")
+                    return
+                selected = await self.app.push_screen_wait(_AuthMethodSelectScreen(auths))
+                if selected is None:
+                    return
+                auth_name = selected.name
+                auth_type = selected.type
+            else:
                 auth_public = await factory.async_public().get_public_auth(auth_name, "cli")
                 auth_type = auth_public.config.type
-            except pfc.exceptions.UI as e:
-                self.notify(str(e), severity="error")
-                status.update("Paste invitation URL or directory URL")
-                return
-        c.auth_name = auth_name
+            c.auth_name = auth_name
 
-        if auth_type == "http_sig" and account_key is None:
-            keys = await asyncio.to_thread(_list_ssh_keys)
-            if not keys:
-                self.notify("No SSH keys found — cannot login", severity="error")
-                status.update("Paste invitation URL or directory URL")
-                return
-            account_key = await self.app.push_screen_wait(_KeySelectScreen(keys))
-            if account_key is None:
-                self.notify("No SSH key selected — cannot login", severity="error")
-                status.update("Paste invitation URL or directory URL")
-                return
-            c.account_key_fingerprint = account_key
-            c.account_key_file = None
+            if auth_type == "http_sig" and account_key is None:
+                keys = await asyncio.to_thread(_list_ssh_keys)
+                if not keys:
+                    self.notify("No SSH keys found — cannot login", severity="error")
+                    return
+                account_key = await self.app.push_screen_wait(_KeySelectScreen(keys))
+                if account_key is None:
+                    self.notify("No SSH key selected — cannot login", severity="error")
+                    return
+                c.account_key_fingerprint = account_key
+                c.account_key_file = None
 
-        c.save(self._config_path)
-        self.app.exit()
+            c.save(self._config_path)
+            self.app.exit()
+        finally:
+            status.update("Paste invitation URL or directory URL")

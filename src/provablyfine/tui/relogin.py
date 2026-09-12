@@ -211,11 +211,7 @@ class ReloginScreen(base.Screen):
         auth_name = self._cfg.auth_name or "default"
         status = self.query_one("#status", textual.widgets.Label)
 
-        try:
-            auth_public = await client.Factory(self._api.config).async_public().get_public_auth(auth_name, "cli")
-        except pfc.exceptions.UI as e:
-            self.notify(str(e), severity="error")
-            return
+        auth_public = await client.Factory(self._api.config).async_public().get_public_auth(auth_name, "cli")
         auth_type = auth_public.config.type
 
         if auth_type not in ("http_sig", "oidc-device-code"):
@@ -250,5 +246,3 @@ class ReloginScreen(base.Screen):
             self.app.call_from_thread(self.app.exit)
         except _LoginCancelled:
             self.app.call_from_thread(self.app.exit)
-        except pfc.exceptions.UI as e:
-            self.notify(str(e), severity="error")
