@@ -2,6 +2,7 @@ import fcntl
 import json
 import os
 import pty
+import random
 import select
 import signal
 import struct
@@ -10,8 +11,16 @@ import time
 
 import pyte
 
+# Demo pacing: inputs land at human speed so the recording reads like a
+# presenter driving the app, not a script replay. Special keys fire one beat
+# apart; typed text is written character by character with jitter so it
+# doesn't look metronomic.
+KEY_DELAY = 0.25
+TYPE_DELAY = 0.09
+TYPE_JITTER = (0.6, 1.4)
+
 # Only the keys the tour scenarios actually press. Anything not listed here is
-# sent as literal text, one os.write() per call to send().
+# typed as literal text, one character at a time.
 _KEYS: dict[str, bytes] = {
     "up": b"\x1b[A",
     "down": b"\x1b[B",
@@ -84,7 +93,7 @@ class PtyRecorder:
         self._stream.feed(data.decode("utf-8", errors="replace"))
         return True
 
-    def wait_for(self, text: str, timeout: float = 5.0, settle: float = 2.4) -> None:
+    def wait_for(self, text: str, timeout: float = 5.0, settle: float = 3.0) -> None:
         deadline = time.monotonic() + timeout
         matched = False
         while time.monotonic() < deadline:
@@ -120,12 +129,20 @@ class PtyRecorder:
         rendered by asciinema-player as a clickable, timestamped label."""
         self._markers.append((time.monotonic() - self._start, label))
 
+    def _write_input(self, data: bytes) -> None:
+        os.write(self._master_fd, data)
+        self._input_events.append((time.monotonic() - self._start, data))
+
     def send(self, *keys: str) -> None:
         for key in keys:
-            data = _KEYS.get(key, key.encode())
-            os.write(self._master_fd, data)
-            self._input_events.append((time.monotonic() - self._start, data))
-            self._drain(timeout=0.05)  # give the app a moment to react, keep draining
+            encoded = _KEYS.get(key)
+            if encoded is not None:
+                self._write_input(encoded)
+                self.idle(KEY_DELAY)
+                continue
+            for char in key:
+                self._write_input(char.encode())
+                self.idle(TYPE_DELAY * random.uniform(*TYPE_JITTER))
 
     def close(self, timeout: float = 5.0) -> None:
         os.kill(self._pid, signal.SIGTERM)
@@ -142,7 +159,7 @@ class PtyRecorder:
             os.waitpid(self._pid, 0)
         os.close(self._master_fd)
 
-    def write_cast(self, path: str, max_gap: float = 2.4) -> None:
+    def write_cast(self, path: str, max_gap: float = 4.5) -> None:
         """Serialize the recorded events (output, input and markers, merged
         in chronological order) as an asciinema v2 cast. Any single
         inter-event gap is capped at max_gap so a slow API call during

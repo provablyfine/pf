@@ -20,7 +20,7 @@ that records everything that just happened.
     AsciinemaPlayer.create(
       "../../assets/tui-tour-thorough.cast",
       document.getElementById("tour-thorough"),
-      {cols: 100, rows: 30, idleTimeLimit: 2, loop: true, preload: true, autoplay: true, keystrokeOverlay: true, controls: true}
+      {cols: 100, rows: 30, idleTimeLimit: 4.5, loop: true, preload: true, autoplay: true, keystrokeOverlay: true, controls: true}
     );
   });
 </script>
