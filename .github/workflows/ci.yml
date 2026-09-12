@@ -106,6 +106,30 @@ jobs:
           name: test-logs-win32-${{ matrix.python-version }}
           path: ${{ runner.temp }}\pf-test-logs\
 
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v8.1.0
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+      - name: Build pf.exe
+        run: |
+          uv sync --group windows-build
+          uv run --group windows-build pyinstaller packaging/windows/pf.spec
+      - name: Smoke-test the packaged binary
+        run: dist/pf/pf.exe --version
+      - name: Build installer
+        run: |
+          # ISCC mis-parses LF-only scripts (silently drops directives like
+          # AppVersion), and checkout-side eol conversion is not reliable
+          # across git builds — normalize explicitly.
+          $p = 'packaging\windows\pf.iss'
+          $t = [IO.File]::ReadAllText($p) -replace "`r`n", "`n"
+          [IO.File]::WriteAllText($p, ($t -replace "`n", "`r`n"))
+          $version = uv version --short
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DMyAppVersion=$version" packaging\windows\pf.iss
+
   docs:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'

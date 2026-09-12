@@ -1,1 +1,5 @@
 * text=auto eol=lf
+
+# ISCC mis-parses LF-only scripts (silently drops directives like AppVersion)
+packaging/windows/pf.iss text eol=crlf
+packaging/windows/post_install_info.txt text eol=crlf

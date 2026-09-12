@@ -2,6 +2,15 @@
 
 ## Install pf
 
+### Native Windows
+
+On Windows, you can instead download `pf-setup.exe` from the
+[latest release](https://github.com/provablyfine/pf/releases/latest) and run
+it. The installer is currently unsigned, so Windows SmartScreen will warn you on
+first run; choose "More info" then "Run anyway" to proceed.
+
+### Linux and macOS
+
 We recommend to use `pipx` to install pf. From a terminal, run this command:
 
 ```console

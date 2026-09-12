@@ -103,6 +103,9 @@ dev = [
     "mutmut>=3.7.0",
     "pyte>=0.8.2",
 ]
+windows-build = [
+    "pyinstaller>=6.11.0",
+]
 
 [tool.tox]
 legacy_tox_ini = """
