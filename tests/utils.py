@@ -1,3 +1,4 @@
+import copy
 import os
 import os.path
 import shutil
