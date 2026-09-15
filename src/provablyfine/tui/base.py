@@ -15,13 +15,13 @@ import textual.widget
 import textual.widgets
 import textual.worker
 
-from .. import client
 from . import nav_pane
 
 
 class App(textual.app.App[None]):
-    # Set by `TuiApp.__init__` and reassigned by `TuiApp.rebind_auth` after
-    # an interactive relogin. Every section/view screen and grant-edit widget
+    # Set by `TuiApp.__init__` and reassigned directly by
+    # `relogin.ReloginScreen._finish` (non-standalone case) after an
+    # interactive relogin. Every section/view screen and grant-edit widget
     # reads this live via `self.app.auth`. Left unset on `SetupApp`, whose
     # screens (login/setup, before a `TuiApp` exists) never touch it.
     auth: pfc.AsyncSessionClient
@@ -34,12 +34,6 @@ class App(textual.app.App[None]):
     # Stays `None` for `SetupApp` screens (login/setup, before any section
     # exists), so they never get one.
     current_section_id: str | None = None
-
-    def rebind_auth(self, cfg: client.Config) -> None:
-        """Reassign `self.auth` after a successful mid-session relogin
-        (`relogin.ReloginScreen._finish`, non-standalone case only). No-op by
-        default: `SetupApp` screens run before any `TuiApp.auth` exists and
-        never call this. Overridden by `TuiApp`."""
 
     def pop_screen(self) -> textual.await_complete.AwaitComplete:
         # `screen_stack[0]` is Textual's own implicit default screen,

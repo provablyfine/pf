@@ -211,7 +211,7 @@ class ReloginScreen(base.ModalScreen[None]):
         if self._standalone:
             self.app.exit()
         else:
-            self.app.rebind_auth(self._cfg)
+            self.app.auth = client.Factory(self._cfg).async_session()
             self.dismiss()
 
     def compose(self) -> textual.app.ComposeResult:

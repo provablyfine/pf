@@ -97,13 +97,6 @@ class TuiApp(base.App):
                 return
         super()._handle_exception(error)
 
-    def rebind_auth(self, cfg: client.Config) -> None:
-        # Every section/view screen and grant-edit widget reads `self.app.auth`
-        # live rather than caching it, so a plain reassignment here is enough
-        # to reach all of them -- including whichever screen is about to be
-        # resumed underneath the dismissed ReloginScreen.
-        self.auth = client.Factory(cfg).async_session()
-
 
 def _has_session(cfg: client.Config) -> bool:
     return (
