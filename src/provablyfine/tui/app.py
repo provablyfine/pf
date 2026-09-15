@@ -67,8 +67,8 @@ class _ReloggingAuth(pfc.AsyncSessionClient):
         self._app = app
         self._cfg = cfg
         self._config_path = config_path
-        self._relogin_lock = asyncio.Lock()
         self._generation = 0
+        self._relogin_task: asyncio.Task[None] | None = None
 
     async def _run(self, fn: typing.Callable[[], typing.Any]) -> typing.Any:
         try:
@@ -87,31 +87,48 @@ class _ReloggingAuth(pfc.AsyncSessionClient):
                 raise _ReloginFailed(f"Session still broken after relogin: {e}") from e
 
     async def _relogin(self, observed_generation: int) -> None:
+        if self._generation != observed_generation:
+            return  # someone else already relogged in since we last checked
+        # Single-flight: every concurrent caller that observed the same
+        # (still-current) generation awaits the *same* task rather than
+        # each pushing its own `ReloginScreen`. A generation bump only
+        # happens on success, so a bare generation check alone isn't enough
+        # to prevent duplicates -- after a failure, every waiter would still
+        # see the same (unchanged) generation and, without this, each push
+        # its own redundant screen. Sharing one task means they all instead
+        # share its one outcome, success or `_ReloginFailed`. Safe without
+        # an explicit lock: nothing here awaits between reading
+        # `self._relogin_task` and (re)assigning it, so two calls can't
+        # race to create two tasks.
+        task = self._relogin_task
+        if task is None or task.done():
+            task = asyncio.create_task(self._do_relogin())
+            self._relogin_task = task
+        await task
+
+    async def _do_relogin(self) -> None:
         assert self._cfg is not None
         assert self._config_path is not None
-        async with self._relogin_lock:
-            if self._generation != observed_generation:
-                return  # someone else already relogged in while we waited
-            loop = asyncio.get_running_loop()
-            future: asyncio.Future[None] = loop.create_future()
+        loop = asyncio.get_running_loop()
+        future: asyncio.Future[None] = loop.create_future()
 
-            def _on_result(success: bool, message: str | None) -> None:
-                if future.done():
-                    return
-                if not success:
-                    future.set_exception(_ReloginFailed(message or "Relogin cancelled"))
-                    return
-                assert self._cfg is not None
-                self._inner = client.Factory(self._cfg).session()  # pyright: ignore[reportPrivateUsage]
-                self._generation += 1
-                future.set_result(None)
+        def _on_result(success: bool, message: str | None) -> None:
+            if future.done():
+                return
+            if not success:
+                future.set_exception(_ReloginFailed(message or "Relogin cancelled"))
+                return
+            assert self._cfg is not None
+            self._inner = client.Factory(self._cfg).session()  # pyright: ignore[reportPrivateUsage]
+            self._generation += 1
+            future.set_result(None)
 
-            self._app.push_screen(
-                relogin.ReloginScreen(
-                    self._cfg, client.Client(self._cfg), self._config_path, standalone=False, on_result=_on_result
-                )
+        self._app.push_screen(
+            relogin.ReloginScreen(
+                self._cfg, client.Client(self._cfg), self._config_path, standalone=False, on_result=_on_result
             )
-            await future
+        )
+        await future
 
 
 class TuiApp(base.App):

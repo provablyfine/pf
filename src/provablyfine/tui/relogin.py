@@ -232,10 +232,22 @@ class ReloginScreen(base.ModalScreen[None]):
         self._config_path = config_path
         self._standalone = standalone
         self._on_result = on_result
+        self._finished = False
 
     def _finish(self, success: bool, message: str | None = None) -> None:
+        # `_login` runs in a real thread and can still be mid-flight when
+        # the user cancels via `action_quit` (or, before that, a call
+        # already reached `_finish` some other way); its eventual
+        # `call_from_thread(self._finish, ...)` must then be a no-op rather
+        # than a second `dismiss()`/`exit()` -- `Screen.dismiss()` pops
+        # whatever screen is currently on top of the stack by position, not
+        # by checking identity, so a stale second call could pop an
+        # unrelated screen the user has since navigated to.
+        if self._finished:
+            return
+        self._finished = True
         if self._standalone:
-            self.app.exit()
+            self.app.exit(message=message)
         else:
             assert self._on_result is not None
             self._on_result(success, message)
@@ -254,7 +266,16 @@ class ReloginScreen(base.ModalScreen[None]):
         auth_name = self._cfg.auth_name or "default"
         status = self.query_one("#status", textual.widgets.Label)
 
-        auth_public = await client.Factory(self._api.config).async_public().get_public_auth(auth_name, "cli")
+        try:
+            auth_public = await client.Factory(self._api.config).async_public().get_public_auth(auth_name, "cli")
+        except Exception as e:
+            # Unguarded, this would leave `_login` never started -- so
+            # `_finish` never called, and (in the non-standalone case)
+            # `app._ReloggingAuth._relogin`'s future awaited forever, even
+            # though this failure is no less final than one from `_login`
+            # itself.
+            self._finish(False, str(e))
+            return
         auth_type = auth_public.config.type
 
         if auth_type not in ("http_sig", "oidc-device-code"):

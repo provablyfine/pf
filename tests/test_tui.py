@@ -111,8 +111,9 @@ async def test_tui_key_expired_relogin_recovers(api):
     not a `pfc.exceptions.UI` subclass (its docstring: the CLI's `do_main`
     rewrites it into login guidance); `app._ReloggingAuth._run` catches it
     alongside `SessionExpired` and, if the retry after relogin somehow fails
-    again with `KeyExpired`, converts it to a `UI` so it still can't crash
-    the app via Textual's fatal handler.
+    again with `KeyExpired`, raises `app._ReloginFailed` instead, which
+    `TuiApp._handle_exception` treats as fatal (exit) rather than letting
+    the raw `KeyExpired` reach Textual's fatal crash handler.
 
     Only reachable with an *oracle*-backed session (a fingerprint, not an
     on-disk key file), since only `AgentSigner.sign()` can raise it -- hence
@@ -271,7 +272,8 @@ async def test_tui_relogin_failure_exits_app(api):
     deterministic: it avoids racing a keypress against a real, fast network
     login that might complete before the key is pressed, while still
     exercising the same failure path (`ReloginScreen._login`'s catch-all ->
-    `_finish_failed` -> `self.app.exit()`).
+    `_finish(False, ...)` -> `on_result` -> `app._ReloginFailed` ->
+    `TuiApp._handle_exception` -> `self.exit()`).
     """
     with tempfile.TemporaryDirectory() as tmpdir:
         scripts = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "scripts"))
