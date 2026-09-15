@@ -20,9 +20,8 @@ class BoundaryGrantEditWidget(base.GrantEditWidget):
     }
     """
 
-    def __init__(self, auth: pfc.AsyncSessionClient, grant: pfc.schemas.BoundaryGrant):
+    def __init__(self, grant: pfc.schemas.BoundaryGrant):
         super().__init__()
-        self._auth = auth
         self._grant = grant
 
     def compose(self) -> textual.app.ComposeResult:
@@ -53,7 +52,7 @@ class BoundaryGrantEditWidget(base.GrantEditWidget):
             )
 
     async def on_mount(self) -> None:
-        boundaries_raw = (await self._auth.list_boundaries()).boundaries
+        boundaries_raw = (await self.app.auth.list_boundaries()).boundaries
         candidates = [textual_autocomplete.DropdownItem(main=b.name) for b in boundaries_raw]
         self.query_one("#filter-name", checkbox_input.CheckboxInput).set_candidates(candidates)
 

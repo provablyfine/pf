@@ -41,9 +41,8 @@ class BoundaryListScreen(base.Screen):
         ("escape", "app.pop_screen", "Back"),
     ]
 
-    def __init__(self, auth: pfc.AsyncSessionClient) -> None:
+    def __init__(self) -> None:
         super().__init__()
-        self._auth = auth
         self._boundaries: list[pfc.schemas.Boundary] = []
 
     def compose(self) -> textual.app.ComposeResult:
@@ -54,12 +53,12 @@ class BoundaryListScreen(base.Screen):
     async def on_mount(self) -> None:
         table = self.query_one(textual.widgets.DataTable[str])
         table.add_columns("Name", "Description", "Denied", "Ceiling")
-        self._boundaries = (await self._auth.list_boundaries()).boundaries
+        self._boundaries = (await self.app.auth.list_boundaries()).boundaries
         self._populate_table(table)
 
     @textual.work
     async def on_screen_resume(self) -> None:
-        self._boundaries = (await self._auth.list_boundaries()).boundaries
+        self._boundaries = (await self.app.auth.list_boundaries()).boundaries
         self._populate_table(self.query_one(textual.widgets.DataTable[str]))
 
     def _populate_table(self, table: textual.widgets.DataTable[str]) -> None:
@@ -84,19 +83,19 @@ class BoundaryListScreen(base.Screen):
             return
         table = self.query_one(textual.widgets.DataTable[str])
         boundary = self._boundaries[table.cursor_row]
-        self.app.push_screen(boundary_view.BoundaryViewScreen(self._auth, boundary))
+        self.app.push_screen(boundary_view.BoundaryViewScreen(boundary))
 
     @textual.work
     async def action_add_boundary(self) -> None:
         name = await self.app.push_screen_wait(_BoundaryCreateScreen())
         if name is None:
             return
-        boundary = await self._auth.create_boundary(name, "")
+        boundary = await self.app.auth.create_boundary(name, "")
         self._boundaries.append(boundary)
         table = self.query_one(textual.widgets.DataTable[str])
         self._populate_table(table)
         table.move_cursor(row=len(self._boundaries) - 1)
-        self.app.push_screen(boundary_view.BoundaryViewScreen(self._auth, boundary))
+        self.app.push_screen(boundary_view.BoundaryViewScreen(boundary))
 
     @textual.work
     async def action_delete_boundary(self) -> None:
@@ -105,7 +104,7 @@ class BoundaryListScreen(base.Screen):
         table = self.query_one(textual.widgets.DataTable[str])
         index = table.cursor_row
         boundary = self._boundaries[index]
-        await self._auth.delete_boundary(boundary.id)
+        await self.app.auth.delete_boundary(boundary.id)
         self._boundaries.pop(index)
         self._populate_table(table)
         self.notify(f"Boundary '{boundary.name}' deleted")

@@ -17,9 +17,8 @@ class AuthViewScreen(base.Screen):
         ("escape", "app.pop_screen", "Back"),
     ]
 
-    def __init__(self, auth: pfc.AsyncSessionClient, a: pfc.schemas.Auth) -> None:
+    def __init__(self, a: pfc.schemas.Auth) -> None:
         super().__init__()
-        self._auth = auth
         self._a = a
         self._saved_name: str = a.name
         self._saved_description: str = a.description
@@ -58,7 +57,7 @@ class AuthViewScreen(base.Screen):
             self.notify("No changes")
             return
 
-        await self._auth.update_auth(
+        await self.app.auth.update_auth(
             self._a.id,
             name=name if name_changed else None,
             description=description if description_changed else None,

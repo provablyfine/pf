@@ -55,9 +55,8 @@ class BastionViewScreen(base.Screen):
     }
     """
 
-    def __init__(self, auth: pfc.AsyncSessionClient, bastion: pfc.schemas.Bastion) -> None:
+    def __init__(self, bastion: pfc.schemas.Bastion) -> None:
         super().__init__()
-        self._auth = auth
         self._bastion = bastion
         self._tags: list[pfc.schemas.TagNameValue] = list(bastion.tag_list)
         self._saved_url: str = bastion.url
@@ -99,7 +98,7 @@ class BastionViewScreen(base.Screen):
 
     @textual.work
     async def action_add_tag(self) -> None:
-        all_tags = (await self._auth.list_tags()).tags
+        all_tags = (await self.app.auth.list_tags()).tags
         existing = {(t.name, t.value) for t in self._tags}
         available = [
             pfc.schemas.TagNameValue(name=t.name, value=t.value) for t in all_tags if (t.name, t.value) not in existing
@@ -135,7 +134,7 @@ class BastionViewScreen(base.Screen):
             self.notify("No changes")
             return
 
-        await self._auth.update_bastion(
+        await self.app.auth.update_bastion(
             self._bastion.id,
             url=url if url_changed else None,
             ssh_proxy_jump=ssh_proxy_jump if ssh_proxy_jump_changed else None,

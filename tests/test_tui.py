@@ -1,3 +1,4 @@
+import asyncio
 import os
 import tempfile
 import typing
@@ -10,13 +11,18 @@ import textual.widgets
 import provablyfine.client
 import provablyfine.jwk
 import provablyfine.ssh.agent
+import provablyfine.ssh.oracle
 import provablyfine.tui.app
 import provablyfine.tui.base
 import provablyfine.tui.checkbox_input
 import provablyfine.tui.grant_edit
+import provablyfine.tui.identity_list
 import provablyfine.tui.nav_pane
 import provablyfine.tui.relogin
+import provablyfine.tui.role_list
+import provablyfine.tui.role_view
 import provablyfine.tui.setup
+import provablyfine.tui.tag_list
 
 from . import tui_support
 
@@ -41,6 +47,270 @@ async def _goto(pilot: textual.pilot.Pilot[None], section_id: str) -> None:
     await pilot.press("shift+tab")
     await pilot.press(*(["down"] * delta if delta > 0 else ["up"] * -delta))
     await pilot.press("enter")
+
+
+@pytest.mark.anyio
+@pytest.mark.real_session_oracle
+@pytest.mark.parametrize("api", [{"session_duration_s": 2}], indirect=True)
+async def test_tui_session_expiry_relogin_recovers(api):
+    """#84: when the session key expires mid-use, the automatic relogin must
+    let the user keep working, not strand them.
+
+    `self.app.auth` is an `app._ReloggingAuth` wrapping the real client:
+    `RoleListScreen.on_mount`'s `list_roles()` call hits the 401 inside
+    `_ReloggingAuth._run`, which pushes `ReloginScreen`, awaits its result,
+    and transparently retries the same call -- `RoleListScreen.on_mount`
+    itself never sees the exception. (Its `on_screen_resume` may also fire a
+    redundant reload via `ScreenResume`, since the failing call happened
+    inside `on_mount`; both are idempotent, so which one populated the table
+    below can't be distinguished, and isn't asserted.)
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        auth = _setup(api, tmpdir)
+        config_file = os.path.join(tmpdir, "config.json")
+        cfg = provablyfine.client.Config.load(config_file)
+
+        app = provablyfine.tui.app.TuiApp(auth, cfg=cfg, config_path=config_file)
+        async with app.run_test(size=(200, 50)) as pilot:
+            await pilot.pause()  # app startup
+            assert isinstance(app.screen, provablyfine.tui.identity_list.IdentityListScreen)
+
+            # Outlast the 2s session so the next API call gets a 401.
+            await asyncio.sleep(3)
+
+            await _goto(pilot, "roles")  # RoleListScreen.on_mount calls list_roles()
+
+            # Must not have quit out from under the user before we even get
+            # to wait for the relogin worker to finish.
+            assert not app._exit, "TUI exited instead of transparently reconnecting"
+            assert app.is_running
+
+            await _wait(pilot, app)  # let ReloginScreen's thread worker finish
+
+            assert not app._exit, "TUI exited instead of transparently reconnecting"
+            assert app.is_running
+            assert not [n for n in app._notifications if n.severity == "error"]
+
+            # The same RoleListScreen instance must still be resumed (never
+            # replaced -- the retry happened underneath it), and its data
+            # must have loaded.
+            assert isinstance(app.screen, provablyfine.tui.role_list.RoleListScreen)
+            table = app.screen.query_one(textual.widgets.DataTable)
+            assert table.row_count >= 1  # root role, loaded after relogin
+
+
+@pytest.mark.anyio
+@pytest.mark.real_session_oracle
+async def test_tui_key_expired_relogin_recovers(api):
+    """#84 follow-up: signing a request can fail *before* it ever reaches the
+    server. `AgentSigner.sign()` (client/http_client.py) raises
+    `pfc.exceptions.KeyExpired` when the local session-key signing oracle's
+    own socket is gone -- typically because its independent TTL
+    (`ssh.oracle.session.spawn_oracle(..., ttl=...)`) elapsed while the
+    session itself was otherwise still fine. `KeyExpired` is deliberately
+    not a `pfc.exceptions.UI` subclass (its docstring: the CLI's `do_main`
+    rewrites it into login guidance); `app._ReloggingAuth._run` catches it
+    alongside `SessionExpired` and, if the retry after relogin somehow fails
+    again with `KeyExpired`, raises `app._ReloginFailed` instead, which
+    `TuiApp._handle_exception` treats as fatal (exit) rather than letting
+    the raw `KeyExpired` reach Textual's fatal crash handler.
+
+    Only reachable with an *oracle*-backed session (a fingerprint, not an
+    on-disk key file), since only `AgentSigner.sign()` can raise it -- hence
+    driving login through `relogin.http_sig_login()` directly rather than
+    `tui_support._setup()`, which logs in via a file-based `--session-key`.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        scripts = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        env = {**os.environ, "PATH": f"{scripts}:{os.environ['PATH']}"}
+        directory_url = f"http://127.0.0.1:{api.port}/pf/t/root/directory"
+        config_file = os.path.join(tmpdir, "config.json")
+
+        account_key = os.path.join(tmpdir, "account")
+        _run(["ssh-keygen", "-t", "ed25519", "-f", account_key, "-N", ""], env)
+        _run(["pfa", "-c", config_file, "initialize", directory_url, f"--key={account_key}"], env)
+
+        cfg = provablyfine.client.Config.load(config_file)
+        cfg.session_key_fingerprint = provablyfine.tui.relogin.http_sig_login(cfg, provablyfine.client.Client(cfg))
+        auth = provablyfine.client.Factory(cfg).async_session()
+
+        # Seed a tag while the oracle is still alive -- there's no default
+        # tag the way there's a default root role, and this is what proves
+        # TagListScreen.on_screen_resume actually reloaded after relogin.
+        await auth.create_tag("env", "prod")
+
+        app = provablyfine.tui.app.TuiApp(auth, cfg=cfg, config_path=config_file)
+        async with app.run_test(size=(200, 50)) as pilot:
+            await pilot.pause()  # app startup, while the oracle is still alive
+            assert isinstance(app.screen, provablyfine.tui.identity_list.IdentityListScreen)
+
+            # Simulate the oracle's own TTL elapsing while the user keeps
+            # working: its socket vanishes out from under an otherwise
+            # still-configured session.
+            oracle_path = provablyfine.ssh.oracle.session.current_socket_path()
+            assert os.path.exists(oracle_path)
+            os.remove(oracle_path)
+
+            await _goto(pilot, "tags")  # TagListScreen.on_mount calls list_tags()
+
+            # Must not have crashed out from under the user before we even
+            # get to wait for the relogin worker to finish.
+            assert not app._exit, "TUI crashed/exited instead of transparently reconnecting"
+            assert app.is_running
+
+            await _wait(pilot, app)  # let ReloginScreen's thread worker finish
+
+            assert not app._exit, "TUI crashed/exited instead of transparently reconnecting"
+            assert app.is_running
+            assert not [n for n in app._notifications if n.severity == "error"]
+
+            # The same TagListScreen instance must still be resumed (never
+            # replaced -- the retry happened underneath it), and its data
+            # must have loaded.
+            assert isinstance(app.screen, provablyfine.tui.tag_list.TagListScreen)
+            table = app.screen.query_one(textual.widgets.DataTable)
+            assert table.row_count >= 1  # the seeded tag, loaded after relogin
+
+
+@pytest.mark.anyio
+@pytest.mark.real_session_oracle
+async def test_tui_relogin_preserves_deeper_screen(api):
+    """A relogin triggered while sitting on a screen deeper than the section
+    root (e.g. mid-edit on a RoleViewScreen) must resume that exact screen --
+    with whatever the user had already typed still intact -- rather than
+    bouncing back to the section root and discarding it, which is what the
+    pre-refactor force=True/pop-to-root behavior always did.
+
+    `ReloginScreen` being a `ModalScreen`, pushed by `app._ReloggingAuth`
+    directly around the failing call, is what makes this possible: nothing
+    about the screen stack changes at all, and `action_save`'s own
+    `update_role()` call -- the one that raised `KeyExpired` -- is the one
+    that gets transparently retried and completes, not just re-issued by a
+    side-effecting resume handler.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        scripts = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        env = {**os.environ, "PATH": f"{scripts}:{os.environ['PATH']}"}
+        directory_url = f"http://127.0.0.1:{api.port}/pf/t/root/directory"
+        config_file = os.path.join(tmpdir, "config.json")
+
+        account_key = os.path.join(tmpdir, "account")
+        _run(["ssh-keygen", "-t", "ed25519", "-f", account_key, "-N", ""], env)
+        _run(["pfa", "-c", config_file, "initialize", directory_url, f"--key={account_key}"], env)
+
+        cfg = provablyfine.client.Config.load(config_file)
+        cfg.session_key_fingerprint = provablyfine.tui.relogin.http_sig_login(cfg, provablyfine.client.Client(cfg))
+        auth = provablyfine.client.Factory(cfg).async_session()
+
+        # Seed a second role while the oracle is still alive, to open and edit.
+        await auth.create_role("test-role", "")
+
+        app = provablyfine.tui.app.TuiApp(auth, cfg=cfg, config_path=config_file)
+        async with app.run_test(size=(200, 50)) as pilot:
+            await pilot.pause()  # app startup
+            await _goto(pilot, "roles")  # role list: root=row0, test-role=row1
+            await pilot.pause()  # screen transition
+            await pilot.pause()  # RoleListScreen.on_mount
+
+            await pilot.press("down")  # move to test-role
+            await pilot.press("enter")  # open RoleViewScreen (no API call in on_mount)
+            await pilot.pause()  # screen transition
+            await pilot.pause()  # RoleViewScreen.on_mount
+
+            # Edit the name field, but don't save yet.
+            await pilot.click("#name")
+            await pilot.press(*"-edited")
+            edited_name = app.screen.query_one("#name", textual.widgets.Input).value
+
+            # Kill the oracle only now -- after reaching and editing this
+            # screen -- so the trigger is ctrl+s (action_save), not
+            # navigation, proving this screen (not just the section root)
+            # survives a relogin triggered from an in-place action.
+            oracle_path = provablyfine.ssh.oracle.session.current_socket_path()
+            assert os.path.exists(oracle_path)
+            os.remove(oracle_path)
+
+            await pilot.press("ctrl+s")  # action_save -> update_role -> KeyExpired
+
+            assert not app._exit, "TUI crashed/exited instead of transparently reconnecting"
+            assert app.is_running
+
+            await _wait(pilot, app)  # let ReloginScreen's thread worker finish
+
+            assert not app._exit, "TUI crashed/exited instead of transparently reconnecting"
+            assert app.is_running
+            assert not [n for n in app._notifications if n.severity == "error"]
+
+            # The stack must be preserved, not unwound to the section root:
+            # RoleViewScreen still on top, RoleListScreen still underneath it.
+            assert isinstance(app.screen, provablyfine.tui.role_view.RoleViewScreen)
+            assert isinstance(app.screen_stack[1], provablyfine.tui.role_list.RoleListScreen)
+
+            # And the in-progress edit survived -- proving this is a
+            # behavioral improvement over the old force=True/pop-to-root
+            # path, which discarded it unconditionally.
+            assert app.screen.query_one("#name", textual.widgets.Input).value == edited_name
+
+            # The save itself must have actually completed after the
+            # transparent relogin+retry, not just left the field unchanged.
+            assert app.screen._saved_name == edited_name
+
+
+@pytest.mark.anyio
+@pytest.mark.real_session_oracle
+async def test_tui_relogin_failure_exits_app(api):
+    """A relogin that does not succeed -- cancelled by the user (escape,
+    `ReloginScreen.action_quit`) or failing outright (any exception from
+    `ReloginScreen._login`, e.g. the account key it re-signs with is itself
+    gone) -- is fatal: the whole app exits, the same way a failed/cancelled
+    *initial* login already does. There is no partial-recovery path where
+    the TUI notifies and carries on with a session it couldn't fix; the
+    proxy's one recovery mechanism is relogin succeeding, and if it doesn't,
+    there's nothing left for the TUI to usefully do.
+
+    Deleting the account key (rather than pressing escape) makes this
+    deterministic: it avoids racing a keypress against a real, fast network
+    login that might complete before the key is pressed, while still
+    exercising the same failure path (`ReloginScreen._login`'s catch-all ->
+    `_finish(False, ...)` -> `on_result` -> `app._ReloginFailed` ->
+    `TuiApp._handle_exception` -> `self.exit()`).
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        scripts = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        env = {**os.environ, "PATH": f"{scripts}:{os.environ['PATH']}"}
+        directory_url = f"http://127.0.0.1:{api.port}/pf/t/root/directory"
+        config_file = os.path.join(tmpdir, "config.json")
+
+        account_key = os.path.join(tmpdir, "account")
+        _run(["ssh-keygen", "-t", "ed25519", "-f", account_key, "-N", ""], env)
+        _run(["pfa", "-c", config_file, "initialize", directory_url, f"--key={account_key}"], env)
+
+        cfg = provablyfine.client.Config.load(config_file)
+        cfg.session_key_fingerprint = provablyfine.tui.relogin.http_sig_login(cfg, provablyfine.client.Client(cfg))
+        auth = provablyfine.client.Factory(cfg).async_session()
+
+        await auth.create_tag("env", "prod")
+
+        app = provablyfine.tui.app.TuiApp(auth, cfg=cfg, config_path=config_file)
+        async with app.run_test(size=(200, 50)) as pilot:
+            await pilot.pause()  # app startup
+            assert isinstance(app.screen, provablyfine.tui.identity_list.IdentityListScreen)
+
+            # Break both the session (forcing a relogin) and the account key
+            # (forcing that relogin attempt to fail rather than succeed).
+            oracle_path = provablyfine.ssh.oracle.session.current_socket_path()
+            assert os.path.exists(oracle_path)
+            os.remove(oracle_path)
+            os.remove(account_key)
+
+            await _goto(pilot, "tags")  # TagListScreen.on_mount -> list_tags() -> KeyExpired
+
+            await _wait(pilot, app)  # let ReloginScreen's failed login worker finish
+
+            # The app must exit cleanly -- not hang, not crash into Textual's
+            # fatal-error handler, and not silently keep running with a
+            # session it never managed to fix.
+            assert app._exit
 
 
 @pytest.mark.anyio

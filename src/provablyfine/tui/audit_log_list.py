@@ -12,9 +12,8 @@ from . import base
 class AuditLogListScreen(base.Screen):
     BINDINGS: typing.ClassVar = [("escape", "app.pop_screen", "Back")]
 
-    def __init__(self, auth: pfc.AsyncSessionClient) -> None:
+    def __init__(self) -> None:
         super().__init__()
-        self._auth = auth
         self._entries: list[pfc.schemas.AuditLogEntry] = []
 
     def compose(self) -> textual.app.ComposeResult:
@@ -25,13 +24,13 @@ class AuditLogListScreen(base.Screen):
     async def on_mount(self) -> None:
         table = self.query_one(textual.widgets.DataTable[str])
         table.add_columns("Time", "Level", "Type", "By")
-        response = await self._auth.list_audit_log()
+        response = await self.app.auth.list_audit_log()
         self._entries = response.entries
         self._populate_table(table)
 
     @textual.work
     async def on_screen_resume(self) -> None:
-        response = await self._auth.list_audit_log()
+        response = await self.app.auth.list_audit_log()
         self._entries = response.entries
         self._populate_table(self.query_one(textual.widgets.DataTable[str]))
 

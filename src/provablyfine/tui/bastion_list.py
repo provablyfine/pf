@@ -56,9 +56,8 @@ class BastionListScreen(base.Screen):
     class _StrDataTable(textual.widgets.DataTable[str]):
         pass
 
-    def __init__(self, auth: pfc.AsyncSessionClient) -> None:
+    def __init__(self) -> None:
         super().__init__()
-        self._auth = auth
         self._bastions: list[pfc.schemas.Bastion] = []
 
     def compose(self) -> textual.app.ComposeResult:
@@ -69,12 +68,12 @@ class BastionListScreen(base.Screen):
     async def on_mount(self) -> None:
         table = self.query_one(self._StrDataTable)
         table.add_columns("URL", "SSH Proxy Jump", "Tags")
-        self._bastions = (await self._auth.list_bastions()).bastions
+        self._bastions = (await self.app.auth.list_bastions()).bastions
         self._populate_table(table)
 
     @textual.work
     async def on_screen_resume(self) -> None:
-        self._bastions = (await self._auth.list_bastions()).bastions
+        self._bastions = (await self.app.auth.list_bastions()).bastions
         self._populate_table(self.query_one(self._StrDataTable))
 
     def _populate_table(self, table: "BastionListScreen._StrDataTable") -> None:
@@ -96,14 +95,14 @@ class BastionListScreen(base.Screen):
             return
         table = self.query_one(self._StrDataTable)
         bastion = self._bastions[table.cursor_row]
-        self.app.push_screen(bastion_view.BastionViewScreen(self._auth, bastion))
+        self.app.push_screen(bastion_view.BastionViewScreen(bastion))
 
     @textual.work
     async def action_add_bastion(self) -> None:
         result = await self.app.push_screen_wait(_BastionCreateScreen())
         if result is None:
             return
-        bastion = await self._auth.create_bastion(
+        bastion = await self.app.auth.create_bastion(
             result["url"],
             result["ssh_proxy_jump"],
             [],
@@ -113,7 +112,7 @@ class BastionListScreen(base.Screen):
         table = self.query_one(self._StrDataTable)
         self._populate_table(table)
         table.move_cursor(row=len(self._bastions) - 1)
-        self.app.push_screen(bastion_view.BastionViewScreen(self._auth, bastion))
+        self.app.push_screen(bastion_view.BastionViewScreen(bastion))
 
     @textual.work
     async def action_delete_bastion(self) -> None:
@@ -122,7 +121,7 @@ class BastionListScreen(base.Screen):
         table = self.query_one(self._StrDataTable)
         index = table.cursor_row
         bastion = self._bastions[index]
-        await self._auth.delete_bastion(bastion.id)
+        await self.app.auth.delete_bastion(bastion.id)
         self._bastions.pop(index)
         self._populate_table(table)
         self.notify(f"Bastion '{bastion.url}' deleted")

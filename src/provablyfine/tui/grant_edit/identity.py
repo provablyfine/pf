@@ -24,8 +24,8 @@ class IdentityGrantEditWidget(base.TripletFilterGrantEditWidget[pfc.schemas.Iden
     }
     """
 
-    def __init__(self, auth: pfc.AsyncSessionClient, grant: pfc.schemas.IdentityGrant):
-        super().__init__(auth=auth, grant=grant)
+    def __init__(self, grant: pfc.schemas.IdentityGrant):
+        super().__init__(grant=grant)
 
     def compose(self) -> textual.app.ComposeResult:
         p = self._grant.permission
@@ -88,13 +88,13 @@ class IdentityGrantEditWidget(base.TripletFilterGrantEditWidget[pfc.schemas.Iden
     async def on_mount(self) -> None:
         await self._mount_filter_candidates()
 
-        tags_raw = (await self._auth.list_tags()).tags
+        tags_raw = (await self.app.auth.list_tags()).tags
         tags = [textual_autocomplete.DropdownItem(main=f"{t.name}={t.value}") for t in tags_raw]
         self.query_one("#permission-create-allowed-tags", checkbox_input.CheckboxInput).set_candidates(tags)
         self.query_one("#permission-add-tag", checkbox_input.CheckboxInput).set_candidates(tags)
         self.query_one("#permission-del-tag", checkbox_input.CheckboxInput).set_candidates(tags)
 
-        boundaries_raw = (await self._auth.list_boundaries()).boundaries
+        boundaries_raw = (await self.app.auth.list_boundaries()).boundaries
         boundaries = [textual_autocomplete.DropdownItem(main=b.name) for b in boundaries_raw]
         self.query_one("#permission-create-req-boundaries", checkbox_input.CheckboxInput).set_candidates(boundaries)
 

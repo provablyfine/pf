@@ -55,9 +55,8 @@ class IdentityViewScreen(base.Screen):
     }
     """
 
-    def __init__(self, auth: pfc.AsyncSessionClient, identity: pfc.schemas.Identity) -> None:
+    def __init__(self, identity: pfc.schemas.Identity) -> None:
         super().__init__()
-        self._auth = auth
         self._identity = identity
         self._tags: list[pfc.schemas.TagNameValue] = list(identity.tags)
         self._saved_name: str = identity.name
@@ -115,7 +114,7 @@ class IdentityViewScreen(base.Screen):
 
     @textual.work
     async def action_add_tag(self) -> None:
-        all_tags = (await self._auth.list_tags()).tags
+        all_tags = (await self.app.auth.list_tags()).tags
         existing = {(t.name, t.value) for t in self._tags}
         available = [
             pfc.schemas.TagNameValue(name=t.name, value=t.value) for t in all_tags if (t.name, t.value) not in existing
@@ -154,10 +153,10 @@ class IdentityViewScreen(base.Screen):
         if unix_username != self._saved_unix_username:
             update_params["unix_username"] = unix_username
         if self._tags != self._saved_tags:
-            all_tags = {(t.name, t.value): t.id for t in (await self._auth.list_tags()).tags}
+            all_tags = {(t.name, t.value): t.id for t in (await self.app.auth.list_tags()).tags}
             tag_id_list = [all_tags[(t.name, t.value)] for t in self._tags if (t.name, t.value) in all_tags]
             tags = [pfc.schemas.IdentityTagOp.model_validate({"type": "set", "tag_id_list": tag_id_list})]
             update_params["tags"] = tags
 
-        await self._auth.update_identity(self._identity.id, **update_params)
+        await self.app.auth.update_identity(self._identity.id, **update_params)
         self.app.pop_screen()

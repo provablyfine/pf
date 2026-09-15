@@ -1,10 +1,14 @@
 import argparse
+import asyncio
+import logging
 import os
 import os.path
 import sys
+import typing
 
 import provablyfine_client as pfc
 import textual
+import textual.screen
 import textual.worker
 
 from .. import client, log
@@ -16,12 +20,84 @@ _DEFAULT_CONFIG = os.path.join(os.path.expanduser("~"), ".config", "provablyfine
 class SetupApp(base.App):
     TITLE = "Provably Fine - Setup"
 
-    def __init__(self, initial_screen: base.Screen) -> None:
+    def __init__(self, initial_screen: textual.screen.Screen[typing.Any]) -> None:
         super().__init__()
         self._initial_screen = initial_screen
 
     def on_mount(self) -> None:
         self.push_screen(self._initial_screen)
+
+
+class _ReloginFailed(Exception):
+    pass
+
+
+class _ReloggingAuth(pfc.AsyncSessionClient):
+    """Wraps `self.app.auth` so session expiration triggers an interactive
+    relogin"""
+
+    def __init__(
+        self,
+        app: "TuiApp",
+        inner: pfc.AsyncSessionClient,
+        cfg: client.Config | None,
+        config_path: str | None,
+    ) -> None:
+        super().__init__(inner._inner)  # pyright: ignore[reportPrivateUsage]
+        self._app = app
+        self._cfg = cfg
+        self._config_path = config_path
+        self._generation = 0
+        self._relogin_task: asyncio.Task[None] | None = None
+
+    async def _run(self, fn: typing.Callable[[], typing.Any]) -> typing.Any:
+        try:
+            return await super()._run(fn)
+        except (pfc.exceptions.SessionExpired, pfc.exceptions.KeyExpired):
+            if self._cfg is None or self._config_path is None:
+                raise
+            observed = self._generation
+            await self._relogin(observed)  # raises _ReloginFailed if this didn't work
+            try:
+                return await super()._run(fn)  # retry exactly once
+            except (pfc.exceptions.SessionExpired, pfc.exceptions.KeyExpired) as e:
+                # The relogin reported success, but the fresh session is
+                # already broken too -- equally fatal, not a third path
+                # where the TUI keeps running regardless.
+                raise _ReloginFailed(f"Session still broken after relogin: {e}") from e
+
+    async def _relogin(self, observed_generation: int) -> None:
+        if self._generation != observed_generation:
+            return  # someone else already relogged in since we last checked
+        task = self._relogin_task
+        if task is None or task.done():
+            task = asyncio.create_task(self._do_relogin())
+            self._relogin_task = task
+        await task
+
+    async def _do_relogin(self) -> None:
+        assert self._cfg is not None
+        assert self._config_path is not None
+        loop = asyncio.get_running_loop()
+        future: asyncio.Future[None] = loop.create_future()
+
+        def _on_result(success: bool, message: str | None) -> None:
+            if future.done():
+                return
+            if not success:
+                future.set_exception(_ReloginFailed(message or "Relogin cancelled"))
+                return
+            assert self._cfg is not None
+            self._inner = client.Factory(self._cfg).session()  # pyright: ignore[reportPrivateUsage]
+            self._generation += 1
+            future.set_result(None)
+
+        self._app.push_screen(
+            relogin.ReloginScreen(
+                self._cfg, client.Client(self._cfg), self._config_path, standalone=False, on_result=_on_result
+            )
+        )
+        await future
 
 
 class TuiApp(base.App):
@@ -37,11 +113,11 @@ class TuiApp(base.App):
         super().__init__()
         self._cfg = cfg
         self._config_path = config_path
-        self.auth = auth
+        self.auth = _ReloggingAuth(self, auth, cfg, config_path)
 
     def on_mount(self) -> None:
         self.current_section_id = sections.SECTIONS[0].id
-        self.push_screen(sections.SECTIONS[0].factory(self.auth))
+        self.push_screen(sections.SECTIONS[0].factory())
         self._load_whoami()
         self.tenant_name = self._cfg.tenant_name if self._cfg is not None else ""
 
@@ -54,7 +130,7 @@ class TuiApp(base.App):
         # (default screen + the section root), not 1.
         while len(self.screen_stack) > 2:
             self.pop_screen()
-        self.switch_screen(sections.factory_for(section_id)(self.auth))  # pyright: ignore[reportUnknownMemberType]
+        self.switch_screen(sections.factory_for(section_id)())  # pyright: ignore[reportUnknownMemberType]
 
     @textual.on(nav_pane.NavPane.Activated)
     def _on_nav_activated(self, event: nav_pane.NavPane.Activated) -> None:
@@ -72,28 +148,24 @@ class TuiApp(base.App):
             self.role = ""
 
     def _handle_exception(self, error: Exception) -> None:
-        if self._cfg is not None and self._config_path is not None:
-            expired = isinstance(error, pfc.exceptions.SessionExpired) or (
-                isinstance(error, textual.worker.WorkerFailed)
-                and isinstance(error.error, pfc.exceptions.SessionExpired)
-            )
-            if expired:
-                self.push_screen(
-                    relogin.ReloginScreen(self._cfg, client.Client(self._cfg), self._config_path),
-                    callback=self._on_relogin,
-                )
-                return
+        unwrapped = error.error if isinstance(error, textual.worker.WorkerFailed) else error
+        if isinstance(unwrapped, _ReloginFailed):
+            self.exit(message=str(unwrapped) if str(unwrapped) else None)
+            return
         super()._handle_exception(error)
-
-    def _on_relogin(self, _: None) -> None:
-        assert self._cfg is not None
-        self.auth = client.Factory(self._cfg).async_session()
 
 
 def _has_session(cfg: client.Config) -> bool:
     return (
         cfg.session_key_fingerprint is not None or cfg.session_key_file is not None or cfg.session_key_pem is not None
     )
+
+
+def _exit_now(code: int) -> typing.NoReturn:
+    sys.stdout.flush()
+    sys.stderr.flush()
+    logging.shutdown()
+    os._exit(code)
 
 
 def pfat() -> None:
@@ -105,30 +177,33 @@ def pfat() -> None:
 
     log.setup(args.debug, log.filename("pfat", args))
 
+    loop = asyncio.new_event_loop()
+
     if not os.path.exists(args.config):
         app = SetupApp(setup.SetupChoiceScreen(args.config))
-        app.run()
+        app.run(loop=loop)
         if not os.path.exists(args.config):
-            return
+            _exit_now(0)
 
     try:
         cfg = client.Config.load(args.config)
     except pfc.exceptions.UI as e:
         sys.stderr.write(f"{e}\n")
-        sys.exit(2)
+        _exit_now(2)
 
     cfg.role_id = None  # cleared at startup; set in-memory during login, never persisted
     cfg.session_key_fingerprint = None
     cfg.session_key_file = None
     cfg.session_key_pem = None
-    SetupApp(relogin.ReloginScreen(cfg, client.Client(cfg), args.config)).run()
+    SetupApp(relogin.ReloginScreen(cfg, client.Client(cfg), args.config)).run(loop=loop)
     if not _has_session(cfg):
-        return
+        _exit_now(0)
 
     try:
         auth = client.Factory(cfg).async_session()
     except pfc.exceptions.UI as e:
         sys.stderr.write(f"{e}\n")
-        sys.exit(2)
+        _exit_now(2)
 
-    TuiApp(auth, cfg=cfg, config_path=args.config).run()
+    TuiApp(auth, cfg=cfg, config_path=args.config).run(loop=loop)
+    _exit_now(0)

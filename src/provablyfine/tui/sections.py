@@ -1,8 +1,6 @@
 import collections.abc
 import dataclasses
 
-import provablyfine_client as pfc
-
 from . import (
     audit_log_list,
     auth_list,
@@ -16,7 +14,7 @@ from . import (
     tenant_list,
 )
 
-_FACTORIES: dict[str, collections.abc.Callable[[pfc.AsyncSessionClient], base.Screen]] = {
+_FACTORIES: dict[str, collections.abc.Callable[[], base.Screen]] = {
     "tenants": tenant_list.TenantListScreen,
     "identities": identity_list.IdentityListScreen,
     "bastions": bastion_list.BastionListScreen,
@@ -32,7 +30,7 @@ _FACTORIES: dict[str, collections.abc.Callable[[pfc.AsyncSessionClient], base.Sc
 class Section:
     id: str
     label: str
-    factory: collections.abc.Callable[[pfc.AsyncSessionClient], base.Screen]
+    factory: collections.abc.Callable[[], base.Screen]
 
 
 SECTIONS: list[Section] = [
@@ -40,5 +38,5 @@ SECTIONS: list[Section] = [
 ]
 
 
-def factory_for(section_id: str) -> collections.abc.Callable[[pfc.AsyncSessionClient], base.Screen]:
+def factory_for(section_id: str) -> collections.abc.Callable[[], base.Screen]:
     return _FACTORIES[section_id]

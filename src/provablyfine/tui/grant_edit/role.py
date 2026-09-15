@@ -20,9 +20,8 @@ class RoleGrantEditWidget(base.GrantEditWidget):
     }
     """
 
-    def __init__(self, auth: pfc.AsyncSessionClient, grant: pfc.schemas.RoleGrant):
+    def __init__(self, grant: pfc.schemas.RoleGrant):
         super().__init__()
-        self._auth = auth
         self._grant = grant
 
     def compose(self) -> textual.app.ComposeResult:
@@ -53,7 +52,7 @@ class RoleGrantEditWidget(base.GrantEditWidget):
             )
 
     async def on_mount(self) -> None:
-        roles = (await self._auth.list_roles()).roles
+        roles = (await self.app.auth.list_roles()).roles
         candidates = [textual_autocomplete.DropdownItem(main=r.name) for r in roles]
         self.query_one("#filter-name", checkbox_input.CheckboxInput).set_candidates(candidates)
 

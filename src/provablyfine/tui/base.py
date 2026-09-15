@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import typing
+
 import provablyfine_client as pfc
 import textual.app
 import textual.await_complete
 import textual.containers
 import textual.css.query
 import textual.events
+import textual.message_pump
 import textual.reactive
 import textual.screen
 import textual.widget
@@ -16,15 +19,12 @@ from . import nav_pane
 
 
 class App(textual.app.App[None]):
+    auth: pfc.AsyncSessionClient
     whoami: textual.reactive.Reactive[str] = textual.reactive.Reactive("")
     identity_name: textual.reactive.Reactive[str] = textual.reactive.Reactive("")
     role: textual.reactive.Reactive[str] = textual.reactive.Reactive("")
     tenant_name: textual.reactive.Reactive[str] = textual.reactive.Reactive("")
     current_section_id: str | None = None
-    """Set by `TuiApp.switch_to_section`; read by `Screen._extend_compose`
-    to decide whether (and with what active item) to inject a `NavColumn`.
-    Stays `None` for `SetupApp` screens (login/setup, before any section
-    exists), so they never get one."""
 
     def pop_screen(self) -> textual.await_complete.AwaitComplete:
         # `screen_stack[0]` is Textual's own implicit default screen,
@@ -56,6 +56,26 @@ class App(textual.app.App[None]):
             self.notify(str(ui_error), severity="error")
             return
         super()._handle_exception(error)
+
+
+class HasApp(typing.Protocol):
+    @property
+    def app(self) -> App: ...
+
+
+# By default, Textual assumes that when an exception reaches _handle_exception,
+# the widget must stop and this is signaled by having _pre_process return False
+# We return True unconditionally to allow Textual to continue its normal execution
+# until despite delivering an exception to _handle_exception()
+_original_pre_process = textual.message_pump.MessagePump._pre_process  # pyright: ignore[reportPrivateUsage]
+
+
+async def _resilient_pre_process(self: textual.message_pump.MessagePump) -> bool:
+    await _original_pre_process(self)
+    return True
+
+
+textual.message_pump.MessagePump._pre_process = _resilient_pre_process  # pyright: ignore[reportPrivateUsage]
 
 
 class Widget(textual.widget.Widget):

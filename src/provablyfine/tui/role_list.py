@@ -41,9 +41,8 @@ class RoleListScreen(base.Screen):
         ("escape", "app.pop_screen", "Back"),
     ]
 
-    def __init__(self, auth: pfc.AsyncSessionClient) -> None:
+    def __init__(self) -> None:
         super().__init__()
-        self._auth = auth
         self._roles: list[pfc.schemas.Role] = []
 
     def compose(self) -> textual.app.ComposeResult:
@@ -54,12 +53,12 @@ class RoleListScreen(base.Screen):
     async def on_mount(self) -> None:
         table = self.query_one(textual.widgets.DataTable[str])
         table.add_columns("Name", "Description", "Members", "Grants")
-        self._roles = (await self._auth.list_roles()).roles
+        self._roles = (await self.app.auth.list_roles()).roles
         self._populate_table(table)
 
     @textual.work
     async def on_screen_resume(self) -> None:
-        self._roles = (await self._auth.list_roles()).roles
+        self._roles = (await self.app.auth.list_roles()).roles
         self._populate_table(self.query_one(textual.widgets.DataTable[str]))
 
     def _populate_table(self, table: textual.widgets.DataTable[str]) -> None:
@@ -82,19 +81,19 @@ class RoleListScreen(base.Screen):
             return
         table = self.query_one(textual.widgets.DataTable[str])
         role = self._roles[table.cursor_row]
-        self.app.push_screen(role_view.RoleViewScreen(self._auth, role))
+        self.app.push_screen(role_view.RoleViewScreen(role))
 
     @textual.work
     async def action_add_role(self) -> None:
         name = await self.app.push_screen_wait(_RoleNameScreen())
         if name is None:
             return
-        role = await self._auth.create_role(name, "")
+        role = await self.app.auth.create_role(name, "")
         self._roles.append(role)
         table = self.query_one(textual.widgets.DataTable[str])
         self._populate_table(table)
         table.move_cursor(row=len(self._roles) - 1)
-        self.app.push_screen(role_view.RoleViewScreen(self._auth, role))
+        self.app.push_screen(role_view.RoleViewScreen(role))
 
     @textual.work
     async def action_delete_role(self) -> None:
@@ -103,7 +102,7 @@ class RoleListScreen(base.Screen):
         table = self.query_one(textual.widgets.DataTable[str])
         index = table.cursor_row
         role = self._roles[index]
-        await self._auth.delete_role(role.id)
+        await self.app.auth.delete_role(role.id)
         self._roles.pop(index)
         self._populate_table(table)
         self.notify(f"Role '{role.name}' deleted")

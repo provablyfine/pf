@@ -20,9 +20,8 @@ class TagGrantEditWidget(base.GrantEditWidget):
     }
     """
 
-    def __init__(self, auth: pfc.AsyncSessionClient, grant: pfc.schemas.TagGrant):
+    def __init__(self, grant: pfc.schemas.TagGrant):
         super().__init__()
-        self._auth = auth
         self._grant = grant
 
     def compose(self) -> textual.app.ComposeResult:
@@ -49,7 +48,7 @@ class TagGrantEditWidget(base.GrantEditWidget):
             )
 
     async def on_mount(self) -> None:
-        tags_raw = (await self._auth.list_tags()).tags
+        tags_raw = (await self.app.auth.list_tags()).tags
         candidates = [textual_autocomplete.DropdownItem(main=f"{t.name}={t.value}") for t in tags_raw]
         self.query_one("#filter-name-value", checkbox_input.CheckboxInput).set_candidates(candidates)
 
