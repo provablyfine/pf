@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import typing
+
 import provablyfine_client as pfc
 import textual.app
 import textual.await_complete
@@ -13,11 +15,12 @@ import textual.widget
 import textual.widgets
 import textual.worker
 
+from .. import client
 from . import nav_pane
 
 
 class App(textual.app.App[None]):
-    # Set by `TuiApp.__init__` and reassigned by `TuiApp._on_relogin` after
+    # Set by `TuiApp.__init__` and reassigned by `TuiApp.rebind_auth` after
     # an interactive relogin. Every section/view screen and grant-edit widget
     # reads this live via `self.app.auth`. Left unset on `SetupApp`, whose
     # screens (login/setup, before a `TuiApp` exists) never touch it.
@@ -31,6 +34,12 @@ class App(textual.app.App[None]):
     # Stays `None` for `SetupApp` screens (login/setup, before any section
     # exists), so they never get one.
     current_section_id: str | None = None
+
+    def rebind_auth(self, cfg: client.Config) -> None:
+        """Reassign `self.auth` after a successful mid-session relogin
+        (`relogin.ReloginScreen._finish`, non-standalone case only). No-op by
+        default: `SetupApp` screens run before any `TuiApp.auth` exists and
+        never call this. Overridden by `TuiApp`."""
 
     def pop_screen(self) -> textual.await_complete.AwaitComplete:
         # `screen_stack[0]` is Textual's own implicit default screen,
@@ -62,6 +71,20 @@ class App(textual.app.App[None]):
             self.notify(str(ui_error), severity="error")
             return
         super()._handle_exception(error)
+
+
+class HasApp(typing.Protocol):
+    """Structural type for code that only needs `.app` typed as our own
+    `App` (not Textual's generic, partially-unknown `App[Unknown]`), and
+    doesn't care whether the concrete screen/widget is a `Screen` or a
+    `ModalScreen` -- the two don't share a `base.*` common ancestor (each
+    independently subclasses a different Textual base), so this is the
+    common type for call sites that accept either, e.g. `relogin.py`'s login
+    functions, which are called from both `ReloginScreen` (a `ModalScreen`)
+    and, in principle, any `Screen`."""
+
+    @property
+    def app(self) -> App: ...
 
 
 # Patched directly on Textual's own `MessagePump` -- once, here -- rather

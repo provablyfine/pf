@@ -57,6 +57,11 @@ class TagListScreen(base.Screen):
         self._tags = (await self.app.auth.list_tags()).tags
         self._populate_table(table)
 
+    @textual.work
+    async def on_screen_resume(self) -> None:
+        self._tags = (await self.app.auth.list_tags()).tags
+        self._populate_table(self.query_one(textual.widgets.DataTable[str]))
+
     def _populate_table(self, table: textual.widgets.DataTable[str]) -> None:
         table.clear(columns=False)
         for tag in self._tags:

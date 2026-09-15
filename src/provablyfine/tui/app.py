@@ -1,6 +1,5 @@
 import argparse
 import asyncio
-import functools
 import logging
 import os
 import os.path
@@ -9,6 +8,7 @@ import typing
 
 import provablyfine_client as pfc
 import textual
+import textual.screen
 import textual.worker
 
 from .. import client, log
@@ -20,7 +20,7 @@ _DEFAULT_CONFIG = os.path.join(os.path.expanduser("~"), ".config", "provablyfine
 class SetupApp(base.App):
     TITLE = "Provably Fine - Setup"
 
-    def __init__(self, initial_screen: base.Screen) -> None:
+    def __init__(self, initial_screen: textual.screen.Screen[typing.Any]) -> None:
         super().__init__()
         self._initial_screen = initial_screen
 
@@ -49,8 +49,8 @@ class TuiApp(base.App):
         self._load_whoami()
         self.tenant_name = self._cfg.tenant_name if self._cfg is not None else ""
 
-    def switch_to_section(self, section_id: str, force: bool) -> None:
-        if self.current_section_id == section_id and not force:
+    def switch_to_section(self, section_id: str) -> None:
+        if self.current_section_id == section_id:
             return
         self.current_section_id = section_id
         # `screen_stack[0]` is Textual's own implicit default screen, beneath
@@ -62,7 +62,7 @@ class TuiApp(base.App):
 
     @textual.on(nav_pane.NavPane.Activated)
     def _on_nav_activated(self, event: nav_pane.NavPane.Activated) -> None:
-        self.switch_to_section(event.section_id, force=False)
+        self.switch_to_section(event.section_id)
 
     @textual.work
     async def _load_whoami(self) -> None:
@@ -92,21 +92,17 @@ class TuiApp(base.App):
                 if any(isinstance(s, relogin.ReloginScreen) for s in self.screen_stack):
                     return
                 self.push_screen(
-                    relogin.ReloginScreen(self._cfg, client.Client(self._cfg), self._config_path, standalone=False),
-                    callback=functools.partial(self._on_relogin, self.current_section_id),
+                    relogin.ReloginScreen(self._cfg, client.Client(self._cfg), self._config_path, standalone=False)
                 )
                 return
         super()._handle_exception(error)
 
-    def _on_relogin(self, section_id: str | None, _: None) -> None:
-        assert self._cfg is not None
+    def rebind_auth(self, cfg: client.Config) -> None:
         # Every section/view screen and grant-edit widget reads `self.app.auth`
         # live rather than caching it, so a plain reassignment here is enough
-        # to reach all of them -- including the ones popped back onto (and
-        # thus momentarily resumed) below.
-        self.auth = client.Factory(self._cfg).async_session()
-        if section_id is not None:
-            self.switch_to_section(section_id, force=True)
+        # to reach all of them -- including whichever screen is about to be
+        # resumed underneath the dismissed ReloginScreen.
+        self.auth = client.Factory(cfg).async_session()
 
 
 def _has_session(cfg: client.Config) -> bool:

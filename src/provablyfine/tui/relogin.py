@@ -58,7 +58,7 @@ def _tui_select_role(
     session_key: jwk.Private,
     api: client.Client,
     cfg: client.Config,
-    screen: base.Screen | None = None,
+    screen: base.HasApp | None = None,
 ) -> None:
     factory = client.Factory(api.config)
     session_client = factory.session_with_private_key(session_key)
@@ -99,7 +99,7 @@ def _tui_select_role(
     session_client.update_session(role_id)
 
 
-def http_sig_login(cfg: client.Config, api: client.Client, screen: base.Screen | None = None) -> str:
+def http_sig_login(cfg: client.Config, api: client.Client, screen: base.HasApp | None = None) -> str:
     session_key, fp = browser_login.generate_session_key()
     account = cfg.account_key_fingerprint or cfg.account_key_file
     http_client = api.login_auth(account=account, session=fp)
@@ -114,7 +114,7 @@ def http_sig_login(cfg: client.Config, api: client.Client, screen: base.Screen |
     return fp
 
 
-def oidc_login(api: client.Client, auth_name: str, cfg: client.Config, screen: base.Screen | None = None) -> str:
+def oidc_login(api: client.Client, auth_name: str, cfg: client.Config, screen: base.HasApp | None = None) -> str:
     session_key, fp = browser_login.generate_session_key()
     auth_public = client.Factory(api.config).public().get_public_auth(auth_name, "cli")
     if not isinstance(auth_public.config, pfc.schemas.OidcConfig):
@@ -142,7 +142,7 @@ def oidc_device_code_login(
     api: client.Client,
     auth_name: str,
     cfg: client.Config,
-    screen: base.Screen | None = None,
+    screen: base.HasApp | None = None,
     on_code: typing.Callable[[str, str], None] | None = None,
 ) -> str:
     session_key, fp = browser_login.generate_session_key()
@@ -173,7 +173,7 @@ def login(
     auth_name: str,
     auth_type: str,
     cfg: client.Config,
-    screen: base.Screen | None = None,
+    screen: base.HasApp | None = None,
 ) -> str:
     match auth_type:
         case "oidc":
@@ -184,11 +184,11 @@ def login(
             raise pfc.exceptions.UI(f"Unsupported browser auth type: {auth_type}")
 
 
-class ReloginScreen(base.Screen):
+class ReloginScreen(base.ModalScreen[None]):
     BINDINGS: typing.ClassVar = [("escape", "quit", "Cancel")]
     DEFAULT_CSS = """
-    ReloginScreen #status {
-        margin: 1 2;
+    ReloginScreen > VerticalGroup {
+        width: 60;
     }
     """
 
@@ -211,12 +211,13 @@ class ReloginScreen(base.Screen):
         if self._standalone:
             self.app.exit()
         else:
+            self.app.rebind_auth(self._cfg)
             self.dismiss()
 
     def compose(self) -> textual.app.ComposeResult:
-        auth_name = self._cfg.auth_name or "default"
-        yield textual.widgets.Label(f"Reconnecting via {auth_name}…", id="status")
-        yield textual.widgets.Footer(compact=True, show_command_palette=False)
+        with textual.containers.VerticalGroup() as container:
+            container.border_title = f"Reconnecting via {self._cfg.auth_name or 'default'}"
+            yield textual.widgets.Label("Connecting…", id="status")
 
     def action_quit(self) -> None:
         self._finish()

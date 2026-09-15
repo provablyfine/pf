@@ -60,6 +60,11 @@ class TenantListScreen(base.Screen):
         self._tenants = (await self.app.auth.list_tenants()).tenants
         self._populate_table(table)
 
+    @textual.work
+    async def on_screen_resume(self) -> None:
+        self._tenants = (await self.app.auth.list_tenants()).tenants
+        self._populate_table(self.query_one(self._StrDataTable))
+
     def _populate_table(self, table: "TenantListScreen._StrDataTable") -> None:
         table.clear(columns=False)
         for tenant in self._tenants:

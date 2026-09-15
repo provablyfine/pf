@@ -20,6 +20,7 @@ import provablyfine.tui.identity_list
 import provablyfine.tui.nav_pane
 import provablyfine.tui.relogin
 import provablyfine.tui.role_list
+import provablyfine.tui.role_view
 import provablyfine.tui.setup
 import provablyfine.tui.tag_list
 
@@ -90,8 +91,9 @@ async def test_tui_session_expiry_relogin_recovers(api):
             assert app.is_running
             assert not [n for n in app._notifications if n.severity == "error"]
 
-            # The roles section must actually be usable: not a screen left
-            # dead in the stack under a ReloginScreen that never gets popped.
+            # The same RoleListScreen instance must be resumed (not dead in
+            # the stack under a ReloginScreen that never gets popped), and
+            # its `on_screen_resume` must have actually reloaded it.
             assert isinstance(app.screen, provablyfine.tui.role_list.RoleListScreen)
             table = app.screen.query_one(textual.widgets.DataTable)
             assert table.row_count >= 1  # root role, loaded after relogin
@@ -130,6 +132,11 @@ async def test_tui_key_expired_relogin_recovers(api):
         cfg.session_key_fingerprint = provablyfine.tui.relogin.http_sig_login(cfg, provablyfine.client.Client(cfg))
         auth = provablyfine.client.Factory(cfg).async_session()
 
+        # Seed a tag while the oracle is still alive -- there's no default
+        # tag the way there's a default root role, and this is what proves
+        # TagListScreen.on_screen_resume actually reloaded after relogin.
+        await auth.create_tag("env", "prod")
+
         app = provablyfine.tui.app.TuiApp(auth, cfg=cfg, config_path=config_file)
         async with app.run_test(size=(200, 50)) as pilot:
             await pilot.pause()  # app startup, while the oracle is still alive
@@ -155,9 +162,89 @@ async def test_tui_key_expired_relogin_recovers(api):
             assert app.is_running
             assert not [n for n in app._notifications if n.severity == "error"]
 
-            # The tags section must actually be usable, not a dead screen
-            # left behind under a ReloginScreen that never gets popped.
+            # The same TagListScreen instance must be resumed (not a dead
+            # screen left behind under a ReloginScreen that never gets
+            # popped), and its `on_screen_resume` must have reloaded it.
             assert isinstance(app.screen, provablyfine.tui.tag_list.TagListScreen)
+            table = app.screen.query_one(textual.widgets.DataTable)
+            assert table.row_count >= 1  # the seeded tag, loaded after relogin
+
+
+@pytest.mark.anyio
+@pytest.mark.real_session_oracle
+async def test_tui_relogin_preserves_deeper_screen(api):
+    """A relogin triggered while sitting on a screen deeper than the section
+    root (e.g. mid-edit on a RoleViewScreen) must resume that exact screen --
+    with whatever the user had already typed still intact -- rather than
+    bouncing back to the section root and discarding it, which is what the
+    pre-refactor force=True/pop-to-root behavior always did.
+
+    `ReloginScreen` becoming a `ModalScreen` (rather than a full `base.Screen`
+    push) is what makes this possible: dismissing it only pops itself, never
+    touching whatever screens are underneath.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        scripts = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        env = {**os.environ, "PATH": f"{scripts}:{os.environ['PATH']}"}
+        directory_url = f"http://127.0.0.1:{api.port}/pf/t/root/directory"
+        config_file = os.path.join(tmpdir, "config.json")
+
+        account_key = os.path.join(tmpdir, "account")
+        _run(["ssh-keygen", "-t", "ed25519", "-f", account_key, "-N", ""], env)
+        _run(["pfa", "-c", config_file, "initialize", directory_url, f"--key={account_key}"], env)
+
+        cfg = provablyfine.client.Config.load(config_file)
+        cfg.session_key_fingerprint = provablyfine.tui.relogin.http_sig_login(cfg, provablyfine.client.Client(cfg))
+        auth = provablyfine.client.Factory(cfg).async_session()
+
+        # Seed a second role while the oracle is still alive, to open and edit.
+        await auth.create_role("test-role", "")
+
+        app = provablyfine.tui.app.TuiApp(auth, cfg=cfg, config_path=config_file)
+        async with app.run_test(size=(200, 50)) as pilot:
+            await pilot.pause()  # app startup
+            await _goto(pilot, "roles")  # role list: root=row0, test-role=row1
+            await pilot.pause()  # screen transition
+            await pilot.pause()  # RoleListScreen.on_mount
+
+            await pilot.press("down")  # move to test-role
+            await pilot.press("enter")  # open RoleViewScreen (no API call in on_mount)
+            await pilot.pause()  # screen transition
+            await pilot.pause()  # RoleViewScreen.on_mount
+
+            # Edit the name field, but don't save yet.
+            await pilot.click("#name")
+            await pilot.press(*"-edited")
+            edited_name = app.screen.query_one("#name", textual.widgets.Input).value
+
+            # Kill the oracle only now -- after reaching and editing this
+            # screen -- so the trigger is ctrl+s (action_save), not
+            # navigation, proving this screen (not just the section root)
+            # survives a relogin triggered from an in-place action.
+            oracle_path = provablyfine.ssh.oracle.session.current_socket_path()
+            assert os.path.exists(oracle_path)
+            os.remove(oracle_path)
+
+            await pilot.press("ctrl+s")  # action_save -> update_role -> KeyExpired
+
+            assert not app._exit, "TUI crashed/exited instead of transparently reconnecting"
+            assert app.is_running
+
+            await _wait(pilot, app)  # let ReloginScreen's thread worker finish
+
+            assert not app._exit, "TUI crashed/exited instead of transparently reconnecting"
+            assert app.is_running
+            assert not [n for n in app._notifications if n.severity == "error"]
+
+            # The stack must be preserved, not unwound to the section root:
+            # RoleViewScreen still on top, RoleListScreen still underneath it.
+            assert isinstance(app.screen, provablyfine.tui.role_view.RoleViewScreen)
+            assert isinstance(app.screen_stack[1], provablyfine.tui.role_list.RoleListScreen)
+
+            # And the in-progress edit survived -- proving this is a
+            # behavioral improvement over the old force=True/pop-to-root
+            # path, which discarded it unconditionally.
+            assert app.screen.query_one("#name", textual.widgets.Input).value == edited_name
 
 
 @pytest.mark.anyio
