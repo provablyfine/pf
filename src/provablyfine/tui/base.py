@@ -19,11 +19,13 @@ from . import nav_pane
 
 
 class App(textual.app.App[None]):
-    # Set by `TuiApp.__init__` and reassigned directly by
-    # `relogin.ReloginScreen._finish` (non-standalone case) after an
-    # interactive relogin. Every section/view screen and grant-edit widget
-    # reads this live via `self.app.auth`. Left unset on `SetupApp`, whose
-    # screens (login/setup, before a `TuiApp` exists) never touch it.
+    # Set exactly once, by `TuiApp.__init__`, to an `app._ReloggingAuth`
+    # wrapping the real client -- never reassigned afterwards. A mid-session
+    # relogin instead mutates that wrapper's private inner client in place,
+    # so every section/view screen and grant-edit widget, all of which read
+    # this live via `self.app.auth`, pick up the refreshed session
+    # transparently. Left unset on `SetupApp`, whose screens (login/setup,
+    # before a `TuiApp` exists) never touch it.
     auth: pfc.AsyncSessionClient
     whoami: textual.reactive.Reactive[str] = textual.reactive.Reactive("")
     identity_name: textual.reactive.Reactive[str] = textual.reactive.Reactive("")
@@ -90,7 +92,7 @@ class HasApp(typing.Protocol):
 # By default, Textual assumes that when an exception reaches _handle_exception,
 # the widget must stop and this is signaled by having _pre_process return False
 # We return True unconditionally to allow Textual to continue its normal execution
-# until despite deliverying an exception to _handle_exception()
+# until despite delivering an exception to _handle_exception()
 _original_pre_process = textual.message_pump.MessagePump._pre_process  # pyright: ignore[reportPrivateUsage]
 
 

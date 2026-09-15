@@ -56,14 +56,14 @@ async def test_tui_session_expiry_relogin_recovers(api):
     """#84: when the session key expires mid-use, the automatic relogin must
     let the user keep working, not strand them.
 
-    Empirically, today it does neither: the screen whose `on_mount` hit the
-    401 (`RoleListScreen`) has its message pump die without ever entering its
-    processing loop (`message_pump._pre_process` returns `False` after
-    `_handle_exception`), so it becomes deaf to all further input while
-    still sitting on the screen stack; and a *successful* relogin calls
-    `self.app.exit()` (`relogin.ReloginScreen._login`, correct for the
-    startup `SetupApp` flow but wrong for this mid-session push), quitting
-    the whole TUI instead of resuming it.
+    `self.app.auth` is an `app._ReloggingAuth` wrapping the real client:
+    `RoleListScreen.on_mount`'s `list_roles()` call hits the 401 inside
+    `_ReloggingAuth._run`, which pushes `ReloginScreen`, awaits its result,
+    and transparently retries the same call -- `RoleListScreen.on_mount`
+    itself never sees the exception. (Its `on_screen_resume` may also fire a
+    redundant reload via `ScreenResume`, since the failing call happened
+    inside `on_mount`; both are idempotent, so which one populated the table
+    below can't be distinguished, and isn't asserted.)
     """
     with tempfile.TemporaryDirectory() as tmpdir:
         auth = _setup(api, tmpdir)
@@ -91,9 +91,9 @@ async def test_tui_session_expiry_relogin_recovers(api):
             assert app.is_running
             assert not [n for n in app._notifications if n.severity == "error"]
 
-            # The same RoleListScreen instance must be resumed (not dead in
-            # the stack under a ReloginScreen that never gets popped), and
-            # its `on_screen_resume` must have actually reloaded it.
+            # The same RoleListScreen instance must still be resumed (never
+            # replaced -- the retry happened underneath it), and its data
+            # must have loaded.
             assert isinstance(app.screen, provablyfine.tui.role_list.RoleListScreen)
             table = app.screen.query_one(textual.widgets.DataTable)
             assert table.row_count >= 1  # root role, loaded after relogin
@@ -109,9 +109,10 @@ async def test_tui_key_expired_relogin_recovers(api):
     (`ssh.oracle.session.spawn_oracle(..., ttl=...)`) elapsed while the
     session itself was otherwise still fine. `KeyExpired` is deliberately
     not a `pfc.exceptions.UI` subclass (its docstring: the CLI's `do_main`
-    rewrites it into login guidance), so `TuiApp._handle_exception`'s
-    `SessionExpired`-only check let it fall through into Textual's fatal
-    crash handler instead of the same relogin flow.
+    rewrites it into login guidance); `app._ReloggingAuth._run` catches it
+    alongside `SessionExpired` and, if the retry after relogin somehow fails
+    again with `KeyExpired`, converts it to a `UI` so it still can't crash
+    the app via Textual's fatal handler.
 
     Only reachable with an *oracle*-backed session (a fingerprint, not an
     on-disk key file), since only `AgentSigner.sign()` can raise it -- hence
@@ -162,9 +163,9 @@ async def test_tui_key_expired_relogin_recovers(api):
             assert app.is_running
             assert not [n for n in app._notifications if n.severity == "error"]
 
-            # The same TagListScreen instance must be resumed (not a dead
-            # screen left behind under a ReloginScreen that never gets
-            # popped), and its `on_screen_resume` must have reloaded it.
+            # The same TagListScreen instance must still be resumed (never
+            # replaced -- the retry happened underneath it), and its data
+            # must have loaded.
             assert isinstance(app.screen, provablyfine.tui.tag_list.TagListScreen)
             table = app.screen.query_one(textual.widgets.DataTable)
             assert table.row_count >= 1  # the seeded tag, loaded after relogin
@@ -179,9 +180,12 @@ async def test_tui_relogin_preserves_deeper_screen(api):
     bouncing back to the section root and discarding it, which is what the
     pre-refactor force=True/pop-to-root behavior always did.
 
-    `ReloginScreen` becoming a `ModalScreen` (rather than a full `base.Screen`
-    push) is what makes this possible: dismissing it only pops itself, never
-    touching whatever screens are underneath.
+    `ReloginScreen` being a `ModalScreen`, pushed by `app._ReloggingAuth`
+    directly around the failing call, is what makes this possible: nothing
+    about the screen stack changes at all, and `action_save`'s own
+    `update_role()` call -- the one that raised `KeyExpired` -- is the one
+    that gets transparently retried and completes, not just re-issued by a
+    side-effecting resume handler.
     """
     with tempfile.TemporaryDirectory() as tmpdir:
         scripts = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "scripts"))
@@ -245,6 +249,75 @@ async def test_tui_relogin_preserves_deeper_screen(api):
             # behavioral improvement over the old force=True/pop-to-root
             # path, which discarded it unconditionally.
             assert app.screen.query_one("#name", textual.widgets.Input).value == edited_name
+
+            # The save itself must have actually completed after the
+            # transparent relogin+retry, not just left the field unchanged.
+            assert app.screen._saved_name == edited_name
+
+
+@pytest.mark.anyio
+@pytest.mark.real_session_oracle
+async def test_tui_relogin_failure_notifies_cleanly(api):
+    """A relogin that does not succeed -- cancelled by the user (escape,
+    `ReloginScreen.action_quit`) or failing outright (any exception from
+    `ReloginScreen._login`, e.g. the account key it re-signs with is itself
+    gone) -- must not be silently treated as success. Both paths call
+    `ReloginScreen._finish(success=False)`, which `app._ReloggingAuth`'s
+    `_on_dismiss` must turn into a clean `UI` failure through the ordinary
+    notification path, not rebuild `_inner` from the same broken signer.
+
+    Deleting the account key (rather than pressing escape) makes this
+    deterministic: it avoids racing a keypress against a real, fast
+    network login that might complete before the key is pressed, while
+    still exercising the same `_finish(success=False)` -> `_on_dismiss`
+    path (via `ReloginScreen._login`'s catch-all -> `_notify_failed`).
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        scripts = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        env = {**os.environ, "PATH": f"{scripts}:{os.environ['PATH']}"}
+        directory_url = f"http://127.0.0.1:{api.port}/pf/t/root/directory"
+        config_file = os.path.join(tmpdir, "config.json")
+
+        account_key = os.path.join(tmpdir, "account")
+        _run(["ssh-keygen", "-t", "ed25519", "-f", account_key, "-N", ""], env)
+        _run(["pfa", "-c", config_file, "initialize", directory_url, f"--key={account_key}"], env)
+
+        cfg = provablyfine.client.Config.load(config_file)
+        cfg.session_key_fingerprint = provablyfine.tui.relogin.http_sig_login(cfg, provablyfine.client.Client(cfg))
+        auth = provablyfine.client.Factory(cfg).async_session()
+
+        await auth.create_tag("env", "prod")
+
+        app = provablyfine.tui.app.TuiApp(auth, cfg=cfg, config_path=config_file)
+        async with app.run_test(size=(200, 50)) as pilot:
+            await pilot.pause()  # app startup
+            assert isinstance(app.screen, provablyfine.tui.identity_list.IdentityListScreen)
+
+            # Break both the session (forcing a relogin) and the account key
+            # (forcing that relogin attempt to fail rather than succeed).
+            oracle_path = provablyfine.ssh.oracle.session.current_socket_path()
+            assert os.path.exists(oracle_path)
+            os.remove(oracle_path)
+            os.remove(account_key)
+
+            await _goto(pilot, "tags")  # TagListScreen.on_mount -> list_tags() -> KeyExpired
+
+            assert not app._exit, "TUI crashed/exited instead of failing cleanly"
+            assert app.is_running
+
+            await _wait(pilot, app)  # let ReloginScreen's failed login worker finish
+
+            assert not app._exit, "TUI crashed/exited on a failed relogin"
+            assert app.is_running
+
+            # The failure must surface as an ordinary notification, not a
+            # crash and not a silently-successful relogin.
+            errors = [n for n in app._notifications if n.severity == "error"]
+            assert errors, "a failed relogin must notify the user, not fail silently"
+
+            # ReloginScreen must have dismissed (not left stuck showing
+            # "Connecting…" forever).
+            assert not isinstance(app.screen, provablyfine.tui.relogin.ReloginScreen)
 
 
 @pytest.mark.anyio

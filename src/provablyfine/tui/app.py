@@ -9,7 +9,6 @@ import typing
 import provablyfine_client as pfc
 import textual
 import textual.screen
-import textual.worker
 
 from .. import client, log
 from . import base, nav_pane, relogin, sections, setup
@@ -28,6 +27,73 @@ class SetupApp(base.App):
         self.push_screen(self._initial_screen)
 
 
+class _ReloggingAuth(pfc.AsyncSessionClient):
+    """Wraps `self.app.auth` so a `SessionExpired`/`KeyExpired` failure from
+    any of `AsyncSessionClient`'s 33 methods -- every one of which already
+    funnels through `_run` -- triggers an interactive relogin and a single
+    transparent retry, without the failing screen ever seeing the exception.
+    Subclassing (rather than composing) means every method is inherited
+    as-is; only `_run` needs overriding."""
+
+    def __init__(
+        self,
+        app: "TuiApp",
+        inner: pfc.AsyncSessionClient,
+        cfg: client.Config | None,
+        config_path: str | None,
+    ) -> None:
+        super().__init__(inner._inner)  # pyright: ignore[reportPrivateUsage]
+        self._app = app
+        self._cfg = cfg
+        self._config_path = config_path
+        self._relogin_lock = asyncio.Lock()
+        self._generation = 0
+
+    async def _run(self, fn: typing.Callable[[], typing.Any]) -> typing.Any:
+        try:
+            return await super()._run(fn)
+        except (pfc.exceptions.SessionExpired, pfc.exceptions.KeyExpired):
+            if self._cfg is None or self._config_path is None:
+                raise
+            observed = self._generation
+            await self._relogin(observed)
+            try:
+                return await super()._run(fn)  # retry exactly once
+            except pfc.exceptions.KeyExpired as e:
+                # KeyExpired is not a UI subclass; base.App._handle_exception
+                # only recognizes UI, so an unconverted KeyExpired here would
+                # reach Textual's fatal handler -- the exact crash class #84
+                # fixed. SessionExpired needs no such treatment (already UI).
+                raise pfc.exceptions.UI(str(e)) from e
+
+    async def _relogin(self, observed_generation: int) -> None:
+        assert self._cfg is not None
+        assert self._config_path is not None
+        async with self._relogin_lock:
+            if self._generation != observed_generation:
+                return  # someone else already relogged in while we waited
+            loop = asyncio.get_running_loop()
+            future: asyncio.Future[None] = loop.create_future()
+
+            def _on_result(success: bool) -> None:
+                if not success:
+                    if not future.done():
+                        future.set_exception(pfc.exceptions.UI("Relogin failed or was cancelled"))
+                    return
+                assert self._cfg is not None
+                self._inner = client.Factory(self._cfg).session()  # pyright: ignore[reportPrivateUsage]
+                self._generation += 1
+                if not future.done():
+                    future.set_result(None)
+
+            self._app.push_screen(
+                relogin.ReloginScreen(
+                    self._cfg, client.Client(self._cfg), self._config_path, standalone=False, on_result=_on_result
+                )
+            )
+            await future
+
+
 class TuiApp(base.App):
     TITLE = "Provably Fine"
 
@@ -41,7 +107,7 @@ class TuiApp(base.App):
         super().__init__()
         self._cfg = cfg
         self._config_path = config_path
-        self.auth = auth
+        self.auth = _ReloggingAuth(self, auth, cfg, config_path)
 
     def on_mount(self) -> None:
         self.current_section_id = sections.SECTIONS[0].id
@@ -74,28 +140,6 @@ class TuiApp(base.App):
         else:
             self.whoami = identity.name
             self.role = ""
-
-    def _handle_exception(self, error: Exception) -> None:
-        if self._cfg is not None and self._config_path is not None:
-            # Unwrapped only for this classification check -- the fallback
-            # below still passes the original `error` (`WorkerFailed` and
-            # all) to `super()`, which does its own unwrapping and expects
-            # the wrapper for its crash report.
-            unwrapped = error.error if isinstance(error, textual.worker.WorkerFailed) else error
-            # `SessionExpired` (a `UI` subclass) is the server *rejecting*
-            # the session, discovered on a request's 401 response.
-            # `KeyExpired` is the client unable to reach the signing oracle
-            expired = isinstance(unwrapped, (pfc.exceptions.SessionExpired, pfc.exceptions.KeyExpired))
-            if expired:
-                # A single session expiry routinely surfaces as more than one
-                # failure at once. The first one is enough.
-                if any(isinstance(s, relogin.ReloginScreen) for s in self.screen_stack):
-                    return
-                self.push_screen(
-                    relogin.ReloginScreen(self._cfg, client.Client(self._cfg), self._config_path, standalone=False)
-                )
-                return
-        super()._handle_exception(error)
 
 
 def _has_session(cfg: client.Config) -> bool:
