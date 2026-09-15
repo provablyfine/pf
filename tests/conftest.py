@@ -1,4 +1,3 @@
-import copy
 import dataclasses
 import hashlib
 import json
@@ -473,7 +472,8 @@ def api(request, tmp_path):
 
     api_log_config.write_text(json.dumps(provablyfine.api.log_filter.log_config(str(api_pf_log))))
 
-    env = copy.copy(os.environ)
+    # See https://github.com/provablyfine/pf/issues/117
+    env = dict(os.environ)
     env["PF_API_CONFIG"] = str(api_config)
     api_log_file = open(api_log, "w+")
     # Handing uvicorn the already-bound socket is what makes this race-free:

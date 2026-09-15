@@ -1,4 +1,3 @@
-import copy
 import os
 import os.path
 import shutil
@@ -14,7 +13,8 @@ def run_cram(filename: str, env: dict[str, str]) -> None:
     """Run a cram `.t` script."""
     if sys.platform == "win32":
         pytest.skip("cram is posix only. Not supported on Windows; Windows coverage uses tests/cli.py")
-    environ = copy.deepcopy(os.environ)
+    # See https://github.com/provablyfine/pf/issues/117
+    environ = dict(os.environ)
     path = os.path.abspath(os.path.join(os.getcwd(), "scripts"))
     environ["PATH"] = f"{path}{os.pathsep}{environ['PATH']}"
     our_tmp = tempfile.mkdtemp(prefix="pf-cram-", dir="/tmp")
