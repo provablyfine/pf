@@ -29,32 +29,12 @@ class SetupApp(base.App):
 
 
 class _ReloginFailed(Exception):
-    """Raised by `_ReloggingAuth._relogin` when the interactive relogin it
-    triggered didn't produce a working session (cancelled, failed outright,
-    or the fresh session broke again immediately on retry). Deliberately not
-    a `pfc.exceptions.UI` -- `TuiApp._handle_exception` treats this as fatal
-    (exit the app) rather than notify-and-continue the way an ordinary `UI`
-    error does: there is no partial-recovery path where the TUI keeps
-    running with a session it couldn't fix.
-
-    Must be raised (not returned/swallowed) from inside the same call chain
-    that's awaiting it, rather than the app being told to exit directly from
-    a screen's dismiss callback: that call chain is nested arbitrarily deep
-    inside the app's own message-processing loop (e.g. a freshly-navigated
-    screen's own `on_mount`, itself inside `switch_screen`'s mount-await),
-    which is the *same* loop `App.exit()` needs to be free in order to act
-    on. Only once this propagates as an ordinary exception back up to that
-    loop's own top-level dispatch (where `_handle_exception` is actually
-    invoked) is it safe to call `exit()`."""
+    pass
 
 
 class _ReloggingAuth(pfc.AsyncSessionClient):
-    """Wraps `self.app.auth` so a `SessionExpired`/`KeyExpired` failure from
-    any of `AsyncSessionClient`'s 33 methods -- every one of which already
-    funnels through `_run` -- triggers an interactive relogin and a single
-    transparent retry, without the failing screen ever seeing the exception.
-    Subclassing (rather than composing) means every method is inherited
-    as-is; only `_run` needs overriding."""
+    """Wraps `self.app.auth` so session expiration triggers an interactive
+    relogin"""
 
     def __init__(
         self,
@@ -89,17 +69,6 @@ class _ReloggingAuth(pfc.AsyncSessionClient):
     async def _relogin(self, observed_generation: int) -> None:
         if self._generation != observed_generation:
             return  # someone else already relogged in since we last checked
-        # Single-flight: every concurrent caller that observed the same
-        # (still-current) generation awaits the *same* task rather than
-        # each pushing its own `ReloginScreen`. A generation bump only
-        # happens on success, so a bare generation check alone isn't enough
-        # to prevent duplicates -- after a failure, every waiter would still
-        # see the same (unchanged) generation and, without this, each push
-        # its own redundant screen. Sharing one task means they all instead
-        # share its one outcome, success or `_ReloginFailed`. Safe without
-        # an explicit lock: nothing here awaits between reading
-        # `self._relogin_task` and (re)assigning it, so two calls can't
-        # race to create two tasks.
         task = self._relogin_task
         if task is None or task.done():
             task = asyncio.create_task(self._do_relogin())
@@ -193,43 +162,6 @@ def _has_session(cfg: client.Config) -> bool:
 
 
 def _exit_now(code: int) -> typing.NoReturn:
-    """Terminate the process immediately, bypassing Python's normal
-    interpreter shutdown.
-
-    By the time this runs, a `.run()` call has already returned, so
-    Textual's own teardown is done: screen closed, terminal restored.
-    Nothing about the *app* is left half-finished. The problem is
-    elsewhere: every signed API call (`AsyncSessionClient._run`) and every
-    `ReloginScreen._login` attempt runs in a real OS thread via
-    `asyncio.to_thread`/`@textual.work(thread=True)`, and
-    `concurrent.futures.thread` registers an `atexit` hook that joins every
-    such thread -- across the whole process, not just this app's -- before
-    the interpreter is allowed to actually exit. Cancelling the asyncio
-    task wrapping one of those (which is all quitting normally does) does
-    not stop the underlying thread; a blocked `socket.recv()` keeps
-    blocking regardless.
-
-    Some of those threads can legitimately run for as long as a human
-    takes to respond: signing against a confirmation-required real
-    ssh-agent (see `client/http_client.py`'s `account_key_signer`) has no
-    timeout, by design. So no timeout on any individual operation can
-    guarantee quitting is instant -- only skipping the wait entirely can.
-    Any such background work is simply abandoned mid-operation, with no
-    chance to fail gracefully into its own exception handling; that's the
-    trade this makes.
-
-    This alone isn't enough, though: `App.run()` without an explicit `loop`
-    drives the app via `asyncio.run()`, whose *own* cleanup (`Runner.close()`)
-    calls `loop.shutdown_default_executor(THREAD_JOIN_TIMEOUT)` -- a 300
-    *second* wait for the same stuck thread -- before `.run()` can even
-    return to let this function run at all. `pfat()` sidesteps that by
-    passing its own `loop=` to every `.run()` call, which makes Textual take
-    the `loop.run_until_complete(...)` path instead of `asyncio.run(...)`;
-    `run_until_complete` returns as soon as the app itself finishes, with no
-    such wait. Verified empirically: a real `@textual.work(thread=True)`
-    worker stuck in a `recv()` with no timeout, `App.run(loop=...)` still
-    returns in ~0s once `self.exit()` is called.
-    """
     sys.stdout.flush()
     sys.stderr.flush()
     logging.shutdown()
@@ -245,9 +177,6 @@ def pfat() -> None:
 
     log.setup(args.debug, log.filename("pfat", args))
 
-    # Passed explicitly to every `.run()` below -- see `_exit_now`'s
-    # docstring for why: it's what lets a stuck background thread not
-    # block quitting.
     loop = asyncio.new_event_loop()
 
     if not os.path.exists(args.config):

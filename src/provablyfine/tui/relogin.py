@@ -201,31 +201,6 @@ class ReloginScreen(base.ModalScreen[None]):
         standalone: bool = True,
         on_result: typing.Callable[[bool, str | None], None] | None = None,
     ) -> None:
-        """`standalone`: this screen is the whole app (the `SetupApp` login
-        flow in `tui.app.pfat`), so finishing -- successfully or not -- must
-        exit the app and let `pfat()` resume past `.run()`. When `False`,
-        this screen was instead pushed onto an already-running `TuiApp` to
-        recover from a session that expired mid-use (`app._ReloggingAuth._relogin`),
-        and `on_result` (required in that case) reports the outcome instead.
-        A relogin that doesn't succeed is fatal either way -- there is no
-        partial-recovery path where the TUI carries on with a session it
-        couldn't fix -- but *how* that's surfaced differs: standalone has no
-        caller to report to, so it exits directly; non-standalone must
-        report failure through `on_result` and let `app._ReloggingAuth`
-        raise it as an ordinary exception instead, so it unwinds back to the
-        top of the app's own message-processing loop before anything calls
-        `App.exit()` -- see `app._ReloginFailed`'s docstring for why calling
-        `exit()` directly from here would not actually work in that case.
-
-        `on_result` is called synchronously from `_finish`, deliberately
-        *not* wired through `push_screen(..., callback=...)`. That callback
-        is delivered via `call_next` on whichever message pump was active
-        when this screen was pushed, which only runs once that pump goes
-        idle; when the trigger is a failing call from inside a screen's own
-        (non-worker) `on_mount` -- the common case, since every section-root
-        list screen loads its data there -- that pump is the one whose
-        `on_mount` is itself awaiting this screen's result, deadlocking
-        forever. Calling `on_result` directly sidesteps that entirely."""
         super().__init__()
         self._cfg = cfg
         self._api = api
@@ -235,14 +210,6 @@ class ReloginScreen(base.ModalScreen[None]):
         self._finished = False
 
     def _finish(self, success: bool, message: str | None = None) -> None:
-        # `_login` runs in a real thread and can still be mid-flight when
-        # the user cancels via `action_quit` (or, before that, a call
-        # already reached `_finish` some other way); its eventual
-        # `call_from_thread(self._finish, ...)` must then be a no-op rather
-        # than a second `dismiss()`/`exit()` -- `Screen.dismiss()` pops
-        # whatever screen is currently on top of the stack by position, not
-        # by checking identity, so a stale second call could pop an
-        # unrelated screen the user has since navigated to.
         if self._finished:
             return
         self._finished = True
@@ -269,11 +236,6 @@ class ReloginScreen(base.ModalScreen[None]):
         try:
             auth_public = await client.Factory(self._api.config).async_public().get_public_auth(auth_name, "cli")
         except Exception as e:
-            # Unguarded, this would leave `_login` never started -- so
-            # `_finish` never called, and (in the non-standalone case)
-            # `app._ReloggingAuth._relogin`'s future awaited forever, even
-            # though this failure is no less final than one from `_login`
-            # itself.
             self._finish(False, str(e))
             return
         auth_type = auth_public.config.type

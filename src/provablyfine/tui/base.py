@@ -19,22 +19,11 @@ from . import nav_pane
 
 
 class App(textual.app.App[None]):
-    # Set exactly once, by `TuiApp.__init__`, to an `app._ReloggingAuth`
-    # wrapping the real client -- never reassigned afterwards. A mid-session
-    # relogin instead mutates that wrapper's private inner client in place,
-    # so every section/view screen and grant-edit widget, all of which read
-    # this live via `self.app.auth`, pick up the refreshed session
-    # transparently. Left unset on `SetupApp`, whose screens (login/setup,
-    # before a `TuiApp` exists) never touch it.
     auth: pfc.AsyncSessionClient
     whoami: textual.reactive.Reactive[str] = textual.reactive.Reactive("")
     identity_name: textual.reactive.Reactive[str] = textual.reactive.Reactive("")
     role: textual.reactive.Reactive[str] = textual.reactive.Reactive("")
     tenant_name: textual.reactive.Reactive[str] = textual.reactive.Reactive("")
-    # Set by `TuiApp.switch_to_section`; read by `Screen._extend_compose`
-    # to decide whether (and with what active item) to inject a `NavColumn`.
-    # Stays `None` for `SetupApp` screens (login/setup, before any section
-    # exists), so they never get one.
     current_section_id: str | None = None
 
     def pop_screen(self) -> textual.await_complete.AwaitComplete:
@@ -70,25 +59,10 @@ class App(textual.app.App[None]):
 
 
 class HasApp(typing.Protocol):
-    """Structural type for code that only needs `.app` typed as our own
-    `App` (not Textual's generic, partially-unknown `App[Unknown]`), and
-    doesn't care whether the concrete screen/widget is a `Screen` or a
-    `ModalScreen` -- the two don't share a `base.*` common ancestor (each
-    independently subclasses a different Textual base), so this is the
-    common type for call sites that accept either, e.g. `relogin.py`'s login
-    functions, which are called from both `ReloginScreen` (a `ModalScreen`)
-    and, in principle, any `Screen`."""
-
     @property
     def app(self) -> App: ...
 
 
-# Patched directly on Textual's own `MessagePump` -- once, here -- rather
-# than overridden on each of `Widget`/`Screen`/`ModalScreen` below, so every
-# screen and widget in the app is covered without any of them needing to opt
-# in (including e.g. `grant_edit.base.GrantEditWidget`, which doesn't extend
-# any of the three).
-#
 # By default, Textual assumes that when an exception reaches _handle_exception,
 # the widget must stop and this is signaled by having _pre_process return False
 # We return True unconditionally to allow Textual to continue its normal execution
