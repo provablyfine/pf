@@ -6,6 +6,7 @@ import textual.await_complete
 import textual.containers
 import textual.css.query
 import textual.events
+import textual.message_pump
 import textual.reactive
 import textual.screen
 import textual.widget
@@ -63,32 +64,31 @@ class App(textual.app.App[None]):
         super()._handle_exception(error)
 
 
-# `_pre_process` (below, overridden identically on `Widget`, `Screen` and
-# `ModalScreen`): `textual.message_pump.MessagePump._pre_process` catches any
-# exception raised while dispatching `Compose`/`Mount` (i.e. from `on_mount`),
-# reports it via `app._handle_exception`, and returns `False` -- which makes
-# `_process_messages` return before ever starting the message loop (`_running`
-# stays `False`), so the widget/screen never processes another message or
-# keypress again while still sitting mounted in the tree. That's what made an
-# `on_mount` API call (e.g. `list_roles()`) that 401s on an expired session
-# turn the whole TUI unresponsive (#84): the underlying screen wasn't merely
-# missing data, its message pump was dead. `app._handle_exception` already
-# exits the whole app for anything it doesn't specifically recognize (see
-# `textual.app.App._handle_exception`: "Always results in the app exiting"),
-# so forcing the loop to start regardless is safe here: a genuinely fatal
-# error still takes the app down, it just no longer also leaves a zombie
-# behind on the way for the errors (`pfc.exceptions.UI` and its
-# `SessionExpired` subclass) that this app recovers from instead.
+# Patched directly on Textual's own `MessagePump` -- once, here -- rather
+# than overridden on each of `Widget`/`Screen`/`ModalScreen` below, so every
+# screen and widget in the app is covered without any of them needing to opt
+# in (including e.g. `grant_edit.base.GrantEditWidget`, which doesn't extend
+# any of the three).
+#
+# By default, Textual assumes that when an exception reaches _handle_exception,
+# the widget must stop and this is signaled by having _pre_process return False
+# We return True unconditionally to allow Textual to continue its normal execution
+# until despite deliverying an exception to _handle_exception()
+_original_pre_process = textual.message_pump.MessagePump._pre_process  # pyright: ignore[reportPrivateUsage]
+
+
+async def _resilient_pre_process(self: textual.message_pump.MessagePump) -> bool:
+    await _original_pre_process(self)
+    return True
+
+
+textual.message_pump.MessagePump._pre_process = _resilient_pre_process  # pyright: ignore[reportPrivateUsage]
 
 
 class Widget(textual.widget.Widget):
     @property
     def app(self) -> App:
         return super().app  # type: ignore
-
-    async def _pre_process(self) -> bool:
-        await super()._pre_process()
-        return True
 
 
 class Screen(textual.screen.Screen[None]):
@@ -136,10 +136,6 @@ class Screen(textual.screen.Screen[None]):
     def app(self) -> App:
         return super().app  # type: ignore
 
-    async def _pre_process(self) -> bool:
-        await super()._pre_process()
-        return True
-
     def _extend_compose(self, widgets: list[textual.widget.Widget]) -> None:
         super()._extend_compose(widgets)
         section_id = self.app.current_section_id
@@ -178,10 +174,6 @@ class ModalScreen[T](textual.screen.ModalScreen[T]):
     @property
     def app(self) -> App:
         return super().app  # type: ignore
-
-    async def _pre_process(self) -> bool:
-        await super()._pre_process()
-        return True
 
 
 class Input(textual.widgets.Input):
