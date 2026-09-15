@@ -6,11 +6,10 @@ import typing
 import provablyfine_client as pfc
 import textual
 import textual.containers
-import textual.widget
 import textual.widgets
 import textual_autocomplete
 
-from .. import auto_complete, checkbox_input, checkbox_list, duration
+from .. import auto_complete, base, checkbox_input, checkbox_list, duration
 
 
 class _TripletFilterGrant(typing.Protocol):
@@ -197,7 +196,7 @@ def new_grant(grant_type: str) -> pfc.schemas.Grant:
             return pfc.schemas.InvalidGrant(type="invalid")
 
 
-class GrantEditWidget(textual.widget.Widget):
+class GrantEditWidget(base.Widget):
     def get_grant_data(self) -> pfc.schemas.Grant:
         """Raises pfc.exceptions.UI when the fields do not describe a grant.
         GrantEditScreen.action_confirm reports that and keeps the editor open.
@@ -218,9 +217,8 @@ class GrantEditWidget(textual.widget.Widget):
 
 
 class TripletFilterGrantEditWidget[T: _TripletFilterGrant](GrantEditWidget):
-    def __init__(self, auth: pfc.AsyncSessionClient, grant: T):
+    def __init__(self, grant: T):
         super().__init__()
-        self._auth = auth
         self._grant = grant
 
     def _compose_filter(self):
@@ -254,15 +252,15 @@ class TripletFilterGrantEditWidget[T: _TripletFilterGrant](GrantEditWidget):
             )
 
     async def _mount_filter_candidates(self) -> None:
-        identities = (await self._auth.list_identities()).identities
+        identities = (await self.app.auth.list_identities()).identities
         identity_candidates = [textual_autocomplete.DropdownItem(main=i.name) for i in identities]
         self.query_one("#filter-name", checkbox_input.CheckboxInput).set_candidates(identity_candidates)
 
-        tags_raw = (await self._auth.list_tags()).tags
+        tags_raw = (await self.app.auth.list_tags()).tags
         tags = [textual_autocomplete.DropdownItem(main=f"{t.name}={t.value}") for t in tags_raw]
         self.query_one("#filter-tagged-by", checkbox_input.CheckboxInput).set_candidates(tags)
 
-        boundaries_raw = (await self._auth.list_boundaries()).boundaries
+        boundaries_raw = (await self.app.auth.list_boundaries()).boundaries
         boundaries = [textual_autocomplete.DropdownItem(main=b.name) for b in boundaries_raw]
         self.query_one("#filter-bounded-by", checkbox_input.CheckboxInput).set_candidates(boundaries)
 

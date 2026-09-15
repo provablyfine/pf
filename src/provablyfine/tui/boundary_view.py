@@ -32,9 +32,8 @@ class BoundaryViewScreen(base.Screen):
     }
     """
 
-    def __init__(self, auth: pfc.AsyncSessionClient, boundary: pfc.schemas.Boundary) -> None:
+    def __init__(self, boundary: pfc.schemas.Boundary) -> None:
         super().__init__()
-        self._auth = auth
         self._boundary = boundary
         self._denied_list = list(boundary.denied_list)
         self._ceiling_list = list(boundary.ceiling_list) if boundary.ceiling_list is not None else None
@@ -106,7 +105,7 @@ class BoundaryViewScreen(base.Screen):
             new_grant = grant_edit.new_grant(grant_type)
             updated_grant = await self.app.push_screen_wait(
                 grant_edit.GrantEditScreen(
-                    self._auth, new_grant, base.format_breadcrumb(base.BREADCRUMB_BOUNDARIES, self._boundary.name)
+                    new_grant, base.format_breadcrumb(base.BREADCRUMB_BOUNDARIES, self._boundary.name)
                 )
             )
             if updated_grant is None:
@@ -151,7 +150,6 @@ class BoundaryViewScreen(base.Screen):
         index = table.cursor_row
         updated_grant = await self.app.push_screen_wait(
             grant_edit.GrantEditScreen(
-                self._auth,
                 grant_list_ref[index],
                 base.format_breadcrumb(base.BREADCRUMB_BOUNDARIES, self._boundary.name),
             )
@@ -179,7 +177,7 @@ class BoundaryViewScreen(base.Screen):
             self.notify("No changes")
             return
 
-        await self._auth.update_boundary(
+        await self.app.auth.update_boundary(
             self._boundary.id,
             name=name if name_changed else None,
             description=description if description_changed else None,

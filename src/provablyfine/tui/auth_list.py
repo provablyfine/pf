@@ -122,9 +122,8 @@ class AuthListScreen(base.Screen):
     class _StrDataTable(textual.widgets.DataTable[str]):
         pass
 
-    def __init__(self, auth: pfc.AsyncSessionClient) -> None:
+    def __init__(self) -> None:
         super().__init__()
-        self._auth = auth
         self._auths: list[pfc.schemas.Auth] = []
 
     def compose(self) -> textual.app.ComposeResult:
@@ -135,12 +134,12 @@ class AuthListScreen(base.Screen):
     async def on_mount(self) -> None:
         table = self.query_one(self._StrDataTable)
         table.add_columns("Name", "Client Type", "Type", "Enabled")
-        self._auths = (await self._auth.list_auths()).auths
+        self._auths = (await self.app.auth.list_auths()).auths
         self._populate_table(table)
 
     @textual.work
     async def on_screen_resume(self) -> None:
-        self._auths = (await self._auth.list_auths()).auths
+        self._auths = (await self.app.auth.list_auths()).auths
         self._populate_table(self.query_one(self._StrDataTable))
 
     def _populate_table(self, table: "AuthListScreen._StrDataTable") -> None:
@@ -158,7 +157,7 @@ class AuthListScreen(base.Screen):
             return
         table = self.query_one(self._StrDataTable)
         a = self._auths[table.cursor_row]
-        self.app.push_screen(auth_view.AuthViewScreen(self._auth, a))
+        self.app.push_screen(auth_view.AuthViewScreen(a))
 
     @textual.work
     async def action_add_auth(self) -> None:
@@ -170,16 +169,16 @@ class AuthListScreen(base.Screen):
             return
         match body:
             case _HttpSigParams():
-                a = await self._auth.create_auth_http_sig(body.name, body.client_type, "")
+                a = await self.app.auth.create_auth_http_sig(body.name, body.client_type, "")
             case _OidcParams():
-                a = await self._auth.create_auth_oidc(
+                a = await self.app.auth.create_auth_oidc(
                     body.name, body.client_type, "", body.issuer, body.client_id, body.client_secret
                 )
         self._auths.append(a)
         table = self.query_one(self._StrDataTable)
         self._populate_table(table)
         table.move_cursor(row=len(self._auths) - 1)
-        self.app.push_screen(auth_view.AuthViewScreen(self._auth, a))
+        self.app.push_screen(auth_view.AuthViewScreen(a))
 
     @textual.work
     async def action_delete_auth(self) -> None:
@@ -188,7 +187,7 @@ class AuthListScreen(base.Screen):
         table = self.query_one(self._StrDataTable)
         index = table.cursor_row
         a = self._auths[index]
-        await self._auth.delete_auth(a.id)
+        await self.app.auth.delete_auth(a.id)
         self._auths.pop(index)
         self._populate_table(table)
         self.notify(f"Auth '{a.name}' deleted")

@@ -128,9 +128,8 @@ class IdentityListScreen(base.Screen):
         ("escape", "app.pop_screen", "Back"),
     ]
 
-    def __init__(self, auth: pfc.AsyncSessionClient) -> None:
+    def __init__(self) -> None:
         super().__init__()
-        self._auth = auth
         self._identities: list[pfc.schemas.Identity] = []
 
     def compose(self) -> textual.app.ComposeResult:
@@ -141,12 +140,12 @@ class IdentityListScreen(base.Screen):
     async def on_mount(self) -> None:
         table = self.query_one(_IdentitiesTable)
         table.add_columns("Name", "Unix username", "Tags", "Boundaries")
-        self._identities = (await self._auth.list_identities()).identities
+        self._identities = (await self.app.auth.list_identities()).identities
         self._populate_table(table)
 
     @textual.work
     async def on_screen_resume(self) -> None:
-        self._identities = (await self._auth.list_identities()).identities
+        self._identities = (await self.app.auth.list_identities()).identities
         self._populate_table(self.query_one(_IdentitiesTable))
 
     def _populate_table(self, table: _IdentitiesTable) -> None:
@@ -171,21 +170,21 @@ class IdentityListScreen(base.Screen):
             return
         table = self.query_one(_IdentitiesTable)
         identity = self._identities[table.cursor_row]
-        self.app.push_screen(identity_view.IdentityViewScreen(self._auth, identity))
+        self.app.push_screen(identity_view.IdentityViewScreen(identity))
 
     @textual.work
     async def action_add_identity(self) -> None:
         result = await self.app.push_screen_wait(_IdentityCreateScreen())
         if result is None:
             return
-        identity = await self._auth.create_identity(
+        identity = await self.app.auth.create_identity(
             result["name"], [], [], [], [], unix_username=result["unix_username"]
         )
         self._identities.append(identity)
         table = self.query_one(_IdentitiesTable)
         self._populate_table(table)
         table.move_cursor(row=len(self._identities) - 1)
-        self.app.push_screen(identity_view.IdentityViewScreen(self._auth, identity))
+        self.app.push_screen(identity_view.IdentityViewScreen(identity))
 
     @textual.work
     async def action_delete_identity(self) -> None:
@@ -194,7 +193,7 @@ class IdentityListScreen(base.Screen):
         table = self.query_one(_IdentitiesTable)
         index = table.cursor_row
         identity = self._identities[index]
-        await self._auth.delete_identity(identity.id)
+        await self.app.auth.delete_identity(identity.id)
         self._identities.pop(index)
         self._populate_table(table)
         self.notify(f"Identity '{identity.name}' deleted")
@@ -208,7 +207,7 @@ class IdentityListScreen(base.Screen):
         method = await self.app.push_screen_wait(_InviteMethodScreen())
         if method is None:
             return
-        secret = await self._auth.invite_identity(identity.id, method)
+        secret = await self.app.auth.invite_identity(identity.id, method)
         if method == "manual" and secret is not None:
             await self.app.push_screen_wait(_InviteSecretScreen(secret))
         else:

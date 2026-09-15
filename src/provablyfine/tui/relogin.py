@@ -192,11 +192,26 @@ class ReloginScreen(base.Screen):
     }
     """
 
-    def __init__(self, cfg: client.Config, api: client.Client, config_path: str) -> None:
+    def __init__(self, cfg: client.Config, api: client.Client, config_path: str, *, standalone: bool = True) -> None:
+        """`standalone`: this screen is the whole app (the `SetupApp` login
+        flow in `tui.app.pfat`), so finishing -- successfully or not -- must
+        exit the app and let `pfat()` resume past `.run()`. When `False`,
+        this screen was instead pushed onto an already-running `TuiApp` to
+        recover from a session that expired mid-use (`TuiApp._handle_exception`),
+        and must dismiss back to it instead: calling `self.app.exit()` there
+        would quit the whole TUI out from under the user on a *successful*
+        relogin (#84)."""
         super().__init__()
         self._cfg = cfg
         self._api = api
         self._config_path = config_path
+        self._standalone = standalone
+
+    def _finish(self) -> None:
+        if self._standalone:
+            self.app.exit()
+        else:
+            self.dismiss()
 
     def compose(self) -> textual.app.ComposeResult:
         auth_name = self._cfg.auth_name or "default"
@@ -204,7 +219,7 @@ class ReloginScreen(base.Screen):
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     def action_quit(self) -> None:
-        self.app.exit()
+        self._finish()
 
     @textual.work
     async def on_mount(self) -> None:
@@ -243,6 +258,6 @@ class ReloginScreen(base.Screen):
             self._cfg.session_key_fingerprint = fp
             self._cfg.session_key_file = None
             self._cfg.session_key_pem = None
-            self.app.call_from_thread(self.app.exit)
+            self.app.call_from_thread(self._finish)
         except _LoginCancelled:
-            self.app.call_from_thread(self.app.exit)
+            self.app.call_from_thread(self._finish)

@@ -29,9 +29,8 @@ class RoleViewScreen(base.Screen):
     }
     """
 
-    def __init__(self, auth: pfc.AsyncSessionClient, role: pfc.schemas.Role) -> None:
+    def __init__(self, role: pfc.schemas.Role) -> None:
         super().__init__()
-        self._auth = auth
         self._role = role
         self._member_names: list[str] = [m.name for m in role.member_list]
         self._grant_list: list[pfc.schemas.Grant] = list(role.grant_list)
@@ -96,7 +95,7 @@ class RoleViewScreen(base.Screen):
         if focused is None:
             return
         if focused.id == "members":
-            identities = (await self._auth.list_identities()).identities
+            identities = (await self.app.auth.list_identities()).identities
             existing = set(self._member_names)
             names = [i.name for i in identities if i.name not in existing]
             name = await self.app.push_screen_wait(member_list.MemberAddScreen(names))
@@ -110,9 +109,7 @@ class RoleViewScreen(base.Screen):
                 return
             new_grant = grant_edit.new_grant(grant_type)
             updated_grant = await self.app.push_screen_wait(
-                grant_edit.GrantEditScreen(
-                    self._auth, new_grant, base.format_breadcrumb(base.BREADCRUMB_ROLES, self._role.name)
-                )
+                grant_edit.GrantEditScreen(new_grant, base.format_breadcrumb(base.BREADCRUMB_ROLES, self._role.name))
             )
             if updated_grant is None:
                 return
@@ -146,7 +143,7 @@ class RoleViewScreen(base.Screen):
         index = table.cursor_row
         updated_grant = await self.app.push_screen_wait(
             grant_edit.GrantEditScreen(
-                self._auth, self._grant_list[index], base.format_breadcrumb(base.BREADCRUMB_ROLES, self._role.name)
+                self._grant_list[index], base.format_breadcrumb(base.BREADCRUMB_ROLES, self._role.name)
             )
         )
         if updated_grant is None:
@@ -170,7 +167,7 @@ class RoleViewScreen(base.Screen):
             self.notify("No changes")
             return
 
-        await self._auth.update_role(
+        await self.app.auth.update_role(
             self._role.id,
             name=name if name_changed else None,
             description=description if description_changed else None,

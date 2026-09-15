@@ -5,14 +5,13 @@ import textual
 import textual.app
 import textual.containers
 import textual.reactive
-import textual.screen
 import textual.widgets
 
 from .. import base as tui_base
 from . import base, boundary, identity, role, ssh, tag, tenant
 
 
-class GrantEditScreen(textual.screen.ModalScreen[pfc.schemas.Grant | None]):
+class GrantEditScreen(tui_base.ModalScreen[pfc.schemas.Grant | None]):
     DEFAULT_CSS = """
     GrantEditScreen {
         align: center middle;
@@ -47,9 +46,8 @@ class GrantEditScreen(textual.screen.ModalScreen[pfc.schemas.Grant | None]):
     ]
     grant_type: textual.reactive.Reactive[str] = textual.reactive.Reactive("")
 
-    def __init__(self, auth: pfc.AsyncSessionClient, grant: pfc.schemas.Grant, parent_breadcrumb: str):
+    def __init__(self, grant: pfc.schemas.Grant, parent_breadcrumb: str):
         super().__init__(id="grant-edit")
-        self._auth = auth
         self._grant = grant
         self._parent_breadcrumb = parent_breadcrumb
         self.grant_type = grant.type
@@ -62,21 +60,17 @@ class GrantEditScreen(textual.screen.ModalScreen[pfc.schemas.Grant | None]):
         await fields.query("*").remove()
         match value:
             case "role":
-                widget = role.RoleGrantEditWidget(self._auth, typing.cast(pfc.schemas.RoleGrant, self._grant))
+                widget = role.RoleGrantEditWidget(typing.cast(pfc.schemas.RoleGrant, self._grant))
             case "identity":
-                widget = identity.IdentityGrantEditWidget(
-                    self._auth, typing.cast(pfc.schemas.IdentityGrant, self._grant)
-                )
+                widget = identity.IdentityGrantEditWidget(typing.cast(pfc.schemas.IdentityGrant, self._grant))
             case "tag":
-                widget = tag.TagGrantEditWidget(self._auth, typing.cast(pfc.schemas.TagGrant, self._grant))
+                widget = tag.TagGrantEditWidget(typing.cast(pfc.schemas.TagGrant, self._grant))
             case "boundary":
-                widget = boundary.BoundaryGrantEditWidget(
-                    self._auth, typing.cast(pfc.schemas.BoundaryGrant, self._grant)
-                )
+                widget = boundary.BoundaryGrantEditWidget(typing.cast(pfc.schemas.BoundaryGrant, self._grant))
             case "tenant":
-                widget = tenant.TenantGrantEditWidget(self._auth, typing.cast(pfc.schemas.TenantGrant, self._grant))
+                widget = tenant.TenantGrantEditWidget(typing.cast(pfc.schemas.TenantGrant, self._grant))
             case "ssh":
-                widget = ssh.SshGrantEditWidget(self._auth, typing.cast(pfc.schemas.SSHGrant, self._grant))
+                widget = ssh.SshGrantEditWidget(typing.cast(pfc.schemas.SSHGrant, self._grant))
             case _:
                 return
         await fields.mount(widget)

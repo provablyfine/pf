@@ -16,15 +16,20 @@ from . import nav_pane
 
 
 class App(textual.app.App[None]):
+    # Set by `TuiApp.__init__` and reassigned by `TuiApp._on_relogin` after
+    # an interactive relogin. Every section/view screen and grant-edit widget
+    # reads this live via `self.app.auth`. Left unset on `SetupApp`, whose
+    # screens (login/setup, before a `TuiApp` exists) never touch it.
+    auth: pfc.AsyncSessionClient
     whoami: textual.reactive.Reactive[str] = textual.reactive.Reactive("")
     identity_name: textual.reactive.Reactive[str] = textual.reactive.Reactive("")
     role: textual.reactive.Reactive[str] = textual.reactive.Reactive("")
     tenant_name: textual.reactive.Reactive[str] = textual.reactive.Reactive("")
+    # Set by `TuiApp.switch_to_section`; read by `Screen._extend_compose`
+    # to decide whether (and with what active item) to inject a `NavColumn`.
+    # Stays `None` for `SetupApp` screens (login/setup, before any section
+    # exists), so they never get one.
     current_section_id: str | None = None
-    """Set by `TuiApp.switch_to_section`; read by `Screen._extend_compose`
-    to decide whether (and with what active item) to inject a `NavColumn`.
-    Stays `None` for `SetupApp` screens (login/setup, before any section
-    exists), so they never get one."""
 
     def pop_screen(self) -> textual.await_complete.AwaitComplete:
         # `screen_stack[0]` is Textual's own implicit default screen,
@@ -58,10 +63,32 @@ class App(textual.app.App[None]):
         super()._handle_exception(error)
 
 
+# `_pre_process` (below, overridden identically on `Widget`, `Screen` and
+# `ModalScreen`): `textual.message_pump.MessagePump._pre_process` catches any
+# exception raised while dispatching `Compose`/`Mount` (i.e. from `on_mount`),
+# reports it via `app._handle_exception`, and returns `False` -- which makes
+# `_process_messages` return before ever starting the message loop (`_running`
+# stays `False`), so the widget/screen never processes another message or
+# keypress again while still sitting mounted in the tree. That's what made an
+# `on_mount` API call (e.g. `list_roles()`) that 401s on an expired session
+# turn the whole TUI unresponsive (#84): the underlying screen wasn't merely
+# missing data, its message pump was dead. `app._handle_exception` already
+# exits the whole app for anything it doesn't specifically recognize (see
+# `textual.app.App._handle_exception`: "Always results in the app exiting"),
+# so forcing the loop to start regardless is safe here: a genuinely fatal
+# error still takes the app down, it just no longer also leaves a zombie
+# behind on the way for the errors (`pfc.exceptions.UI` and its
+# `SessionExpired` subclass) that this app recovers from instead.
+
+
 class Widget(textual.widget.Widget):
     @property
     def app(self) -> App:
         return super().app  # type: ignore
+
+    async def _pre_process(self) -> bool:
+        await super()._pre_process()
+        return True
 
 
 class Screen(textual.screen.Screen[None]):
@@ -109,6 +136,10 @@ class Screen(textual.screen.Screen[None]):
     def app(self) -> App:
         return super().app  # type: ignore
 
+    async def _pre_process(self) -> bool:
+        await super()._pre_process()
+        return True
+
     def _extend_compose(self, widgets: list[textual.widget.Widget]) -> None:
         super()._extend_compose(widgets)
         section_id = self.app.current_section_id
@@ -147,6 +178,10 @@ class ModalScreen[T](textual.screen.ModalScreen[T]):
     @property
     def app(self) -> App:
         return super().app  # type: ignore
+
+    async def _pre_process(self) -> bool:
+        await super()._pre_process()
+        return True
 
 
 class Input(textual.widgets.Input):

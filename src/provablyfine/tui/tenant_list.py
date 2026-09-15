@@ -45,9 +45,8 @@ class TenantListScreen(base.Screen):
         ("escape", "app.pop_screen", "Back"),
     ]
 
-    def __init__(self, auth: pfc.AsyncSessionClient) -> None:
+    def __init__(self) -> None:
         super().__init__()
-        self._auth = auth
         self._tenants: list[pfc.schemas.Tenant] = []
 
     def compose(self) -> textual.app.ComposeResult:
@@ -58,7 +57,7 @@ class TenantListScreen(base.Screen):
     async def on_mount(self) -> None:
         table = self.query_one(self._StrDataTable)
         table.add_columns("Name", "Display Name", "Enabled")
-        self._tenants = (await self._auth.list_tenants()).tenants
+        self._tenants = (await self.app.auth.list_tenants()).tenants
         self._populate_table(table)
 
     def _populate_table(self, table: "TenantListScreen._StrDataTable") -> None:
@@ -76,7 +75,7 @@ class TenantListScreen(base.Screen):
         data = await self.app.push_screen_wait(_TenantCreateScreen())  # pyright: ignore[reportUnknownMemberType]
         if data is None:
             return
-        tenant = await self._auth.create_tenant(data["name"], data["display_name"])
+        tenant = await self.app.auth.create_tenant(data["name"], data["display_name"])
         self._tenants.append(tenant)
         table = self.query_one(self._StrDataTable)
         self._populate_table(table)
@@ -88,7 +87,7 @@ class TenantListScreen(base.Screen):
         table = self.query_one(self._StrDataTable)
         index = table.cursor_row
         tenant = self._tenants[index]
-        await self._auth.delete_tenant(tenant.id)
+        await self.app.auth.delete_tenant(tenant.id)
         self._tenants.pop(index)
         self._populate_table(table)
         self.notify(f"Tenant '{tenant.name}' deleted")

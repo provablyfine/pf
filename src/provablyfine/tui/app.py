@@ -1,4 +1,5 @@
 import argparse
+import functools
 import os
 import os.path
 import sys
@@ -41,12 +42,12 @@ class TuiApp(base.App):
 
     def on_mount(self) -> None:
         self.current_section_id = sections.SECTIONS[0].id
-        self.push_screen(sections.SECTIONS[0].factory(self.auth))
+        self.push_screen(sections.SECTIONS[0].factory())
         self._load_whoami()
         self.tenant_name = self._cfg.tenant_name if self._cfg is not None else ""
 
-    def switch_to_section(self, section_id: str) -> None:
-        if self.current_section_id == section_id:
+    def switch_to_section(self, section_id: str, force: bool) -> None:
+        if self.current_section_id == section_id and not force:
             return
         self.current_section_id = section_id
         # `screen_stack[0]` is Textual's own implicit default screen, beneath
@@ -54,11 +55,11 @@ class TuiApp(base.App):
         # (default screen + the section root), not 1.
         while len(self.screen_stack) > 2:
             self.pop_screen()
-        self.switch_screen(sections.factory_for(section_id)(self.auth))  # pyright: ignore[reportUnknownMemberType]
+        self.switch_screen(sections.factory_for(section_id)())  # pyright: ignore[reportUnknownMemberType]
 
     @textual.on(nav_pane.NavPane.Activated)
     def _on_nav_activated(self, event: nav_pane.NavPane.Activated) -> None:
-        self.switch_to_section(event.section_id)
+        self.switch_to_section(event.section_id, force=False)
 
     @textual.work
     async def _load_whoami(self) -> None:
@@ -73,21 +74,36 @@ class TuiApp(base.App):
 
     def _handle_exception(self, error: Exception) -> None:
         if self._cfg is not None and self._config_path is not None:
-            expired = isinstance(error, pfc.exceptions.SessionExpired) or (
-                isinstance(error, textual.worker.WorkerFailed)
-                and isinstance(error.error, pfc.exceptions.SessionExpired)
-            )
+            # Unwrapped only for this classification check -- the fallback
+            # below still passes the original `error` (`WorkerFailed` and
+            # all) to `super()`, which does its own unwrapping and expects
+            # the wrapper for its crash report.
+            unwrapped = error.error if isinstance(error, textual.worker.WorkerFailed) else error
+            # `SessionExpired` (a `UI` subclass) is the server *rejecting*
+            # the session, discovered on a request's 401 response.
+            # `KeyExpired` is the client unable to reach the signing oracle
+            expired = isinstance(unwrapped, (pfc.exceptions.SessionExpired, pfc.exceptions.KeyExpired))
             if expired:
+                # A single session expiry routinely surfaces as more than one
+                # failure at once. The first one is enough.
+                if any(isinstance(s, relogin.ReloginScreen) for s in self.screen_stack):
+                    return
                 self.push_screen(
-                    relogin.ReloginScreen(self._cfg, client.Client(self._cfg), self._config_path),
-                    callback=self._on_relogin,
+                    relogin.ReloginScreen(self._cfg, client.Client(self._cfg), self._config_path, standalone=False),
+                    callback=functools.partial(self._on_relogin, self.current_section_id),
                 )
                 return
         super()._handle_exception(error)
 
-    def _on_relogin(self, _: None) -> None:
+    def _on_relogin(self, section_id: str | None, _: None) -> None:
         assert self._cfg is not None
+        # Every section/view screen and grant-edit widget reads `self.app.auth`
+        # live rather than caching it, so a plain reassignment here is enough
+        # to reach all of them -- including the ones popped back onto (and
+        # thus momentarily resumed) below.
         self.auth = client.Factory(self._cfg).async_session()
+        if section_id is not None:
+            self.switch_to_section(section_id, force=True)
 
 
 def _has_session(cfg: client.Config) -> bool:

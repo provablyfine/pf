@@ -42,9 +42,8 @@ class TagListScreen(base.Screen):
         ("escape", "app.pop_screen", "Back"),
     ]
 
-    def __init__(self, auth: pfc.AsyncSessionClient) -> None:
+    def __init__(self) -> None:
         super().__init__()
-        self._auth = auth
         self._tags: list[pfc.schemas.Tag] = []
 
     def compose(self) -> textual.app.ComposeResult:
@@ -55,7 +54,7 @@ class TagListScreen(base.Screen):
     async def on_mount(self) -> None:
         table = self.query_one(textual.widgets.DataTable[str])
         table.add_columns("Name", "Value")
-        self._tags = (await self._auth.list_tags()).tags
+        self._tags = (await self.app.auth.list_tags()).tags
         self._populate_table(table)
 
     def _populate_table(self, table: textual.widgets.DataTable[str]) -> None:
@@ -69,7 +68,7 @@ class TagListScreen(base.Screen):
         data = await self.app.push_screen_wait(_TagCreateScreen())
         if data is None:
             return
-        tag = await self._auth.create_tag(data.name, data.value)
+        tag = await self.app.auth.create_tag(data.name, data.value)
         self._tags.append(tag)
         table = self.query_one(textual.widgets.DataTable[str])
         self._populate_table(table)
@@ -81,7 +80,7 @@ class TagListScreen(base.Screen):
         table = self.query_one(textual.widgets.DataTable[str])
         index = table.cursor_row
         tag = self._tags[index]
-        await self._auth.delete_tag(tag.id)
+        await self.app.auth.delete_tag(tag.id)
         self._tags.pop(index)
         self._populate_table(table)
         self.notify(f"Tag '{tag.name}={tag.value}' deleted")

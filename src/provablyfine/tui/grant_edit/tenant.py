@@ -20,9 +20,8 @@ class TenantGrantEditWidget(base.GrantEditWidget):
     }
     """
 
-    def __init__(self, auth: pfc.AsyncSessionClient, grant: pfc.schemas.TenantGrant):
+    def __init__(self, grant: pfc.schemas.TenantGrant):
         super().__init__()
-        self._auth = auth
         self._grant = grant
 
     def compose(self) -> textual.app.ComposeResult:
@@ -51,7 +50,7 @@ class TenantGrantEditWidget(base.GrantEditWidget):
             )
 
     async def on_mount(self) -> None:
-        tenants_raw = (await self._auth.list_tenants()).tenants
+        tenants_raw = (await self.app.auth.list_tenants()).tenants
         candidates = [textual_autocomplete.DropdownItem(main=str(t.id)) for t in tenants_raw]
         self.query_one("#filter-id", checkbox_input.CheckboxInput).set_candidates(candidates)
 
