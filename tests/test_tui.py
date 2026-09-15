@@ -257,20 +257,21 @@ async def test_tui_relogin_preserves_deeper_screen(api):
 
 @pytest.mark.anyio
 @pytest.mark.real_session_oracle
-async def test_tui_relogin_failure_notifies_cleanly(api):
+async def test_tui_relogin_failure_exits_app(api):
     """A relogin that does not succeed -- cancelled by the user (escape,
     `ReloginScreen.action_quit`) or failing outright (any exception from
     `ReloginScreen._login`, e.g. the account key it re-signs with is itself
-    gone) -- must not be silently treated as success. Both paths call
-    `ReloginScreen._finish(success=False)`, which `app._ReloggingAuth`'s
-    `_on_dismiss` must turn into a clean `UI` failure through the ordinary
-    notification path, not rebuild `_inner` from the same broken signer.
+    gone) -- is fatal: the whole app exits, the same way a failed/cancelled
+    *initial* login already does. There is no partial-recovery path where
+    the TUI notifies and carries on with a session it couldn't fix; the
+    proxy's one recovery mechanism is relogin succeeding, and if it doesn't,
+    there's nothing left for the TUI to usefully do.
 
     Deleting the account key (rather than pressing escape) makes this
-    deterministic: it avoids racing a keypress against a real, fast
-    network login that might complete before the key is pressed, while
-    still exercising the same `_finish(success=False)` -> `_on_dismiss`
-    path (via `ReloginScreen._login`'s catch-all -> `_notify_failed`).
+    deterministic: it avoids racing a keypress against a real, fast network
+    login that might complete before the key is pressed, while still
+    exercising the same failure path (`ReloginScreen._login`'s catch-all ->
+    `_finish_failed` -> `self.app.exit()`).
     """
     with tempfile.TemporaryDirectory() as tmpdir:
         scripts = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "scripts"))
@@ -302,22 +303,12 @@ async def test_tui_relogin_failure_notifies_cleanly(api):
 
             await _goto(pilot, "tags")  # TagListScreen.on_mount -> list_tags() -> KeyExpired
 
-            assert not app._exit, "TUI crashed/exited instead of failing cleanly"
-            assert app.is_running
-
             await _wait(pilot, app)  # let ReloginScreen's failed login worker finish
 
-            assert not app._exit, "TUI crashed/exited on a failed relogin"
-            assert app.is_running
-
-            # The failure must surface as an ordinary notification, not a
-            # crash and not a silently-successful relogin.
-            errors = [n for n in app._notifications if n.severity == "error"]
-            assert errors, "a failed relogin must notify the user, not fail silently"
-
-            # ReloginScreen must have dismissed (not left stuck showing
-            # "Connecting…" forever).
-            assert not isinstance(app.screen, provablyfine.tui.relogin.ReloginScreen)
+            # The app must exit cleanly -- not hang, not crash into Textual's
+            # fatal-error handler, and not silently keep running with a
+            # session it never managed to fix.
+            assert app._exit
 
 
 @pytest.mark.anyio

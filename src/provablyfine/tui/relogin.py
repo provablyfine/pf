@@ -199,28 +199,33 @@ class ReloginScreen(base.ModalScreen[None]):
         config_path: str,
         *,
         standalone: bool = True,
-        on_result: typing.Callable[[bool], None] | None = None,
+        on_result: typing.Callable[[bool, str | None], None] | None = None,
     ) -> None:
         """`standalone`: this screen is the whole app (the `SetupApp` login
         flow in `tui.app.pfat`), so finishing -- successfully or not -- must
         exit the app and let `pfat()` resume past `.run()`. When `False`,
         this screen was instead pushed onto an already-running `TuiApp` to
         recover from a session that expired mid-use (`app._ReloggingAuth._relogin`),
-        and must dismiss back to it instead: calling `self.app.exit()` there
-        would quit the whole TUI out from under the user on a *successful*
-        relogin (#84).
+        and `on_result` (required in that case) reports the outcome instead.
+        A relogin that doesn't succeed is fatal either way -- there is no
+        partial-recovery path where the TUI carries on with a session it
+        couldn't fix -- but *how* that's surfaced differs: standalone has no
+        caller to report to, so it exits directly; non-standalone must
+        report failure through `on_result` and let `app._ReloggingAuth`
+        raise it as an ordinary exception instead, so it unwinds back to the
+        top of the app's own message-processing loop before anything calls
+        `App.exit()` -- see `app._ReloginFailed`'s docstring for why calling
+        `exit()` directly from here would not actually work in that case.
 
-        `on_result`, when given (the non-standalone case), is called
-        synchronously from `_finish` with whether login succeeded --
-        deliberately *not* wired through `push_screen(..., callback=...)`.
-        That callback is delivered via `call_next` on whichever message pump
-        was active when this screen was pushed, which only runs once that
-        pump goes idle; when the trigger is a failing call from inside a
-        screen's own (non-worker) `on_mount` -- the common case, since every
-        section-root list screen loads its data there -- that pump is the
-        one whose `on_mount` is itself awaiting this screen's result,
-        deadlocking forever. Calling `on_result` directly sidesteps that
-        entirely."""
+        `on_result` is called synchronously from `_finish`, deliberately
+        *not* wired through `push_screen(..., callback=...)`. That callback
+        is delivered via `call_next` on whichever message pump was active
+        when this screen was pushed, which only runs once that pump goes
+        idle; when the trigger is a failing call from inside a screen's own
+        (non-worker) `on_mount` -- the common case, since every section-root
+        list screen loads its data there -- that pump is the one whose
+        `on_mount` is itself awaiting this screen's result, deadlocking
+        forever. Calling `on_result` directly sidesteps that entirely."""
         super().__init__()
         self._cfg = cfg
         self._api = api
@@ -228,17 +233,13 @@ class ReloginScreen(base.ModalScreen[None]):
         self._standalone = standalone
         self._on_result = on_result
 
-    def _finish(self, success: bool) -> None:
+    def _finish(self, success: bool, message: str | None = None) -> None:
         if self._standalone:
             self.app.exit()
         else:
-            if self._on_result is not None:
-                self._on_result(success)
+            assert self._on_result is not None
+            self._on_result(success, message)
             self.dismiss()
-
-    def _notify_failed(self, message: str) -> None:
-        self.app.notify(message, severity="error")
-        self._finish(False)
 
     def compose(self) -> textual.app.ComposeResult:
         with textual.containers.VerticalGroup() as container:
@@ -289,4 +290,4 @@ class ReloginScreen(base.ModalScreen[None]):
         except _LoginCancelled:
             self.app.call_from_thread(self._finish, False)
         except Exception as e:
-            self.app.call_from_thread(self._notify_failed, str(e))
+            self.app.call_from_thread(self._finish, False, str(e))

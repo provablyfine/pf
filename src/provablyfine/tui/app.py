@@ -9,6 +9,7 @@ import typing
 import provablyfine_client as pfc
 import textual
 import textual.screen
+import textual.worker
 
 from .. import client, log
 from . import base, nav_pane, relogin, sections, setup
@@ -25,6 +26,26 @@ class SetupApp(base.App):
 
     def on_mount(self) -> None:
         self.push_screen(self._initial_screen)
+
+
+class _ReloginFailed(Exception):
+    """Raised by `_ReloggingAuth._relogin` when the interactive relogin it
+    triggered didn't produce a working session (cancelled, failed outright,
+    or the fresh session broke again immediately on retry). Deliberately not
+    a `pfc.exceptions.UI` -- `TuiApp._handle_exception` treats this as fatal
+    (exit the app) rather than notify-and-continue the way an ordinary `UI`
+    error does: there is no partial-recovery path where the TUI keeps
+    running with a session it couldn't fix.
+
+    Must be raised (not returned/swallowed) from inside the same call chain
+    that's awaiting it, rather than the app being told to exit directly from
+    a screen's dismiss callback: that call chain is nested arbitrarily deep
+    inside the app's own message-processing loop (e.g. a freshly-navigated
+    screen's own `on_mount`, itself inside `switch_screen`'s mount-await),
+    which is the *same* loop `App.exit()` needs to be free in order to act
+    on. Only once this propagates as an ordinary exception back up to that
+    loop's own top-level dispatch (where `_handle_exception` is actually
+    invoked) is it safe to call `exit()`."""
 
 
 class _ReloggingAuth(pfc.AsyncSessionClient):
@@ -56,15 +77,14 @@ class _ReloggingAuth(pfc.AsyncSessionClient):
             if self._cfg is None or self._config_path is None:
                 raise
             observed = self._generation
-            await self._relogin(observed)
+            await self._relogin(observed)  # raises _ReloginFailed if this didn't work
             try:
                 return await super()._run(fn)  # retry exactly once
-            except pfc.exceptions.KeyExpired as e:
-                # KeyExpired is not a UI subclass; base.App._handle_exception
-                # only recognizes UI, so an unconverted KeyExpired here would
-                # reach Textual's fatal handler -- the exact crash class #84
-                # fixed. SessionExpired needs no such treatment (already UI).
-                raise pfc.exceptions.UI(str(e)) from e
+            except (pfc.exceptions.SessionExpired, pfc.exceptions.KeyExpired) as e:
+                # The relogin reported success, but the fresh session is
+                # already broken too -- equally fatal, not a third path
+                # where the TUI keeps running regardless.
+                raise _ReloginFailed(f"Session still broken after relogin: {e}") from e
 
     async def _relogin(self, observed_generation: int) -> None:
         assert self._cfg is not None
@@ -75,16 +95,16 @@ class _ReloggingAuth(pfc.AsyncSessionClient):
             loop = asyncio.get_running_loop()
             future: asyncio.Future[None] = loop.create_future()
 
-            def _on_result(success: bool) -> None:
+            def _on_result(success: bool, message: str | None) -> None:
+                if future.done():
+                    return
                 if not success:
-                    if not future.done():
-                        future.set_exception(pfc.exceptions.UI("Relogin failed or was cancelled"))
+                    future.set_exception(_ReloginFailed(message or "Relogin cancelled"))
                     return
                 assert self._cfg is not None
                 self._inner = client.Factory(self._cfg).session()  # pyright: ignore[reportPrivateUsage]
                 self._generation += 1
-                if not future.done():
-                    future.set_result(None)
+                future.set_result(None)
 
             self._app.push_screen(
                 relogin.ReloginScreen(
@@ -140,6 +160,13 @@ class TuiApp(base.App):
         else:
             self.whoami = identity.name
             self.role = ""
+
+    def _handle_exception(self, error: Exception) -> None:
+        unwrapped = error.error if isinstance(error, textual.worker.WorkerFailed) else error
+        if isinstance(unwrapped, _ReloginFailed):
+            self.exit(message=str(unwrapped) if str(unwrapped) else None)
+            return
+        super()._handle_exception(error)
 
 
 def _has_session(cfg: client.Config) -> bool:
