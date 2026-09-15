@@ -1,8 +1,11 @@
 import argparse
+import asyncio
 import functools
+import logging
 import os
 import os.path
 import sys
+import typing
 
 import provablyfine_client as pfc
 import textual
@@ -112,6 +115,50 @@ def _has_session(cfg: client.Config) -> bool:
     )
 
 
+def _exit_now(code: int) -> typing.NoReturn:
+    """Terminate the process immediately, bypassing Python's normal
+    interpreter shutdown.
+
+    By the time this runs, a `.run()` call has already returned, so
+    Textual's own teardown is done: screen closed, terminal restored.
+    Nothing about the *app* is left half-finished. The problem is
+    elsewhere: every signed API call (`AsyncSessionClient._run`) and every
+    `ReloginScreen._login` attempt runs in a real OS thread via
+    `asyncio.to_thread`/`@textual.work(thread=True)`, and
+    `concurrent.futures.thread` registers an `atexit` hook that joins every
+    such thread -- across the whole process, not just this app's -- before
+    the interpreter is allowed to actually exit. Cancelling the asyncio
+    task wrapping one of those (which is all quitting normally does) does
+    not stop the underlying thread; a blocked `socket.recv()` keeps
+    blocking regardless.
+
+    Some of those threads can legitimately run for as long as a human
+    takes to respond: signing against a confirmation-required real
+    ssh-agent (see `client/http_client.py`'s `account_key_signer`) has no
+    timeout, by design. So no timeout on any individual operation can
+    guarantee quitting is instant -- only skipping the wait entirely can.
+    Any such background work is simply abandoned mid-operation, with no
+    chance to fail gracefully into its own exception handling; that's the
+    trade this makes.
+
+    This alone isn't enough, though: `App.run()` without an explicit `loop`
+    drives the app via `asyncio.run()`, whose *own* cleanup (`Runner.close()`)
+    calls `loop.shutdown_default_executor(THREAD_JOIN_TIMEOUT)` -- a 300
+    *second* wait for the same stuck thread -- before `.run()` can even
+    return to let this function run at all. `pfat()` sidesteps that by
+    passing its own `loop=` to every `.run()` call, which makes Textual take
+    the `loop.run_until_complete(...)` path instead of `asyncio.run(...)`;
+    `run_until_complete` returns as soon as the app itself finishes, with no
+    such wait. Verified empirically: a real `@textual.work(thread=True)`
+    worker stuck in a `recv()` with no timeout, `App.run(loop=...)` still
+    returns in ~0s once `self.exit()` is called.
+    """
+    sys.stdout.flush()
+    sys.stderr.flush()
+    logging.shutdown()
+    os._exit(code)
+
+
 def pfat() -> None:
     parser = argparse.ArgumentParser(description="pf admin TUI")
     parser.add_argument("-c", "--config", default=_DEFAULT_CONFIG, help="Configuration file. Default: %(default)s")
@@ -121,30 +168,36 @@ def pfat() -> None:
 
     log.setup(args.debug, log.filename("pfat", args))
 
+    # Passed explicitly to every `.run()` below -- see `_exit_now`'s
+    # docstring for why: it's what lets a stuck background thread not
+    # block quitting.
+    loop = asyncio.new_event_loop()
+
     if not os.path.exists(args.config):
         app = SetupApp(setup.SetupChoiceScreen(args.config))
-        app.run()
+        app.run(loop=loop)
         if not os.path.exists(args.config):
-            return
+            _exit_now(0)
 
     try:
         cfg = client.Config.load(args.config)
     except pfc.exceptions.UI as e:
         sys.stderr.write(f"{e}\n")
-        sys.exit(2)
+        _exit_now(2)
 
     cfg.role_id = None  # cleared at startup; set in-memory during login, never persisted
     cfg.session_key_fingerprint = None
     cfg.session_key_file = None
     cfg.session_key_pem = None
-    SetupApp(relogin.ReloginScreen(cfg, client.Client(cfg), args.config)).run()
+    SetupApp(relogin.ReloginScreen(cfg, client.Client(cfg), args.config)).run(loop=loop)
     if not _has_session(cfg):
-        return
+        _exit_now(0)
 
     try:
         auth = client.Factory(cfg).async_session()
     except pfc.exceptions.UI as e:
         sys.stderr.write(f"{e}\n")
-        sys.exit(2)
+        _exit_now(2)
 
-    TuiApp(auth, cfg=cfg, config_path=args.config).run()
+    TuiApp(auth, cfg=cfg, config_path=args.config).run(loop=loop)
+    _exit_now(0)
