@@ -6,6 +6,7 @@ import os
 import socket
 import subprocess
 import sys
+import time
 
 import pytest
 
@@ -56,6 +57,29 @@ def test_spawn_and_sign_from_the_same_shell() -> None:
             data = b"session key test payload"
             signature = client.sign(identities[0], data, 0)
             key.to_crypto().public_key().verify(signature, data)  # type: ignore[union-attr]
+        finally:
+            client.close()
+    finally:
+        _cleanup(path)
+
+
+@pytest.mark.xdist_group(name="pf-session-oracle")
+def test_superseded_oracle_ttl_expiry_does_not_delete_newer_socket() -> None:
+    """Try to verify that two oracles racing to the same socket do nothing crazy."""
+    key_a = jwk.Private.generate_ed25519()
+    path = session.spawn_oracle(key_a, ttl=1)
+    key_b = jwk.Private.generate_ed25519()
+    assert session.spawn_oracle(key_b, ttl=10) == path
+    try:
+        time.sleep(2.5)  # let key_a's oracle hit its 1s TTL and shut down
+        assert os.path.exists(path), "the still-live second oracle's socket was deleted"
+        client = agent.Client(path)
+        try:
+            identities = list(client.list_identities())
+            assert len(identities) == 1
+            data = b"still alive"
+            signature = client.sign(identities[0], data, 0)
+            key_b.to_crypto().public_key().verify(signature, data)  # type: ignore[union-attr]
         finally:
             client.close()
     finally:
