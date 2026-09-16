@@ -128,6 +128,7 @@ source_paths = [
 pytest_add_cli_args_test_selection = [
   "src/provablyfine/api/",
   "src/provablyfine/test_jwk.py",
+  "src/provablyfine/ssh/test_cert.py",
   "src/provablyfine/ssh/test_ssh_keygen.py",
   "src/provablyfine/ssh/test_serde.py",
   "src/provablyfine/ssh/test_buffer.py",

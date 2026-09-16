@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import dataclasses
 import enum
 import time
 
@@ -17,33 +16,79 @@ class Role(enum.IntEnum):
     HOST = 2
 
 
-@dataclasses.dataclass(frozen=True)
 class CriticalOptions:
     # https://www.ietf.org/archive/id/draft-miller-ssh-cert-01.html#name-critical-options
-    force_command: str | None = None
-    source_address: list[str] | None = None
-    verify_required: bool | None = None
+    def __init__(
+        self,
+        force_command: str | None = None,
+        source_address: list[str] | None = None,
+        verify_required: bool | None = None,
+    ) -> None:
+        self.force_command = force_command
+        self.source_address = source_address
+        self.verify_required = verify_required
 
-    def to_dict(self):
-        return dataclasses.asdict(self)
+    def to_dict(self) -> dict[str, str | list[str] | bool | None]:
+        return {
+            "force_command": self.force_command,
+            "source_address": self.source_address,
+            "verify_required": self.verify_required,
+        }
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, CriticalOptions):
+            return False
+        return self.to_dict() == other.to_dict()
+
+    def __repr__(self) -> str:
+        fields = ", ".join(f"{k}={v!r}" for k, v in self.to_dict().items())
+        return f"CriticalOptions({fields})"
 
 
-@dataclasses.dataclass(frozen=True)
 class Extensions:
     # https://www.ietf.org/archive/id/draft-miller-ssh-cert-01.html#name-certificate-extensions
-    no_touch_required: bool | None = None
-    permit_agent_forwarding: bool | None = None
-    permit_port_forwarding: bool | None = None
-    permit_pty: bool | None = None
-    permit_user_rc: bool | None = None
-    permit_x11_forwarding: bool | None = None
-    # provablyfine-specific extensions, appended last so their presence/absence
-    # cannot perturb the key order of the six standard fields above in to_dict().
-    session_deadline: int | None = None
-    connection_id: str | None = None
+    def __init__(
+        self,
+        no_touch_required: bool | None = None,
+        permit_agent_forwarding: bool | None = None,
+        permit_port_forwarding: bool | None = None,
+        permit_pty: bool | None = None,
+        permit_user_rc: bool | None = None,
+        permit_x11_forwarding: bool | None = None,
+        # provablyfine-specific extensions, appended last so their presence/absence
+        # cannot perturb the key order of the six standard fields above in to_dict().
+        session_deadline: int | None = None,
+        connection_id: str | None = None,
+    ) -> None:
+        self.no_touch_required = no_touch_required
+        self.permit_agent_forwarding = permit_agent_forwarding
+        self.permit_port_forwarding = permit_port_forwarding
+        self.permit_pty = permit_pty
+        self.permit_user_rc = permit_user_rc
+        self.permit_x11_forwarding = permit_x11_forwarding
+        self.session_deadline = session_deadline
+        self.connection_id = connection_id
 
-    def to_dict(self):
-        return dataclasses.asdict(self)
+    def to_dict(self) -> dict[str, bool | int | str | None]:
+        return {
+            "no_touch_required": self.no_touch_required,
+            "permit_agent_forwarding": self.permit_agent_forwarding,
+            "permit_port_forwarding": self.permit_port_forwarding,
+            "permit_pty": self.permit_pty,
+            "permit_user_rc": self.permit_user_rc,
+            "permit_x11_forwarding": self.permit_x11_forwarding,
+            "session_deadline": self.session_deadline,
+            "connection_id": self.connection_id,
+        }
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Extensions):
+            return False
+        return self.to_dict() == other.to_dict()
+
+    def __repr__(self) -> str:
+        fields = ", ".join(f"{k}={v!r}" for k, v in self.to_dict().items())
+        return f"Extensions({fields})"
 
 
 class Cert:
