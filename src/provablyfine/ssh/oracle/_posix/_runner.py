@@ -73,11 +73,15 @@ def main() -> None:
     else:
         raise ValueError(f"unknown oracle mode: {mode}")
 
+    own_stat = os.fstat(sock.fileno())
     try:
         server.serve_forever(sock, authorize, identities, ttl_deadline=ttl_deadline, anchor=anchor)
     finally:
         try:
-            os.unlink(socket_path)
+            # If another process raced to create the same socket,
+            # to relogin, we cannot blindly unlink it.
+            if os.path.samestat(os.stat(socket_path), own_stat):
+                os.unlink(socket_path)
         except OSError:
             pass
         try:
