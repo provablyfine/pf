@@ -26,6 +26,16 @@ async def _wait(pilot, app=None):
             await target.workers.wait_for_complete()  # wait for save/add/delete
     except (textual.worker.WorkerFailed, textual.worker.WorkerCancelled):
         pass  # errors already handled by app._handle_exception → notify()
+    if target._exit:
+        # The awaited worker's own result handler already called app.exit()
+        # (e.g. a relogin failure): `_exit` flips synchronously, but the
+        # message pump it schedules shutdown through stops asynchronously,
+        # possibly mid-`pilot.pause()`. Racing that stop against
+        # `pilot.pause()`'s per-widget settle counters (which never get
+        # decremented once the pump halts) hangs until its own 30s
+        # WaitForScreenTimeout instead of returning early -- so once exit is
+        # known, there is no UI left to settle and nothing to wait for.
+        return
     await pilot.pause()  # let UI re-render (notifications, table updates)
 
 

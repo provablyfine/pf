@@ -174,8 +174,8 @@ async def test_tui_key_expired_relogin_recovers(api):
             # working: its socket vanishes out from under an otherwise
             # still-configured session.
             oracle_path = provablyfine.ssh.oracle.session.current_socket_path()
-            assert os.path.exists(oracle_path)
-            os.remove(oracle_path)
+            assert provablyfine.ssh.oracle.session.socket_exists(oracle_path)
+            provablyfine.ssh.oracle.session.kill_oracle(oracle_path)
 
             await _goto(pilot, "tags")  # TagListScreen.on_mount calls list_tags()
 
@@ -261,8 +261,8 @@ async def test_tui_relogin_preserves_deeper_screen(api):
             # navigation, proving this screen (not just the section root)
             # survives a relogin triggered from an in-place action.
             oracle_path = provablyfine.ssh.oracle.session.current_socket_path()
-            assert os.path.exists(oracle_path)
-            os.remove(oracle_path)
+            assert provablyfine.ssh.oracle.session.socket_exists(oracle_path)
+            provablyfine.ssh.oracle.session.kill_oracle(oracle_path)
 
             await pilot.press("ctrl+s")  # action_save -> update_role -> KeyExpired
 
@@ -339,8 +339,8 @@ async def test_tui_relogin_failure_exits_app(api):
             # Break both the session (forcing a relogin) and the account key
             # (forcing that relogin attempt to fail rather than succeed).
             oracle_path = provablyfine.ssh.oracle.session.current_socket_path()
-            assert os.path.exists(oracle_path)
-            os.remove(oracle_path)
+            assert provablyfine.ssh.oracle.session.socket_exists(oracle_path)
+            provablyfine.ssh.oracle.session.kill_oracle(oracle_path)
             os.remove(account_key)
 
             await _goto(pilot, "tags")  # TagListScreen.on_mount -> list_tags() -> KeyExpired

@@ -69,6 +69,46 @@ def current_socket_path() -> str:
     return pipe_name(*peercred.login_shell_identity())
 
 
+def socket_exists(path: str) -> bool:
+    """Whether an oracle is listening at `path`.
+
+    Not `os.path.exists()`: `GetFileAttributesW`, which backs it, is
+    unreliable for named pipes. `_win32api.named_pipe_exists()` uses
+    `WaitNamedPipeW` instead, which distinguishes "no such pipe" from "pipe
+    exists but every instance is busy" unambiguously.
+    """
+    return _win32api.named_pipe_exists(path)
+
+
+def kill_oracle(path: str) -> None:
+    """Make the calling process's own oracle disappear, the way its TTL
+    elapsing would -- for tests that simulate that without waiting it out.
+
+    Unlike `_posix.session`, `path` cannot just be unlinked: a named pipe is
+    not independently removable while its server still holds the listening
+    handle (`os.remove()` raises `WinError 231`, "All pipe instances are
+    busy"). Instead this signals the same new-login event a fresh `pf login`
+    would use to evict a predecessor (see `_create_pipe_on_new_login`) --
+    `serve()`'s watchdog thread wakes on it and calls `os._exit()`, which is
+    what actually closes the pipe's last handle -- then polls for `path` to
+    stop existing, since that exit happens on the oracle's own thread,
+    asynchronously to this call.
+    """
+    pid, creation_time = peercred.login_shell_identity()
+    event = _win32api.open_event(_new_login_event_name(pid, creation_time))
+    if event is None:
+        raise exceptions.Error(f"No session oracle is listening at {path}")
+    try:
+        _win32api.set_event(event)
+    finally:
+        _win32api.close_handle(event)
+    deadline = time.monotonic() + _NEW_LOGIN_TIMEOUT_SECONDS
+    while _win32api.named_pipe_exists(path):
+        if time.monotonic() >= deadline:
+            raise exceptions.Error(f"Oracle at {path} did not exit after being signaled to stand down")
+        time.sleep(0.02)
+
+
 def spawn_oracle(key: jwk.Private, ttl: float = 1800) -> str:
     """Spawn a session-key oracle bound to the calling process's login shell.
 
