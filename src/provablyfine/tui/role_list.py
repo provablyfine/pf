@@ -51,6 +51,7 @@ class RoleListScreen(base.Screen):
         yield textual.widgets.Label("No roles — add one with 'a'", id="roles-placeholder")
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
+    @textual.work
     async def on_mount(self) -> None:
         table = self.query_one(textual.widgets.DataTable[str])
         table.add_columns("Name", "Description", "Members", "Grants")

@@ -138,6 +138,7 @@ class IdentityListScreen(base.Screen):
         yield textual.widgets.Label("No identities — add one with 'a'", id="identities-placeholder")
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
+    @textual.work
     async def on_mount(self) -> None:
         table = self.query_one(_IdentitiesTable)
         table.add_columns("Name", "Unix username", "Tags", "Boundaries")

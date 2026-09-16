@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import typing
+
 import provablyfine_client as pfc
 import textual.app
 import textual.await_complete
@@ -56,6 +58,11 @@ class App(textual.app.App[None]):
             self.notify(str(ui_error), severity="error")
             return
         super()._handle_exception(error)
+
+
+class HasApp(typing.Protocol):
+    @property
+    def app(self) -> App: ...
 
 
 class Widget(textual.widget.Widget):

@@ -52,6 +52,7 @@ class TagListScreen(base.Screen):
         yield textual.widgets.Label("No tags — add one with 'a'", id="tags-placeholder")
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
+    @textual.work
     async def on_mount(self) -> None:
         table = self.query_one(textual.widgets.DataTable[str])
         table.add_columns("Name", "Value")
