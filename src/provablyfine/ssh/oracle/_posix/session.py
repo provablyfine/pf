@@ -88,25 +88,6 @@ def current_socket_path() -> str:
     return socket_path(parent_pid, parent_starttime)
 
 
-def socket_exists(path: str) -> bool:
-    """Whether an oracle is listening at `path`.
-
-    A plain `os.path.exists()`: an AF_UNIX socket is a real filesystem entry,
-    unlike its `_win32` named-pipe counterpart.
-    """
-    return os.path.exists(path)
-
-
-def kill_oracle(path: str) -> None:
-    """Make the oracle at `path` disappear, the way its TTL elapsing would --
-    for tests that simulate that without waiting it out.
-
-    A plain `os.remove()`: an AF_UNIX socket path can be unlinked independently
-    of its server process, unlike its `_win32` named-pipe counterpart.
-    """
-    os.remove(path)
-
-
 def spawn_oracle(key: jwk.Private, ttl: float = 1800) -> str:
     """Spawn a session-key oracle bound to the calling process's parent ancestry.
 
