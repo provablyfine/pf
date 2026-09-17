@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import os
 import tempfile
 import typing
@@ -343,9 +344,27 @@ async def test_tui_relogin_failure_exits_app(api):
             provablyfine.ssh.oracle.session.kill_oracle(oracle_path)
             os.remove(account_key)
 
-            await _goto(pilot, "tags")  # TagListScreen.on_mount -> list_tags() -> KeyExpired
+            # Deleting the account key makes the relogin attempt fail fast
+            # (no network round-trip), which can outrun the enter keypress
+            # below: `pilot.press()` calls Textual's own `_wait_for_screen()`
+            # to confirm the screen it just navigated to has settled, but
+            # navigating to "tags" is what mounts TagListScreen and triggers
+            # the KeyExpired -> relogin -> app.exit() chain in the first
+            # place. If that chain finishes while `_wait_for_screen()` is
+            # still waiting, the message pump it was counting on to signal
+            # "settled" has already stopped, and it hangs until its own 30s
+            # WaitForScreenTimeout instead of returning -- routine here, not
+            # a real hang, since exiting *is* the expected outcome.
+            with contextlib.suppress(textual.pilot.WaitForScreenTimeout):
+                await _goto(pilot, "tags")  # TagListScreen.on_mount -> list_tags() -> KeyExpired
 
-            await _wait(pilot, app)  # let ReloginScreen's failed login worker finish
+            # Poll for the app actually exiting rather than trusting any more
+            # pilot/worker settle bookkeeping to survive a concurrent
+            # app.exit() -- same race as above, one layer up.
+            for _ in range(200):  # ~10s ceiling
+                if app._exit:
+                    break
+                await asyncio.sleep(0.05)
 
             # The app must exit cleanly -- not hang, not crash into Textual's
             # fatal-error handler, and not silently keep running with a
