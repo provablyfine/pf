@@ -1,4 +1,6 @@
 import argparse
+import asyncio
+import logging
 import os
 import os.path
 import sys
@@ -156,6 +158,22 @@ def _has_session(cfg: client.Config) -> bool:
     )
 
 
+def _exit_now(code: int) -> typing.NoReturn:
+    """Terminate the process immediately, bypassing Python's normal
+    interpreter shutdown.
+
+    This is a protection against a potentially rogue thread still running
+    and blocking the textual main loop: it allows us to ensure that exiting
+    the tui app is always near-instantaneous, even if it is not _clean_.
+    """
+    sys.stdout.flush()
+    sys.stderr.flush()
+    logging.shutdown()
+    # Bypass `concurrent.futures.thread` atexit handler which waits forever
+    # for any stuck thread.
+    os._exit(code)
+
+
 def pfat() -> None:
     parser = argparse.ArgumentParser(description="pf admin TUI")
     parser.add_argument("-c", "--config", default=_DEFAULT_CONFIG, help="Configuration file. Default: %(default)s")
@@ -165,30 +183,35 @@ def pfat() -> None:
 
     log.setup(args.debug, log.filename("pfat", args))
 
+    # bypass the default textual loop to avoid
+    # waiting forever to cleanup after stuck threads
+    loop = asyncio.new_event_loop()
+
     if not os.path.exists(args.config):
         app = SetupApp(setup.SetupChoiceScreen(args.config))
-        app.run()
+        app.run(loop=loop)
         if not os.path.exists(args.config):
-            return
+            _exit_now(0)
 
     try:
         cfg = client.Config.load(args.config)
     except pfc.exceptions.UI as e:
         sys.stderr.write(f"{e}\n")
-        sys.exit(2)
+        _exit_now(2)
 
     cfg.role_id = None  # cleared at startup; set in-memory during login, never persisted
     cfg.session_key_fingerprint = None
     cfg.session_key_file = None
     cfg.session_key_pem = None
-    SetupApp(relogin.ReloginScreen(cfg, client.Client(cfg), args.config)).run()
+    SetupApp(relogin.ReloginScreen(cfg, client.Client(cfg), args.config)).run(loop=loop)
     if not _has_session(cfg):
-        return
+        _exit_now(0)
 
     try:
         auth = client.Factory(cfg).async_session()
     except pfc.exceptions.UI as e:
         sys.stderr.write(f"{e}\n")
-        sys.exit(2)
+        _exit_now(2)
 
-    TuiApp(auth, cfg=cfg, config_path=args.config).run()
+    TuiApp(auth, cfg=cfg, config_path=args.config).run(loop=loop)
+    _exit_now(0)
