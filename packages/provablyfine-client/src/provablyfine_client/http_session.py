@@ -4,10 +4,21 @@ import logging
 import typing
 
 import requests
+import urllib3.exceptions
 
 from . import exceptions, http_signatures
 
 logger = logging.getLogger(__name__)
+
+
+def _server_dropped_connection(error: requests.exceptions.ConnectionError) -> bool:
+    """True if the server closed a pooled connection that the client had kept open.
+
+    Servers close idle keep-alive connections after a few seconds.
+    The client only notices when it sends the next request on that connection.
+    This is different from a server that cannot be reached at all.
+    """
+    return bool(error.args) and isinstance(error.args[0], urllib3.exceptions.ProtocolError)
 
 
 class HttpSession:
@@ -39,7 +50,7 @@ class HttpSession:
         logger.debug(f"tx headers: {prepared.headers}")
         logger.debug(f"tx body: {prepared.body}")
         try:
-            response = self._session.send(prepared, timeout=effective_timeout)
+            response = self._send(prepared, effective_timeout)
         except requests.exceptions.ConnectionError:
             raise exceptions.UI("Unable to connect to server")
         except requests.exceptions.ReadTimeout:
@@ -67,6 +78,21 @@ class HttpSession:
                 raise exceptions.SessionExpired(title)
 
         return response
+
+    def _send(self, prepared: requests.PreparedRequest, timeout: float) -> requests.Response:
+        """Send `prepared`, once more if the server had closed a kept-alive connection.
+
+        The second attempt sends the same signed request on a new connection.
+        The server rejects a signature nonce it has already seen.
+        So the request cannot be executed twice, even if the first attempt did reach the server.
+        """
+        try:
+            return self._session.send(prepared, timeout=timeout)
+        except requests.exceptions.ConnectionError as e:
+            if not _server_dropped_connection(e):
+                raise
+            logger.debug("server closed a kept-alive connection, retrying once")
+        return self._session.send(prepared, timeout=timeout)
 
     def get(
         self,

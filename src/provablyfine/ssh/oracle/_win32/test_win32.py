@@ -8,6 +8,7 @@ import os
 import pathlib
 import subprocess
 import sys
+import threading
 import time
 
 import pytest
@@ -165,6 +166,33 @@ def test_lists_and_signs(self_anchored_oracle: str, key: jwk.Private) -> None:
         client.close()
     crypto_key = key.to_crypto()
     crypto_key.public_key().verify(signature, data)  # type: ignore[union-attr]
+
+
+def test_clients_arriving_while_the_oracle_is_busy_are_served(self_anchored_oracle: str) -> None:
+    """The oracle serves one client at a time on a single pipe instance.
+
+    A client that arrives while another is being served, or while the server
+    re-arms after the previous one, is told the pipe is busy. It must wait its
+    turn rather than fail, or `session_key_signer` reports a live session as
+    expired.
+    """
+    failures: list[BaseException] = []
+
+    def hammer(count: int) -> None:
+        for _ in range(count):
+            try:
+                with agent.Client(self_anchored_oracle) as client:
+                    assert len(list(client.list_identities())) == 1
+            except (OSError, AssertionError) as e:
+                failures.append(e)
+
+    hammer(200)
+    threads = [threading.Thread(target=hammer, args=(50,)) for _ in range(4)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert not failures, f"{len(failures)} refused, first: {failures[0]!r}"
 
 
 def test_a_missing_oracle_raises_oserror() -> None:

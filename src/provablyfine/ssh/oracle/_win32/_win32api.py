@@ -408,6 +408,16 @@ def named_pipe_exists(name: str) -> bool:
     return ctypes.get_last_error() != ERROR_FILE_NOT_FOUND
 
 
+def wait_named_pipe(name: str, timeout_ms: int) -> bool:
+    """Block until an instance of the pipe `name` is free to connect to.
+
+    Returns False if there is no such pipe, or if none became free within
+    `timeout_ms`. A timeout of 0 would mean "the pipe's default", so the
+    smallest wait is 1ms.
+    """
+    return bool(_k32.WaitNamedPipeW(name, max(1, timeout_ms)))
+
+
 def named_pipe_client_pid(handle: int) -> int:
     pid = ctypes.wintypes.ULONG()
     if not _k32.GetNamedPipeClientProcessId(handle, ctypes.byref(pid)):

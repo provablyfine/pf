@@ -6,6 +6,7 @@ import getpass
 import os
 import socket
 import sys
+import time
 import typing
 
 from .. import jwk
@@ -17,6 +18,40 @@ class Identity:
     public_key: jwk.Public
     comment: str
     raw: bytes
+
+
+# How long a client waits for a pipe whose instances are all busy.
+_PIPE_BUSY_TIMEOUT_SECONDS = 5.0
+
+
+def _open_pipe(name: str) -> typing.BinaryIO:
+    """Open the named pipe `name`, waiting for its turn if it is busy.
+
+    A pipe instance serves one client at a time. pf's oracle has a single
+    instance, so a client that arrives while another is being served, or while
+    the server is re-arming after the previous one, is told the pipe is busy.
+    The system ssh-agent behaves the same way.
+
+    The C runtime reports that as a bare `EINVAL`, so `open()` cannot tell it
+    apart from other failures. `WaitNamedPipe` can: it only succeeds when the
+    pipe exists and an instance becomes free. A pipe that does not exist, or
+    that we may not open, fails at once.
+    """
+    import provablyfine.ssh.oracle._win32._win32api
+
+    deadline = time.monotonic() + _PIPE_BUSY_TIMEOUT_SECONDS
+    while True:
+        try:
+            return open(name, "r+b", buffering=0)
+        except (FileNotFoundError, PermissionError):
+            raise
+        except OSError:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0 or not provablyfine.ssh.oracle._win32._win32api.wait_named_pipe(
+                name, int(remaining * 1000)
+            ):
+                raise
+            time.sleep(0.005)
 
 
 class _PipeTransport:
@@ -33,7 +68,7 @@ class _PipeTransport:
         # `client/http_client.py` takes advantage of that to distinguish "the
         # oracle is gone, log in again" from every other failure by catching
         # `OSError`
-        self._stream: typing.BinaryIO = open(name, "r+b", buffering=0)
+        self._stream = _open_pipe(name)
 
     def recv(self, size: int) -> bytes:
         return self._stream.read(size) or b""
