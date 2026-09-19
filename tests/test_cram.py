@@ -45,6 +45,7 @@ def _free_port() -> int:
         "bastion-crud.t",
         "tenant.t",
         "tenant-isolation.t",
+        "ctx.t",
         "auth.t",
         "audit-log.t",
         "access-control-audit-log.t",

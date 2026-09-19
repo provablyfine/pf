@@ -30,14 +30,23 @@ def _cleanup(path: str) -> None:
 
 
 def test_current_socket_path_is_deterministic() -> None:
-    assert session.current_socket_path() == session.current_socket_path()
+    assert session.current_socket_path("https://a.example/pf/t/root/") == session.current_socket_path(
+        "https://a.example/pf/t/root/"
+    )
 
 
 def test_socket_path_differs_for_different_parents() -> None:
-    a = session.socket_path(parent_pid=111, parent_starttime=222)
-    b = session.socket_path(parent_pid=111, parent_starttime=223)
-    c = session.socket_path(parent_pid=112, parent_starttime=222)
+    url = "https://a.example/pf/t/root/"
+    a = session.socket_path(parent_pid=111, parent_starttime=222, directory_url=url)
+    b = session.socket_path(parent_pid=111, parent_starttime=223, directory_url=url)
+    c = session.socket_path(parent_pid=112, parent_starttime=222, directory_url=url)
     assert len({a, b, c}) == 3
+
+
+def test_socket_path_differs_for_different_tenants() -> None:
+    d = session.socket_path(parent_pid=111, parent_starttime=222, directory_url="https://a.example/pf/t/root/")
+    e = session.socket_path(parent_pid=111, parent_starttime=222, directory_url="https://b.example/pf/t/root/")
+    assert d != e
 
 
 @pytest.mark.xdist_group(name="pf-session-oracle")
@@ -46,10 +55,11 @@ def test_spawn_and_sign_from_the_same_shell() -> None:
     # what current_socket_path() derives from -- without this, a concurrent
     # test in another worker doing the same thing races on the identical
     # socket path (see tests/test_oidc.py's _create_session_key() docstring).
+    directory_url = "https://a.example/pf/t/root/"
     key = jwk.Private.generate_ed25519()
-    path = session.spawn_oracle(key, ttl=10)
+    path = session.spawn_oracle(key, directory_url, ttl=10)
     try:
-        assert path == session.current_socket_path()
+        assert path == session.current_socket_path(directory_url)
         client = agent.Client(path)
         try:
             identities = list(client.list_identities())
@@ -66,10 +76,11 @@ def test_spawn_and_sign_from_the_same_shell() -> None:
 @pytest.mark.xdist_group(name="pf-session-oracle")
 def test_superseded_oracle_ttl_expiry_does_not_delete_newer_socket() -> None:
     """Try to verify that two oracles racing to the same socket do nothing crazy."""
+    directory_url = "https://a.example/pf/t/root/"
     key_a = jwk.Private.generate_ed25519()
-    path = session.spawn_oracle(key_a, ttl=1)
+    path = session.spawn_oracle(key_a, directory_url, ttl=1)
     key_b = jwk.Private.generate_ed25519()
-    assert session.spawn_oracle(key_b, ttl=10) == path
+    assert session.spawn_oracle(key_b, directory_url, ttl=10) == path
     try:
         time.sleep(2.5)  # let key_a's oracle hit its 1s TTL and shut down
         assert os.path.exists(path), "the still-live second oracle's socket was deleted"

@@ -32,16 +32,21 @@ logger = logging.getLogger(__name__)
 _NEW_LOGIN_TIMEOUT_SECONDS = 5.0
 
 
-def _digest(pid: int, creation_time: int) -> str:
-    return hashlib.sha256(f"{pid}:{creation_time}".encode()).hexdigest()[:16]
+def _digest(pid: int, creation_time: int, directory_url: str) -> str:
+    return hashlib.sha256(f"{pid}:{creation_time}:{directory_url}".encode()).hexdigest()[:16]
 
 
-def pipe_name(pid: int, creation_time: int) -> str:
-    """The oracle's pipe name, derived from its anchor.
+def pipe_name(pid: int, creation_time: int, directory_url: str) -> str:
+    """The oracle's pipe name, derived from its anchor and from `directory_url`
+    so each tenant gets its own oracle: a session key signed against one
+    tenant must never be reachable by a request bound for another, and
+    process identity alone can't tell them apart when the same shell
+    switches contexts via `pf ctx`.
 
-    Only requirement is determinism -- a later `pf` has to recompute it with no
-    shared state. It is not a secret, and does not need to be: the access
-    control is the peer-credential check in `authorize()`, not the name.
+    Only remaining requirement is determinism -- a later `pf` has to
+    recompute it with no shared state. It is not a secret, and does not need
+    to be: the access control is the peer-credential check in `authorize()`,
+    not the name.
 
     A squatter who created the pipe first is not a real exposure either.
     `create_named_pipe` uses FILE_FLAG_FIRST_PIPE_INSTANCE, so `pf login`
@@ -49,35 +54,38 @@ def pipe_name(pid: int, creation_time: int) -> str:
     request an impostor would have to list back our session public key, whose
     fingerprint lives in the user's own config file.
     """
-    return f"\\\\.\\pipe\\pf-session-oracle-{_digest(pid, creation_time)}"
+    return f"\\\\.\\pipe\\pf-session-oracle-{_digest(pid, creation_time, directory_url)}"
 
 
-def _new_login_event_name(pid: int, creation_time: int) -> str:
+def _new_login_event_name(pid: int, creation_time: int, directory_url: str) -> str:
     # A bare name, so it lands in the per-Windows-session object namespace --
     # which is exactly the scope wanted, and is not a path: the
     # `\BaseNamedObjects\...` form is not accepted by CreateEventW.
-    return f"pf-session-oracle-{_digest(pid, creation_time)}-new-login"
+    return f"pf-session-oracle-{_digest(pid, creation_time, directory_url)}-new-login"
 
 
-def current_socket_path() -> str:
+def current_socket_path(directory_url: str) -> str:
     """Recompute this invocation's oracle name from its own login shell.
 
     Used by later `pf`/`pfa` invocations in the same shell to find the oracle
-    `pf login` spawned there. Named "socket path" because its callers are
-    cross-platform; on Windows the string is a named pipe, not a path.
+    `pf login` spawned there for this tenant. Named "socket path" because its
+    callers are cross-platform; on Windows the string is a named pipe, not a
+    path.
     """
-    return pipe_name(*peercred.login_shell_identity())
+    pid, creation_time = peercred.login_shell_identity()
+    return pipe_name(pid, creation_time, directory_url)
 
 
-def spawn_oracle(key: jwk.Private, ttl: float = 1800) -> str:
-    """Spawn a session-key oracle bound to the calling process's login shell.
+def spawn_oracle(key: jwk.Private, directory_url: str, ttl: float = 1800) -> str:
+    """Spawn a session-key oracle bound to the calling process's login shell
+    and to `directory_url`.
 
     Returns the oracle's pipe name.
     """
-    return _spawn(key, ttl, peercred.login_shell_identity()[0])
+    return _spawn(key, ttl, peercred.login_shell_identity()[0], directory_url)
 
 
-def _spawn(key: jwk.Private, ttl: float, anchor_pid: int) -> str:
+def _spawn(key: jwk.Private, ttl: float, anchor_pid: int, directory_url: str) -> str:
     """Spawn an oracle anchored on `anchor_pid`.
 
     Split out from `spawn_oracle` so tests can anchor on a process they created
@@ -85,8 +93,8 @@ def _spawn(key: jwk.Private, ttl: float, anchor_pid: int) -> str:
     """
     anchor = peercred.open_anchor(anchor_pid)
     try:
-        name = pipe_name(anchor.pid, anchor.creation_time)
-        event_name = _new_login_event_name(anchor.pid, anchor.creation_time)
+        name = pipe_name(anchor.pid, anchor.creation_time, directory_url)
+        event_name = _new_login_event_name(anchor.pid, anchor.creation_time, directory_url)
         handle = _create_pipe_on_new_login(name, event_name)
     except BaseException:
         peercred.close_anchor(anchor)

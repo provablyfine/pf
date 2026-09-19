@@ -100,7 +100,7 @@ def _tui_select_role(
 
 
 def http_sig_login(cfg: client.Config, api: client.Client, screen: base.HasApp | None = None) -> str:
-    session_key, fp = browser_login.generate_session_key()
+    session_key, fp = browser_login.generate_session_key(cfg.directory_url)
     account = cfg.account_key_fingerprint or cfg.account_key_file
     http_client = api.login_auth(account=account, session=fp)
     response = http_client.post(
@@ -115,7 +115,7 @@ def http_sig_login(cfg: client.Config, api: client.Client, screen: base.HasApp |
 
 
 def oidc_login(api: client.Client, auth_name: str, cfg: client.Config, screen: base.HasApp | None = None) -> str:
-    session_key, fp = browser_login.generate_session_key()
+    session_key, fp = browser_login.generate_session_key(cfg.directory_url)
     auth_public = client.Factory(api.config).public().get_public_auth(auth_name, "cli")
     if not isinstance(auth_public.config, pfc.schemas.OidcConfig):
         raise pfc.exceptions.UI(f"Auth '{auth_name}' is not OIDC")
@@ -145,7 +145,7 @@ def oidc_device_code_login(
     screen: base.HasApp | None = None,
     on_code: typing.Callable[[str, str], None] | None = None,
 ) -> str:
-    session_key, fp = browser_login.generate_session_key()
+    session_key, fp = browser_login.generate_session_key(cfg.directory_url)
     auth_public = client.Factory(api.config).public().get_public_auth(auth_name, "cli")
     if not isinstance(auth_public.config, pfc.schemas.OidcDeviceCodeConfig):
         raise pfc.exceptions.UI(f"Auth '{auth_name}' is not OIDC device code")
@@ -182,6 +182,20 @@ def login(
             return oidc_device_code_login(api, auth_name, cfg, screen)
         case _:
             raise pfc.exceptions.UI(f"Unsupported browser auth type: {auth_type}")
+
+
+def _persist_session_key(cfg: client.Config, config_path: str) -> None:
+    """Record the new session key fingerprint in this context's registry entry.
+
+    A context switch reloads the config from disk. Without the fingerprint
+    there, the still-running oracle of the context we switch back to is never
+    found and the user must log in again.
+
+    Only the session key fields are written. `role_id` stays in memory.
+    """
+    if cfg.ephemeral:
+        return
+    client.configuration.Registry.set_session_fingerprint(config_path, cfg.directory_url, cfg.session_key_fingerprint)
 
 
 class ReloginScreen(base.ModalScreen[None]):
@@ -269,6 +283,7 @@ class ReloginScreen(base.ModalScreen[None]):
             self._cfg.session_key_fingerprint = fp
             self._cfg.session_key_file = None
             self._cfg.session_key_pem = None
+            _persist_session_key(self._cfg, self._config_path)
             self.app.call_from_thread(self._finish, True)
         except _LoginCancelled:
             self.app.call_from_thread(self._finish, False)

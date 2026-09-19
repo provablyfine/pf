@@ -21,7 +21,7 @@ class App(textual.app.App[None]):
     whoami: textual.reactive.Reactive[str] = textual.reactive.Reactive("")
     identity_name: textual.reactive.Reactive[str] = textual.reactive.Reactive("")
     role: textual.reactive.Reactive[str] = textual.reactive.Reactive("")
-    tenant_name: textual.reactive.Reactive[str] = textual.reactive.Reactive("")
+    context_name: textual.reactive.Reactive[str] = textual.reactive.Reactive("")
     current_section_id: str | None = None
     """Set by `TuiApp.switch_to_section`; read by `Screen._extend_compose`
     to decide whether (and with what active item) to inject a `NavColumn`.

@@ -51,11 +51,16 @@ from . import peercred, server, spawn
 _SUN_PATH_MAX = 104
 
 
-def socket_path(parent_pid: int, parent_starttime: int) -> str:
-    """The socket path is derived from the parent process's PID and start time.
+def socket_path(parent_pid: int, parent_starttime: int, directory_url: str) -> str:
+    """The socket path is derived from the parent process's PID and start time,
+    plus the tenant's directory URL so each tenant gets its own oracle: a
+    session key signed against one tenant must never be reachable by a
+    request bound for another, and process identity alone can't tell them
+    apart when the same shell switches contexts via `pf ctx`.
 
-    The requirement is merely to be deterministic. no security issue here since
-    any user would need to pass the access control check implemented in the oracle.
+    The requirement is otherwise merely to be deterministic. no security issue
+    here since any user would need to pass the access control check
+    implemented in the oracle.
 
     The name must stay short on purpose: an AF_UNIX socket path is limited to
     `_SUN_PATH_MAX` bytes, and the appended subdirectory name is ~24 bytes, so a
@@ -71,25 +76,26 @@ def socket_path(parent_pid: int, parent_starttime: int) -> str:
             "unset it or point it at a shorter path"
         )
 
-    material = f"{parent_pid}:{parent_starttime}".encode()
+    material = f"{parent_pid}:{parent_starttime}:{directory_url}".encode()
     digest = hashlib.sha256(material).hexdigest()[:16]
     return os.path.join(tempdir, f"pf-so-{digest}", "s")
 
 
-def current_socket_path() -> str:
+def current_socket_path(directory_url: str) -> str:
     """Recompute this invocation's session-oracle path from its own parent.
 
     Used by later `pf`/`pfa` invocations in the same shell to find the
-    oracle `pf login` spawned there.
+    oracle `pf login` spawned there for this tenant.
     """
     spawn.require_platform_supported()
     parent_pid = os.getppid()
     parent_starttime = peercred.process_starttime(parent_pid)
-    return socket_path(parent_pid, parent_starttime)
+    return socket_path(parent_pid, parent_starttime, directory_url)
 
 
-def spawn_oracle(key: jwk.Private, ttl: float = 1800) -> str:
-    """Spawn a session-key oracle bound to the calling process's parent ancestry.
+def spawn_oracle(key: jwk.Private, directory_url: str, ttl: float = 1800) -> str:
+    """Spawn a session-key oracle bound to the calling process's parent ancestry
+    and to `directory_url`.
 
     Returns the oracle's socket path.
     """
@@ -100,7 +106,7 @@ def spawn_oracle(key: jwk.Private, ttl: float = 1800) -> str:
     session_id = peercred.parent_session_id(parent_pid)
     tty_dev = peercred.parent_tty_dev(parent_pid)
 
-    path = socket_path(parent_pid, parent_starttime)
+    path = socket_path(parent_pid, parent_starttime, directory_url)
     sock = spawn.bind_socket(path, replace=True)
     identities = [server.Identity(raw=serde.serialize_public(key.public()), key=key)]
     spawn.spawn_subprocess(

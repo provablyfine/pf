@@ -11,6 +11,7 @@ from . import audit_log_cli, auth_cli, bastion_cli, boundary_cli, grant_cli, ide
 
 
 def _initialize_function(args: argparse.Namespace) -> None:
+    client.configuration.Registry.ensure_url_available(args.config, args.url)
     c = client.Config(directory_url=args.url)
     sc = client.Factory(c, timeout=args.timeout)
     if args.transient_key:
@@ -59,6 +60,9 @@ def pfa() -> None:
 
     login_parser = subparsers.add_parser("login", help="Login using the configured auth method")
     common.setup_login_subparser(login_parser)
+
+    ctx_parser = subparsers.add_parser("ctx", help="List or switch between tenant contexts")
+    common.setup_ctx_subparser(ctx_parser)
 
     initialize_parser = subparsers.add_parser("initialize", help="Initialize a new server and register account key")
     initialize_parser.add_argument("url", help="Directory URL of the server")
