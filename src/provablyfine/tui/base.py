@@ -57,6 +57,13 @@ class App(textual.app.App[None]):
         if ui_error is not None:
             self.notify(str(ui_error), severity="error")
             return
+        unwrapped = error.error if isinstance(error, textual.worker.WorkerFailed) else error
+        if not self.is_running and isinstance(unwrapped, textual.css.query.NoMatches):
+            # The app is shutting down and its widgets are already gone. A
+            # worker that finishes now and looks one up has nothing left to
+            # update. Nobody can act on this error, so it must not turn a
+            # normal exit into a crash.
+            return
         super()._handle_exception(error)
 
 
