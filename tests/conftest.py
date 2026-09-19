@@ -510,13 +510,17 @@ def api(request, tmp_path):
     if sys.platform != "win32":
         api_sock.close()
 
-    pf_start_timeout = 10
-    start = time.time()
+    # Starting the server runs the database migrations, which a loaded machine
+    # can slow down a lot. The deadline uses the monotonic clock so that a jump
+    # of the wall clock cannot end the wait early. A server that has already
+    # exited is reported at once instead of after the whole timeout.
+    pf_start_timeout = 30
+    start = time.monotonic()
     api_ready = False
-    while time.time() - start < pf_start_timeout:
+    while time.monotonic() - start < pf_start_timeout and popen.poll() is None:
         try:
-            response = requests.get(f"http://{api_host}:{api_port}/pf/t/root/directory")
-        except requests.exceptions.ConnectionError:
+            response = requests.get(f"http://{api_host}:{api_port}/pf/t/root/directory", timeout=2)
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
             time.sleep(0.1)
             continue
         if response.status_code != 200:
