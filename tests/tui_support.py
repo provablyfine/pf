@@ -1,3 +1,4 @@
+import asyncio
 import os
 import subprocess
 
@@ -27,6 +28,23 @@ async def _wait(pilot, app=None):
     except (textual.worker.WorkerFailed, textual.worker.WorkerCancelled):
         pass  # errors already handled by app._handle_exception → notify()
     await pilot.pause()  # let UI re-render (notifications, table updates)
+
+
+async def _wait_until_gone(pilot, screen_type, timeout=30):
+    """Wait until no screen of `screen_type` is left in the app's screen stack.
+
+    `_wait` returns once the relogin worker is done, but the dialog closes a
+    few event loop turns later. On a loaded machine a test that looks right
+    away still sees the dialog.
+
+    `pilot.pause()` only waits for pending messages, and Textual has no event
+    for a screen going away, so this polls one precise condition. The timeout
+    only catches a dialog that never closes. It is not a guess at how long
+    closing takes.
+    """
+    async with asyncio.timeout(timeout):
+        while any(isinstance(screen, screen_type) for screen in pilot.app.screen_stack):
+            await pilot.pause(0.05)
 
 
 def _run(args: list[str], env: dict[str, str]):

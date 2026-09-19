@@ -28,6 +28,7 @@ import provablyfine.tui.tag_list
 from . import oracle_control, tui_support
 
 _wait = tui_support._wait
+_wait_until_gone = tui_support._wait_until_gone
 _run = tui_support._run
 _setup_ssh_auth_sock = tui_support._setup_ssh_auth_sock
 _setup = tui_support._setup
@@ -114,6 +115,7 @@ async def test_tui_session_expiry_relogin_recovers(api):
             # runs after the relogin finished, it succeeds on its own. That
             # race isn't what this test is about, so it isn't asserted; the
             # explicit re-navigation below is the deterministic check.)
+            await _wait_until_gone(pilot, provablyfine.tui.relogin.ReloginScreen)
             assert isinstance(app.screen, provablyfine.tui.role_list.RoleListScreen)
 
             # The relogin prompt completed and refreshed the session
@@ -198,6 +200,7 @@ async def test_tui_key_expired_relogin_recovers(api):
             # TagListScreen itself must still be alive and responsive -- the
             # failed (`@textual.work`-decorated) on_mount must not have
             # zombied its message loop -- even though it has no data yet.
+            await _wait_until_gone(pilot, provablyfine.tui.relogin.ReloginScreen)
             assert isinstance(app.screen, provablyfine.tui.tag_list.TagListScreen)
 
             # The relogin prompt completed and refreshed the session: a call
@@ -282,6 +285,7 @@ async def test_tui_relogin_preserves_deeper_screen(api):
 
             # The stack must be preserved, not unwound to the section root:
             # RoleViewScreen still on top, RoleListScreen still underneath it.
+            await _wait_until_gone(pilot, provablyfine.tui.relogin.ReloginScreen)
             assert isinstance(app.screen, provablyfine.tui.role_view.RoleViewScreen)
             assert isinstance(app.screen_stack[1], provablyfine.tui.role_list.RoleListScreen)
 
