@@ -164,23 +164,7 @@ class _ContextRenameScreen(base.ModalScreen[str | None]):
 
 
 class _ContextSelectScreen(base.ModalScreen[str | None]):
-    """Popup context switcher, bound to a global keybinding on `TuiApp`
-    (`SessionPane` is deliberately inert/unfocusable -- see its docstring in
-    `nav_pane.py`). Modeled directly on `relogin._RoleSelectScreen`, but
-    defined here rather than in `nav_pane.py`: that module is kept free of
-    any dependency on `base.py` on purpose, since `base.py` itself imports
-    `nav_pane` (see `nav_pane.py`'s own module comment) -- importing `base`
-    from `nav_pane` for `ModalScreen` would cycle back.
-
-    Also handles rename ("r") and delete ("d") of the highlighted context,
-    persisting immediately -- matching every other delete action in this TUI
-    (single keypress, toast afterward, no confirm dialog). Deleting the
-    *current* context is refused (same rule as the CLI's `pf ctx delete`):
-    `registry.current` can then only ever be `None` (empty registry) or a
-    valid key, so there is no stale-current fallback logic to get wrong.
-    Adding a context is deliberately not here -- that needs account-key/
-    invitation material that's a CLI-native flow (`pf accept`/
-    `pfa initialize`), not a TUI one."""
+    """Popup context switcher, bound to a global keybinding on `TuiApp`"""
 
     BINDINGS: typing.ClassVar = [
         ("escape", "cancel", "Cancel"),
