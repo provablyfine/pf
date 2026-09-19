@@ -52,11 +52,15 @@ async def _goto(pilot: textual.pilot.Pilot[None], section_id: str) -> None:
 
 @pytest.mark.anyio
 @pytest.mark.real_session_oracle
-@pytest.mark.parametrize("api", [{"session_duration_s": 2}], indirect=True)
 async def test_tui_session_expiry_relogin_recovers(api):
-    """#84: when the session key expires mid-use, the user must be shown a
+    """#84: when the session ends mid-use, the user must be shown a
     relogin prompt and end up with a working session again -- not stranded,
     not crashed.
+
+    The session is ended by logging out through the API, which makes the
+    server answer 401 the same way it does for a session that ran out of time.
+    Waiting for a real expiry would make the test depend on how fast the
+    machine is.
 
     `self.app.auth` is an `app._ReloggingAuth` wrapping the real client, and
     `RoleListScreen` holds a reference to that same object as `self._auth`
@@ -86,8 +90,8 @@ async def test_tui_session_expiry_relogin_recovers(api):
             await pilot.pause()  # app startup
             assert isinstance(app.screen, provablyfine.tui.identity_list.IdentityListScreen)
 
-            # Outlast the 2s session so the next API call gets a 401.
-            await asyncio.sleep(3)
+            # End the session so the next API call gets a 401.
+            await auth.logout()
 
             await _goto(pilot, "roles")  # RoleListScreen.on_mount calls list_roles()
 
@@ -117,9 +121,8 @@ async def test_tui_session_expiry_relogin_recovers(api):
             # against `app.auth` -- the same `_ReloggingAuth` object every
             # screen holds -- must now succeed, proving its `_inner` was
             # actually swapped rather than just having shown a prompt.
-            # Checked directly (not via a UI re-navigation) since the fixture's
-            # 2s `session_duration_s` applies to the *relogged-in* session
-            # too, and a UI round-trip is slow enough to flake against that.
+            # Checked directly rather than via a UI re-navigation, which is
+            # not what this test is about.
             roles = await app.auth.list_roles()
             assert len(roles.roles) >= 1  # root role
 

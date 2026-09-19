@@ -60,6 +60,9 @@ class AsyncSessionClient:
     ) -> schemas.SshHostCertificateResponse:
         return await self._run(lambda: self._inner.sign_host_certificates(public_keys))
 
+    async def logout(self) -> None:
+        await self._run(self._inner.logout)
+
     async def get_self(self) -> schemas.Identity:
         return await self._run(self._inner.get_self)
 

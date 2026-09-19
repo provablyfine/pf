@@ -193,6 +193,7 @@ def oidc_login_endpoint(
         expires_at=now + ctx.config.session_duration_s,
         login_ip=request.client.host if request.client else None,
         role_id=None,
+        logged_out_at=None,
     )
     members = ctx.app_db.role_member.read_all(identity_id=identity.id)
     role_ids = list(set(m.role_id for m in members))

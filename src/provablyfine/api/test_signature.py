@@ -174,6 +174,7 @@ def _seed_session_key(
     expires_at: int,
     is_revoked: bool = False,
     role_id: int | None = None,
+    logged_out_at: int | None = None,
 ) -> None:
     now = int(time.time())
     ctx.app_db.identity_session_key.create(
@@ -186,6 +187,7 @@ def _seed_session_key(
         expires_at=expires_at,
         login_ip=None,
         role_id=role_id,
+        logged_out_at=logged_out_at,
     )
 
 
@@ -483,6 +485,19 @@ async def test_verify_session_rejects_revoked_key(real_app_db: app_db.AppDb) -> 
         async with contextlib.aclosing(signature.verify_session(request)) as agen:
             await agen.__anext__()
     assert _title(exc_info.value) == "Session key is revoked"
+
+
+@pytest.mark.anyio
+async def test_verify_session_rejects_logged_out_key(real_app_db: app_db.AppDb) -> None:
+    identity_id = _seed_identity()
+    priv = jwk.Private.generate_ed25519()
+    now = int(time.time())
+    _seed_session_key(identity_id, priv.public(), expires_at=now + 3600, logged_out_at=now)
+    request, _ = _signed_request_with(_Ed25519Signer("session", priv))
+    with pytest.raises(responses.ProblemHTTPException) as exc_info:
+        async with contextlib.aclosing(signature.verify_session(request)) as agen:
+            await agen.__anext__()
+    assert _title(exc_info.value) == "Session key is logged out"
 
 
 @pytest.mark.anyio

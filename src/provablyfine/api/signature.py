@@ -295,6 +295,10 @@ async def verify_session(request: fastapi.requests.Request) -> typing.AsyncGener
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=401, title="Session key is revoked")
         )
+    if session_key.logged_out_at is not None:
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=401, title="Session key is logged out")
+        )
     now = int(time.time())
     if session_key.expires_at <= now:
         raise responses.ProblemHTTPException(

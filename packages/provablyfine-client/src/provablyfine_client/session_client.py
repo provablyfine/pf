@@ -614,6 +614,12 @@ class SessionClient:
         if response.status_code != 204:
             raise exceptions.UI(_problem_title(response, "Unable to set session role"))
 
+    def logout(self) -> None:
+        """End this session. Later requests signed with its key are refused."""
+        response = self._session.delete(f"{self._directory.session}/self", auth=self._auth())
+        if response.status_code != 204:
+            raise exceptions.UI(_problem_title(response, "Unable to logout"))
+
     # Ping
 
     def ping(self) -> None:

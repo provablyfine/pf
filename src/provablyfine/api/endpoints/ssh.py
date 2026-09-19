@@ -221,7 +221,7 @@ def sign_user_certificate(data: schemas.ssh.SSHUserCertificateRequest) -> schema
         identity_id=ctx.identity_id,
         is_revoked=False,
     )
-    ip_address_list = [s.login_ip for s in sessions if s.login_ip and s.expires_at > now]
+    ip_address_list = [s.login_ip for s in sessions if s.login_ip and s.logged_out_at is None and s.expires_at > now]
 
     if matching_bastions:
         grant_converter = converters.GrantConverter()

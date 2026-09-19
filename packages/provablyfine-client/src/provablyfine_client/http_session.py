@@ -10,6 +10,14 @@ from . import exceptions, http_signatures
 
 logger = logging.getLogger(__name__)
 
+# The 401 titles that mean "this session cannot be used any more, log in again".
+_SESSION_ENDED_TITLES = (
+    "Session key is expired",
+    "Session key is logged out",
+    "Session key is revoked",
+    "Session does not exist",
+)
+
 
 def _server_dropped_connection(error: requests.exceptions.ConnectionError) -> bool:
     """True if the server closed a pooled connection that the client had kept open.
@@ -74,7 +82,7 @@ class HttpSession:
                 title = response.json().get("title", "")
             except Exception:
                 title = ""
-            if title in ("Session key is expired", "Session does not exist", "Session key is revoked"):
+            if title in _SESSION_ENDED_TITLES:
                 raise exceptions.SessionExpired(title)
 
         return response

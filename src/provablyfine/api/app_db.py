@@ -90,6 +90,7 @@ class IdentitySessionKeyRow(typing.NamedTuple):
     expires_at: int
     login_ip: str | None
     role_id: int | None
+    logged_out_at: int | None
 
 
 identity_session_key = db.make_table("identity_session_key", metadata, IdentitySessionKeyRow)
