@@ -21,6 +21,7 @@ _CMD = os.environ.get("COMSPEC") or "C:\\Windows\\System32\\cmd.exe"
 # Long enough that no test races its own oracle's TTL, short enough that a
 # leaked one is gone well before the next run.
 _TTL = 30.0
+_DIRECTORY_URL = "https://a.example/pf/t/root/"
 
 
 def _spawn_child_chain(*, depth: int, pid_file: str) -> subprocess.Popen[bytes]:
@@ -72,11 +73,11 @@ def _wait_until_pipe_gone(name: str, timeout: float) -> float:
     raise AssertionError(f"{name} was still serving after {timeout}s")
 
 
-def _stop_oracle(anchor_pid: int) -> None:
+def _stop_oracle(anchor_pid: int, directory_url: str = _DIRECTORY_URL) -> None:
     """Ask an oracle anchored on `anchor_pid` to exit, via the same new-login
     event a second `pf login` would use. Keeps a failed test from leaving a
     process holding a pipe name the next run wants."""
-    name = session._new_login_event_name(anchor_pid, peercred.process_starttime(anchor_pid))
+    name = session._new_login_event_name(anchor_pid, peercred.process_starttime(anchor_pid), directory_url)
     event = _win32api.open_event(name)
     if event is not None:
         try:
@@ -94,7 +95,7 @@ def key() -> jwk.Private:
 def self_anchored_oracle(key: jwk.Private) -> collections.abc.Iterator[str]:
     """An oracle anchored on the test process, so the test process itself is an
     authorized peer (`same_process`)."""
-    name = session._spawn(key, _TTL, os.getpid())
+    name = session._spawn(key, _TTL, os.getpid(), _DIRECTORY_URL)
     try:
         yield name
     finally:
@@ -170,7 +171,7 @@ def test_a_missing_oracle_raises_oserror() -> None:
     """`client/http_client.py` tells "log in again" apart from every other
     failure by catching `OSError`"""
     with pytest.raises(OSError):
-        agent.Client(session.pipe_name(1, 1))
+        agent.Client(session.pipe_name(1, 1, _DIRECTORY_URL))
 
 
 def test_rejects_a_peer_outside_the_anchor_ancestry(key: jwk.Private, tmp_path: pathlib.Path) -> None:
@@ -186,7 +187,7 @@ def test_rejects_a_peer_outside_the_anchor_ancestry(key: jwk.Private, tmp_path: 
     chain = _spawn_child_chain(depth=1, pid_file=pid_file)
     _read_pid_file(pid_file)
     anchor_pid = chain.pid
-    name = session._spawn(key, _TTL, anchor_pid)
+    name = session._spawn(key, _TTL, anchor_pid, _DIRECTORY_URL)
     try:
         client = agent.Client(name)
         # Either shape counts as a rejection and both are correct: the server
@@ -208,7 +209,7 @@ def test_exits_when_the_anchor_dies(key: jwk.Private, tmp_path: pathlib.Path) ->
     pid_file = str(tmp_path / "anchor.pid")
     chain = _spawn_child_chain(depth=0, pid_file=pid_file)
     anchor_pid = _read_pid_file(pid_file)
-    name = session._spawn(key, _TTL, anchor_pid)
+    name = session._spawn(key, _TTL, anchor_pid, _DIRECTORY_URL)
     assert _pipe_is_up(name)
     chain.kill()
     chain.wait(timeout=30)
@@ -222,7 +223,7 @@ def test_exits_when_the_anchor_dies(key: jwk.Private, tmp_path: pathlib.Path) ->
 def test_exits_at_ttl(key: jwk.Private) -> None:
     """The watchdog's second job, and the one that matters most: this is what
     bounds how long the key exists at all."""
-    name = session._spawn(key, 2.0, os.getpid())
+    name = session._spawn(key, 2.0, os.getpid(), _DIRECTORY_URL)
     assert _pipe_is_up(name)
     waited = _wait_until_pipe_gone(name, timeout=30)
     assert waited >= 1.0, f"exited after {waited:.1f}s, well before its 2s TTL"
@@ -233,13 +234,13 @@ def test_a_second_login_displaces_the_first(key: jwk.Private) -> None:
     """the predecessor has to be asked to exit upon a new login and the
     replacement must end up serving the *new* key, not the old one."""
     replacement = jwk.Private.generate_ed25519()
-    first = session._spawn(key, _TTL, os.getpid())
+    first = session._spawn(key, _TTL, os.getpid(), _DIRECTORY_URL)
     # Without this the test has a silent way to pass while testing nothing: if
     # the first oracle's child never started, its name was never claimed, the
     # second _spawn succeeds on its first attempt, and the fingerprint
     # assertion below holds having exercised no displacement at all.
     assert _pipe_is_up(first), "the first oracle never came up, so nothing was displaced"
-    second = session._spawn(replacement, _TTL, os.getpid())
+    second = session._spawn(replacement, _TTL, os.getpid(), _DIRECTORY_URL)
     assert first == second, "same anchor must derive the same pipe name"
     try:
         client = agent.Client(second)

@@ -44,6 +44,9 @@ def pf() -> None:
     login_parser = subparsers.add_parser("login", help="Login")
     common.setup_login_subparser(login_parser)
 
+    ctx_parser = subparsers.add_parser("ctx", help="List or switch between tenant contexts")
+    common.setup_ctx_subparser(ctx_parser)
+
     openssh_parser = subparsers.add_parser("openssh", help="OpenSSH integration")
     openssh_cli.add_subparsers(openssh_parser)
 

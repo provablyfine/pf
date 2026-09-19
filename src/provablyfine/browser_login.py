@@ -39,7 +39,7 @@ def has_valid_session(config: client.Config) -> bool:
     if not config.session_key_fingerprint:
         return False
     try:
-        path = ssh.oracle.session.current_socket_path()
+        path = ssh.oracle.session.current_socket_path(config.directory_url)
         with ssh.agent.Client(path) as agent:
             for identity in agent.list_identities():
                 if identity.public_key.match_ssh_fingerprint(config.session_key_fingerprint):
@@ -55,12 +55,12 @@ def has_valid_session(config: client.Config) -> bool:
     return False
 
 
-def generate_session_key() -> tuple[jwk.Private, str]:
+def generate_session_key(directory_url: str) -> tuple[jwk.Private, str]:
     if ssh.oracle.peercred.parent_is_launcher():
         sys.stderr.write("pf was launched by uv/uvx. This is not supported.\nInstall pf or setup a venv")
     session_key = jwk.Private.generate_ed25519()
     try:
-        ssh.oracle.session.spawn_oracle(session_key, ttl=1800)
+        ssh.oracle.session.spawn_oracle(session_key, directory_url, ttl=1800)
     except (ssh.exceptions.Error, OSError) as e:
         raise pfc.exceptions.UI(f"Unable to start session-key signing oracle: {e}") from e
     return session_key, session_key.public().ssh_fingerprint()

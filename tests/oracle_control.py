@@ -29,7 +29,7 @@ if sys.platform == "win32":
         """
         return provablyfine.ssh.oracle._win32._win32api.named_pipe_exists(path)
 
-    def kill_oracle(path: str) -> None:
+    def kill_oracle(path: str, directory_url: str) -> None:
         """Make the calling process's own oracle disappear, the way its TTL
         elapsing would.
 
@@ -46,7 +46,7 @@ if sys.platform == "win32":
         """
         pid, creation_time = provablyfine.ssh.oracle._win32.peercred.login_shell_identity()
         event = provablyfine.ssh.oracle._win32._win32api.open_event(
-            provablyfine.ssh.oracle._win32.session._new_login_event_name(pid, creation_time)
+            provablyfine.ssh.oracle._win32.session._new_login_event_name(pid, creation_time, directory_url)
         )
         if event is None:
             raise provablyfine.ssh.exceptions.Error(f"No session oracle is listening at {path}")
@@ -72,11 +72,15 @@ else:
         """
         return os.path.exists(path)
 
-    def kill_oracle(path: str) -> None:
+    def kill_oracle(path: str, directory_url: str) -> None:
         """Make the oracle at `path` disappear, the way its TTL elapsing would.
 
         A plain `os.remove()`: an AF_UNIX socket path can be unlinked
         independently of its server process, unlike its win32 named-pipe
-        counterpart.
+        counterpart. `directory_url` is unused here (the path alone is
+        enough on POSIX) but kept in the signature so callers can use one
+        cross-platform call, matching the win32 implementation which needs
+        it to recompute the new-login event name.
         """
+        del directory_url
         os.remove(path)

@@ -174,9 +174,9 @@ async def test_tui_key_expired_relogin_recovers(api):
             # Simulate the oracle's own TTL elapsing while the user keeps
             # working: its socket vanishes out from under an otherwise
             # still-configured session.
-            oracle_path = provablyfine.ssh.oracle.session.current_socket_path()
+            oracle_path = provablyfine.ssh.oracle.session.current_socket_path(cfg.directory_url)
             assert oracle_control.socket_exists(oracle_path)
-            oracle_control.kill_oracle(oracle_path)
+            oracle_control.kill_oracle(oracle_path, cfg.directory_url)
 
             await _goto(pilot, "tags")  # TagListScreen.on_mount calls list_tags()
 
@@ -261,9 +261,9 @@ async def test_tui_relogin_preserves_deeper_screen(api):
             # screen -- so the trigger is ctrl+s (action_save), not
             # navigation, proving this screen (not just the section root)
             # survives a relogin triggered from an in-place action.
-            oracle_path = provablyfine.ssh.oracle.session.current_socket_path()
+            oracle_path = provablyfine.ssh.oracle.session.current_socket_path(cfg.directory_url)
             assert oracle_control.socket_exists(oracle_path)
-            oracle_control.kill_oracle(oracle_path)
+            oracle_control.kill_oracle(oracle_path, cfg.directory_url)
 
             await pilot.press("ctrl+s")  # action_save -> update_role -> KeyExpired
 
@@ -339,9 +339,9 @@ async def test_tui_relogin_failure_exits_app(api):
 
             # Break both the session (forcing a relogin) and the account key
             # (forcing that relogin attempt to fail rather than succeed).
-            oracle_path = provablyfine.ssh.oracle.session.current_socket_path()
+            oracle_path = provablyfine.ssh.oracle.session.current_socket_path(cfg.directory_url)
             assert oracle_control.socket_exists(oracle_path)
-            oracle_control.kill_oracle(oracle_path)
+            oracle_control.kill_oracle(oracle_path, cfg.directory_url)
             os.remove(account_key)
 
             # Deleting the account key makes the relogin attempt fail fast
@@ -1826,3 +1826,184 @@ async def test_tui_setup_new_server_lists_and_uses_agent_key(api, ssh_agent, mon
             assert not [n for n in app._notifications if n.severity == "error"]
             cfg = provablyfine.client.Config.load(config_file)
             assert cfg.account_key_fingerprint == fingerprint
+
+
+@pytest.mark.anyio
+@pytest.mark.real_session_oracle
+async def test_pfat_skips_relogin_when_oracle_session_is_valid(api):
+    """pfat()'s startup gate (`if not relogin.has_valid_session(cfg): ...`)
+    must skip the clear-and-relogin block entirely when a live, oracle-backed
+    session already exists for the current context -- constructing `TuiApp`
+    directly (bypassing `ReloginScreen`, exactly as that gate does) must land
+    straight on the identity list, not a relogin prompt.
+
+    The oracle-backed session is created via `relogin.http_sig_login()`
+    called in-process, not a `pfa login` subprocess: the oracle's socket path
+    is derived from the *calling process's* parent ancestry
+    (`ssh/oracle/_posix/session.py`), so a subprocess-spawned oracle is only
+    ever visible to a later invocation sharing that same subprocess's parent
+    -- not to this test process itself, which has a different one.
+    `has_valid_session` has two branches (file/PEM vs. oracle-lookup); this
+    exercises the oracle one, the branch this feature actually depends on.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        scripts = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        env = {**os.environ, "PATH": f"{scripts}:{os.environ['PATH']}"}
+        directory_url = f"http://127.0.0.1:{api.port}/pf/t/root/directory"
+        config_file = os.path.join(tmpdir, "config.json")
+
+        account_key = os.path.join(tmpdir, "account")
+        _run(["ssh-keygen", "-t", "ed25519", "-f", account_key, "-N", ""], env)
+        _run(["pfa", "-c", config_file, "initialize", directory_url, f"--key={account_key}"], env)
+
+        cfg = provablyfine.client.Config.load(config_file)
+        cfg.session_key_fingerprint = provablyfine.tui.relogin.http_sig_login(cfg, provablyfine.client.Client(cfg))
+        cfg.save(config_file)
+
+        assert provablyfine.tui.relogin.has_valid_session(cfg), "a freshly oracle-logged-in session must read as valid"
+
+        auth = provablyfine.client.Factory(cfg).async_session()
+        app = provablyfine.tui.app.TuiApp(auth, cfg=cfg, config_path=config_file)
+        async with app.run_test(size=(200, 50)) as pilot:
+            await pilot.pause()
+            assert isinstance(app.screen, provablyfine.tui.identity_list.IdentityListScreen)
+
+
+@pytest.mark.anyio
+async def test_tui_switch_role(api):
+    """ctrl+r doesn't switch roles in place: `role_id` is never persisted by
+    pfat() (there's nothing to write), so it just exits asking pfat()'s loop
+    to rebuild with force_relogin=True -- which skips the has_valid_session
+    reuse check that would otherwise just reconfirm the already-active role."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        auth = _setup(api, tmpdir)
+        config_file = os.path.join(tmpdir, "config.json")
+        cfg = provablyfine.client.Config.load(config_file)
+        app = provablyfine.tui.app.TuiApp(auth, cfg=cfg, config_path=config_file)
+        async with app.run_test(size=(200, 50)) as pilot:
+            await pilot.pause()
+            assert isinstance(app.screen, provablyfine.tui.identity_list.IdentityListScreen)
+
+            await pilot.press("ctrl+r")
+            await pilot.pause()
+
+        assert app.restart_reason is provablyfine.tui.app._RestartReason.ROLE
+
+
+@pytest.mark.anyio
+async def test_tui_switch_context(api):
+    """ctrl+t writes the chosen context as current/previous in the registry
+    and exits asking pfat()'s loop to rebuild -- it does not attempt a
+    relogin itself; has_valid_session's reuse-vs-relogin decision happens in
+    the next _run_tui() iteration, outside this app instance's lifetime."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        auth = _setup(api, tmpdir)
+        config_file = os.path.join(tmpdir, "config.json")
+        cfg = provablyfine.client.Config.load(config_file)
+
+        # A second, purely-local context to switch to: the switch action
+        # itself is now just a registry write, no network call, so it
+        # doesn't need to be a real, logged-in tenant.
+        acme_cfg = provablyfine.client.Config(directory_url=f"http://127.0.0.1:{api.port}/pf/t/acme/directory")
+        acme_cfg.save(config_file)
+        registry = provablyfine.client.configuration.Registry.load(config_file)
+        registry.current = "root"  # keep "root" current -- TuiApp below runs as root
+        registry.save(config_file)
+
+        app = provablyfine.tui.app.TuiApp(auth, cfg=cfg, config_path=config_file)
+        async with app.run_test(size=(200, 50)) as pilot:
+            await pilot.pause()
+
+            await pilot.press("ctrl+t")
+            await pilot.pause()
+            assert isinstance(app.screen, provablyfine.tui.app._ContextSelectScreen)  # pyright: ignore[reportPrivateUsage]
+
+            # "acme" sorts before "root", so it's the default-focused row.
+            await pilot.press("enter")
+            await pilot.pause()
+
+        assert app.restart_reason is provablyfine.tui.app._RestartReason.CTX
+        registry = provablyfine.client.configuration.Registry.load(config_file)
+        assert registry.current == "acme"
+        assert registry.previous == "root"
+
+
+@pytest.mark.anyio
+async def test_tui_context_rename_and_delete(api):
+    """The ctrl+t popup can rename/delete contexts locally -- no network call
+    needed for either -- but refuses to delete whichever context is current,
+    matching the CLI's `pf ctx delete` refusal."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        auth = _setup(api, tmpdir)
+        config_file = os.path.join(tmpdir, "config.json")
+        cfg = provablyfine.client.Config.load(config_file)
+
+        # A second, purely-local context: rename/delete are local registry
+        # mutations, no network call, so it doesn't need to be a real,
+        # logged-in tenant.
+        acme_cfg = provablyfine.client.Config(directory_url=f"http://127.0.0.1:{api.port}/pf/t/acme/directory")
+        acme_cfg.save(config_file)
+        registry = provablyfine.client.configuration.Registry.load(config_file)
+        registry.current = "root"  # keep "root" current -- TuiApp below runs as root
+        registry.save(config_file)
+
+        app = provablyfine.tui.app.TuiApp(auth, cfg=cfg, config_path=config_file)
+        async with app.run_test(size=(200, 50)) as pilot:
+            await pilot.pause()
+
+            await pilot.press("ctrl+t")
+            await pilot.pause()
+            assert isinstance(app.screen, provablyfine.tui.app._ContextSelectScreen)  # pyright: ignore[reportPrivateUsage]
+
+            # "acme" sorts before "root", so it's the default-focused row.
+            await pilot.press("d")
+            await pilot.pause()
+            registry = provablyfine.client.configuration.Registry.load(config_file)
+            assert set(registry.contexts) == {"root"}
+
+            # Only "root" is left, and it's current: delete must be refused.
+            await pilot.press("d")
+            await pilot.pause()
+            assert [n for n in app._notifications if n.severity == "error"]
+            registry = provablyfine.client.configuration.Registry.load(config_file)
+            assert set(registry.contexts) == {"root"}
+
+            # Rename the current context; the registry's `current` pointer
+            # must follow the rename.
+            await pilot.press("r")
+            await pilot.pause()
+            assert isinstance(app.screen, provablyfine.tui.app._ContextRenameScreen)  # pyright: ignore[reportPrivateUsage]
+            await pilot.press(*(["backspace"] * len("root")))
+            await pilot.press(*"root-renamed")
+            await pilot.press("enter")
+            await pilot.pause()
+
+            registry = provablyfine.client.configuration.Registry.load(config_file)
+            assert set(registry.contexts) == {"root-renamed"}
+            assert registry.current == "root-renamed"
+
+
+@pytest.mark.anyio
+async def test_tui_auth_failure_is_judged_against_its_own_session_generation(api):
+    """A call that started before a relogin finished may still fail once the
+    relogin is done. That failure belongs to the replaced session and must not
+    count against the new one. A failure of the new session before it has ever
+    been accepted is a real login problem, and ends the app."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        auth = _setup(api, tmpdir)
+        config_file = os.path.join(tmpdir, "config.json")
+        cfg = provablyfine.client.Config.load(config_file)
+
+        app = provablyfine.tui.app.TuiApp(auth, cfg=cfg, config_path=config_file)
+        async with app.run_test(size=(200, 50)) as pilot:
+            await pilot.pause()
+
+            # State right after a successful relogin.
+            app.auth._generation = 1  # pyright: ignore[reportPrivateUsage]
+            app.auth._verified = False  # pyright: ignore[reportPrivateUsage]
+
+            app.auth._on_auth_failure(0)  # pyright: ignore[reportPrivateUsage]
+            assert not app._exit, "a failure of the replaced session must be ignored"
+
+            app.auth._on_auth_failure(1)  # pyright: ignore[reportPrivateUsage]
+            assert app._exit, "the new session was refused before ever being accepted"

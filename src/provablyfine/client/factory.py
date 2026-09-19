@@ -15,7 +15,7 @@ class Factory:
 
     def _session_signer(self) -> http_client.PrivateSigner:
         if self._config.session_key_fingerprint is not None:
-            return http_client.session_key_signer(self._config.session_key_fingerprint)
+            return http_client.session_key_signer(self._config.session_key_fingerprint, self._config.directory_url)
         if self._config.session_key_file is not None:
             return http_client.session_file_signer(self._config.session_key_file)
         if self._config.session_key_pem is not None:
@@ -33,7 +33,7 @@ class Factory:
         return pfc.SessionClient(self._http, self._directory, self._session_signer())
 
     def session_with_key(self, session_key: str) -> pfc.SessionClient:
-        signer = http_client.session_key_signer(session_key)
+        signer = http_client.session_key_signer(session_key, self._config.directory_url)
         return pfc.SessionClient(self._http, self._directory, signer)
 
     def public(self) -> pfc.PublicClient:
@@ -41,7 +41,7 @@ class Factory:
 
     def account(self, account_key: str | None, session_key: str) -> pfc.AccountClient:
         account_signer = http_client.account_key_signer(account_key)
-        session_signer = http_client.session_key_signer(session_key)
+        session_signer = http_client.session_key_signer(session_key, self._config.directory_url)
         return pfc.AccountClient(self._http, self._directory, account_signer, session_signer)
 
     def account_from_keys(self, account: jwk.Private, session: jwk.Private) -> pfc.AccountClient:

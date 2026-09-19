@@ -100,7 +100,7 @@ def http_sig_login(
         _select_role(result.roles, sc.session_with_private_key(session_key), role)
         return
 
-    session_key, fingerprint = browser_login.generate_session_key()
+    session_key, fingerprint = browser_login.generate_session_key(c.directory_url)
     result = sc.account_with_session_key(c, session_key).login_http_sig(session_key.public().to_dict())
     c.session_key_fingerprint = fingerprint
     c.session_key_file = None
@@ -114,7 +114,7 @@ def oidc_login(c: client.Config, sc: client.Factory, auth_name: str, role: str |
     if not isinstance(auth_public.config, pfc.schemas.OidcConfig):
         raise pfc.exceptions.UI(f"Auth '{auth_name}' is not OIDC")
 
-    session_key, session_fingerprint = browser_login.generate_session_key()
+    session_key, session_fingerprint = browser_login.generate_session_key(c.directory_url)
     print("Opening browser for OIDC login...")
     id_token, nonce = browser_login.oidc_flow(auth_public.config)
     result = sc.session_with_key(session_fingerprint).login_oidc(
@@ -131,7 +131,7 @@ def oidc_device_code_login(c: client.Config, sc: client.Factory, auth_name: str,
     auth_public = sc.public().get_public_auth(auth_name, "cli")
     if not isinstance(auth_public.config, pfc.schemas.OidcDeviceCodeConfig):
         raise pfc.exceptions.UI(f"Auth '{auth_name}' is not OIDC device code")
-    session_key, session_fingerprint = browser_login.generate_session_key()
+    session_key, session_fingerprint = browser_login.generate_session_key(c.directory_url)
     id_token, nonce = browser_login.oidc_device_code_flow(auth_public.config)
     result = sc.session_with_key(session_fingerprint).login_oidc(
         auth_name, "cli", id_token, session_key.public().to_dict(), nonce

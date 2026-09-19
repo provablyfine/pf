@@ -199,6 +199,7 @@ class NewServerSetupScreen(base.Screen):
 
         set_status("Connecting...")
         try:
+            client.configuration.Registry.ensure_url_available(self._config_path, url)
             try:
                 resp = requests.get(url, timeout=5)
             except requests.RequestException as e:
@@ -271,6 +272,7 @@ class ConnectScreen(base.Screen):
         auth_name = params.get("auth", [None])[0]
 
         try:
+            client.configuration.Registry.ensure_url_available(self._config_path, clean_url)
             status.update("Connecting...")
             try:
                 resp = await asyncio.to_thread(requests.get, clean_url, timeout=5)

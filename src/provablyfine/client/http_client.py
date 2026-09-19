@@ -154,16 +154,17 @@ def account_key_signer(identifier: str | None) -> PrivateSigner:
 
 
 @ssh_utils.exception
-def session_key_signer(identifier: str | None) -> PrivateSigner:
+def session_key_signer(identifier: str | None, directory_url: str) -> PrivateSigner:
     """Resolve the session key from `identifier`: a config-supplied file
     path, or (if that's not a real path) a fingerprint to look up in pf's
-    own peer-credential-gated oracle.
+    own peer-credential-gated oracle. `directory_url` selects the oracle
+    scoped to that tenant.
     """
     if identifier is None:
         raise pfc.exceptions.UI("Did you forget to login ?")
     if os.path.exists(identifier):
         return session_file_signer(identifier)
-    path = ssh.oracle.session.current_socket_path()
+    path = ssh.oracle.session.current_socket_path(directory_url)
     unreachable: OSError | None = None
     try:
         key = _lookup_agent_identity(identifier, path)
@@ -272,7 +273,7 @@ class Client:
         return self._config
 
     def session_auth(self, session: str | None) -> HttpClient:
-        signer = session_key_signer(session)
+        signer = session_key_signer(session, self._config.directory_url)
         return HttpClient(self._pf_session, self._pf_directory, pfc.Auth([signer]))
 
     def session_auth_with_key(self, session: jwk.Private) -> HttpClient:
@@ -282,7 +283,7 @@ class Client:
     def login_auth(self, account: str | None, session: str | None) -> HttpClient:
         signers: list[pfc.Signer] = [
             account_key_signer(account),
-            session_key_signer(session),
+            session_key_signer(session, self._config.directory_url),
         ]
         return HttpClient(self._pf_session, self._pf_directory, pfc.Auth(signers))
 

@@ -8,11 +8,12 @@ import traceback
 import urllib.parse
 
 import provablyfine_client as pfc
+import tabulate
 
 from .. import __version__, client, jwk, log
 from . import login
 
-DEFAULT_CONFIG = os.path.join(os.path.expanduser("~"), ".config", "provablyfine", "config.json")
+DEFAULT_CONFIG = client.configuration.DEFAULT_CONFIG
 
 
 def generate_and_save_key() -> tuple[jwk.Private, str]:
@@ -133,6 +134,7 @@ def parse_invitation(invitation_url: str) -> Invitation:
 
 def _accept_function(args: argparse.Namespace) -> None:
     invitation = parse_invitation(args.invitation)
+    client.configuration.Registry.ensure_url_available(args.config, invitation.directory_url)
     c = client.Config(
         directory_url=invitation.directory_url,
         auth_name=invitation.auth_name,
@@ -203,6 +205,57 @@ def setup_accept_subparser(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--key", help="Private key to register", default=None)
     parser.add_argument("--invitation", help="Invitation you were given", required=True)
     parser.set_defaults(func=_accept_function)
+
+
+def _ctx_list_function(args: argparse.Namespace) -> None:
+    registry = client.configuration.Registry.load(args.config)
+    if not registry.contexts:
+        print("No contexts. Use 'accept' or 'initialize' to create one.")
+        return
+    rows: list[tuple[str, str, str, str]] = []
+    for name in sorted(registry.contexts):
+        marker = "*" if name == registry.current else ""
+        cfg = registry.contexts[name]
+        rows.append((marker, name, cfg.tenant_name, cfg.directory_url))
+    print(tabulate.tabulate(rows, headers=("", "name", "tenant", "directory_url")))
+
+
+def _ctx_use_function(args: argparse.Namespace) -> None:
+    with client.configuration.Registry.transaction(args.config) as registry:
+        if args.name == "-":
+            registry.use_previous()
+        else:
+            registry.use(args.name)
+
+
+def _ctx_rename_function(args: argparse.Namespace) -> None:
+    with client.configuration.Registry.transaction(args.config) as registry:
+        registry.rename(args.name, args.to)
+
+
+def _ctx_delete_function(args: argparse.Namespace) -> None:
+    with client.configuration.Registry.transaction(args.config) as registry:
+        registry.delete(args.name)
+
+
+def setup_ctx_subparser(parser: argparse.ArgumentParser) -> None:
+    subparsers = parser.add_subparsers(required=True, dest="subcommand", metavar="subcommand")
+
+    list_parser = subparsers.add_parser("list", help="List available contexts")
+    list_parser.set_defaults(func=_ctx_list_function)
+
+    use_parser = subparsers.add_parser("use", help="Switch to a context")
+    use_parser.add_argument("name", help="Context to switch to, or '-' for the previous one")
+    use_parser.set_defaults(func=_ctx_use_function)
+
+    rename_parser = subparsers.add_parser("rename", help="Rename a context")
+    rename_parser.add_argument("name", help="Context to rename")
+    rename_parser.add_argument("--to", required=True, help="New name for the context")
+    rename_parser.set_defaults(func=_ctx_rename_function)
+
+    delete_parser = subparsers.add_parser("delete", help="Delete a context")
+    delete_parser.add_argument("name", help="Context to delete")
+    delete_parser.set_defaults(func=_ctx_delete_function)
 
 
 def do_main(binary_name: str, args: argparse.Namespace) -> None:

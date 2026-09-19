@@ -193,18 +193,18 @@ class SessionPane(textual.widget.Widget):
     def compose(self) -> textual.app.ComposeResult:
         with textual.containers.Vertical() as v:
             v.border_title = "Session"
-            yield textual.widgets.Static(id="session-tenant")
+            yield textual.widgets.Static(id="session-context")
             yield textual.widgets.Static(id="session-role")
             yield textual.widgets.Static(id="session-identity")
 
     def on_mount(self) -> None:
-        self.watch(self.app, "tenant_name", self._set_tenant)
+        self.watch(self.app, "context_name", self._set_context)
         self.watch(self.app, "role", self._set_role)
         self.watch(self.app, "identity_name", self._set_identity)
 
-    def _set_tenant(self, tenant_name: str) -> None:
-        text = f"Tenant: {tenant_name}" if tenant_name else ""
-        self.query_one("#session-tenant", textual.widgets.Static).update(text)
+    def _set_context(self, context_name: str) -> None:
+        text = f"Context: {context_name}" if context_name else ""
+        self.query_one("#session-context", textual.widgets.Static).update(text)
 
     def _set_role(self, role: str) -> None:
         self.query_one("#session-role", textual.widgets.Static).update(f"Role: {role}" if role else "")
