@@ -115,8 +115,8 @@ jobs:
         run: choco install innosetup --no-progress -y
       - name: Build pf.exe
         run: |
-          uv sync --group windows-build
-          uv run --group windows-build pyinstaller packaging/windows/pf.spec
+          uv sync --group build
+          uv run --group build pyinstaller packaging/windows/pf.spec
       - name: Smoke-test the packaged binary
         run: dist/pf/pf.exe --version
       - name: Build installer

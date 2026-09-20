@@ -1,0 +1,47 @@
+# nfpm packaging configuration for the Linux client packages.
+# Both .deb and .rpm artifacts are generated from this single file.
+#
+# PF_VERSION and PF_ARCH must be provided by the caller:
+#   PF_VERSION=0.7.6 PF_ARCH=amd64 nfpm package -p deb
+# Architecture values follow the nfpm convention (amd64, arm64); nfpm maps
+# them to the deb (amd64/arm64) and rpm (x86_64/aarch64) names.
+name: provablyfine
+arch: ${PF_ARCH}
+platform: linux
+version: ${PF_VERSION}
+section: utils
+priority: optional
+maintainer: Mathieu Lacage <mathieu.lacage@cutebugs.net>
+description: |-
+  ProvablyFine SSH access-control client tools.
+  Provides the pf, pfa, and pfat command line tools.
+homepage: https://docs.provablyfine.net
+license: AGPL-3.0-only
+contents:
+  # PyInstaller onedir payload built by packaging/linux/pf.spec.
+  - src: dist/provablyfine/
+    dst: /opt/provablyfine
+  # /usr/bin wrappers instead of symlinks: PyInstaller onedir bootloaders
+  # locate their _internal directory relative to the invoked path, and
+  # wrapper scripts sidestep any symlink-resolution quirks.
+  - src: packaging/linux/pf.sh
+    dst: /usr/bin/pf
+    type: file
+    file_info:
+      mode: 0755
+  - src: packaging/linux/pfa.sh
+    dst: /usr/bin/pfa
+    type: file
+    file_info:
+      mode: 0755
+  - src: packaging/linux/pfat.sh
+    dst: /usr/bin/pfat
+    type: file
+    file_info:
+      mode: 0755
+depends:
+  - openssh-client
+overrides:
+  rpm:
+    depends:
+      - openssh-clients

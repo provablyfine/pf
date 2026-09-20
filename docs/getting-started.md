@@ -9,13 +9,33 @@ On Windows, you can instead download `pf-setup.exe` from the
 it. The installer is currently unsigned, so Windows SmartScreen will warn you on
 first run; choose "More info" then "Run anyway" to proceed.
 
-### Linux and macOS
+### Linux packages
+
+For simple cli use, we recommend pipx:
+```console
+$ pipx install provablyfine
+```
+
+For hosts you want to connect to via `pf`, we publish `.deb` and `.rpm` packages on the
+[latest release](https://github.com/provablyfine/pf/releases/latest) page.
+
+We support the following releases:
+| Distribution | Versions |
+| --- | --- |
+| Debian | 12, 13 |
+| Ubuntu | 22.04, 24.04 |
+| RHEL and rebuilds | 9, 10 |
+| Fedora | 43, 44 |
+
+### macOS
 
 We recommend to use `pipx` to install pf. From a terminal, run this command:
 
 ```console
 $ pipx install provablyfine
 ```
+
+### Check that the install has worked
 
 And then, check that it has been installed successfully:
 ```console

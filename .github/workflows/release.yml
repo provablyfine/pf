@@ -58,6 +58,17 @@ jobs:
           name: test-logs-${{ matrix.python-version }}
           path: /tmp/pf-test-logs/
 
+  audit:
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v8.1.0
+      - name: Audit runtime dependencies
+        # Fails the release if any runtime dependency has a known published
+        # vulnerability. Renovate keeps the lockfile patched.
+        run: uv audit --locked --no-dev --preview-features audit-command
+
   docs:
     needs: [lint, test]
     runs-on: ubuntu-latest
@@ -125,8 +136,8 @@ jobs:
         run: choco install innosetup --no-progress -y
       - name: Build pf.exe
         run: |
-          uv sync --group windows-build
-          uv run --group windows-build pyinstaller packaging/windows/pf.spec
+          uv sync --group build
+          uv run --group build pyinstaller packaging/windows/pf.spec
       - name: Build installer
         run: |
           # ISCC mis-parses LF-only scripts (silently drops directives like
@@ -142,8 +153,105 @@ jobs:
           name: windows-installer
           path: dist/pf-setup.exe
 
+  build-linux:
+    needs: [lint, test, audit]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            arch: amd64
+          - os: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.os }}
+    container:
+      # Build in the oldest supported environment: glibc 2.34 floor, so the
+      # payload runs on Ubuntu 22.04+, Debian 12+, RHEL 9+, and current Fedora.
+      image: rockylinux:9
+    env:
+      UV_LINK_MODE: copy
+    steps:
+      - name: Install build prerequisites
+        # curl is preinstalled on rockylinux:9 as curl-minimal; installing the
+        # full curl package would conflict with it.
+        run: dnf install -y --setopt=install_weak_deps=False git tar gzip
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v8.1.0
+        with:
+          python-version: "3.12"
+      - name: Build PyInstaller payload
+        run: |
+          uv sync --no-dev --group build --frozen
+          uv run --no-sync --group build pyinstaller packaging/linux/pf.spec --noconfirm
+      - name: Build deb and rpm packages
+        run: |
+          case "${{ runner.arch }}" in
+            X64)   nfpm_arch=x86_64 ;;
+            ARM64) nfpm_arch=arm64  ;;
+            *) echo "unexpected runner.arch ${{ runner.arch }}"; exit 1 ;;
+          esac
+          curl -fsSL -o /tmp/nfpm.tar.gz \
+            "https://github.com/goreleaser/nfpm/releases/download/v2.43.0/nfpm_2.43.0_Linux_${nfpm_arch}.tar.gz"
+          tar -xzf /tmp/nfpm.tar.gz -C /tmp nfpm
+          export PF_VERSION="$(uv version --short)"
+          export PF_ARCH="${{ matrix.arch }}"
+          /tmp/nfpm package -f packaging/linux/nfpm.yaml -p deb -t dist/
+          /tmp/nfpm package -f packaging/linux/nfpm.yaml -p rpm -t dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-deb-${{ matrix.arch }}
+          path: dist/*.deb
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-rpm-${{ matrix.arch }}
+          path: dist/*.rpm
+
+  smoke-test-linux:
+    needs: [build-linux]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # amd64 deb
+          - os: ubuntu-latest
+            artifact: linux-deb-amd64
+            distro: debian:12
+          - os: ubuntu-latest
+            artifact: linux-deb-amd64
+            distro: ubuntu:22.04
+          - os: ubuntu-latest
+            artifact: linux-deb-amd64
+            distro: ubuntu:24.04
+          # amd64 rpm
+          - os: ubuntu-latest
+            artifact: linux-rpm-x86_64
+            distro: rockylinux:9
+          - os: ubuntu-latest
+            artifact: linux-rpm-x86_64
+            distro: fedora:latest
+          # arm64
+          - os: ubuntu-24.04-arm
+            artifact: linux-deb-arm64
+            distro: debian:12
+          - os: ubuntu-24.04-arm
+            artifact: linux-rpm-aarch64
+            distro: rockylinux:9
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: pkg
+      - name: Install and smoke-test in ${{ matrix.distro }}
+        run: |
+          docker run --rm \
+            -v "$PWD/pkg:/pkg:ro" \
+            -v "$PWD/packaging/linux/smoke.sh:/smoke.sh:ro" \
+            ${{ matrix.distro }} /smoke.sh
+
   publish-pypi:
-    needs: [build-client, build-sdist, build-wheels, docs]
+    needs: [build-client, build-sdist, build-wheels, docs, audit]
     runs-on: ubuntu-latest
     environment: pypi
     steps:
@@ -156,15 +264,17 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
 
   github-release:
-    needs: [publish-pypi, build-windows]
+    needs: [publish-pypi, build-windows, smoke-test-linux]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          pattern: '{wheel-*,sdist-*,windows-installer}'
+          pattern: '{wheel-*,sdist-*,windows-installer,linux-deb-*,linux-rpm-*}'
           merge-multiple: true
           path: dist/
+      - name: Generate checksums
+        run: cd dist && sha256sum --binary * > SHA256SUMS
       - name: Extract release notes
         id: notes
         run: |

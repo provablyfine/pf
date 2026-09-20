@@ -103,7 +103,10 @@ dev = [
     "mutmut>=3.7.0",
     "pyte>=0.8.2",
 ]
-windows-build = [
+# Shared build group for the platform packaging jobs: pyinstaller payload for
+# the Windows installer (packaging/windows) and the Linux deb/rpm packages
+# (packaging/linux).
+build = [
     "pyinstaller>=6.11.0",
 ]
 

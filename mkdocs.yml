@@ -34,6 +34,7 @@ nav:
   - Getting Started:
       - Managed tenant: getting-started.md
       - Self-hosted tenant: getting-started-self-hosted.md
+      - Install on Linux: install.md
   - Access control:
       - Identities & tags: access-control/identities-tags.md
       - Permissions: access-control/permissions.md

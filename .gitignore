@@ -12,11 +12,11 @@
 **/*.patch
 **/*.swo
 .coverage*
-uv.lock
 site
 .idea
 .aleash*
 src/provablyfine/bin/
+build/
 src/provablyfine/licenses/
 .cache/
 tests/tmp*.t

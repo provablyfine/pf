@@ -1,0 +1,17 @@
+name: Security audit
+
+on:
+  schedule:
+    # Mondays 06:00 UTC, after the renovate update window
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v8.1.0
+      - name: Audit runtime dependencies
+        # Fails if any runtime dependency has a known published vulnerability.
+        run: uv audit --locked --no-dev --preview-features audit-command

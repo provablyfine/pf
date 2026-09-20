@@ -58,14 +58,19 @@ repos:
         language: system
         pass_filenames: false
         stages: [pre-push]
-      - id: uv-audit
-        name: Vulnerability scan (uv audit)
-        entry: uv audit
-        language: system
-        pass_filenames: false
-        stages: [pre-push]
       - id: check-changelog-fragments
         name: Validate changelog fragment filenames
         entry: scripts/check-changelog-fragments
         language: system
         files: ^changelog\.d/.*\.md$
+      - id: uv-lock-check
+        name: Check uv.lock is up to date
+        entry: uv lock --check
+        language: system
+        pass_filenames: false
+        files: ^(pyproject\.toml|uv\.lock|packages/provablyfine-client/pyproject\.toml)$
+      - id: uv-audit
+        name: Vulnerability scan (uv audit)
+        entry: uv audit --preview-features audit-command
+        language: system
+        pass_filenames: false
