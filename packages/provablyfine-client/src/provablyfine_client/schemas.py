@@ -118,6 +118,7 @@ class IdentitySelfTokenResponse(_Base):
 
 class Tenant(_Base):
     id: int
+    uuid: str
     name: str
     display_name: str
     owner_id: int | None = None

@@ -202,3 +202,27 @@ def test_tenant_autoincrement_preserved(tmp_path: pathlib.Path) -> None:
     url = f"sqlite:///{tmp_path / 'tenant.db'}"
     migrate.upgrade_tenant(url)
     assert _tables_missing_autoincrement_ddl(url, app_db.metadata) == []
+
+
+def test_registry_migration_backfills_tenant_uuid(tmp_path: pathlib.Path) -> None:
+    url = f"sqlite:///{tmp_path / 'registry.db'}"
+    config = migrate._alembic_config(schema="registry", url=url)
+    alembic.command.upgrade(config, "6356a7f48b37")
+
+    engine = sqlalchemy.create_engine(url)
+    with engine.begin() as connection:
+        for tenant_id, name in ((1, "root"), (2, "acme"), (3, "beta")):
+            connection.execute(
+                sqlalchemy.text(
+                    "INSERT INTO tenant (id, name, display_name, owner_id, database_url, is_enabled,"
+                    " is_initialized, is_deleted, created_at) VALUES (:id, :n, :n, NULL, 'sqlite://', 1, 1, 0, 0)"
+                ),
+                {"id": tenant_id, "n": name},
+            )
+
+    migrate.upgrade_registry(url)
+
+    with engine.connect() as connection:
+        uuids = dict(connection.execute(sqlalchemy.text("SELECT name, uuid FROM tenant")).all())
+    assert uuids["root"] == registry_db.ROOT_TENANT_UUID
+    assert len({uuids["acme"], uuids["beta"], uuids["root"]}) == 3

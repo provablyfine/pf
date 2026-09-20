@@ -6,7 +6,7 @@ import pytest
 from .. import jwk
 from . import token_verify
 
-_ISSUER = "https://issuer.example/pf/t/root/public/oidc"
+_ISSUER = "https://issuer.example/pf/t/00000000-0000-0000-0000-000000000001/public/oidc"
 _AUDIENCE = "host-1"
 
 

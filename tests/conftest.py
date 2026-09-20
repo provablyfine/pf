@@ -519,7 +519,9 @@ def api(request, tmp_path):
     api_ready = False
     while time.monotonic() - start < pf_start_timeout and popen.poll() is None:
         try:
-            response = requests.get(f"http://{api_host}:{api_port}/pf/t/root/directory", timeout=2)
+            response = requests.get(
+                f"http://{api_host}:{api_port}/pf/t/00000000-0000-0000-0000-000000000001/directory", timeout=2
+            )
         except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
             time.sleep(0.1)
             continue

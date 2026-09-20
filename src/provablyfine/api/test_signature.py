@@ -73,7 +73,7 @@ def _app(nonce_store: signature.NonceStore | None = None) -> types.SimpleNamespa
 def _signed_request_with(
     signer: client_signer.Signer,
     app: types.SimpleNamespace | None = None,
-    path: str = "/pf/t/root/whoami",
+    path: str = "/pf/t/00000000-0000-0000-0000-000000000001/whoami",
     body: bytes = b"{}",
     tamper: typing.Callable[[requests.structures.CaseInsensitiveDict[str]], None] | None = None,
 ) -> tuple[starlette.requests.Request, str]:
@@ -107,7 +107,7 @@ def _signed_request_with(
 def _signed_request(
     key: bytes,
     app: types.SimpleNamespace | None = None,
-    path: str = "/pf/t/root/whoami",
+    path: str = "/pf/t/00000000-0000-0000-0000-000000000001/whoami",
     body: bytes = b"{}",
     tamper: typing.Callable[[requests.structures.CaseInsensitiveDict[str]], None] | None = None,
 ) -> tuple[starlette.requests.Request, str]:
@@ -122,8 +122,8 @@ def _bare_request(headers: list[tuple[bytes, bytes]] | None = None) -> starlette
     scope = {
         "type": "http",
         "method": "GET",
-        "path": "/pf/t/root/whoami",
-        "raw_path": b"/pf/t/root/whoami",
+        "path": "/pf/t/00000000-0000-0000-0000-000000000001/whoami",
+        "raw_path": b"/pf/t/00000000-0000-0000-0000-000000000001/whoami",
         "query_string": b"",
         "headers": headers or [],
         "server": ("testserver", 80),
@@ -229,15 +229,15 @@ def test_get_keyid_skips_non_matching_label_before_a_match() -> None:
     account_signer = _Ed25519Signer("account", account_priv)
     prepared = requests.PreparedRequest()
     prepared.method = "GET"
-    prepared.url = "http://testserver/pf/t/root/whoami"
+    prepared.url = "http://testserver/pf/t/00000000-0000-0000-0000-000000000001/whoami"
     prepared.headers = requests.structures.CaseInsensitiveDict()
     prepared.body = b"{}"
     http_signatures.Auth([session_signer, account_signer])(prepared)
     scope = {
         "type": "http",
         "method": "GET",
-        "path": "/pf/t/root/whoami",
-        "raw_path": b"/pf/t/root/whoami",
+        "path": "/pf/t/00000000-0000-0000-0000-000000000001/whoami",
+        "raw_path": b"/pf/t/00000000-0000-0000-0000-000000000001/whoami",
         "query_string": b"",
         "headers": [(k.lower().encode(), v.encode()) for k, v in prepared.headers.items()],
         "server": ("testserver", 80),

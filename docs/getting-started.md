@@ -37,7 +37,7 @@ the new tenant!
 From the list of tenants, click on the **Connect** button to display the
 commands needed and run the `accept` command:
 ```console
-$ pfa accept --invitation https://demo.provablyfine.net/pf/t/your-tenant/directory
+$ pfa accept --invitation https://demo.provablyfine.net/pf/t/<tenant-uuid>/directory
 ```
 
 You can now login
@@ -154,7 +154,7 @@ $ pfa identity invite --email -i $(pfa identity list -n julie.chloe@gmail.com -q
 After you share the invitation with your new user, she receives an email
 that describes how to connect via the SSO:
 ```console
-$ pf accept https://demo.provablyfine.net/pf/t/your-tenant/directory
+$ pf accept https://demo.provablyfine.net/pf/t/<tenant-uuid>/directory
 ```
 
 . `accept` asks the user to

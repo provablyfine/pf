@@ -87,6 +87,7 @@ def create(conf: config.Config) -> fastapi.FastAPI:
         migrate.create_tenant(root_db_url)
         with registry_engine.begin() as registry_conn:
             registry_db.create(registry_conn).tenant.create(
+                uuid=registry_db.ROOT_TENANT_UUID,
                 name="root",
                 display_name="root",
                 owner_id=None,
@@ -176,7 +177,7 @@ def create(conf: config.Config) -> fastapi.FastAPI:
     fastapi_app.include_router(endpoints.frps.router)
 
     _tenant_dep = fastapi.Depends(dependencies.tenant_context)
-    _tenant_prefix = "/pf/t/{tenant_name}"
+    _tenant_prefix = "/pf/t/{tenant_uuid}"
 
     fastapi_app.include_router(endpoints.audit_log.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
     fastapi_app.include_router(endpoints.directory.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])

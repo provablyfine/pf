@@ -45,6 +45,7 @@ def _initialize_function(args: argparse.Namespace) -> None:
             c.account_key_file = None
     sc.invitation(sc.public().initialize(), account_key_id).accept_invitation()
     c.auth_name = "default"
+    c.tenant_name = sc.directory.name
     c.save(args.config)
 
 

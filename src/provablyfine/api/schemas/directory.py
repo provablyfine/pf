@@ -4,6 +4,8 @@ from . import base, jwk
 
 
 class DirectoryReadResponse(base.APIBase):
+    name: str
+    display_name: str
     initialize: str
     accept_invitation: str
     login: str

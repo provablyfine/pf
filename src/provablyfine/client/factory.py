@@ -13,6 +13,10 @@ class Factory:
         self._http = pfc.HttpSession(requests.Session(), timeout)
         self._directory = pfc.Directory(config.directory_url, timeout)
 
+    @property
+    def directory(self) -> pfc.Directory:
+        return self._directory
+
     def _session_signer(self) -> http_client.PrivateSigner:
         if self._config.session_key_fingerprint is not None:
             return http_client.session_key_signer(self._config.session_key_fingerprint, self._config.directory_url)

@@ -28,7 +28,7 @@ def _setup_session(api_port: int, tmp_path) -> tuple[provablyfine.client.Factory
     session_key_file.write_bytes(session_key.to_pem())
 
     config = provablyfine.client.Config(
-        directory_url=f"http://127.0.0.1:{api_port}/pf/t/root/directory",
+        directory_url=f"http://127.0.0.1:{api_port}/pf/t/00000000-0000-0000-0000-000000000001/directory",
         account_key_file=str(account_key_file),
         session_key_file=str(session_key_file),
     )
@@ -201,7 +201,7 @@ def _invite_second_identity(
     session_key_file.write_bytes(session_key.to_pem())
 
     config = provablyfine.client.Config(
-        directory_url=f"http://127.0.0.1:{api_port}/pf/t/root/directory",
+        directory_url=f"http://127.0.0.1:{api_port}/pf/t/00000000-0000-0000-0000-000000000001/directory",
         account_key_file=str(account_key_file),
         session_key_file=str(session_key_file),
     )

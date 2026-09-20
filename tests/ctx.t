@@ -14,13 +14,14 @@ Root sees only itself in the tenant list
 
 Create and bootstrap a second tenant "acme" into the SAME registry file --
 no --name flag exists, so it lands under its auto-derived name ("acme",
-from the tenant slug in its directory_url) and becomes current.
+from the tenant name in its directory) and becomes current.
   $ pfa -c config.json tenant create --name acme --display-name "Acme Corp"
   .* (re)
   .* (re)
   .* (re)
   $ ssh-keygen -t ed25519 -f acme-account -N "" > /dev/null
-  $ pfa -c config.json initialize http://127.0.0.1:$API_PORT/pf/t/acme/directory --key acme-account
+  $ ACME_UUID=$(pfa -c config.json tenant get -i 2 | awk 'NR==3{print $2}')
+  $ pfa -c config.json initialize http://127.0.0.1:$API_PORT/pf/t/$ACME_UUID/directory --key acme-account
   $ ssh-keygen -t ed25519 -f acme-session -N "" > /dev/null
   $ pfa -c config.json login --session-key acme-session
 
@@ -34,8 +35,8 @@ Both contexts now exist in the one file; "acme" is current
 
 A second context for a directory URL that already has one is refused before
 the server is contacted, so the invitation is not spent
-  $ pfa -c config.json initialize http://127.0.0.1:$API_PORT/pf/t/acme/directory --key acme-account
-  Context 'acme' already targets http://127.0.0.1:\d+/pf/t/acme/directory\. Use it \(ctx use acme\) or delete it first \(ctx delete acme\)\. (re)
+  $ pfa -c config.json initialize http://127.0.0.1:$API_PORT/pf/t/$ACME_UUID/directory --key acme-account
+  Context 'acme' already targets http://127.0.0.1:\d+/pf/t/[0-9a-f-]+/directory\. Use it \(ctx use acme\) or delete it first \(ctx delete acme\)\. (re)
   [2]
 
 Commands against config.json now act as acme -- sees only itself, no -c change needed

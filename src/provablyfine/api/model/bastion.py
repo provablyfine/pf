@@ -127,7 +127,7 @@ def generate_token(
     assert private_key.type == jwk.KeyType.ED25519
     self_identity = identity.read_one(id=ctx.identity_id)
     assert self_identity is not None
-    iss = f"{ctx.config.base_url}/pf/t/{ctx.tenant_name}/public/oidc"
+    iss = f"{ctx.config.base_url}/pf/t/{ctx.tenant_uuid}/public/oidc"
     now = int(time.time())
     claims: dict[str, typing.Any] = {
         "sub": str(self_identity.id),

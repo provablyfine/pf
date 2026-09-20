@@ -25,7 +25,7 @@ def test_logout_ends_only_the_calling_session(api, tmp_path: pathlib.Path) -> No
     account_key_file = tmp_path / "account_key"
     account_key_file.write_bytes(provablyfine.jwk.Private.generate_ed25519().to_pem())
     config = provablyfine.client.Config(
-        directory_url=f"http://127.0.0.1:{api.port}/pf/t/root/directory",
+        directory_url=f"http://127.0.0.1:{api.port}/pf/t/00000000-0000-0000-0000-000000000001/directory",
         account_key_file=str(account_key_file),
     )
     sc = provablyfine.client.Factory(config)

@@ -5,7 +5,6 @@ import contextlib
 import dataclasses
 import json
 import os
-import re
 import tempfile
 import time
 import typing
@@ -13,8 +12,6 @@ import typing
 import provablyfine_client as pfc
 
 from . import _filelock
-
-_TENANT_URL_RE = re.compile(r"/pf/t/([^/]+)/")
 
 DEFAULT_CONFIG = os.path.join(os.path.expanduser("~"), ".config", "provablyfine", "config.json")
 
@@ -128,6 +125,9 @@ class Config:
     known_hosts: str | None = None
     auth_name: str | None = None
     role_id: int | None = None  # headless only: set from invitation URL, consumed by ensure_session
+    # The tenant name is read from the directory when the context is created.
+    # It is only a label: the directory URL holds a UUID, not the name.
+    tenant_name: str = ""
 
     def __post_init__(self) -> None:
         self.ephemeral: bool = False
@@ -137,13 +137,6 @@ class Config:
         # persisted (not a dataclass field) -- see save() below, which
         # branches on it to decide "new context" vs. "update in place".
         self.context_name: str | None = None
-
-    @property
-    def tenant_name(self) -> str:
-        """Tenant slug embedded in `directory_url` (`.../pf/t/<slug>/directory`), or
-        `""` if the URL doesn't follow that shape."""
-        match = _TENANT_URL_RE.search(self.directory_url)
-        return match.group(1) if match else ""
 
     @staticmethod
     def load(filename: str) -> Config:

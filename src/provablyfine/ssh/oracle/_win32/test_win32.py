@@ -22,7 +22,7 @@ _CMD = os.environ.get("COMSPEC") or "C:\\Windows\\System32\\cmd.exe"
 # Long enough that no test races its own oracle's TTL, short enough that a
 # leaked one is gone well before the next run.
 _TTL = 30.0
-_DIRECTORY_URL = "https://a.example/pf/t/root/"
+_DIRECTORY_URL = "https://a.example/pf/t/00000000-0000-0000-0000-000000000001/"
 
 
 def _spawn_child_chain(*, depth: int, pid_file: str) -> subprocess.Popen[bytes]:

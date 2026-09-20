@@ -71,7 +71,7 @@ def _setup_ssh_auth_sock(ssh_agent):
 def _setup(api, tmpdir):
     scripts = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "scripts"))
     env = {**os.environ, "PATH": f"{scripts}:{os.environ['PATH']}"}
-    directory_url = f"http://127.0.0.1:{api.port}/pf/t/root/directory"
+    directory_url = f"http://127.0.0.1:{api.port}/pf/t/00000000-0000-0000-0000-000000000001/directory"
     config_file = os.path.join(tmpdir, "config.json")
 
     account_key = os.path.join(tmpdir, "account")

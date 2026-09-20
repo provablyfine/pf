@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import time
+import uuid
 
 import fastapi
 import fastapi.responses
@@ -17,6 +18,7 @@ _204 = fastapi.responses.Response(status_code=204)
 def _row_to_schema(row: registry_db.TenantRow) -> schemas.tenant.TenantReadResponse:
     return schemas.tenant.TenantReadResponse(
         id=row.id,
+        uuid=row.uuid,
         name=row.name,
         display_name=row.display_name,
         owner_id=row.owner_id,
@@ -80,6 +82,7 @@ def create_endpoint(
     db_url = f"sqlite:///{db_path}"
     now = int(time.time())
     new_id = reg_db.tenant.create(
+        uuid=str(uuid.uuid4()),
         name=data.name,
         display_name=data.display_name,
         owner_id=ctx.tenant_id,

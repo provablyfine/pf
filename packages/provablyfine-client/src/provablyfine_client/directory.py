@@ -28,6 +28,15 @@ class Directory:
         return self._data
 
     @property
+    def name(self) -> str:
+        """The tenant name. Empty if the server predates it."""
+        return self._load().get("name", "")
+
+    @property
+    def display_name(self) -> str:
+        return self._load().get("display_name", "")
+
+    @property
     def accept_invitation(self) -> str:
         return self._load()["accept_invitation"]
 
