@@ -75,7 +75,7 @@ def read_all(**kwargs: typing.Any) -> list[Bastion]:
 def update(
     id: int,
     url: str | _sentinel.Unset = _sentinel.UNSET,
-    ssh_proxy_jump: str | None | _sentinel.Unset = _sentinel.UNSET,
+    ssh_proxy_jump: str | _sentinel.Unset | None = _sentinel.UNSET,
     tag_id_list: list[int] | _sentinel.Unset = _sentinel.UNSET,
 ) -> None:
     update_fields: dict[str, typing.Any] = {}

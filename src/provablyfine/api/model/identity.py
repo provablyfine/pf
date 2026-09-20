@@ -120,7 +120,7 @@ def update(
     name: str | _sentinel.Unset = _sentinel.UNSET,
     added_tag_id_list: list[int] | _sentinel.Unset = _sentinel.UNSET,
     deleted_tag_id_list: list[int] | _sentinel.Unset = _sentinel.UNSET,
-    unix_username: str | None | _sentinel.Unset = _sentinel.UNSET,
+    unix_username: str | _sentinel.Unset | None = _sentinel.UNSET,
 ) -> None:
     update_fields: dict[str, typing.Any] = {}
     if not isinstance(name, _sentinel.Unset):
