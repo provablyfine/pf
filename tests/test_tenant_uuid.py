@@ -1,4 +1,8 @@
+import provablyfine_client as pfc
+import pytest
 import requests
+
+import provablyfine.client
 
 ROOT_UUID = "00000000-0000-0000-0000-000000000001"
 UNKNOWN_UUID = "9f1c0a1e-3b0d-4a55-8f7e-2d6c1b7a4e10"
@@ -29,3 +33,12 @@ def test_existing_and_unknown_tenants_answer_the_same_on_every_unauthenticated_e
     for name in ("root", "acme", "admin"):
         response = requests.post(f"http://127.0.0.1:{api.port}/pf/t/{name}/initialize", timeout=5)
         assert response.status_code == 404
+
+
+def test_initializing_twice_says_the_tenant_may_be_compromised(api) -> None:
+    config = provablyfine.client.Config(directory_url=f"http://127.0.0.1:{api.port}/pf/t/{ROOT_UUID}/directory")
+    public = provablyfine.client.Factory(config).public()
+    public.initialize()
+
+    with pytest.raises(pfc.exceptions.UI, match="treat it as compromised"):
+        public.initialize()
