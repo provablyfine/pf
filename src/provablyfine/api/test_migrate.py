@@ -226,3 +226,22 @@ def test_registry_migration_backfills_tenant_uuid(tmp_path: pathlib.Path) -> Non
         uuids = dict(connection.execute(sqlalchemy.text("SELECT name, uuid FROM tenant")).all())
     assert uuids["root"] == registry_db.ROOT_TENANT_UUID
     assert len({uuids["acme"], uuids["beta"], uuids["root"]}) == 3
+
+
+def test_registry_migration_drops_unique_tenant_name(tmp_path: pathlib.Path) -> None:
+    url = f"sqlite:///{tmp_path / 'registry.db'}"
+    migrate.upgrade_registry(url)
+
+    engine = sqlalchemy.create_engine(url)
+    with engine.begin() as connection:
+        for tenant_id in (1, 2):
+            connection.execute(
+                sqlalchemy.text(
+                    "INSERT INTO tenant (id, uuid, name, display_name, owner_id, database_url, is_enabled,"
+                    " is_initialized, is_deleted, created_at) VALUES (:id, :u, 'acme', 'Acme', NULL, 'sqlite://',"
+                    " 1, 1, 0, 0)"
+                ),
+                {"id": tenant_id, "u": f"uuid-{tenant_id}"},
+            )
+    with engine.connect() as connection:
+        assert connection.execute(sqlalchemy.text("SELECT count(*) FROM tenant")).scalar_one() == 2

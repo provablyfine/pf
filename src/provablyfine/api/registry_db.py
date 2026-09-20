@@ -28,7 +28,7 @@ ROOT_TENANT_UUID = "00000000-0000-0000-0000-000000000001"
 class TenantRow(typing.NamedTuple):
     id: typing.Annotated[int, db.Col(primary_key=True, nullable=False)]
     uuid: typing.Annotated[str, db.Col(nullable=False, unique=True)]
-    name: typing.Annotated[str, db.Col(nullable=False, unique=True)]
+    name: str
     display_name: str
     owner_id: int | None
     database_url: str

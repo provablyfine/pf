@@ -50,6 +50,25 @@ def test_config_save_auto_names_collide_with_numeric_suffix(tmp_path: pathlib.Pa
     assert registry.previous == "acme"
 
 
+def test_tenants_sharing_a_name_get_distinct_context_names(tmp_path: pathlib.Path) -> None:
+    # Tenant names are not unique: two tenants on the same server can both be called "acme".
+    path = str(tmp_path / "config.json")
+    urls = [f"https://example.com/pf/t/{u}/directory" for u in ("uuid-1", "uuid-2", "uuid-3")]
+    configuration.Config(directory_url=urls[0], tenant_name="acme").save(path)
+    configuration.Config(directory_url=urls[1], tenant_name="acme").save(path)
+    with configuration.Registry.transaction(path) as registry:
+        registry.rename("acme", "work")
+    configuration.Config(directory_url=urls[2], tenant_name="acme").save(path)
+
+    registry = configuration.Registry.load(path)
+    assert {name: cfg.directory_url for name, cfg in registry.contexts.items()} == {
+        "work": urls[0],
+        "acme-2": urls[1],
+        "acme": urls[2],
+    }
+    assert all(cfg.tenant_name == "acme" for cfg in registry.contexts.values())
+
+
 def test_config_save_refuses_when_ephemeral(tmp_path: pathlib.Path) -> None:
     path = str(tmp_path / "config.json")
     other = configuration.Config(directory_url="https://example.com/pf/t/root/directory", tenant_name="root")
