@@ -1,3 +1,5 @@
+import collections.abc
+
 import fastapi.responses
 
 from . import schemas
@@ -32,3 +34,28 @@ def problem_response(
         content=content,
         media_type="application/problem+json",
     )
+
+
+def not_found(title: str) -> ProblemHTTPException:
+    """The response for a missing object.
+
+    Use it for every "does not exist" answer about one kind of object, and for
+    objects the caller may not know about, so that the answers cannot be told apart.
+    """
+    return ProblemHTTPException(problem_response(status_code=404, title=title))
+
+
+def forbidden_or_not_found(
+    can_read: collections.abc.Callable[[], bool],
+    title: str,
+    not_found_title: str,
+    detail: str | None = None,
+) -> ProblemHTTPException:
+    """The response for an action the caller is not allowed to do on an existing object.
+
+    A caller who cannot read the object gets the same answer as for a missing object.
+    Otherwise the status code would tell them that the object exists.
+    """
+    if not can_read():
+        return not_found(not_found_title)
+    return ProblemHTTPException(problem_response(status_code=403, title=title, detail=detail))

@@ -71,18 +71,14 @@ def create_endpoint(data: schemas.auth.AuthCreateRequest) -> schemas.auth.Auth:
     return converters.auth_config_to_schema(ac)
 
 
-@router.get("/{auth_id:int}", status_code=200, responses={403: responses.PROBLEM, 404: responses.PROBLEM})
+@router.get("/{auth_id:int}", status_code=200, responses={404: responses.PROBLEM})
 def read_endpoint(auth_id: int) -> schemas.auth.Auth:
     ac = model.auth_config.read_one(id=auth_id)
     if ac is None:
-        raise responses.ProblemHTTPException(
-            responses.problem_response(status_code=404, title="Auth config does not exist")
-        )
+        raise responses.not_found("Auth config does not exist")
     grants = grant.Grants.create()
     if not grants.auth(ac.id).can_read():
-        raise responses.ProblemHTTPException(
-            responses.problem_response(status_code=403, title="Not allowed to read auth config")
-        )
+        raise responses.not_found("Auth config does not exist")
     return converters.auth_config_to_schema(ac)
 
 
@@ -94,17 +90,15 @@ def read_endpoint(auth_id: int) -> schemas.auth.Auth:
 def update_endpoint(auth_id: int, data: schemas.auth.AuthUpdateRequest) -> schemas.auth.Auth:
     ac = model.auth_config.read_one(id=auth_id)
     if ac is None:
-        raise responses.ProblemHTTPException(
-            responses.problem_response(status_code=404, title="Auth config does not exist")
-        )
+        raise responses.not_found("Auth config does not exist")
 
     grants = grant.Grants.create()
     fields_to_update: dict[str, typing.Any] = {}
 
     if data.name is not None:
         if not grants.auth(ac.id).can_update("name"):
-            raise responses.ProblemHTTPException(
-                responses.problem_response(status_code=403, title="Not allowed to update auth config name")
+            raise responses.forbidden_or_not_found(
+                grants.auth(ac.id).can_read, "Not allowed to update auth config name", "Auth config does not exist"
             )
         if data.name.isdigit():
             raise responses.ProblemHTTPException(
@@ -114,15 +108,19 @@ def update_endpoint(auth_id: int, data: schemas.auth.AuthUpdateRequest) -> schem
 
     if data.description is not None:
         if not grants.auth(ac.id).can_update("description"):
-            raise responses.ProblemHTTPException(
-                responses.problem_response(status_code=403, title="Not allowed to update auth config description")
+            raise responses.forbidden_or_not_found(
+                grants.auth(ac.id).can_read,
+                "Not allowed to update auth config description",
+                "Auth config does not exist",
             )
         fields_to_update["description"] = data.description
 
     if data.is_enabled is not None:
         if not grants.auth(ac.id).can_update("is_enabled"):
-            raise responses.ProblemHTTPException(
-                responses.problem_response(status_code=403, title="Not allowed to update auth config is_enabled")
+            raise responses.forbidden_or_not_found(
+                grants.auth(ac.id).can_read,
+                "Not allowed to update auth config is_enabled",
+                "Auth config does not exist",
             )
         fields_to_update["is_enabled"] = data.is_enabled
 
@@ -138,13 +136,11 @@ def update_endpoint(auth_id: int, data: schemas.auth.AuthUpdateRequest) -> schem
 def delete_endpoint(auth_id: int) -> fastapi.responses.Response:
     ac = model.auth_config.read_one(id=auth_id)
     if ac is None:
-        raise responses.ProblemHTTPException(
-            responses.problem_response(status_code=404, title="Auth config does not exist")
-        )
+        raise responses.not_found("Auth config does not exist")
     grants = grant.Grants.create()
     if not grants.auth(ac.id).can_delete():
-        raise responses.ProblemHTTPException(
-            responses.problem_response(status_code=403, title="Not allowed to delete auth config")
+        raise responses.forbidden_or_not_found(
+            grants.auth(ac.id).can_read, "Not allowed to delete auth config", "Auth config does not exist"
         )
     model.auth_config.delete(id=auth_id)
     return _204

@@ -52,12 +52,12 @@ def create_endpoint(data: schemas.tag.TagCreateRequest) -> schemas.tag.Tag:
 def delete_endpoint(tag_id: int) -> fastapi.responses.Response:
     tag = ctx.app_db.tag.read_one(id=tag_id)
     if tag is None:
-        raise responses.ProblemHTTPException(responses.problem_response(status_code=404, title="Tag does not exist"))
+        raise responses.not_found("Tag does not exist")
 
     grants = grant.Grants.create()
     if not grants.tag(tag.id).can_delete():
-        raise responses.ProblemHTTPException(
-            responses.problem_response(status_code=403, title="Not allowed to delete tag")
+        raise responses.forbidden_or_not_found(
+            grants.tag(tag.id).can_read, "Not allowed to delete tag", "Tag does not exist"
         )
 
     # XXX: delete all rows in other tables that reference this

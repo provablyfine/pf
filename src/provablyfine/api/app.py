@@ -58,7 +58,7 @@ class _InMemoryDebugStore:
         if len(self._store) > self._max_size:
             first = next(iter(self._store))
             self._store.pop(first)
-        id = secrets.token_hex(4)
+        id = secrets.token_urlsafe(16)
         self._store[id] = data
         return self._prefix + id
 

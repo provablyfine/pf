@@ -54,19 +54,19 @@ Check that grant "{{grant}}" is actually enforcing access control
 ] %}
 Check that grant "{{grant}}" is actually enforcing access control
   $ pfa -c user1.json bastion update -i $BASTION1_ID {{flag}}
-  Not allowed to update bastion field
+  Bastion not found
   [2]
   $ pfa -c config.json grant bastion {{grant}} | pfa -c config.json role grant -i $ROLE_ID --add
   $ pfa -c user1.json bastion update -i $BASTION1_ID {{flag}}
   $ pfa -c config.json role read -i $ROLE_ID -f json | jq '.grant_list[-1]' | pfa -c config.json role grant -i $ROLE_ID --del
   $ pfa -c user1.json bastion update -i $BASTION1_ID {{flag}}
-  Not allowed to update bastion field
+  Bastion not found
   [2]
 {% endfor %}
 
 Check that grant "--delete" is actually enforcing access control
   $ pfa -c user1.json bastion delete -i $BASTION2_ID
-  Not allowed to delete bastion
+  Bastion not found
   [2]
   $ pfa -c config.json grant bastion --delete | pfa -c config.json role grant -i $ROLE_ID --add
   $ pfa -c user1.json bastion delete -i $BASTION2_ID

@@ -63,7 +63,7 @@ def frps_plugin_endpoint(request: fastapi.Request, data: _PluginRequest) -> _Plu
         )
     except jwt.exceptions.InvalidTokenError as e:
         logger.debug(f"frps plugin: jwt validation failed: {e}")
-        return _PluginResponse(reject=True, reject_reason=str(e))
+        return _PluginResponse(reject=True, reject_reason="invalid jwt")
 
     if payload["use"] != "register":
         logger.debug(f"frps plugin: wrong token purpose: {payload['use']}")
