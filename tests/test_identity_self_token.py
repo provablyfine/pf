@@ -209,3 +209,17 @@ def _invite_second_identity(
     other_factory.invitation(invitation_key, str(account_key_file)).accept_invitation()
     other_factory.account(str(account_key_file), str(session_key_file)).login_http_sig(session_key.public().to_dict())
     return other_factory.session()
+
+
+def test_register_token_does_not_expose_tenant_ids(api, tmp_path) -> None:
+    factory, identity_name, _role_id = _setup_session(api.port, tmp_path)
+    token = factory.session().get_self_token("bastion", hostname=identity_name, purpose="register").token
+    claims = _claims(token)
+
+    assert "tenant_id" not in claims
+    audience = str(claims["aud"])
+    assert audience.startswith(f"{identity_name}-")
+    # The audience is used as a DNS label by the bastion client.
+    assert len(audience) <= 63
+    assert "00000000-0000-0000-0000-000000000001" not in audience
+    assert not audience.endswith("-1")

@@ -59,7 +59,7 @@ def frps_plugin_endpoint(request: fastapi.Request, data: _PluginRequest) -> _Plu
             algorithms=["EdDSA"],
             audience=user,
             issuer=trusted_key.issuer,
-            options={"require": ["sub", "name", "tenant_id", "use"]},
+            options={"require": ["sub", "name", "use"]},
         )
     except jwt.exceptions.InvalidTokenError as e:
         logger.debug(f"frps plugin: jwt validation failed: {e}")

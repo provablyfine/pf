@@ -29,7 +29,6 @@ def _base_claims(now: int, **overrides: object) -> dict[str, object]:
         "exp": now + 60,
         "jti": "jti-1",
         "name": "alice",
-        "tenant_id": 1,
         "use": "connect",
     }
     claims.update(overrides)
