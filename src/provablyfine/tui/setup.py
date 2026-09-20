@@ -161,7 +161,7 @@ class NewServerSetupScreen(base.Screen):
         self._keys: list[tuple[str, str]] = []
 
     def compose(self) -> textual.app.ComposeResult:
-        url_input = base.Input(placeholder="https://example.com/pf/t/tenant/directory", id="url", compact=True)
+        url_input = base.Input(placeholder="https://example.com/pf/t/<tenant-uuid>/directory", id="url", compact=True)
         url_input.border_title = "Directory URL"
         yield url_input
         lv = textual.widgets.ListView(id="keys")
@@ -207,7 +207,7 @@ class NewServerSetupScreen(base.Screen):
             if resp.status_code != 200:
                 raise pfc.exceptions.UI(f"Unable to read directory: {resp.status_code}")
             directory_data = resp.json()
-            c = client.Config(directory_url=url, directory=directory_data)
+            c = client.Config(directory_url=url, directory=directory_data, tenant_name=directory_data.get("name", ""))
 
             set_status("Initializing...")
             f = client.Factory(c)
@@ -244,7 +244,7 @@ class ConnectScreen(base.Screen):
 
     def compose(self) -> textual.app.ComposeResult:
         url_input = base.Input(
-            placeholder="https://example.com/pf/t/tenant/directory?invitation=...&auth=...",
+            placeholder="https://example.com/pf/t/<tenant-uuid>/directory?invitation=...&auth=...",
             id="url",
             compact=True,
         )
@@ -282,7 +282,9 @@ class ConnectScreen(base.Screen):
                 self.notify(f"Unable to read directory ({resp.status_code})", severity="error")
                 return
             directory_data = resp.json()
-            c = client.Config(directory_url=clean_url, directory=directory_data)
+            c = client.Config(
+                directory_url=clean_url, directory=directory_data, tenant_name=directory_data.get("name", "")
+            )
             factory = client.Factory(c)
 
             account_key: str | None = None

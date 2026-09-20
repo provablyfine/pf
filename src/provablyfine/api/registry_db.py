@@ -14,6 +14,11 @@ from . import db
 # Database metadata
 metadata = sqlalchemy.MetaData()
 
+# The root tenant is addressed by a well-known UUID so that deployment tooling can find it.
+# Every other tenant gets a random UUID. Knowing a UUID is what lets a client reach a tenant,
+# so tenant names are never used in URLs.
+ROOT_TENANT_UUID = "00000000-0000-0000-0000-000000000001"
+
 
 # ============================================================================
 # Row Type and Table Definition
@@ -22,7 +27,8 @@ metadata = sqlalchemy.MetaData()
 
 class TenantRow(typing.NamedTuple):
     id: typing.Annotated[int, db.Col(primary_key=True, nullable=False)]
-    name: typing.Annotated[str, db.Col(nullable=False, unique=True)]
+    uuid: typing.Annotated[str, db.Col(nullable=False, unique=True)]
+    name: str
     display_name: str
     owner_id: int | None
     database_url: str

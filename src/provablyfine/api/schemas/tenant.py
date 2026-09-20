@@ -21,6 +21,7 @@ class TenantUpdateRequest(base.APIBase):
 
 class TenantReadResponse(base.APIBase):
     id: int
+    uuid: str
     name: str
     display_name: str
     owner_id: int | None

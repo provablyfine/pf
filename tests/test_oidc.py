@@ -49,7 +49,7 @@ def oidc_env(api, mock_oidc, tmp_path) -> typing.Iterator[OidcEnv]:
 
     # Initialize Config pointing to the API (no session key yet)
     config = provablyfine.client.Config(
-        directory_url=f"http://127.0.0.1:{api.port}/pf/t/root/directory",
+        directory_url=f"http://127.0.0.1:{api.port}/pf/t/00000000-0000-0000-0000-000000000001/directory",
         account_key_file=str(account_key_file),
     )
 
@@ -384,7 +384,7 @@ def oidc_device_code_env(api, mock_oidc, tmp_path) -> typing.Iterator[OidcDevice
     account_key_file.write_bytes(account_key_obj.to_pem())
 
     config = provablyfine.client.Config(
-        directory_url=f"http://127.0.0.1:{api.port}/pf/t/root/directory",
+        directory_url=f"http://127.0.0.1:{api.port}/pf/t/00000000-0000-0000-0000-000000000001/directory",
         account_key_file=str(account_key_file),
     )
 

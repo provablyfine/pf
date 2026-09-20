@@ -145,7 +145,7 @@ def initialize(cli: Cli, api_port: int) -> None:
         "-c",
         "config.json",
         "initialize",
-        f"http://127.0.0.1:{api_port}/pf/t/root/directory",
+        f"http://127.0.0.1:{api_port}/pf/t/00000000-0000-0000-0000-000000000001/directory",
         "--key",
         "account",
     )

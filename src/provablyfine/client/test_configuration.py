@@ -9,24 +9,9 @@ import pytest
 from . import configuration
 
 
-def test_tenant_name_parses_slug_from_directory_url() -> None:
-    cfg = configuration.Config(directory_url="https://example.com/pf/t/acme-corp/directory")
-    assert cfg.tenant_name == "acme-corp"
-
-
-def test_tenant_name_parses_slug_with_query_string() -> None:
-    cfg = configuration.Config(directory_url="https://example.com/pf/t/acme-corp/directory?invitation=abc&auth=def")
-    assert cfg.tenant_name == "acme-corp"
-
-
-def test_tenant_name_empty_for_malformed_url() -> None:
-    cfg = configuration.Config(directory_url="https://example.com/not-a-directory-url")
-    assert cfg.tenant_name == ""
-
-
 def test_config_save_then_load_round_trips_as_current_context(tmp_path: pathlib.Path) -> None:
     path = str(tmp_path / "config.json")
-    cfg = configuration.Config(directory_url="https://example.com/pf/t/acme/directory")
+    cfg = configuration.Config(directory_url="https://example.com/pf/t/acme/directory", tenant_name="acme")
     cfg.save(path)
 
     loaded = configuration.Config.load(path)
@@ -41,7 +26,7 @@ def test_config_save_then_load_round_trips_as_current_context(tmp_path: pathlib.
 
 def test_config_save_updates_in_place_when_context_name_is_set(tmp_path: pathlib.Path) -> None:
     path = str(tmp_path / "config.json")
-    cfg = configuration.Config(directory_url="https://example.com/pf/t/acme/directory")
+    cfg = configuration.Config(directory_url="https://example.com/pf/t/acme/directory", tenant_name="acme")
     cfg.save(path)
 
     cfg.auth_name = "sso"
@@ -54,9 +39,9 @@ def test_config_save_updates_in_place_when_context_name_is_set(tmp_path: pathlib
 
 def test_config_save_auto_names_collide_with_numeric_suffix(tmp_path: pathlib.Path) -> None:
     path = str(tmp_path / "config.json")
-    first = configuration.Config(directory_url="https://a.example.com/pf/t/acme/directory")
+    first = configuration.Config(directory_url="https://a.example.com/pf/t/acme/directory", tenant_name="acme")
     first.save(path)
-    second = configuration.Config(directory_url="https://b.example.com/pf/t/acme/directory")
+    second = configuration.Config(directory_url="https://b.example.com/pf/t/acme/directory", tenant_name="acme")
     second.save(path)
 
     registry = configuration.Registry.load(path)
@@ -65,12 +50,31 @@ def test_config_save_auto_names_collide_with_numeric_suffix(tmp_path: pathlib.Pa
     assert registry.previous == "acme"
 
 
+def test_tenants_sharing_a_name_get_distinct_context_names(tmp_path: pathlib.Path) -> None:
+    # Tenant names are not unique: two tenants on the same server can both be called "acme".
+    path = str(tmp_path / "config.json")
+    urls = [f"https://example.com/pf/t/{u}/directory" for u in ("uuid-1", "uuid-2", "uuid-3")]
+    configuration.Config(directory_url=urls[0], tenant_name="acme").save(path)
+    configuration.Config(directory_url=urls[1], tenant_name="acme").save(path)
+    with configuration.Registry.transaction(path) as registry:
+        registry.rename("acme", "work")
+    configuration.Config(directory_url=urls[2], tenant_name="acme").save(path)
+
+    registry = configuration.Registry.load(path)
+    assert {name: cfg.directory_url for name, cfg in registry.contexts.items()} == {
+        "work": urls[0],
+        "acme-2": urls[1],
+        "acme": urls[2],
+    }
+    assert all(cfg.tenant_name == "acme" for cfg in registry.contexts.values())
+
+
 def test_config_save_refuses_when_ephemeral(tmp_path: pathlib.Path) -> None:
     path = str(tmp_path / "config.json")
-    other = configuration.Config(directory_url="https://example.com/pf/t/root/directory")
+    other = configuration.Config(directory_url="https://example.com/pf/t/root/directory", tenant_name="root")
     other.save(path)
 
-    cfg = configuration.Config(directory_url="https://example.com/pf/t/acme/directory")
+    cfg = configuration.Config(directory_url="https://example.com/pf/t/acme/directory", tenant_name="acme")
     cfg.ephemeral = True
     with pytest.raises(RuntimeError):
         cfg.save(path)
@@ -91,6 +95,7 @@ def test_registry_load_migrates_legacy_flat_config(tmp_path: pathlib.Path) -> No
     path = str(tmp_path / "config.json")
     legacy = {
         "directory_url": "https://example.com/pf/t/acme/directory",
+        "tenant_name": "acme",
         "account_key_fingerprint": "SHA256:abc",
         "auth_name": "default",
     }
@@ -138,7 +143,7 @@ def test_set_session_fingerprint_only_touches_session_fields(tmp_path: pathlib.P
 def test_set_session_fingerprint_follows_a_rename(tmp_path: pathlib.Path) -> None:
     path = str(tmp_path / "config.json")
     url = "https://example.com/pf/t/acme/directory"
-    configuration.Config(directory_url=url).save(path)
+    configuration.Config(directory_url=url, tenant_name="acme").save(path)
     with configuration.Registry.transaction(path) as registry:
         registry.rename("acme", "work")
 
@@ -151,7 +156,7 @@ def test_set_session_fingerprint_follows_a_rename(tmp_path: pathlib.Path) -> Non
 
 def test_config_save_after_a_rename_elsewhere_updates_the_renamed_context(tmp_path: pathlib.Path) -> None:
     path = str(tmp_path / "config.json")
-    cfg = configuration.Config(directory_url="https://example.com/pf/t/acme/directory")
+    cfg = configuration.Config(directory_url="https://example.com/pf/t/acme/directory", tenant_name="acme")
     cfg.save(path)
     with configuration.Registry.transaction(path) as registry:
         registry.rename("acme", "work")
@@ -168,10 +173,10 @@ def test_config_save_after_a_rename_elsewhere_updates_the_renamed_context(tmp_pa
 def test_config_save_refuses_a_second_context_for_the_same_directory_url(tmp_path: pathlib.Path) -> None:
     path = str(tmp_path / "config.json")
     url = "https://example.com/pf/t/acme/directory"
-    configuration.Config(directory_url=url).save(path)
+    configuration.Config(directory_url=url, tenant_name="acme").save(path)
 
     with pytest.raises(pfc.exceptions.UI, match="acme"):
-        configuration.Config(directory_url=url).save(path)
+        configuration.Config(directory_url=url, tenant_name="acme").save(path)
     with pytest.raises(pfc.exceptions.UI, match="acme"):
         configuration.Registry.ensure_url_available(path, url)
 
@@ -181,7 +186,7 @@ def test_config_save_refuses_a_second_context_for_the_same_directory_url(tmp_pat
 
 def test_transaction_writes_nothing_when_the_body_raises(tmp_path: pathlib.Path) -> None:
     path = str(tmp_path / "config.json")
-    configuration.Config(directory_url="https://example.com/pf/t/acme/directory").save(path)
+    configuration.Config(directory_url="https://example.com/pf/t/acme/directory", tenant_name="acme").save(path)
 
     with pytest.raises(pfc.exceptions.UI):
         with configuration.Registry.transaction(path) as registry:
@@ -194,8 +199,8 @@ def test_transaction_writes_nothing_when_the_body_raises(tmp_path: pathlib.Path)
 def test_registry_delete_refuses_the_current_context() -> None:
     registry = configuration.Registry(
         contexts={
-            "a": configuration.Config(directory_url="https://example.com/pf/t/a/directory"),
-            "b": configuration.Config(directory_url="https://example.com/pf/t/b/directory"),
+            "a": configuration.Config(directory_url="https://example.com/pf/t/a/directory", tenant_name="a"),
+            "b": configuration.Config(directory_url="https://example.com/pf/t/b/directory", tenant_name="b"),
         },
         current="a",
         previous="b",
@@ -211,7 +216,7 @@ def test_leftover_lock_file_does_not_block_writers(tmp_path: pathlib.Path) -> No
     # What a crashed writer used to leave behind.
     pathlib.Path(path + ".lock").write_text("")
 
-    configuration.Config(directory_url="https://example.com/pf/t/acme/directory").save(path)
+    configuration.Config(directory_url="https://example.com/pf/t/acme/directory", tenant_name="acme").save(path)
 
     assert set(configuration.Registry.load(path).contexts) == {"acme"}
 
@@ -232,7 +237,7 @@ def test_writer_times_out_naming_the_lock_file_while_another_holds_it(
 
 def test_readers_do_not_take_the_lock(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
     path = str(tmp_path / "config.json")
-    configuration.Config(directory_url="https://example.com/pf/t/acme/directory").save(path)
+    configuration.Config(directory_url="https://example.com/pf/t/acme/directory", tenant_name="acme").save(path)
     monkeypatch.setattr(configuration, "_LOCK_TIMEOUT_SECONDS", 0.2)
 
     with configuration.Registry.transaction(path):
@@ -247,10 +252,10 @@ def test_reading_needs_no_write_access_to_the_config_directory(tmp_path: pathlib
     config_dir = tmp_path / "ro"
     config_dir.mkdir()
     path = str(config_dir / "config.json")
-    configuration.Config(directory_url="https://example.com/pf/t/acme/directory").save(path)
+    configuration.Config(directory_url="https://example.com/pf/t/acme/directory", tenant_name="acme").save(path)
     legacy_path = str(config_dir / "legacy.json")
     with open(legacy_path, "w") as f:
-        json.dump({"directory_url": "https://example.com/pf/t/old/directory"}, f)
+        json.dump({"directory_url": "https://example.com/pf/t/old/directory", "tenant_name": "old"}, f)
     config_dir.chmod(0o500)
     try:
         assert configuration.Config.load(path).context_name == "acme"

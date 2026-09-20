@@ -179,6 +179,7 @@ def _accept_function(args: argparse.Namespace) -> None:
         sc.invitation(invitation.key, account_key_id).accept_invitation()
     c.auth_name = auth.name
     c.role_id = invitation.role_id
+    c.tenant_name = sc.directory.name
     c.save(args.config)
 
 

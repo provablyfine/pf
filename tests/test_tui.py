@@ -151,7 +151,7 @@ async def test_tui_key_expired_relogin_recovers(api):
     with tempfile.TemporaryDirectory() as tmpdir:
         scripts = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "scripts"))
         env = {**os.environ, "PATH": f"{scripts}:{os.environ['PATH']}"}
-        directory_url = f"http://127.0.0.1:{api.port}/pf/t/root/directory"
+        directory_url = f"http://127.0.0.1:{api.port}/pf/t/00000000-0000-0000-0000-000000000001/directory"
         config_file = os.path.join(tmpdir, "config.json")
 
         account_key = os.path.join(tmpdir, "account")
@@ -227,7 +227,7 @@ async def test_tui_relogin_preserves_deeper_screen(api):
     with tempfile.TemporaryDirectory() as tmpdir:
         scripts = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "scripts"))
         env = {**os.environ, "PATH": f"{scripts}:{os.environ['PATH']}"}
-        directory_url = f"http://127.0.0.1:{api.port}/pf/t/root/directory"
+        directory_url = f"http://127.0.0.1:{api.port}/pf/t/00000000-0000-0000-0000-000000000001/directory"
         config_file = os.path.join(tmpdir, "config.json")
 
         account_key = os.path.join(tmpdir, "account")
@@ -319,7 +319,7 @@ async def test_tui_relogin_failure_exits_app(api):
     with tempfile.TemporaryDirectory() as tmpdir:
         scripts = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "scripts"))
         env = {**os.environ, "PATH": f"{scripts}:{os.environ['PATH']}"}
-        directory_url = f"http://127.0.0.1:{api.port}/pf/t/root/directory"
+        directory_url = f"http://127.0.0.1:{api.port}/pf/t/00000000-0000-0000-0000-000000000001/directory"
         config_file = os.path.join(tmpdir, "config.json")
 
         account_key = os.path.join(tmpdir, "account")
@@ -1802,7 +1802,7 @@ async def test_tui_setup_new_server_lists_and_uses_agent_key(api, ssh_agent, mon
             # doesn't depend on what's in the real dev machine's ~/.ssh.
             monkeypatch.setenv("HOME", tmpdir)
             config_file = os.path.join(tmpdir, "config.json")
-            directory_url = f"http://127.0.0.1:{api.port}/pf/t/root/directory"
+            directory_url = f"http://127.0.0.1:{api.port}/pf/t/00000000-0000-0000-0000-000000000001/directory"
 
             app = provablyfine.tui.app.SetupApp(provablyfine.tui.setup.SetupChoiceScreen(config_file))
             async with app.run_test(size=(200, 50)) as pilot:
@@ -1849,7 +1849,7 @@ async def test_pfat_skips_relogin_when_oracle_session_is_valid(api):
     with tempfile.TemporaryDirectory() as tmpdir:
         scripts = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "scripts"))
         env = {**os.environ, "PATH": f"{scripts}:{os.environ['PATH']}"}
-        directory_url = f"http://127.0.0.1:{api.port}/pf/t/root/directory"
+        directory_url = f"http://127.0.0.1:{api.port}/pf/t/00000000-0000-0000-0000-000000000001/directory"
         config_file = os.path.join(tmpdir, "config.json")
 
         account_key = os.path.join(tmpdir, "account")
@@ -1904,7 +1904,10 @@ async def test_tui_switch_context(api):
         # A second, purely-local context to switch to: the switch action
         # itself is now just a registry write, no network call, so it
         # doesn't need to be a real, logged-in tenant.
-        acme_cfg = provablyfine.client.Config(directory_url=f"http://127.0.0.1:{api.port}/pf/t/acme/directory")
+        acme_cfg = provablyfine.client.Config(
+            directory_url=f"http://127.0.0.1:{api.port}/pf/t/11111111-1111-1111-1111-111111111111/directory",
+            tenant_name="acme",
+        )
         acme_cfg.save(config_file)
         registry = provablyfine.client.configuration.Registry.load(config_file)
         registry.current = "root"  # keep "root" current -- TuiApp below runs as root
@@ -1941,7 +1944,10 @@ async def test_tui_context_rename_and_delete(api):
         # A second, purely-local context: rename/delete are local registry
         # mutations, no network call, so it doesn't need to be a real,
         # logged-in tenant.
-        acme_cfg = provablyfine.client.Config(directory_url=f"http://127.0.0.1:{api.port}/pf/t/acme/directory")
+        acme_cfg = provablyfine.client.Config(
+            directory_url=f"http://127.0.0.1:{api.port}/pf/t/11111111-1111-1111-1111-111111111111/directory",
+            tenant_name="acme",
+        )
         acme_cfg.save(config_file)
         registry = provablyfine.client.configuration.Registry.load(config_file)
         registry.current = "root"  # keep "root" current -- TuiApp below runs as root

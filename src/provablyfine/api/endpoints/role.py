@@ -58,12 +58,12 @@ def create_endpoint(data: schemas.role.RoleCreateRequest) -> schemas.role.Role:
 def delete_endpoint(role_id: int) -> fastapi.responses.Response:
     role = model.role.read_one(id=role_id)
     if role is None:
-        raise responses.ProblemHTTPException(responses.problem_response(status_code=404, title="Role not found"))
+        raise responses.not_found("Role not found")
 
     grants = grant.Grants.create()
     if not grants.role(role.id).can_delete():
-        raise responses.ProblemHTTPException(
-            responses.problem_response(status_code=403, title="Not allowed to delete role")
+        raise responses.forbidden_or_not_found(
+            grants.role(role.id).can_read, "Not allowed to delete role", "Role not found"
         )
 
     member = ctx.app_db.role_member.read_one(role_id=role.id)
@@ -82,13 +82,13 @@ def delete_endpoint(role_id: int) -> fastapi.responses.Response:
 def update_endpoint(role_id: int, data: schemas.role.RoleUpdateRequest) -> schemas.role.Role:
     role = model.role.read_one(id=role_id)
     if role is None:
-        raise responses.ProblemHTTPException(responses.problem_response(status_code=404, title="Role not found"))
+        raise responses.not_found("Role not found")
 
     grants = grant.Grants.create()
     for field_name in data.model_fields_set:
         if not grants.role(role.id).can_update(field_name):
-            raise responses.ProblemHTTPException(
-                responses.problem_response(status_code=403, title="Not allowed to update role field", detail=field_name)
+            raise responses.forbidden_or_not_found(
+                grants.role(role.id).can_read, "Not allowed to update role field", "Role not found", detail=field_name
             )
 
     converter = converters.GrantConverter()

@@ -144,13 +144,9 @@ def oidc_login_endpoint(
 
     # Look up auth config
     ac = model.auth_config.read_one(name=data.auth_name, client_type=data.client_type)
-    if ac is None or not ac.is_enabled:
+    if ac is None or not ac.is_enabled or ac.type not in ("oidc", "oidc-device-code"):
         raise responses.ProblemHTTPException(
-            responses.problem_response(status_code=403, title="Auth config not found or disabled")
-        )
-    if ac.type not in ("oidc", "oidc-device-code"):
-        raise responses.ProblemHTTPException(
-            responses.problem_response(status_code=403, title="Auth config is not of type oidc or oidc-device-code")
+            responses.problem_response(status_code=403, title="Auth config not found or not usable for OIDC login")
         )
 
     # Verify OIDC token

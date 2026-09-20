@@ -68,14 +68,17 @@ def create_endpoint(data: schemas.bastion.BastionCreateRequest) -> schemas.basti
 def update_endpoint(bastion_id: int, data: schemas.bastion.BastionUpdateRequest) -> schemas.bastion.Bastion:
     bastion = model.bastion.read_one(id=bastion_id)
     if bastion is None:
-        raise responses.ProblemHTTPException(responses.problem_response(status_code=404, title="Bastion not found"))
+        raise responses.not_found("Bastion not found")
 
     grants = grant.Grants.create()
     for field in data.model_fields_set:
         checked_field = "tag_list" if field in ("tag_id_list", "tag_name_value_list") else field
         if not grants.bastion(bastion.id).can_update(checked_field):
-            raise responses.ProblemHTTPException(
-                responses.problem_response(status_code=403, title="Not allowed to update bastion field", detail=field)
+            raise responses.forbidden_or_not_found(
+                grants.bastion(bastion.id).can_read,
+                "Not allowed to update bastion field",
+                "Bastion not found",
+                detail=field,
             )
 
     update_params: dict[str, typing.Any] = {}
@@ -102,12 +105,12 @@ def update_endpoint(bastion_id: int, data: schemas.bastion.BastionUpdateRequest)
 def delete_endpoint(bastion_id: int) -> fastapi.responses.Response:
     bastion = model.bastion.read_one(id=bastion_id)
     if bastion is None:
-        raise responses.ProblemHTTPException(responses.problem_response(status_code=404, title="Bastion not found"))
+        raise responses.not_found("Bastion not found")
 
     grants = grant.Grants.create()
     if not grants.bastion(bastion.id).can_delete():
-        raise responses.ProblemHTTPException(
-            responses.problem_response(status_code=403, title="Not allowed to delete bastion")
+        raise responses.forbidden_or_not_found(
+            grants.bastion(bastion.id).can_read, "Not allowed to delete bastion", "Bastion not found"
         )
 
     model.bastion.delete(id=bastion_id)

@@ -30,13 +30,13 @@ def _cleanup(path: str) -> None:
 
 
 def test_current_socket_path_is_deterministic() -> None:
-    assert session.current_socket_path("https://a.example/pf/t/root/") == session.current_socket_path(
-        "https://a.example/pf/t/root/"
-    )
+    assert session.current_socket_path(
+        "https://a.example/pf/t/00000000-0000-0000-0000-000000000001/"
+    ) == session.current_socket_path("https://a.example/pf/t/00000000-0000-0000-0000-000000000001/")
 
 
 def test_socket_path_differs_for_different_parents() -> None:
-    url = "https://a.example/pf/t/root/"
+    url = "https://a.example/pf/t/00000000-0000-0000-0000-000000000001/"
     a = session.socket_path(parent_pid=111, parent_starttime=222, directory_url=url)
     b = session.socket_path(parent_pid=111, parent_starttime=223, directory_url=url)
     c = session.socket_path(parent_pid=112, parent_starttime=222, directory_url=url)
@@ -44,8 +44,16 @@ def test_socket_path_differs_for_different_parents() -> None:
 
 
 def test_socket_path_differs_for_different_tenants() -> None:
-    d = session.socket_path(parent_pid=111, parent_starttime=222, directory_url="https://a.example/pf/t/root/")
-    e = session.socket_path(parent_pid=111, parent_starttime=222, directory_url="https://b.example/pf/t/root/")
+    d = session.socket_path(
+        parent_pid=111,
+        parent_starttime=222,
+        directory_url="https://a.example/pf/t/00000000-0000-0000-0000-000000000001/",
+    )
+    e = session.socket_path(
+        parent_pid=111,
+        parent_starttime=222,
+        directory_url="https://b.example/pf/t/00000000-0000-0000-0000-000000000001/",
+    )
     assert d != e
 
 
@@ -55,7 +63,7 @@ def test_spawn_and_sign_from_the_same_shell() -> None:
     # what current_socket_path() derives from -- without this, a concurrent
     # test in another worker doing the same thing races on the identical
     # socket path (see tests/test_oidc.py's _create_session_key() docstring).
-    directory_url = "https://a.example/pf/t/root/"
+    directory_url = "https://a.example/pf/t/00000000-0000-0000-0000-000000000001/"
     key = jwk.Private.generate_ed25519()
     path = session.spawn_oracle(key, directory_url, ttl=10)
     try:
@@ -76,7 +84,7 @@ def test_spawn_and_sign_from_the_same_shell() -> None:
 @pytest.mark.xdist_group(name="pf-session-oracle")
 def test_superseded_oracle_ttl_expiry_does_not_delete_newer_socket() -> None:
     """Try to verify that two oracles racing to the same socket do nothing crazy."""
-    directory_url = "https://a.example/pf/t/root/"
+    directory_url = "https://a.example/pf/t/00000000-0000-0000-0000-000000000001/"
     key_a = jwk.Private.generate_ed25519()
     path = session.spawn_oracle(key_a, directory_url, ttl=1)
     key_b = jwk.Private.generate_ed25519()

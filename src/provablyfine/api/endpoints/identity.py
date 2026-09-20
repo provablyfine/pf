@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import collections.abc
+import functools
 import logging
 import time
 import typing
@@ -240,7 +242,7 @@ def create_endpoint(data: schemas.identity.IdentityCreateRequest) -> schemas.ide
 def delete_endpoint(identity_id: int) -> fastapi.responses.Response:
     identity = model.identity.read_one(id=identity_id)
     if identity is None:
-        raise responses.ProblemHTTPException(responses.problem_response(status_code=404, title="Identity not found"))
+        raise responses.not_found("Identity not found")
     if ctx.identity_id == identity_id:
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=400, title="You cannot delete yourself")
@@ -250,45 +252,58 @@ def delete_endpoint(identity_id: int) -> fastapi.responses.Response:
 
     grants = grant.Grants.create()
     if not grants.identity(identity.id, identity.tag_id_list, identity.boundary_id_list).can_delete():
-        raise responses.ProblemHTTPException(
-            responses.problem_response(status_code=403, title="Not allowed to delete identity")
+        raise responses.forbidden_or_not_found(
+            lambda: _can_read(grants, identity),
+            "Not allowed to delete identity",
+            "Identity not found",
         )
 
     model.identity.delete(id=identity.id)
     return _204
 
 
-def _403_tag() -> responses.ProblemHTTPException:
+def _can_read(grants: grant.Grants, identity: model.identity.Identity) -> bool:
+    """Callers always know about their own identity."""
+    return (
+        identity.id == ctx.identity_id
+        or grants.identity(identity.id, identity.tag_id_list, identity.boundary_id_list).can_read()
+    )
+
+
+def _403_tag(can_read: collections.abc.Callable[[], bool]) -> responses.ProblemHTTPException:
     # We purposely do not return detailed information to the client
     # to make sure we do not leak information that the client should not know
-    return responses.ProblemHTTPException(
-        responses.problem_response(status_code=403, title="Not allowed to update tag")
-    )
+    return responses.forbidden_or_not_found(can_read, "Not allowed to update tag", "Identity not found")
 
 
 def _check_set_tags(
     permission_request: grant.IdentityChecker,
+    can_read: collections.abc.Callable[[], bool],
     current_tag_id_list: list[int],
     new_tag_ids: set[int],
 ) -> tuple[list[int], list[int]]:
     current_tag_ids = set(current_tag_id_list)
     added_tag_id_list = list(new_tag_ids.difference(current_tag_ids))
     deleted_tag_id_list = list(current_tag_ids.difference(new_tag_ids))
-    _check_add_tags(permission_request, added_tag_id_list)
-    _check_del_tags(permission_request, deleted_tag_id_list)
+    _check_add_tags(permission_request, can_read, added_tag_id_list)
+    _check_del_tags(permission_request, can_read, deleted_tag_id_list)
     return added_tag_id_list, deleted_tag_id_list
 
 
-def _check_add_tags(permission_request: grant.IdentityChecker, tag_id_list: list[int]) -> None:
+def _check_add_tags(
+    permission_request: grant.IdentityChecker, can_read: collections.abc.Callable[[], bool], tag_id_list: list[int]
+) -> None:
     for tag_id in tag_id_list:
         if not permission_request.can_add_tag(tag_id):
-            raise _403_tag()
+            raise _403_tag(can_read)
 
 
-def _check_del_tags(permission_request: grant.IdentityChecker, tag_id_list: list[int]) -> None:
+def _check_del_tags(
+    permission_request: grant.IdentityChecker, can_read: collections.abc.Callable[[], bool], tag_id_list: list[int]
+) -> None:
     for tag_id in tag_id_list:
         if not permission_request.can_del_tag(tag_id):
-            raise _403_tag()
+            raise _403_tag(can_read)
 
 
 @router.patch(
@@ -299,26 +314,31 @@ def _check_del_tags(permission_request: grant.IdentityChecker, tag_id_list: list
 def update_endpoint(identity_id: int, data: schemas.identity.IdentityUpdateRequest) -> schemas.identity.Identity:
     identity = model.identity.read_one(id=identity_id)
     if identity is None:
-        raise responses.ProblemHTTPException(
-            responses.problem_response(status_code=404, title="Unable to find identity", detail=str(identity_id))
-        )
+        raise responses.not_found("Identity not found")
 
     grants = grant.Grants.create()
     permission_request = grants.identity(identity.id, identity.tag_id_list, identity.boundary_id_list)
+
+    can_read = functools.partial(_can_read, grants, identity)
+
     update_params: dict[str, typing.Any] = {}
     if "name" in data.model_fields_set:
         if not permission_request.can_update("name"):
-            raise responses.ProblemHTTPException(
-                responses.problem_response(status_code=403, title="Not allowed to update identity field", detail="name")
+            raise responses.forbidden_or_not_found(
+                lambda: _can_read(grants, identity),
+                "Not allowed to update identity field",
+                "Identity not found",
+                detail="name",
             )
         update_params["name"] = data.name
 
     if "unix_username" in data.model_fields_set:
         if not permission_request.can_update("unix_username"):
-            raise responses.ProblemHTTPException(
-                responses.problem_response(
-                    status_code=403, title="Not allowed to update identity field", detail="unix_username"
-                )
+            raise responses.forbidden_or_not_found(
+                lambda: _can_read(grants, identity),
+                "Not allowed to update identity field",
+                "Identity not found",
+                detail="unix_username",
             )
         if data.unix_username is not None:
             if not unix_account.is_valid(data.unix_username):
@@ -353,14 +373,14 @@ def update_endpoint(identity_id: int, data: schemas.identity.IdentityUpdateReque
             match operation.type:
                 case "set":
                     new_tag_ids = set(_read_tag_ids(operation.tag_id_list, operation.tag_name_value_list))
-                    _, _ = _check_set_tags(permission_request, identity.tag_id_list, new_tag_ids)
+                    _, _ = _check_set_tags(permission_request, can_read, identity.tag_id_list, new_tag_ids)
                 case "add":
                     add_tag_ids = _read_tag_ids(operation.tag_id_list, operation.tag_name_value_list)
-                    _check_add_tags(permission_request, add_tag_ids)
+                    _check_add_tags(permission_request, can_read, add_tag_ids)
                     new_tag_ids = new_tag_ids.union(set(add_tag_ids))
                 case "del":
                     del_tag_ids = _read_tag_ids(operation.tag_id_list, operation.tag_name_value_list)
-                    _check_del_tags(permission_request, del_tag_ids)
+                    _check_del_tags(permission_request, can_read, del_tag_ids)
                     new_tag_ids = new_tag_ids.difference(set(del_tag_ids))
 
         # No, you are not hallucinating, we are checking permissions here
@@ -368,7 +388,9 @@ def update_endpoint(identity_id: int, data: schemas.identity.IdentityUpdateReque
         # weird corner cases. For example, if the user wants to delete a tag that
         # is not here and for which the user does not have permission to delete,
         # we need to check it above to catch it.
-        added_tag_id_list, deleted_tag_id_list = _check_set_tags(permission_request, identity.tag_id_list, new_tag_ids)
+        added_tag_id_list, deleted_tag_id_list = _check_set_tags(
+            permission_request, can_read, identity.tag_id_list, new_tag_ids
+        )
         update_params["added_tag_id_list"] = added_tag_id_list
         update_params["deleted_tag_id_list"] = deleted_tag_id_list
 
@@ -401,14 +423,15 @@ def invite_endpoint(
 ) -> schemas.identity.IdentityInviteManualResponse | fastapi.responses.Response:
     identity = model.identity.read_one(id=identity_id)
     if identity is None:
-        raise responses.ProblemHTTPException(
-            responses.problem_response(status_code=404, title="Unable to find identity", detail=str(identity_id))
-        )
+        raise responses.not_found("Identity not found")
 
     grants = grant.Grants.create()
     if not grants.identity(identity.id, identity.tag_id_list, identity.boundary_id_list).can_invite(data.delivery):
-        raise responses.ProblemHTTPException(
-            responses.problem_response(status_code=403, title="Not allowed to invite identity", detail=data.delivery)
+        raise responses.forbidden_or_not_found(
+            lambda: _can_read(grants, identity),
+            "Not allowed to invite identity",
+            "Identity not found",
+            detail=data.delivery,
         )
 
     identity_invitation_key_id = model.identity_invitation_key.create(

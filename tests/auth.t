@@ -131,26 +131,26 @@ Re-enable an auth config
   created_at   .* (re)
 
 Public discovery endpoint returns correct data for http_sig
-  $ curl -s "http://127.0.0.1:$API_PORT/pf/t/root/public/auth/default?client_type=cli" && echo ""
+  $ curl -s "http://127.0.0.1:$API_PORT/pf/t/00000000-0000-0000-0000-000000000001/public/auth/default?client_type=cli" && echo ""
   {"name":"default","description":"Default HTTP signature authentication","config":{"type":"http_sig"}}
 
 Public discovery endpoint returns correct data for oidc
-  $ curl -s "http://127.0.0.1:$API_PORT/pf/t/root/public/auth/google?client_type=cli" && echo ""
+  $ curl -s "http://127.0.0.1:$API_PORT/pf/t/00000000-0000-0000-0000-000000000001/public/auth/google?client_type=cli" && echo ""
   {"name":"google","description":"","config":{"issuer":"https://accounts.google.com","client_id":"my-client-id","client_secret":null,"callback_url":"http://127.0.0.1/callback","type":"oidc"}}
 
 Public list endpoint filters by client_type
-  $ curl -s "http://127.0.0.1:$API_PORT/pf/t/root/public/auth?client_type=cli" | jq -r '.auths[].name'
+  $ curl -s "http://127.0.0.1:$API_PORT/pf/t/00000000-0000-0000-0000-000000000001/public/auth?client_type=cli" | jq -r '.auths[].name'
   default
   corp-http-sig
   google
 
 Public discovery endpoint returns 404 for unknown name
-  $ curl -s -o /dev/null -w "%{http_code}\n" "http://127.0.0.1:$API_PORT/pf/t/root/public/auth/nonexistent?client_type=cli"
+  $ curl -s -o /dev/null -w "%{http_code}\n" "http://127.0.0.1:$API_PORT/pf/t/00000000-0000-0000-0000-000000000001/public/auth/nonexistent?client_type=cli"
   404
 
 Public discovery endpoint returns 404 for disabled auth config
   $ pfa -c config.json auth update -i 4 --disable
-  $ curl -s -o /dev/null -w "%{http_code}\n" "http://127.0.0.1:$API_PORT/pf/t/root/public/auth/google?client_type=cli"
+  $ curl -s -o /dev/null -w "%{http_code}\n" "http://127.0.0.1:$API_PORT/pf/t/00000000-0000-0000-0000-000000000001/public/auth/google?client_type=cli"
   404
   $ pfa -c config.json auth update -i 4 --enable
 

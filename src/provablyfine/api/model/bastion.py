@@ -1,4 +1,5 @@
 import dataclasses
+import hashlib
 import time
 import typing
 import uuid
@@ -74,7 +75,7 @@ def read_all(**kwargs: typing.Any) -> list[Bastion]:
 def update(
     id: int,
     url: str | _sentinel.Unset = _sentinel.UNSET,
-    ssh_proxy_jump: str | None | _sentinel.Unset = _sentinel.UNSET,
+    ssh_proxy_jump: str | _sentinel.Unset | None = _sentinel.UNSET,
     tag_id_list: list[int] | _sentinel.Unset = _sentinel.UNSET,
 ) -> None:
     update_fields: dict[str, typing.Any] = {}
@@ -117,6 +118,16 @@ def read_matching() -> list[Bastion]:
     return matching
 
 
+def _tenant_label() -> str:
+    """A short, stable label for the current tenant, for use inside a DNS label.
+
+    The bastion client uses the token audience as a subdomain and as its frp user name.
+    Both show up on the network, so the audience must not carry the tenant UUID.
+    A hash cannot be turned back into the UUID, and it is not sequential either.
+    """
+    return hashlib.sha256(ctx.tenant_uuid.encode()).hexdigest()[:12]
+
+
 def generate_token(
     hostname: str,
     purpose: typing.Literal["connect", "register"],
@@ -127,17 +138,16 @@ def generate_token(
     assert private_key.type == jwk.KeyType.ED25519
     self_identity = identity.read_one(id=ctx.identity_id)
     assert self_identity is not None
-    iss = f"{ctx.config.base_url}/pf/t/{ctx.tenant_name}/public/oidc"
+    iss = f"{ctx.config.base_url}/pf/t/{ctx.tenant_uuid}/public/oidc"
     now = int(time.time())
     claims: dict[str, typing.Any] = {
         "sub": str(self_identity.id),
         "iss": iss,
-        "aud": f"{hostname}-{ctx.tenant_id}",
+        "aud": f"{hostname}-{_tenant_label()}",
         "iat": now,
         "exp": now + 60,
         "jti": str(uuid.uuid4()),
         "name": self_identity.name,
-        "tenant_id": ctx.tenant_id,
         "use": purpose,
     }
     if deadline is not None:

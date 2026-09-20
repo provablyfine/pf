@@ -14,14 +14,14 @@ No identity permission. Try to use them.
   Not allowed to create identity
   [2]
   $ pfa -c user1.json identity delete -i $ROOT_ID
-  Not allowed to delete identity
+  Identity not found
   [2]
   $ pfa -c user1.json identity tag -i $ROOT_ID -a $PERSON_ID
-  Not allowed to update tag
+  Identity not found
   [2]
   $ pfa -c user1.json identity tag -i $ROOT_ID -d $PERSON_ID
-  Not allowed to update tag
+  Identity not found
   [2]
   $ pfa -c user1.json identity update -i $ROOT_ID -n root1
-  Not allowed to update identity field
+  Identity not found
   [2]

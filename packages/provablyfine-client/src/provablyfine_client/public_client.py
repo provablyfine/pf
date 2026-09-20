@@ -47,7 +47,8 @@ class PublicClient:
         response = self._session.post(self._directory.initialize)
         if response.status_code == 204:
             raise exceptions.UI(
-                "Unable to initialize app: it is already initialized. Connect to the existing server instead."
+                "Unable to initialize app: it is already initialized. "
+                "If you did not initialize it yourself, treat it as compromised and recreate it."
             )
         if response.status_code != 200:
             raise exceptions.UI(f"Unable to initialize app. Unexpected error: {response.status_code}.")

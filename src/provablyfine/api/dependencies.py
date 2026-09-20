@@ -15,24 +15,24 @@ async def registry(request: fastapi.requests.Request):
 
 async def tenant_context(
     request: fastapi.requests.Request,
-    tenant_name: str,
+    tenant_uuid: str,
     reg_db: registry_db.RegistryDb = fastapi.Depends(registry),
 ):
-    tenant_row = reg_db.tenant.read_one(name=tenant_name)
+    tenant_row = reg_db.tenant.read_one(uuid=tenant_uuid)
 
     if tenant_row is None or not tenant_row.is_enabled:
         raise responses.ProblemHTTPException(responses.problem_response(status_code=404, title="Tenant not found"))
 
     engines = request.app.state.tenant_engines
-    if tenant_name not in engines:
-        engines[tenant_name] = sqlalchemy.create_engine(
+    if tenant_row.id not in engines:
+        engines[tenant_row.id] = sqlalchemy.create_engine(
             tenant_row.database_url, echo=request.app.state.config.debug_sql
         )
-    with engines[tenant_name].begin() as conn:
+    with engines[tenant_row.id].begin() as conn:
         application_db = app_db.create(conn)
         with (
             ctx.set_tenant_id(tenant_row.id),
-            ctx.set_tenant_name(tenant_name),
+            ctx.set_tenant_uuid(tenant_uuid),
             ctx.set_app_db(application_db),
         ):
             yield

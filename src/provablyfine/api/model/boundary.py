@@ -65,7 +65,7 @@ def update(
     id: int,
     name: str | _sentinel.Unset = _sentinel.UNSET,
     description: str | _sentinel.Unset = _sentinel.UNSET,
-    ceiling_list: list[grant.Grant] | None | _sentinel.Unset = _sentinel.UNSET,
+    ceiling_list: list[grant.Grant] | _sentinel.Unset | None = _sentinel.UNSET,
     denied_list: list[grant.Grant] | _sentinel.Unset = _sentinel.UNSET,
 ) -> None:
     update_fields: dict[str, typing.Any] = {}

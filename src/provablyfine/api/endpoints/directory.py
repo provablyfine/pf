@@ -1,16 +1,23 @@
 import fastapi
 
-from .. import schemas
+from .. import dependencies, registry_db, schemas
 from ..context import ctx
 
 router = fastapi.APIRouter()
 
 
 @router.get("/directory", status_code=200)
-def directory_endpoint(tenant_name: str) -> schemas.directory.DirectoryReadResponse:
+def directory_endpoint(
+    tenant_uuid: str,
+    reg_db: registry_db.RegistryDb = fastapi.Depends(dependencies.registry),
+) -> schemas.directory.DirectoryReadResponse:
+    tenant_row = reg_db.tenant.read_one(id=ctx.tenant_id)
+    assert tenant_row is not None
     base = ctx.config.base_url
-    p = f"{base}/pf/t/{tenant_name}"
+    p = f"{base}/pf/t/{tenant_uuid}"
     return schemas.directory.DirectoryReadResponse(
+        name=tenant_row.name,
+        display_name=tenant_row.display_name,
         initialize=f"{p}/initialize",
         accept_invitation=f"{p}/auth/http_sig/accept-invitation",
         login=f"{p}/auth/http_sig/login",

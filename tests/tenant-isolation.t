@@ -9,7 +9,8 @@ Create and initialize child tenant "acme"
   .* (re)
   .* (re)
   $ ssh-keygen -t ed25519 -f acme-account -N "" > /dev/null
-  $ pfa -c acme.json initialize http://127.0.0.1:$API_PORT/pf/t/acme/directory --key acme-account
+  $ ACME_UUID=$(pfa -c config.json tenant get -i 2 | awk 'NR==3{print $2}')
+  $ pfa -c acme.json initialize http://127.0.0.1:$API_PORT/pf/t/$ACME_UUID/directory --key acme-account
   $ ssh-keygen -t ed25519 -f acme-session -N "" > /dev/null
   $ pfa -c acme.json login --session-key acme-session
   $ pfa -c acme.json tag create -n scope -v acme-only
@@ -20,7 +21,8 @@ Create and initialize child tenant "beta"
   .* (re)
   .* (re)
   $ ssh-keygen -t ed25519 -f beta-account -N "" > /dev/null
-  $ pfa -c beta.json initialize http://127.0.0.1:$API_PORT/pf/t/beta/directory --key beta-account
+  $ BETA_UUID=$(pfa -c config.json tenant get -i 3 | awk 'NR==3{print $2}')
+  $ pfa -c beta.json initialize http://127.0.0.1:$API_PORT/pf/t/$BETA_UUID/directory --key beta-account
   $ ssh-keygen -t ed25519 -f beta-session -N "" > /dev/null
   $ pfa -c beta.json login --session-key beta-session
   $ pfa -c beta.json tag create -n scope -v beta-only

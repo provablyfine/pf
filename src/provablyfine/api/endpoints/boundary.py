@@ -72,17 +72,17 @@ def create_endpoint(data: schemas.boundary.BoundaryCreateRequest) -> schemas.bou
 def delete_endpoint(boundary_id: int) -> fastapi.responses.Response:
     boundary = model.boundary.read_one(id=boundary_id)
     if boundary is None:
-        raise responses.ProblemHTTPException(responses.problem_response(status_code=404, title="Boundary not found"))
+        raise responses.not_found("Boundary does not exist")
+    grants = grant.Grants.create()
+    if not grants.boundary(boundary.id).can_delete():
+        raise responses.forbidden_or_not_found(
+            grants.boundary(boundary.id).can_read, "Not allowed to delete boundary", "Boundary does not exist"
+        )
+
     identity = ctx.app_db.identity_boundary.read_one(boundary_id=boundary.id)
     if identity is not None:
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=400, title="Boundary is still in use")
-        )
-
-    grants = grant.Grants.create()
-    if not grants.boundary(boundary.id).can_delete():
-        raise responses.ProblemHTTPException(
-            responses.problem_response(status_code=403, title="Not allowed to delete boundary")
         )
 
     ctx.app_db.boundary.delete(id=boundary.id)
@@ -102,15 +102,16 @@ def update_endpoint(
 
     boundary = model.boundary.read_one(id=boundary_id)
     if boundary is None:
-        raise responses.ProblemHTTPException(
-            responses.problem_response(status_code=404, title="Boundary does not exist", detail=str(boundary_id))
-        )
+        raise responses.not_found("Boundary does not exist")
 
     grants = grant.Grants.create()
     for field in data.model_fields_set:
         if not grants.boundary(boundary.id).can_update(field):
-            raise responses.ProblemHTTPException(
-                responses.problem_response(status_code=403, title="Not allowed to update boundary field", detail=field)
+            raise responses.forbidden_or_not_found(
+                grants.boundary(boundary.id).can_read,
+                "Not allowed to update boundary field",
+                "Boundary does not exist",
+                detail=field,
             )
 
     update_query: dict[str, typing.Any] = {}

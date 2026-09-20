@@ -13,7 +13,7 @@ _identity_id_var: contextvars.ContextVar[int | None] = contextvars.ContextVar("i
 _active_role_id_var: contextvars.ContextVar[int | None] = contextvars.ContextVar("active_role_id", default=None)
 _session_key_id_var: contextvars.ContextVar[str | None] = contextvars.ContextVar("session_key_id", default=None)
 _tenant_id_var: contextvars.ContextVar[int | None] = contextvars.ContextVar("tenant_id", default=None)
-_tenant_name_var: contextvars.ContextVar[str | None] = contextvars.ContextVar("tenant_name", default=None)
+_tenant_uuid_var: contextvars.ContextVar[str | None] = contextvars.ContextVar("tenant_uuid", default=None)
 
 
 class RequestContext:
@@ -118,19 +118,19 @@ class RequestContext:
             _tenant_id_var.set(None)
 
     @property
-    def tenant_name(self) -> str:
-        v = _tenant_name_var.get()
+    def tenant_uuid(self) -> str:
+        v = _tenant_uuid_var.get()
         assert v is not None
         return v
 
     @contextlib.contextmanager
-    def set_tenant_name(self, tenant_name: str):
-        assert _tenant_name_var.get() is None
-        _tenant_name_var.set(tenant_name)
+    def set_tenant_uuid(self, tenant_uuid: str):
+        assert _tenant_uuid_var.get() is None
+        _tenant_uuid_var.set(tenant_uuid)
         try:
             yield
         finally:
-            _tenant_name_var.set(None)
+            _tenant_uuid_var.set(None)
 
 
 ctx = RequestContext()
