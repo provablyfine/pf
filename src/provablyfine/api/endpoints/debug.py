@@ -13,7 +13,6 @@ def trigger_error_endpoint() -> fastapi.responses.Response:
 @router.get("/{debug_id}")
 def debug_endpoint(debug_id: str, request: fastapi.requests.Request) -> fastapi.responses.Response:
     data = request.app.state.debug_store.get(debug_id)
-    data = request.app.state.debug_store.get(debug_id)
     if data is None:
         return responses.problem_response(
             status_code=404, title="Debug data could not be found", detail=f"Missing {debug_id}"

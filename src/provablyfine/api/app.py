@@ -157,6 +157,8 @@ def create(conf: config.Config) -> fastapi.FastAPI:
     async def generic_exception_handler(
         request: fastapi.requests.Request, exc: Exception
     ) -> fastapi.responses.Response:
+        if not request.app.state.config.debug:
+            return responses.problem_response(status_code=500, title="Internal Server Error")
         tb = _format_endpoint_traceback(exc)
         debug_path = request.app.state.debug_store.add(_Backtrace(request.method, request.url.path, tb).format())
         debug_url = request.app.state.config.base_url + debug_path
@@ -173,7 +175,8 @@ def create(conf: config.Config) -> fastapi.FastAPI:
     fastapi_app.add_middleware(middleware.BodyReaderMiddleware)
     fastapi_app.add_middleware(middleware.PrometheusMiddleware)
 
-    fastapi_app.include_router(endpoints.debug.router, tags=["debug"])
+    if conf.debug:
+        fastapi_app.include_router(endpoints.debug.router, tags=["debug"])
     fastapi_app.include_router(endpoints.frps.router)
 
     _tenant_dep = fastapi.Depends(dependencies.tenant_context)
