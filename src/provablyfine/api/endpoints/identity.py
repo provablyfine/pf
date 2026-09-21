@@ -454,5 +454,21 @@ def invite_endpoint(
         )
     key_material = identity_invitation.key.to_dict()["k"]
     url = f"{ctx.config.base_url}?invitation={key_material}"
-    mailer.send(email_cfg, to=identity.name, subject="Your invitation", body=f"Accept your invitation:\n{url}\n")
+    to = identity.name
+
+    def send() -> None:
+        try:
+            mailer.send(email_cfg, to=to, subject="Your invitation", body=f"Accept your invitation:\n{url}\n")
+        except Exception as e:
+            logger.exception("Unable to send the invitation email")
+            raise responses.ProblemHTTPException(
+                responses.problem_response(
+                    status_code=502,
+                    title="The invitation was created but its email could not be sent",
+                    detail=str(e),
+                )
+            )
+
+    # The email goes out once the invitation is committed, and without holding the database lock.
+    ctx.after_commit(send)
     return fastapi.responses.Response(status_code=204)

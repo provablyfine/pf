@@ -117,6 +117,38 @@ def test_endpoint_rs256(oidc_env: OidcEnv) -> None:
     )
 
 
+def test_slow_identity_provider_does_not_block_other_writes(oidc_env: OidcEnv) -> None:
+    """The identity provider is called before the transaction starts, so it cannot hold the tenant write lock."""
+    nonce = "test-nonce-slow"
+    id_token = oidc_env.mock.issue_token("user@example.com", alg="RS256", nonce=nonce)
+    session_key = _create_session_key()
+    oidc_env.mock.delay_s = 1.5
+
+    login = threading.Thread(
+        target=lambda: (
+            provablyfine.client.Factory(oidc_env.config, timeout=30)
+            .session_with_private_key(session_key)
+            .login_oidc(
+                auth_name="oidc-test",
+                client_type="cli",
+                id_token=id_token,
+                nonce=nonce,
+                session_public_key=session_key.public().to_dict(),
+            )
+        )
+    )
+    login.start()
+    try:
+        time.sleep(0.5)  # the login is now waiting for the identity provider
+        assert login.is_alive()
+        started = time.monotonic()
+        oidc_env.sc.session().create_tag("written-during-login", "yes")
+        assert time.monotonic() - started < 1.0, "a write waited for the identity provider"
+    finally:
+        login.join(30)
+    assert not login.is_alive()
+
+
 def test_endpoint_es256(oidc_env: OidcEnv) -> None:
     """Valid ES256 token succeeds."""
     nonce = "test-nonce-es256"

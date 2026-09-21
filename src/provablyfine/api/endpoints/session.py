@@ -18,7 +18,10 @@ def update_session_self(data: schemas.session.SessionSelfUpdateRequest) -> fasta
     member = ctx.app_db.role_member.read_one(role_id=data.role_id, identity_id=ctx.identity_id)
     if member is None:
         raise responses.ProblemHTTPException(responses.problem_response(403, "Identity is not a member of this role"))
-    ctx.app_db.identity_session_key.update(role_id=data.role_id).where(id=ctx.session_key_id)
+    # The role was read earlier in this request. Another request may have set it since.
+    # So the update only applies to a session that still has no role.
+    if ctx.app_db.identity_session_key.update(role_id=data.role_id).where(id=ctx.session_key_id, role_id=None) == 0:
+        raise responses.ProblemHTTPException(responses.problem_response(409, "Session role already set"))
     return fastapi.responses.Response(status_code=204)
 
 

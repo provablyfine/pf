@@ -21,7 +21,7 @@ import sqlalchemy
 import starlette.requests
 
 from .. import jwk
-from . import app_db, migrate, model, responses, signature
+from . import app_db, context, migrate, model, responses, signature
 from .context import ctx
 
 
@@ -148,7 +148,7 @@ def real_app_db(tmp_path: pathlib.Path) -> collections.abc.Iterator[app_db.AppDb
     with engine.connect() as connection:
         db = app_db.create(connection)
         kek = cryptography.fernet.Fernet(cryptography.fernet.Fernet.generate_key())
-        with ctx.set_app_db(db), ctx.set_kek(kek):
+        with ctx.set_app_db(db), ctx.set_kek(kek), ctx.set_deferred(context.Deferred()):
             yield db
 
 
@@ -417,6 +417,19 @@ async def test_verify_account_accepts_valid_key(real_app_db: app_db.AppDb) -> No
 
 
 @pytest.mark.anyio
+async def test_verify_account_looks_up_the_key_that_signed(real_app_db: app_db.AppDb) -> None:
+    other_identity_id = _seed_identity("bob")
+    _seed_account_key(other_identity_id, jwk.Private.generate_ed25519().public())
+    identity_id = _seed_identity("alice")
+    priv = jwk.Private.generate_ed25519()
+    _seed_account_key(identity_id, priv.public())
+    request, _ = _signed_request_with(_Ed25519Signer("account", priv))
+    async with contextlib.aclosing(signature.verify_account(request)) as agen:
+        await agen.__anext__()
+        assert ctx.identity_id == identity_id
+
+
+@pytest.mark.anyio
 async def test_verify_account_rejects_unknown_key(real_app_db: app_db.AppDb) -> None:
     priv = jwk.Private.generate_ed25519()
     request, _ = _signed_request_with(_Ed25519Signer("account", priv))
@@ -463,6 +476,22 @@ async def test_verify_session_accepts_valid_key_and_sets_role(real_app_db: app_d
         assert ctx.identity_id == identity_id
         assert ctx.active_role_id == 42
         assert ctx.session_key_id == priv.public().thumbprint()
+
+
+@pytest.mark.anyio
+async def test_verify_session_looks_up_the_key_that_signed(real_app_db: app_db.AppDb) -> None:
+    other_identity_id = _seed_identity("bob")
+    _seed_session_key(
+        other_identity_id, jwk.Private.generate_ed25519().public(), expires_at=int(time.time()) + 3600, role_id=1
+    )
+    identity_id = _seed_identity("alice")
+    priv = jwk.Private.generate_ed25519()
+    _seed_session_key(identity_id, priv.public(), expires_at=int(time.time()) + 3600, role_id=2)
+    request, _ = _signed_request_with(_Ed25519Signer("session", priv))
+    async with contextlib.aclosing(signature.verify_session(request)) as agen:
+        await agen.__anext__()
+        assert ctx.identity_id == identity_id
+        assert ctx.active_role_id == 2
 
 
 @pytest.mark.anyio

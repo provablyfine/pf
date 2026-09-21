@@ -19,6 +19,23 @@ def create_warning(type: str, **kwargs: typing.Any) -> None:
     )
 
 
+def create_warning_after_rollback(type: str, **kwargs: typing.Any) -> None:
+    """Record a warning about a request that is about to be rejected. Call it right before raising.
+
+    Rejecting a request rolls its transaction back, and a plain `create_warning` with it.
+    This one is written in its own transaction, after the rollback.
+    """
+    now = int(time.time())
+    by_identity_id = ctx.identity_id
+
+    def write() -> None:
+        ctx.app_db.audit_log.create(
+            type=type, level=app_db.AuditLogLevel.WARNING, at=now, by_identity_id=by_identity_id, details=kwargs
+        )
+
+    ctx.after_rollback(write)
+
+
 def read_all(
     level: int | None = None,
     object_type: str | None = None,

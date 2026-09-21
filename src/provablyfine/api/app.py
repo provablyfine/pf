@@ -190,14 +190,15 @@ def create(conf: config.Config) -> fastapi.FastAPI:
         fastapi_app.include_router(endpoints.debug.router, tags=["debug"])
     fastapi_app.include_router(endpoints.frps.router)
 
-    _tenant_dep = fastapi.Depends(dependencies.tenant_context)
+    _tenant_dep = dependencies.TENANT_CONTEXT
     _tenant_prefix = "/pf/t/{tenant_uuid}"
 
     fastapi_app.include_router(endpoints.audit_log.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
     fastapi_app.include_router(endpoints.directory.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
     fastapi_app.include_router(endpoints.initialize.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
     fastapi_app.include_router(endpoints.auth_http_sig.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
-    fastapi_app.include_router(endpoints.auth_oidc.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
+    # The OIDC login calls the identity provider before its transaction starts: it orders its own dependencies.
+    fastapi_app.include_router(endpoints.auth_oidc.router, prefix=_tenant_prefix)
     fastapi_app.include_router(endpoints.auth_endpoint.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
     fastapi_app.include_router(endpoints.public.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
     fastapi_app.include_router(endpoints.boundary.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])

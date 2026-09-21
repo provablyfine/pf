@@ -1,8 +1,9 @@
+import asyncio
 import base64
+import dataclasses
 import json
 import time
 
-import cryptography.exceptions
 import cryptography.hazmat.primitives.asymmetric.ec
 import cryptography.hazmat.primitives.asymmetric.padding
 import cryptography.hazmat.primitives.asymmetric.rsa
@@ -14,7 +15,7 @@ import fastapi.responses
 import requests
 import sqlalchemy.exc
 
-from .. import converters, crypto_policy, model, responses, schemas, signature
+from .. import converters, crypto_policy, dependencies, model, responses, schemas, signature
 from ..context import ctx
 
 router = fastapi.APIRouter()
@@ -127,23 +128,28 @@ def _verify_oidc_token(issuer: str, client_id: str, id_token: str, nonce: str) -
     return email, payload["exp"]
 
 
-@router.post(
-    "/auth/oidc/login",
-    status_code=200,
-    responses={400: responses.PROBLEM, 403: responses.PROBLEM},
-)
-def oidc_login_endpoint(
-    request: fastapi.requests.Request, data: schemas.auth.OidcLoginRequest
-) -> schemas.directory.LoginResponse:
+@dataclasses.dataclass(frozen=True)
+class _VerifiedOidcLogin:
+    email: str
+    token_exp: int
+
+
+async def _verify_oidc_login(request: fastapi.requests.Request, tenant_uuid: str) -> _VerifiedOidcLogin:
+    """Check the login and its identity provider token before the request's transaction starts.
+
+    Calling the identity provider can take seconds. The request's transaction holds the tenant's write lock,
+    so the call has to happen before it starts. Only short reads of the tenant database happen here.
+    """
+    data = schemas.auth.OidcLoginRequest.model_validate_json(request.state.body)
     session_key = converters.public_from_schema(data.session_public_key)
     crypto_policy.enforce_key_is_allowed(session_key)
-    model.denylist.enforce_not_denied(session_key.thumbprint())
 
     # Verify proof-of-possession: request must be signed with the claimed session key
     signature.verify(request, f"session:{session_key.thumbprint()}", session_key)
 
     # Look up auth config
-    ac = model.auth_config.read_one(name=data.auth_name, client_type=data.client_type)
+    async with dependencies.tenant_read(request, tenant_uuid):
+        ac = await asyncio.to_thread(model.auth_config.read_one, name=data.auth_name, client_type=data.client_type)
     if ac is None or not ac.is_enabled or ac.type not in ("oidc", "oidc-device-code"):
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=403, title="Auth config not found or not usable for OIDC login")
@@ -151,16 +157,38 @@ def oidc_login_endpoint(
 
     # Verify OIDC token
     try:
-        email, token_exp = _verify_oidc_token(
+        email, token_exp = await asyncio.to_thread(
+            _verify_oidc_token,
             issuer=ac.config["issuer"],
             client_id=ac.config["client_id"],
             id_token=data.id_token,
             nonce=data.nonce,
         )
-    except (ValueError, cryptography.exceptions.InvalidSignature, Exception) as exc:
+    except Exception as exc:
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=403, title="OIDC token verification failed", detail=str(exc))
         )
+    return _VerifiedOidcLogin(email=email, token_exp=token_exp)
+
+
+_VERIFIED_LOGIN = fastapi.Depends(_verify_oidc_login)
+
+
+@router.post(
+    "/auth/oidc/login",
+    status_code=200,
+    # The verification comes first, and the transaction only starts after it.
+    dependencies=[_VERIFIED_LOGIN, dependencies.TENANT_CONTEXT],
+    responses={400: responses.PROBLEM, 403: responses.PROBLEM},
+)
+def oidc_login_endpoint(
+    request: fastapi.requests.Request,
+    data: schemas.auth.OidcLoginRequest,
+    verified: _VerifiedOidcLogin = _VERIFIED_LOGIN,
+) -> schemas.directory.LoginResponse:
+    session_key = converters.public_from_schema(data.session_public_key)
+    model.denylist.enforce_not_denied(session_key.thumbprint())
+    email, token_exp = verified.email, verified.token_exp
 
     # Prevent nonce replay: store the nonce; reject if already seen
     try:

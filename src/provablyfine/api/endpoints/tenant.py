@@ -35,7 +35,7 @@ def _ownership_filter(rows: list[registry_db.TenantRow], tenant_id: int) -> list
 
 @router.get("", status_code=200)
 def list_endpoint(
-    reg_db: registry_db.RegistryDb = fastapi.Depends(dependencies.registry),
+    reg_db: registry_db.RegistryDb = dependencies.REGISTRY,
 ) -> schemas.tenant.TenantListResponse:
     all_rows = reg_db.tenant.read_all()
     rows = _ownership_filter(all_rows, ctx.tenant_id)
@@ -50,7 +50,7 @@ def list_endpoint(
 @router.get("/{tenant_id:int}", status_code=200, responses={403: responses.PROBLEM, 404: responses.PROBLEM})
 def read_endpoint(
     tenant_id: int,
-    reg_db: registry_db.RegistryDb = fastapi.Depends(dependencies.registry),
+    reg_db: registry_db.RegistryDb = dependencies.REGISTRY,
 ) -> schemas.tenant.TenantReadResponse:
     row = reg_db.tenant.read_one(id=tenant_id)
 
@@ -70,7 +70,7 @@ def read_endpoint(
 @dependencies.writes_registry
 def create_endpoint(
     data: schemas.tenant.TenantCreateRequest,
-    reg_db: registry_db.RegistryDb = fastapi.Depends(dependencies.registry),
+    reg_db: registry_db.RegistryDb = dependencies.REGISTRY,
 ) -> schemas.tenant.TenantReadResponse:
     grants = grant.Grants.create()
     if not grants.tenant(None).can_create():
@@ -113,7 +113,7 @@ def create_endpoint(
 def update_endpoint(
     tenant_id: int,
     data: schemas.tenant.TenantUpdateRequest,
-    reg_db: registry_db.RegistryDb = fastapi.Depends(dependencies.registry),
+    reg_db: registry_db.RegistryDb = dependencies.REGISTRY,
 ) -> fastapi.responses.Response:
     row = reg_db.tenant.read_one(id=tenant_id)
 
@@ -142,7 +142,7 @@ def update_endpoint(
 @dependencies.writes_registry
 def delete_endpoint(
     tenant_id: int,
-    reg_db: registry_db.RegistryDb = fastapi.Depends(dependencies.registry),
+    reg_db: registry_db.RegistryDb = dependencies.REGISTRY,
 ) -> fastapi.responses.Response:
     row = reg_db.tenant.read_one(id=tenant_id)
 

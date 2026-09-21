@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import hmac
 import time
@@ -248,7 +249,7 @@ async def verify_invitation(
     request: fastapi.requests.Request,
 ) -> typing.AsyncGenerator[model.identity_invitation_key.IdentityInvitationKey, None]:
     key_id = _get_keyid(request, "invitation")
-    invitation = model.identity_invitation_key.read(key_id)
+    invitation = await asyncio.to_thread(model.identity_invitation_key.read, key_id)
     if invitation is None:
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=401, title="Invitation does not exist")
@@ -266,7 +267,7 @@ async def verify_invitation(
 
 async def verify_account(request: fastapi.requests.Request) -> typing.AsyncGenerator[None, None]:
     key_id = _get_keyid(request, "account")
-    account_key = ctx.app_db.identity_account_key.read_one(id=key_id)
+    account_key = await asyncio.to_thread(ctx.app_db.identity_account_key.read_one, id=key_id)
     if account_key is None:
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=401, title="Account does not exist")
@@ -278,7 +279,7 @@ async def verify_account(request: fastapi.requests.Request) -> typing.AsyncGener
     key = jwk.Public.from_dict(account_key.public_key)
     crypto_policy.enforce_key_is_allowed(key)
     assert key.thumbprint() == key_id
-    model.denylist.enforce_not_denied(key.thumbprint())
+    await asyncio.to_thread(model.denylist.enforce_not_denied, key.thumbprint())
     verify(request, key_id=f"account:{key_id}", key=key)
     with ctx.set_identity_id(account_key.identity_id):
         yield
@@ -286,7 +287,7 @@ async def verify_account(request: fastapi.requests.Request) -> typing.AsyncGener
 
 async def verify_session(request: fastapi.requests.Request) -> typing.AsyncGenerator[None, None]:
     key_id = _get_keyid(request, "session")
-    session_key = ctx.app_db.identity_session_key.read_one(id=key_id)
+    session_key = await asyncio.to_thread(ctx.app_db.identity_session_key.read_one, id=key_id)
     if session_key is None:
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=401, title="Session does not exist")
@@ -307,7 +308,7 @@ async def verify_session(request: fastapi.requests.Request) -> typing.AsyncGener
     key = jwk.Public.from_dict(session_key.public_key)
     crypto_policy.enforce_key_is_allowed(key)
     assert key.thumbprint() == key_id
-    model.denylist.enforce_not_denied(key.thumbprint())
+    await asyncio.to_thread(model.denylist.enforce_not_denied, key.thumbprint())
     verify(request, key_id=f"session:{key_id}", key=key)
     with ctx.set_identity_id(session_key.identity_id):
         with ctx.set_active_role_id(session_key.role_id):

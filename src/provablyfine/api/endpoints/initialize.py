@@ -171,7 +171,7 @@ def _provision(allow_tenant_create: bool):
 )
 @dependencies.writes_registry
 def initialize_endpoint(
-    reg_db: registry_db.RegistryDb = fastapi.Depends(dependencies.registry),
+    reg_db: registry_db.RegistryDb = dependencies.REGISTRY,
 ) -> schemas.directory.InitializeResponse | fastapi.responses.Response:
     tenant_row = reg_db.tenant.read_one(id=ctx.tenant_id)
     assert tenant_row is not None

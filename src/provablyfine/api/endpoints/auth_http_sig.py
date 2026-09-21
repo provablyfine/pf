@@ -24,6 +24,7 @@ def _already_accepted(
         key_id=account_key.thumbprint(),
         identity_invitation_id=invitation.id,
     )
+    # Return the response, do not raise it: raising rolls back the transaction, and with it the denylist entry.
     return responses.problem_response(status_code=403, title="Invitation was already accepted")
 
 

@@ -2,7 +2,7 @@ import json
 import typing
 
 from ... import jwk
-from .. import app_db
+from .. import app_db, responses
 from ..context import ctx
 from . import audit_log
 
@@ -33,6 +33,24 @@ def read_all(*args: typing.Any, **kwargs: typing.Any) -> list[typing.Any]:
     return output
 
 
-def update(id: int, serial_number: int):
-    ctx.app_db.signing_key.update(serial_number=serial_number).where(id=id)
-    audit_log.create("signing-key-update-serial", id=id, serial_number=serial_number)
+_SERIAL_ATTEMPTS = 5
+
+
+def allocate_serial_numbers(id: int, count: int) -> int:
+    """Reserve `count` consecutive serial numbers of a signing key and return the first one.
+
+    The counter moves forward with a conditional update. If another request moved it after we read it,
+    the update changes no row and we read again. A serial number is never handed out twice.
+    """
+    for _ in range(_SERIAL_ATTEMPTS):
+        row = ctx.app_db.signing_key.read_one(id=id)
+        assert row is not None
+        first = row.serial_number
+        if count == 0:
+            return first
+        if ctx.app_db.signing_key.update(serial_number=first + count).where(id=id, serial_number=first) == 1:
+            audit_log.create("signing-key-update-serial", id=id, serial_number=first + count)
+            return first
+    raise responses.ProblemHTTPException(
+        responses.problem_response(status_code=409, title="Unable to reserve serial numbers, try again")
+    )
