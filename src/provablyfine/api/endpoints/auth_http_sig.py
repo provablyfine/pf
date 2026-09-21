@@ -103,6 +103,13 @@ def login_endpoint(
         role_id=None,
         logged_out_at=None,
     )
+    model.audit_log.create(
+        "session-create",
+        identity_id=ctx.identity_id,
+        session_key_id=session_key.thumbprint(),
+        login_ip=request.client.host if request.client else None,
+        method="http_sig",
+    )
     members = ctx.app_db.role_member.read_all(identity_id=ctx.identity_id)
     role_ids = list(set(m.role_id for m in members))
     roles = ctx.app_db.role.read_all(id=role_ids) if role_ids else []

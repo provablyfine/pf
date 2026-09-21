@@ -28,7 +28,7 @@ Check that grant "{{grant}}" is actually enforcing access control
 ]
 %}
 Check that grant "{{grant}}" is actually enforcing access control
-and becomes invalid after the identity is deleted
+and is removed together with the identity
   $ pfa -c config.json identity create -n user4 -b boundary -t $PERSON_ID
   $ USER4_ID=$(pfa -c config.json identity list -n user4 -q)
   $ pfa -c user1.json identity delete -i $USER4_ID
@@ -41,8 +41,4 @@ and becomes invalid after the identity is deleted
   name         role
   description
   member       user1
-  grant        type:       invalid
-               filter:     !
-               permission: !
-  $ pfa -c config.json role read -i $ROLE_ID -f json | jq '.grant_list[-1]' | pfa -c config.json role grant -i $ROLE_ID --del
 {% endfor %}
