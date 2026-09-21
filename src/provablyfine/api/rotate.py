@@ -4,10 +4,9 @@ import logging
 import os
 
 import cryptography.fernet
-import sqlalchemy
 
 from .. import base64url, jwk, log
-from . import app_db, config, model, registry_db
+from . import app_db, config, db, model, registry_db
 from .context import ctx
 
 logger = logging.getLogger(__name__)
@@ -57,8 +56,8 @@ def main():
         kek = cryptography.fernet.Fernet(kek_string)
 
     def _rotate_one(database_url: str):
-        engine = sqlalchemy.create_engine(database_url)
-        with engine.begin() as connection:
+        engine = db.create_engine(database_url)
+        with db.begin(engine, write=True) as connection:
             application_db = app_db.create(connection)
             with ctx.set_app_db(application_db), ctx.set_kek(kek):
                 rotate(
@@ -74,7 +73,7 @@ def main():
                     conf.user_key_staging_period,
                 )
 
-    registry_engine = sqlalchemy.create_engine(conf.tenant_registry_url)
+    registry_engine = db.create_engine(conf.tenant_registry_url)
     with registry_engine.connect() as registry_conn:
         reg_db = registry_db.create(registry_conn)
         for tenant_row in reg_db.tenant.read_all():

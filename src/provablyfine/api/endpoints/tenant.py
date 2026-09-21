@@ -67,6 +67,7 @@ def read_endpoint(
 
 
 @router.post("", status_code=200, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
+@dependencies.writes_registry
 def create_endpoint(
     data: schemas.tenant.TenantCreateRequest,
     reg_db: registry_db.RegistryDb = fastapi.Depends(dependencies.registry),
@@ -108,6 +109,7 @@ def create_endpoint(
     status_code=204,
     responses={400: responses.PROBLEM, 403: responses.PROBLEM, 404: responses.PROBLEM},
 )
+@dependencies.writes_registry
 def update_endpoint(
     tenant_id: int,
     data: schemas.tenant.TenantUpdateRequest,
@@ -137,6 +139,7 @@ def update_endpoint(
     status_code=204,
     responses={403: responses.PROBLEM, 404: responses.PROBLEM},
 )
+@dependencies.writes_registry
 def delete_endpoint(
     tenant_id: int,
     reg_db: registry_db.RegistryDb = fastapi.Depends(dependencies.registry),

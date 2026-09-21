@@ -169,6 +169,7 @@ def _provision(allow_tenant_create: bool):
     response_model=schemas.directory.InitializeResponse,
     responses={204: {"description": "Already initialized"}},
 )
+@dependencies.writes_registry
 def initialize_endpoint(
     reg_db: registry_db.RegistryDb = fastapi.Depends(dependencies.registry),
 ) -> schemas.directory.InitializeResponse | fastapi.responses.Response:

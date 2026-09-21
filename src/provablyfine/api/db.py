@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import asyncio
+import collections.abc
+import contextlib
 import dataclasses
 import logging
+import sqlite3
 import types
 import typing
 
 import sqlalchemy
+import sqlalchemy.event
 
 logger = logging.getLogger(__name__)
 
@@ -131,6 +136,71 @@ class Dao:
         if name not in self._tables:
             self._tables[name] = Table(self._connection, table_def.table, table_def.row_type)
         return self._tables[name]  # type: ignore[return-value]
+
+
+def create_engine(url: str, echo: bool = False) -> sqlalchemy.Engine:
+    """Create an engine whose transactions are real transactions.
+
+    With the sqlite3 driver's default mode, a transaction only starts at the first INSERT,
+    UPDATE or DELETE. SELECT and DDL statements run outside of any transaction.
+    Here the driver never starts transactions and SQLAlchemy sends BEGIN itself.
+    Everything up to the commit is one transaction.
+
+    Use `begin()` to start a transaction.
+    """
+    engine = sqlalchemy.create_engine(url, echo=echo)
+    if engine.dialect.name == "sqlite":
+        _begin_sqlite_transactions(engine)
+    return engine
+
+
+_WRITE_OPTION = "pf_write"
+
+
+def _begin_sqlite_transactions(engine: sqlalchemy.Engine) -> None:
+    """SQLite locks the whole file. A transaction that reads and then writes cannot always upgrade its lock.
+
+    When two of them try at once, SQLite fails one immediately with "database is locked".
+    A transaction that is going to write takes the write lock first with BEGIN IMMEDIATE.
+    Other writers then wait their turn.
+    """
+
+    @sqlalchemy.event.listens_for(engine, "connect")
+    def _disable_driver_transactions(dbapi_connection: sqlite3.Connection, _record: object) -> None:
+        dbapi_connection.isolation_level = None
+
+    @sqlalchemy.event.listens_for(engine, "begin")
+    def _begin(conn: sqlalchemy.Connection) -> None:
+        write = conn.get_execution_options().get(_WRITE_OPTION, False)
+        conn.exec_driver_sql("BEGIN IMMEDIATE" if write else "BEGIN")
+
+
+def begin(engine: sqlalchemy.Engine, write: bool = False) -> contextlib.AbstractContextManager[sqlalchemy.Connection]:
+    """Start a transaction. It commits on success and rolls back on error.
+
+    Pass write=True when the transaction is going to write. Correctness must never depend on it.
+    It only makes concurrent writers wait instead of failing on databases that lock the whole file.
+    """
+    return engine.execution_options(**{_WRITE_OPTION: write}).begin()
+
+
+@contextlib.asynccontextmanager
+async def abegin(
+    engine: sqlalchemy.Engine, write: bool = False
+) -> collections.abc.AsyncGenerator[sqlalchemy.Connection]:
+    """Like `begin()`, for code that runs on the event loop.
+
+    Waiting for a lock, and committing, can take a while. Both happen in a worker thread,
+    so that the event loop keeps running while the request waits.
+    """
+    transaction = begin(engine, write)
+    conn = await asyncio.to_thread(transaction.__enter__)
+    try:
+        yield conn
+    except BaseException as e:
+        await asyncio.shield(asyncio.to_thread(transaction.__exit__, type(e), e, e.__traceback__))
+        raise
+    await asyncio.shield(asyncio.to_thread(transaction.__exit__, None, None, None))
 
 
 def create(connection: sqlalchemy.engine.Connection, metadata: sqlalchemy.MetaData) -> Dao:

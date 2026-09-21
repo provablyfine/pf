@@ -5,7 +5,7 @@ import alembic.command
 import alembic.config
 import sqlalchemy
 
-from . import app_db, registry_db
+from . import app_db, db, registry_db
 
 logger = logging.getLogger(__name__)
 
@@ -20,8 +20,10 @@ def _alembic_config(schema: str, url: str) -> alembic.config.Config:
 
 
 def _create(metadata: sqlalchemy.MetaData, schema: str, url: str) -> None:
-    engine = sqlalchemy.create_engine(url)
-    metadata.create_all(engine)
+    engine = db.create_engine(url)
+    with db.begin(engine, write=True) as conn:
+        metadata.create_all(conn)
+    engine.dispose()
     alembic.command.stamp(_alembic_config(schema=schema, url=url), "head")
 
 
@@ -46,5 +48,5 @@ def upgrade_tenant(url: str) -> None:
 
 
 def is_alembic_versioned(url: str) -> bool:
-    engine = sqlalchemy.create_engine(url)
+    engine = db.create_engine(url)
     return sqlalchemy.inspect(engine).has_table("alembic_version")
