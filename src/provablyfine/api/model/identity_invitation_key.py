@@ -40,19 +40,25 @@ def create(identity_id: int, expiration_delay_s: int) -> str:
     return id
 
 
-def accept(id: str, public_key_id: str):
+def accept(id: str, public_key_id: str) -> bool:
+    """Mark the invitation as accepted by `public_key_id`.
+
+    Returns False if the invitation is missing, expired, revoked, or was accepted by someone else first.
+    The check and the write are one conditional update, so of two concurrent callers only one gets True.
+    """
     now = int(time.time())
     invitation = ctx.app_db.identity_invitation_key.read_one(id=id)
-    assert invitation is not None
-    assert not invitation.is_accepted
-    assert not invitation.is_revoked
-    assert invitation.expires_at > now
-    ctx.app_db.identity_invitation_key.update(
+    if invitation is None or invitation.expires_at <= now:
+        return False
+    changed = ctx.app_db.identity_invitation_key.update(
         is_accepted=True,
         accepted_at=now,
         accepted_public_key_id=public_key_id,
-    ).where(id=invitation.id)
+    ).where(id=invitation.id, is_accepted=False, is_revoked=False)
+    if changed == 0:
+        return False
     audit_log.create("identity-invitation-accepted", id=invitation.id, identity_id=invitation.identity_id)
+    return True
 
 
 def read(id: str) -> IdentityInvitationKey | None:

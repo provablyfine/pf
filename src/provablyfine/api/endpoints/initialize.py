@@ -178,6 +178,12 @@ def initialize_endpoint(
     if tenant_row.is_initialized:
         return fastapi.responses.Response(status_code=204)
 
+    # Claim the tenant before doing any work. The conditional update takes the write lock on the
+    # registry row, so a concurrent caller waits here and then finds zero rows to change.
+    # If anything below fails, the registry transaction rolls back and the claim is released.
+    if reg_db.tenant.update(is_initialized=True).where(id=ctx.tenant_id, is_initialized=False) == 0:
+        return fastapi.responses.Response(status_code=204)
+
     identity = ctx.app_db.identity.read_one(id=1)
     if identity is None:
         _provision(allow_tenant_create=tenant_row.owner_id is None)
@@ -187,7 +193,5 @@ def initialize_endpoint(
     identity_invitation_key_id = model.identity_invitation_key.create(identity_id=identity.id, expiration_delay_s=600)
     identity_invitation = model.identity_invitation_key.read(identity_invitation_key_id)
     assert identity_invitation is not None
-
-    reg_db.tenant.update(is_initialized=True).where(id=ctx.tenant_id)
 
     return schemas.directory.InitializeResponse(key=converters.symmetric_to_schema(identity_invitation.key))

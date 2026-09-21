@@ -108,9 +108,11 @@ class Update:
         self._outer: Table[typing.Any] = outer
         self._statement = statement
 
-    def where(self, **kwargs: typing.Any) -> None:
+    def where(self, **kwargs: typing.Any) -> int:
+        """Apply the update and return the number of rows it changed."""
         statement = self._outer._where(self._statement, **kwargs)  # type: ignore[protected-access]
-        self._outer._connection.execute(statement)  # type: ignore[protected-access]
+        result = self._outer._connection.execute(statement)  # type: ignore[protected-access]
+        return result.rowcount
 
 
 class Dao:
