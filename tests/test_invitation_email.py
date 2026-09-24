@@ -13,6 +13,8 @@ import pytest
 import provablyfine.client
 import tests.tui_support
 
+from . import utils
+
 FAKE_SENDMAIL = str(pathlib.Path(__file__).parent / "fake_sendmail.sh")
 EMAIL = {"email": {"type": "sendmail", "from_address": "pf@example.com", "sendmail_path": FAKE_SENDMAIL}}
 
@@ -44,7 +46,7 @@ def test_email_waits_for_the_commit(sent_mail, api) -> None:
         session, identity_id = _session_and_identity(api, tmpdir)
 
         # An open read transaction from outside makes the server's COMMIT wait.
-        reader = sqlite3.connect(api.log.parent / "root.db", isolation_level=None)
+        reader = sqlite3.connect(utils.root_tenant_db_path(api), isolation_level=None)
         reader.execute("BEGIN")
         reader.execute("SELECT count(*) FROM tag").fetchall()
 

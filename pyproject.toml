@@ -52,6 +52,8 @@ dependencies = [
 
 [project.optional-dependencies]
 bcrypt = ["bcrypt"]
+postgres = ["psycopg[binary]>=3.2"]
+mysql = ["pymysql>=1.1"]
 
 [project.urls]
 Documentation = "https://docs.provablyfine.net"

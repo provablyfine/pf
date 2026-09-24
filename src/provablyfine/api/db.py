@@ -5,12 +5,15 @@ import collections.abc
 import contextlib
 import dataclasses
 import logging
+import os
+import re
 import sqlite3
 import types
 import typing
 
 import sqlalchemy
 import sqlalchemy.event
+import sqlalchemy.exc
 
 logger = logging.getLogger(__name__)
 
@@ -175,6 +178,138 @@ def _begin_sqlite_transactions(engine: sqlalchemy.Engine) -> None:
         conn.exec_driver_sql("BEGIN IMMEDIATE" if write else "BEGIN")
 
 
+_DATABASE_NAME_RE = re.compile(r"^[a-z0-9_]+$")
+_DATABASE_NAME_MAX_LENGTH = {"postgresql": 63, "mysql": 64, "mariadb": 64}
+
+
+def _validate_database_name(name: str, dialect: str) -> None:
+    if not _DATABASE_NAME_RE.match(name):
+        raise ValueError(f"Invalid database name {name!r}: must match {_DATABASE_NAME_RE.pattern!r}")
+    max_length = _DATABASE_NAME_MAX_LENGTH.get(dialect)
+    if max_length is not None and len(name) > max_length:
+        raise ValueError(f"Database name {name!r} has {len(name)} characters, over the {dialect} limit of {max_length}")
+
+
+def _admin_database_name(dialect: str) -> str | None:
+    """The database to connect to in order to run CREATE/DROP DATABASE.
+
+    Postgres always needs an existing database to connect to; every server has one
+    named "postgres". MySQL and MariaDB accept a connection with no database selected.
+    """
+    return "postgres" if dialect == "postgresql" else None
+
+
+def _with_database(url: sqlalchemy.engine.URL, database: str | None) -> sqlalchemy.engine.URL:
+    """Like `url.set(database=...)`, except database=None actually clears it.
+
+    URL.set() treats a None argument as "leave this field alone", not "clear it",
+    since None is also its default for "not provided". Passing database=None through
+    it silently keeps the original database name instead of dropping it.
+    """
+    return sqlalchemy.engine.URL.create(
+        drivername=url.drivername,
+        username=url.username,
+        password=url.password,
+        host=url.host,
+        port=url.port,
+        database=database,
+        query=url.query,
+    )
+
+
+def create_database(url: str, *, exist_ok: bool = False) -> None:
+    """Create the database named in `url`, on its server.
+
+    SQLite has no separate create-a-database step, but the directory that its file
+    lives in (a tenants directory, or the registry file's own directory) may not exist
+    yet. Postgres and MySQL/MariaDB need CREATE DATABASE issued against the server first.
+    """
+    made_url = sqlalchemy.make_url(url)
+    dialect = made_url.get_backend_name()
+    if dialect == "sqlite":
+        db_path = made_url.database
+        assert db_path is not None
+        dirname = os.path.dirname(db_path)
+        if dirname:
+            os.makedirs(dirname, exist_ok=True)
+        return
+    db_name = made_url.database
+    assert db_name is not None
+    _validate_database_name(db_name, dialect)
+    admin_url = _with_database(made_url, _admin_database_name(dialect))
+    engine = sqlalchemy.create_engine(admin_url, isolation_level="AUTOCOMMIT")
+    try:
+        with engine.connect() as conn:
+            quoted = conn.dialect.identifier_preparer.quote(db_name)
+            statement = (
+                f"CREATE DATABASE {quoted}"
+                if dialect == "postgresql"
+                else f"CREATE DATABASE {quoted} CHARACTER SET utf8mb4 COLLATE utf8mb4_bin"
+            )
+            try:
+                conn.exec_driver_sql(statement)
+            except sqlalchemy.exc.DatabaseError:
+                if not exist_ok:
+                    raise
+    finally:
+        engine.dispose()
+
+
+def drop_database(url: str, *, if_exists: bool = True) -> None:
+    """Drop the database named in `url`, from its server. No-op for sqlite; see create_database.
+
+    Callers must dispose every engine connected to this database before calling this:
+    MySQL/MariaDB has no way to force-disconnect lingering connections, so a live
+    connection can make this hang or fail. Postgres uses WITH (FORCE) to disconnect
+    stragglers, but relying on that instead of disposing engines is not a substitute.
+    """
+    made_url = sqlalchemy.make_url(url)
+    dialect = made_url.get_backend_name()
+    if dialect == "sqlite":
+        return
+    db_name = made_url.database
+    assert db_name is not None
+    admin_url = _with_database(made_url, _admin_database_name(dialect))
+    engine = sqlalchemy.create_engine(admin_url, isolation_level="AUTOCOMMIT")
+    try:
+        with engine.connect() as conn:
+            quoted = conn.dialect.identifier_preparer.quote(db_name)
+            exists_clause = "IF EXISTS " if if_exists else ""
+            force = " WITH (FORCE)" if dialect == "postgresql" else ""
+            conn.exec_driver_sql(f"DROP DATABASE {exists_clause}{quoted}{force}")
+    finally:
+        engine.dispose()
+
+
+def _sqlite_tenants_dir(registry_url: str) -> str:
+    """Where per-tenant sqlite files live: a "tenants" directory next to the registry file."""
+    registry_path = sqlalchemy.make_url(registry_url).database
+    assert registry_path is not None
+    return os.path.join(os.path.dirname(registry_path), "tenants")
+
+
+def derive_tenant_url(registry_url: str, tenant_uuid: str) -> str:
+    """Derive a tenant's database URL from the registry's URL and the tenant's UUID.
+
+    On a shared server (Postgres/MySQL), a tenant is a separate database on that same
+    server, named after the registry database so that two registries sharing one
+    physical server (e.g. two test runs against the same container) never collide on
+    the same tenant database name. For sqlite, a tenant is one file, named after the
+    tenant, in a "tenants" directory next to the registry's own file.
+    """
+    made_url = sqlalchemy.make_url(registry_url)
+    dialect = made_url.get_backend_name()
+    suffix = tenant_uuid.replace("-", "")
+    if dialect == "sqlite":
+        tenant_path = os.path.join(_sqlite_tenants_dir(registry_url), f"{suffix}.db")
+        return f"sqlite:///{tenant_path}"
+    registry_name = made_url.database
+    assert registry_name is not None
+    tenant_db_name = f"{registry_name}_t_{suffix}"
+    _validate_database_name(tenant_db_name, dialect)
+    return made_url.set(database=tenant_db_name).render_as_string(hide_password=False)
+
+
 def begin(engine: sqlalchemy.Engine, write: bool = False) -> contextlib.AbstractContextManager[sqlalchemy.Connection]:
     """Start a transaction. It commits on success and rolls back on error.
 
@@ -219,9 +354,9 @@ def _infer_sa_type(python_type: type) -> sqlalchemy.types.TypeEngine[typing.Any]
             return _infer_sa_type(non_none)
 
     if python_type is int:
-        return sqlalchemy.Integer()
+        return sqlalchemy.BigInteger().with_variant(sqlalchemy.Integer(), "sqlite")
     elif python_type is str:
-        return sqlalchemy.String()
+        return sqlalchemy.String().with_variant(sqlalchemy.String(255), "mysql", "mariadb")
     elif python_type is bool:
         return sqlalchemy.Boolean()
     elif python_type is bytes:

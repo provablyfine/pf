@@ -16,7 +16,6 @@ def _create(tmp_path: pathlib.Path, *, debug: bool) -> fastapi.FastAPI:
     conf = config.Config(
         debug=debug,
         tenant_registry_url=f"sqlite:///{tmp_path / 'tenants.db'}",
-        tenants_dir=str(tmp_path / "tenants"),
         kek_filename=str(kek_file),
     )
     api = app.create(conf)

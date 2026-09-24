@@ -48,7 +48,6 @@ class Config(pydantic.BaseModel):
     log_filename: str | None = None
     base_url: str = "http://127.0.0.1:8000"
     tenant_registry_url: str = "sqlite:///tenants.db"
-    tenants_dir: str = "tenants"
     kek_filename: str = "kek.key"
     session_duration_s: int = 3600
     privileged_unix_usernames: list[str] = pydantic.Field(
