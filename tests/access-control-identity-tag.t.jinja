@@ -38,3 +38,10 @@ Check that grant "{{grant}}" is actually enforcing access control
   $ pfa -c user1.json identity tag -i $USER2_ID -d $PERSON_ID
   $ pfa -c config.json role read -i $ROLE_ID -f json | jq '.grant_list[-1]' | pfa -c config.json role grant -i $ROLE_ID --del
 {% endfor %}
+
+Empty tag filter denies unconditionally (regression test for #137)
+  $ pfa -c config.json grant identity --tag --add-tag-all | pfa -c config.json role grant -i $ROLE_ID --add
+  $ pfa -c user1.json identity tag -i $USER2_ID -a $PERSON_ID
+  Identity not found
+  [2]
+  $ pfa -c config.json role read -i $ROLE_ID -f json | jq '.grant_list[-1]' | pfa -c config.json role grant -i $ROLE_ID --del

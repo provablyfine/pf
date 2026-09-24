@@ -258,3 +258,9 @@ The deadline (issued_at + ttl) and connection id land in the audit entry
   3610
   $ pfa -c config.json audit-log list --format json | jq -r "$CERT_DETAILS | .valid_before - .valid_after"
   70
+
+Empty tag filter denies unconditionally, even though host carries the id=device tag (regression test for #137)
+  $ pfa -c config.json grant ssh --tag --username charlie --capability port-forwarding | pfa -c config.json role grant -i $ROLE_ID --add
+  $ pf -c user.json ssh -L 19905:localhost:22 -n -o "Hostname=$SSHD_ADDRESS" -o "HostKeyAlias=host" -p $SSHD_PORT charlie@host "echo ok"
+  User is not authorized to connect to host
+  [2]
