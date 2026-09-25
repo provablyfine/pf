@@ -16,8 +16,10 @@ Rotating immediately after initialize is a no-op: still two keys, nothing new
   $ sqlite3 $ROOT_DB "SELECT count(*) FROM oidc_key"
   2
 
-Once the staged key is due to become current, rotate creates a fresh staged key
-  $ sleep 28
+Age both keys well past the point where the staged one is due to become current. This is a
+one-shot database edit rather than a real sleep, so the test does not race a fixed wait against
+however long `pfa`/`curl`/`pf-api-rotate` subprocess startup happens to take on a loaded machine.
+  $ sqlite3 $ROOT_DB "UPDATE oidc_key SET valid_after = valid_after - 590, valid_before = valid_before - 590"
   $ pf-api-rotate -c $API_CONFIG
   $ sqlite3 $ROOT_DB "SELECT count(*) FROM oidc_key"
   3
