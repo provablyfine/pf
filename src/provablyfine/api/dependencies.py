@@ -24,7 +24,14 @@ Examples are `UPDATE ... WHERE is_initialized = 0` followed by a look at the row
 or an insert guarded by a unique constraint.
 Then handle the loser cleanly, for example with a 204 or a 409.
 
-SQLite hides this mistake because it queues writers. Postgres and MySQL do not.
+Catching the insert's `IntegrityError` and raising from there is enough when the request ends
+right there: raising rolls back everything anyway, so nothing else touches the transaction.
+Postgres refuses every later statement in a transaction once one of them has errored, until it
+is rolled back, so an insert that keeps using the same transaction afterward, for example to
+read the row back or write an audit entry, needs `Table.create_if_absent` instead. It runs the
+insert in its own SAVEPOINT, so losing the race does not carry over.
+
+SQLite hides the write-scheduling mistake below because it queues writers. Postgres and MySQL do not.
 Non-GET requests take the SQLite write lock first (`BEGIN IMMEDIATE`) to avoid "database is locked" errors.
 This is only about scheduling/optimization. Correctness must never depend on it.
 

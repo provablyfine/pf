@@ -39,6 +39,30 @@ def rotate(key_type: app_db.SigningKeyType, crypto_key_type: jwk.KeyType, rotati
         model.signing_key.create(key_type, crypto_key_type, staged_start, staged_end)
 
 
+def rotate_oidc(rotation_period: int, staging_period: int) -> None:
+    one = ctx.app_db.identity.read_one()
+    if one is None:
+        return
+    logger.info("rotate oidc")
+    now = int(datetime.datetime.now().timestamp())
+    keys = ctx.app_db.oidc_key.read_all(ctx.app_db.oidc_key.columns.valid_after >= now - rotation_period)
+    current = [k for k in keys if k.valid_after <= (now - staging_period) and k.valid_before > now]
+    staged = [k for k in keys if k.valid_after > (now - staging_period)]
+    if len(current) == 0:
+        logger.error(f"create current oidc key rotation={rotation_period} staging={staging_period}")
+        # This case should really never happen if rotation has happened ok
+        current_start = now - staging_period - 10
+        current_end = current_start + rotation_period
+        model.oidc_key.create(valid_after=current_start, valid_before=current_end)
+    else:
+        current_end = current[0].valid_before
+    if len(staged) == 0:
+        logger.info(f"create staged oidc key rotation={rotation_period} staging={staging_period}")
+        staged_start = current_end - staging_period
+        staged_end = staged_start + rotation_period
+        model.oidc_key.create(valid_after=staged_start, valid_before=staged_end)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", "--config", help="Configuration file", required=True)
@@ -72,6 +96,7 @@ def main():
                     conf.user_key_rotation_period,
                     conf.user_key_staging_period,
                 )
+                rotate_oidc(conf.oidc_key_rotation_period, conf.oidc_key_staging_period)
 
     registry_engine = db.create_engine(conf.tenant_registry_url)
     with registry_engine.connect() as registry_conn:

@@ -8,6 +8,7 @@ import collections
 import collections.abc
 import concurrent.futures
 import os
+import sqlite3
 import tempfile
 
 import provablyfine_client as pfc
@@ -125,8 +126,21 @@ def test_reads_and_writes_at_the_same_time(api) -> None:
         assert _run_all(calls) == {"ok": 12}
 
 
+def test_initialize_creates_the_oidc_signing_key(api, tmp_path) -> None:
+    """The OIDC signing key is provisioned eagerly, like the host/user SSH keys.
+
+    No request ever has to create one on the fly, so there is nothing to race on.
+    """
+    tests.test_identity_self_token._setup_session(api.port, tmp_path)
+
+    conn = sqlite3.connect(api.log.parent / "root.db")
+    count = conn.execute("SELECT count(*) FROM oidc_key").fetchone()[0]
+    conn.close()
+    assert count == 2
+
+
 def test_first_tokens_create_one_signing_key(api, tmp_path) -> None:
-    """The first token of a tenant creates its OIDC signing key, from a GET request."""
+    """Concurrent /self/token GET requests against the already-provisioned OIDC key don't race or error."""
     factory, identity_name, _role_id = tests.test_identity_self_token._setup_session(api.port, tmp_path)
 
     def token() -> str:

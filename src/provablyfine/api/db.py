@@ -11,6 +11,7 @@ import typing
 
 import sqlalchemy
 import sqlalchemy.event
+import sqlalchemy.exc
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +67,26 @@ class Table[T]:
     def create(self, **kwargs: typing.Any) -> int | None:
         statement = self._table.insert().values(**kwargs)
         result = self._connection.execute(statement)
+        return self._primary_key(result)
+
+    def create_if_absent(self, **kwargs: typing.Any) -> bool:
+        """Insert the row unless a unique or primary key constraint already rejects it.
+
+        Runs the insert in its own SAVEPOINT. Postgres refuses every later statement in a
+        transaction once one of them errors, until it is rolled back; the SAVEPOINT lets a
+        rejected insert roll back on its own, leaving the rest of the transaction usable.
+        Returns whether the row was inserted: False means a concurrent caller's insert of the
+        same thing won the race.
+        """
+        statement = self._table.insert().values(**kwargs)
+        try:
+            with self._connection.begin_nested():
+                self._connection.execute(statement)
+        except sqlalchemy.exc.IntegrityError:
+            return False
+        return True
+
+    def _primary_key(self, result: sqlalchemy.CursorResult[typing.Any]) -> int | None:
         primary_key: typing.Any = result.inserted_primary_key
         if primary_key is None or len(primary_key) == 0:
             return None
