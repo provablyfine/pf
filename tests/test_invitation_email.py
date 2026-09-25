@@ -3,6 +3,7 @@
 import os
 import pathlib
 import sqlite3
+import sys
 import tempfile
 import threading
 import time
@@ -13,7 +14,9 @@ import pytest
 import provablyfine.client
 import tests.tui_support
 
-FAKE_SENDMAIL = str(pathlib.Path(__file__).parent / "fake_sendmail.sh")
+# CreateProcess can run a .bat directly on Windows but has no idea what to do with a shebang script.
+_FAKE_SENDMAIL_NAME = "fake_sendmail.bat" if sys.platform == "win32" else "fake_sendmail.sh"
+FAKE_SENDMAIL = str(pathlib.Path(__file__).parent / _FAKE_SENDMAIL_NAME)
 EMAIL = {"email": {"type": "sendmail", "from_address": "pf@example.com", "sendmail_path": FAKE_SENDMAIL}}
 
 
