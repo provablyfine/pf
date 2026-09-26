@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import os
 import time
 import uuid
 
 import fastapi
 import fastapi.responses
 
-from .. import dependencies, grant, migrate, registry_db, responses, schemas, signature
+from .. import db, dependencies, grant, migrate, registry_db, responses, schemas, signature
 from ..context import ctx
 
 router = fastapi.APIRouter(prefix="/tenant", dependencies=[fastapi.Depends(signature.verify_session)])
@@ -79,10 +78,10 @@ def create_endpoint(
         )
 
     # new tenant entry
-    # The database file is named after the UUID because tenant names are not unique.
+    # The database is named after the UUID because tenant names are not unique.
     tenant_uuid = str(uuid.uuid4())
-    db_path = os.path.join(ctx.config.tenants_dir, f"{tenant_uuid}.db")
-    db_url = f"sqlite:///{db_path}"
+    db_url = db.derive_tenant_url(ctx.config.tenant_registry_url, tenant_uuid)
+    db.create_database(db_url)
     now = int(time.time())
     new_id = reg_db.tenant.create(
         uuid=tenant_uuid,
@@ -155,6 +154,8 @@ def delete_endpoint(
             responses.problem_response(status_code=403, title="Not allowed to delete tenant")
         )
 
+    # Soft delete only, for every backend: the tenant's physical database (or file, for
+    # sqlite) is never dropped here.
     reg_db.tenant.update(is_enabled=False, is_deleted=True).where(id=tenant_id)
 
     return _204

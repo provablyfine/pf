@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 import typing
 
 import requests
@@ -29,6 +30,21 @@ def _server_dropped_connection(error: requests.exceptions.ConnectionError) -> bo
     return bool(error.args) and isinstance(error.args[0], urllib3.exceptions.ProtocolError)
 
 
+def _parse_retry_after(value: str | None) -> float | None:
+    """Parse a `Retry-After` header given as a number of seconds.
+
+    Returns None if there is no header or it is not a plain number (for example an HTTP-date):
+    nothing in this codebase's server ever sends anything but a plain integer, so that is the
+    only form worth understanding here. None means "do not retry on this".
+    """
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except ValueError:
+        return None
+
+
 class HttpSession:
     """Thin wrapper around requests.Session: logging, 400/422 error handling, per-request auth."""
 
@@ -49,23 +65,38 @@ class HttpSession:
         timeout: float | None = None,
     ) -> requests.Response:
         req = requests.Request(method=method, url=url, json=json, data=data, headers=headers, params=params)
-        prepared = req.prepare()
-        if auth is not None:
-            prepared = auth(prepared)
-
         effective_timeout = timeout if timeout is not None else self._timeout
-        logger.info(f"tx {prepared.method} {prepared.url}")
-        logger.debug(f"tx headers: {prepared.headers}")
-        logger.debug(f"tx body: {prepared.body}")
-        try:
-            response = self._send(prepared, effective_timeout)
-        except requests.exceptions.ConnectionError:
-            raise exceptions.UI("Unable to connect to server")
-        except requests.exceptions.ReadTimeout:
-            raise exceptions.UI("Request timed out")
-        logger.info(f"rx {response.status_code}")
-        logger.debug(f"rx headers: {response.headers}")
-        logger.debug(f"rx body: {response.content}")
+        start = time.monotonic()
+
+        while True:
+            # Rebuilt and re-signed on every attempt in case there is
+            # a nonce in the auth.
+            prepared = req.prepare()
+            if auth is not None:
+                prepared = auth(prepared)
+
+            remaining = effective_timeout - (time.monotonic() - start)
+            logger.info(f"tx {prepared.method} {prepared.url}")
+            logger.debug(f"tx headers: {prepared.headers}")
+            logger.debug(f"tx body: {prepared.body}")
+            try:
+                response = self._send(prepared, max(remaining, 0.001))
+            except requests.exceptions.ConnectionError:
+                raise exceptions.UI("Unable to connect to server")
+            except requests.exceptions.ReadTimeout:
+                raise exceptions.UI("Request timed out")
+            logger.info(f"rx {response.status_code}")
+            logger.debug(f"rx headers: {response.headers}")
+            logger.debug(f"rx body: {response.content}")
+
+            if response.status_code == 503:
+                retry_after = _parse_retry_after(response.headers.get("Retry-After"))
+                elapsed = time.monotonic() - start
+                if retry_after is not None and elapsed + retry_after < effective_timeout:
+                    logger.debug(f"503, retrying in {retry_after}s")
+                    time.sleep(retry_after)
+                    continue
+            break
 
         if response.status_code in (400, 422):
             try:

@@ -49,4 +49,7 @@ def upgrade_tenant(url: str) -> None:
 
 def is_alembic_versioned(url: str) -> bool:
     engine = db.create_engine(url)
-    return sqlalchemy.inspect(engine).has_table("alembic_version")
+    try:
+        return sqlalchemy.inspect(engine).has_table("alembic_version")
+    finally:
+        engine.dispose()

@@ -1,12 +1,15 @@
 import collections.abc
 import pathlib
 import types
+import typing
 
 import pytest
-import sqlalchemy
 
-from . import app_db, grant, migrate, model
+from . import app_db, db, grant, migrate, model
 from .context import ctx
+
+if typing.TYPE_CHECKING:
+    import conftest as root_conftest
 
 
 def _deserialize(items: list[dict]) -> list[model.grant.Grant]:
@@ -1903,20 +1906,22 @@ def test_deadline_shell_eight_hours_port_forwarding_one_hour():
 
 
 @pytest.fixture
-def real_app_db(tmp_path: pathlib.Path) -> collections.abc.Iterator[app_db.AppDb]:
-    """A real (sqlite-backed, migrated) AppDb wired into ctx, not a mock.
+def real_app_db(
+    request: pytest.FixtureRequest, tmp_path: pathlib.Path, db_backend: "root_conftest.DbBackend"
+) -> collections.abc.Iterator[app_db.AppDb]:
+    """A real, migrated AppDb wired into ctx, not a mock.
 
     Grants.create() reads through ctx.app_db/ctx.identity_id/ctx.active_role_id,
     which the rest of this file's fake boundary()/role() SimpleNamespace helpers
-    can't reach.
+    can't reach. Runs against whichever backend(s) --db-backends selected.
     """
-    url = f"sqlite:///{tmp_path / 'tenant.db'}"
+    url = db_backend.fresh_database_url(request, tmp_path)
     migrate.create_tenant(url)
-    engine = sqlalchemy.create_engine(url)
-    with engine.connect() as connection:
-        db = app_db.create(connection)
-        with ctx.set_app_db(db):
-            yield db
+    engine = db.create_engine(url)
+    with db.begin(engine, write=True) as connection:
+        application_db = app_db.create(connection)
+        with ctx.set_app_db(application_db):
+            yield application_db
 
 
 def test_grants_create_with_active_role(real_app_db: app_db.AppDb) -> None:
