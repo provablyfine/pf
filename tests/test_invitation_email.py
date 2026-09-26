@@ -14,6 +14,8 @@ import pytest
 import provablyfine.client
 import tests.tui_support
 
+from . import utils
+
 # CreateProcess can run a .bat directly on Windows but has no idea what to do with a shebang script.
 _FAKE_SENDMAIL_NAME = "fake_sendmail.bat" if sys.platform == "win32" else "fake_sendmail.sh"
 FAKE_SENDMAIL = str(pathlib.Path(__file__).parent / _FAKE_SENDMAIL_NAME)
@@ -53,7 +55,7 @@ def test_email_waits_for_the_commit(sent_mail, api) -> None:
         session, identity_id = _session_and_identity(api, tmpdir)
 
         # An open read transaction from outside makes the server's COMMIT wait.
-        reader = sqlite3.connect(api.log.parent / "root.db", isolation_level=None)
+        reader = sqlite3.connect(utils.root_tenant_db_path(api), isolation_level=None)
         reader.execute("BEGIN")
         reader.execute("SELECT count(*) FROM tag").fetchall()
 

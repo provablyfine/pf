@@ -28,6 +28,7 @@ import provablyfine.tui.tag_list
 from . import oracle_control, tui_support
 
 _wait = tui_support._wait
+_wait_until = tui_support._wait_until
 _wait_until_gone = tui_support._wait_until_gone
 _run = tui_support._run
 _setup_ssh_auth_sock = tui_support._setup_ssh_auth_sock
@@ -1159,8 +1160,7 @@ async def test_tui_grant_edit_scrolls(api):
 
             # Walking the focus chain onto it brings it into view.
             ttl.query_one(textual.widgets.Checkbox).focus()
-            await pilot.pause()  # the scroll animation is a no-op in tests
-            await pilot.pause()  # region recomputed after the scroll
+            await _wait_until(pilot, lambda: app.screen.scrollable_content_region.contains_region(ttl.region))
             assert app.screen.scrollable_content_region.contains_region(ttl.region)
 
 

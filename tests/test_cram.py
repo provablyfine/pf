@@ -64,6 +64,37 @@ def test_pf_cram(api, filename):
     utils.run_cram(f"tests/{filename}", {"API_PORT": str(api.port), "API_LOG": str(api.log)})
 
 
+@pytest.mark.skipif(not shutil.which("jq"), reason="jq not found")
+@pytest.mark.parametrize(
+    "filename",
+    [
+        "identity.t",
+        "tenant.t",
+        "tenant-isolation.t",
+        "test-role-unique-name.t",
+        "test-boundary-unique-name.t",
+        "test-role-member-unique.t",
+    ],
+)
+def test_pf_cram_multi_backend(multi_backend_api, filename):
+    """A curated subset of test_pf_cram's files, run against every requested --db-backends.
+
+    These specifically exercise tenant lifecycle and unique-constraint conflicts, the
+    two things that differ by backend (see db.py, endpoints/tenant.py, endpoints/identity.py).
+    Not folded into test_pf_cram: multiplying every cram file by every backend would be
+    far too slow, and most of them don't exercise anything backend-specific anyway.
+
+    tags.t is deliberately not here: it hardcodes literal auto-increment ids across a
+    step that triggers a duplicate-tag conflict, and Postgres/MySQL permanently skip an
+    id on a rolled-back insert where SQLite's sqlite_sequence update rolls back with it
+    (see papercuts.md, 2026-09-24). That's an expected, permanent difference in id
+    numbering, not a bug in the conflict handling itself, which does pass on every backend.
+    """
+    utils.run_cram(
+        f"tests/{filename}", {"API_PORT": str(multi_backend_api.port), "API_LOG": str(multi_backend_api.log)}
+    )
+
+
 _OIDC_ROTATION_CONFIG = {"oidc_key_rotation_period": 600, "oidc_key_staging_period": 10}
 
 

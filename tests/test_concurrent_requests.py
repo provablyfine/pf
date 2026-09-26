@@ -19,6 +19,8 @@ import provablyfine.client
 import tests.test_identity_self_token
 import tests.tui_support
 
+from . import utils
+
 CONCURRENCY = 8
 ROOT = "00000000-0000-0000-0000-000000000001"
 
@@ -147,7 +149,7 @@ def test_initialize_creates_the_oidc_signing_key(api, tmp_path) -> None:
     """
     tests.test_identity_self_token._setup_session(api.port, tmp_path)
 
-    conn = sqlite3.connect(api.log.parent / "root.db")
+    conn = sqlite3.connect(utils.root_tenant_db_path(api))
     count = conn.execute("SELECT count(*) FROM oidc_key").fetchone()[0]
     conn.close()
     assert count == 2

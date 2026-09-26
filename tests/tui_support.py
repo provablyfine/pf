@@ -30,21 +30,36 @@ async def _wait(pilot, app=None):
     await pilot.pause()  # let UI re-render (notifications, table updates)
 
 
+async def _wait_until(pilot, predicate, timeout=30):
+    """Poll `predicate()` until it's true.
+
+    `pilot.pause()` only waits for pending messages. Some UI state -- a
+    scroll landing, a dialog closing -- settles a few more event loop turns
+    later still, and further on a loaded machine: `pilot.pause()`'s own
+    idle-detection (comparing CPU time to wall clock) can misread a process
+    that is merely waiting for its turn on a busy host as having finished its
+    work. This polls the actual condition with real sleeps instead of
+    guessing how many pause() calls are enough. The timeout only catches a
+    condition that never becomes true; it is not a guess at how long it takes.
+    """
+    async with asyncio.timeout(timeout):
+        while not predicate():
+            await pilot.pause(0.05)
+
+
 async def _wait_until_gone(pilot, screen_type, timeout=30):
     """Wait until no screen of `screen_type` is left in the app's screen stack.
 
     `_wait` returns once the relogin worker is done, but the dialog closes a
     few event loop turns later. On a loaded machine a test that looks right
-    away still sees the dialog.
-
-    `pilot.pause()` only waits for pending messages, and Textual has no event
-    for a screen going away, so this polls one precise condition. The timeout
-    only catches a dialog that never closes. It is not a guess at how long
-    closing takes.
+    away still sees the dialog. Textual has no event for a screen going away,
+    so this polls for it; see `_wait_until`.
     """
-    async with asyncio.timeout(timeout):
-        while any(isinstance(screen, screen_type) for screen in pilot.app.screen_stack):
-            await pilot.pause(0.05)
+
+    def gone():
+        return not any(isinstance(screen, screen_type) for screen in pilot.app.screen_stack)
+
+    await _wait_until(pilot, gone, timeout)
 
 
 def _run(args: list[str], env: dict[str, str]):

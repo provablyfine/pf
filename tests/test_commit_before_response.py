@@ -9,6 +9,8 @@ import time
 import provablyfine.client
 import tests.tui_support
 
+from . import utils
+
 
 def test_response_waits_for_the_commit(api) -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -17,7 +19,7 @@ def test_response_waits_for_the_commit(api) -> None:
         session = provablyfine.client.Factory(config, timeout=30).session()
 
         # An open read transaction from outside makes the server's COMMIT wait.
-        reader = sqlite3.connect(api.log.parent / "root.db", isolation_level=None)
+        reader = sqlite3.connect(utils.root_tenant_db_path(api), isolation_level=None)
         reader.execute("BEGIN")
         reader.execute("SELECT count(*) FROM tag").fetchall()
 

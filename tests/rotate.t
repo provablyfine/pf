@@ -1,7 +1,15 @@
 Initialize server, login, and create the tenant's first identity
   $ bash $TESTDIR/fixture.sh
   .* (re)
-  $ ROOT_DB=$(dirname $API_CONFIG)/root.db
+  $ ROOT_DB=$(python3 -c "
+  > import json
+  > import sqlalchemy
+  > import provablyfine.api.db as db
+  > import provablyfine.api.registry_db as registry_db
+  > config = json.load(open('$API_CONFIG'))
+  > url = db.derive_tenant_url(config['tenant_registry_url'], registry_db.ROOT_TENANT_UUID)
+  > print(sqlalchemy.make_url(url).database)
+  > ")
 
 The OIDC signing key already exists right after initialize: current + staged in the database
   $ sqlite3 $ROOT_DB "SELECT count(*) FROM oidc_key"

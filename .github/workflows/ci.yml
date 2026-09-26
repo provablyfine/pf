@@ -51,6 +51,30 @@ jobs:
           name: test-logs-${{ matrix.python-version }}
           path: /tmp/pf-test-logs/
 
+  test-multi-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v8.1.0
+        with:
+          python-version: "3.14"
+      - name: Install podman
+        run: sudo apt-get update && sudo apt-get install -y podman openssh-client socat jq
+      - name: Install postgres/mysql extras
+        run: uv sync --extra postgres --extra mysql
+      - name: Run tests against every database backend
+        # --db-backends=all only affects the curated tests that request the db_backend
+        # fixture (see conftest.py); everything else runs once, same as the default job.
+        # Kept separate from the `test` job/matrix so day-to-day CI stays fast; this is
+        # the "extensive matrix before pushing" run.
+        run: uv run pytest --basetemp=/tmp/pf-test-multi-backend-logs --db-backends=all
+      - name: Upload test logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs-multi-backend
+          path: /tmp/pf-test-multi-backend-logs/
+
   test-macos:
     runs-on: macos-latest
     steps:

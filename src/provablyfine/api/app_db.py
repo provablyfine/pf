@@ -10,7 +10,7 @@ import typing
 
 import sqlalchemy
 
-from . import db
+from . import orm
 
 # Type variable for generic Table
 T = typing.TypeVar("T")
@@ -40,8 +40,8 @@ SerializedGrant = dict[str, typing.Any]
 
 
 class AuthRow(typing.NamedTuple):
-    id: typing.Annotated[int, db.Col(primary_key=True)]
-    name: typing.Annotated[str, db.Col(index=True)]
+    id: typing.Annotated[int, orm.Col(primary_key=True)]
+    name: typing.Annotated[str, orm.Col(index=True)]
     client_type: str
     description: str
     created_at: int
@@ -50,7 +50,7 @@ class AuthRow(typing.NamedTuple):
     config: bytes
 
 
-auth = db.make_table(
+auth = orm.make_table(
     "auth",
     metadata,
     AuthRow,
@@ -60,16 +60,16 @@ auth = db.make_table(
 
 
 class PublicKeyDenylistRow(typing.NamedTuple):
-    id: typing.Annotated[str, db.Col(index=True, unique=True, nullable=False)]
+    id: typing.Annotated[str, orm.Col(index=True, unique=True, nullable=False)]
     key_id: str
     created_at: int
 
 
-public_key_denylist = db.make_table("public_key_denylist", metadata, PublicKeyDenylistRow)
+public_key_denylist = orm.make_table("public_key_denylist", metadata, PublicKeyDenylistRow)
 
 
 class IdentityAccountKeyRow(typing.NamedTuple):
-    id: typing.Annotated[str, db.Col(index=True, unique=True, nullable=False)]
+    id: typing.Annotated[str, orm.Col(index=True, unique=True, nullable=False)]
     public_key: dict[str, typing.Any]
     identity_id: int
     created_at: int
@@ -77,11 +77,11 @@ class IdentityAccountKeyRow(typing.NamedTuple):
     revoked_at: int | None
 
 
-identity_account_key = db.make_table("identity_account_key", metadata, IdentityAccountKeyRow)
+identity_account_key = orm.make_table("identity_account_key", metadata, IdentityAccountKeyRow)
 
 
 class IdentitySessionKeyRow(typing.NamedTuple):
-    id: typing.Annotated[str, db.Col(index=True, unique=True, nullable=False)]
+    id: typing.Annotated[str, orm.Col(index=True, unique=True, nullable=False)]
     public_key: dict[str, typing.Any]
     identity_id: int
     created_at: int
@@ -93,11 +93,11 @@ class IdentitySessionKeyRow(typing.NamedTuple):
     logged_out_at: int | None
 
 
-identity_session_key = db.make_table("identity_session_key", metadata, IdentitySessionKeyRow)
+identity_session_key = orm.make_table("identity_session_key", metadata, IdentitySessionKeyRow)
 
 
 class IdentityInvitationKeyRow(typing.NamedTuple):
-    id: typing.Annotated[str, db.Col(index=True, unique=True, nullable=False)]
+    id: typing.Annotated[str, orm.Col(index=True, unique=True, nullable=False)]
     key: bytes
     identity_id: int
     created_at: int
@@ -109,16 +109,16 @@ class IdentityInvitationKeyRow(typing.NamedTuple):
     accepted_public_key_id: str | None
 
 
-identity_invitation_key = db.make_table("identity_invitation_key", metadata, IdentityInvitationKeyRow)
+identity_invitation_key = orm.make_table("identity_invitation_key", metadata, IdentityInvitationKeyRow)
 
 
 class TagRow(typing.NamedTuple):
-    id: typing.Annotated[int, db.Col(primary_key=True)]
+    id: typing.Annotated[int, orm.Col(primary_key=True)]
     name: str
     value: str
 
 
-tag = db.make_table(
+tag = orm.make_table(
     "tag",
     metadata,
     TagRow,
@@ -128,23 +128,23 @@ tag = db.make_table(
 
 
 class IdentityRow(typing.NamedTuple):
-    id: typing.Annotated[int, db.Col(primary_key=True)]
+    id: typing.Annotated[int, orm.Col(primary_key=True)]
     created_by_id: int | None
     created_at: int
-    name: typing.Annotated[str, db.Col(unique=True)]
-    unix_username: typing.Annotated[str | None, db.Col(unique=True)] = None
+    name: typing.Annotated[str, orm.Col(unique=True)]
+    unix_username: typing.Annotated[str | None, orm.Col(unique=True)] = None
 
 
-identity = db.make_table("identity", metadata, IdentityRow, sqlite_autoincrement=True)
+identity = orm.make_table("identity", metadata, IdentityRow, sqlite_autoincrement=True)
 
 
 class IdentityBoundaryRow(typing.NamedTuple):
-    id: typing.Annotated[int, db.Col(primary_key=True)]
+    id: typing.Annotated[int, orm.Col(primary_key=True)]
     identity_id: int
     boundary_id: int
 
 
-identity_boundary = db.make_table(
+identity_boundary = orm.make_table(
     "identity_boundary",
     metadata,
     IdentityBoundaryRow,
@@ -154,12 +154,12 @@ identity_boundary = db.make_table(
 
 
 class IdentityTagRow(typing.NamedTuple):
-    id: typing.Annotated[int, db.Col(primary_key=True)]
+    id: typing.Annotated[int, orm.Col(primary_key=True)]
     identity_id: int
     tag_id: int
 
 
-identity_tag = db.make_table(
+identity_tag = orm.make_table(
     "identity_tag",
     metadata,
     IdentityTagRow,
@@ -169,13 +169,13 @@ identity_tag = db.make_table(
 
 
 class RoleRow(typing.NamedTuple):
-    id: typing.Annotated[int, db.Col(primary_key=True)]
+    id: typing.Annotated[int, orm.Col(primary_key=True)]
     name: str
     description: str
     grant_list: list[SerializedGrant]
 
 
-role = db.make_table(
+role = orm.make_table(
     "role",
     metadata,
     RoleRow,
@@ -185,12 +185,12 @@ role = db.make_table(
 
 
 class RoleMemberRow(typing.NamedTuple):
-    id: typing.Annotated[int, db.Col(primary_key=True)]
+    id: typing.Annotated[int, orm.Col(primary_key=True)]
     role_id: int
     identity_id: int
 
 
-role_member = db.make_table(
+role_member = orm.make_table(
     "role_member",
     metadata,
     RoleMemberRow,
@@ -200,14 +200,14 @@ role_member = db.make_table(
 
 
 class BoundaryRow(typing.NamedTuple):
-    id: typing.Annotated[int, db.Col(primary_key=True)]
+    id: typing.Annotated[int, orm.Col(primary_key=True)]
     name: str
     description: str
     ceiling_list: list[SerializedGrant] | None
     denied_list: list[SerializedGrant]
 
 
-boundary = db.make_table(
+boundary = orm.make_table(
     "boundary",
     metadata,
     BoundaryRow,
@@ -217,7 +217,7 @@ boundary = db.make_table(
 
 
 class SigningKeyRow(typing.NamedTuple):
-    id: typing.Annotated[int, db.Col(primary_key=True)]
+    id: typing.Annotated[int, orm.Col(primary_key=True)]
     type: int
     key: bytes
     serial_number: int
@@ -225,7 +225,7 @@ class SigningKeyRow(typing.NamedTuple):
     valid_before: int
 
 
-signing_key = db.make_table(
+signing_key = orm.make_table(
     "signing_key",
     metadata,
     SigningKeyRow,
@@ -235,7 +235,7 @@ signing_key = db.make_table(
 
 
 class BastionRow(typing.NamedTuple):
-    id: typing.Annotated[int, db.Col(primary_key=True)]
+    id: typing.Annotated[int, orm.Col(primary_key=True)]
     url: str
     ssh_proxy_jump: str | None
     tag_id_list: list[int]
@@ -243,11 +243,11 @@ class BastionRow(typing.NamedTuple):
     created_by_id: int | None
 
 
-bastion = db.make_table("bastion", metadata, BastionRow, sqlite_autoincrement=True)
+bastion = orm.make_table("bastion", metadata, BastionRow, sqlite_autoincrement=True)
 
 
 class AuditLogRow(typing.NamedTuple):
-    id: typing.Annotated[int, db.Col(primary_key=True)]
+    id: typing.Annotated[int, orm.Col(primary_key=True)]
     at: int
     level: int
     type: str
@@ -255,7 +255,7 @@ class AuditLogRow(typing.NamedTuple):
     details: dict[str, typing.Any]
 
 
-audit_log = db.make_table(
+audit_log = orm.make_table(
     "audit_log",
     metadata,
     AuditLogRow,
@@ -267,7 +267,7 @@ audit_log = db.make_table(
 
 
 class OidcKeyRow(typing.NamedTuple):
-    id: typing.Annotated[int, db.Col(primary_key=True)]
+    id: typing.Annotated[int, orm.Col(primary_key=True)]
     private_key: bytes
     public_key: dict[str, typing.Any]
     valid_after: int
@@ -275,7 +275,7 @@ class OidcKeyRow(typing.NamedTuple):
     created_at: int
 
 
-oidc_key = db.make_table(
+oidc_key = orm.make_table(
     "oidc_key",
     metadata,
     OidcKeyRow,
@@ -285,22 +285,22 @@ oidc_key = db.make_table(
 
 
 class OidcNonceRow(typing.NamedTuple):
-    nonce: typing.Annotated[str, db.Col(primary_key=True)]
+    nonce: typing.Annotated[str, orm.Col(primary_key=True)]
     expires_at: int
 
 
-oidc_nonce = db.make_table("oidc_nonce", metadata, OidcNonceRow)
+oidc_nonce = orm.make_table("oidc_nonce", metadata, OidcNonceRow)
 
 
 class SshConnectionRow(typing.NamedTuple):
-    connection_id: typing.Annotated[str, db.Col(primary_key=True)]
+    connection_id: typing.Annotated[str, orm.Col(primary_key=True)]
     identity_id: int
     hostname: str
     deadline: int | None
     valid_before: int
 
 
-ssh_connection = db.make_table(
+ssh_connection = orm.make_table(
     "ssh_connection",
     metadata,
     SshConnectionRow,
@@ -313,7 +313,7 @@ ssh_connection = db.make_table(
 # ============================================================================
 
 
-class AppDb(db.Dao):
+class AppDb(orm.Dao):
     """Typed DAO for the application database.
 
     Each property returns Table[XxxRow], so pyright sees concrete row types
@@ -321,75 +321,75 @@ class AppDb(db.Dao):
     """
 
     @property
-    def auth(self) -> db.Table[AuthRow]:
+    def auth(self) -> orm.Table[AuthRow]:
         return self._get(auth)
 
     @property
-    def public_key_denylist(self) -> db.Table[PublicKeyDenylistRow]:
+    def public_key_denylist(self) -> orm.Table[PublicKeyDenylistRow]:
         return self._get(public_key_denylist)
 
     @property
-    def identity_account_key(self) -> db.Table[IdentityAccountKeyRow]:
+    def identity_account_key(self) -> orm.Table[IdentityAccountKeyRow]:
         return self._get(identity_account_key)
 
     @property
-    def identity_session_key(self) -> db.Table[IdentitySessionKeyRow]:
+    def identity_session_key(self) -> orm.Table[IdentitySessionKeyRow]:
         return self._get(identity_session_key)
 
     @property
-    def identity_invitation_key(self) -> db.Table[IdentityInvitationKeyRow]:
+    def identity_invitation_key(self) -> orm.Table[IdentityInvitationKeyRow]:
         return self._get(identity_invitation_key)
 
     @property
-    def tag(self) -> db.Table[TagRow]:
+    def tag(self) -> orm.Table[TagRow]:
         return self._get(tag)
 
     @property
-    def identity(self) -> db.Table[IdentityRow]:
+    def identity(self) -> orm.Table[IdentityRow]:
         return self._get(identity)
 
     @property
-    def identity_boundary(self) -> db.Table[IdentityBoundaryRow]:
+    def identity_boundary(self) -> orm.Table[IdentityBoundaryRow]:
         return self._get(identity_boundary)
 
     @property
-    def identity_tag(self) -> db.Table[IdentityTagRow]:
+    def identity_tag(self) -> orm.Table[IdentityTagRow]:
         return self._get(identity_tag)
 
     @property
-    def role(self) -> db.Table[RoleRow]:
+    def role(self) -> orm.Table[RoleRow]:
         return self._get(role)
 
     @property
-    def role_member(self) -> db.Table[RoleMemberRow]:
+    def role_member(self) -> orm.Table[RoleMemberRow]:
         return self._get(role_member)
 
     @property
-    def boundary(self) -> db.Table[BoundaryRow]:
+    def boundary(self) -> orm.Table[BoundaryRow]:
         return self._get(boundary)
 
     @property
-    def signing_key(self) -> db.Table[SigningKeyRow]:
+    def signing_key(self) -> orm.Table[SigningKeyRow]:
         return self._get(signing_key)
 
     @property
-    def bastion(self) -> db.Table[BastionRow]:
+    def bastion(self) -> orm.Table[BastionRow]:
         return self._get(bastion)
 
     @property
-    def audit_log(self) -> db.Table[AuditLogRow]:
+    def audit_log(self) -> orm.Table[AuditLogRow]:
         return self._get(audit_log)
 
     @property
-    def oidc_key(self) -> db.Table[OidcKeyRow]:
+    def oidc_key(self) -> orm.Table[OidcKeyRow]:
         return self._get(oidc_key)
 
     @property
-    def oidc_nonce(self) -> db.Table[OidcNonceRow]:
+    def oidc_nonce(self) -> orm.Table[OidcNonceRow]:
         return self._get(oidc_nonce)
 
     @property
-    def ssh_connection(self) -> db.Table[SshConnectionRow]:
+    def ssh_connection(self) -> orm.Table[SshConnectionRow]:
         return self._get(ssh_connection)
 
 

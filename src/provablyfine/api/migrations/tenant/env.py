@@ -4,6 +4,7 @@ import alembic
 import sqlalchemy
 
 import provablyfine.api.app_db
+import provablyfine.api.db
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -35,12 +36,14 @@ def run_migrations_offline() -> None:
 
     """
     url = config.get_main_option("sqlalchemy.url")
+    assert url is not None
+    is_sqlite = provablyfine.api.db.is_sqlite(url)
     alembic.context.configure(
         url=url,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
-        render_as_batch=True,  # critical for SQLite ALTER
+        render_as_batch=is_sqlite,  # critical for SQLite ALTER; unnecessary elsewhere
         compare_type=True,  # catch column type changes
     )
 
@@ -55,18 +58,21 @@ def run_migrations_online() -> None:
     and associate a connection with the alembic.context.
 
     """
+    url = config.get_main_option("sqlalchemy.url")
+    assert url is not None
+    is_sqlite = provablyfine.api.db.is_sqlite(url)
     connectable = sqlalchemy.engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=sqlalchemy.pool.NullPool,
-        connect_args={"autocommit": False},
+        connect_args={"autocommit": False} if is_sqlite else {},
     )
 
     with connectable.connect() as connection:
         alembic.context.configure(
             connection=connection,
             target_metadata=target_metadata,
-            render_as_batch=True,  # critical for SQLite ALTER
+            render_as_batch=is_sqlite,  # critical for SQLite ALTER; unnecessary elsewhere
             compare_type=True,  # catch column type changes
         )
 
