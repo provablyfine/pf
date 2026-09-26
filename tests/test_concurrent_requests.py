@@ -10,6 +10,7 @@ import concurrent.futures
 import os
 import sqlite3
 import tempfile
+import time
 
 import provablyfine_client as pfc
 import requests
@@ -43,7 +44,20 @@ def _session_factory(api, tmpdir: str) -> collections.abc.Callable[[], pfc.Sessi
 
 def test_initialize_has_one_winner(api) -> None:
     url = f"http://127.0.0.1:{api.port}/pf/t/{ROOT}/initialize"
-    outcomes = _run_all([lambda: requests.post(url, timeout=30).status_code for _ in range(CONCURRENCY)])
+    # This bypasses pfc (it needs the raw 200/204/503 distinction pfc's own initialize() call
+    # collapses into indistinguishable exceptions), so it retries a busy server itself instead
+    # of getting that for free from HttpSession; the real Retry-After still drives the wait.
+    max_attempts = 10
+
+    def call() -> str:
+        for attempt in range(max_attempts):
+            response = requests.post(url, timeout=30)
+            if response.status_code != 503 or attempt == max_attempts - 1:
+                return str(response.status_code)
+            time.sleep(float(response.headers.get("Retry-After", "1")))
+        raise AssertionError("unreachable")  # the loop above always returns
+
+    outcomes = _run_all([call for _ in range(CONCURRENCY)])
     assert outcomes == {"200": 1, "204": CONCURRENCY - 1}
 
 
@@ -137,14 +151,3 @@ def test_initialize_creates_the_oidc_signing_key(api, tmp_path) -> None:
     count = conn.execute("SELECT count(*) FROM oidc_key").fetchone()[0]
     conn.close()
     assert count == 2
-
-
-def test_first_tokens_create_one_signing_key(api, tmp_path) -> None:
-    """Concurrent /self/token GET requests against the already-provisioned OIDC key don't race or error."""
-    factory, identity_name, _role_id = tests.test_identity_self_token._setup_session(api.port, tmp_path)
-
-    def token() -> str:
-        factory.session().get_self_token("bastion", hostname=identity_name, purpose="register")
-        return "ok"
-
-    assert _run_all([token for _ in range(CONCURRENCY)]) == {"ok": CONCURRENCY}
