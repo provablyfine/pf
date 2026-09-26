@@ -3,6 +3,7 @@
 import os
 import pathlib
 import sqlite3
+import sys
 import tempfile
 import threading
 import time
@@ -15,7 +16,9 @@ import tests.tui_support
 
 from . import utils
 
-FAKE_SENDMAIL = str(pathlib.Path(__file__).parent / "fake_sendmail.sh")
+# CreateProcess can run a .bat directly on Windows but has no idea what to do with a shebang script.
+_FAKE_SENDMAIL_NAME = "fake_sendmail.bat" if sys.platform == "win32" else "fake_sendmail.sh"
+FAKE_SENDMAIL = str(pathlib.Path(__file__).parent / _FAKE_SENDMAIL_NAME)
 EMAIL = {"email": {"type": "sendmail", "from_address": "pf@example.com", "sendmail_path": FAKE_SENDMAIL}}
 
 
@@ -30,6 +33,12 @@ def sent_mail(tmp_path, monkeypatch) -> pathlib.Path:
 @pytest.fixture
 def failing_mail(monkeypatch) -> None:
     monkeypatch.setenv("FAKE_SENDMAIL_FAIL", "1")
+
+
+@pytest.fixture
+def slow_mail(monkeypatch) -> None:
+    """Ask for this before `api`, like `sent_mail`: the server inherits the environment."""
+    monkeypatch.setenv("FAKE_SENDMAIL_DELAY_SECONDS", "6")
 
 
 def _session_and_identity(api, tmpdir: str) -> tuple[pfc.SessionClient, int]:
@@ -58,6 +67,36 @@ def test_email_waits_for_the_commit(sent_mail, api) -> None:
             assert not sent_mail.exists(), "the email was sent before the invitation was committed"
         finally:
             reader.execute("ROLLBACK")
+            request.join(30)
+        assert not request.is_alive()
+        assert "Accept your invitation" in sent_mail.read_text()
+
+
+@pytest.mark.parametrize("api", [EMAIL], indirect=True)
+def test_registry_is_not_locked_while_the_email_is_sent(slow_mail, sent_mail, api) -> None:
+    """The email is sent after the tenant commit, but the registry lookup must already be closed by then."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        session, identity_id = _session_and_identity(api, tmpdir)
+
+        request = threading.Thread(target=lambda: session.invite_identity(identity_id, "email"))
+        request.start()
+        try:
+            time.sleep(1.5)
+            assert request.is_alive(), "the invite request should still be waiting on the fake sendmail"
+            assert not sent_mail.exists()
+
+            # A registry write (what every writes_registry endpoint does) must go through
+            # promptly: it must not wait behind the still in-flight email.
+            registry_conn = sqlite3.connect(api.log.parent / "tenants.db", isolation_level=None, timeout=1)
+            try:
+                start = time.monotonic()
+                registry_conn.execute("BEGIN IMMEDIATE")
+                registry_conn.execute("COMMIT")
+                elapsed = time.monotonic() - start
+            finally:
+                registry_conn.close()
+            assert elapsed < 1, f"a registry write waited {elapsed:.1f}s behind the in-flight email"
+        finally:
             request.join(30)
         assert not request.is_alive()
         assert "Accept your invitation" in sent_mail.read_text()

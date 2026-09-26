@@ -5,7 +5,7 @@ from ... import jwk
 from ..context import ctx
 
 
-def create(valid_after: int, valid_before: int):
+def create(valid_after: int, valid_before: int) -> int:
     key = jwk.Private.generate(jwk.KeyType.ED25519)
     encrypted_key = ctx.kek.encrypt(json.dumps(key.to_dict()).encode("utf-8"))
     now = int(datetime.datetime.now().timestamp())
@@ -35,12 +35,7 @@ def get_private_key() -> jwk.Private:
     active_keys = ctx.app_db.oidc_key.read_all(
         ctx.app_db.oidc_key.columns.valid_after <= now, ctx.app_db.oidc_key.columns.valid_before > now
     )
-    if len(active_keys) == 0:
-        create(now, now + ctx.config.oidc_key_rotation_period)
-        active_keys = ctx.app_db.oidc_key.read_all(
-            ctx.app_db.oidc_key.columns.valid_after <= now, ctx.app_db.oidc_key.columns.valid_before > now
-        )
-
+    # Provisioning and rotation always keep a current key around; see initialize.py and rotate.py.
     active_keys.sort(key=lambda k: k.created_at, reverse=True)
     key_row = active_keys[0]
     decrypted = ctx.kek.decrypt(key_row.private_key)

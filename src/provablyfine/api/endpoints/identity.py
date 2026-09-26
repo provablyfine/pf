@@ -10,7 +10,7 @@ import fastapi
 import fastapi.responses
 import sqlalchemy.exc
 
-from .. import converters, dependencies, grant, mailer, model, responses, schemas, signature, unix_account
+from .. import converters, grant, mailer, model, responses, schemas, signature, unix_account
 from ..context import ctx
 
 logger = logging.getLogger(__name__)
@@ -128,7 +128,6 @@ def read_self_bastions_endpoint() -> schemas.identity.IdentitySelfBastionListRes
     status_code=200,
     responses={400: responses.PROBLEM, 403: responses.PROBLEM},
 )
-@dependencies.writes_tenant  # the first token of a tenant creates its OIDC signing key
 def read_self_token_endpoint(
     service: str,
     hostname: str,

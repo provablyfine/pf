@@ -60,6 +60,21 @@ def test_session_role_can_only_be_set_once(tenant_app_db: app_db.AppDb) -> None:
     assert row.role_id == 5
 
 
+def test_create_if_absent_lets_the_loser_know(tenant_app_db: app_db.AppDb) -> None:
+    """The insert that loses a unique-constraint race returns False instead of raising.
+
+    A plain uncaught IntegrityError would leave the transaction unusable on Postgres, which
+    aborts it after any error. The connection must still work afterwards, whatever the database.
+    """
+    table = tenant_app_db.public_key_denylist
+    assert table.create_if_absent(id="key", key_id="key", created_at=0) is True
+    assert table.create_if_absent(id="key", key_id="key", created_at=1) is False
+
+    assert len(table.read_all(id="key")) == 1
+    # The connection is still usable: a statement after the rejected insert must not fail too.
+    assert table.read_one(id="key") is not None
+
+
 def test_denying_a_key_twice_is_not_an_error(tenant_app_db: app_db.AppDb) -> None:
     model.denylist.create("key", identity_invitation_id="invitation")
     model.denylist.create("key", identity_invitation_id="invitation")

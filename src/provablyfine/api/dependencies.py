@@ -3,13 +3,10 @@
 # A request is one all-or-nothing unit of work
 
 Each request gets one transaction on the registry database and one on its tenant database.
-They start before your handler runs.
-They commit when the handler returns normally.
+They start before your handler runs. They commit when the handler returns normally.
 They roll back if anything raises, including a `ProblemHTTPException`.
 
-Raising an error undoes every write the request made.
-Returning a problem response commits them.
-`_already_accepted` relies on this to keep its denylist entry while it answers 403.
+Raising an error undoes every write the request made. Returning a problem response commits them.
 
 Your own writes are visible to your later reads in the same request.
 Nobody else sees them until the commit.
@@ -19,19 +16,24 @@ Examples are the invitation mail or an outbound HTTP call.
 
 # Do not assume that what you read is still true when you write
 
-Other requests commit while yours runs.
-So a check followed by a write is unsafe by itself.
+Other requests commit while yours runs. So a check followed by a write is
+unsafe by itself.
 
 Express every invariant as one statement that checks and writes together.
 Examples are `UPDATE ... WHERE is_initialized = 0` followed by a look at the row count,
 or an insert guarded by a unique constraint.
 Then handle the loser cleanly, for example with a 204 or a 409.
 
-SQLite hides this mistake because it queues writers.
-Postgres and MySQL do not.
+Catching the insert's `IntegrityError` and raising from there is enough when the request ends
+right there: raising rolls back everything anyway, so nothing else touches the transaction.
+Postgres refuses every later statement in a transaction once one of them has errored, until it
+is rolled back, so an insert that keeps using the same transaction afterward, for example to
+read the row back or write an audit entry, needs `Table.create_if_absent` instead. It runs the
+insert in its own SAVEPOINT, so losing the race does not carry over.
+
+SQLite hides the write-scheduling mistake below because it queues writers. Postgres and MySQL do not.
 Non-GET requests take the SQLite write lock first (`BEGIN IMMEDIATE`) to avoid "database is locked" errors.
-This is only about scheduling.
-Correctness must never depend on it.
+This is only about scheduling/optimization. Correctness must never depend on it.
 
 A GET that writes must be marked with `writes_tenant`.
 An endpoint that writes the registry must be marked with `writes_registry`.
@@ -55,6 +57,11 @@ To do something after the commit, use `ctx.after_commit(action)`.
 The action runs when the data is committed and before the response is sent.
 If it raises a `ProblemHTTPException`, the client gets that error.
 The invitation email works this way.
+
+`tenant_context` looks the tenant up in its own short registry transaction, closed before
+the tenant transaction even starts. It does not keep the registry open for the request:
+an `after_commit` action would then run while it is still there, holding up every
+tenant's registry writes for as long as the action takes.
 
 To do something slow before the transaction, use a dependency that runs before `tenant_context`.
 It reads the database with `tenant_read`, in short transactions of its own.
@@ -135,6 +142,20 @@ def _tenant_engine(request: fastapi.requests.Request, tenant_row: registry_db.Te
     return engines[tenant_row.id]
 
 
+async def _read_tenant_row(request: fastapi.requests.Request, tenant_uuid: str) -> registry_db.TenantRow:
+    """Look up the tenant in its own short transaction, closed immediately.
+
+    Endpoints that need the registry for their own work (tenant CRUD, initialize) declare
+    `reg_db: RegistryDb = REGISTRY` themselves. That transaction is independent of this lookup
+    and stays open for the endpoint's own body.
+    """
+    async with db.abegin(request.app.state.tenant_registry_engine) as registry_conn:
+        tenant_row = await asyncio.to_thread(registry_db.create(registry_conn).tenant.read_one, uuid=tenant_uuid)
+    if tenant_row is None or not tenant_row.is_enabled:
+        raise responses.ProblemHTTPException(responses.problem_response(status_code=404, title="Tenant not found"))
+    return tenant_row
+
+
 @contextlib.asynccontextmanager
 async def tenant_read(request: fastapi.requests.Request, tenant_uuid: str) -> collections.abc.AsyncGenerator[None]:
     """Read the tenant database in a short transaction of its own, before the request's transaction starts.
@@ -143,10 +164,7 @@ async def tenant_read(request: fastapi.requests.Request, tenant_uuid: str) -> co
     The request's own transaction holds the tenant's write lock, so it must not be open during that call.
     Model functions work inside the block, as in a handler. Nothing may be written.
     """
-    async with db.abegin(request.app.state.tenant_registry_engine) as registry_conn:
-        tenant_row = await asyncio.to_thread(registry_db.create(registry_conn).tenant.read_one, uuid=tenant_uuid)
-    if tenant_row is None or not tenant_row.is_enabled:
-        raise responses.ProblemHTTPException(responses.problem_response(status_code=404, title="Tenant not found"))
+    tenant_row = await _read_tenant_row(request, tenant_uuid)
     async with db.abegin(_tenant_engine(request, tenant_row)) as conn:
         with (
             ctx.set_tenant_id(tenant_row.id),
@@ -172,13 +190,8 @@ async def _run_after_rollback(engine: sqlalchemy.Engine, deferred: context.Defer
 async def tenant_context(
     request: fastapi.requests.Request,
     tenant_uuid: str,
-    reg_db: registry_db.RegistryDb = REGISTRY,
 ):
-    # Database calls in async code go to a worker thread: waiting for a lock must not stop the event loop.
-    tenant_row = await asyncio.to_thread(reg_db.tenant.read_one, uuid=tenant_uuid)
-
-    if tenant_row is None or not tenant_row.is_enabled:
-        raise responses.ProblemHTTPException(responses.problem_response(status_code=404, title="Tenant not found"))
+    tenant_row = await _read_tenant_row(request, tenant_uuid)
 
     engine = _tenant_engine(request, tenant_row)
     write = request.method not in ("GET", "HEAD", "OPTIONS") or request.scope["endpoint"] in _TENANT_WRITERS

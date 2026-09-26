@@ -187,6 +187,7 @@ minversion = "6.0"
 addopts = "--tb=short -n auto --dist=loadgroup"
 testpaths = [
     "src/provablyfine",
+    "packages/provablyfine-client/src/provablyfine_client",
     "tests",
 ]
 timeout = 240
