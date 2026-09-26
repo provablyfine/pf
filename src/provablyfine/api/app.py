@@ -158,9 +158,7 @@ def create(conf: config.Config) -> fastapi.FastAPI:
 
     async def database_error_handler(request: fastapi.requests.Request, exc: Exception) -> fastapi.responses.Response:
         assert isinstance(exc, sqlalchemy.exc.OperationalError)
-        # "database is locked" is sqlite3's own error text for its whole-file write lock.
-        # Postgres and MySQL do row-level locking and never raise this from this driver.
-        if "sqlite3" not in type(exc.orig).__module__ or "database is locked" not in str(exc.orig):
+        if not db.is_database_busy(exc):
             return await generic_exception_handler(request, exc)
         # Writers wait for each other for a few seconds. Getting here means the database is overloaded.
         response = responses.problem_response(status_code=503, title="Database is busy, try again")

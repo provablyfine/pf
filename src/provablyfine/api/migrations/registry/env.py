@@ -3,6 +3,7 @@ import logging.config
 import alembic
 import sqlalchemy
 
+import provablyfine.api.db
 import provablyfine.api.registry_db
 
 # this is the Alembic Config object, which provides
@@ -36,7 +37,7 @@ def run_migrations_offline() -> None:
     """
     url = config.get_main_option("sqlalchemy.url")
     assert url is not None
-    is_sqlite = sqlalchemy.make_url(url).get_backend_name() == "sqlite"
+    is_sqlite = provablyfine.api.db.is_sqlite(url)
     alembic.context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -59,7 +60,7 @@ def run_migrations_online() -> None:
     """
     url = config.get_main_option("sqlalchemy.url")
     assert url is not None
-    is_sqlite = sqlalchemy.make_url(url).get_backend_name() == "sqlite"
+    is_sqlite = provablyfine.api.db.is_sqlite(url)
     connectable = sqlalchemy.engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",

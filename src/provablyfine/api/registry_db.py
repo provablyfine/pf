@@ -9,7 +9,7 @@ import typing
 
 import sqlalchemy
 
-from . import db
+from . import orm
 
 # Database metadata
 metadata = sqlalchemy.MetaData()
@@ -26,8 +26,8 @@ ROOT_TENANT_UUID = "00000000-0000-0000-0000-000000000001"
 
 
 class TenantRow(typing.NamedTuple):
-    id: typing.Annotated[int, db.Col(primary_key=True, nullable=False)]
-    uuid: typing.Annotated[str, db.Col(nullable=False, unique=True)]
+    id: typing.Annotated[int, orm.Col(primary_key=True, nullable=False)]
+    uuid: typing.Annotated[str, orm.Col(nullable=False, unique=True)]
     name: str
     display_name: str
     owner_id: int | None
@@ -38,7 +38,7 @@ class TenantRow(typing.NamedTuple):
     created_at: int
 
 
-tenant = db.make_table("tenant", metadata, TenantRow, sqlite_autoincrement=True)
+tenant = orm.make_table("tenant", metadata, TenantRow, sqlite_autoincrement=True)
 
 
 # ============================================================================
@@ -46,7 +46,7 @@ tenant = db.make_table("tenant", metadata, TenantRow, sqlite_autoincrement=True)
 # ============================================================================
 
 
-class RegistryDb(db.Dao):
+class RegistryDb(orm.Dao):
     """Typed DAO for the tenant registry database.
 
     Each property returns Table[XxxRow], so pyright sees concrete row types
@@ -54,7 +54,7 @@ class RegistryDb(db.Dao):
     """
 
     @property
-    def tenant(self) -> db.Table[TenantRow]:
+    def tenant(self) -> orm.Table[TenantRow]:
         return self._get(tenant)
 
 

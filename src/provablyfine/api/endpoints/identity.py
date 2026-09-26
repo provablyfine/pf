@@ -10,7 +10,7 @@ import fastapi
 import fastapi.responses
 import sqlalchemy.exc
 
-from .. import converters, grant, mailer, model, responses, schemas, signature, unix_account
+from .. import converters, db, grant, mailer, model, responses, schemas, signature, unix_account
 from ..context import ctx
 
 logger = logging.getLogger(__name__)
@@ -21,26 +21,10 @@ _204 = fastapi.responses.Response(status_code=204)
 
 
 def _violated_unique_column(exc: sqlalchemy.exc.IntegrityError) -> str | None:
-    """Return which of "unix_username" or "name" violated its UNIQUE constraint, if either did.
-
-    Each driver reports this differently. Postgres names the constraint itself
-    (deterministically, from Column(unique=True), with no explicit naming needed) and
-    exposes it structurally via `orig.diag`. Sqlite and MySQL/MariaDB report it as part
-    of the error message text instead, in a driver-specific format.
-    """
-    orig = exc.orig
-    diag = getattr(orig, "diag", None)
-    constraint_name = getattr(diag, "constraint_name", None) if diag is not None else None
-    if constraint_name is not None:
-        if constraint_name == "identity_unix_username_key":
-            return "unix_username"
-        if constraint_name == "identity_name_key":
-            return "name"
-        return None
-    text = str(orig)
-    if "identity.unix_username" in text or "'unix_username'" in text:
+    """Return which of "unix_username" or "name" violated its UNIQUE constraint, if either did."""
+    if db.violated_unique_column(exc, "identity", "unix_username"):
         return "unix_username"
-    if "identity.name" in text or "'name'" in text:
+    if db.violated_unique_column(exc, "identity", "name"):
         return "name"
     return None
 
