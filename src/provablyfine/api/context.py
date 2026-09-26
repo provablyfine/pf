@@ -1,5 +1,7 @@
+import collections.abc
 import contextlib
 import contextvars
+import dataclasses
 
 import cryptography.fernet
 
@@ -16,8 +18,54 @@ _tenant_id_var: contextvars.ContextVar[int | None] = contextvars.ContextVar("ten
 _tenant_uuid_var: contextvars.ContextVar[str | None] = contextvars.ContextVar("tenant_uuid", default=None)
 
 
+@dataclasses.dataclass
+class Deferred:
+    """Work that waits for the end of the request's tenant transaction."""
+
+    after_commit: list[collections.abc.Callable[[], None]] = dataclasses.field(
+        default_factory=list[collections.abc.Callable[[], None]]
+    )
+    after_rollback: list[collections.abc.Callable[[], None]] = dataclasses.field(
+        default_factory=list[collections.abc.Callable[[], None]]
+    )
+
+
+_deferred_var: contextvars.ContextVar[Deferred | None] = contextvars.ContextVar("deferred", default=None)
+
+
 class RequestContext:
     """A proxy that makes contextvars feel like regular attributes."""
+
+    def after_commit(self, action: collections.abc.Callable[[], None]) -> None:
+        """Run `action` once the request's transaction has committed, before the response is sent.
+
+        Use it for anything that must not happen if the request fails, and must not hold the database lock.
+        Examples are sending an email or calling another service.
+        The action runs in a worker thread and has no database access.
+        If it raises a `ProblemHTTPException`, the client gets that error.
+        """
+        deferred = _deferred_var.get()
+        assert deferred is not None
+        deferred.after_commit.append(action)
+
+    def after_rollback(self, action: collections.abc.Callable[[], None]) -> None:
+        """Run `action` if the request is rejected with a `ProblemHTTPException`, after its rollback.
+
+        The action runs in its own transaction, so what it writes survives the rejection.
+        Capture what you need from the request when you schedule it.
+        """
+        deferred = _deferred_var.get()
+        assert deferred is not None
+        deferred.after_rollback.append(action)
+
+    @contextlib.contextmanager
+    def set_deferred(self, deferred: Deferred):
+        assert _deferred_var.get() is None
+        _deferred_var.set(deferred)
+        try:
+            yield
+        finally:
+            _deferred_var.set(None)
 
     @property
     def config(self) -> config_module.Config:

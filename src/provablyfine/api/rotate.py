@@ -4,10 +4,9 @@ import logging
 import os
 
 import cryptography.fernet
-import sqlalchemy
 
 from .. import base64url, jwk, log
-from . import app_db, config, model, registry_db
+from . import app_db, config, db, model, registry_db
 from .context import ctx
 
 logger = logging.getLogger(__name__)
@@ -40,6 +39,30 @@ def rotate(key_type: app_db.SigningKeyType, crypto_key_type: jwk.KeyType, rotati
         model.signing_key.create(key_type, crypto_key_type, staged_start, staged_end)
 
 
+def rotate_oidc(rotation_period: int, staging_period: int) -> None:
+    one = ctx.app_db.identity.read_one()
+    if one is None:
+        return
+    logger.info("rotate oidc")
+    now = int(datetime.datetime.now().timestamp())
+    keys = ctx.app_db.oidc_key.read_all(ctx.app_db.oidc_key.columns.valid_after >= now - rotation_period)
+    current = [k for k in keys if k.valid_after <= (now - staging_period) and k.valid_before > now]
+    staged = [k for k in keys if k.valid_after > (now - staging_period)]
+    if len(current) == 0:
+        logger.error(f"create current oidc key rotation={rotation_period} staging={staging_period}")
+        # This case should really never happen if rotation has happened ok
+        current_start = now - staging_period - 10
+        current_end = current_start + rotation_period
+        model.oidc_key.create(valid_after=current_start, valid_before=current_end)
+    else:
+        current_end = current[0].valid_before
+    if len(staged) == 0:
+        logger.info(f"create staged oidc key rotation={rotation_period} staging={staging_period}")
+        staged_start = current_end - staging_period
+        staged_end = staged_start + rotation_period
+        model.oidc_key.create(valid_after=staged_start, valid_before=staged_end)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", "--config", help="Configuration file", required=True)
@@ -57,8 +80,8 @@ def main():
         kek = cryptography.fernet.Fernet(kek_string)
 
     def _rotate_one(database_url: str):
-        engine = sqlalchemy.create_engine(database_url)
-        with engine.begin() as connection:
+        engine = db.create_engine(database_url)
+        with db.begin(engine, write=True) as connection:
             application_db = app_db.create(connection)
             with ctx.set_app_db(application_db), ctx.set_kek(kek):
                 rotate(
@@ -73,8 +96,9 @@ def main():
                     conf.user_key_rotation_period,
                     conf.user_key_staging_period,
                 )
+                rotate_oidc(conf.oidc_key_rotation_period, conf.oidc_key_staging_period)
 
-    registry_engine = sqlalchemy.create_engine(conf.tenant_registry_url)
+    registry_engine = db.create_engine(conf.tenant_registry_url)
     with registry_engine.connect() as registry_conn:
         reg_db = registry_db.create(registry_conn)
         for tenant_row in reg_db.tenant.read_all():

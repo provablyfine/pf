@@ -64,6 +64,18 @@ def test_pf_cram(api, filename):
     utils.run_cram(f"tests/{filename}", {"API_PORT": str(api.port), "API_LOG": str(api.log)})
 
 
+_OIDC_ROTATION_CONFIG = {"oidc_key_rotation_period": 600, "oidc_key_staging_period": 10}
+
+
+@pytest.mark.skipif(not shutil.which("jq"), reason="jq not found")
+@pytest.mark.parametrize("api", [_OIDC_ROTATION_CONFIG], indirect=True)
+def test_rotate_oidc_cram(api):
+    utils.run_cram(
+        "tests/rotate.t",
+        {"API_PORT": str(api.port), "API_CONFIG": str(api.log.parent / "config.json")},
+    )
+
+
 @pytest.mark.skipif(not shutil.which("ssh"), reason="ssh not found")
 def test_bastion_ssh(api, frps, sshd):
     utils.run_cram(

@@ -12,9 +12,10 @@ import fastapi.responses
 import prometheus_client
 import pydantic
 import sqlalchemy
+import sqlalchemy.exc
 
 from .. import base64url
-from . import config, dependencies, endpoints, jwt_validator, middleware, migrate, registry_db, responses, signature
+from . import config, db, dependencies, endpoints, jwt_validator, middleware, migrate, registry_db, responses, signature
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +86,7 @@ def create(conf: config.Config) -> fastapi.FastAPI:
         migrate.create_registry(conf.tenant_registry_url)
         root_db_url = f"sqlite:///{os.path.join(conf.tenants_dir, 'root.db')}"
         migrate.create_tenant(root_db_url)
-        with registry_engine.begin() as registry_conn:
+        with db.begin(registry_engine, write=True) as registry_conn:
             registry_db.create(registry_conn).tenant.create(
                 uuid=registry_db.ROOT_TENANT_UUID,
                 name="root",
@@ -101,7 +102,7 @@ def create(conf: config.Config) -> fastapi.FastAPI:
     @contextlib.asynccontextmanager
     async def lifespan(app: fastapi.FastAPI):
         os.makedirs(conf.tenants_dir, exist_ok=True)
-        registry_engine = sqlalchemy.create_engine(conf.tenant_registry_url, echo=conf.debug_sql)
+        registry_engine = db.create_engine(conf.tenant_registry_url, echo=conf.debug_sql)
 
         _bootstrap_databases(registry_engine)
         migrate.upgrade_registry(conf.tenant_registry_url)
@@ -154,6 +155,15 @@ def create(conf: config.Config) -> fastapi.FastAPI:
             detail=f"{error['msg']}: {'.'.join(map(str, error['loc']))}",
         )
 
+    async def database_error_handler(request: fastapi.requests.Request, exc: Exception) -> fastapi.responses.Response:
+        assert isinstance(exc, sqlalchemy.exc.OperationalError)
+        if "database is locked" not in str(exc.orig):
+            return await generic_exception_handler(request, exc)
+        # Writers wait for each other for a few seconds. Getting here means the database is overloaded.
+        response = responses.problem_response(status_code=503, title="Database is busy, try again")
+        response.headers["Retry-After"] = "1"
+        return response
+
     async def generic_exception_handler(
         request: fastapi.requests.Request, exc: Exception
     ) -> fastapi.responses.Response:
@@ -167,6 +177,7 @@ def create(conf: config.Config) -> fastapi.FastAPI:
     fastapi_app.add_exception_handler(responses.ProblemHTTPException, problem_exception_handler)
     fastapi_app.add_exception_handler(pydantic.ValidationError, validation_error_handler)
     fastapi_app.add_exception_handler(fastapi.exceptions.RequestValidationError, request_validation_error_handler)
+    fastapi_app.add_exception_handler(sqlalchemy.exc.OperationalError, database_error_handler)
     fastapi_app.add_exception_handler(Exception, generic_exception_handler)
 
     # Middleware added in reverse order: last added = outermost
@@ -179,14 +190,15 @@ def create(conf: config.Config) -> fastapi.FastAPI:
         fastapi_app.include_router(endpoints.debug.router, tags=["debug"])
     fastapi_app.include_router(endpoints.frps.router)
 
-    _tenant_dep = fastapi.Depends(dependencies.tenant_context)
+    _tenant_dep = dependencies.TENANT_CONTEXT
     _tenant_prefix = "/pf/t/{tenant_uuid}"
 
     fastapi_app.include_router(endpoints.audit_log.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
     fastapi_app.include_router(endpoints.directory.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
     fastapi_app.include_router(endpoints.initialize.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
     fastapi_app.include_router(endpoints.auth_http_sig.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
-    fastapi_app.include_router(endpoints.auth_oidc.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
+    # The OIDC login calls the identity provider before its transaction starts: it orders its own dependencies.
+    fastapi_app.include_router(endpoints.auth_oidc.router, prefix=_tenant_prefix)
     fastapi_app.include_router(endpoints.auth_endpoint.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
     fastapi_app.include_router(endpoints.public.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
     fastapi_app.include_router(endpoints.boundary.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])

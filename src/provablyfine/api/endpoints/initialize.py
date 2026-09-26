@@ -36,6 +36,17 @@ def _create_keys(
     )
 
 
+def _create_oidc_keys(rotation_period: int, staging_period: int) -> None:
+    now = int(time.time())
+
+    current_start = now - staging_period - 10
+    current_end = current_start + rotation_period
+    model.oidc_key.create(valid_after=current_start, valid_before=current_end)
+    staged_start = current_end - staging_period
+    staged_end = staged_start + rotation_period
+    model.oidc_key.create(valid_after=staged_start, valid_before=staged_end)
+
+
 def _provision(allow_tenant_create: bool):
     _create_keys(
         app_db.SigningKeyType.HOST,
@@ -49,6 +60,7 @@ def _provision(allow_tenant_create: bool):
         ctx.config.user_key_rotation_period,
         ctx.config.user_key_staging_period,
     )
+    _create_oidc_keys(ctx.config.oidc_key_rotation_period, ctx.config.oidc_key_staging_period)
 
     tenant_grant_all = model.grant.TenantGrant(
         filter=model.grant.TenantFilter(id=None),
@@ -169,8 +181,9 @@ def _provision(allow_tenant_create: bool):
     response_model=schemas.directory.InitializeResponse,
     responses={204: {"description": "Already initialized"}},
 )
+@dependencies.writes_registry
 def initialize_endpoint(
-    reg_db: registry_db.RegistryDb = fastapi.Depends(dependencies.registry),
+    reg_db: registry_db.RegistryDb = dependencies.REGISTRY,
 ) -> schemas.directory.InitializeResponse | fastapi.responses.Response:
     tenant_row = reg_db.tenant.read_one(id=ctx.tenant_id)
     assert tenant_row is not None

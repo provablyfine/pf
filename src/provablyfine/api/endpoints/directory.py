@@ -9,7 +9,7 @@ router = fastapi.APIRouter()
 @router.get("/directory", status_code=200)
 def directory_endpoint(
     tenant_uuid: str,
-    reg_db: registry_db.RegistryDb = fastapi.Depends(dependencies.registry),
+    reg_db: registry_db.RegistryDb = dependencies.REGISTRY,
 ) -> schemas.directory.DirectoryReadResponse:
     tenant_row = reg_db.tenant.read_one(id=ctx.tenant_id)
     assert tenant_row is not None

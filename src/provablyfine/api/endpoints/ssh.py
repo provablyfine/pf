@@ -36,7 +36,8 @@ def sign_host_certificate(data: schemas.ssh.SSHHostCertificateRequest) -> schema
 
     signers = _read_current(app_db.SigningKeyType.HOST, ctx.config.host_key_staging_period)
     signer = signers[0]
-    serial_number = signer.serial_number
+    # The certificates embed their serial numbers: reserve them before signing.
+    serial_number = model.signing_key.allocate_serial_numbers(signer.id, len(data.public_keys))
     now = int(time.time())
 
     certificates: list[ssh.cert.Cert] = []
@@ -87,7 +88,8 @@ def sign_user_certificate(data: schemas.ssh.SSHUserCertificateRequest) -> schema
     public_key = converters.public_from_schema(data.public_key)
     signers = _read_current(app_db.SigningKeyType.USER, ctx.config.user_key_staging_period)
     signer = signers[0]
-    serial_number = signer.serial_number
+    # The certificate embeds its serial number: reserve it before signing.
+    serial_number = model.signing_key.allocate_serial_numbers(signer.id, 1)
     now = int(time.time())
     connection_id = str(uuid.uuid4())
 
@@ -182,9 +184,6 @@ def sign_user_certificate(data: schemas.ssh.SSHUserCertificateRequest) -> schema
                 ),
                 signer=signer.key,
             )
-
-    serial_number += 1
-    model.signing_key.update(signer.id, serial_number=serial_number)
 
     # Record the connection so the bastion token endpoint can later mirror the
     # exact deadline embedded in this certificate. Expired rows are swept

@@ -83,6 +83,7 @@ class _MockOidcHandler(http.server.BaseHTTPRequestHandler):
 
     def _handle_discovery(self) -> None:
         provider = self.server.mock_provider  # type: ignore
+        time.sleep(provider.delay_s)
         discovery = {
             "issuer": provider.issuer,
             "authorization_endpoint": f"{provider.issuer}/authorize",
@@ -97,6 +98,7 @@ class _MockOidcHandler(http.server.BaseHTTPRequestHandler):
 
     def _handle_jwks(self) -> None:
         provider = self.server.mock_provider  # type: ignore
+        time.sleep(provider.delay_s)
         jwks = provider._build_jwks()
         self.send_response(200)
         self.send_header("content-type", "application/json")
@@ -215,6 +217,7 @@ class MockOidcProvider:
     def __init__(self, client_id: str = "test-client") -> None:
         self.client_id = client_id
         self._authorize_error: str | None = None
+        self.delay_s = 0.0
         self._pending_codes: dict[str, _PendingCode] = {}
         self._pending_device_codes: dict[str, _PendingDeviceCode] = {}
 
