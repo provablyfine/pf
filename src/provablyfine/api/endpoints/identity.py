@@ -20,26 +20,16 @@ router = fastapi.APIRouter(prefix="/identity", dependencies=[fastapi.Depends(sig
 _204 = fastapi.responses.Response(status_code=204)
 
 
-def _violated_unique_column(exc: sqlalchemy.exc.IntegrityError) -> str | None:
-    """Return which of "unix_username" or "name" violated its UNIQUE constraint, if either did."""
-    if db.violated_unique_column(exc, "identity", "unix_username"):
-        return "unix_username"
-    if db.violated_unique_column(exc, "identity", "name"):
-        return "name"
-    return None
-
-
 def _identity_uniqueness_conflict(
     exc: sqlalchemy.exc.IntegrityError, name: str, unix_username: str | None
 ) -> responses.ProblemHTTPException:
-    column = _violated_unique_column(exc)
-    if column == "unix_username":
+    if db.violated_unique_column(exc, "identity", "unix_username"):
         return responses.ProblemHTTPException(
             responses.problem_response(
                 status_code=400, title='Identity already exists. "unix_username" must be unique.', detail=unix_username
             )
         )
-    if column == "name":
+    if db.violated_unique_column(exc, "identity", "name"):
         return responses.ProblemHTTPException(
             responses.problem_response(
                 status_code=400, title='Identity already exists. "name" must be unique.', detail=name
