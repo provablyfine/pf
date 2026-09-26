@@ -172,7 +172,7 @@ class IdentityChecker:
             if g.filter.id is not None and g.filter.id != identity_id:
                 return False
             if g.filter.tag_id_list is not None:
-                if tag_id_list is None:
+                if tag_id_list is None or len(g.filter.tag_id_list) == 0:
                     return False
                 if not all(tag_id in tag_id_list for tag_id in g.filter.tag_id_list):
                     return False
@@ -313,7 +313,9 @@ def triplet_match(
 ) -> bool:
     if g.filter.id is not None and g.filter.id != identity_id:
         return False
-    if g.filter.tag_id_list is not None and not all(tag_id in tag_id_list for tag_id in g.filter.tag_id_list):
+    if g.filter.tag_id_list is not None and (
+        len(g.filter.tag_id_list) == 0 or not all(tag_id in tag_id_list for tag_id in g.filter.tag_id_list)
+    ):
         return False
     if g.filter.boundary_id_list is not None and not all(
         boundary_id in boundary_id_list for boundary_id in g.filter.boundary_id_list

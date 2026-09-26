@@ -495,7 +495,7 @@ def test_identity_add_tag():
     grants = single_grants(
         {
             "type": "identity",
-            "filter": {"id": 2, "tag_id_list": [], "boundary_id_list": []},
+            "filter": {"id": 2, "tag_id_list": None, "boundary_id_list": []},
             "permission": _identity_add_tag([1, 2]),
         }
     )
@@ -547,7 +547,7 @@ def test_identity_del_tag():
     grants = single_grants(
         {
             "type": "identity",
-            "filter": {"id": 2, "tag_id_list": [], "boundary_id_list": []},
+            "filter": {"id": 2, "tag_id_list": None, "boundary_id_list": []},
             "permission": _identity_del_tag([1, 2]),
         }
     )
@@ -575,7 +575,7 @@ def test_identity_invite():
     grants = single_grants(
         {
             "type": "identity",
-            "filter": {"id": 2, "tag_id_list": [], "boundary_id_list": []},
+            "filter": {"id": 2, "tag_id_list": None, "boundary_id_list": []},
             "permission": _identity_invite(["email", "sms"]),
         }
     )
@@ -596,6 +596,19 @@ def test_identity_invite_permission_none_is_unrestricted():
     )
     assert grants.identity().can_invite("email")
     assert grants.identity().can_invite("carrier-pigeon")
+
+
+def test_identity_filter_empty_tag_id_list_denies_all():
+    grants = single_grants(
+        {
+            "type": "identity",
+            "filter": {"id": None, "tag_id_list": [], "boundary_id_list": None},
+            "permission": _identity_add_tag(None),
+        }
+    )
+    assert not grants.identity(1, [], []).can_add_tag(1)
+    assert not grants.identity(1, [1, 2], []).can_add_tag(1)
+    assert not grants.identity(1, None, []).can_add_tag(1)
 
 
 def test_identity_add_tag_ceiling_and_denied():
@@ -1223,6 +1236,14 @@ def test_ssh_decide_triplet_filter():
     denied = grant.Grants([_deny_boundary([_ssh(filter=tagged)])], [role([_ssh()])])
     assert denied.ssh(1, [], []).decide("alice", None).capabilities == frozenset(model.grant.SSHCapability)
     assert denied.ssh(1, [42], []).decide("alice", None).capabilities == frozenset()
+
+
+def test_ssh_decide_triplet_filter_empty_tag_list_denies_all():
+    empty_tag = {"id": None, "tag_id_list": [], "boundary_id_list": None}
+
+    granted = grant.Grants([], [role([_ssh(filter=empty_tag)])])
+    assert granted.ssh(1, [], []).decide("alice", None).capabilities == frozenset()
+    assert granted.ssh(1, [42], []).decide("alice", None).capabilities == frozenset()
 
 
 def test_ssh_decide_triplet_filter_identity_and_boundary():
