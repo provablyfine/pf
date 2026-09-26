@@ -6,6 +6,9 @@ from ... import _sentinel
 from ..context import ctx
 from . import audit_log, utils
 
+# The identity that `initialize` creates for the first administrator of a tenant.
+FOUNDING_ID = 1
+
 
 @dataclasses.dataclass(frozen=True)
 class Identity:
@@ -35,15 +38,85 @@ def create(name: str, boundary_id_list: list[int], tag_id_list: list[int], unix_
     return identity_id
 
 
+# Sessions that are still usable when an identity is deleted are listed one by one in the audit log.
+# A busy identity can have many, so the list is capped.
+_AUDIT_LIVE_SESSIONS = 50
+
+
+def _deletion_snapshot(identity: Identity) -> dict[str, typing.Any]:
+    """What the deletion destroys, for the audit log. Never includes key material."""
+    now = int(time.time())
+    app = ctx.app_db
+
+    sessions = app.identity_session_key.read_all(identity_id=identity.id)
+    live = [s for s in sessions if not s.is_revoked and s.logged_out_at is None and s.expires_at > now]
+    live.sort(key=lambda s: s.created_at, reverse=True)
+    invitations = app.identity_invitation_key.read_all(identity_id=identity.id)
+    connections = app.ssh_connection.read_all(identity_id=identity.id)
+
+    return {
+        "name": identity.name,
+        "unix_username": identity.unix_username,
+        "tag_id_list": identity.tag_id_list,
+        "boundary_id_list": identity.boundary_id_list,
+        "role_id_list": sorted(m.role_id for m in app.role_member.read_all(identity_id=identity.id)),
+        "account_keys": [
+            {"id": k.id, "is_revoked": k.is_revoked} for k in app.identity_account_key.read_all(identity_id=identity.id)
+        ],
+        "pending_invitations": [
+            {"id": i.id, "expires_at": i.expires_at}
+            for i in invitations
+            if not i.is_accepted and not i.is_revoked and i.expires_at > now
+        ],
+        "session_count": len(sessions),
+        "last_session_created_at": max((s.created_at for s in sessions), default=None),
+        "live_sessions": [
+            {
+                "id": s.id,
+                "created_at": s.created_at,
+                "expires_at": s.expires_at,
+                "login_ip": s.login_ip,
+                "role_id": s.role_id,
+            }
+            for s in live[:_AUDIT_LIVE_SESSIONS]
+        ],
+        "live_sessions_truncated": max(0, len(live) - _AUDIT_LIVE_SESSIONS),
+        # Certificates that were already issued stay valid until they expire. They cannot be revoked.
+        "valid_ssh_connections": [
+            {
+                "connection_id": c.connection_id,
+                "hostname": c.hostname,
+                "deadline": c.deadline,
+                "valid_before": c.valid_before,
+            }
+            for c in connections
+            if c.valid_before > now
+        ],
+    }
+
+
 def delete(id: int) -> None:
+    """Delete an identity, and everything that only makes sense with it.
+
+    Its keys and sessions go at once: the next request signed with one of them is a 401.
+    The audit entry keeps what is lost with them (see `_deletion_snapshot`).
+    The grants that name the identity are removed by `identity_references.remove`. Call it first.
+
+    Certificates that were already issued cannot be revoked. They stay valid until they expire,
+    and an SSH session that is already open runs until its deadline.
+    """
+    identity = read_one(id=id)
+    assert identity is not None
+    snapshot = _deletion_snapshot(identity)
     ctx.app_db.identity_boundary.delete(identity_id=id)
     ctx.app_db.identity_tag.delete(identity_id=id)
     ctx.app_db.identity_account_key.delete(identity_id=id)
     ctx.app_db.identity_session_key.delete(identity_id=id)
     ctx.app_db.identity_invitation_key.delete(identity_id=id)
     ctx.app_db.role_member.delete(identity_id=id)
+    ctx.app_db.ssh_connection.delete(identity_id=id)
     ctx.app_db.identity.delete(id=id)
-    audit_log.create("identity-delete", id=id)
+    audit_log.create("identity-delete", id=id, **snapshot)
 
 
 def read_one(**kwargs: typing.Any) -> Identity | None:

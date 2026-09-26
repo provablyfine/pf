@@ -197,10 +197,10 @@ def initialize_endpoint(
     if reg_db.tenant.update(is_initialized=True).where(id=ctx.tenant_id, is_initialized=False) == 0:
         return fastapi.responses.Response(status_code=204)
 
-    identity = ctx.app_db.identity.read_one(id=1)
+    identity = ctx.app_db.identity.read_one(id=model.identity.FOUNDING_ID)
     if identity is None:
         _provision(allow_tenant_create=tenant_row.owner_id is None)
-        identity = ctx.app_db.identity.read_one(id=1)
+        identity = ctx.app_db.identity.read_one(id=model.identity.FOUNDING_ID)
         assert identity is not None
 
     identity_invitation_key_id = model.identity_invitation_key.create(identity_id=identity.id, expiration_delay_s=600)

@@ -229,7 +229,9 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
     )
     invite_parser.set_defaults(func=_identity_invite_function)
 
-    delete_parser = subparsers.add_parser("delete", help="Delete an unused identity")
+    delete_parser = subparsers.add_parser(
+        "delete", help="Delete an identity, the grants that name it, and its keys and sessions"
+    )
     delete_parser.add_argument("-i", "--id", type=int, help="Id of identity")
     delete_parser.set_defaults(func=_identity_delete_function)
 

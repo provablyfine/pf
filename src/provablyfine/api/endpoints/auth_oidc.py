@@ -219,6 +219,14 @@ def oidc_login_endpoint(
         role_id=None,
         logged_out_at=None,
     )
+    # No identity is set in the context during an OIDC login: name it in the details.
+    model.audit_log.create(
+        "session-create",
+        identity_id=identity.id,
+        session_key_id=session_key.thumbprint(),
+        login_ip=request.client.host if request.client else None,
+        method="oidc",
+    )
     members = ctx.app_db.role_member.read_all(identity_id=identity.id)
     role_ids = list(set(m.role_id for m in members))
     roles = ctx.app_db.role.read_all(id=role_ids) if role_ids else []

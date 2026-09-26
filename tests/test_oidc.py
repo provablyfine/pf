@@ -149,6 +149,30 @@ def test_slow_identity_provider_does_not_block_other_writes(oidc_env: OidcEnv) -
     assert not login.is_alive()
 
 
+def test_oidc_login_is_audited(oidc_env: OidcEnv) -> None:
+    """The session table is not the only record of a login."""
+    nonce = "test-nonce-audit"
+    id_token = oidc_env.mock.issue_token("user@example.com", alg="RS256", nonce=nonce)
+    session_key = _create_session_key()
+
+    oidc_env.sc.session_with_private_key(session_key).login_oidc(
+        auth_name="oidc-test",
+        client_type="cli",
+        id_token=id_token,
+        nonce=nonce,
+        session_public_key=session_key.public().to_dict(),
+    )
+
+    sc = oidc_env.sc.session()
+    user_id = next(i.id for i in sc.list_identities().identities if i.name == "user@example.com")
+    (entry,) = [
+        e for e in sc.list_audit_log().entries if e.type == "session-create" and e.details["identity_id"] == user_id
+    ]
+    assert entry.details["method"] == "oidc"
+    assert entry.details["session_key_id"] == session_key.public().thumbprint()
+    assert entry.details["login_ip"] == "127.0.0.1"
+
+
 def test_endpoint_es256(oidc_env: OidcEnv) -> None:
     """Valid ES256 token succeeds."""
     nonce = "test-nonce-es256"

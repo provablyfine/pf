@@ -240,11 +240,7 @@ def delete_endpoint(identity_id: int) -> fastapi.responses.Response:
     if identity is None:
         raise responses.not_found("Identity not found")
     if ctx.identity_id == identity_id:
-        raise responses.ProblemHTTPException(
-            responses.problem_response(status_code=400, title="You cannot delete yourself")
-        )
-    # XXX: Should we check that this identity cannot be deleted because
-    # someone depends on it in some way ?
+        _refuse_delete(identity_id, "self", "You cannot delete yourself")
 
     grants = grant.Grants.create()
     if not grants.identity(identity.id, identity.tag_id_list, identity.boundary_id_list).can_delete():
@@ -253,9 +249,20 @@ def delete_endpoint(identity_id: int) -> fastapi.responses.Response:
             "Not allowed to delete identity",
             "Identity not found",
         )
+    if identity_id == model.identity.FOUNDING_ID:
+        _refuse_delete(identity_id, "founding", "The founding identity of the tenant cannot be deleted")
 
+    # The grants that name this identity are removed in the same transaction.
+    # Nobody's permissions change: they were about this identity, and its id is never reused.
+    model.identity_references.remove(identity.id)
     model.identity.delete(id=identity.id)
     return _204
+
+
+def _refuse_delete(identity_id: int, reason: str, title: str) -> typing.NoReturn:
+    # The refusal rolls the request back. The warning is written after the rollback so that it is kept.
+    model.audit_log.create_warning_after_rollback("identity-delete-refused", identity_id=identity_id, reason=reason)
+    raise responses.ProblemHTTPException(responses.problem_response(status_code=400, title=title))
 
 
 def _can_read(grants: grant.Grants, identity: model.identity.Identity) -> bool:
