@@ -81,9 +81,6 @@ class _Backtrace:
 def create(conf: config.Config) -> fastapi.FastAPI:
     def _bootstrap_databases(registry_engine: sqlalchemy.Engine) -> None:
         """Create the registry and root tenant databases on first startup."""
-        # On a shared server, the registry database itself must exist before
-        # anything can connect to it at all, unlike a sqlite file. is_alembic_versioned
-        # below is the first thing that connects.
         db.create_database(conf.tenant_registry_url, exist_ok=True)
         if migrate.is_alembic_versioned(conf.tenant_registry_url):
             return
