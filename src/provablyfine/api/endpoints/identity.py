@@ -10,7 +10,7 @@ import fastapi
 import fastapi.responses
 import sqlalchemy.exc
 
-from .. import converters, dependencies, grant, mailer, model, responses, schemas, signature, unix_account
+from .. import converters, db, grant, mailer, model, responses, schemas, signature, unix_account
 from ..context import ctx
 
 logger = logging.getLogger(__name__)
@@ -23,17 +23,13 @@ _204 = fastapi.responses.Response(status_code=204)
 def _identity_uniqueness_conflict(
     exc: sqlalchemy.exc.IntegrityError, name: str, unix_username: str | None
 ) -> responses.ProblemHTTPException:
-    # sqlite reports which column violated its UNIQUE constraint in the
-    # underlying driver error (e.g. "UNIQUE constraint failed: identity.unix_username"),
-    # so we can tell the two apart instead of returning one generic message.
-    orig = str(exc.orig)
-    if "identity.unix_username" in orig:
+    if db.violated_unique_column(exc, "identity", "unix_username"):
         return responses.ProblemHTTPException(
             responses.problem_response(
                 status_code=400, title='Identity already exists. "unix_username" must be unique.', detail=unix_username
             )
         )
-    if "identity.name" in orig:
+    if db.violated_unique_column(exc, "identity", "name"):
         return responses.ProblemHTTPException(
             responses.problem_response(
                 status_code=400, title='Identity already exists. "name" must be unique.', detail=name
@@ -106,7 +102,6 @@ def read_self_bastions_endpoint() -> schemas.identity.IdentitySelfBastionListRes
     status_code=200,
     responses={400: responses.PROBLEM, 403: responses.PROBLEM},
 )
-@dependencies.writes_tenant  # the first token of a tenant creates its OIDC signing key
 def read_self_token_endpoint(
     service: str,
     hostname: str,

@@ -81,10 +81,12 @@ class _Backtrace:
 def create(conf: config.Config) -> fastapi.FastAPI:
     def _bootstrap_databases(registry_engine: sqlalchemy.Engine) -> None:
         """Create the registry and root tenant databases on first startup."""
+        db.create_database(conf.tenant_registry_url, exist_ok=True)
         if migrate.is_alembic_versioned(conf.tenant_registry_url):
             return
         migrate.create_registry(conf.tenant_registry_url)
-        root_db_url = f"sqlite:///{os.path.join(conf.tenants_dir, 'root.db')}"
+        root_db_url = db.derive_tenant_url(conf.tenant_registry_url, registry_db.ROOT_TENANT_UUID)
+        db.create_database(root_db_url)
         migrate.create_tenant(root_db_url)
         with db.begin(registry_engine, write=True) as registry_conn:
             registry_db.create(registry_conn).tenant.create(
@@ -101,7 +103,6 @@ def create(conf: config.Config) -> fastapi.FastAPI:
 
     @contextlib.asynccontextmanager
     async def lifespan(app: fastapi.FastAPI):
-        os.makedirs(conf.tenants_dir, exist_ok=True)
         registry_engine = db.create_engine(conf.tenant_registry_url, echo=conf.debug_sql)
 
         _bootstrap_databases(registry_engine)
@@ -157,7 +158,7 @@ def create(conf: config.Config) -> fastapi.FastAPI:
 
     async def database_error_handler(request: fastapi.requests.Request, exc: Exception) -> fastapi.responses.Response:
         assert isinstance(exc, sqlalchemy.exc.OperationalError)
-        if "database is locked" not in str(exc.orig):
+        if not db.is_database_busy(exc):
             return await generic_exception_handler(request, exc)
         # Writers wait for each other for a few seconds. Getting here means the database is overloaded.
         response = responses.problem_response(status_code=503, title="Database is busy, try again")

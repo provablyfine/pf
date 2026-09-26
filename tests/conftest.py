@@ -433,8 +433,7 @@ class Api:
     log: pathlib.Path
 
 
-@pytest.fixture
-def api(request, tmp_path):
+def _start_api(request, tmp_path, config_params):
     tmp_path = tmp_path.absolute()
     api_kek_file = tmp_path / "kek_file.key"
     api_config = tmp_path / "config.json"
@@ -450,8 +449,6 @@ def api(request, tmp_path):
     api_sock.bind(("127.0.0.1", 0))
     api_host, api_port = api_sock.getsockname()
 
-    config_params = getattr(request, "param", {})
-
     tenant_registry_url = f"sqlite:///{tmp_path / 'tenants.db'!s}"
 
     with open(api_config, "w+") as f:
@@ -459,7 +456,6 @@ def api(request, tmp_path):
             json.dumps(
                 {
                     "tenant_registry_url": tenant_registry_url,
-                    "tenants_dir": str(tmp_path),
                     "debug": True,
                     "log_level": 3,
                     "kek_filename": str(api_kek_file),
@@ -556,6 +552,23 @@ def api(request, tmp_path):
             print(f"API config: {api_config}")
             print(f"API kek: {api_kek_file}")
             return
+
+
+@pytest.fixture
+def api(request, tmp_path):
+    config_params = getattr(request, "param", {})
+    yield from _start_api(request, tmp_path, config_params)
+
+
+@pytest.fixture
+def multi_backend_api(request, tmp_path, db_backend):
+    """Like `api`, but its registry database runs on whichever backend --db-backends selected.
+
+    Use only for the small, curated set of tests that specifically exercise cross-backend
+    SQL portability end-to-end; everything else should keep using `api` unchanged.
+    """
+    config_params = {"tenant_registry_url": db_backend.fresh_database_url(request, tmp_path)}
+    yield from _start_api(request, tmp_path, config_params)
 
 
 @pytest.fixture(autouse=True)

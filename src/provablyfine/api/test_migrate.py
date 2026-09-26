@@ -1,12 +1,17 @@
 import json
 import pathlib
+import typing
 
 import alembic.autogenerate
 import alembic.command
 import alembic.runtime.migration
+import pytest
 import sqlalchemy
 
 from . import app_db, migrate, registry_db
+
+if typing.TYPE_CHECKING:
+    import conftest as root_conftest
 
 
 def _diffs(url: str, metadata: sqlalchemy.MetaData) -> list[object]:
@@ -25,6 +30,32 @@ def test_registry_migrations_match_model(tmp_path: pathlib.Path) -> None:
 def test_tenant_migrations_match_model(tmp_path: pathlib.Path) -> None:
     url = f"sqlite:///{tmp_path / 'tenant.db'}"
     migrate.upgrade_tenant(url)
+    assert _diffs(url, app_db.metadata) == []
+
+
+def test_registry_creation_matches_model(
+    request: pytest.FixtureRequest, tmp_path: pathlib.Path, db_backend: "root_conftest.DbBackend"
+) -> None:
+    """create_registry, on every backend, must produce exactly the live model's schema.
+
+    Unlike test_registry_migrations_match_model, this does not replay the historical
+    migration chain: that chain predates multi-backend support and its early revisions
+    hardcode column types (e.g. unbounded VARCHAR) that assume SQLite, so it isn't
+    portable. create_registry (metadata.create_all, then stamp to head) is what
+    app.py and endpoints/tenant.py actually call to provision a brand-new database on
+    any backend; that is the path this test exercises.
+    """
+    url = db_backend.fresh_database_url(request, tmp_path)
+    migrate.create_registry(url)
+    assert _diffs(url, registry_db.metadata) == []
+
+
+def test_tenant_creation_matches_model(
+    request: pytest.FixtureRequest, tmp_path: pathlib.Path, db_backend: "root_conftest.DbBackend"
+) -> None:
+    """Like test_registry_creation_matches_model, for a new tenant database."""
+    url = db_backend.fresh_database_url(request, tmp_path)
+    migrate.create_tenant(url)
     assert _diffs(url, app_db.metadata) == []
 
 

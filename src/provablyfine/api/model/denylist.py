@@ -11,10 +11,14 @@ def create(key_id: str, **kwargs: typing.Any) -> None:
 
     Adding a key that is already there is not an error, because a denied key can keep trying.
     Every call is recorded in the audit log.
+
+    The check and the insert are not one atomic statement, so two concurrent callers can both
+    see the key as absent. `id` is unique: `create_if_absent` guards the insert with it, so the
+    loser is told it lost instead of failing.
     """
     if ctx.app_db.public_key_denylist.read_one(key_id=key_id) is None:
         now = int(time.time())
-        ctx.app_db.public_key_denylist.create(id=key_id, key_id=key_id, created_at=now)
+        ctx.app_db.public_key_denylist.create_if_absent(id=key_id, key_id=key_id, created_at=now)
     audit_log.create_warning(type="denylist-add", public_key_id=key_id, **kwargs)
 
 
