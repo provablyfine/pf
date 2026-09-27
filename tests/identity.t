@@ -66,5 +66,14 @@ Identity names must be unique: cannot rename to an existing name
   [2]
   $ pfa -c config.json identity delete -i $USER3_ID
 
+A raw tag id that does not exist is rejected, both at create and at update time
+  $ pfa -c config.json identity create -n rawtag -t 999999
+  Request contains invalid fields
+  [2]
+  $ pfa -c config.json identity list -n rawtag -q
+  $ pfa -c config.json identity tag -i $USER2_ID -a 999999
+  Request contains invalid fields
+  [2]
+
 And yes, we can delete an identity
   $ pfa -c config.json identity delete -i $USER2_ID

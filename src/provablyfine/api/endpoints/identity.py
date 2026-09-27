@@ -151,6 +151,15 @@ def _read_boundary_ids(boundary_id_list: list[int], boundary_name_list: list[str
 
 
 def _read_tag_ids(tag_id_list: list[int], tag_name_value_list: list[schemas.tag.TagNameValue]) -> list[int]:
+    if tag_id_list:
+        existing_ids = {t.id for t in ctx.app_db.tag.read_all(id=tag_id_list)}
+        missing = set(tag_id_list) - existing_ids
+        if missing:
+            logger.info(f"No tag found for one of={sorted(missing)}")
+            raise responses.ProblemHTTPException(
+                responses.problem_response(status_code=400, title="Request contains invalid fields")
+            )
+
     id_list: list[int] = []
     for tag in tag_name_value_list:
         db_tag = ctx.app_db.tag.read_one(name=tag.name, value=tag.value)

@@ -60,7 +60,15 @@ def delete_endpoint(tag_id: int) -> fastapi.responses.Response:
             grants.tag(tag.id).can_read, "Not allowed to delete tag", "Tag does not exist"
         )
 
-    # XXX: delete all rows in other tables that reference this
+    is_identity_tagged = ctx.app_db.identity_tag.read_one(tag_id=tag_id) is not None
+    is_acl_referenced = len(model.tag_references.find(tag_id)) > 0
+    if is_identity_tagged and is_acl_referenced:
+        raise responses.ProblemHTTPException(responses.problem_response(status_code=400, title="Tag is still in use"))
+
+    model.tag_references.remove(tag_id)
+    model.bastion.remove_tag(tag_id)
+    if is_identity_tagged:
+        ctx.app_db.identity_tag.delete(tag_id=tag_id)
     model.audit_log.create("tag-delete", id=tag_id, name=tag.name, value=tag.value)
     ctx.app_db.tag.delete(id=tag_id)
     return _204

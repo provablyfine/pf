@@ -86,6 +86,8 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
     create_parser.add_argument("-v", "--value", type=str, help="Value of tag.", required=True)
     create_parser.set_defaults(func=_tag_create_function)
 
-    delete_parser = subparsers.add_parser("delete", help="Delete a tag")
+    delete_parser = subparsers.add_parser(
+        "delete", help="Delete a tag. Refuses if it is both assigned to an identity and named by a grant."
+    )
     delete_parser.add_argument("-i", "--id", type=int, help="Id of tag.")
     delete_parser.set_defaults(func=_tag_delete_function)
