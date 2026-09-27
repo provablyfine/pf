@@ -1287,7 +1287,7 @@ async def test_tui_bastion_list(api):
 
             await pilot.press("a")  # open add modal via action_add_bastion worker
             await pilot.pause()  # screen transition
-            await pilot.pause()  # _BastionCreateScreen.on_mount (no API)
+            await pilot.pause()  # _BastionCreateScreen.on_mount calls list_tags()
             await pilot.press(*"https://bastion.example.com")  # type url
             await pilot.press("tab")  # move to ssh_proxy_jump
             await pilot.press(*"proxy.example.com")  # type ssh_proxy_jump
@@ -1302,6 +1302,43 @@ async def test_tui_bastion_list(api):
 
 
 @pytest.mark.anyio
+async def test_tui_bastion_create_with_tags(api):
+    """Create a bastion with a tag via _BastionCreateScreen's Tags CheckboxInput."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        auth = _setup(api, tmpdir)
+        await auth.create_tag("env", "prod")
+        app = provablyfine.tui.app.TuiApp(auth)
+
+        async with app.run_test(size=(200, 50)) as pilot:
+            await pilot.pause()  # app startup
+            await _goto(pilot, "bastions")  # navigate to Bastions
+            await pilot.pause()  # screen transition
+            await pilot.pause()  # BastionListScreen.on_mount
+
+            await pilot.press("a")  # open add modal via action_add_bastion worker
+            await pilot.pause()  # screen transition
+            await pilot.pause()  # _BastionCreateScreen.on_mount calls list_tags()
+            await pilot.press(*"https://tagged-bastion.example.com")  # type url
+
+            # Tags: enable CheckboxInput and type "env=prod".
+            await pilot.click("#tags Checkbox")
+            await pilot.pause()  # UI event settle
+            await pilot.press(*"env=prod")
+            await pilot.pause()  # UI event settle
+
+            await pilot.press("enter")  # submit
+            await _wait(pilot, app)  # action_add_bastion worker posts bastion
+
+        assert not [n for n in app._notifications if n.severity == "error"]
+
+        resp = await auth.list_bastions()
+
+    bastion = next(b for b in resp.bastions if b.url == "https://tagged-bastion.example.com")
+    assert bastion.tag_list is not None
+    assert any(t.name == "env" and t.value == "prod" for t in bastion.tag_list)
+
+
+@pytest.mark.anyio
 async def test_tui_bastion_delete(api):
     """Delete a bastion via the TUI."""
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -1309,7 +1346,7 @@ async def test_tui_bastion_delete(api):
         bastion = await auth.create_bastion(
             "https://register.example.com",
             "proxy.example.com",
-            [],
+            None,
             [],
         )
         app = provablyfine.tui.app.TuiApp(auth)
@@ -1340,7 +1377,7 @@ async def test_tui_bastion_add_tag(api):
         bastion = await auth.create_bastion(
             "https://register.example.com",
             None,
-            [],
+            None,
             [],
         )
         bastion_id = bastion.id
@@ -1355,17 +1392,13 @@ async def test_tui_bastion_add_tag(api):
 
             await pilot.press("enter")  # open bastion's BastionViewScreen
             await pilot.pause()  # screen transition
-            await pilot.pause()  # BastionViewScreen.on_mount (no API)
+            await pilot.pause()  # BastionViewScreen.on_mount calls list_tags()
 
-            # BastionViewScreen: Input#url is focused; tab to #ssh_proxy_jump, then to #tags
-            await pilot.press("tab", "tab")
-            await pilot.press("a")  # action_add_tag → _TagAddScreen opens via worker
-            await pilot.pause()  # screen transition
-            await pilot.pause()  # _TagAddScreen.on_mount calls list_tags()
-
-            await pilot.press(*"env=prod")  # type exact tag label
-            await pilot.press("enter")  # submit; _TagAddScreen dismisses with tag dict
-            await _wait(pilot, app)  # action_add_tag worker completes
+            # Tags: enable CheckboxInput and type "env=prod".
+            await pilot.click("#tags Checkbox")
+            await pilot.pause()  # UI event settle
+            await pilot.press(*"env=prod")
+            await pilot.pause()  # UI event settle
 
             await pilot.press("ctrl+s")  # save bastion
             await _wait(pilot, app)  # action_save worker posts bastion
@@ -1374,8 +1407,79 @@ async def test_tui_bastion_add_tag(api):
 
         bastion = await auth.get_bastion(bastion_id)
 
+    assert bastion.tag_list is not None
+    assert any(t.name == "env" and t.value == "prod" for t in bastion.tag_list)
 
-#        assert any(t.name == "env" and t.value == "prod" for t in bastion.tag_list)
+
+@pytest.mark.anyio
+async def test_tui_bastion_check_empty_tags_matches_no_one(api):
+    """Checking Tags with no value on an unrestricted bastion locks it to no one."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        auth = _setup(api, tmpdir)
+
+        bastion = await auth.create_bastion("https://register.example.com", None, None, [])
+        bastion_id = bastion.id
+
+        app = provablyfine.tui.app.TuiApp(auth)
+
+        async with app.run_test(size=(200, 50)) as pilot:
+            await pilot.pause()  # app startup
+            await _goto(pilot, "bastions")  # navigate to Bastions
+            await pilot.pause()  # screen transition
+            await pilot.pause()  # BastionListScreen.on_mount
+
+            await pilot.press("enter")  # open bastion's BastionViewScreen
+            await pilot.pause()  # screen transition
+            await pilot.pause()  # BastionViewScreen.on_mount calls list_tags()
+
+            await pilot.click("#tags Checkbox")  # enable, leaving the value empty
+            await pilot.pause()  # UI event settle
+
+            await pilot.press("ctrl+s")  # save bastion
+            await _wait(pilot, app)  # action_save worker posts bastion
+
+        assert not [n for n in app._notifications if n.severity == "error"]
+
+        bastion = await auth.get_bastion(bastion_id)
+
+    assert bastion.tag_list == []
+
+
+@pytest.mark.anyio
+async def test_tui_bastion_uncheck_tags_restores_unrestricted(api):
+    """Unchecking Tags on a tagged bastion restores it to visible-to-everyone."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        auth = _setup(api, tmpdir)
+        await auth.create_tag("env", "prod")
+
+        bastion = await auth.create_bastion(
+            "https://register.example.com", None, None, [{"name": "env", "value": "prod"}]
+        )
+        bastion_id = bastion.id
+
+        app = provablyfine.tui.app.TuiApp(auth)
+
+        async with app.run_test(size=(200, 50)) as pilot:
+            await pilot.pause()  # app startup
+            await _goto(pilot, "bastions")  # navigate to Bastions
+            await pilot.pause()  # screen transition
+            await pilot.pause()  # BastionListScreen.on_mount
+
+            await pilot.press("enter")  # open bastion's BastionViewScreen
+            await pilot.pause()  # screen transition
+            await pilot.pause()  # BastionViewScreen.on_mount calls list_tags()
+
+            await pilot.click("#tags Checkbox")  # starts checked with "env=prod"; uncheck it
+            await pilot.pause()  # UI event settle
+
+            await pilot.press("ctrl+s")  # save bastion
+            await _wait(pilot, app)  # action_save worker posts bastion
+
+        assert not [n for n in app._notifications if n.severity == "error"]
+
+        bastion = await auth.get_bastion(bastion_id)
+
+    assert bastion.tag_list is None
 
 
 @pytest.mark.anyio

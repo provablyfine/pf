@@ -14,14 +14,14 @@ from . import audit_log, identity, oidc_key
 @dataclasses.dataclass(frozen=True)
 class Bastion:
     id: int
-    tag_id_list: list[int]
+    tag_id_list: list[int] | None
     url: str
     created_at: int
     ssh_proxy_jump: str | None = None
     created_by_id: int | None = None
 
 
-def create(url: str, ssh_proxy_jump: str | None, tag_id_list: list[int]) -> int:
+def create(url: str, ssh_proxy_jump: str | None, tag_id_list: list[int] | None) -> int:
     now = int(time.time())
     bastion_id = ctx.app_db.bastion.create(
         url=url,
@@ -76,7 +76,7 @@ def update(
     id: int,
     url: str | _sentinel.Unset = _sentinel.UNSET,
     ssh_proxy_jump: str | _sentinel.Unset | None = _sentinel.UNSET,
-    tag_id_list: list[int] | _sentinel.Unset = _sentinel.UNSET,
+    tag_id_list: list[int] | _sentinel.Unset | None = _sentinel.UNSET,
 ) -> None:
     update_fields: dict[str, typing.Any] = {}
     if url is not _sentinel.UNSET:
@@ -104,8 +104,8 @@ def remove_tag(tag_id: int) -> list[int]:
     """Drop the tag id from every bastion's tag list, including a bastion's only tag.
 
     `tag_id_list` controls which bastions an identity sees, not what it may do once connected:
-    an empty list means every identity sees the bastion. So stripping a bastion's last tag down
-    to `[]` widens who sees it rather than restricting it further, and that's fine here: a tag
+    `None` means every identity sees the bastion. So stripping a bastion's last tag down to
+    `None` widens who sees it rather than restricting it further, and that's fine here: a tag
     delete only reaches this point once it's already established that no identity's access
     depends on this tag id (see the two-condition check in `endpoints/tag.py`).
 
@@ -113,9 +113,10 @@ def remove_tag(tag_id: int) -> list[int]:
     """
     changed: list[int] = []
     for b in read_all():
-        if tag_id not in b.tag_id_list:
+        if b.tag_id_list is None or tag_id not in b.tag_id_list:
             continue
-        update(b.id, tag_id_list=[t for t in b.tag_id_list if t != tag_id])
+        remaining = [t for t in b.tag_id_list if t != tag_id]
+        update(b.id, tag_id_list=remaining if remaining else None)
         changed.append(b.id)
     return changed
 
@@ -128,8 +129,10 @@ def read_matching() -> list[Bastion]:
     all_bastions = read_all()
     matching: list[Bastion] = []
     for bastion in all_bastions:
-        if len(bastion.tag_id_list) == 0:
+        if bastion.tag_id_list is None:
             matching.append(bastion)
+        elif len(bastion.tag_id_list) == 0:
+            continue
         else:
             for tag_id in bastion.tag_id_list:
                 if tag_id in caller.tag_id_list:

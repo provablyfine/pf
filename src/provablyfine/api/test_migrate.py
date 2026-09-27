@@ -259,6 +259,42 @@ def test_registry_migration_backfills_tenant_uuid(tmp_path: pathlib.Path) -> Non
     assert len({uuids["acme"], uuids["beta"], uuids["root"]}) == 3
 
 
+def test_tenant_migration_nulls_out_unrestricted_bastions(tmp_path: pathlib.Path) -> None:
+    """A bastion with `tag_id_list is None` is visible to every identity.
+
+    Existing bastions stored with `[]` are rewritten to `NULL` so they keep that
+    visibility across the upgrade. A bastion with a non-empty tag_id_list is
+    left untouched.
+    """
+    url = f"sqlite:///{tmp_path / 'tenant.db'}"
+    config = migrate._alembic_config(schema="tenant", url=url)
+    alembic.command.upgrade(config, "c8d1e4f7a2b9")
+
+    engine = sqlalchemy.create_engine(url)
+    with engine.begin() as connection:
+        connection.execute(
+            sqlalchemy.text(
+                "INSERT INTO bastion (id, url, ssh_proxy_jump, tag_id_list, created_at, created_by_id)"
+                " VALUES (1, 'https://unrestricted', NULL, '[]', 0, NULL)"
+            )
+        )
+        connection.execute(
+            sqlalchemy.text(
+                "INSERT INTO bastion (id, url, ssh_proxy_jump, tag_id_list, created_at, created_by_id)"
+                " VALUES (2, 'https://tagged', NULL, '[1, 2]', 0, NULL)"
+            )
+        )
+
+    migrate.upgrade_tenant(url)
+
+    with engine.connect() as connection:
+        tag_id_lists = dict(
+            connection.execute(sqlalchemy.text("SELECT url, tag_id_list FROM bastion ORDER BY id")).all()
+        )
+    assert json.loads(tag_id_lists["https://unrestricted"]) is None
+    assert json.loads(tag_id_lists["https://tagged"]) == [1, 2]
+
+
 def test_registry_migration_drops_unique_tenant_name(tmp_path: pathlib.Path) -> None:
     url = f"sqlite:///{tmp_path / 'registry.db'}"
     migrate.upgrade_registry(url)

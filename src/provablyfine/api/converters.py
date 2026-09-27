@@ -580,12 +580,11 @@ def auth_config_to_public_schema(ac: model.auth_config.AuthConfig) -> schemas.au
 
 
 def bastion_to_schema(converter: GrantConverter, bastion: model.bastion.Bastion) -> schemas.bastion.Bastion:
-    tag_list = converter.to_tag_list(bastion.tag_id_list)
     return schemas.bastion.Bastion(
         id=bastion.id,
         url=bastion.url,
         ssh_proxy_jump=bastion.ssh_proxy_jump,
-        tag_list=tag_list if tag_list else [],
+        tag_list=converter.to_tag_list(bastion.tag_id_list),
     )
 
 

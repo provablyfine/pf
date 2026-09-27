@@ -238,7 +238,7 @@ class BastionRow(typing.NamedTuple):
     id: typing.Annotated[int, orm.Col(primary_key=True)]
     url: str
     ssh_proxy_jump: str | None
-    tag_id_list: list[int]
+    tag_id_list: list[int] | None
     created_at: int
     created_by_id: int | None
 

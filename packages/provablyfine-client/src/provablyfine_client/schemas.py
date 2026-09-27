@@ -192,7 +192,7 @@ class Bastion(_Base):
     id: int
     url: str
     ssh_proxy_jump: str | None = None
-    tag_list: list[TagNameValue] = []
+    tag_list: list[TagNameValue] | None = None
 
 
 class BastionListResponse(_Base):
