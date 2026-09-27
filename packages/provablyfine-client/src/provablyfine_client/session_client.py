@@ -320,7 +320,7 @@ class SessionClient:
         self,
         url: str,
         ssh_proxy_jump: str | None,
-        tag_id_list: list[int],
+        tag_id_list: list[int] | None,
         tag_name_value_list: list[dict[str, str]],
     ) -> schemas.Bastion:
         response = self._session.post(
@@ -340,20 +340,24 @@ class SessionClient:
     def update_bastion(
         self,
         id: int,
-        url: str | None = None,
-        ssh_proxy_jump: str | None = None,
-        tag_id_list: list[int] | None = None,
-        tag_name_value_list: list[schemas.TagNameValue] | None = None,
+        url: str | _sentinel.Unset = _sentinel.UNSET,
+        ssh_proxy_jump: str | _sentinel.Unset | None = _sentinel.UNSET,
+        tag_id_list: list[int] | _sentinel.Unset | None = _sentinel.UNSET,
+        tag_name_value_list: list[schemas.TagNameValue] | _sentinel.Unset | None = _sentinel.UNSET,
     ) -> None:
         query: dict[str, typing.Any] = {}
-        if url is not None:
+        if not isinstance(url, _sentinel.Unset):
             query["url"] = url
-        if ssh_proxy_jump is not None:
+        if not isinstance(ssh_proxy_jump, _sentinel.Unset):
             query["ssh_proxy_jump"] = ssh_proxy_jump
-        if tag_id_list is not None:
+        if not isinstance(tag_id_list, _sentinel.Unset):
             query["tag_id_list"] = tag_id_list
-        if tag_name_value_list is not None:
-            query["tag_name_value_list"] = [{"name": t.name, "value": t.value} for t in tag_name_value_list]
+        if not isinstance(tag_name_value_list, _sentinel.Unset):
+            query["tag_name_value_list"] = (
+                None
+                if tag_name_value_list is None
+                else [{"name": t.name, "value": t.value} for t in tag_name_value_list]
+            )
         if not query:
             raise exceptions.UI("No fields to update")
         response = self._session.patch(f"{self._directory.bastion}/{id}", auth=self._auth(), json=query)

@@ -4,65 +4,40 @@ import provablyfine_client as pfc
 import textual
 import textual.app
 import textual.containers
-import textual.events
 import textual.widgets
 import textual_autocomplete
 
-from . import auto_complete, base
+from . import base, checkbox_input
 
 
-class _TagAddScreen(base.ModalScreen[pfc.schemas.TagNameValue | None]):
-    DEFAULT_CSS = """
-    _TagAddScreen > VerticalGroup {
-        width: 50;
-    }
+def tag_filter(active: bool, value: str) -> list[pfc.schemas.TagNameValue] | None:
+    """Map a Tags CheckboxInput's state to the None/[]/list tri-state.
+
+    Unchecked -> None (visible to everyone). Checked and empty -> [] (visible to
+    no one). Checked with values -> that list.
     """
-    BINDINGS: typing.ClassVar = [("escape", "cancel", "Cancel")]
+    if not active:
+        return None
+    return [pfc.schemas.TagNameValue(name=k, value=v) for k, v in (s.split("=", 1) for s in value.split() if "=" in s)]
 
-    def __init__(self, tags: list[pfc.schemas.TagNameValue]) -> None:
-        super().__init__()
-        self._tags: dict[str, pfc.schemas.TagNameValue] = {f"{t.name}={t.value}": t for t in tags}
 
-    def compose(self) -> textual.app.ComposeResult:
-        candidates = [textual_autocomplete.DropdownItem(main=label) for label in self._tags]
-        with textual.containers.VerticalGroup() as container:
-            container.border_title = "Add tag"
-            yield base.Input(placeholder="name=value", compact=True, id="tag-input")
-        yield auto_complete.MonoAutoComplete("#tag-input", candidates=candidates)
-
-    def action_cancel(self) -> None:
-        self.dismiss(None)
-
-    @textual.on(textual.widgets.Input.Submitted)
-    def _on_submit(self) -> None:
-        value = self.query_one("#tag-input", textual.widgets.Input).value.strip()
-        tag = self._tags.get(value)
-        if tag is None:
-            return
-        self.dismiss(tag)
+def tag_field_value(tag_list: list[pfc.schemas.TagNameValue] | None) -> str:
+    return " ".join(f"{t.name}={t.value}" for t in (tag_list or []))
 
 
 class BastionViewScreen(base.Screen):
     BINDINGS: typing.ClassVar = [
         ("ctrl+s", "save", "Save"),
         ("escape", "app.pop_screen", "Back"),
-        ("a", "add_tag", "Add tag"),
-        ("d", "delete_tag", "Delete tag"),
     ]
-    DEFAULT_CSS = """
-    #tags {
-        height: auto;
-    }
-    """
 
     def __init__(self, auth: pfc.AsyncSessionClient, bastion: pfc.schemas.Bastion) -> None:
         super().__init__()
         self._auth = auth
         self._bastion = bastion
-        self._tags: list[pfc.schemas.TagNameValue] = list(bastion.tag_list)
         self._saved_url: str = bastion.url
         self._saved_ssh_proxy_jump: str | None = bastion.ssh_proxy_jump
-        self._saved_tags: list[pfc.schemas.TagNameValue] = list(bastion.tag_list)
+        self._saved_tag_list: list[pfc.schemas.TagNameValue] | None = bastion.tag_list
 
     def compose(self) -> textual.app.ComposeResult:
         with textual.containers.Vertical():
@@ -70,75 +45,42 @@ class BastionViewScreen(base.Screen):
             yield base.Input(self._bastion.url, id="url", compact=True)
             yield textual.widgets.Label("SSH Proxy Jump", classes="field-label")
             yield base.Input(self._bastion.ssh_proxy_jump or "", id="ssh_proxy_jump", compact=True)
-            yield textual.widgets.Label("Tags", classes="field-label")
-            yield textual.widgets.ListView(id="tags")
-            yield textual.widgets.Label("No tags — add one with 'a'", id="tags-placeholder")
+            yield checkbox_input.CheckboxInput(
+                "Tags",
+                active=self._bastion.tag_list is not None,
+                value=tag_field_value(self._bastion.tag_list),
+                placeholder="Type a tag name=value",
+                id="tags",
+            )
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     async def on_mount(self) -> None:
-        await self._populate_tags()
-
-    def on_descendant_focus(self, event: textual.events.DescendantFocus) -> None:
-        self.refresh_bindings()
-
-    def on_descendant_blur(self, event: textual.events.DescendantBlur) -> None:
-        self.refresh_bindings()
-
-    def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
-        if action in ("add_tag", "delete_tag"):
-            focused = self.focused
-            return focused is not None and focused.id == "tags"
-        return True
-
-    async def _populate_tags(self) -> None:
-        lv = self.query_one("#tags", textual.widgets.ListView)
-        await lv.clear()
-        for tag in self._tags:
-            await lv.append(textual.widgets.ListItem(textual.widgets.Label(f"{tag.name}={tag.value}")))
-        self.query_one("#tags-placeholder").display = not bool(self._tags)
-
-    @textual.work
-    async def action_add_tag(self) -> None:
-        all_tags = (await self._auth.list_tags()).tags
-        existing = {(t.name, t.value) for t in self._tags}
-        available = [
-            pfc.schemas.TagNameValue(name=t.name, value=t.value) for t in all_tags if (t.name, t.value) not in existing
-        ]
-        if not available:
-            self.notify("No tag available to add")
-            return
-        tag = await self.app.push_screen_wait(_TagAddScreen(available))
-        if tag is None:
-            return
-        self._tags.append(tag)
-        await self._populate_tags()
-
-    @textual.work
-    async def action_delete_tag(self) -> None:
-        lv = self.query_one("#tags", textual.widgets.ListView)
-        index = lv.index
-        if index is None or not self._tags:
-            return
-        self._tags.pop(index)
-        await self._populate_tags()
+        tags_raw = (await self._auth.list_tags()).tags
+        candidates = [textual_autocomplete.DropdownItem(main=f"{t.name}={t.value}") for t in tags_raw]
+        self.query_one("#tags", checkbox_input.CheckboxInput).set_candidates(candidates)
 
     @textual.work
     async def action_save(self) -> None:
         url = self.query_one("#url", textual.widgets.Input).value
         ssh_proxy_jump = self.query_one("#ssh_proxy_jump", textual.widgets.Input).value.strip() or None
+        tags_field = self.query_one("#tags", checkbox_input.CheckboxInput)
+        tag_list = tag_filter(tags_field.active, tags_field.value)
 
         url_changed = url != self._saved_url
         ssh_proxy_jump_changed = ssh_proxy_jump != self._saved_ssh_proxy_jump
-        tags_changed = self._tags != self._saved_tags
+        tags_changed = tag_list != self._saved_tag_list
 
         if not (url_changed or ssh_proxy_jump_changed or tags_changed):
             self.notify("No changes")
             return
 
-        await self._auth.update_bastion(
-            self._bastion.id,
-            url=url if url_changed else None,
-            ssh_proxy_jump=ssh_proxy_jump if ssh_proxy_jump_changed else None,
-            tag_name_value_list=self._tags if tags_changed else None,
-        )
+        update_params: dict[str, typing.Any] = {}
+        if url_changed:
+            update_params["url"] = url
+        if ssh_proxy_jump_changed:
+            update_params["ssh_proxy_jump"] = ssh_proxy_jump
+        if tags_changed:
+            update_params["tag_name_value_list"] = tag_list
+
+        await self._auth.update_bastion(self._bastion.id, **update_params)
         self.app.pop_screen()

@@ -32,7 +32,8 @@ def _bastion_list_function(args: argparse.Namespace) -> None:
         case "text":
             rows: list[list[int | str]] = []
             for bastion in bastions:
-                rows.append([bastion.id, bastion.url, len(bastion.tag_list)])
+                ntags = "all" if bastion.tag_list is None else str(len(bastion.tag_list))
+                rows.append([bastion.id, bastion.url, ntags])
             if len(rows) == 0:
                 output = ""
             else:
@@ -56,8 +57,13 @@ def _bastion_read_function(args: argparse.Namespace) -> None:
             rows.append(["url", bastion.url])
             if bastion.ssh_proxy_jump:
                 rows.append(["ssh_proxy_jump", bastion.ssh_proxy_jump])
-            for tag in bastion.tag_list:
-                rows.append(["tag", f"{tag.name}={tag.value}"])
+            if bastion.tag_list is None:
+                rows.append(["tags", "all (unrestricted)"])
+            elif len(bastion.tag_list) == 0:
+                rows.append(["tags", "none (visible to no one)"])
+            else:
+                for tag in bastion.tag_list:
+                    rows.append(["tag", f"{tag.name}={tag.value}"])
             output = tabulate.tabulate(rows, tablefmt="plain")
         case _:
             assert False
@@ -73,12 +79,19 @@ def _bastion_delete_function(args: argparse.Namespace) -> None:
 def _bastion_create_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     sc = client.Factory(c, timeout=args.timeout).session()
-    tag_id_list = [int(t) for t in args.tag if t.isdigit()]
-    tag_name_value_list = [_parse_tag(t) for t in args.tag if not t.isdigit()]
+    tag_id_list: list[int] | None
+    tag_name_value_list: list[dict[str, str]]
+    if args.tag is None:
+        tag_id_list, tag_name_value_list = None, []
+    else:
+        tag_id_list = [int(t) for t in args.tag if t.isdigit()]
+        tag_name_value_list = [_parse_tag(t) for t in args.tag if not t.isdigit()]
     sc.create_bastion(args.url, args.ssh_proxy_jump, tag_id_list, tag_name_value_list)
 
 
 def _bastion_update_function(args: argparse.Namespace) -> None:
+    if args.unrestrict_tags and args.tag is not None:
+        raise pfc.exceptions.UI("Cannot combine --tag and --unrestrict-tags")
     c = client.Config.load(args.config)
     sc = client.Factory(c, timeout=args.timeout).session()
     update_params: dict[str, typing.Any] = {}
@@ -86,6 +99,17 @@ def _bastion_update_function(args: argparse.Namespace) -> None:
         update_params["url"] = args.url
     if args.ssh_proxy_jump is not None:
         update_params["ssh_proxy_jump"] = args.ssh_proxy_jump
+    if args.unrestrict_tags:
+        update_params["tag_name_value_list"] = None
+    elif args.tag is not None:
+        numeric = [int(t) for t in args.tag if t.isdigit()]
+        named = [_parse_tag(t) for t in args.tag if not t.isdigit()]
+        if numeric and named:
+            raise pfc.exceptions.UI("Cannot mix numeric tag ids and name=value tags")
+        if numeric:
+            update_params["tag_id_list"] = numeric
+        else:
+            update_params["tag_name_value_list"] = [pfc.schemas.TagNameValue(**t) for t in named]
     sc.update_bastion(args.id, **update_params)
 
 
@@ -108,7 +132,14 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
     create_parser = subparsers.add_parser("create", help="Create a new bastion")
     create_parser.add_argument("--url", type=str, required=True, help="URL of the bastion")
     create_parser.add_argument("--ssh-proxy-jump", type=str, help="SSH ProxyJump string")
-    create_parser.add_argument("-t", "--tag", help="Tag to apply on the bastion", nargs="*", default=[])
+    create_parser.add_argument(
+        "-t",
+        "--tag",
+        help="Tag (name=value or numeric id) restricting who sees the bastion. Omit entirely for "
+        "'visible to everyone'. Pass with no values for 'visible to no one'.",
+        nargs="*",
+        default=None,
+    )
     create_parser.set_defaults(func=_bastion_create_function)
 
     delete_parser = subparsers.add_parser("delete", help="Delete a bastion")
@@ -119,4 +150,17 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
     update_parser.add_argument("-i", "--id", type=int, help="Id of bastion", required=True)
     update_parser.add_argument("--url", type=str, help="URL of the bastion")
     update_parser.add_argument("--ssh-proxy-jump", type=str, help="SSH ProxyJump string, set empty to clear.")
+    update_parser.add_argument(
+        "-t",
+        "--tag",
+        help="Tag (name=value or numeric id) restricting who sees the bastion, replacing any existing "
+        "tags. Pass with no values to set 'visible to no one'.",
+        nargs="*",
+        default=None,
+    )
+    update_parser.add_argument(
+        "--unrestrict-tags",
+        help="Clear all tag restrictions, making the bastion visible to everyone",
+        action="store_true",
+    )
     update_parser.set_defaults(func=_bastion_update_function)

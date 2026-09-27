@@ -160,7 +160,7 @@ class AsyncSessionClient:
         self,
         url: str,
         ssh_proxy_jump: str | None,
-        tag_id_list: list[int],
+        tag_id_list: list[int] | None,
         tag_name_value_list: list[dict[str, str]],
     ) -> schemas.Bastion:
         return await self._run(
@@ -170,10 +170,10 @@ class AsyncSessionClient:
     async def update_bastion(
         self,
         id: int,
-        url: str | None = None,
-        ssh_proxy_jump: str | None = None,
-        tag_id_list: list[int] | None = None,
-        tag_name_value_list: list[schemas.TagNameValue] | None = None,
+        url: str | _sentinel.Unset = _sentinel.UNSET,
+        ssh_proxy_jump: str | _sentinel.Unset | None = _sentinel.UNSET,
+        tag_id_list: list[int] | _sentinel.Unset | None = _sentinel.UNSET,
+        tag_name_value_list: list[schemas.TagNameValue] | _sentinel.Unset | None = _sentinel.UNSET,
     ) -> None:
         return await self._run(
             lambda: self._inner.update_bastion(id, url, ssh_proxy_jump, tag_id_list, tag_name_value_list)

@@ -47,7 +47,9 @@ def create_endpoint(data: schemas.bastion.BastionCreateRequest) -> schemas.basti
             responses.problem_response(status_code=403, title="Not allowed to create bastion")
         )
 
-    tag_ids = _read_tag_ids(data.tag_id_list, data.tag_name_value_list)
+    tag_ids: list[int] | None = None
+    if data.tag_id_list is not None or len(data.tag_name_value_list) > 0:
+        tag_ids = _read_tag_ids(data.tag_id_list or [], data.tag_name_value_list)
 
     bastion_id = model.bastion.create(
         url=data.url,
@@ -87,8 +89,10 @@ def update_endpoint(bastion_id: int, data: schemas.bastion.BastionUpdateRequest)
     if "ssh_proxy_jump" in data.model_fields_set:
         update_params["ssh_proxy_jump"] = data.ssh_proxy_jump
     if "tag_id_list" in data.model_fields_set or "tag_name_value_list" in data.model_fields_set:
-        tag_ids = _read_tag_ids(data.tag_id_list or [], data.tag_name_value_list or [])
-        update_params["tag_id_list"] = tag_ids
+        if data.tag_id_list is None and data.tag_name_value_list is None:
+            update_params["tag_id_list"] = None
+        else:
+            update_params["tag_id_list"] = _read_tag_ids(data.tag_id_list or [], data.tag_name_value_list or [])
 
     model.bastion.update(id=bastion_id, **update_params)
 

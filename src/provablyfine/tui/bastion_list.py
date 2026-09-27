@@ -5,13 +5,16 @@ import textual
 import textual.app
 import textual.containers
 import textual.widgets
+import textual_autocomplete
 
-from . import base, bastion_view
+from . import base, bastion_view, checkbox_input
 
 
 class _BastionFormResult(typing.TypedDict):
     url: str
     ssh_proxy_jump: str | None
+    tag_id_list: list[int] | None
+    tag_name_value_list: list[dict[str, str]]
 
 
 class _BastionCreateScreen(base.ModalScreen[_BastionFormResult | None]):
@@ -22,11 +25,27 @@ class _BastionCreateScreen(base.ModalScreen[_BastionFormResult | None]):
     """
     BINDINGS: typing.ClassVar = [("escape", "cancel", "Cancel")]
 
+    def __init__(self, auth: pfc.AsyncSessionClient) -> None:
+        super().__init__()
+        self._auth = auth
+
     def compose(self) -> textual.app.ComposeResult:
         with textual.containers.VerticalGroup() as container:
             container.border_title = "Add a bastion"
             yield base.Input(placeholder="URL", id="url", compact=True)
             yield base.Input(placeholder="SSH proxy jump (optional)", id="ssh_proxy_jump", compact=True)
+            yield checkbox_input.CheckboxInput(
+                "Tags",
+                active=False,
+                value="",
+                placeholder="Type a tag name=value",
+                id="tags",
+            )
+
+    async def on_mount(self) -> None:
+        tags_raw = (await self._auth.list_tags()).tags
+        candidates = [textual_autocomplete.DropdownItem(main=f"{t.name}={t.value}") for t in tags_raw]
+        self.query_one("#tags", checkbox_input.CheckboxInput).set_candidates(candidates)
 
     def action_cancel(self) -> None:
         self.dismiss(None)
@@ -37,10 +56,24 @@ class _BastionCreateScreen(base.ModalScreen[_BastionFormResult | None]):
         if not url:
             return
         ssh_proxy_jump = self.query_one("#ssh_proxy_jump", textual.widgets.Input).value.strip() or None
+        tags_field = self.query_one("#tags", checkbox_input.CheckboxInput)
+        tag_list = bastion_view.tag_filter(tags_field.active, tags_field.value)
+
+        tag_id_list: list[int] | None
+        if tag_list is None:
+            tag_id_list = None
+        elif len(tag_list) == 0:
+            tag_id_list = []
+        else:
+            tag_id_list = None
+        tag_name_value_list = [{"name": t.name, "value": t.value} for t in (tag_list or [])]
+
         self.dismiss(
             {
                 "url": url,
                 "ssh_proxy_jump": ssh_proxy_jump,
+                "tag_id_list": tag_id_list,
+                "tag_name_value_list": tag_name_value_list,
             }
         )
 
@@ -83,7 +116,7 @@ class BastionListScreen(base.Screen):
             table.add_row(
                 bastion.url,
                 bastion.ssh_proxy_jump or "",
-                str(len(bastion.tag_list)),
+                "all" if bastion.tag_list is None else str(len(bastion.tag_list)),
             )
         self.query_one("#bastions-placeholder").display = not bool(self._bastions)
 
@@ -100,14 +133,14 @@ class BastionListScreen(base.Screen):
 
     @textual.work
     async def action_add_bastion(self) -> None:
-        result = await self.app.push_screen_wait(_BastionCreateScreen())
+        result = await self.app.push_screen_wait(_BastionCreateScreen(self._auth))
         if result is None:
             return
         bastion = await self._auth.create_bastion(
             result["url"],
             result["ssh_proxy_jump"],
-            [],
-            [],
+            result["tag_id_list"],
+            result["tag_name_value_list"],
         )
         self._bastions.append(bastion)
         table = self.query_one(self._StrDataTable)
