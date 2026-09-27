@@ -140,5 +140,5 @@ Deleting a tag that is a bastion's only tag strips it, leaving the bastion unres
   $ pfa -c config.json tag delete -i $SITE2_ID
   $ pfa -c config.json bastion read -i $SOLE_BASTION_ID -f json | jq -c '.tag_list'
   []
-  $ pfa -c config.json bastion list -q | wc -l
+  $ pfa -c config.json bastion list -q | wc -l | tr -d ' '
   2
