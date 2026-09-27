@@ -45,8 +45,9 @@ class BastionViewScreen(base.Screen):
             yield base.Input(self._bastion.url, id="url", compact=True)
             yield textual.widgets.Label("SSH Proxy Jump", classes="field-label")
             yield base.Input(self._bastion.ssh_proxy_jump or "", id="ssh_proxy_jump", compact=True)
+            yield textual.widgets.Label("Tags", classes="field-label")
             yield checkbox_input.CheckboxInput(
-                "Tags",
+                "Restrict to",
                 active=self._bastion.tag_list is not None,
                 value=tag_field_value(self._bastion.tag_list),
                 placeholder="Type a tag name=value",

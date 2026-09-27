@@ -35,7 +35,7 @@ class _BastionCreateScreen(base.ModalScreen[_BastionFormResult | None]):
             yield base.Input(placeholder="URL", id="url", compact=True)
             yield base.Input(placeholder="SSH proxy jump (optional)", id="ssh_proxy_jump", compact=True)
             yield checkbox_input.CheckboxInput(
-                "Tags",
+                "Restrict to",
                 active=False,
                 value="",
                 placeholder="Type a tag name=value",
