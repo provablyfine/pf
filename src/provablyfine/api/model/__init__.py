@@ -11,6 +11,7 @@ from . import (
     oidc_key,
     role,
     signing_key,
+    tag_references,
 )
 
 __all__ = [
@@ -26,4 +27,5 @@ __all__ = [
     "oidc_key",
     "role",
     "signing_key",
+    "tag_references",
 ]

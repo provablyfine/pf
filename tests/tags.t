@@ -83,3 +83,62 @@ Delete all tags (check ids are never reused)
     id  name    value
   ----  ------  -------
      7  env     dev
+
+A tag that is neither tagged nor ACL-referenced can be deleted (already covered above)
+
+A tag that is only identity-tagged (no ACL reference) can be deleted, and the tagging goes with it
+  $ pfa -c config.json tag create -n team -v ops
+  $ pfa -c config.json identity create -n carol -t team=ops
+  $ CAROL_ID=$(pfa -c config.json identity list -n carol -q)
+  $ pfa -c config.json identity read -i $CAROL_ID -f json | jq -c '.tags'
+  [{"name":"team","value":"ops"}]
+  $ pfa -c config.json tag delete -i $(pfa -c config.json tag list -n team -v ops -q)
+  $ pfa -c config.json identity read -i $CAROL_ID -f json | jq -c '.tags'
+  []
+
+A tag that is only ACL-referenced (no identity tagged) can be deleted, and the reference goes with it
+  $ pfa -c config.json tag create -n quarantine -v "true"
+  $ pfa -c config.json boundary create -n quarantine-guard -d "Blocks SSH for anyone quarantined"
+  $ GUARD_ID=$(pfa -c config.json boundary list -n quarantine-guard -q)
+  $ pfa -c config.json grant ssh --tag quarantine=true --username-all --capability-all | pfa -c config.json boundary denied -i $GUARD_ID --add
+  $ pfa -c config.json boundary read -i $GUARD_ID -f json | jq '.denied_list | length'
+  1
+  $ pfa -c config.json tag delete -i $(pfa -c config.json tag list -n quarantine -v true -q)
+  $ pfa -c config.json boundary read -i $GUARD_ID -f json | jq '.denied_list | length'
+  0
+
+A tag that is both identity-tagged and ACL-referenced refuses deletion; untagging and retrying then succeeds
+  $ pfa -c config.json tag create -n quarantine -v "true"
+  $ pfa -c config.json grant ssh --tag quarantine=true --username-all --capability-all | pfa -c config.json boundary denied -i $GUARD_ID --add
+  $ pfa -c config.json identity create -n dave -t quarantine=true
+  $ DAVE_ID=$(pfa -c config.json identity list -n dave -q)
+  $ QUARANTINE_ID=$(pfa -c config.json tag list -n quarantine -v true -q)
+  $ pfa -c config.json tag delete -i $QUARANTINE_ID
+  Tag is still in use
+  [2]
+  $ pfa -c config.json identity tag -i $DAVE_ID -d quarantine=true
+  $ pfa -c config.json tag delete -i $QUARANTINE_ID
+  $ pfa -c config.json boundary read -i $GUARD_ID -f json | jq '.denied_list | length'
+  0
+
+Deleting a tag narrows a bastion's tag list when other tags remain on it
+  $ pfa -c config.json tag create -n site -v hq
+  $ pfa -c config.json tag create -n rack -v a1
+  $ SITE_ID=$(pfa -c config.json tag list -n site -v hq -q)
+  $ RACK_ID=$(pfa -c config.json tag list -n rack -v a1 -q)
+  $ pfa -c config.json bastion create --url https://multi-tag.example.com -t $SITE_ID $RACK_ID
+  $ MULTI_BASTION_ID=$(pfa -c config.json bastion list -q | tail -1)
+  $ pfa -c config.json tag delete -i $SITE_ID
+  $ pfa -c config.json bastion read -i $MULTI_BASTION_ID -f json | jq -c '.tag_list'
+  [{"name":"rack","value":"a1"}]
+
+Deleting a tag that is a bastion's only tag strips it, leaving the bastion unrestricted (tag_id_list gates visibility, not access)
+  $ pfa -c config.json tag create -n site -v remote
+  $ SITE2_ID=$(pfa -c config.json tag list -n site -v remote -q)
+  $ pfa -c config.json bastion create --url https://sole-tag.example.com -t $SITE2_ID
+  $ SOLE_BASTION_ID=$(pfa -c config.json bastion list -q | tail -1)
+  $ pfa -c config.json tag delete -i $SITE2_ID
+  $ pfa -c config.json bastion read -i $SOLE_BASTION_ID -f json | jq -c '.tag_list'
+  []
+  $ pfa -c config.json bastion list -q | wc -l | tr -d ' '
+  2

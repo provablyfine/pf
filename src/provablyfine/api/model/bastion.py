@@ -100,6 +100,26 @@ def delete(id: int) -> None:
     ctx.app_db.bastion.delete(id=id)
 
 
+def remove_tag(tag_id: int) -> list[int]:
+    """Drop the tag id from every bastion's tag list, including a bastion's only tag.
+
+    `tag_id_list` controls which bastions an identity sees, not what it may do once connected:
+    an empty list means every identity sees the bastion. So stripping a bastion's last tag down
+    to `[]` widens who sees it rather than restricting it further, and that's fine here: a tag
+    delete only reaches this point once it's already established that no identity's access
+    depends on this tag id (see the two-condition check in `endpoints/tag.py`).
+
+    Returns the ids of the bastions that were changed.
+    """
+    changed: list[int] = []
+    for b in read_all():
+        if tag_id not in b.tag_id_list:
+            continue
+        update(b.id, tag_id_list=[t for t in b.tag_id_list if t != tag_id])
+        changed.append(b.id)
+    return changed
+
+
 def read_matching() -> list[Bastion]:
     caller = identity.read_one(id=ctx.identity_id)
     if caller is None:
