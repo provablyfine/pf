@@ -21,6 +21,9 @@ from .context import ctx
 # Signatures older than this are rejected, regardless of nonce tracking.
 FRESHNESS_WINDOW_SECONDS = 300
 
+# A created timestamp further in the future than this is rejected outright.
+MAX_FUTURE_SKEW_SECONDS = 30
+
 # Header names are pulled out as constants (rather than inline literals) so that
 # mutation testing's string-case mutants land on these lines alone: HTTP header
 # lookups are case-insensitive, so case-mutated variants are unkillable noise,
@@ -31,23 +34,37 @@ _SIGNATURE_INPUT_HEADER = "Signature-Input"  # pragma: no mutate
 
 
 class NonceStore:
-    """In-memory TTL set of (key_id, nonce) pairs used to reject replayed signatures."""
+    """In-memory TTL set of (key_id, nonce) pairs used to reject replayed signatures.
 
-    def __init__(self, window_seconds: int = FRESHNESS_WINDOW_SECONDS):
+    Expiry is keyed off each signature's own `created` timestamp.
+
+    A nonce is never forgotten before `verify`'s freshness check would
+    independently reject the same signature as stale.
+
+    `started_at` also rejects any `created` older than this store's own
+    construction time. A restart still opens a replay window, but only
+    for signatures created within `MAX_FUTURE_SKEW_SECONDS` of the restart,
+    down from the full freshness window before this store existed.
+    """
+
+    def __init__(self, window_seconds: int = FRESHNESS_WINDOW_SECONDS, started_at: int | None = None):
         self._window_seconds = window_seconds
+        self._started_at = started_at if started_at is not None else int(time.time())
         self._seen: dict[tuple[str, str], int] = {}
 
-    def check_and_add(self, key_id: str, nonce: str, now: int) -> bool:
-        """Records (key_id, nonce) as seen; returns False if it was already seen."""
+    def check_and_add(self, key_id: str, nonce: str, now: int, created: int) -> bool:
+        """Records (key_id, nonce) as seen. Returns False if it was already seen, or predates this store."""
         self._expire(now)
+        if created < self._started_at:
+            return False
         entry = (key_id, nonce)
         if entry in self._seen:
             return False
-        self._seen[entry] = now
+        self._seen[entry] = created + self._window_seconds
         return True
 
     def _expire(self, now: int) -> None:
-        expired = [entry for entry, seen_at in self._seen.items() if now - seen_at > self._window_seconds]
+        expired = [entry for entry, expires_at in self._seen.items() if now > expires_at]
         for entry in expired:
             del self._seen[entry]
 
@@ -166,15 +183,24 @@ def verify(request: fastapi.requests.Request, key_id: str, key: jwk.Symmetric | 
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=400, title="Missing created in Signature-Input", detail=key_id)
         )
-    created: int = inner.params["created"]
+    created_param = inner.params["created"]
+    if not isinstance(created_param, int) or isinstance(created_param, bool):
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=400, title="created mistyped in Signature-Input", detail=key_id)
+        )
+    created = created_param
     now = int(time.time())
+    if created > now + MAX_FUTURE_SKEW_SECONDS:
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=400, title="Signature is too far in the future", detail=key_id)
+        )
     if now - created > FRESHNESS_WINDOW_SECONDS:
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=400, title="Signature is too old", detail=key_id)
         )
 
     nonce_store: NonceStore = request.app.state.nonce_store
-    if not nonce_store.check_and_add(key_id, nonce, now):
+    if not nonce_store.check_and_add(key_id, nonce, now=now, created=created):
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=400, title="Signature nonce has already been used", detail=key_id)
         )

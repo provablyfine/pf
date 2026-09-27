@@ -66,6 +66,18 @@ def _corrupt_signature(headers: requests.structures.CaseInsensitiveDict[str]) ->
     headers["Signature"] = str(d)
 
 
+def _set_created(created: object) -> typing.Callable[[requests.structures.CaseInsensitiveDict[str]], None]:
+    def tamper(headers: requests.structures.CaseInsensitiveDict[str]) -> None:
+        d = http_sfv.Dictionary()
+        d.parse(headers["Signature-Input"].encode())
+        for _label, inner in d.items():
+            assert isinstance(inner, http_sfv.InnerList)
+            inner.params["created"] = created
+        headers["Signature-Input"] = str(d)
+
+    return tamper
+
+
 def _app(nonce_store: signature.NonceStore | None = None) -> types.SimpleNamespace:
     return types.SimpleNamespace(state=types.SimpleNamespace(nonce_store=nonce_store or signature.NonceStore()))
 
@@ -313,23 +325,41 @@ def test_old_signature_is_rejected() -> None:
 
 
 def test_nonce_store_rejects_duplicate_within_window() -> None:
-    store = signature.NonceStore(window_seconds=300)
-    assert store.check_and_add("k1", "n1", now=1000)
-    assert not store.check_and_add("k1", "n1", now=1100)
-    assert store.check_and_add("k1", "n2", now=1100)
-    assert store.check_and_add("k2", "n1", now=1100)
+    store = signature.NonceStore(window_seconds=300, started_at=0)
+    assert store.check_and_add("k1", "n1", now=1000, created=1000)
+    assert not store.check_and_add("k1", "n1", now=1100, created=1100)
+    assert store.check_and_add("k1", "n2", now=1100, created=1100)
+    assert store.check_and_add("k2", "n1", now=1100, created=1100)
 
 
 def test_nonce_store_forgets_entries_after_window() -> None:
-    store = signature.NonceStore(window_seconds=300)
-    assert store.check_and_add("k1", "n1", now=1000)
-    assert store.check_and_add("k1", "n1", now=1301)
+    store = signature.NonceStore(window_seconds=300, started_at=0)
+    assert store.check_and_add("k1", "n1", now=1000, created=1000)
+    assert store.check_and_add("k1", "n1", now=1301, created=1301)
 
 
 def test_nonce_store_does_not_forget_entries_exactly_at_window_boundary() -> None:
-    store = signature.NonceStore(window_seconds=300)
-    assert store.check_and_add("k1", "n1", now=1000)
-    assert not store.check_and_add("k1", "n1", now=1300)
+    store = signature.NonceStore(window_seconds=300, started_at=0)
+    assert store.check_and_add("k1", "n1", now=1000, created=1000)
+    assert not store.check_and_add("k1", "n1", now=1300, created=1300)
+
+
+def test_nonce_store_expiry_tracks_created_not_first_seen_time() -> None:
+    # Expiry follows `created` (700 + 300 = 1000), not the `now` this was
+    # first seen at (1000 + 300 = 1300).
+    store = signature.NonceStore(window_seconds=300, started_at=0)
+    assert store.check_and_add("k1", "n1", now=1000, created=700)
+    assert store.check_and_add("k1", "n1", now=1001, created=1001)
+
+
+def test_nonce_store_rejects_nonce_created_before_store_started() -> None:
+    store = signature.NonceStore(window_seconds=300, started_at=1000)
+    assert not store.check_and_add("k1", "n1", now=1000, created=999)
+
+
+def test_nonce_store_accepts_nonce_created_at_store_start() -> None:
+    store = signature.NonceStore(window_seconds=300, started_at=1000)
+    assert store.check_and_add("k1", "n1", now=1000, created=1000)
 
 
 def test_signature_exactly_at_freshness_window_is_accepted() -> None:
@@ -356,6 +386,91 @@ def test_signature_one_second_past_freshness_window_is_rejected() -> None:
         with pytest.raises(responses.ProblemHTTPException) as exc_info:
             signature.verify(request, key_id=key_id, key=jwk.Symmetric.from_bytes(key))
         assert _title(exc_info.value) == "Signature is too old"
+    finally:
+        time.time = real_time
+
+
+def test_future_dated_signature_within_skew_is_accepted() -> None:
+    key = secrets.token_bytes(32)
+    created_time = 1_700_000_000
+    real_time = time.time
+    time.time = lambda: created_time + signature.MAX_FUTURE_SKEW_SECONDS
+    try:
+        request, key_id = _signed_request(key)
+        time.time = lambda: created_time
+        signature.verify(request, key_id=key_id, key=jwk.Symmetric.from_bytes(key))
+    finally:
+        time.time = real_time
+
+
+def test_future_dated_signature_beyond_skew_is_rejected() -> None:
+    key = secrets.token_bytes(32)
+    created_time = 1_700_000_000
+    real_time = time.time
+    time.time = lambda: created_time + signature.MAX_FUTURE_SKEW_SECONDS + 1
+    try:
+        request, key_id = _signed_request(key)
+        time.time = lambda: created_time
+        with pytest.raises(responses.ProblemHTTPException) as exc_info:
+            signature.verify(request, key_id=key_id, key=jwk.Symmetric.from_bytes(key))
+        assert _title(exc_info.value) == "Signature is too far in the future"
+    finally:
+        time.time = real_time
+
+
+def test_future_dated_nonce_is_remembered_past_first_seen_window() -> None:
+    # This is the #149 scenario: a client clock running fast by up to the
+    # allowed skew must not let a captured request be replayed once the old,
+    # first-seen-anchored nonce store would have forgotten it.
+    key = secrets.token_bytes(32)
+    created_time = 1_700_000_000
+    real_time = time.time
+    time.time = lambda: created_time + signature.MAX_FUTURE_SKEW_SECONDS
+    try:
+        request, key_id = _signed_request(key, app=_app(signature.NonceStore(started_at=created_time)))
+        jwk_key = jwk.Symmetric.from_bytes(key)
+        time.time = lambda: created_time
+        signature.verify(request, key_id=key_id, key=jwk_key)
+        time.time = lambda: created_time + signature.FRESHNESS_WINDOW_SECONDS + 1
+        with pytest.raises(responses.ProblemHTTPException) as exc_info:
+            signature.verify(request, key_id=key_id, key=jwk_key)
+        assert _title(exc_info.value) == "Signature nonce has already been used"
+    finally:
+        time.time = real_time
+
+
+def test_non_integer_created_is_rejected() -> None:
+    key = secrets.token_bytes(32)
+    request, key_id = _signed_request(key, tamper=_set_created("not-a-number"))
+    with pytest.raises(responses.ProblemHTTPException) as exc_info:
+        signature.verify(request, key_id=key_id, key=jwk.Symmetric.from_bytes(key))
+    assert _title(exc_info.value) == "created mistyped in Signature-Input"
+
+
+def test_boolean_created_is_rejected() -> None:
+    key = secrets.token_bytes(32)
+    request, key_id = _signed_request(key, tamper=_set_created(True))
+    with pytest.raises(responses.ProblemHTTPException) as exc_info:
+        signature.verify(request, key_id=key_id, key=jwk.Symmetric.from_bytes(key))
+    assert _title(exc_info.value) == "created mistyped in Signature-Input"
+
+
+def test_replay_after_simulated_restart_is_rejected() -> None:
+    # A fresh NonceStore (as created on every process restart) must not
+    # accept a replay of a request signed before it existed, even though
+    # the store itself never saw the nonce and the signature is still
+    # within the freshness window.
+    key = secrets.token_bytes(32)
+    created_time = 1_700_000_000
+    fresh_store = signature.NonceStore(started_at=created_time + 1)
+    real_time = time.time
+    time.time = lambda: created_time
+    try:
+        request, key_id = _signed_request(key, app=_app(nonce_store=fresh_store))
+        time.time = lambda: created_time + 1
+        with pytest.raises(responses.ProblemHTTPException) as exc_info:
+            signature.verify(request, key_id=key_id, key=jwk.Symmetric.from_bytes(key))
+        assert _title(exc_info.value) == "Signature nonce has already been used"
     finally:
         time.time = real_time
 
