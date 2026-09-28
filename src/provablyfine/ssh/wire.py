@@ -27,6 +27,16 @@ SSH_AGENT_CONSTRAIN_LIFETIME = 1
 SSH_AGENT_CONSTRAIN_CONFIRM = 2
 SSH_AGENT_FAILURE = 5
 
+# Largest message frame we accept from a peer. The 4-byte length prefix allows
+# up to 4 GiB, so a peer could otherwise make us buffer (or preallocate, on
+# Windows) arbitrarily much. This is the same limit OpenSSH enforces on agent
+# messages and is far above anything the agent protocol legitimately needs.
+MAX_MESSAGE_LENGTH = 256 * 1024
+
+# Largest single chunk we ask the transport for. This bounds the buffer a
+# recv() call allocates regardless of how much of the frame is still missing.
+RECV_CHUNK_SIZE = 64 * 1024
+
 
 @dataclasses.dataclass
 class Message:
@@ -88,7 +98,7 @@ class WireSocket:
         remaining = n
         data: list[bytes] = []
         while remaining > 0:
-            partial = self._sock.recv(remaining)
+            partial = self._sock.recv(min(remaining, RECV_CHUNK_SIZE))
             if len(partial) == 0:
                 raise exceptions.Error("Peer closed the connection")
             remaining -= len(partial)
@@ -100,6 +110,8 @@ class WireSocket:
         length_int = int.from_bytes(length, byteorder="big")
         if length_int == 0:
             raise exceptions.Error("Received an empty message")
+        if length_int > MAX_MESSAGE_LENGTH:
+            raise exceptions.Error(f"Received a message frame larger than {MAX_MESSAGE_LENGTH} bytes")
         payload = self._recv_bytes(length_int)
         return Message(type=payload[0], contents=payload[1:])
 
