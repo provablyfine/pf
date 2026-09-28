@@ -66,6 +66,7 @@ def read(id: str) -> IdentityInvitationKey | None:
     if invitation is None:
         return None
     key = jwk.Symmetric.from_bytes(ctx.kek.decrypt(invitation.key))
+    assert key.thumbprint() == invitation.id  # true by construction: `create` sets id = key.thumbprint()
     return IdentityInvitationKey(
         id=invitation.id,
         key=key,

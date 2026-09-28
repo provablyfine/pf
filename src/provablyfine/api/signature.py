@@ -285,7 +285,6 @@ async def verify_invitation(
     now = int(time.time())
     if invitation.expires_at <= now:
         raise responses.ProblemHTTPException(responses.problem_response(status_code=401, title="Invitation is expired"))
-    assert invitation.key.thumbprint() == key_id
     verify(request, key_id=f"invitation:{key_id}", key=invitation.key)
     with ctx.set_identity_id(invitation.identity_id):
         yield invitation
