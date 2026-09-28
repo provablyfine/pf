@@ -112,7 +112,7 @@ def create(conf: config.Config) -> fastapi.FastAPI:
         with open(kek_filename, "rb") as f:
             kek = base64url.encode(f.read()) + "======"
         app.state.config = conf
-        app.state.trusted_keys = jwt_validator.TrustedKeys(f"{conf.base_url}/pf/t")
+        app.state.trusted_keys = jwt_validator.TrustedKeys(f"{conf.base_url}/pf/t", registry_engine)
         app.state.tenant_registry_engine = registry_engine
         app.state.tenant_engines = {}
         app.state.kek = kek
