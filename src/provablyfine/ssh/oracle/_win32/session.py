@@ -14,6 +14,12 @@ shell are recorded, and every later caller is checked against both:
 
 The trust model to compare this against is real ssh-agent's, where any process
 running as the same user can ask the agent to sign.
+
+Holding the key out of reach of those other processes is `spawn`'s job: the
+oracle process is created with a DACL that leaves the same user unable to read
+its memory or attach to it. A privileged process (one that can enable
+`SeDebugPrivilege`) can still read anything, which is the honest Windows
+version of the boundary POSIX's `PR_SET_DUMPABLE` draws against root.
 """
 
 from __future__ import annotations
@@ -82,14 +88,16 @@ def spawn_oracle(key: jwk.Private, directory_url: str, ttl: float = 1800) -> str
 
     Returns the oracle's pipe name.
     """
-    return _spawn(key, ttl, peercred.login_shell_identity()[0], directory_url)
+    return _spawn(key, ttl, peercred.login_shell_identity()[0], directory_url)[0]
 
 
-def _spawn(key: jwk.Private, ttl: float, anchor_pid: int, directory_url: str) -> str:
+def _spawn(key: jwk.Private, ttl: float, anchor_pid: int, directory_url: str) -> tuple[str, int]:
     """Spawn an oracle anchored on `anchor_pid`.
 
     Split out from `spawn_oracle` so tests can anchor on a process they created
-    rather than on whatever happened to launch pytest.
+    rather than on whatever happened to launch pytest. Returns the pipe name
+    and the oracle's pid; the pid exists only so tests can point a probe
+    process at it.
     """
     anchor = peercred.open_anchor(anchor_pid)
     try:
@@ -101,7 +109,7 @@ def _spawn(key: jwk.Private, ttl: float, anchor_pid: int, directory_url: str) ->
         raise
     identities = [server.Identity(raw=serde.serialize_public(key.public()), key=key)]
     try:
-        spawn.spawn_subprocess(
+        pid = spawn.spawn_subprocess(
             handle,
             key,
             identities,
@@ -114,7 +122,7 @@ def _spawn(key: jwk.Private, ttl: float, anchor_pid: int, directory_url: str) ->
     finally:
         _win32api.close_handle(handle)
         peercred.close_anchor(anchor)
-    return name
+    return name, pid
 
 
 def _create_pipe_on_new_login(name: str, event_name: str) -> int:

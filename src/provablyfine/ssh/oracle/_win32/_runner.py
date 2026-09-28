@@ -26,6 +26,8 @@ exist when its server process does, and `server.serve()` never returns anyway
 
 from __future__ import annotations
 
+import logging
+import os
 import sys
 
 from .... import jwk, log
@@ -41,13 +43,9 @@ def _read_key_material() -> tuple[jwk.Private, list[bytes]]:
     return key, [reader.read_string() for _ in range(identity_count)]
 
 
-def main() -> None:
-    # Before anything that can fail. `.._posix._runner` configures no logging
-    # at all, which is survivable on Linux where you can rerun it by hand; this
-    # process is detached, console-less, and has stderr on DEVNULL, so without
-    # this a crash would leave nothing behind at all. Level 0 stays silent
-    # unless PF_LOG_LEVEL says otherwise, and PF_LOG_DIRECTORY picks the file.
-    log.setup_server("oracle", 0)
+def _run() -> None:
+    if not _win32api.disable_wer_reporting():
+        logging.getLogger(__name__).debug("WerSetFlags unavailable; relying on the never-crash wrapper alone")
 
     mode = sys.argv[1]
     pipe_handle = int(sys.argv[2])
@@ -84,6 +82,28 @@ def main() -> None:
         anchor=anchor,
         new_login_event=new_login_event,
     )
+
+
+def main() -> None:
+    # Before anything that can fail. `.._posix._runner` configures no logging
+    # at all, which is survivable on Linux where you can rerun it by hand; this
+    # process is detached, console-less, and has its std handles on a pipe and
+    # NUL, so without this a crash would leave nothing behind at all. Level 0
+    # stays silent unless PF_LOG_LEVEL says otherwise, and PF_LOG_DIRECTORY
+    # picks the file.
+    log.setup_server("oracle", 0)
+
+    # Exit by `os._exit()`, never by letting an exception reach the default
+    # handler: a Python-level traceback exit still runs the interpreter's
+    # teardown, and anything that ends up in WerFault's hands can end up in a
+    # crash dump that a user-readable path leads to. The process holds a
+    # private key; every exit route is better than a dump of it.
+    try:
+        _run()
+    except BaseException:
+        logging.getLogger(__name__).exception("oracle exiting after an unhandled error")
+        logging.shutdown()
+        os._exit(1)
 
 
 if __name__ == "__main__":

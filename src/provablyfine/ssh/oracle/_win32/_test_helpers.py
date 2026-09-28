@@ -11,13 +11,40 @@ import sys
 import time
 
 from ... import agent, exceptions
-from . import peercred
+from . import _win32api, peercred
 
 
 def _shell_identity() -> None:
     """Print the login-shell anchor this process resolves to."""
     pid, creation_time = peercred.login_shell_identity()
     print(f"{pid} {creation_time}", flush=True)
+
+
+def _probe_process_memory(target_pid: str) -> None:
+    """Print `pid=OPENED` or `pid=DENIED:<error>` for `target_pid`, then for
+    our own process.
+
+    `SeDebugPrivilege` is disabled first: the kernel grants process reads
+    through it without consulting any DACL, so a probe that still holds it
+    (an admin's ssh session, here) measures the privilege rather than the
+    boundary. Without the privilege this is the ordinary same-user attacker
+    the oracle's DACL exists to stop.
+
+    Our own process is the control: it has the default DACL, so an OPENED
+    there proves `OpenProcess` with memory rights works on this box at all --
+    and that a DENIED for the target is the target's DACL talking, not the
+    machine's.
+    """
+    _win32api.disable_debug_privilege()
+    results: list[str] = []
+    for pid in (int(target_pid), os.getpid()):
+        handle, error = _win32api.try_open_process_for_read(pid)
+        if handle is not None:
+            _win32api.close_handle(handle)
+            results.append(f"{pid}=OPENED")
+        else:
+            results.append(f"{pid}=DENIED:{error}")
+    print(" ".join(results), flush=True)
 
 
 def _sleep(pid_file: str) -> None:
@@ -93,6 +120,8 @@ def main() -> None:
         _sleep(sys.argv[2])
     elif mode == "list-when-ready":
         _list_when_ready(sys.argv[2], sys.argv[3])
+    elif mode == "probe-process-memory":
+        _probe_process_memory(sys.argv[2])
     else:
         raise SystemExit(f"unknown helper mode: {mode!r}")
 

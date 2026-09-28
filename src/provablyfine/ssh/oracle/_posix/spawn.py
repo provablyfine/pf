@@ -152,10 +152,11 @@ def spawn_subprocess(
     *,
     session_id: int | None = None,
     tty_dev: int | None = None,
-) -> None:
+) -> int:
     """Spawn the oracle as a subprocess running `_runner.py`; the parent
     returns immediately, the child runs the accept loop until it self-
-    terminates (TTL expiry or anchor process exit).
+    terminates (TTL expiry or anchor process exit). The return value is the
+    child's pid, which callers ignore and only tests use.
 
     `mode` is `"connection"` or `"session"` -- which of `connection.authorize`
     / `session.authorize` the runner reconstructs and uses; `session_id`/
@@ -199,7 +200,7 @@ def spawn_subprocess(
         "-" if session_id is None else str(session_id),
         "-" if tty_dev is None else str(tty_dev),
     ]
-    subprocess.Popen(  # noqa: S603
+    child = subprocess.Popen(  # noqa: S603
         argv,
         pass_fds=(sock.fileno(), *anchor_fds, read_fd),
         start_new_session=True,
@@ -208,8 +209,10 @@ def spawn_subprocess(
         stderr=subprocess.DEVNULL,
         close_fds=True,
     )
+    pid = child.pid
     sock.close()
     for fd in anchor_fds:
         os.close(fd)
     peercred.close_anchor(anchor)
     os.close(read_fd)
+    return pid

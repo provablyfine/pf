@@ -10,6 +10,14 @@ Within `_posix`, a second, narrower dispatch picks the Linux or Darwin
 peercred backend (see `_posix/peercred/__init__.py`) -- those two are close
 enough to be siblings under one transport, which is why they live together
 and `_win32` does not.
+
+The oracle's key lives in process memory that a same-user process cannot
+read or dump. On POSIX via `_posix._runner._lock_down()`. On Windows via
+the process DACL applied by `_win32.spawn`. A privileged observer (root
+on POSIX, a process that can enable `SeDebugPrivilege` on Windows) can
+still read anything, so what the oracle stops is *use* of the key by
+processes outside the login shell's tree, not extraction by the machine's
+operator.
 """
 
 from __future__ import annotations

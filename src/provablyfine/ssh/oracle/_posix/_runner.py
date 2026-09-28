@@ -24,17 +24,61 @@ The private key and identity blobs are read from `key_pipe_fd`, a pipe whose
 write end the spawner already closed after writing exactly one buffer.Writer
 payload: string(key PEM) + uint32(identity count) + that many string(raw
 identity blob), all signed by the same key.
+
+Before any of that, `_lock_down()` makes this process's memory unreadable to
+other processes of the same user, so the key is only ever readable by the key's
+own future readers (see `.._win32.spawn` for the Windows equivalent).
 """
 
 from __future__ import annotations
 
+import ctypes
 import os
+import resource
 import socket
 import sys
 
 from .... import jwk
 from ... import buffer
 from . import connection, peercred, server, session
+
+# Linux: `prctl` option for turning off the dumpable flag.
+_PR_SET_DUMPABLE = 4
+# Darwin: the `ptrace` request that denies future attaches.
+_PT_DENY_ATTACH = 31
+
+
+def _lock_down() -> None:
+    """Make this process's memory unreadable from outside, before the key
+    arrives.
+
+    Without this, any process of the same user could read the key straight out
+    of our address space: `ptrace`/`/proc/<pid>/mem` on a Linux box with no
+    Yama `ptrace_scope`, plain `ptrace` on macOS, and a core dump on both. The
+    oracle's stated goal -- a process outside the login shell cannot *use* the
+    key -- requires this step, since nothing else stops such a process from
+    simply *reading* the key instead.
+
+    - `RLIMIT_CORE` to 0: no core dump can ever contain the key.
+    - Linux `PR_SET_DUMPABLE` off: non-dumpable processes cannot be ptraced or
+      memory-read by same-user processes, and never dump core either. Root
+      remains able to, exactly as ssh-agent's own boundary assumes.
+    - macOS `PT_DENY_ATTACH`: the platform's only anti-debugger primitive; it
+      makes attaches fail rather than making the process non-dumpable, so
+      `RLIMIT_CORE` still matters here.
+
+    Failures are fatal on purpose: a partially locked-down oracle would
+    silently hold a readable key, which is precisely the state callers think
+    they are not in.
+    """
+    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+    libc = ctypes.CDLL(None, use_errno=True)
+    if sys.platform == "linux":
+        if libc.prctl(_PR_SET_DUMPABLE, 0, 0, 0, 0) != 0:
+            raise OSError("PR_SET_DUMPABLE")
+    elif sys.platform == "darwin":
+        if libc.ptrace(_PT_DENY_ATTACH, 0, None, 0) != 0:
+            raise OSError("PT_DENY_ATTACH")
 
 
 def _read_key_material(read_fd: int) -> tuple[jwk.Private, list[bytes]]:
@@ -52,6 +96,8 @@ def _optional_int(value: str) -> int | None:
 
 
 def main() -> None:
+    _lock_down()
+
     mode = sys.argv[1]
     sock_fd = int(sys.argv[2])
     anchor_token = sys.argv[3]

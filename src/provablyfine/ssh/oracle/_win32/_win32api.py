@@ -32,6 +32,7 @@ PIPE_UNLIMITED_INSTANCES = 255
 
 ERROR_FILE_NOT_FOUND = 2
 ERROR_ACCESS_DENIED = 5
+ERROR_INSUFFICIENT_BUFFER = 122
 ERROR_BROKEN_PIPE = 109
 ERROR_SEM_TIMEOUT = 121
 ERROR_PIPE_BUSY = 231
@@ -44,13 +45,32 @@ WAIT_TIMEOUT = 0x00000102
 WAIT_FAILED = 0xFFFFFFFF
 
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+PROCESS_VM_READ = 0x0010
+PROCESS_VM_OPERATION = 0x0008
+PROCESS_CREATE_THREAD = 0x0002
+PROCESS_SUSPEND_RESUME = 0x0800
 SYNCHRONIZE = 0x00100000
 EVENT_MODIFY_STATE = 0x0002
 
 DETACHED_PROCESS = 0x00000008
 CREATE_NEW_PROCESS_GROUP = 0x00000200
+EXTENDED_STARTUPINFO_PRESENT = 0x00080000
+STARTF_USESTDHANDLES = 0x00000100
+PROC_THREAD_ATTRIBUTE_HANDLE_LIST = 0x00020002
+
+GENERIC_READ = 0x80000000
+GENERIC_WRITE = 0x40000000
+FILE_SHARE_ALL = 0x00000007
+OPEN_EXISTING = 3
+
+# `WerSetFlags` bits, so a crash can't hand WerFault a reason to write a
+# user-readable dump of our address space (HKCU `LocalDumps` included).
+WER_FAULT_REP_DISABLE = 0x00000002
+WER_DEBUG_INFO_DISABLE = 0x00000004
+WER_UI_DISABLE = 0x00000010
 
 _TOKEN_QUERY = 0x0008
+_TOKEN_ADJUST_PRIVILEGES = 0x0020
 _TOKEN_USER_CLASS = 1
 _TOKEN_LOGON_SID_CLASS = 28
 _SDDL_REVISION_1 = 1
@@ -77,6 +97,19 @@ class _TokenGroups(ctypes.Structure):
     _fields_ = (("GroupCount", ctypes.wintypes.DWORD), ("Groups", _SidAndAttributes * 1))
 
 
+class _Luid(ctypes.Structure):
+    _fields_ = (("LowPart", ctypes.wintypes.DWORD), ("HighPart", ctypes.wintypes.LONG))
+
+
+class _LuidAndAttributes(ctypes.Structure):
+    _fields_ = (("Luid", _Luid), ("Attributes", ctypes.wintypes.DWORD))
+
+
+class _TokenPrivileges(ctypes.Structure):
+    # `disable_debug_privilege` adjusts exactly one, so a length-1 array suffices.
+    _fields_ = (("PrivilegeCount", ctypes.wintypes.DWORD), ("Privileges", _LuidAndAttributes * 1))
+
+
 class _ProcessBasicInformation(ctypes.Structure):
     """Only the last field is read; the earlier ones exist to place
     `InheritedFromUniqueProcessId` at the right offset."""
@@ -88,6 +121,45 @@ class _ProcessBasicInformation(ctypes.Structure):
         ("BasePriority", ctypes.wintypes.LPVOID),
         ("UniqueProcessId", ctypes.wintypes.LPVOID),
         ("InheritedFromUniqueProcessId", ctypes.wintypes.LPVOID),
+    )
+
+
+class STARTUPINFOW(ctypes.Structure):
+    _fields_ = (
+        ("cb", ctypes.wintypes.DWORD),
+        ("lpReserved", ctypes.wintypes.LPWSTR),
+        ("lpDesktop", ctypes.wintypes.LPWSTR),
+        ("lpTitle", ctypes.wintypes.LPWSTR),
+        ("dwX", ctypes.wintypes.DWORD),
+        ("dwY", ctypes.wintypes.DWORD),
+        ("dwXSize", ctypes.wintypes.DWORD),
+        ("dwYSize", ctypes.wintypes.DWORD),
+        ("dwXCountChars", ctypes.wintypes.DWORD),
+        ("dwYCountChars", ctypes.wintypes.DWORD),
+        ("dwFillAttribute", ctypes.wintypes.DWORD),
+        ("dwFlags", ctypes.wintypes.DWORD),
+        ("wShowWindow", ctypes.wintypes.WORD),
+        ("cbReserved2", ctypes.wintypes.WORD),
+        ("lpReserved2", ctypes.POINTER(ctypes.c_char)),
+        ("hStdInput", ctypes.wintypes.HANDLE),
+        ("hStdOutput", ctypes.wintypes.HANDLE),
+        ("hStdError", ctypes.wintypes.HANDLE),
+    )
+
+
+class STARTUPINFOEXW(ctypes.Structure):
+    _fields_ = (
+        ("StartupInfo", STARTUPINFOW),
+        ("lpAttributeList", ctypes.wintypes.LPVOID),
+    )
+
+
+class PROCESS_INFORMATION(ctypes.Structure):
+    _fields_ = (
+        ("hProcess", ctypes.wintypes.HANDLE),
+        ("hThread", ctypes.wintypes.HANDLE),
+        ("dwProcessId", ctypes.wintypes.DWORD),
+        ("dwThreadId", ctypes.wintypes.DWORD),
     )
 
 
@@ -168,6 +240,55 @@ _k32.QueryFullProcessImageNameW.argtypes = (
 _k32.QueryFullProcessImageNameW.restype = ctypes.wintypes.BOOL
 _k32.LocalFree.argtypes = (ctypes.wintypes.HLOCAL,)
 _k32.LocalFree.restype = ctypes.wintypes.HLOCAL
+_k32.CreatePipe.argtypes = (
+    ctypes.POINTER(ctypes.wintypes.HANDLE),
+    ctypes.POINTER(ctypes.wintypes.HANDLE),
+    ctypes.POINTER(SECURITY_ATTRIBUTES),
+    ctypes.wintypes.DWORD,
+)
+_k32.CreatePipe.restype = ctypes.wintypes.BOOL
+_k32.CreateFileW.argtypes = (
+    ctypes.wintypes.LPCWSTR,
+    ctypes.wintypes.DWORD,
+    ctypes.wintypes.DWORD,
+    ctypes.POINTER(SECURITY_ATTRIBUTES),
+    ctypes.wintypes.DWORD,
+    ctypes.wintypes.DWORD,
+    ctypes.wintypes.HANDLE,
+)
+_k32.CreateFileW.restype = ctypes.wintypes.HANDLE
+_k32.InitializeProcThreadAttributeList.argtypes = (
+    ctypes.wintypes.LPVOID,
+    ctypes.wintypes.DWORD,
+    ctypes.wintypes.DWORD,
+    _LPDWORD,
+)
+_k32.InitializeProcThreadAttributeList.restype = ctypes.wintypes.BOOL
+_k32.UpdateProcThreadAttribute.argtypes = (
+    ctypes.wintypes.LPVOID,
+    ctypes.wintypes.DWORD,
+    ctypes.wintypes.DWORD,
+    ctypes.wintypes.LPVOID,
+    ctypes.c_size_t,
+    ctypes.wintypes.LPVOID,
+    ctypes.POINTER(ctypes.c_size_t),
+)
+_k32.UpdateProcThreadAttribute.restype = ctypes.wintypes.BOOL
+_k32.DeleteProcThreadAttributeList.argtypes = (ctypes.wintypes.LPVOID,)
+_k32.DeleteProcThreadAttributeList.restype = None
+_k32.CreateProcessW.argtypes = (
+    ctypes.wintypes.LPCWSTR,
+    ctypes.wintypes.LPWSTR,
+    ctypes.POINTER(SECURITY_ATTRIBUTES),
+    ctypes.POINTER(SECURITY_ATTRIBUTES),
+    ctypes.wintypes.BOOL,
+    ctypes.wintypes.DWORD,
+    ctypes.wintypes.LPVOID,
+    ctypes.wintypes.LPCWSTR,
+    ctypes.POINTER(STARTUPINFOW),
+    ctypes.POINTER(PROCESS_INFORMATION),
+)
+_k32.CreateProcessW.restype = ctypes.wintypes.BOOL
 
 _adv.OpenProcessToken.argtypes = (
     ctypes.wintypes.HANDLE,
@@ -192,6 +313,17 @@ _adv.ConvertStringSecurityDescriptorToSecurityDescriptorW.argtypes = (
     _LPDWORD,
 )
 _adv.ConvertStringSecurityDescriptorToSecurityDescriptorW.restype = ctypes.wintypes.BOOL
+_adv.LookupPrivilegeValueW.argtypes = (ctypes.wintypes.LPCWSTR, ctypes.wintypes.LPCWSTR, ctypes.POINTER(_Luid))
+_adv.LookupPrivilegeValueW.restype = ctypes.wintypes.BOOL
+_adv.AdjustTokenPrivileges.argtypes = (
+    ctypes.wintypes.HANDLE,
+    ctypes.wintypes.BOOL,
+    ctypes.POINTER(_TokenPrivileges),
+    ctypes.wintypes.DWORD,
+    ctypes.c_void_p,
+    ctypes.c_void_p,
+)
+_adv.AdjustTokenPrivileges.restype = ctypes.wintypes.BOOL
 
 # Undocumented, but unchanged since NT 4 and relied on by essentially every
 # process-tree tool on Windows. The public alternative,
@@ -306,6 +438,19 @@ def logon_sid(process_handle: int) -> str | None:
         close_handle(process_token.value or 0)
 
 
+def _security_attributes(sddl: str, *, inheritable: bool) -> OwnedSecurityAttributes:
+    descriptor = ctypes.wintypes.LPVOID()
+    if not _adv.ConvertStringSecurityDescriptorToSecurityDescriptorW(
+        sddl, _SDDL_REVISION_1, ctypes.byref(descriptor), None
+    ):
+        raise_last_error("ConvertStringSecurityDescriptorToSecurityDescriptorW")
+    attributes = SECURITY_ATTRIBUTES()
+    attributes.nLength = ctypes.sizeof(SECURITY_ATTRIBUTES)
+    attributes.lpSecurityDescriptor = descriptor
+    attributes.bInheritHandle = inheritable
+    return OwnedSecurityAttributes(attributes=attributes, descriptor=descriptor)
+
+
 def owner_only_security_attributes(*, inheritable: bool) -> OwnedSecurityAttributes:
     """Security attributes granting full access to this user and SYSTEM only.
 
@@ -318,17 +463,156 @@ def owner_only_security_attributes(*, inheritable: bool) -> OwnedSecurityAttribu
     the peer-credential check at accept().
     """
     sid = _current_user_sid_string()
-    sddl = f"O:{sid}G:{sid}D:(A;;GA;;;{sid})(A;;GA;;;SY)"
-    descriptor = ctypes.wintypes.LPVOID()
-    if not _adv.ConvertStringSecurityDescriptorToSecurityDescriptorW(
-        sddl, _SDDL_REVISION_1, ctypes.byref(descriptor), None
-    ):
-        raise_last_error("ConvertStringSecurityDescriptorToSecurityDescriptorW")
+    return _security_attributes(f"O:{sid}G:{sid}D:(A;;GA;;;{sid})(A;;GA;;;SY)", inheritable=inheritable)
+
+
+def oracle_process_security_attributes() -> OwnedSecurityAttributes:
+    """A process-object DACL that keeps the oracle unreadable from outside.
+
+    The Windows counterpart of `_posix._runner._lock_down()`'s
+    `PR_SET_DUMPABLE`/`PT_DENY_ATTACH`: object access is decided by this DACL
+    at `OpenProcess` time, and a process HANDLE is never rechecked after it is
+    granted, so the descriptor has to be in force from the process object's
+    first instant -- which only `CreateProcessW`'s `lpProcessAttributes`
+    achieves. Locking down from inside the runner instead would let anything
+    that opened a handle before the change keep reading forever.
+
+    The same user keeps `QUERY_LIMITED_INFORMATION|SYNCHRONIZE` (process times,
+    wait for exit), which `peercred`-style observation needs; that exposes no
+    memory. Administrators get the same limited rights *from the DACL*, on
+    purpose: their real power to read anything comes from `SeDebugPrivilege`,
+    which no DACL can gate and no claim here pretends to. A DACL that granted
+    Administrators full control would even weaken the boundary, because an
+    ssh-session/admin token has that group *enabled* without anyone holding
+    anything privileged. Deliberately absent for the user: `VM_READ`/
+    `VM_WRITE`, `CREATE_THREAD`, `SUSPEND_RESUME`, `TERMINATE`, and `WRITE_DAC`
+    (owner rights do not let a non-privileged user re-loosen this later).
+    """
+    sid = _current_user_sid_string()
+    readable = PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE
+    sddl = f"O:{sid}G:{sid}D:(A;;GA;;;SY)(A;;0x{readable:x};;;BA)(A;;0x{readable:x};;;{sid})"
+    return _security_attributes(sddl, inheritable=False)
+
+
+def create_inheritable_pipe(size: int = 65536) -> tuple[int, int]:
+    """A `(read, write)` anonymous-pipe HANDLE pair; both ends inheritable, so
+    the handle list in `spawn_detached_process` can hand exactly one of them to
+    the child."""
     attributes = SECURITY_ATTRIBUTES()
     attributes.nLength = ctypes.sizeof(SECURITY_ATTRIBUTES)
-    attributes.lpSecurityDescriptor = descriptor
-    attributes.bInheritHandle = inheritable
-    return OwnedSecurityAttributes(attributes=attributes, descriptor=descriptor)
+    attributes.lpSecurityDescriptor = None
+    attributes.bInheritHandle = True
+    read = ctypes.wintypes.HANDLE()
+    write = ctypes.wintypes.HANDLE()
+    if not _k32.CreatePipe(ctypes.byref(read), ctypes.byref(write), ctypes.byref(attributes), size):
+        raise_last_error("CreatePipe")
+    return read.value or 0, write.value or 0
+
+
+def open_nul() -> int:
+    """An inheritable HANDLE to `NUL`, to stand in for the child's stdout and
+    stderr exactly as `subprocess.DEVNULL` did."""
+    attributes = SECURITY_ATTRIBUTES()
+    attributes.nLength = ctypes.sizeof(SECURITY_ATTRIBUTES)
+    attributes.lpSecurityDescriptor = None
+    attributes.bInheritHandle = True
+    handle = _k32.CreateFileW(
+        "NUL", GENERIC_READ | GENERIC_WRITE, FILE_SHARE_ALL, ctypes.byref(attributes), OPEN_EXISTING, 0, None
+    )
+    if handle == INVALID_HANDLE_VALUE or not handle:
+        raise_last_error("CreateFileW(NUL)")
+    return handle
+
+
+def spawn_detached_process(
+    command_line: str,
+    *,
+    inherit: tuple[int, ...],
+    std_input: int,
+    std_null: int,
+    process_security: OwnedSecurityAttributes,
+) -> int:
+    """`CreateProcessW` a detached, new-process-group child, and return its pid.
+
+    Only the handles in `inherit` (plus `std_input` and `std_null`, which the
+    child receives as its std handles) reach the child:
+    `PROC_THREAD_ATTRIBUTE_HANDLE_LIST` suppresses the default "everything
+    inheritable leaks" inheritance, same job `close_fds=True` did for
+    `subprocess.Popen`. `process_security` is the child *process object's* DACL
+    from its first instant -- see `oracle_process_security_attributes`.
+    """
+    size = ctypes.wintypes.DWORD()
+    # First call must fail with ERROR_INSUFFICIENT_BUFFER and return the size.
+    if _k32.InitializeProcThreadAttributeList(None, 1, 0, ctypes.byref(size)) or not size.value:
+        raise_last_error("InitializeProcThreadAttributeList")
+    storage = ctypes.create_string_buffer(size.value)
+    attribute_list = ctypes.cast(storage, ctypes.wintypes.LPVOID)
+    if not _k32.InitializeProcThreadAttributeList(attribute_list, 1, 0, ctypes.byref(size)):
+        raise_last_error("InitializeProcThreadAttributeList")
+    handles = (ctypes.wintypes.HANDLE * len(inherit))(*inherit)
+    try:
+        if not _k32.UpdateProcThreadAttribute(
+            attribute_list,
+            0,
+            PROC_THREAD_ATTRIBUTE_HANDLE_LIST,
+            ctypes.cast(handles, ctypes.wintypes.LPVOID),
+            ctypes.sizeof(handles),
+            None,
+            None,
+        ):
+            raise_last_error("UpdateProcThreadAttribute")
+        startup = STARTUPINFOEXW()
+        startup.StartupInfo.cb = ctypes.sizeof(STARTUPINFOEXW)
+        startup.StartupInfo.dwFlags = STARTF_USESTDHANDLES
+        startup.StartupInfo.hStdInput = std_input
+        startup.StartupInfo.hStdOutput = std_null
+        startup.StartupInfo.hStdError = std_null
+        startup.lpAttributeList = attribute_list
+        info = PROCESS_INFORMATION()
+        command = ctypes.create_unicode_buffer(command_line)
+        flags = EXTENDED_STARTUPINFO_PRESENT | DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+        if not _k32.CreateProcessW(
+            None,
+            command,
+            ctypes.byref(process_security.attributes),
+            None,
+            True,
+            flags,
+            None,
+            None,
+            # `byref` of the embedded member: ctypes enforces the declared
+            # `POINTER(STARTUPINFOW)`, and the member is at offset 0 of the EX
+            # struct anyway, so the address is the one CreateProcess reads.
+            ctypes.byref(startup.StartupInfo),
+            ctypes.byref(info),
+        ):
+            raise_last_error("CreateProcessW")
+        try:
+            return int(info.dwProcessId)
+        finally:
+            close_handle(info.hProcess or 0)
+            close_handle(info.hThread or 0)
+    finally:
+        _k32.DeleteProcThreadAttributeList(attribute_list)
+
+
+def disable_wer_reporting() -> bool:
+    """Keep WerFault out of this process, so a crash is not the seed for a
+    user-readable dump (HKCU `LocalDumps` included). Best-effort by design:
+    `_runner.main()`'s never-crash wrapper is the primary defense and this is
+    the belt behind it, so a WER API that is absent on some Windows revision
+    must not take login down with it."""
+    sdds = WER_FAULT_REP_DISABLE | WER_DEBUG_INFO_DISABLE | WER_UI_DISABLE
+    for dll_name in ("wer", "advapi32"):
+        try:
+            dll = ctypes.WinDLL(dll_name)
+        except OSError:
+            continue
+        try:
+            return bool(dll.WerSetFlags(sdds))
+        except (AttributeError, OSError):
+            continue
+    return False
 
 
 def create_named_pipe(name: str, *, inheritable: bool) -> int:
@@ -509,6 +793,40 @@ def open_process(pid: int) -> int | None:
     owned by another user."""
     handle = _k32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE, False, pid)
     return None if not handle else handle
+
+
+def try_open_process_for_read(pid: int) -> tuple[int | None, int]:
+    """`(handle, 0)` or `(None, error)`, trying the access a memory-reading
+    tool needs. Exists so tests can verify what `oracle_process_security_attributes`
+    promises is actually enforced; nothing in the oracle itself uses it."""
+    access = PROCESS_VM_READ | PROCESS_VM_OPERATION | PROCESS_CREATE_THREAD | PROCESS_SUSPEND_RESUME
+    handle = _k32.OpenProcess(access, False, pid)
+    if handle:
+        return handle, 0
+    return None, ctypes.get_last_error()
+
+
+def disable_debug_privilege() -> None:
+    """Take `SeDebugPrivilege` away from this process, best effort.
+
+    `OpenProcess` grants access through that privilege *before* consulting any
+    DACL, so a test of the oracle's DACL only measures the DACL if the holder
+    has first disarmed it. What is left after this is precisely the ordinary
+    same-user attacker the DACL exists to stop. Processes that do not hold the
+    privilege keep failing to use it, which is also fine."""
+    luid = _Luid()
+    if not _adv.LookupPrivilegeValueW(None, "SeDebugPrivilege", ctypes.byref(luid)):
+        return
+    token = ctypes.wintypes.HANDLE()
+    if not _adv.OpenProcessToken(
+        _k32.GetCurrentProcess(), _TOKEN_ADJUST_PRIVILEGES | _TOKEN_QUERY, ctypes.byref(token)
+    ):
+        return
+    try:
+        state = _TokenPrivileges(1, (_LuidAndAttributes(luid, 0),))
+        _adv.AdjustTokenPrivileges(token, False, ctypes.byref(state), 0, None, None)
+    finally:
+        close_handle(token.value or 0)
 
 
 def process_creation_time(handle: int) -> int:
