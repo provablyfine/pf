@@ -299,18 +299,14 @@ def list_hosts() -> schemas.ssh.SSHHostsResponse:
 
 
 @router.get("/user/trusted-keys", status_code=200)
-def read_user_trusted_keys() -> fastapi.responses.Response:
+def read_user_trusted_keys(request: fastapi.Request) -> fastapi.responses.Response:
     now = int(time.time())
     signing_keys = model.signing_key.read_all(
         ctx.app_db.signing_key.columns.valid_before > now,
         type=app_db.SigningKeyType.USER,
     )
     trusted_keys = [signing_key.key.public().to_openssh() for signing_key in signing_keys]
-    try:
-        with open(ctx.config.user_extra_trusted_keys_filename, "rb") as f:
-            trusted_keys.append(f.read())
-    except Exception:
-        pass
+    trusted_keys.extend(request.app.state.user_extra_trusted_keys)
 
     return fastapi.responses.Response(
         content=b"\n".join(trusted_keys),

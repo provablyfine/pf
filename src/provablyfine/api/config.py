@@ -5,10 +5,11 @@ import os
 import os.path
 import typing
 
+import cryptography.exceptions
 import pydantic
 import yaml
 
-from .. import base64url
+from .. import base64url, jwk
 from . import unix_account
 
 
@@ -65,7 +66,7 @@ class Config(pydantic.BaseModel):
     user_key_rotation_period: int = 24 * 3600
     user_key_type: str = "ed25519"
     user_certificate_lifetime: int = 60
-    user_extra_trusted_keys_filename: str = "user-trusted-key.pub"
+    user_extra_trusted_keys_filename: str | None = None
 
     oidc_key_grace_period: int = 7 * 86400
     oidc_key_rotation_period: int = 30 * 86400
@@ -99,3 +100,29 @@ class Config(pydantic.BaseModel):
         if len(raw) != 32:
             raise ValueError(f"KEK file {filename} must contain exactly 32 random bytes, found {len(raw)}")
         return base64url.encode(raw, pad=True)
+
+    def load_user_extra_trusted_keys(self) -> list[bytes]:
+        """Read the extra user CA keys named by `user_extra_trusted_keys_filename`.
+
+        Returns no keys when no file is configured.
+        A configured file must contain at least one valid key.
+        Blank lines and `#` comments are skipped.
+        Each key is returned in its normalized OpenSSH form, one per entry.
+        """
+        filename = self.user_extra_trusted_keys_filename
+        if filename is None:
+            return []
+        with open(filename, "rb") as f:
+            lines = f.read().splitlines()
+        keys: list[bytes] = []
+        for number, line in enumerate(lines, start=1):
+            line = line.strip()
+            if not line or line.startswith(b"#"):
+                continue
+            try:
+                keys.append(jwk.Public.from_openssh(line).to_openssh())
+            except (ValueError, cryptography.exceptions.UnsupportedAlgorithm) as e:
+                raise ValueError(f"{filename}:{number}: not a valid OpenSSH public key: {e}") from e
+        if not keys:
+            raise ValueError(f"{filename} does not contain any public key")
+        return keys

@@ -108,6 +108,7 @@ def create(conf: config.Config) -> fastapi.FastAPI:
         migrate.upgrade_registry(conf.tenant_registry_url)
 
         kek = conf.load_kek()
+        app.state.user_extra_trusted_keys = conf.load_user_extra_trusted_keys()
         app.state.config = conf
         app.state.trusted_keys = jwt_validator.TrustedKeys(f"{conf.base_url}/pf/t", registry_engine)
         app.state.tenant_registry_engine = registry_engine
