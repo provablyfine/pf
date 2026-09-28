@@ -24,6 +24,9 @@ class AuthViewScreen(base.Screen):
         self._saved_name: str = a.name
         self._saved_description: str = a.description
         self._saved_enabled: bool = a.is_enabled
+        self._saved_require_email_verified: bool | None = (
+            a.config.require_email_verified if isinstance(a.config, pfc.schemas.OidcConfig) else None
+        )
 
     def compose(self) -> textual.app.ComposeResult:
         with textual.containers.Vertical():
@@ -42,6 +45,10 @@ class AuthViewScreen(base.Screen):
                 yield base.Input(
                     "", placeholder="unchanged", id="client_secret", compact=True, password=True, disabled=True
                 )
+                yield textual.widgets.Label("Require verified email", classes="field-label")
+                yield textual.widgets.Checkbox(
+                    value=self._a.config.require_email_verified, id="require_email_verified", compact=True
+                )
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
     @textual.work
@@ -54,7 +61,13 @@ class AuthViewScreen(base.Screen):
         description_changed = description != self._saved_description
         is_enabled_changed = is_enabled != self._saved_enabled
 
-        if not (name_changed or description_changed or is_enabled_changed):
+        require_email_verified: bool | None = None
+        require_email_verified_changed = False
+        if self._saved_require_email_verified is not None:
+            require_email_verified = self.query_one("#require_email_verified", textual.widgets.Checkbox).value
+            require_email_verified_changed = require_email_verified != self._saved_require_email_verified
+
+        if not (name_changed or description_changed or is_enabled_changed or require_email_verified_changed):
             self.notify("No changes")
             return
 
@@ -63,5 +76,6 @@ class AuthViewScreen(base.Screen):
             name=name if name_changed else None,
             description=description if description_changed else None,
             is_enabled=is_enabled if is_enabled_changed else None,
+            require_email_verified=require_email_verified if require_email_verified_changed else None,
         )
         self.app.pop_screen()

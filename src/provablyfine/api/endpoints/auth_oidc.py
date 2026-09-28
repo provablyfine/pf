@@ -2,6 +2,7 @@ import asyncio
 import base64
 import dataclasses
 import json
+import logging
 import time
 
 import cryptography.hazmat.primitives.asymmetric.ec
@@ -19,6 +20,7 @@ from .. import converters, crypto_policy, dependencies, model, responses, schema
 from ..context import ctx
 
 router = fastapi.APIRouter()
+logger = logging.getLogger(__name__)
 
 _204 = fastapi.responses.Response(status_code=204)
 
@@ -28,7 +30,9 @@ def _b64url_decode(s: str) -> bytes:
     return base64.urlsafe_b64decode(s)
 
 
-def _verify_oidc_token(issuer: str, client_id: str, id_token: str, nonce: str) -> tuple[str, int]:
+def _verify_oidc_token(
+    issuer: str, client_id: str, id_token: str, nonce: str, require_email_verified: bool
+) -> tuple[str, int]:
     """Verify an OIDC id_token JWT and return (email, exp)."""
     parts = id_token.split(".")
     if len(parts) != 3:
@@ -119,6 +123,14 @@ def _verify_oidc_token(issuer: str, client_id: str, id_token: str, nonce: str) -
     if not email:
         raise ValueError("JWT missing email claim")
 
+    # The opt-out (require_email_verified=False) only tolerates a provider that never sends this
+    # claim at all. It never accepts an explicit false claim, or a non-boolean stand-in for true
+    # such as the string some non-compliant providers send.
+    email_verified = payload.get("email_verified")
+    verified = email_verified is True or (email_verified is None and not require_email_verified)
+    if not verified:
+        raise ValueError("JWT email not verified")
+
     token_nonce = payload.get("nonce")
     if not token_nonce:
         raise ValueError("JWT missing nonce claim")
@@ -163,10 +175,16 @@ async def _verify_oidc_login(request: fastapi.requests.Request, tenant_uuid: str
             client_id=ac.config["client_id"],
             id_token=data.id_token,
             nonce=data.nonce,
+            require_email_verified=ac.config.get("require_email_verified", True),
         )
     except Exception as exc:
+        # exc can echo attacker-controlled header fields (kid, alg) from a token whose signature
+        # hasn't been checked yet. Log with %r, not %s, to avoid newline injection into the log line.
+        logger.warning("OIDC token verification failed: %r", exc)
         raise responses.ProblemHTTPException(
-            responses.problem_response(status_code=403, title="OIDC token verification failed", detail=str(exc))
+            responses.problem_response(
+                status_code=403, title="OIDC token verification failed", detail="OIDC token verification failed"
+            )
         )
     return _VerifiedOidcLogin(email=email, token_exp=token_exp)
 

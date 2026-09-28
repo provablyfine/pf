@@ -538,12 +538,14 @@ def _auth_config_to_config(ac: model.auth_config.AuthConfig) -> schemas.auth.Aut
             issuer=ac.config["issuer"],
             client_id=ac.config["client_id"],
             client_secret=ac.config.get("client_secret"),
+            require_email_verified=ac.config.get("require_email_verified", True),
         )
     elif ac.type == "oidc-device-code":
         config = schemas.auth.OidcDeviceCodeConfig(
             issuer=ac.config["issuer"],
             client_id=ac.config["client_id"],
             client_secret=ac.config.get("client_secret"),
+            require_email_verified=ac.config.get("require_email_verified", True),
         )
     elif ac.type == "http_sig":
         config = schemas.auth.HttpSigConfig()

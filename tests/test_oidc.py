@@ -234,8 +234,25 @@ def test_endpoint_wrong_issuer(oidc_env: OidcEnv) -> None:
 
 
 def test_endpoint_wrong_audience(oidc_env: OidcEnv) -> None:
-    """Token with wrong audience is rejected."""
+    """Token with wrong audience is rejected, and the response does not leak why."""
     id_token = oidc_env.mock.issue_token("user@example.com", audience="wrong-client")
+    session_key = _create_session_key()
+
+    with pytest.raises(pfc.exceptions.UI) as excinfo:
+        oidc_env.sc.session_with_private_key(session_key).login_oidc(
+            auth_name="oidc-test",
+            client_type="cli",
+            id_token=id_token,
+            nonce="irrelevant",
+            session_public_key=session_key.public().to_dict(),
+        )
+    assert "OIDC token verification failed" in str(excinfo.value)
+    assert "audience mismatch" not in str(excinfo.value)
+
+
+def test_endpoint_email_not_verified(oidc_env: OidcEnv) -> None:
+    """Token with email_verified=false is rejected."""
+    id_token = oidc_env.mock.issue_token("user@example.com", nonce="irrelevant", email_verified=False)
     session_key = _create_session_key()
 
     with pytest.raises(pfc.exceptions.UI):
@@ -246,6 +263,131 @@ def test_endpoint_wrong_audience(oidc_env: OidcEnv) -> None:
             nonce="irrelevant",
             session_public_key=session_key.public().to_dict(),
         )
+
+
+def test_endpoint_email_verified_missing_rejected_by_default(oidc_env: OidcEnv) -> None:
+    """Token without an email_verified claim is rejected when the auth config requires it (the default)."""
+    id_token = oidc_env.mock.issue_token("user@example.com", nonce="irrelevant", email_verified=None)
+    session_key = _create_session_key()
+
+    with pytest.raises(pfc.exceptions.UI):
+        oidc_env.sc.session_with_private_key(session_key).login_oidc(
+            auth_name="oidc-test",
+            client_type="cli",
+            id_token=id_token,
+            nonce="irrelevant",
+            session_public_key=session_key.public().to_dict(),
+        )
+
+
+def test_endpoint_email_verified_absent_allowed_when_opted_out(oidc_env: OidcEnv) -> None:
+    """A missing email_verified claim is tolerated on an auth config that opted out of requiring it."""
+    oidc_env.sc.session().create_auth_oidc(
+        name="oidc-test-opt-out",
+        client_type="cli",
+        description="Test OIDC provider without email_verified",
+        issuer=oidc_env.mock.issuer,
+        client_id=oidc_env.mock.client_id,
+        client_secret=None,
+        require_email_verified=False,
+    )
+    id_token = oidc_env.mock.issue_token("user@example.com", nonce="irrelevant", email_verified=None)
+    session_key = _create_session_key()
+
+    oidc_env.sc.session_with_private_key(session_key).login_oidc(
+        auth_name="oidc-test-opt-out",
+        client_type="cli",
+        id_token=id_token,
+        nonce="irrelevant",
+        session_public_key=session_key.public().to_dict(),
+    )
+
+
+def test_endpoint_email_explicitly_unverified_rejected_even_when_opted_out(oidc_env: OidcEnv) -> None:
+    """An explicit email_verified=false is never tolerated, even when the auth config opted out."""
+    oidc_env.sc.session().create_auth_oidc(
+        name="oidc-test-opt-out",
+        client_type="cli",
+        description="Test OIDC provider without email_verified",
+        issuer=oidc_env.mock.issuer,
+        client_id=oidc_env.mock.client_id,
+        client_secret=None,
+        require_email_verified=False,
+    )
+    id_token = oidc_env.mock.issue_token("user@example.com", nonce="irrelevant", email_verified=False)
+    session_key = _create_session_key()
+
+    with pytest.raises(pfc.exceptions.UI):
+        oidc_env.sc.session_with_private_key(session_key).login_oidc(
+            auth_name="oidc-test-opt-out",
+            client_type="cli",
+            id_token=id_token,
+            nonce="irrelevant",
+            session_public_key=session_key.public().to_dict(),
+        )
+
+
+def test_endpoint_email_verified_string_rejected_even_when_opted_out(oidc_env: OidcEnv) -> None:
+    """A non-boolean email_verified (a string, as some non-compliant providers send) is always rejected."""
+    oidc_env.sc.session().create_auth_oidc(
+        name="oidc-test-opt-out",
+        client_type="cli",
+        description="Test OIDC provider without email_verified",
+        issuer=oidc_env.mock.issuer,
+        client_id=oidc_env.mock.client_id,
+        client_secret=None,
+        require_email_verified=False,
+    )
+    id_token = oidc_env.mock.issue_token("user@example.com", nonce="irrelevant", email_verified="true")
+    session_key = _create_session_key()
+
+    with pytest.raises(pfc.exceptions.UI):
+        oidc_env.sc.session_with_private_key(session_key).login_oidc(
+            auth_name="oidc-test-opt-out",
+            client_type="cli",
+            id_token=id_token,
+            nonce="irrelevant",
+            session_public_key=session_key.public().to_dict(),
+        )
+
+
+def test_endpoint_require_email_verified_can_be_updated(oidc_env: OidcEnv) -> None:
+    """An existing auth config can be switched to not require email_verified, without deleting it."""
+    sc = oidc_env.sc.session()
+    created = sc.create_auth_oidc(
+        name="oidc-test-updatable",
+        client_type="cli",
+        description="Test OIDC provider",
+        issuer=oidc_env.mock.issuer,
+        client_id=oidc_env.mock.client_id,
+        client_secret=None,
+    )
+
+    id_token = oidc_env.mock.issue_token("user@example.com", nonce="before-update", email_verified=None)
+    session_key = _create_session_key()
+    with pytest.raises(pfc.exceptions.UI):
+        oidc_env.sc.session_with_private_key(session_key).login_oidc(
+            auth_name="oidc-test-updatable",
+            client_type="cli",
+            id_token=id_token,
+            nonce="before-update",
+            session_public_key=session_key.public().to_dict(),
+        )
+
+    sc.update_auth(created.id, require_email_verified=False)
+
+    id_token_2 = oidc_env.mock.issue_token("user@example.com", nonce="after-update", email_verified=None)
+    session_key_2 = _create_session_key()
+    oidc_env.sc.session_with_private_key(session_key_2).login_oidc(
+        auth_name="oidc-test-updatable",
+        client_type="cli",
+        id_token=id_token_2,
+        nonce="after-update",
+        session_public_key=session_key_2.public().to_dict(),
+    )
+
+    (entry,) = [e for e in sc.list_audit_log().entries if e.type == "auth-update" and e.details.get("id") == created.id]
+    assert entry.details["require_email_verified"] is False
 
 
 def test_endpoint_missing_email(oidc_env: OidcEnv) -> None:

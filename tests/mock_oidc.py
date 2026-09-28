@@ -260,6 +260,7 @@ class MockOidcProvider:
         nbf: int | None = None,
         no_kid: bool = False,
         nonce: str | None = None,
+        email_verified: bool | str | None = True,
     ) -> str:
         """Generate a signed JWT token."""
         if issuer is None:
@@ -284,6 +285,8 @@ class MockOidcProvider:
             payload["nbf"] = nbf
         if nonce is not None:
             payload["nonce"] = nonce
+        if email_verified is not None:
+            payload["email_verified"] = email_verified
 
         header_b64 = _b64url_encode(json.dumps(header).encode())
         payload_b64 = _b64url_encode(json.dumps(payload).encode())

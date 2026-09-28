@@ -147,6 +147,7 @@ class OidcConfig(_Base):
     client_id: str
     client_secret: str | None = None
     callback_url: str
+    require_email_verified: bool = True
 
 
 class OidcDeviceCodeConfig(_Base):
@@ -154,6 +155,7 @@ class OidcDeviceCodeConfig(_Base):
     issuer: str
     client_id: str
     client_secret: str | None = None
+    require_email_verified: bool = True
 
 
 AuthConfig = typing.Annotated[

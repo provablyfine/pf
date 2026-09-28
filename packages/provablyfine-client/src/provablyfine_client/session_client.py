@@ -240,10 +240,13 @@ class SessionClient:
         issuer: str,
         client_id: str,
         client_secret: str | None,
+        require_email_verified: bool = True,
     ) -> schemas.Auth:
-        config: dict[str, str] = {"type": "oidc", "issuer": issuer, "client_id": client_id}
+        config: dict[str, typing.Any] = {"type": "oidc", "issuer": issuer, "client_id": client_id}
         if client_secret is not None:
             config["client_secret"] = client_secret
+        if not require_email_verified:
+            config["require_email_verified"] = False
         body = {"name": name, "client_type": client_type, "description": description, "config": config}
         response = self._session.post(self._directory.auth, auth=self._auth(), json=body)
         if response.status_code != 201:
@@ -258,10 +261,13 @@ class SessionClient:
         issuer: str,
         client_id: str,
         client_secret: str | None,
+        require_email_verified: bool = True,
     ) -> schemas.Auth:
-        config: dict[str, str] = {"type": "oidc-device-code", "issuer": issuer, "client_id": client_id}
+        config: dict[str, typing.Any] = {"type": "oidc-device-code", "issuer": issuer, "client_id": client_id}
         if client_secret is not None:
             config["client_secret"] = client_secret
+        if not require_email_verified:
+            config["require_email_verified"] = False
         body = {"name": name, "client_type": client_type, "description": description, "config": config}
         response = self._session.post(self._directory.auth, auth=self._auth(), json=body)
         if response.status_code != 201:
@@ -274,6 +280,7 @@ class SessionClient:
         name: str | None = None,
         description: str | None = None,
         is_enabled: bool | None = None,
+        require_email_verified: bool | None = None,
     ) -> None:
         body: dict[str, typing.Any] = {}
         if name is not None:
@@ -282,6 +289,8 @@ class SessionClient:
             body["description"] = description
         if is_enabled is not None:
             body["is_enabled"] = is_enabled
+        if require_email_verified is not None:
+            body["require_email_verified"] = require_email_verified
         if not body:
             raise exceptions.UI("Nothing to update")
         response = self._session.patch(f"{self._directory.auth}/{id}", auth=self._auth(), json=body)

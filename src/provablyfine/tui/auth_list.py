@@ -23,6 +23,7 @@ class _OidcParams:
     issuer: str
     client_id: str
     client_secret: str | None
+    require_email_verified: bool
 
 
 _AuthParamsResult = _HttpSigParams | _OidcParams
@@ -84,6 +85,9 @@ class _AuthParamsScreen(base.ModalScreen[_AuthParamsResult | None]):
                 yield base.Input(
                     placeholder="Client secret (optional)", id="client_secret", compact=True, password=True
                 )
+                yield textual.widgets.Checkbox(
+                    "Require verified email", value=True, id="require_email_verified", compact=True
+                )
 
     def action_cancel(self) -> None:
         self.dismiss(None)
@@ -102,9 +106,15 @@ class _AuthParamsScreen(base.ModalScreen[_AuthParamsResult | None]):
             if not issuer or not client_id:
                 return
             secret = self.query_one("#client_secret", textual.widgets.Input).value.strip()
+            require_email_verified = self.query_one("#require_email_verified", textual.widgets.Checkbox).value
             self.dismiss(
                 _OidcParams(
-                    name=name, client_type=client_type, issuer=issuer, client_id=client_id, client_secret=secret or None
+                    name=name,
+                    client_type=client_type,
+                    issuer=issuer,
+                    client_id=client_id,
+                    client_secret=secret or None,
+                    require_email_verified=require_email_verified,
                 )
             )
         else:
@@ -173,7 +183,13 @@ class AuthListScreen(base.Screen):
                 a = await self._auth.create_auth_http_sig(body.name, body.client_type, "")
             case _OidcParams():
                 a = await self._auth.create_auth_oidc(
-                    body.name, body.client_type, "", body.issuer, body.client_id, body.client_secret
+                    body.name,
+                    body.client_type,
+                    "",
+                    body.issuer,
+                    body.client_id,
+                    body.client_secret,
+                    body.require_email_verified,
                 )
         self._auths.append(a)
         table = self.query_one(self._StrDataTable)

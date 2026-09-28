@@ -133,9 +133,12 @@ class AsyncSessionClient:
         issuer: str,
         client_id: str,
         client_secret: str | None,
+        require_email_verified: bool = True,
     ) -> schemas.Auth:
         return await self._run(
-            lambda: self._inner.create_auth_oidc(name, client_type, description, issuer, client_id, client_secret)
+            lambda: self._inner.create_auth_oidc(
+                name, client_type, description, issuer, client_id, client_secret, require_email_verified
+            )
         )
 
     async def update_auth(
@@ -144,8 +147,11 @@ class AsyncSessionClient:
         name: str | None = None,
         description: str | None = None,
         is_enabled: bool | None = None,
+        require_email_verified: bool | None = None,
     ) -> None:
-        return await self._run(lambda: self._inner.update_auth(id, name, description, is_enabled))
+        return await self._run(
+            lambda: self._inner.update_auth(id, name, description, is_enabled, require_email_verified)
+        )
 
     async def delete_auth(self, id: int) -> None:
         return await self._run(lambda: self._inner.delete_auth(id))

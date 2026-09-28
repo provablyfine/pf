@@ -67,16 +67,17 @@ Create an oidc auth config
 
 Read the oidc auth config
   $ pfa -c config.json auth read -i 4
-  id            4
-  name          google
-  client_type   cli
-  type          oidc
+  id                      4
+  name                    google
+  client_type             cli
+  type                    oidc
   description
-  enabled       True
+  enabled                 True
   created_at    .* (re)
-  issuer        https://accounts.google.com
-  client_id     my-client-id
-  callback_url  http://127.0.0.1/callback
+  issuer                  https://accounts.google.com
+  client_id               my-client-id
+  callback_url            http://127.0.0.1/callback
+  require_email_verified  True
 
 Create an oidc auth config without issuer (should fail)
   $ pfa -c config.json auth create oidc -n bad-oidc --client-type cli --client-id my-client-id 2>&1 | grep "error:"
@@ -85,6 +86,16 @@ Create an oidc auth config without issuer (should fail)
 Create an oidc auth config without client-id (should fail)
   $ pfa -c config.json auth create oidc -n bad-oidc --client-type cli --issuer https://accounts.google.com 2>&1 | grep "error:"
   pfa auth create oidc: error: the following arguments are required: --client-id
+
+Create an oidc auth config that allows unverified email
+  $ pfa -c config.json auth create oidc -n unverified-ok --client-type web --issuer https://accounts.google.com --client-id my-client-id-2 --allow-unverified-email
+  $ pfa -c config.json auth read -i 5 -f json | jq .config.require_email_verified
+  false
+
+Update it to require verified email again
+  $ pfa -c config.json auth update -i 5 --require-verified-email
+  $ pfa -c config.json auth read -i 5 -f json | jq .config.require_email_verified
+  true
 
 Update auth config name
   $ pfa -c config.json auth update -i 2 --name corp-http-sig
@@ -136,7 +147,7 @@ Public discovery endpoint returns correct data for http_sig
 
 Public discovery endpoint returns correct data for oidc
   $ curl -s "http://127.0.0.1:$API_PORT/pf/t/00000000-0000-0000-0000-000000000001/public/auth/google?client_type=cli" && echo ""
-  {"name":"google","description":"","config":{"issuer":"https://accounts.google.com","client_id":"my-client-id","client_secret":null,"callback_url":"http://127.0.0.1/callback","type":"oidc"}}
+  {"name":"google","description":"","config":{"issuer":"https://accounts.google.com","client_id":"my-client-id","client_secret":null,"callback_url":"http://127.0.0.1/callback","require_email_verified":true,"type":"oidc"}}
 
 Public list endpoint filters by client_type
   $ curl -s "http://127.0.0.1:$API_PORT/pf/t/00000000-0000-0000-0000-000000000001/public/auth?client_type=cli" | jq -r '.auths[].name'
@@ -169,6 +180,7 @@ Delete an auth config
   $ pfa -c config.json auth list -q
   1
   4
+  5
 
 Delete a non-existent auth config
   $ pfa -c config.json auth delete -i 999

@@ -45,7 +45,12 @@ def create(name: str, client_type: str, description: str, type: str, config: dic
         config=ctx.kek.encrypt(json.dumps(config).encode()),
     )
     assert auth_id is not None
-    audit_log.create("auth-create", id=auth_id, name=name)
+    # config holds secrets and is never logged as a whole. require_email_verified is a
+    # security-relevant setting on OIDC configs, so it's worth keeping in the audit trail.
+    audit_fields: dict[str, typing.Any] = {"name": name}
+    if "require_email_verified" in config:
+        audit_fields["require_email_verified"] = config["require_email_verified"]
+    audit_log.create("auth-create", id=auth_id, **audit_fields)
     return auth_id
 
 
@@ -61,10 +66,14 @@ def read_one(**kwargs: typing.Any) -> AuthConfig | None:
     return rows[0]
 
 
-def update(id: int, **fields: typing.Any) -> None:
+def update(id: int, config_audit_fields: dict[str, typing.Any] | None = None, **fields: typing.Any) -> None:
     allowed = {"name", "description", "is_enabled", "config"}
     update_fields = {k: v for k, v in fields.items() if k in allowed and v is not None}
     audit_fields = {k: v for k, v in update_fields.items() if k != "config"}
+    # config holds secrets and is never logged as a whole. config_audit_fields lets a caller
+    # name specific, non-secret sub-fields of a config change that are worth auditing.
+    if config_audit_fields:
+        audit_fields.update(config_audit_fields)
     if "config" in update_fields:
         update_fields["config"] = ctx.kek.encrypt(json.dumps(update_fields["config"]).encode())
     if update_fields:

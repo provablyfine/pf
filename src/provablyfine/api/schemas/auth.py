@@ -14,6 +14,7 @@ class OidcConfig(base.APIBase):
     client_id: str
     client_secret: str | None = None
     callback_url: str = "http://127.0.0.1/callback"
+    require_email_verified: bool = True
     type: typing.Literal["oidc"] = "oidc"
 
 
@@ -21,6 +22,7 @@ class OidcDeviceCodeConfig(base.APIBase):
     issuer: str
     client_id: str
     client_secret: str | None = None
+    require_email_verified: bool = True
     type: typing.Literal["oidc-device-code"] = "oidc-device-code"
 
 
@@ -64,6 +66,7 @@ class AuthUpdateRequest(base.APIBase):
     name: str | None = None
     description: str | None = None
     is_enabled: bool | None = None
+    require_email_verified: bool | None = None
 
 
 class AuthPublic(base.APIBase):

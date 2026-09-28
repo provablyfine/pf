@@ -14,15 +14,17 @@ _204 = fastapi.responses.Response(status_code=204)
 def _build_config(data: schemas.auth.AuthCreateRequest) -> dict[str, typing.Any]:
     if data.config.type == "oidc":
         assert isinstance(data.config, schemas.auth.OidcCreateConfig)
-        config = {"issuer": data.config.issuer, "client_id": data.config.client_id}
+        config: dict[str, typing.Any] = {"issuer": data.config.issuer, "client_id": data.config.client_id}
         if data.config.client_secret is not None:
             config["client_secret"] = data.config.client_secret
+        config["require_email_verified"] = data.config.require_email_verified
         return config
     if data.config.type == "oidc-device-code":
         assert isinstance(data.config, schemas.auth.OidcDeviceCodeCreateConfig)
         config = {"issuer": data.config.issuer, "client_id": data.config.client_id}
         if data.config.client_secret is not None:
             config["client_secret"] = data.config.client_secret
+        config["require_email_verified"] = data.config.require_email_verified
         return config
     return {}
 
@@ -124,8 +126,27 @@ def update_endpoint(auth_id: int, data: schemas.auth.AuthUpdateRequest) -> schem
             )
         fields_to_update["is_enabled"] = data.is_enabled
 
+    config_audit_fields: dict[str, typing.Any] = {}
+    if data.require_email_verified is not None:
+        if not grants.auth(ac.id).can_update("config"):
+            raise responses.forbidden_or_not_found(
+                grants.auth(ac.id).can_read,
+                "Not allowed to update auth config require_email_verified",
+                "Auth config does not exist",
+            )
+        if ac.type not in ("oidc", "oidc-device-code"):
+            raise responses.ProblemHTTPException(
+                responses.problem_response(
+                    status_code=400, title="require_email_verified only applies to OIDC auth configs"
+                )
+            )
+        new_config = dict(ac.config)
+        new_config["require_email_verified"] = data.require_email_verified
+        fields_to_update["config"] = new_config
+        config_audit_fields["require_email_verified"] = data.require_email_verified
+
     if fields_to_update:
-        model.auth_config.update(id=auth_id, **fields_to_update)
+        model.auth_config.update(id=auth_id, config_audit_fields=config_audit_fields, **fields_to_update)
 
     updated = model.auth_config.read_one(id=auth_id)
     assert updated is not None
