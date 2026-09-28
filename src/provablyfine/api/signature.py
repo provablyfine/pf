@@ -151,6 +151,10 @@ def _build_signature_base(
 
 
 def verify(request: fastapi.requests.Request, key_id: str, key: jwk.Symmetric | jwk.Public) -> None:
+    if _CONTENT_DIGEST_HEADER not in request.headers:
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=400, title="Missing Content-Digest header")
+        )
     content_digest = str(http_sfv.Dictionary({"sha-256": hashlib.sha256(request.state.body).digest()}))
     if request.headers[_CONTENT_DIGEST_HEADER] != content_digest:
         raise responses.ProblemHTTPException(

@@ -66,6 +66,13 @@ def _corrupt_signature(headers: requests.structures.CaseInsensitiveDict[str]) ->
     headers["Signature"] = str(d)
 
 
+def _delete_header(name: str) -> typing.Callable[[requests.structures.CaseInsensitiveDict[str]], None]:
+    def tamper(headers: requests.structures.CaseInsensitiveDict[str]) -> None:
+        del headers[name]
+
+    return tamper
+
+
 def _set_created(created: object) -> typing.Callable[[requests.structures.CaseInsensitiveDict[str]], None]:
     def tamper(headers: requests.structures.CaseInsensitiveDict[str]) -> None:
         d = http_sfv.Dictionary()
@@ -481,6 +488,15 @@ def test_tampered_signature_is_rejected() -> None:
     with pytest.raises(responses.ProblemHTTPException) as exc_info:
         signature.verify(request, key_id=key_id, key=jwk.Symmetric.from_bytes(key))
     assert _title(exc_info.value) == "Invalid signature"
+
+
+def test_missing_content_digest_header_is_rejected() -> None:
+    key = secrets.token_bytes(32)
+    request, key_id = _signed_request(key, tamper=_delete_header("Content-Digest"))
+    with pytest.raises(responses.ProblemHTTPException) as exc_info:
+        signature.verify(request, key_id=key_id, key=jwk.Symmetric.from_bytes(key))
+    assert exc_info.value.response.status_code == 400
+    assert _title(exc_info.value) == "Missing Content-Digest header"
 
 
 def test_tampered_signature_does_not_consume_the_nonce() -> None:
