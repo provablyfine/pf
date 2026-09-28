@@ -483,6 +483,33 @@ def test_tampered_signature_is_rejected() -> None:
     assert _title(exc_info.value) == "Invalid signature"
 
 
+def test_tampered_signature_does_not_consume_the_nonce() -> None:
+    # a bad signature must not fill the nonce store. Reusing the same
+    # nonce for a follow-up request with a valid signature proves the earlier,
+    # tampered attempt was never recorded.
+    key = secrets.token_bytes(32)
+    app = _app()
+    jwk_key = jwk.Symmetric.from_bytes(key)
+
+    real_token_hex = http_signatures.secrets.token_hex
+    http_signatures.secrets.token_hex = lambda nbytes=None: "fixed-nonce"
+    try:
+        bad_request, key_id = _signed_request(key, app=app, tamper=_corrupt_signature)
+        good_request, _ = _signed_request(key, app=app)
+    finally:
+        http_signatures.secrets.token_hex = real_token_hex
+
+    with pytest.raises(responses.ProblemHTTPException) as exc_info:
+        signature.verify(bad_request, key_id=key_id, key=jwk_key)
+    assert _title(exc_info.value) == "Invalid signature"
+    assert (
+        len(app.state.nonce_store._seen) == 0
+    )  # accessing internal state deliberately, to assert the fix's whole point
+
+    signature.verify(good_request, key_id=key_id, key=jwk_key)
+    assert len(app.state.nonce_store._seen) == 1
+
+
 def test_ed25519_signature_is_accepted() -> None:
     private = jwk.Private.generate_ed25519()
     request, key_id = _signed_request_with(_Ed25519Signer("session", private))

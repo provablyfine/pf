@@ -64,9 +64,15 @@ class NonceStore:
         return True
 
     def _expire(self, now: int) -> None:
-        expired = [entry for entry, expires_at in self._seen.items() if now > expires_at]
-        for entry in expired:
-            del self._seen[entry]
+        # Entries are added in a bounded approximation of expiry order (see the
+        # class docstring), so popping from the front until one is still live
+        # is amortized O(1) per call instead of scanning every entry. A later
+        # entry that jitter placed out of order just waits for a future call.
+        while self._seen:
+            oldest = next(iter(self._seen))
+            if self._seen[oldest] >= now:
+                break  # pragma: no mutate — it's the loop's last statement, so `return` here is equivalent
+            del self._seen[oldest]
 
 
 def _parse_signature_input(signature_input: str) -> dict[str, tuple[str, http_sfv.InnerList]]:
@@ -199,12 +205,6 @@ def verify(request: fastapi.requests.Request, key_id: str, key: jwk.Symmetric | 
             responses.problem_response(status_code=400, title="Signature is too old", detail=key_id)
         )
 
-    nonce_store: NonceStore = request.app.state.nonce_store
-    if not nonce_store.check_and_add(key_id, nonce, now=now, created=created):
-        raise responses.ProblemHTTPException(
-            responses.problem_response(status_code=400, title="Signature nonce has already been used", detail=key_id)
-        )
-
     if label not in signature_by_label:
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=400, title="Unable to find label in Signature", detail=label)
@@ -253,6 +253,14 @@ def verify(request: fastapi.requests.Request, key_id: str, key: jwk.Symmetric | 
                 title="Signature does not cover the expected fields",
                 detail=f"Got: {covered}. Expected: {expected_covered}",
             )
+        )
+
+    # Only now, with the signature cryptographically verified so malicious clients
+    # cannot fill our nonce store.
+    nonce_store: NonceStore = request.app.state.nonce_store
+    if not nonce_store.check_and_add(key_id, nonce, now=now, created=created):
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=400, title="Signature nonce has already been used", detail=key_id)
         )
 
 
