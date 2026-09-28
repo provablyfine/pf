@@ -14,7 +14,6 @@ import pydantic
 import sqlalchemy
 import sqlalchemy.exc
 
-from .. import base64url
 from . import config, db, dependencies, endpoints, jwt_validator, middleware, migrate, registry_db, responses, signature
 
 logger = logging.getLogger(__name__)
@@ -108,9 +107,7 @@ def create(conf: config.Config) -> fastapi.FastAPI:
         _bootstrap_databases(registry_engine)
         migrate.upgrade_registry(conf.tenant_registry_url)
 
-        kek_filename = conf.kek_filename.format(PF_SECRET_DIRECTORY=os.getenv("PF_SECRET_DIRECTORY", ""))
-        with open(kek_filename, "rb") as f:
-            kek = base64url.encode(f.read()) + "======"
+        kek = conf.load_kek()
         app.state.config = conf
         app.state.trusted_keys = jwt_validator.TrustedKeys(f"{conf.base_url}/pf/t", registry_engine)
         app.state.tenant_registry_engine = registry_engine

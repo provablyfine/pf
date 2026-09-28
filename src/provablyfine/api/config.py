@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+import os
 import os.path
 import typing
 
 import pydantic
 import yaml
 
+from .. import base64url
 from . import unix_account
 
 
@@ -88,3 +90,12 @@ class Config(pydantic.BaseModel):
             else:
                 assert False
         return Config.model_validate(data)
+
+    def load_kek(self) -> str:
+        """Read the key encryption key file and return it as a Fernet key string."""
+        filename = self.kek_filename.format(PF_SECRET_DIRECTORY=os.getenv("PF_SECRET_DIRECTORY", ""))
+        with open(filename, "rb") as f:
+            raw = f.read()
+        if len(raw) != 32:
+            raise ValueError(f"KEK file {filename} must contain exactly 32 random bytes, found {len(raw)}")
+        return base64url.encode(raw, pad=True)

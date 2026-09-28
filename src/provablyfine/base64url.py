@@ -5,8 +5,13 @@ def decode(s: str) -> bytes:
     return base64.urlsafe_b64decode(s + "=======")
 
 
-def encode(s: bytes) -> str:
-    return base64.urlsafe_b64encode(s).decode().rstrip("=")
+def encode(s: bytes, pad: bool = False) -> str:
+    """Encode bytes as base64url.
+
+    Padding characters are stripped unless pad is True.
+    """
+    encoded = base64.urlsafe_b64encode(s).decode()
+    return encoded if pad else encoded.rstrip("=")
 
 
 def decode_uint(s: str) -> int:

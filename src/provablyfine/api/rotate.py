@@ -1,11 +1,10 @@
 import argparse
 import datetime
 import logging
-import os
 
 import cryptography.fernet
 
-from .. import base64url, jwk, log
+from .. import jwk, log
 from . import app_db, config, db, model, registry_db
 from .context import ctx
 
@@ -74,10 +73,7 @@ def main():
 
     log.setup_server("rotate", args.debug, args.log_filename)
 
-    kek_filename = conf.kek_filename.format(PF_SECRET_DIRECTORY=os.getenv("PF_SECRET_DIRECTORY", ""))
-    with open(kek_filename, "rb") as f:
-        kek_string = base64url.encode(f.read()) + "======"
-        kek = cryptography.fernet.Fernet(kek_string)
+    kek = cryptography.fernet.Fernet(conf.load_kek())
 
     def _rotate_one(database_url: str):
         engine = db.create_engine(database_url)
