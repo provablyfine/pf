@@ -47,6 +47,7 @@ class Config(pydantic.BaseModel):
 
     debug: bool = False
     debug_sql: bool = False
+    docs_enabled: bool = False
     log_level: int = 0
     log_filename: str | None = None
     base_url: str = "http://127.0.0.1:8000"

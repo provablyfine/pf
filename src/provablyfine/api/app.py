@@ -124,7 +124,12 @@ def create(conf: config.Config) -> fastapi.FastAPI:
 
         yield
 
-    fastapi_app = fastapi.FastAPI(lifespan=lifespan, docs_url="/docs", redoc_url="/redoc")
+    fastapi_app = fastapi.FastAPI(
+        lifespan=lifespan,
+        docs_url="/docs" if conf.docs_enabled else None,
+        redoc_url="/redoc" if conf.docs_enabled else None,
+        openapi_url="/openapi.json" if conf.docs_enabled else None,
+    )
 
     async def problem_exception_handler(
         request: fastapi.requests.Request, exc: Exception

@@ -10,11 +10,12 @@ import pytest
 from . import app, config
 
 
-def _create(tmp_path: pathlib.Path, *, debug: bool) -> fastapi.FastAPI:
+def _create(tmp_path: pathlib.Path, *, debug: bool, docs_enabled: bool = False) -> fastapi.FastAPI:
     kek_file = tmp_path / "kek.key"
     kek_file.write_bytes(os.urandom(32))
     conf = config.Config(
         debug=debug,
+        docs_enabled=docs_enabled,
         tenant_registry_url=f"sqlite:///{tmp_path / 'tenants.db'}",
         kek_filename=str(kek_file),
     )
@@ -96,3 +97,16 @@ def test_debug_disabled_omits_traceback_url(tmp_path: pathlib.Path) -> None:
     assert status == 500
     assert "instance" not in json.loads(body)
     assert b"RuntimeError" not in body
+
+
+@pytest.mark.parametrize("path", ["/docs", "/redoc", "/openapi.json"])
+@pytest.mark.parametrize("debug", [True, False])
+def test_docs_disabled_by_default_regardless_of_debug(tmp_path: pathlib.Path, debug: bool, path: str) -> None:
+    [(status, _)] = asyncio.run(_run(_create(tmp_path, debug=debug), path))
+    assert status == 404
+
+
+@pytest.mark.parametrize("path", ["/docs", "/redoc", "/openapi.json"])
+def test_docs_enabled_serves_docs_without_debug(tmp_path: pathlib.Path, path: str) -> None:
+    [(status, _)] = asyncio.run(_run(_create(tmp_path, debug=False, docs_enabled=True), path))
+    assert status == 200
