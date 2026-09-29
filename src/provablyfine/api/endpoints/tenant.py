@@ -4,9 +4,10 @@ import time
 import uuid
 
 import fastapi
+import fastapi.requests
 import fastapi.responses
 
-from .. import db, dependencies, grant, migrate, registry_db, responses, schemas, signature
+from .. import dependencies, grant, migrate, registry_db, responses, schemas, signature
 from ..context import ctx
 
 router = fastapi.APIRouter(prefix="/tenant", dependencies=[fastapi.Depends(signature.verify_session)])
@@ -68,6 +69,7 @@ def read_endpoint(
 @router.post("", status_code=200, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
 @dependencies.writes_registry
 def create_endpoint(
+    request: fastapi.requests.Request,
     data: schemas.tenant.TenantCreateRequest,
     reg_db: registry_db.RegistryDb = dependencies.REGISTRY,
 ) -> schemas.tenant.TenantReadResponse:
@@ -80,15 +82,15 @@ def create_endpoint(
     # new tenant entry
     # The database is named after the UUID because tenant names are not unique.
     tenant_uuid = str(uuid.uuid4())
-    db_url = db.derive_tenant_url(ctx.config.tenant_registry_url, tenant_uuid)
-    db.create_database(db_url)
+    tenants = request.app.state.tenants
+    database_url = tenants.create(tenant_uuid)
     now = int(time.time())
     new_id = reg_db.tenant.create(
         uuid=tenant_uuid,
         name=data.name,
         display_name=data.display_name,
         owner_id=ctx.tenant_id,
-        database_url=db_url,
+        database_url=database_url,
         is_enabled=True,
         is_initialized=False,
         is_deleted=False,
@@ -98,7 +100,7 @@ def create_endpoint(
     assert row is not None
 
     # new database
-    migrate.create_tenant(db_url)
+    migrate.create_tenant_tables(tenants, tenant_uuid)
 
     return _row_to_schema(row)
 

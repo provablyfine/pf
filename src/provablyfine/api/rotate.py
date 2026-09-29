@@ -75,9 +75,10 @@ def main():
 
     kek = cryptography.fernet.Fernet(conf.load_kek())
 
-    def _rotate_one(database_url: str):
-        engine = db.create_engine(database_url)
-        with db.begin(engine, write=True) as connection:
+    tenants = db.TenantDatabases(conf.tenant_registry_url)
+
+    def _rotate_one(tenant_uuid: str):
+        with db.begin(tenants.engine(tenant_uuid), write=True) as connection:
             application_db = app_db.create(connection)
             with ctx.set_app_db(application_db), ctx.set_kek(kek):
                 rotate(
@@ -95,8 +96,12 @@ def main():
                 rotate_oidc(conf.oidc_key_rotation_period, conf.oidc_key_staging_period)
 
     registry_engine = db.create_engine(conf.tenant_registry_url)
-    with registry_engine.connect() as registry_conn:
-        reg_db = registry_db.create(registry_conn)
-        for tenant_row in reg_db.tenant.read_all():
-            if tenant_row.is_enabled and tenant_row.is_initialized:
-                _rotate_one(tenant_row.database_url)
+    try:
+        with registry_engine.connect() as registry_conn:
+            reg_db = registry_db.create(registry_conn)
+            for tenant_row in reg_db.tenant.read_all():
+                if tenant_row.is_enabled and tenant_row.is_initialized:
+                    _rotate_one(tenant_row.uuid)
+    finally:
+        tenants.dispose()
+        registry_engine.dispose()

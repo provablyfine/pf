@@ -1915,9 +1915,9 @@ def real_app_db(
     which the rest of this file's fake boundary()/role() SimpleNamespace helpers
     can't reach. Runs against whichever backend(s) --db-backends selected.
     """
-    url = db_backend.fresh_database_url(request, tmp_path)
-    migrate.create_tenant(url)
-    engine = db.create_engine(url)
+    tenants, tenant_uuid = db_backend.fresh_tenant(request, tmp_path)
+    migrate.create_tenant_tables(tenants, tenant_uuid)
+    engine = tenants.engine(tenant_uuid)
     with db.begin(engine, write=True) as connection:
         application_db = app_db.create(connection)
         with ctx.set_app_db(application_db):

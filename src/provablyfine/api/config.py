@@ -54,6 +54,8 @@ class Config(pydantic.BaseModel):
     tenant_registry_url: str = "sqlite:///tenants.db"
     kek_filename: str = "kek.key"
     session_duration_s: int = 3600
+    db_pool_size: int = 5
+    db_max_overflow: int = 10
     privileged_unix_usernames: list[str] = pydantic.Field(
         default_factory=lambda: list(unix_account.DEFAULT_PRIVILEGED_USERNAMES)
     )

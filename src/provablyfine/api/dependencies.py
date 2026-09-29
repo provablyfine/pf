@@ -136,10 +136,8 @@ REGISTRY = fastapi.Depends(registry, scope="function")
 
 
 def _tenant_engine(request: fastapi.requests.Request, tenant_row: registry_db.TenantRow) -> sqlalchemy.Engine:
-    engines = request.app.state.tenant_engines
-    if tenant_row.id not in engines:
-        engines[tenant_row.id] = db.create_engine(tenant_row.database_url, echo=request.app.state.config.debug_sql)
-    return engines[tenant_row.id]
+    """The engine to use for one tenant. Every tenant request goes through here."""
+    return request.app.state.tenants.engine(tenant_row.uuid)
 
 
 async def _read_tenant_row(request: fastapi.requests.Request, tenant_uuid: str) -> registry_db.TenantRow:

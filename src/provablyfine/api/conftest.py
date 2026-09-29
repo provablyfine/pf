@@ -22,9 +22,9 @@ def tenant_app_db(
     hold on every backend, not just SQLite, so this runs against whichever backend(s)
     --db-backends selected; see the repo-root conftest.py.
     """
-    url = db_backend.fresh_database_url(request, tmp_path)
-    migrate.create_tenant(url)
-    engine = db.create_engine(url)
+    tenants, tenant_uuid = db_backend.fresh_tenant(request, tmp_path)
+    migrate.create_tenant_tables(tenants, tenant_uuid)
+    engine = tenants.engine(tenant_uuid)
     kek = cryptography.fernet.Fernet(cryptography.fernet.Fernet.generate_key())
     with db.begin(engine, write=True) as connection:
         application_db = app_db.create(connection)

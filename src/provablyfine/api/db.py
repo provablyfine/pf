@@ -6,13 +6,22 @@ import contextlib
 import os
 import re
 import sqlite3
+import threading
 
 import sqlalchemy
 import sqlalchemy.event
 import sqlalchemy.exc
+import sqlalchemy.pool
 
 
-def create_engine(url: str, echo: bool = False) -> sqlalchemy.Engine:
+def create_engine(
+    url: str,
+    echo: bool = False,
+    *,
+    pool_size: int | None = None,
+    max_overflow: int | None = None,
+    pool_per_use: bool = False,
+) -> sqlalchemy.Engine:
     """Create an engine whose transactions are real transactions.
 
     With the sqlite3 driver's default mode, a transaction only starts at the first INSERT,
@@ -20,9 +29,21 @@ def create_engine(url: str, echo: bool = False) -> sqlalchemy.Engine:
     Here the driver never starts transactions and SQLAlchemy sends BEGIN itself.
     Everything up to the commit is one transaction.
 
+    `pool_size` and `max_overflow` bound the connections of this engine.
+    `pool_per_use` opens a connection for each transaction and closes it right after.
+    It suits a sqlite file that is used rarely: an idle engine then holds nothing.
+
     Use `begin()` to start a transaction.
     """
-    engine = sqlalchemy.create_engine(url, echo=echo)
+    pool_options: dict[str, object] = {}
+    if pool_per_use:
+        pool_options["poolclass"] = sqlalchemy.pool.NullPool
+    else:
+        if pool_size is not None:
+            pool_options["pool_size"] = pool_size
+        if max_overflow is not None:
+            pool_options["max_overflow"] = max_overflow
+    engine = sqlalchemy.create_engine(url, echo=echo, **pool_options)
     if engine.dialect.name == "sqlite":
         _begin_sqlite_transactions(engine)
     return engine
@@ -190,26 +211,141 @@ def _sqlite_tenants_dir(registry_url: str) -> str:
     return os.path.join(os.path.dirname(registry_path), "tenants")
 
 
-def derive_tenant_url(registry_url: str, tenant_uuid: str) -> str:
-    """Derive a tenant's database URL from the registry's URL and the tenant's UUID.
+class TenantDatabases:
+    """The databases of all the tenants. Create one for the whole process and share it.
 
-    On a shared server (Postgres/MySQL), a tenant is a separate database on that same
-    server, named after the registry database so that two registries sharing one
-    physical server (e.g. two test runs against the same container) never collide on
-    the same tenant database name. For sqlite, a tenant is one file, named after the
-    tenant, in a "tenants" directory next to the registry's own file.
+    On sqlite each tenant is a file of its own, with an engine of its own.
+    An engine opens a connection for each transaction, so an idle tenant holds nothing.
+
+    On Postgres and MySQL all the tenants share the registry's server.
+    Each tenant is a schema. On MySQL a schema is a database.
+    They also share one engine, so `pool_size` and `max_overflow` bound the connections of all of them.
+    Every statement sent through the engine of a tenant is qualified as "schema"."table".
+    The tables are declared without a schema and exist only in the tenant schemas.
+    A statement sent through the shared engine itself fails instead of reaching another tenant.
     """
-    made_url = sqlalchemy.make_url(registry_url)
-    dialect = made_url.get_backend_name()
-    suffix = tenant_uuid.replace("-", "")
-    if dialect == "sqlite":
-        tenant_path = os.path.join(_sqlite_tenants_dir(registry_url), f"{suffix}.db")
-        return f"sqlite:///{tenant_path}"
-    registry_name = made_url.database
-    assert registry_name is not None
-    tenant_db_name = f"{registry_name}_t_{suffix}"
-    _validate_database_name(tenant_db_name, dialect)
-    return made_url.set(database=tenant_db_name).render_as_string(hide_password=False)
+
+    def __init__(
+        self,
+        registry_url: str,
+        *,
+        echo: bool = False,
+        pool_size: int | None = None,
+        max_overflow: int | None = None,
+    ) -> None:
+        self._registry_url = registry_url
+        self._echo = echo
+        self._lock = threading.Lock()
+        self._files: dict[str, sqlalchemy.Engine] = {}
+        self._server: sqlalchemy.Engine | None = None
+        if not is_sqlite(registry_url):
+            self._server = create_engine(registry_url, echo=echo, pool_size=pool_size, max_overflow=max_overflow)
+
+    @property
+    def registry_url(self) -> str:
+        return self._registry_url
+
+    def _locate(self, tenant_uuid: str) -> tuple[str, str | None]:
+        """The URL to connect to and the schema in it. The schema is None on sqlite.
+
+        The schema is named after the registry database, so that two registries sharing one
+        physical server (e.g. two test runs against the same container) never collide on
+        the same tenant schema name. For sqlite, a tenant is one file, named after the
+        tenant, in a "tenants" directory next to the registry's own file.
+        """
+        made_url = sqlalchemy.make_url(self._registry_url)
+        dialect = made_url.get_backend_name()
+        suffix = tenant_uuid.replace("-", "")
+        if dialect == "sqlite":
+            return f"sqlite:///{os.path.join(_sqlite_tenants_dir(self._registry_url), f'{suffix}.db')}", None
+        registry_name = made_url.database
+        assert registry_name is not None
+        schema = f"{registry_name}_t_{suffix}"
+        _validate_database_name(schema, dialect)
+        return self._registry_url, schema
+
+    def create(self, tenant_uuid: str) -> str:
+        """Create the empty schema of a tenant. On sqlite, create the directory of its file.
+
+        Returns the URL to record in the registry. It never holds a password.
+        """
+        url, schema = self._locate(tenant_uuid)
+        made_url = sqlalchemy.make_url(url)
+        if schema is None:
+            create_database(url)
+        elif made_url.get_backend_name() == "postgresql":
+            engine = sqlalchemy.create_engine(made_url, isolation_level="AUTOCOMMIT")
+            try:
+                with engine.connect() as conn:
+                    conn.exec_driver_sql(f"CREATE SCHEMA {conn.dialect.identifier_preparer.quote_schema(schema)}")
+            finally:
+                engine.dispose()
+        else:
+            create_database(made_url.set(database=schema).render_as_string(hide_password=False))
+        return made_url.render_as_string(hide_password=True)
+
+    def delete(self, tenant_uuid: str) -> None:
+        """Drop the schema of a tenant with everything in it. On sqlite, forget the engine of its file.
+
+        The connections of the shared engine are not in the schema, so nothing has to be disposed first.
+        """
+        url, schema = self._locate(tenant_uuid)
+        made_url = sqlalchemy.make_url(url)
+        if schema is None:
+            with self._lock:
+                engine = self._files.pop(tenant_uuid, None)
+            if engine is not None:
+                engine.dispose()
+        elif made_url.get_backend_name() == "postgresql":
+            admin = sqlalchemy.create_engine(made_url, isolation_level="AUTOCOMMIT")
+            try:
+                with admin.connect() as conn:
+                    conn.exec_driver_sql(
+                        f"DROP SCHEMA IF EXISTS {conn.dialect.identifier_preparer.quote_schema(schema)} CASCADE"
+                    )
+            finally:
+                admin.dispose()
+        else:
+            drop_database(made_url.set(database=schema).render_as_string(hide_password=False))
+
+    def engine(self, tenant_uuid: str) -> sqlalchemy.Engine:
+        """The engine to use for one tenant. Pass it to `begin` or `abegin`."""
+        url, schema = self._locate(tenant_uuid)
+        if schema is not None:
+            assert self._server is not None
+            return self._server.execution_options(schema_translate_map={None: schema})
+        with self._lock:
+            if tenant_uuid not in self._files:
+                self._files[tenant_uuid] = create_engine(url, echo=self._echo, pool_per_use=True)
+            return self._files[tenant_uuid]
+
+    def migration_engine(self, tenant_uuid: str) -> sqlalchemy.Engine:
+        """An engine whose connections work inside the tenant's schema without qualifying names.
+
+        For Alembic and reflection only. The caller disposes it.
+        Alembic writes its own DDL and does not honor the schema translate map that `engine` uses.
+        Here the connection itself is pointed at the schema.
+        Postgres takes a search path. MySQL takes a default database.
+        """
+        url, schema = self._locate(tenant_uuid)
+        made_url = sqlalchemy.make_url(url)
+        connect_args: dict[str, object] = {}
+        if schema is None:
+            connect_args["autocommit"] = False
+        elif made_url.get_backend_name() == "postgresql":
+            connect_args["options"] = f"-csearch_path={schema}"
+        else:
+            made_url = made_url.set(database=schema)
+        return sqlalchemy.create_engine(made_url, poolclass=sqlalchemy.pool.NullPool, connect_args=connect_args)
+
+    def dispose(self) -> None:
+        with self._lock:
+            engines = list(self._files.values())
+            self._files.clear()
+        for engine in engines:
+            engine.dispose()
+        if self._server is not None:
+            self._server.dispose()
 
 
 def begin(engine: sqlalchemy.Engine, write: bool = False) -> contextlib.AbstractContextManager[sqlalchemy.Connection]:

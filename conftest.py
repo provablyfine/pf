@@ -72,9 +72,9 @@ class DbBackend:
         Schema-agnostic: what schema ends up in it depends on which migration the test
         runs against it (registry or tenant), not on this method.
 
-        For a shared-server backend, this is exactly the create_database/derive_tenant_url
-        machinery that production tenant provisioning uses (see db.py, endpoints/tenant.py):
-        test-side and production code share it rather than each having their own.
+        For a shared-server backend, this is exactly the create_database machinery that
+        production uses for the registry (see db.py, app.py): test-side and production code
+        share it rather than each having their own.
         """
         if self.name == "sqlite":
             return f"sqlite:///{tmp_path / 'tenants.db'}"
@@ -85,6 +85,21 @@ class DbBackend:
         provablyfine.api.db.create_database(url)
         request.addfinalizer(lambda: provablyfine.api.db.drop_database(url))
         return url
+
+    def fresh_tenant(
+        self, request: pytest.FixtureRequest, tmp_path: pathlib.Path
+    ) -> tuple[provablyfine.api.db.TenantDatabases, str]:
+        """A fresh, empty tenant, dropped after the test. Returns the tenants and the UUID of this one.
+
+        On a shared server it is a schema in a fresh registry database, as in production.
+        """
+        tenants = provablyfine.api.db.TenantDatabases(self.fresh_database_url(request, tmp_path))
+        tenant_uuid = secrets.token_hex(16)
+        tenants.create(tenant_uuid)
+        # Finalizers run last in, first out: the tenant goes before the registry database and the pool.
+        request.addfinalizer(tenants.dispose)
+        request.addfinalizer(lambda: tenants.delete(tenant_uuid))
+        return tenants, tenant_uuid
 
 
 @pytest.fixture(scope="session")

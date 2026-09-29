@@ -78,22 +78,21 @@ class _Backtrace:
 
 
 def create(conf: config.Config) -> fastapi.FastAPI:
-    def _bootstrap_databases(registry_engine: sqlalchemy.Engine) -> None:
+    def _bootstrap_databases(registry_engine: sqlalchemy.Engine, tenants: db.TenantDatabases) -> None:
         """Create the registry and root tenant databases on first startup."""
         db.create_database(conf.tenant_registry_url, exist_ok=True)
         if migrate.is_alembic_versioned(conf.tenant_registry_url):
             return
         migrate.create_registry(conf.tenant_registry_url)
-        root_db_url = db.derive_tenant_url(conf.tenant_registry_url, registry_db.ROOT_TENANT_UUID)
-        db.create_database(root_db_url)
-        migrate.create_tenant(root_db_url)
+        root_url = tenants.create(registry_db.ROOT_TENANT_UUID)
+        migrate.create_tenant_tables(tenants, registry_db.ROOT_TENANT_UUID)
         with db.begin(registry_engine, write=True) as registry_conn:
             registry_db.create(registry_conn).tenant.create(
                 uuid=registry_db.ROOT_TENANT_UUID,
                 name="root",
                 display_name="root",
                 owner_id=None,
-                database_url=root_db_url,
+                database_url=root_url,
                 is_enabled=True,
                 is_initialized=False,
                 created_at=int(time.time()),
@@ -102,9 +101,21 @@ def create(conf: config.Config) -> fastapi.FastAPI:
 
     @contextlib.asynccontextmanager
     async def lifespan(app: fastapi.FastAPI):
-        registry_engine = db.create_engine(conf.tenant_registry_url, echo=conf.debug_sql)
+        registry_engine = db.create_engine(
+            conf.tenant_registry_url,
+            echo=conf.debug_sql,
+            pool_size=conf.db_pool_size,
+            max_overflow=conf.db_max_overflow,
+        )
 
-        _bootstrap_databases(registry_engine)
+        tenants = db.TenantDatabases(
+            conf.tenant_registry_url,
+            echo=conf.debug_sql,
+            pool_size=conf.db_pool_size,
+            max_overflow=conf.db_max_overflow,
+        )
+
+        _bootstrap_databases(registry_engine, tenants)
         migrate.upgrade_registry(conf.tenant_registry_url)
 
         kek = conf.load_kek()
@@ -112,7 +123,7 @@ def create(conf: config.Config) -> fastapi.FastAPI:
         app.state.config = conf
         app.state.trusted_keys = jwt_validator.TrustedKeys(f"{conf.base_url}/pf/t", registry_engine)
         app.state.tenant_registry_engine = registry_engine
-        app.state.tenant_engines = {}
+        app.state.tenants = tenants
         app.state.kek = kek
         app.state.debug_store = _InMemoryDebugStore()
         app.state.nonce_store = signature.NonceStore()
@@ -120,9 +131,13 @@ def create(conf: config.Config) -> fastapi.FastAPI:
         with registry_engine.connect() as registry_conn:
             tenant_rows = registry_db.create(registry_conn).tenant.read_all()
         for tenant_row in tenant_rows:
-            migrate.upgrade_tenant(tenant_row.database_url)
+            migrate.upgrade_tenant(tenants, tenant_row.uuid)
 
-        yield
+        try:
+            yield
+        finally:
+            tenants.dispose()
+            registry_engine.dispose()
 
     fastapi_app = fastapi.FastAPI(
         lifespan=lifespan,

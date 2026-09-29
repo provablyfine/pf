@@ -1,5 +1,6 @@
 import logging
 import pathlib
+import threading
 
 import alembic.command
 import alembic.config
@@ -11,40 +12,56 @@ logger = logging.getLogger(__name__)
 
 MIGRATIONS_DIR = pathlib.Path(__file__).parent / "migrations"
 
+# Alembic keeps the state of a running command in module globals, so two commands in one
+# process must not overlap. Requests that create tenants run in threads.
+# On sqlite the registry write lock already serialized them. Postgres and MySQL do not.
+_ALEMBIC_LOCK = threading.Lock()
 
-def _alembic_config(schema: str, url: str) -> alembic.config.Config:
+
+def _alembic_config(scripts: str, registry_url: str, tenant_uuid: str | None = None) -> alembic.config.Config:
+    """`scripts` names the migration directory. `tenant_uuid` names the tenant to migrate, if any."""
     cfg = alembic.config.Config()
-    cfg.set_main_option("script_location", str(MIGRATIONS_DIR / schema))
-    cfg.set_main_option("sqlalchemy.url", url)
+    cfg.set_main_option("script_location", str(MIGRATIONS_DIR / scripts))
+    cfg.set_main_option("sqlalchemy.url", registry_url)
+    if tenant_uuid is not None:
+        cfg.set_main_option("pf.tenant_uuid", tenant_uuid)
     return cfg
 
 
-def _create(metadata: sqlalchemy.MetaData, schema: str, url: str) -> None:
-    engine = db.create_engine(url)
-    with db.begin(engine, write=True) as conn:
-        metadata.create_all(conn)
-    engine.dispose()
-    alembic.command.stamp(_alembic_config(schema=schema, url=url), "head")
+def _stamp_head(scripts: str, registry_url: str, tenant_uuid: str | None = None) -> None:
+    with _ALEMBIC_LOCK:
+        alembic.command.stamp(_alembic_config(scripts, registry_url, tenant_uuid), "head")
 
 
 def create_registry(url: str) -> None:
     logger.info("creating registry database")
-    _create(registry_db.metadata, schema="registry", url=url)
+    engine = db.create_engine(url)
+    try:
+        with db.begin(engine, write=True) as conn:
+            registry_db.metadata.create_all(conn)
+    finally:
+        engine.dispose()
+    _stamp_head("registry", url)
 
 
-def create_tenant(url: str) -> None:
-    logger.info("creating tenant database")
-    _create(app_db.metadata, schema="tenant", url=url)
+def create_tenant_tables(tenants: db.TenantDatabases, tenant_uuid: str) -> None:
+    """Create the tables of a tenant that `tenants.create` made."""
+    logger.info("creating tenant tables")
+    with db.begin(tenants.engine(tenant_uuid), write=True) as conn:
+        app_db.metadata.create_all(conn)
+    _stamp_head("tenant", tenants.registry_url, tenant_uuid)
 
 
 def upgrade_registry(url: str) -> None:
     logger.info("upgrading registry database")
-    alembic.command.upgrade(_alembic_config(schema="registry", url=url), "head")
+    with _ALEMBIC_LOCK:
+        alembic.command.upgrade(_alembic_config("registry", url), "head")
 
 
-def upgrade_tenant(url: str) -> None:
-    logger.info("upgrading tenant database")
-    alembic.command.upgrade(_alembic_config(schema="tenant", url=url), "head")
+def upgrade_tenant(tenants: db.TenantDatabases, tenant_uuid: str) -> None:
+    logger.info("upgrading tenant tables")
+    with _ALEMBIC_LOCK:
+        alembic.command.upgrade(_alembic_config("tenant", tenants.registry_url, tenant_uuid), "head")
 
 
 def is_alembic_versioned(url: str) -> bool:

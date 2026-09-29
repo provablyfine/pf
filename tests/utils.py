@@ -10,7 +10,6 @@ import typing
 
 import jinja2
 import pytest
-import sqlalchemy
 
 import provablyfine.api.db
 import provablyfine.api.registry_db
@@ -26,10 +25,8 @@ def root_tenant_db_path(api: "tests.conftest.Api") -> pathlib.Path:
     rather than hardcoding a filename the server's own naming convention might change.
     """
     config = json.loads((api.log.parent / "config.json").read_text())
-    url = provablyfine.api.db.derive_tenant_url(
-        config["tenant_registry_url"], provablyfine.api.registry_db.ROOT_TENANT_UUID
-    )
-    path = sqlalchemy.make_url(url).database
+    tenants = provablyfine.api.db.TenantDatabases(config["tenant_registry_url"])
+    path = tenants.engine(provablyfine.api.registry_db.ROOT_TENANT_UUID).url.database
     assert path is not None
     return pathlib.Path(path)
 

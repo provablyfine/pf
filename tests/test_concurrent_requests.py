@@ -153,3 +153,19 @@ def test_initialize_creates_the_oidc_signing_key(api, tmp_path) -> None:
     count = conn.execute("SELECT count(*) FROM oidc_key").fetchone()[0]
     conn.close()
     assert count == 2
+
+
+# The same requests with the registry on each database backend chosen by --db-backends.
+# On Postgres and MySQL every tenant is a schema of one shared database and pool.
+
+
+def test_concurrent_tenant_creates_on_every_backend(multi_backend_api) -> None:
+    test_concurrent_tenant_creates_all_succeed(multi_backend_api)
+
+
+def test_same_name_create_has_one_winner_on_every_backend(multi_backend_api) -> None:
+    test_same_name_create_has_one_winner(multi_backend_api)
+
+
+def test_reads_and_writes_at_the_same_time_on_every_backend(multi_backend_api) -> None:
+    test_reads_and_writes_at_the_same_time(multi_backend_api)

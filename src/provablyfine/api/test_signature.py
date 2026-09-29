@@ -17,11 +17,10 @@ import provablyfine_client.signer as client_signer
 import pytest
 import requests
 import requests.structures
-import sqlalchemy
 import starlette.requests
 
 from .. import jwk
-from . import app_db, context, migrate, model, responses, signature
+from . import app_db, context, db, migrate, model, responses, signature
 from .context import ctx
 
 
@@ -161,14 +160,17 @@ def real_app_db(tmp_path: pathlib.Path) -> collections.abc.Iterator[app_db.AppDb
     Exercises the ctx.app_db/ctx.kek-dependent code paths that a plain unit
     test can't reach, without spawning the subprocess-based e2e API server.
     """
-    url = f"sqlite:///{tmp_path / 'tenant.db'}"
-    migrate.create_tenant(url)
-    engine = sqlalchemy.create_engine(url)
-    with engine.connect() as connection:
-        db = app_db.create(connection)
-        kek = cryptography.fernet.Fernet(cryptography.fernet.Fernet.generate_key())
-        with ctx.set_app_db(db), ctx.set_kek(kek), ctx.set_deferred(context.Deferred()):
-            yield db
+    tenants = db.TenantDatabases(f"sqlite:///{tmp_path / 'registry.db'}")
+    tenants.create("tenant")
+    migrate.create_tenant_tables(tenants, "tenant")
+    try:
+        with tenants.engine("tenant").connect() as connection:
+            application_db = app_db.create(connection)
+            kek = cryptography.fernet.Fernet(cryptography.fernet.Fernet.generate_key())
+            with ctx.set_app_db(application_db), ctx.set_kek(kek), ctx.set_deferred(context.Deferred()):
+                yield application_db
+    finally:
+        tenants.dispose()
 
 
 def _seed_identity(name: str = "alice") -> int:

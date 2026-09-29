@@ -1,7 +1,6 @@
 import logging.config
 
 import alembic
-import sqlalchemy
 
 import provablyfine.api.app_db
 import provablyfine.api.db
@@ -60,13 +59,10 @@ def run_migrations_online() -> None:
     """
     url = config.get_main_option("sqlalchemy.url")
     assert url is not None
+    tenant_uuid = config.get_main_option("pf.tenant_uuid")
+    assert tenant_uuid is not None
     is_sqlite = provablyfine.api.db.is_sqlite(url)
-    connectable = sqlalchemy.engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
-        poolclass=sqlalchemy.pool.NullPool,
-        connect_args={"autocommit": False} if is_sqlite else {},
-    )
+    connectable = provablyfine.api.db.TenantDatabases(url).migration_engine(tenant_uuid)
 
     with connectable.connect() as connection:
         alembic.context.configure(

@@ -8,14 +8,23 @@ import alembic.runtime.migration
 import pytest
 import sqlalchemy
 
-from . import app_db, migrate, registry_db
+from . import app_db, db, migrate, registry_db
 
 if typing.TYPE_CHECKING:
     import conftest as root_conftest
 
 
-def _diffs(url: str, metadata: sqlalchemy.MetaData) -> list[object]:
-    engine = sqlalchemy.create_engine(url)
+_TENANT = "0" * 32
+
+
+def _sqlite_tenant(tmp_path: pathlib.Path) -> db.TenantDatabases:
+    """A tenant on sqlite, whose file is next to a registry file in `tmp_path`."""
+    tenants = db.TenantDatabases(f"sqlite:///{tmp_path / 'registry.db'}")
+    tenants.create(_TENANT)
+    return tenants
+
+
+def _diffs(engine: sqlalchemy.Engine, metadata: sqlalchemy.MetaData) -> list[object]:
     with engine.connect() as connection:
         context = alembic.runtime.migration.MigrationContext.configure(connection, opts={"compare_type": True})
         return alembic.autogenerate.compare_metadata(context, metadata)
@@ -24,13 +33,13 @@ def _diffs(url: str, metadata: sqlalchemy.MetaData) -> list[object]:
 def test_registry_migrations_match_model(tmp_path: pathlib.Path) -> None:
     url = f"sqlite:///{tmp_path / 'registry.db'}"
     migrate.upgrade_registry(url)
-    assert _diffs(url, registry_db.metadata) == []
+    assert _diffs(sqlalchemy.create_engine(url), registry_db.metadata) == []
 
 
 def test_tenant_migrations_match_model(tmp_path: pathlib.Path) -> None:
-    url = f"sqlite:///{tmp_path / 'tenant.db'}"
-    migrate.upgrade_tenant(url)
-    assert _diffs(url, app_db.metadata) == []
+    tenants = _sqlite_tenant(tmp_path)
+    migrate.upgrade_tenant(tenants, _TENANT)
+    assert _diffs(tenants.migration_engine(_TENANT), app_db.metadata) == []
 
 
 def test_registry_creation_matches_model(
@@ -47,16 +56,16 @@ def test_registry_creation_matches_model(
     """
     url = db_backend.fresh_database_url(request, tmp_path)
     migrate.create_registry(url)
-    assert _diffs(url, registry_db.metadata) == []
+    assert _diffs(sqlalchemy.create_engine(url), registry_db.metadata) == []
 
 
 def test_tenant_creation_matches_model(
     request: pytest.FixtureRequest, tmp_path: pathlib.Path, db_backend: "root_conftest.DbBackend"
 ) -> None:
     """Like test_registry_creation_matches_model, for a new tenant database."""
-    url = db_backend.fresh_database_url(request, tmp_path)
-    migrate.create_tenant(url)
-    assert _diffs(url, app_db.metadata) == []
+    tenants, tenant_uuid = db_backend.fresh_tenant(request, tmp_path)
+    migrate.create_tenant_tables(tenants, tenant_uuid)
+    assert _diffs(tenants.migration_engine(tenant_uuid), app_db.metadata) == []
 
 
 # The revision just before the ssh grant capability model.
@@ -70,8 +79,8 @@ def _legacy(type: str, permission: dict[str, object]) -> dict[str, object]:
 
 
 def test_tenant_migration_upcasts_ssh_grants(tmp_path: pathlib.Path) -> None:
-    url = f"sqlite:///{tmp_path / 'tenant.db'}"
-    config = migrate._alembic_config(schema="tenant", url=url)
+    tenants = _sqlite_tenant(tmp_path)
+    config = migrate._alembic_config("tenant", tenants.registry_url, _TENANT)
     alembic.command.upgrade(config, _BEFORE_SSH_GRANT)
 
     tag_grant = {"type": "tag", "filter": {"id": None}, "permission": {"create": True, "read": True, "delete": True}}
@@ -87,7 +96,7 @@ def test_tenant_migration_upcasts_ssh_grants(tmp_path: pathlib.Path) -> None:
         # Denotes no atoms at all: the migration drops it.
         _legacy("ssh-command", {"username_list": ["root"], "command_list": []}),
     ]
-    engine = sqlalchemy.create_engine(url)
+    engine = tenants.engine(_TENANT)
     with engine.begin() as connection:
         connection.execute(
             sqlalchemy.text("INSERT INTO role (id, name, description, grant_list) VALUES (1, 'r', '', :g)"),
@@ -110,7 +119,7 @@ def test_tenant_migration_upcasts_ssh_grants(tmp_path: pathlib.Path) -> None:
             {"d": json.dumps([])},
         )
 
-    migrate.upgrade_tenant(url)
+    migrate.upgrade_tenant(tenants, _TENANT)
 
     with engine.connect() as connection:
         grant_list = json.loads(connection.execute(sqlalchemy.text("SELECT grant_list FROM role")).scalar_one())
@@ -154,13 +163,13 @@ def _ssh(permission: dict[str, object]) -> dict[str, object]:
 
 
 def test_tenant_migration_adds_max_session_ttl(tmp_path: pathlib.Path) -> None:
-    url = f"sqlite:///{tmp_path / 'tenant.db'}"
-    config = migrate._alembic_config(schema="tenant", url=url)
+    tenants = _sqlite_tenant(tmp_path)
+    config = migrate._alembic_config("tenant", tenants.registry_url, _TENANT)
     alembic.command.upgrade(config, _BEFORE_MAX_SESSION_TTL)
 
     tag_grant = {"type": "tag", "filter": {"id": None}, "permission": {"create": True, "read": True, "delete": True}}
     three_key = {"username_list": ["root"], "capability_list": ["shell"], "command_list": []}
-    engine = sqlalchemy.create_engine(url)
+    engine = tenants.engine(_TENANT)
     with engine.begin() as connection:
         connection.execute(
             sqlalchemy.text("INSERT INTO role (id, name, description, grant_list) VALUES (1, 'r', '', :g)"),
@@ -180,7 +189,7 @@ def test_tenant_migration_adds_max_session_ttl(tmp_path: pathlib.Path) -> None:
             {"d": json.dumps([])},
         )
 
-    migrate.upgrade_tenant(url)
+    migrate.upgrade_tenant(tenants, _TENANT)
 
     with engine.connect() as connection:
         grant_list = json.loads(connection.execute(sqlalchemy.text("SELECT grant_list FROM role")).scalar_one())
@@ -201,14 +210,13 @@ def test_tenant_migration_adds_max_session_ttl(tmp_path: pathlib.Path) -> None:
     assert empty_ceiling is None
 
 
-def _tables_missing_autoincrement_ddl(url: str, metadata: sqlalchemy.MetaData) -> list[str]:
+def _tables_missing_autoincrement_ddl(engine: sqlalchemy.Engine, metadata: sqlalchemy.MetaData) -> list[str]:
     """Find tables declared with sqlite_autoincrement=True whose live DDL lacks AUTOINCREMENT.
 
     compare_metadata() cannot see this: sqlite_autoincrement is a dialect-level table
     construction option, not a column/constraint/index difference, so a batch_alter_table
     rebuild that forgets to re-pass it produces a schema that still diffs clean.
     """
-    engine = sqlalchemy.create_engine(url)
     missing = []
     with engine.connect() as connection:
         for table in metadata.tables.values():
@@ -226,18 +234,18 @@ def _tables_missing_autoincrement_ddl(url: str, metadata: sqlalchemy.MetaData) -
 def test_registry_autoincrement_preserved(tmp_path: pathlib.Path) -> None:
     url = f"sqlite:///{tmp_path / 'registry.db'}"
     migrate.upgrade_registry(url)
-    assert _tables_missing_autoincrement_ddl(url, registry_db.metadata) == []
+    assert _tables_missing_autoincrement_ddl(sqlalchemy.create_engine(url), registry_db.metadata) == []
 
 
 def test_tenant_autoincrement_preserved(tmp_path: pathlib.Path) -> None:
-    url = f"sqlite:///{tmp_path / 'tenant.db'}"
-    migrate.upgrade_tenant(url)
-    assert _tables_missing_autoincrement_ddl(url, app_db.metadata) == []
+    tenants = _sqlite_tenant(tmp_path)
+    migrate.upgrade_tenant(tenants, _TENANT)
+    assert _tables_missing_autoincrement_ddl(tenants.engine(_TENANT), app_db.metadata) == []
 
 
 def test_registry_migration_backfills_tenant_uuid(tmp_path: pathlib.Path) -> None:
     url = f"sqlite:///{tmp_path / 'registry.db'}"
-    config = migrate._alembic_config(schema="registry", url=url)
+    config = migrate._alembic_config("registry", url)
     alembic.command.upgrade(config, "6356a7f48b37")
 
     engine = sqlalchemy.create_engine(url)
@@ -266,11 +274,11 @@ def test_tenant_migration_nulls_out_unrestricted_bastions(tmp_path: pathlib.Path
     visibility across the upgrade. A bastion with a non-empty tag_id_list is
     left untouched.
     """
-    url = f"sqlite:///{tmp_path / 'tenant.db'}"
-    config = migrate._alembic_config(schema="tenant", url=url)
+    tenants = _sqlite_tenant(tmp_path)
+    config = migrate._alembic_config("tenant", tenants.registry_url, _TENANT)
     alembic.command.upgrade(config, "c8d1e4f7a2b9")
 
-    engine = sqlalchemy.create_engine(url)
+    engine = tenants.engine(_TENANT)
     with engine.begin() as connection:
         connection.execute(
             sqlalchemy.text(
@@ -285,7 +293,7 @@ def test_tenant_migration_nulls_out_unrestricted_bastions(tmp_path: pathlib.Path
             )
         )
 
-    migrate.upgrade_tenant(url)
+    migrate.upgrade_tenant(tenants, _TENANT)
 
     with engine.connect() as connection:
         tag_id_lists = dict(
