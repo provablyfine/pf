@@ -43,9 +43,10 @@ def run_cram(filename: str, env: dict[str, str], clear_env: list[str] | None = N
     for var in ("TMPDIR", "TEMP", "TMP"):
         environ[var] = our_tmp
     environ.update(env)
-    for var in clear_env:
-        if var in environ:
-            del environ[env]
+    if clear_env is not None:
+        for var in clear_env:
+            if var in environ:
+                del environ[env]
     try:
         if filename.endswith(".t.jinja"):
             directory = os.path.dirname(filename)
