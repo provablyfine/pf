@@ -8,6 +8,7 @@ import logging
 import os.path
 import typing
 
+import cryptography.exceptions
 import cryptography.hazmat.primitives.asymmetric.ed25519
 import provablyfine_client as pfc
 import requests
@@ -73,8 +74,29 @@ class AgentSigner(PrivateSigner):
             for identity in ssh_agent.list_identities():
                 if identity.public_key.match_ssh_fingerprint(fingerprint):
                     assert identity.public_key.type == jwk.KeyType.ED25519
-                    return ssh_agent.sign(identity, data, 0)
+                    signature = ssh_agent.sign(identity, data, 0)
+                    self._check_signature(data, signature)
+                    return signature
         raise pfc.exceptions.UI(f"Unable to find requested key={fingerprint}")
+
+    def _check_signature(self, data: bytes, signature: bytes) -> None:
+        """Check the agent's answer before trusting it."""
+        public_key = self._key.to_crypto()
+        assert isinstance(public_key, cryptography.hazmat.primitives.asymmetric.ed25519.Ed25519PublicKey)
+        try:
+            public_key.verify(signature, data)
+        except (cryptography.exceptions.InvalidSignature, ValueError) as e:
+            fingerprint = self._key.ssh_fingerprint()
+            if self._prefix == "session":
+                raise pfc.exceptions.KeyExpired(
+                    "session",
+                    f"The signing oracle for session key {fingerprint} produced an invalid signature. "
+                    "The oracle may be buggy or compromised.",
+                ) from e
+            raise pfc.exceptions.UI(
+                f"Your ssh agent produced an invalid signature for account key {fingerprint}. "
+                "The agent may be buggy or compromised; check what SSH_AUTH_SOCK points to."
+            ) from e
 
 
 def hmac_signer(prefix: str, key: str) -> pfc.Signer:

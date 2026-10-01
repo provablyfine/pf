@@ -265,8 +265,9 @@ def do_main(binary_name: str, args: argparse.Namespace) -> None:
     try:
         args.func(args)
         exitcode = 0
-    except pfc.exceptions.KeyExpired:
-        sys.stderr.write(f'Your session has expired. You must "{binary_name} login".\n')
+    except pfc.exceptions.KeyExpired as e:
+        reason = str(e) or "Your session has expired."
+        sys.stderr.write(f'{reason} You must "{binary_name} login".\n')
         exitcode = 2
     except pfc.exceptions.UI as e:
         sys.stderr.write(f"{e!s}\n")

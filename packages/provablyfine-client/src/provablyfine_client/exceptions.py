@@ -29,7 +29,13 @@ class SessionExpired(UI):
 
 class KeyExpired(Exception):
     """The account or session key has expired. Not a `UI` subclass: the CLI
-    top-level handler rewrites it into login guidance."""
+    top-level handler rewrites it into login guidance.
 
-    def __init__(self, key_type: str):
+    The optional `message` says why the key is unusable when that is not
+    simple expiry, e.g. the signing oracle behind it misbehaved. Top-level
+    handlers show it verbatim before the login guidance.
+    """
+
+    def __init__(self, key_type: str, message: str | None = None):
+        super().__init__(message or "")
         self.key_type = key_type
