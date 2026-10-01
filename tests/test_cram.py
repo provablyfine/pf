@@ -175,4 +175,8 @@ def test_password_protected_key_create(api, tmp_path: pathlib.Path):
 def test_tmpdir_too_long(api):
     long = os.path.join(tempfile.gettempdir(), "pf-tmpdir-guard-" + "x" * 80)
     os.makedirs(long, exist_ok=True)
-    utils.run_cram("tests/oracle-tmpdir-too-long.t", {"API_PORT": str(api.port), "TMPDIR": long})
+    utils.run_cram(
+        "tests/oracle-tmpdir-too-long.t",
+        {"API_PORT": str(api.port), "TMPDIR": long},
+        clear_env=["XDG_RUNTIME_DIR"]
+    )

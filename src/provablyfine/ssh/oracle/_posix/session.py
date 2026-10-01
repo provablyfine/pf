@@ -50,6 +50,18 @@ from . import peercred, server, spawn
 # AF_UNIX sun_path is 104 bytes on macOS (108 on Linux). Use the tighter one.
 _SUN_PATH_MAX = 104
 
+# Below this, there's no room left for the "pf-so-<16 hex chars>/s" suffix
+# (~24 bytes) a tempdir needs to append
+_MAX_TEMPDIR_LEN = _SUN_PATH_MAX - 30
+
+
+def _tempdir() -> str:
+    """Pick the directory the socket's subdirectory is created under"""
+    runtime_dir = os.environ.get("XDG_RUNTIME_DIR")
+    if runtime_dir and len(runtime_dir) < _MAX_TEMPDIR_LEN:
+        return runtime_dir
+    return tempfile.gettempdir()
+
 
 def socket_path(parent_pid: int, parent_starttime: int, directory_url: str) -> str:
     """The socket path is derived from the parent process's PID and start time,
@@ -58,19 +70,13 @@ def socket_path(parent_pid: int, parent_starttime: int, directory_url: str) -> s
     request bound for another, and process identity alone can't tell them
     apart when the same shell switches contexts via `pf ctx`.
 
-    The requirement is otherwise merely to be deterministic. no security issue
-    here since any user would need to pass the access control check
-    implemented in the oracle.
-
-    The name must stay short on purpose: an AF_UNIX socket path is limited to
-    `_SUN_PATH_MAX` bytes, and the appended subdirectory name is ~24 bytes, so a
-    tempdir that leaves no room would make bind() fail with a cryptic "AF_UNIX
-    path too long". A rough upper-bound check here turns a misconfigured $TMPDIR
-    into a clear error instead.
+    Predictability of the name is otherwise not itself a problem: a peer
+    still has to pass the access control check implemented in the oracle to
+    get anything signed.
     """
 
-    tempdir = tempfile.gettempdir()
-    if len(tempdir) >= _SUN_PATH_MAX - 30:
+    tempdir = _tempdir()
+    if len(tempdir) >= _MAX_TEMPDIR_LEN:
         raise exceptions.InvalidConfiguration(
             f"$TMPDIR is too long to hold a pf session-oracle socket ({tempdir!r}); "
             "unset it or point it at a shorter path"

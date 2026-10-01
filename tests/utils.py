@@ -31,7 +31,7 @@ def root_tenant_db_path(api: "tests.conftest.Api") -> pathlib.Path:
     return pathlib.Path(path)
 
 
-def run_cram(filename: str, env: dict[str, str]) -> None:
+def run_cram(filename: str, env: dict[str, str], clear_env: list[str] | None = None) -> None:
     """Run a cram `.t` script."""
     if sys.platform == "win32":
         pytest.skip("cram is posix only. Not supported on Windows; Windows coverage uses tests/cli.py")
@@ -43,6 +43,9 @@ def run_cram(filename: str, env: dict[str, str]) -> None:
     for var in ("TMPDIR", "TEMP", "TMP"):
         environ[var] = our_tmp
     environ.update(env)
+    for var in clear_env:
+        if var in environ:
+            del environ[env]
     try:
         if filename.endswith(".t.jinja"):
             directory = os.path.dirname(filename)

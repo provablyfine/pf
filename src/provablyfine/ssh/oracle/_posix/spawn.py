@@ -41,6 +41,7 @@ from __future__ import annotations
 import errno
 import os
 import socket
+import stat
 import subprocess
 import sys
 import time
@@ -67,13 +68,40 @@ def require_platform_supported() -> None:
         raise exceptions.Error("The peer-credential signing oracle only supports Linux and macOS")
 
 
+def _ensure_private_directory(directory: str) -> None:
+    """Create `directory` mode 0700, or confirm an already-existing one is
+    genuinely ours before reusing it.
+    """
+    try:
+        os.mkdir(directory, 0o700)
+        return
+    except FileExistsError:
+        pass
+    try:
+        st = os.lstat(directory)
+    except OSError as e:
+        raise exceptions.InvalidConfiguration(f"Unable to inspect {directory}: {e}") from e
+    if not stat.S_ISDIR(st.st_mode):
+        raise exceptions.InvalidConfiguration(
+            f"{directory} already exists and is not a directory. Remove it, or point $TMPDIR or "
+            "$XDG_RUNTIME_DIR elsewhere, and try again."
+        )
+    if st.st_uid != os.geteuid():
+        raise exceptions.InvalidConfiguration(
+            f"{directory} already exists and belongs to another user, not you. This usually means "
+            "another local account created it first; pf refuses to reuse a directory it doesn't own. "
+            "Ask that user to remove it, or point $TMPDIR or $XDG_RUNTIME_DIR at a directory only you "
+            "can write to, and try again."
+        )
+    if stat.S_IMODE(st.st_mode) != 0o700:
+        os.chmod(directory, 0o700)
+
+
 def bind_socket(path: str, *, replace: bool = False) -> socket.socket:
     """Create, bind, and listen() a UNIX socket at `path`.
 
-    `path`'s parent directory is created 0700 if missing; the socket file
-    itself is 0600 -- both belt-and-braces behind the actual security
-    boundary, which is peer-credential verification at accept(), not
-    filesystem permissions.
+    `path`'s parent directory is created 0700 if missing, or confirmed to
+    already be ours the socket file itself is 0600.
 
     If `path` already exists, behavior depends on `replace`:
     - `replace=False` (connection key: a fresh, per-invocation random path --
@@ -92,8 +120,7 @@ def bind_socket(path: str, *, replace: bool = False) -> socket.socket:
       the new session key.
     """
     directory = os.path.dirname(path)
-    os.makedirs(directory, exist_ok=True, mode=0o700)
-    os.chmod(directory, 0o700)
+    _ensure_private_directory(directory)
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     try:
         sock.bind(path)
