@@ -12,13 +12,14 @@ import ctypes.wintypes
 import dataclasses
 import typing
 
-from ... import exceptions
+from ... import _win32_bindings, exceptions
 
-_k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+_k32 = _win32_bindings.k32
 _adv = ctypes.WinDLL("advapi32", use_last_error=True)
 _nt = ctypes.WinDLL("ntdll")
 
-INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
+SECURITY_ATTRIBUTES = _win32_bindings.SECURITY_ATTRIBUTES
+INVALID_HANDLE_VALUE = _win32_bindings.INVALID_HANDLE_VALUE
 
 PIPE_ACCESS_DUPLEX = 0x00000003
 FILE_FLAG_FIRST_PIPE_INSTANCE = 0x00080000
@@ -58,10 +59,10 @@ EXTENDED_STARTUPINFO_PRESENT = 0x00080000
 STARTF_USESTDHANDLES = 0x00000100
 PROC_THREAD_ATTRIBUTE_HANDLE_LIST = 0x00020002
 
-GENERIC_READ = 0x80000000
-GENERIC_WRITE = 0x40000000
+GENERIC_READ = _win32_bindings.GENERIC_READ
+GENERIC_WRITE = _win32_bindings.GENERIC_WRITE
 FILE_SHARE_ALL = 0x00000007
-OPEN_EXISTING = 3
+OPEN_EXISTING = _win32_bindings.OPEN_EXISTING
 
 # `WerSetFlags` bits, so a crash can't hand WerFault a reason to write a
 # user-readable dump of our address space (HKCU `LocalDumps` included).
@@ -74,14 +75,6 @@ _TOKEN_ADJUST_PRIVILEGES = 0x0020
 _TOKEN_USER_CLASS = 1
 _TOKEN_LOGON_SID_CLASS = 28
 _SDDL_REVISION_1 = 1
-
-
-class SECURITY_ATTRIBUTES(ctypes.Structure):
-    _fields_ = (
-        ("nLength", ctypes.wintypes.DWORD),
-        ("lpSecurityDescriptor", ctypes.wintypes.LPVOID),
-        ("bInheritHandle", ctypes.wintypes.BOOL),
-    )
 
 
 class _SidAndAttributes(ctypes.Structure):
@@ -183,8 +176,6 @@ _k32.ConnectNamedPipe.argtypes = (ctypes.wintypes.HANDLE, ctypes.wintypes.LPVOID
 _k32.ConnectNamedPipe.restype = ctypes.wintypes.BOOL
 _k32.DisconnectNamedPipe.argtypes = (ctypes.wintypes.HANDLE,)
 _k32.DisconnectNamedPipe.restype = ctypes.wintypes.BOOL
-_k32.WaitNamedPipeW.argtypes = (ctypes.wintypes.LPCWSTR, ctypes.wintypes.DWORD)
-_k32.WaitNamedPipeW.restype = ctypes.wintypes.BOOL
 _k32.GetNamedPipeClientProcessId.argtypes = (ctypes.wintypes.HANDLE, ctypes.POINTER(ctypes.wintypes.ULONG))
 _k32.GetNamedPipeClientProcessId.restype = ctypes.wintypes.BOOL
 _k32.ReadFile.argtypes = (
@@ -247,16 +238,6 @@ _k32.CreatePipe.argtypes = (
     ctypes.wintypes.DWORD,
 )
 _k32.CreatePipe.restype = ctypes.wintypes.BOOL
-_k32.CreateFileW.argtypes = (
-    ctypes.wintypes.LPCWSTR,
-    ctypes.wintypes.DWORD,
-    ctypes.wintypes.DWORD,
-    ctypes.POINTER(SECURITY_ATTRIBUTES),
-    ctypes.wintypes.DWORD,
-    ctypes.wintypes.DWORD,
-    ctypes.wintypes.HANDLE,
-)
-_k32.CreateFileW.restype = ctypes.wintypes.HANDLE
 _k32.InitializeProcThreadAttributeList.argtypes = (
     ctypes.wintypes.LPVOID,
     ctypes.wintypes.DWORD,
@@ -690,16 +671,6 @@ def named_pipe_exists(name: str) -> bool:
     if _k32.WaitNamedPipeW(name, 1):
         return True
     return ctypes.get_last_error() != ERROR_FILE_NOT_FOUND
-
-
-def wait_named_pipe(name: str, timeout_ms: int) -> bool:
-    """Block until an instance of the pipe `name` is free to connect to.
-
-    Returns False if there is no such pipe, or if none became free within
-    `timeout_ms`. A timeout of 0 would mean "the pipe's default", so the
-    smallest wait is 1ms.
-    """
-    return bool(_k32.WaitNamedPipeW(name, max(1, timeout_ms)))
 
 
 def named_pipe_client_pid(handle: int) -> int:
