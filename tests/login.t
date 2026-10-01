@@ -24,3 +24,8 @@ No explicit --session-key and no real ssh-agent
 Verify subsequent command works with the oracle-backed session key
   $ pfa -c config.json auth list -q
   1
+
+Login via sudo is rejected
+  $ env SUDO_USER=root SUDO_UID=0 pf -c config.json login
+  Cannot login via sudo. Log in as your own user, without sudo.
+  [2]

@@ -19,6 +19,18 @@ def has_valid_session(c: client.Config) -> bool:
     return browser_login.has_valid_session(c)
 
 
+def _reject_sudo() -> None:
+    """Refuse to log in under sudo.
+
+    A login started by sudo spawns a session oracle that dies when sudo
+    returns, so the session it saves can never be used. On systems where
+    sudo keeps the caller's HOME, it also overwrites the user's config
+    file with a root-owned one. There is no valid use for this.
+    """
+    if "SUDO_USER" in os.environ or "SUDO_UID" in os.environ:
+        raise pfc.exceptions.UI("Cannot login via sudo. Log in as your own user, without sudo.")
+
+
 def _select_role(
     roles: list[pfc.schemas.LoginRoleInfo],
     session_client: pfc.SessionClient,
@@ -150,6 +162,7 @@ def login(
     role: str | None = None,
 ) -> None:
     """Perform login based on server auth config. Mutates c with new session key fields."""
+    _reject_sudo()
     auth_public = sc.public().get_public_auth(auth_name, "cli")
     match auth_public.config.type:
         case "http_sig":
