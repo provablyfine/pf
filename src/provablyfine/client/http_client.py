@@ -142,7 +142,7 @@ def _lookup_agent_identity(fingerprint: str, path: str | None) -> jwk.Public | N
     """
     with ssh.agent.Client(path) as ssh_agent:
         for identity in ssh_agent.list_identities():
-            if identity.comment == fingerprint or identity.public_key.match_ssh_fingerprint(fingerprint):
+            if identity.public_key.match_ssh_fingerprint(fingerprint):
                 if identity.public_key.type != jwk.KeyType.ED25519:
                     raise pfc.exceptions.UI(f"Unsupported: {identity.public_key.type}")
                 return identity.public_key
