@@ -1,35 +1,18 @@
 """Kernel-verified peer-process identity for the oracle's UNIX-socket peers,
 on macOS.
 
-Neither of Linux's load-bearing primitives exists here (see `_linux.py`'s
-module docstring), but macOS has its own kernel-verified equivalents for
-every fact this package needs:
+- `LOCAL_PEERTOKEN` under `SOL_LOCAL` returns the connecting
+  peer's Mach audit token in one `getsockopt()` call both its real pid
+  and its BSM audit session id from `libbsm`.
 
-- `LOCAL_PEERTOKEN` under `SOL_LOCAL` (`<sys/un.h>`) returns the connecting
-  peer's Mach audit token in one `getsockopt()` call -- both its real pid
-  (`audit_token_to_pid()`) and its BSM audit session id
-  (`audit_token_to_asid()`), from `libbsm`. This is actually *tighter* than
-  Linux here: the asid arrives attributed by the kernel on the socket
-  itself, with no equivalent of `_linux.py`'s "re-read /proc/<pid>/sessionid
-  by raw pid" TOCTOU gap.
-- `libproc`'s `proc_pidinfo(PROC_PIDTBSDINFO)` (`<libproc.h>`,
-  `<sys/proc_info.h>`) gives a process's parent pid, controlling-tty device,
-  and start time in one call -- the equivalents of `/proc/<pid>/status`'s
-  PPid, `/proc/<pid>/stat` fields 7 and 22.
-- `getpeereid()` (libc) is the client's way to ask the same question the audit
-  token answers for the server. `LOCAL_PEERTOKEN` fails with `EINVAL` when a
-  client reads it about a real oracle, so the uid check cannot share the token
-  read. See `peer_user_id`.
+- `libproc`'s `proc_pidinfo(PROC_PIDTBSDINFO)` gives a process's parent
+  pid, controlling-tty device, and start time in one call
+
+- `getpeereid()` is the client's way to ask the same question the audit
+  token answers for the server.
+
 - `kqueue`'s `EVFILT_PROC`/`NOTE_EXIT` gives a select()-able fd that becomes
-  readable the instant a pinned pid exits -- the equivalent of a Linux
-  pidfd's poll behavior (verified empirically: level-triggered while the
-  exit event sits undrained in the queue, exactly like a pidfd). Unlike a
-  pidfd, though, it is *not* a comparable process identity by itself and
-  does *not* survive fork/exec (verified empirically: a kqueue fd inherited
-  via `pass_fds` is dead -- `EBADF` -- in the child). So an `Anchor` here
-  pairs the watch fd with a separately-verified `(pid, start_key)` identity,
-  and a spawned oracle subprocess re-registers its own watch from scratch
-  (see `reconstruct_anchor()`) rather than inheriting one.
+  readable the instant a pinned pid exits.
 """
 
 from __future__ import annotations
@@ -197,11 +180,6 @@ def _peer_audit_token(conn: socket.socket) -> _AuditToken:
 def peer_identity(conn: socket.socket) -> PeerIdentity:
     """Kernel-verified (pid, start_key, asid) for the process on the other
     end of `conn`.
-
-    pid and asid come from one `LOCAL_PEERTOKEN` read of the peer's Mach
-    audit token; start_key is a second, immediately-following `proc_pidinfo`
-    call by that pid -- the same tight, accepted TOCTOU window `_linux.py`
-    documents for its own SO_PEERCRED -> pidfd_open gap.
     """
     token = _peer_audit_token(conn)
     pid = _libbsm.audit_token_to_pid(token)
@@ -220,14 +198,7 @@ def peer_user_id(conn: socket.socket) -> int:
     `getpeereid()`, deliberately not the `LOCAL_PEERTOKEN` audit token
     `peer_identity()` reads. That option answers in one direction and not the
     other: from an oracle to its peer it works, but from a client to a real
-    oracle it fails with `EINVAL`, verified against an oracle spawned by
-    `pf login` on macOS 26.6. So the token cannot be this check's source, and
-    the kernel-issued uid has to come from the call that was always meant to
-    report it.
-
-    `LOCAL_PEERCRED`'s xucred carries the same uid (word 1 of the buffer, at
-    offset 4) and works from both ends, but its layout is version-dependent and
-    it reports no gid, so the libc wrapper is the better choice.
+    oracle it fails with `EINVAL`.
     """
     euid, _egid = _getpeereid(conn)
     return euid
@@ -270,16 +241,10 @@ def _self_audit_session_id() -> int | None:
 def parent_session_id(_pid: int) -> int | None:
     """The BSM audit session id session.py should pin as the anchor's.
 
-    Unlike Linux's `/proc/<pid>/sessionid`, an arbitrary pid's asid cannot be
-    read unprivileged on Darwin: `auditon(A_GETPINFO_ADDR)` returns EPERM for
-    any pid but the caller's own (verified empirically). So this reads *our
-    own* asid instead of `_pid`'s (the parent's) -- correct because a BSM
-    asid is inherited across fork and unchanged unless a process explicitly
-    calls `setaudit_addr()`, which a login shell spawning `pf login` does
-    not, so `pf login`'s own asid equals its parent's (verified empirically:
-    same value from `getaudit_addr()` in parent and child across a plain
-    fork). `_pid` is accepted anyway to keep this call-compatible with
-    `_linux.py`'s by-pid version.
+    This reads *our own* asid instead of `_pid`'s (the parent's). It is
+    correct because a BSM asid is inherited across fork and unchanged
+    unless a process explicitly calls `setaudit_addr()`, which a login
+    shell spawning `pf login` does not
     """
     return _self_audit_session_id()
 
@@ -291,12 +256,7 @@ def parent_tty_dev(pid: int) -> int | None:
 
 
 def parent_is_launcher() -> bool:
-    """True if our immediate parent is a known dev launcher (uv/uvx/python).
-
-    Best-effort: any failure to read the parent's comm (parent already gone,
-    a permission/EPERM) is False -- "no warning" -- never an error. See
-    `is_launcher_name`.
-    """
+    """True if our immediate parent is a known dev launcher (uv/uvx/python)."""
     try:
         return _linux.is_launcher_name(_bsdinfo(os.getppid()).pbi_comm.decode())
     except (OSError, exceptions.Error):
@@ -311,8 +271,7 @@ def is_descendant_of(pid: int, anchor: Anchor, *, max_depth: int = 64) -> bool:
     else happens with that pid -- narrowing (not eliminating) the window for
     a recycled pid to be substituted in underneath us; a false accept would
     additionally require the recycled process to coincidentally reuse the
-    exact `start_key` of the real anchor, judged acceptable for the same
-    reason `_linux.py`'s equivalent gap is.
+    exact `start_key` of the real anchor.
 
     Does not check `pid` itself against the anchor -- callers that want
     "anchor or a descendant of it" should check same_process() separately
@@ -320,12 +279,7 @@ def is_descendant_of(pid: int, anchor: Anchor, *, max_depth: int = 64) -> bool:
 
     Unlike `/proc`, `proc_pidinfo()` raises PermissionError (not just
     ProcessLookupError) for a pid owned by a different user -- e.g. the walk
-    crossing into a root-owned session leader on the way to launchd. Treated
-    the same as the walk losing the trail: verified empirically that
-    `_linux.py`'s equivalent walk keeps going all the way to pid 1 regardless
-    of ownership (procfs's PPid field is world-readable), so this is a real
-    platform difference, not a bug to route around -- an ancestor we cannot
-    positively identify must not be treated as a match, fail closed.
+    crossing into a root-owned session leader on the way to launchd.
     """
     current = pid
     for _ in range(max_depth):
@@ -369,18 +323,16 @@ def open_anchor(pid: int) -> Anchor:
 
 
 def close_anchor(anchor: Anchor) -> None:
-    """The kqueue watch never crosses to the child (`anchor_extra_fds()`
-    returns none for Darwin, unlike Linux's pidfd) -- the parent's own copy
+    """The kqueue watch never crosses to the child: the parent's own copy
     is dead weight once the child has re-registered its own via
     `reconstruct_anchor()`, so release it here."""
     anchor.kq.close()
 
 
 def anchor_extra_fds(_anchor: Anchor) -> tuple[int, ...]:
-    """A kqueue fd does not survive fork/exec (verified empirically), so
-    nothing rides along via `pass_fds` for a Darwin anchor -- the spawned
-    child re-registers its own watch instead, from the (pid, start_key) in
-    `anchor_spawn_token()`'s argv token. See spawn.py."""
+    """A kqueue fd does not survive fork/exec, so
+    nothing rides along via `pass_fds` for a Darwin anchor.
+    """
     return ()
 
 
@@ -391,14 +343,23 @@ def anchor_spawn_token(anchor: Anchor, extra_fds: tuple[int, ...]) -> str:
 
 def reconstruct_anchor(token: str) -> Anchor:
     """Rebuild the `Anchor` a spawning process encoded with
-    `anchor_spawn_token()`, from inside the spawned child -- see
-    _runner.py. Registers a fresh watch on `pid` and then verifies its
-    start_key still matches: if the pid had been continuously held by the
-    same process from the spawner's read up to this registration (true
-    whenever the anchor process is still alive, since pids aren't recycled
-    out from under a live process), the watch is provably on the right
-    process. Reversed -- verify then watch -- would let a pid recycled in
-    between silently end up watched instead."""
+    `anchor_spawn_token()`, from inside the spawned child.
+
+    The token is only two numbers, so the child checks them against the
+    kernel before trusting them. First it asks the kernel to signal it when
+    `pid` exits. A `pid` that is already dead fails that step, so from then
+    on no exit of it can be missed.
+
+    Then it reads the start time of `pid` and compares it with the one in
+    the token. The kernel hands a pid out again only after the old owner is
+    gone, and the new owner gets a new start time. So when the two start
+    times match, the process under watch is the exact process instance the
+    parent pinned.
+
+    If it dies later, the watch fires. If its pid had already been reused,
+    the start times differ and pinning fails. There is no path where the
+    anchor silently becomes a different process.
+    """
     kind, pid_str, start_key_str = token.split(":", 2)
     assert kind == "pidstart", f"unexpected anchor token kind on Darwin: {kind!r}"
     return _pin(int(pid_str), expected_start_key=int(start_key_str))

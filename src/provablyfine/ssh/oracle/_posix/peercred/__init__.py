@@ -3,10 +3,6 @@
 Pure, server-independent primitives, no socket-protocol knowledge -- just
 "who is on the other end of this connection, and is it who we think it is."
 
-The oracle uses these on every accepted connection, to decide who may ask for a
-signature. The client uses `peer_user_id()` on a connection it made itself, to
-decide whether it is really talking to its own oracle.
-
 Dispatches to `_linux.py` or `_darwin.py` below, which export identical
 names for identical purposes -- see their module docstrings for the
 platform-specific primitives each is built on. Any other platform gets

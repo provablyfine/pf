@@ -90,13 +90,7 @@ class _FakeAgent:
 
 @pytest.fixture
 def agent_path() -> typing.Generator[str]:
-    """A directory short enough to hold an AF_UNIX socket.
-
-    Not `tmp_path`: pytest's own directory is long on macOS
-    (`/var/folders/.../pytest-N/test_name0/`), and `agent.sock` appended to it
-    can pass `sun_path`'s 104 bytes, so `bind()` fails before the test starts.
-    Same reason `session._tempdir` prefers `$XDG_RUNTIME_DIR`.
-    """
+    """A directory short enough to hold an AF_UNIX socket"""
     directory = tempfile.mkdtemp(prefix="pf-fake-agent-", dir="/tmp")
     try:
         yield os.path.join(directory, "s")
