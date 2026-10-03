@@ -47,8 +47,7 @@ def has_valid_session(config: client.Config) -> bool:
     except ssh.exceptions.OraclePeerCheckFailed as e:
         # Raised, not swallowed like everything below. Starting a fresh login
         # would succeed, and would hand the path straight back to whoever is
-        # squatting it, so the one failure mode we can name has to be the one
-        # we refuse to work around.
+        # squatting it.
         raise pfc.exceptions.UI(str(e)) from e
     except Exception:
         # Deliberately broad and swallowed: a wrong-terminal oracle refusal,
