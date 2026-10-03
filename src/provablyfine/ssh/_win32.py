@@ -1,4 +1,13 @@
-"""The Windows end of the ssh-agent client."""
+"""The Windows end of the ssh-agent client.
+
+`ssh.agent` dispatches here (or to `_posix.connect`) by platform. The system
+agent's pipe name is fixed and pf's own oracle's is derived, so unlike POSIX
+there is no environment to resolve.
+
+`check_owner` is for the case where the caller knows the name because pf
+derived it, and so can tell an impostor from an absent oracle. See
+`peer_owner`.
+"""
 
 from __future__ import annotations
 
@@ -9,7 +18,7 @@ import time
 import typing
 
 from . import _win32_bindings as bindings
-from . import wire
+from . import exceptions, peer_owner, wire
 
 # Where Windows' OpenSSH agent listens. Unlike POSIX, there is no environment
 # variable pointing at it by convention: the pipe name is fixed and clients
@@ -71,8 +80,10 @@ class PipeTransport:
     is gone, log in again" from every other failure by catching `OSError`.
     """
 
-    def __init__(self, name: str) -> None:
+    def __init__(self, name: str, *, check_owner: bool = False) -> None:
         self._stream = _open_pipe(name)
+        if check_owner:
+            _check_owner(self._stream, name)
 
     def recv(self, size: int) -> bytes:
         return self._stream.read(size) or b""
@@ -84,5 +95,21 @@ class PipeTransport:
         self._stream.close()
 
 
-def connect(path: str | None) -> wire.Transport:
-    return PipeTransport(path if path is not None else WINDOWS_AGENT_PIPE)
+def connect(path: str | None, *, check_owner: bool = False) -> wire.Transport:
+    return PipeTransport(path if path is not None else WINDOWS_AGENT_PIPE, check_owner=check_owner)
+
+
+def _check_owner(stream: typing.BinaryIO, name: str) -> None:
+    # `ssh.oracle` is imported here rather than at module scope:
+    # `ssh/__init__.py` imports this module before it, so a top-level import
+    # would make that order load-bearing for a call made once per connection.
+    from . import oracle
+
+    # The stream owns the handle, so this only borrows it for one call.
+    handle = msvcrt.get_osfhandle(stream.fileno())
+    try:
+        peer_sid = oracle.peercred.peer_user_id(handle)
+        our_sid = oracle.peercred.our_user_id()
+    except (exceptions.Error, OSError) as e:
+        raise peer_owner.unverifiable(name, e) from e
+    peer_owner.check_sid(name, peer_sid, our_sid)

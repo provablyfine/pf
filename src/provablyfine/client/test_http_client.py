@@ -11,9 +11,10 @@ from __future__ import annotations
 
 import collections.abc
 import os
-import pathlib
+import shutil
 import socket
 import sys
+import tempfile
 import threading
 import typing
 
@@ -85,8 +86,19 @@ class _FakeAgent(threading.Thread):
 
 
 @pytest.fixture
-def agent_path(tmp_path: pathlib.Path) -> typing.Generator[str]:
-    yield os.path.join(str(tmp_path), "agent.sock")
+def agent_path() -> typing.Generator[str]:
+    """A directory short enough to hold an AF_UNIX socket.
+
+    Not `tmp_path`: pytest's own directory is long on macOS
+    (`/var/folders/.../pytest-N/test_name0/`), and `agent.sock` appended to it
+    can pass `sun_path`'s 104 bytes, so `bind()` fails before the test starts.
+    Same reason `session._tempdir` prefers `$XDG_RUNTIME_DIR`.
+    """
+    directory = tempfile.mkdtemp(prefix="pf-fake-agent-", dir="/tmp")
+    try:
+        yield os.path.join(directory, "s")
+    finally:
+        shutil.rmtree(directory, ignore_errors=True)
 
 
 @pytest.fixture

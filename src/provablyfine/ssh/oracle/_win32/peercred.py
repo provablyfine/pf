@@ -4,6 +4,8 @@ The primitives:
 
 - `GetNamedPipeClientProcessId()` is the kernel's own record of who connected.
   Like `SO_PEERCRED`, the client cannot lie about it.
+- `GetNamedPipeServerProcessId()` is the same record read from the other side,
+  which is how a client checks what it connected to. See `peer_user_id`.
 - `OpenProcess()` returns a real kernel object reference rather than a
   recyclable integer -- `WaitForSingleObject` on it stays unsignaled while the
   process lives and signals the instant it exits.
@@ -88,6 +90,29 @@ def peer_identity(pipe_handle: int) -> PeerIdentity:
         raise exceptions.Error(f"Peer process {pid} exited before its identity could be verified")
     try:
         return PeerIdentity(pid=pid, creation_time=_win32api.process_creation_time(handle))
+    finally:
+        _win32api.close_handle(handle)
+
+
+def our_user_id() -> str:
+    """This process's user SID, what `peer_user_id` results are compared to."""
+    return _win32api.current_user_sid()
+
+
+def peer_user_id(pipe_handle: int) -> str:
+    """The user SID of the process serving the pipe `pipe_handle` is joined to.
+
+    Both halves are read from the kernel rather than from the peer: the pairing
+    comes from `GetNamedPipeServerProcessId`, and the SID from that process's
+    own token. A server cannot misreport either.
+
+    Fails closed. Unlike `logon_sid`, where None means "this optional factor is
+    absent and the other factor still stands", here there is no other factor,
+    so an unreadable owner has to be a refusal.
+    """
+    handle = _open_or_fail(_win32api.named_pipe_server_pid(pipe_handle), "Server")
+    try:
+        return _win32api.process_user_sid(handle)
     finally:
         _win32api.close_handle(handle)
 

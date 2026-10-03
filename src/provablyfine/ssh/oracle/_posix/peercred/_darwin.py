@@ -16,6 +16,10 @@ every fact this package needs:
   `<sys/proc_info.h>`) gives a process's parent pid, controlling-tty device,
   and start time in one call -- the equivalents of `/proc/<pid>/status`'s
   PPid, `/proc/<pid>/stat` fields 7 and 22.
+- `getpeereid()` (libc) is the client's way to ask the same question the audit
+  token answers for the server. `LOCAL_PEERTOKEN` fails with `EINVAL` when a
+  client reads it about a real oracle, so the uid check cannot share the token
+  read. See `peer_user_id`.
 - `kqueue`'s `EVFILT_PROC`/`NOTE_EXIT` gives a select()-able fd that becomes
   readable the instant a pinned pid exits -- the equivalent of a Linux
   pidfd's poll behavior (verified empirically: level-triggered while the
@@ -109,6 +113,10 @@ _libbsm.audit_token_to_asid.restype = ctypes.c_int
 _libbsm.getaudit_addr.argtypes = [ctypes.POINTER(_Auditinfo), ctypes.c_int]
 _libbsm.getaudit_addr.restype = ctypes.c_int
 
+_libc = ctypes.CDLL(None, use_errno=True)
+_libc.getpeereid.argtypes = [ctypes.c_int, ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.c_uint32)]
+_libc.getpeereid.restype = ctypes.c_int
+
 
 def _bsdinfo(pid: int) -> _ProcBsdInfo:
     """Raises ProcessLookupError (via OSError's errno-based subclassing) if
@@ -175,6 +183,17 @@ class PeerIdentity:
     asid: int | None
 
 
+def _peer_audit_token(conn: socket.socket) -> _AuditToken:
+    """The peer's Mach audit token, in one `getsockopt()`.
+
+    Everything the kernel can tell us about who is on the other end of a UNIX
+    socket is already in here, so every reader below takes this one call and
+    then asks `libbsm` to decode a field of it.
+    """
+    raw_token = conn.getsockopt(_SOL_LOCAL, _LOCAL_PEERTOKEN, struct.calcsize("8I"))
+    return _AuditToken(val=(ctypes.c_uint32 * 8)(*struct.unpack("8I", raw_token)))
+
+
 def peer_identity(conn: socket.socket) -> PeerIdentity:
     """Kernel-verified (pid, start_key, asid) for the process on the other
     end of `conn`.
@@ -184,8 +203,7 @@ def peer_identity(conn: socket.socket) -> PeerIdentity:
     call by that pid -- the same tight, accepted TOCTOU window `_linux.py`
     documents for its own SO_PEERCRED -> pidfd_open gap.
     """
-    raw_token = conn.getsockopt(_SOL_LOCAL, _LOCAL_PEERTOKEN, struct.calcsize("8I"))
-    token = _AuditToken(val=(ctypes.c_uint32 * 8)(*struct.unpack("8I", raw_token)))
+    token = _peer_audit_token(conn)
     pid = _libbsm.audit_token_to_pid(token)
     raw_asid = _libbsm.audit_token_to_asid(token)
     asid = None if raw_asid < 0 else raw_asid
@@ -194,6 +212,33 @@ def peer_identity(conn: socket.socket) -> PeerIdentity:
     except ProcessLookupError as e:
         raise exceptions.Error(f"Peer process {pid} exited before its identity could be verified") from e
     return PeerIdentity(pid=pid, start_key=start_key, asid=asid)
+
+
+def peer_user_id(conn: socket.socket) -> int:
+    """The effective uid of the process on the other end of `conn`.
+
+    `getpeereid()`, deliberately not the `LOCAL_PEERTOKEN` audit token
+    `peer_identity()` reads. That option answers in one direction and not the
+    other: from an oracle to its peer it works, but from a client to a real
+    oracle it fails with `EINVAL`, verified against an oracle spawned by
+    `pf login` on macOS 26.6. So the token cannot be this check's source, and
+    the kernel-issued uid has to come from the call that was always meant to
+    report it.
+
+    `LOCAL_PEERCRED`'s xucred carries the same uid (word 1 of the buffer, at
+    offset 4) and works from both ends, but its layout is version-dependent and
+    it reports no gid, so the libc wrapper is the better choice.
+    """
+    euid, _egid = _getpeereid(conn)
+    return euid
+
+
+def _getpeereid(conn: socket.socket) -> tuple[int, int]:
+    euid, egid = ctypes.c_uint32(), ctypes.c_uint32()
+    rc = _libc.getpeereid(conn.fileno(), ctypes.byref(euid), ctypes.byref(egid))
+    if rc != 0:
+        raise exceptions.Error(f"getpeereid() failed: {os.strerror(ctypes.get_errno())}")
+    return int(euid.value), int(egid.value)
 
 
 def close_peer_identity(_peer: PeerIdentity) -> None:

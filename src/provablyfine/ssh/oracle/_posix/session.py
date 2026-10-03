@@ -70,9 +70,13 @@ def socket_path(parent_pid: int, parent_starttime: int, directory_url: str) -> s
     request bound for another, and process identity alone can't tell them
     apart when the same shell switches contexts via `pf ctx`.
 
-    Predictability of the name is otherwise not itself a problem: a peer
-    still has to pass the access control check implemented in the oracle to
-    get anything signed.
+    Predictability of the name is not a signing risk: a peer still has to pass
+    the access control check implemented in the oracle to get anything signed,
+    and the client only ever signs against a key it already holds. What a
+    predictable name does invite is someone else holding the endpoint, which is
+    why both ends check ownership: `spawn.bind_socket` before binding (see
+    `_ensure_private_directory`), and `ssh.agent.Client(check_owner=True)`
+    before trusting what answered.
     """
 
     tempdir = _tempdir()

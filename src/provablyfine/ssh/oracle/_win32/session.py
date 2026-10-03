@@ -54,11 +54,17 @@ def pipe_name(pid: int, creation_time: int, directory_url: str) -> str:
     to be: the access control is the peer-credential check in `authorize()`,
     not the name.
 
-    A squatter who created the pipe first is not a real exposure either.
-    `create_named_pipe` uses FILE_FLAG_FIRST_PIPE_INSTANCE, so `pf login`
-    fails loudly rather than sharing the name. To be *sent* a signing
-    request an impostor would have to list back our session public key, whose
-    fingerprint lives in the user's own config file.
+    A squatter who created the pipe first cannot get anything signed, for the
+    same reason: `create_named_pipe` uses FILE_FLAG_FIRST_PIPE_INSTANCE, so
+    `pf login` fails loudly rather than sharing the name, and to be *sent* a
+    signing request an impostor would have to list back our session public key,
+    whose fingerprint lives in the user's own config file.
+
+    It is still an exposure, because the name being free is the normal state
+    between an oracle exiting and the next command noticing. Whoever holds it
+    answers every `pf` we make in that window, and the answer they choose is
+    "no such key here", which reads as an expired session. That is what
+    `ssh.agent.Client(check_owner=True)` is for.
     """
     return f"\\\\.\\pipe\\pf-session-oracle-{_digest(pid, creation_time, directory_url)}"
 

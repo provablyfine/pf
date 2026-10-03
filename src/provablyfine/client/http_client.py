@@ -67,7 +67,13 @@ class AgentSigner(PrivateSigner):
     def sign(self, data: bytes) -> bytes:
         fingerprint = self._key.ssh_fingerprint()
         try:
-            ssh_agent = ssh.agent.Client(self._path)
+            ssh_agent = ssh.agent.Client(self._path, check_owner=self._prefix == "session")
+        except ssh.exceptions.OraclePeerCheckFailed as e:
+            # Not `self._unreachable`: a foreign owner is not a missing oracle,
+            # and saying "session expired" here would send the user to re-login
+            # over an attack. `ssh_utils.exception` cannot do this conversion
+            # instead, because it only wraps the signer factories.
+            raise pfc.exceptions.UI(str(e)) from e
         except OSError as e:
             raise self._unreachable(e) from e
         with ssh_agent:
@@ -127,7 +133,7 @@ def _find_account_key_path(fingerprint: str) -> str | None:
     return None
 
 
-def _lookup_agent_identity(fingerprint: str, path: str | None) -> jwk.Public | None:
+def _lookup_agent_identity(fingerprint: str, path: str | None, *, check_owner: bool = False) -> jwk.Public | None:
     """Look up `fingerprint` among the identities served at `path` (the real
     ssh-agent when `path` is None). Returns None if reachable but the
     fingerprint isn't listed there.
@@ -139,8 +145,11 @@ def _lookup_agent_identity(fingerprint: str, path: str | None) -> jwk.Public | N
     pf's own session oracle, whose absence specifically means "log in
     again" -- and only the caller (`account_key_signer`/`session_key_signer`
     below) knows which, and so what to actually tell the user.
+
+    `check_owner` rides the same distinction, and for the same reason: it
+    belongs to whoever knows what `path` is supposed to be.
     """
-    with ssh.agent.Client(path) as ssh_agent:
+    with ssh.agent.Client(path, check_owner=check_owner) as ssh_agent:
         for identity in ssh_agent.list_identities():
             if identity.public_key.match_ssh_fingerprint(fingerprint):
                 if identity.public_key.type != jwk.KeyType.ED25519:
@@ -189,7 +198,11 @@ def session_key_signer(identifier: str | None, directory_url: str) -> PrivateSig
     path = ssh.oracle.session.current_socket_path(directory_url)
     unreachable: OSError | None = None
     try:
-        key = _lookup_agent_identity(identifier, path)
+        # `check_owner`: this path is one pf derived, so an endpoint we do not
+        # own there is an attack, not an absent oracle. It must not fall into
+        # the `KeyExpired` below, which is the whole misdiagnosis this check
+        # exists to remove.
+        key = _lookup_agent_identity(identifier, path, check_owner=True)
     except OSError as e:
         key, unreachable = None, e
     if key is None:

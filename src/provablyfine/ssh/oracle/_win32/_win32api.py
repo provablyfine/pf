@@ -178,6 +178,8 @@ _k32.DisconnectNamedPipe.argtypes = (ctypes.wintypes.HANDLE,)
 _k32.DisconnectNamedPipe.restype = ctypes.wintypes.BOOL
 _k32.GetNamedPipeClientProcessId.argtypes = (ctypes.wintypes.HANDLE, ctypes.POINTER(ctypes.wintypes.ULONG))
 _k32.GetNamedPipeClientProcessId.restype = ctypes.wintypes.BOOL
+_k32.GetNamedPipeServerProcessId.argtypes = (ctypes.wintypes.HANDLE, ctypes.POINTER(ctypes.wintypes.ULONG))
+_k32.GetNamedPipeServerProcessId.restype = ctypes.wintypes.BOOL
 _k32.ReadFile.argtypes = (
     ctypes.wintypes.HANDLE,
     ctypes.wintypes.LPVOID,
@@ -379,12 +381,31 @@ def _token_sid_string(process_token: int, token_class: int, sid_offset: int, buf
         _k32.LocalFree(ctypes.cast(string_sid, ctypes.wintypes.HLOCAL))
 
 
-def _current_user_sid_string() -> str:
+def current_user_sid() -> str:
+    """The user SID of this process, which is what `process_user_sid` results
+    are compared against."""
     process_token = ctypes.wintypes.HANDLE()
     if not _adv.OpenProcessToken(_k32.GetCurrentProcess(), _TOKEN_QUERY, ctypes.byref(process_token)):
         raise_last_error("OpenProcessToken")
     try:
         # The `Sid` pointer is the first field of the `_SidAndAttributes`.
+        return _token_sid_string(process_token.value or 0, _TOKEN_USER_CLASS, 0, ctypes.sizeof(_TokenUser))
+    finally:
+        close_handle(process_token.value or 0)
+
+
+def process_user_sid(process_handle: int) -> str:
+    """The user SID of the process `process_handle` refers to.
+
+    Raises rather than returning None on a read failure, unlike `logon_sid`
+    below. Its caller is a security check that has to answer "is this ours",
+    and "could not tell" is not an answer that lets the check pass. `logon_sid`
+    can afford None because it is one optional factor of a two-factor test.
+    """
+    process_token = ctypes.wintypes.HANDLE()
+    if not _adv.OpenProcessToken(process_handle, _TOKEN_QUERY, ctypes.byref(process_token)):
+        raise_last_error("OpenProcessToken")
+    try:
         return _token_sid_string(process_token.value or 0, _TOKEN_USER_CLASS, 0, ctypes.sizeof(_TokenUser))
     finally:
         close_handle(process_token.value or 0)
@@ -443,7 +464,7 @@ def owner_only_security_attributes(*, inheritable: bool) -> OwnedSecurityAttribu
     Like its POSIX counterpart this is belt-and-braces: the real boundary is
     the peer-credential check at accept().
     """
-    sid = _current_user_sid_string()
+    sid = current_user_sid()
     return _security_attributes(f"O:{sid}G:{sid}D:(A;;GA;;;{sid})(A;;GA;;;SY)", inheritable=inheritable)
 
 
@@ -469,7 +490,7 @@ def oracle_process_security_attributes() -> OwnedSecurityAttributes:
     `VM_WRITE`, `CREATE_THREAD`, `SUSPEND_RESUME`, `TERMINATE`, and `WRITE_DAC`
     (owner rights do not let a non-privileged user re-loosen this later).
     """
-    sid = _current_user_sid_string()
+    sid = current_user_sid()
     readable = PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE
     sddl = f"O:{sid}G:{sid}D:(A;;GA;;;SY)(A;;0x{readable:x};;;BA)(A;;0x{readable:x};;;{sid})"
     return _security_attributes(sddl, inheritable=False)
@@ -677,6 +698,23 @@ def named_pipe_client_pid(handle: int) -> int:
     pid = ctypes.wintypes.ULONG()
     if not _k32.GetNamedPipeClientProcessId(handle, ctypes.byref(pid)):
         raise_last_error("GetNamedPipeClientProcessId")
+    return int(pid.value)
+
+
+def named_pipe_server_pid(handle: int) -> int:
+    """The pid of the process serving the pipe instance `handle` is connected
+    to. A client's view of `named_pipe_client_pid`, and equally unforgeable: it
+    is the kernel's own record of the pairing, not something the server
+    announced.
+
+    Requires `SECURITY_IDENTIFICATION`-level access to the pipe, which
+    `_win32.py`'s `SECURITY_ANONYMOUS` open still grants: what anonymous
+    impersonation removes is the server's ability to *act* as the client, not
+    either side's ability to name the other.
+    """
+    pid = ctypes.wintypes.ULONG()
+    if not _k32.GetNamedPipeServerProcessId(handle, ctypes.byref(pid)):
+        raise_last_error("GetNamedPipeServerProcessId")
     return int(pid.value)
 
 

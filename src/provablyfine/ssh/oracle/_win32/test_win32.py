@@ -4,16 +4,19 @@ from __future__ import annotations
 
 import collections.abc
 import hashlib
+import msvcrt
 import os
 import pathlib
 import subprocess
 import sys
 import threading
 import time
+import uuid
 
 import pytest
 
 from .... import jwk
+from ... import _win32 as agent_transport
 from ... import agent, cert, exceptions, serde
 from . import _win32api, connection, peercred, session
 
@@ -467,3 +470,37 @@ def test_is_descendant_of_walks_a_real_chain(tmp_path: pathlib.Path) -> None:
     finally:
         chain.kill()
         chain.wait(timeout=30)
+
+
+def _unique_pipe_name() -> str:
+    return f"\\\\.\\pipe\\pf-test-peer-{uuid.uuid4().hex[:12]}"
+
+
+def test_peer_user_id_of_a_pipe_we_serve_ourselves_is_our_sid() -> None:
+    """The Windows half of the chain `ssh._win32._check_owner` depends on.
+
+    Both ends are this process, so this proves `GetNamedPipeServerProcessId`
+    answers on a client handle opened at `SECURITY_ANONYMOUS` (the level
+    `_open_pipe` uses, per O-5) and that the token read agrees with our own.
+    Rejecting a peer that is *not* ours needs a second account; the comparison
+    itself is covered in `ssh/test_peer_owner.py`.
+    """
+    name = _unique_pipe_name()
+    server = _win32api.create_named_pipe(name, inheritable=False)
+    stream = agent_transport._open_pipe(name)
+    try:
+        assert peercred.peer_user_id(msvcrt.get_osfhandle(stream.fileno())) == peercred.our_user_id()
+    finally:
+        stream.close()
+        _win32api.close_handle(server)
+
+
+def test_an_oracle_pipe_we_serve_passes_the_owner_check() -> None:
+    """No false positive: a legitimate oracle must never be rejected."""
+    name = _unique_pipe_name()
+    server = _win32api.create_named_pipe(name, inheritable=False)
+    try:
+        client = agent.Client(name, check_owner=True)
+        client.close()
+    finally:
+        _win32api.close_handle(server)

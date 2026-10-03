@@ -63,6 +63,22 @@ def test_is_descendant_of_rejects_an_unrelated_sibling_process() -> None:
         sibling_b.wait(timeout=5)
 
 
+def test_peer_user_id_reports_the_effective_uid_of_the_peer() -> None:
+    """What `ssh._posix._check_owner` compares against `os.geteuid()`.
+
+    Both ends of a socketpair are this process, so this is the happy path only:
+    the mismatch it guards needs a peer running as someone else, which no
+    unprivileged test can arrange. The comparison itself is covered in
+    `ssh/test_peer_owner.py`.
+    """
+    a, b = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        assert peercred.peer_user_id(a) == os.geteuid()
+    finally:
+        a.close()
+        b.close()
+
+
 def test_same_process_identity() -> None:
     anchor = peercred.open_anchor(os.getpid())
     try:

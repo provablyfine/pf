@@ -23,8 +23,14 @@ class Identity:
 
 
 class Client(wire.WireSocket):
-    def __init__(self, path: str | None = None):
-        super().__init__(transport.connect(path))
+    def __init__(self, path: str | None = None, *, check_owner: bool = False):
+        """`check_owner` asks who is listening before trusting the answer.
+
+        Only meaningful for a path pf derived itself, i.e. one of our own
+        session oracles: for the system agent there is no expectation to check
+        against, and pf running as another user against a real agent is normal.
+        """
+        super().__init__(transport.connect(path, check_owner=check_owner))
 
     def list_identities(self) -> collections.abc.Generator[Identity]:
         self.send_message(wire.SSH_AGENTC_REQUEST_IDENTITIES, b"")

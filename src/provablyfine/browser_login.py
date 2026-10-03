@@ -40,10 +40,16 @@ def has_valid_session(config: client.Config) -> bool:
         return False
     try:
         path = ssh.oracle.session.current_socket_path(config.directory_url)
-        with ssh.agent.Client(path) as agent:
+        with ssh.agent.Client(path, check_owner=True) as agent:
             for identity in agent.list_identities():
                 if identity.public_key.match_ssh_fingerprint(config.session_key_fingerprint):
                     return True
+    except ssh.exceptions.OraclePeerCheckFailed as e:
+        # Raised, not swallowed like everything below. Starting a fresh login
+        # would succeed, and would hand the path straight back to whoever is
+        # squatting it, so the one failure mode we can name has to be the one
+        # we refuse to work around.
+        raise pfc.exceptions.UI(str(e)) from e
     except Exception:
         # Deliberately broad and swallowed: a wrong-terminal oracle refusal,
         # a genuinely expired/TTL'd-out oracle, and a bug in
