@@ -26,7 +26,11 @@ def connect(path: str | None, *, check_owner: bool = False) -> wire.Transport:
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     sock.connect(path.encode("ascii"))
     if check_owner:
-        _check_owner(sock, path)
+        try:
+            _check_owner(sock, path)
+        except Exception:
+            sock.close()
+            raise
     return sock
 
 

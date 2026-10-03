@@ -83,7 +83,11 @@ class PipeTransport:
     def __init__(self, name: str, *, check_owner: bool = False) -> None:
         self._stream = _open_pipe(name)
         if check_owner:
-            _check_owner(self._stream, name)
+            try:
+                _check_owner(self._stream, name)
+            except Exception:
+                self._stream.close()
+                raise
 
     def recv(self, size: int) -> bytes:
         return self._stream.read(size) or b""
