@@ -68,8 +68,8 @@ def test_peer_user_id_reports_the_effective_uid_of_the_peer() -> None:
 
     Both ends of a socketpair are this process, so this is the happy path only:
     the mismatch it guards needs a peer running as someone else, which no
-    unprivileged test can arrange. The comparison itself is covered in
-    `ssh/test_peer_owner.py`.
+    unprivileged test can arrange. The comparison is a one-line check in
+    `_posix._check_owner`.
     """
     a, b = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
     try:

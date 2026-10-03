@@ -31,8 +31,9 @@ import os
 import sys
 
 from .... import jwk, log
+from ... import _w32 as w32
 from ... import buffer
-from . import _win32api, connection, peercred, server, session
+from . import connection, peercred, server, session
 
 
 def _read_key_material() -> tuple[jwk.Private, list[bytes]]:
@@ -44,7 +45,7 @@ def _read_key_material() -> tuple[jwk.Private, list[bytes]]:
 
 
 def _run() -> None:
-    if not _win32api.disable_wer_reporting():
+    if not w32.errors.disable_wer_reporting():
         logging.getLogger(__name__).debug("WerSetFlags unavailable; relying on the never-crash wrapper alone")
 
     mode = sys.argv[1]
@@ -67,12 +68,12 @@ def _run() -> None:
 
     new_login_event = None
     if new_login_event_name is not None:
-        new_login_event = _win32api.create_event(new_login_event_name)
-        # CreateEventW on an existing name *opens* that event rather thani
+        new_login_event = w32.event.create_event(new_login_event_name)
+        # CreateEventW on an existing name *opens* that event rather than
         # creating one. A predecessor we just displaced may still be
         # referenced (by the spawning parent's handle) and is signaled,
         # so without this reset our own watchdog would fire immediately.
-        _win32api.reset_event(new_login_event)
+        w32.event.reset_event(new_login_event)
 
     server.serve(
         pipe_handle,

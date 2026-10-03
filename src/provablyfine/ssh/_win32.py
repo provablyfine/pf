@@ -2,23 +2,23 @@
 
 `ssh.agent` dispatches here (or to `_posix.connect`) by platform. The system
 agent's pipe name is fixed and pf's own oracle's is derived, so unlike POSIX
-there is no environment to resolve.
+there is no environment to resolve. The raw Win32 calls live in
+`provablyfine.ssh._w32`; this module is the transport plus the owner check.
 
 `check_owner` is for the case where the caller knows the name because pf
-derived it, and so can tell an impostor from an absent oracle. See
-`peer_owner`.
+derived it, and so can tell an impostor from an absent oracle. The check
+itself is `_check_owner` below.
 """
 
 from __future__ import annotations
 
-import ctypes
 import msvcrt
 import os
 import time
 import typing
 
-from . import _win32_bindings as bindings
-from . import exceptions, peer_owner, wire
+from . import _w32 as w32
+from . import exceptions, wire
 
 # Where Windows' OpenSSH agent listens. Unlike POSIX, there is no environment
 # variable pointing at it by convention: the pipe name is fixed and clients
@@ -49,26 +49,15 @@ def _open_pipe(name: str) -> typing.BinaryIO:
             raise
         except OSError:
             remaining = deadline - time.monotonic()
-            if remaining <= 0 or not bindings.k32.WaitNamedPipeW(name, max(1, int(remaining * 1000))):
+            if remaining <= 0 or not w32.pipe.wait_named_pipe(name, max(1, int(remaining * 1000))):
                 raise
             time.sleep(0.005)
 
 
 def _open_once(name: str) -> typing.BinaryIO:
-    handle = bindings.k32.CreateFileW(
-        name,
-        bindings.GENERIC_READ | bindings.GENERIC_WRITE,
-        0,
-        None,
-        bindings.OPEN_EXISTING,
-        bindings.SECURITY_SQOS_PRESENT | bindings.SECURITY_ANONYMOUS,
-        None,
-    )
-    if handle == bindings.INVALID_HANDLE_VALUE or not handle:
-        # `ctypes.WinError` maps the code to the right `OSError` subclass, so
-        # "no such pipe" stays a `FileNotFoundError` and "the DACL says no"
-        # stays a `PermissionError`, exactly as Python's `open()` reported them.
-        raise ctypes.WinError(code=ctypes.get_last_error())
+    # The pipe HANDLE becomes a Python file object through the CRT, exactly as
+    # `open()` would have made one; the transport only ever reads and writes it.
+    handle = w32.pipe.open_client(name)
     return os.fdopen(msvcrt.open_osfhandle(handle, os.O_RDWR), "r+b", buffering=0)
 
 
@@ -104,16 +93,20 @@ def connect(path: str | None, *, check_owner: bool = False) -> wire.Transport:
 
 
 def _check_owner(stream: typing.BinaryIO, name: str) -> None:
-    # `ssh.oracle` is imported here rather than at module scope:
-    # `ssh/__init__.py` imports this module before it, so a top-level import
-    # would make that order load-bearing for a call made once per connection.
-    from . import oracle
-
     # The stream owns the handle, so this only borrows it for one call.
     handle = msvcrt.get_osfhandle(stream.fileno())
     try:
-        peer_sid = oracle.peercred.peer_user_id(handle)
-        our_sid = oracle.peercred.our_user_id()
+        server = w32.process.open_process(w32.pipe.named_pipe_server_pid(handle))
+        if server is None:
+            raise exceptions.Error("Server process exited before its owner could be read")
+        try:
+            peer_sid = w32.security.process_user_sid(server)
+        finally:
+            w32.process.close_handle(server)
+        our_sid = w32.security.current_user_sid()
     except (exceptions.Error, OSError) as e:
-        raise peer_owner.unverifiable(name, e) from e
-    peer_owner.check_sid(name, peer_sid, our_sid)
+        raise exceptions.OraclePeerCheckFailed(f"Unable to check who serves {name}: {e}") from e
+    if peer_sid != our_sid:
+        raise exceptions.OraclePeerCheckFailed(
+            f"{name} is served by a process running as {peer_sid}, not by you ({our_sid})."
+        )

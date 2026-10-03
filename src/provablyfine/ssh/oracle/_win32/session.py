@@ -30,8 +30,9 @@ import logging
 import time
 
 from .... import jwk
+from ... import _w32 as w32
 from ... import exceptions, serde
-from . import _win32api, peercred, server, spawn
+from . import peercred, server, spawn
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +127,7 @@ def _spawn(key: jwk.Private, ttl: float, anchor_pid: int, directory_url: str) ->
             logon_sid=peercred.logon_sid(anchor),
         )
     finally:
-        _win32api.close_handle(handle)
+        w32.process.close_handle(handle)
         peercred.close_anchor(anchor)
     return name, pid
 
@@ -136,7 +137,7 @@ def _create_pipe_on_new_login(name: str, event_name: str) -> int:
     deadline = time.monotonic() + _NEW_LOGIN_TIMEOUT_SECONDS
     announced = False
     while True:
-        handle = _win32api.try_create_named_pipe(name, inheritable=True)
+        handle = w32.pipe.try_create_named_pipe(name, inheritable=True)
         if handle is not None:
             return handle
         if time.monotonic() >= deadline:
@@ -147,12 +148,12 @@ def _create_pipe_on_new_login(name: str, event_name: str) -> int:
         if not announced:
             logger.debug("A newer login is waiting on an existing session oracle")
             announced = True
-        predecessor = _win32api.open_event(event_name)
+        predecessor = w32.event.open_event(event_name)
         if predecessor is not None:
             try:
-                _win32api.set_event(predecessor)
+                w32.event.set_event(predecessor)
             finally:
-                _win32api.close_handle(predecessor)
+                w32.process.close_handle(predecessor)
         time.sleep(0.05)
 
 

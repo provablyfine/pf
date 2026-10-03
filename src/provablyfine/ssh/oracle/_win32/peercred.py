@@ -5,7 +5,7 @@ The primitives:
 - `GetNamedPipeClientProcessId()` is the kernel's own record of who connected.
   Like `SO_PEERCRED`, the client cannot lie about it.
 - `GetNamedPipeServerProcessId()` is the same record read from the other side,
-  which is how a client checks what it connected to. See `peer_user_id`.
+  which is how a client checks what it connected to; see `ssh._win32._check_owner`.
 - `OpenProcess()` returns a real kernel object reference rather than a
   recyclable integer -- `WaitForSingleObject` on it stays unsignaled while the
   process lives and signals the instant it exits.
@@ -26,8 +26,8 @@ import dataclasses
 import os
 import re
 
+from ... import _w32 as w32
 from ... import exceptions
-from . import _win32api
 
 # `login_shell_identity()`'s walk only has to climb past the interpreter, a
 # venv shim, and `uv` -- measured at 3 hops. 8 is slack, and bounds a walk that
@@ -62,14 +62,14 @@ def is_alive(anchor: Anchor) -> bool:
 
     A process HANDLE signals once at exit and stays signaled
     """
-    return _win32api.wait_for_single_object(anchor.handle, 0) == _win32api.WAIT_TIMEOUT
+    return w32.event.wait_for_single_object(anchor.handle, 0) == w32.raw.WAIT_TIMEOUT
 
 
 def _open_or_fail(pid: int, what: str) -> int:
-    handle = _win32api.open_process(pid)
+    handle = w32.process.open_process(pid)
     if handle is None:
         raise exceptions.Error(
-            f"{what} process {pid} could not be opened: {_win32api.last_error_message('OpenProcess')}"
+            f"{what} process {pid} could not be opened: {w32.errors.last_error_message('OpenProcess')}"
         )
     return handle
 
@@ -77,44 +77,21 @@ def _open_or_fail(pid: int, what: str) -> int:
 def process_starttime(pid: int) -> int:
     handle = _open_or_fail(pid, "Target")
     try:
-        return _win32api.process_creation_time(handle)
+        return w32.process.process_creation_time(handle)
     finally:
-        _win32api.close_handle(handle)
+        w32.process.close_handle(handle)
 
 
 def peer_identity(pipe_handle: int) -> PeerIdentity:
     """Kernel-verified `(pid, creation_time)` for the process on the other end."""
-    pid = _win32api.named_pipe_client_pid(pipe_handle)
-    handle = _win32api.open_process(pid)
+    pid = w32.pipe.named_pipe_client_pid(pipe_handle)
+    handle = w32.process.open_process(pid)
     if handle is None:
         raise exceptions.Error(f"Peer process {pid} exited before its identity could be verified")
     try:
-        return PeerIdentity(pid=pid, creation_time=_win32api.process_creation_time(handle))
+        return PeerIdentity(pid=pid, creation_time=w32.process.process_creation_time(handle))
     finally:
-        _win32api.close_handle(handle)
-
-
-def our_user_id() -> str:
-    """This process's user SID, what `peer_user_id` results are compared to."""
-    return _win32api.current_user_sid()
-
-
-def peer_user_id(pipe_handle: int) -> str:
-    """The user SID of the process serving the pipe `pipe_handle` is joined to.
-
-    Both halves are read from the kernel rather than from the peer: the pairing
-    comes from `GetNamedPipeServerProcessId`, and the SID from that process's
-    own token. A server cannot misreport either.
-
-    Fails closed. Unlike `logon_sid`, where None means "this optional factor is
-    absent and the other factor still stands", here there is no other factor,
-    so an unreadable owner has to be a refusal.
-    """
-    handle = _open_or_fail(_win32api.named_pipe_server_pid(pipe_handle), "Server")
-    try:
-        return _win32api.process_user_sid(handle)
-    finally:
-        _win32api.close_handle(handle)
+        w32.process.close_handle(handle)
 
 
 def same_process(peer: PeerIdentity, anchor: Anchor) -> bool:
@@ -131,7 +108,7 @@ def logon_sid(anchor: Anchor) -> str | None:
     not the token. None means "unreadable", which callers treat as a missing
     (not a matching) factor.
     """
-    return _win32api.logon_sid(anchor.handle)
+    return w32.security.logon_sid(anchor.handle)
 
 
 def logon_sid_of(pid: int) -> str | None:
@@ -142,13 +119,13 @@ def logon_sid_of(pid: int) -> str | None:
     usual limited access should succeed; None means "could not verify", which
     the caller treats as a rejection rather than a match.
     """
-    handle = _win32api.open_process(pid)
+    handle = w32.process.open_process(pid)
     if handle is None:
         return None
     try:
-        return _win32api.logon_sid(handle)
+        return w32.security.logon_sid(handle)
     finally:
-        _win32api.close_handle(handle)
+        w32.process.close_handle(handle)
 
 
 def is_descendant_of(pid: int, anchor: Anchor, *, max_depth: int = 64) -> bool:
@@ -162,39 +139,39 @@ def is_descendant_of(pid: int, anchor: Anchor, *, max_depth: int = 64) -> bool:
     go on reporting its now-meaningless pid, which the OS is free to hand to
     something else.
     """
-    handle = _win32api.open_process(pid)
+    handle = w32.process.open_process(pid)
     if handle is None:
         return False
     try:
         for _ in range(max_depth):
             try:
-                created = _win32api.process_creation_time(handle)
-                parent = _win32api.process_parent_pid(handle)
+                created = w32.process.process_creation_time(handle)
+                parent = w32.process.process_parent_pid(handle)
             except exceptions.Error:
                 return False
             if parent == 0:
                 return False
-            parent_handle = _win32api.open_process(parent)
+            parent_handle = w32.process.open_process(parent)
             if parent_handle is None:
                 return False
             try:
-                parent_created = _win32api.process_creation_time(parent_handle)
+                parent_created = w32.process.process_creation_time(parent_handle)
             except exceptions.Error:
-                _win32api.close_handle(parent_handle)
+                w32.process.close_handle(parent_handle)
                 return False
             if parent_created > created:
                 # A recycled pid: this "parent" started after its claimed
                 # child, so the real parent is gone and the trail is dead.
-                _win32api.close_handle(parent_handle)
+                w32.process.close_handle(parent_handle)
                 return False
             if parent == anchor.pid and parent_created == anchor.creation_time:
-                _win32api.close_handle(parent_handle)
+                w32.process.close_handle(parent_handle)
                 return True
-            _win32api.close_handle(handle)
+            w32.process.close_handle(handle)
             handle = parent_handle
         return False
     finally:
-        _win32api.close_handle(handle)
+        w32.process.close_handle(handle)
 
 
 def _pin(pid: int, *, expected_creation_time: int | None) -> Anchor:
@@ -207,11 +184,11 @@ def _pin(pid: int, *, expected_creation_time: int | None) -> Anchor:
     """
     handle = _open_or_fail(pid, "Anchor")
     try:
-        creation_time = _win32api.process_creation_time(handle)
+        creation_time = w32.process.process_creation_time(handle)
         if expected_creation_time is not None and creation_time != expected_creation_time:
             raise exceptions.Error(f"Anchor process {pid} identity changed before the oracle could pin it")
     except exceptions.Error:
-        _win32api.close_handle(handle)
+        w32.process.close_handle(handle)
         raise
     return Anchor(pid=pid, creation_time=creation_time, handle=handle)
 
@@ -221,7 +198,7 @@ def open_anchor(pid: int) -> Anchor:
 
 
 def close_anchor(anchor: Anchor) -> None:
-    _win32api.close_handle(anchor.handle)
+    w32.process.close_handle(anchor.handle)
 
 
 def anchor_spawn_token(anchor: Anchor) -> str:
@@ -314,33 +291,33 @@ def login_shell_identity() -> tuple[int, int]:
     try:
         current = os.getpid()
         for _ in range(_MAX_LAUNCHER_HOPS):
-            parent = _win32api.process_parent_pid(handle)
+            parent = w32.process.process_parent_pid(handle)
             if parent == 0:
                 break
-            parent_handle = _win32api.open_process(parent)
+            parent_handle = w32.process.open_process(parent)
             if parent_handle is None:
                 break
             try:
-                image = _win32api.process_image_path(parent_handle)
+                image = w32.process.process_image_path(parent_handle)
             except exceptions.Error:
-                _win32api.close_handle(parent_handle)
+                w32.process.close_handle(parent_handle)
                 break
             if _is_launcher(image):
-                _win32api.close_handle(handle)
+                w32.process.close_handle(handle)
                 handle, current = parent_handle, parent
                 continue
             try:
                 # The parent is not a launcher: it is the shell we anchor on.
-                return parent, _win32api.process_creation_time(parent_handle)
+                return parent, w32.process.process_creation_time(parent_handle)
             finally:
-                _win32api.close_handle(parent_handle)
+                w32.process.close_handle(parent_handle)
         # Every ancestor we could see was a launcher (a deep `python` nesting,
         # a detached process). Anchoring on the deepest process we reached
         # still gives a stable, correct -- just narrower -- binding: this
         # process and its descendants.
-        return current, _win32api.process_creation_time(handle)
+        return current, w32.process.process_creation_time(handle)
     finally:
-        _win32api.close_handle(handle)
+        w32.process.close_handle(handle)
 
 
 def parent_is_launcher() -> bool:
