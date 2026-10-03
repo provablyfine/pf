@@ -1,10 +1,4 @@
-"""`CreateProcessW` with an explicit handle list and a process-object DACL.
-
-The mechanism only: the caller supplies the child process object's security
-descriptor (`process_security`) and the exact handles to inherit. Locking the
-key out of reach is the oracle's policy for what descriptor to pass, not this
-function's.
-"""
+"""`CreateProcessW` with an explicit handle list and a process-object DACL."""
 
 from __future__ import annotations
 

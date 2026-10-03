@@ -3,8 +3,7 @@ peer on each end.
 
 `create_named_pipe` bakes in the defaults every pf pipe wants -- an owner-only
 DACL and `FILE_FLAG_FIRST_PIPE_INSTANCE`, so a squatter turns into a loud
-failure rather than a shared name. Anything more specific (the `pf-*` naming) is
-the oracle's, not here.
+failure rather than a shared name.
 """
 
 from __future__ import annotations
@@ -61,8 +60,7 @@ def connect_named_pipe(handle: int) -> None:
 
     `ERROR_PIPE_CONNECTED` is success, not failure: it means a client got in
     during the window between the pipe being created (or disconnected) and this
-    call. That is routine -- it was in fact what the spawn prototype hit every
-    single time.
+    call. That is routine.
     """
     if raw.k32.ConnectNamedPipe(handle, None):
         return
@@ -106,9 +104,7 @@ def named_pipe_server_pid(handle: int) -> int:
     the kernel's own record of the pairing, not something the server announced.
 
     Requires `SECURITY_IDENTIFICATION`-level access to the pipe, which the
-    client's `SECURITY_ANONYMOUS` open still grants: what anonymous
-    impersonation removes is the server's ability to *act* as the client, not
-    either side's ability to name the other.
+    client's `SECURITY_ANONYMOUS` open still grants
     """
     pid = ctypes.wintypes.ULONG()
     if not raw.k32.GetNamedPipeServerProcessId(handle, ctypes.byref(pid)):

@@ -1,8 +1,7 @@
 """Process handles: open, close, observe, and watch for exit.
 
 `OpenProcess` returns a real kernel object reference rather than a recyclable
-integer, which is what lets a handle pin one specific process instance and make
-the ancestry walk in `peercred` TOCTOU-safe.
+integer
 """
 
 from __future__ import annotations
@@ -23,8 +22,8 @@ def close_handle(handle: int) -> None:
 
 def open_process(pid: int) -> int | None:
     """A HANDLE to `pid` with just enough access to read its times and image
-    and to wait on its exit, or None if it cannot be opened -- already gone, or
-    owned by another user."""
+    and to wait on its exit, or None if it cannot be opened (already gone, or
+    owned by another user)."""
     handle = raw.k32.OpenProcess(raw.PROCESS_QUERY_LIMITED_INFORMATION | raw.SYNCHRONIZE, False, pid)
     return None if not handle else handle
 

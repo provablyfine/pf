@@ -14,7 +14,7 @@ def create_event(name: str) -> int:
 
     Manual-reset because the watchdog waits on it once and must see it stay
     signaled. Note `CreateEventW` on an existing name *opens* that event rather
-    than making a new one -- callers must `reset_event()` immediately after, or
+    than making a new one. Callers must `reset_event()` immediately after, or
     a predecessor's still-signaled event fires the new watchdog instantly.
     """
     handle = raw.k32.CreateEventW(None, True, False, name)

@@ -21,9 +21,8 @@ def raise_last_error(prefix: str) -> typing.NoReturn:
 def disable_wer_reporting() -> bool:
     """Keep WerFault out of this process, so a crash is not the seed for a
     user-readable dump (HKCU `LocalDumps` included). Best-effort by design:
-    `_runner.main()`'s never-crash wrapper is the primary defense and this is
-    the belt behind it, so a WER API that is absent on some Windows revision
-    must not take login down with it."""
+    a WER API that is absent on some Windows revision is not a fatal error
+    """
     sdds = raw.WER_FAULT_REP_DISABLE | raw.WER_DEBUG_INFO_DISABLE | raw.WER_UI_DISABLE
     for dll_name in ("wer", "advapi32"):
         try:

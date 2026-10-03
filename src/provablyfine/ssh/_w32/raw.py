@@ -1,10 +1,7 @@
 """Raw Win32 bindings, via `ctypes`.
 
 Only the OS surface lives here: DLL handles, structures, constants, and
-`argtypes`/`restype`, each named for the Win32 function it wraps. There is no
-composed logic; the sibling modules in this package (`process`, `security`,
-`pipe`, `event`, `spawn`) build on it and are shared by the ssh-agent client and
-the signing oracle.
+`argtypes`/`restype`, each named for the Win32 function it wraps.
 """
 
 from __future__ import annotations

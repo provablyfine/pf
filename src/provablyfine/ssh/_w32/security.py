@@ -1,8 +1,7 @@
 """Tokens, SIDs, and security descriptors.
 
 The mechanics only: read a user or logon SID off a process token, turn an SDDL
-string into a `SECURITY_ATTRIBUTES`, remove a privilege. The *policies* -- which
-DACL to apply to the oracle's process object -- live with their callers.
+string into a `SECURITY_ATTRIBUTES`, remove a privilege.
 """
 
 from __future__ import annotations
@@ -73,8 +72,7 @@ def process_user_sid(process_handle: int) -> str:
 
     Raises on a read failure. Its caller is a security check that has to answer
     "is this ours", and "could not tell" is not an answer that lets the check
-    pass. `logon_sid` can afford None because it is one optional factor of a
-    two-factor test.
+    pass.
     """
     process_token = ctypes.wintypes.HANDLE()
     if not raw.adv.OpenProcessToken(process_handle, raw.TOKEN_QUERY, ctypes.byref(process_token)):
@@ -88,10 +86,7 @@ def process_user_sid(process_handle: int) -> str:
 def logon_sid(process_handle: int) -> str | None:
     """The logon SID of `process_handle`, or None if it cannot be read.
 
-    Returns None rather than raising so callers can decide how to degrade: the
-    anchor's SID is optional (fall back to anchor-only binding), while a peer's
-    SID failing to read is a rejection. `OpenProcessToken` accepts the same
-    `PROCESS_QUERY_LIMITED_INFORMATION` handle `process.open_process` returns.
+    Returns None rather than raising so callers can decide how to degrade
     """
     process_token = ctypes.wintypes.HANDLE()
     if not raw.adv.OpenProcessToken(process_handle, raw.TOKEN_QUERY, ctypes.byref(process_token)):
@@ -128,16 +123,7 @@ def security_attributes(sddl: str, *, inheritable: bool) -> OwnedSecurityAttribu
 
 
 def owner_only_security_attributes(*, inheritable: bool) -> OwnedSecurityAttributes:
-    """Security attributes granting full access to this user and SYSTEM only.
-
-    A UNIX socket inherits the protection of the directory holding it, which is
-    what the POSIX oracle's spawn relies on with its 0700 directory.
-    `\\\\.\\pipe\\` is a flat, machine-global namespace with no directory to hide
-    behind, so the restriction has to be stated on the object itself.
-
-    Like its POSIX counterpart this is belt-and-braces: the real boundary is
-    the peer-credential check at accept().
-    """
+    """Security attributes granting full access to this user and SYSTEM only."""
     sid = current_user_sid()
     return security_attributes(f"O:{sid}G:{sid}D:(A;;GA;;;{sid})(A;;GA;;;SY)", inheritable=inheritable)
 
@@ -145,11 +131,11 @@ def owner_only_security_attributes(*, inheritable: bool) -> OwnedSecurityAttribu
 def disable_debug_privilege() -> None:
     """Take `SeDebugPrivilege` away from this process, best effort.
 
-    `OpenProcess` grants access through that privilege *before* consulting any
-    DACL, so a test of a process DACL only measures the DACL if the holder has
-    first disarmed it. What is left after this is precisely the ordinary
-    same-user attacker a DACL exists to stop. Processes that do not hold the
-    privilege keep failing to use it, which is also fine."""
+    This is a test-only function used to drop our debug priv (if we
+    have them) to make sure we test the access control of OpenProcess
+    via the DACL, without debug priv. (The internals of OpenProcess
+    grant access if we have debug priv, regardless of the DACL configured)
+    """
     luid = raw.LUID()
     if not raw.adv.LookupPrivilegeValueW(None, "SeDebugPrivilege", ctypes.byref(luid)):
         return
