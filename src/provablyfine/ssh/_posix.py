@@ -6,8 +6,8 @@ whatever the caller has; for the system agent that path is in the
 environment, which is the only resolution this endpoint must do.
 
 `check_owner` is for the case where the caller knows the path because pf
-derived it, and so can tell an impostor from an absent oracle. See
-`peer_owner`.
+derived it, and so can tell an impostor from an absent oracle. The check
+itself is `_check_owner` below.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from __future__ import annotations
 import os
 import socket
 
-from . import exceptions, peer_owner, wire
+from . import exceptions, wire
 
 
 def connect(path: str | None, *, check_owner: bool = False) -> wire.Transport:
@@ -43,5 +43,9 @@ def _check_owner(sock: socket.socket, path: str) -> None:
     try:
         peer_uid = oracle.peercred.peer_user_id(sock)
     except (exceptions.Error, OSError) as e:
-        raise peer_owner.unverifiable(path, e) from e
-    peer_owner.check_uid(path, peer_uid, os.geteuid())
+        raise exceptions.OraclePeerCheckFailed(f"Unable to check who serves {path}: {e}") from e
+    our_uid = os.geteuid()
+    if peer_uid != our_uid:
+        raise exceptions.OraclePeerCheckFailed(
+            f"{path} is served by a process running as uid {peer_uid}, not by you (uid {our_uid})."
+        )
