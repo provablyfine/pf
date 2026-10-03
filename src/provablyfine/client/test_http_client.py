@@ -28,17 +28,20 @@ from . import http_client
 pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="AF_UNIX fake agent is posix-only")
 
 
-class _FakeAgent(threading.Thread):
+class _FakeAgent:
     """An ssh-agent over a UNIX socket whose signing answer you choose."""
 
     def __init__(self, path: str, public_key: jwk.Public, sign: collections.abc.Callable[[bytes], bytes]) -> None:
-        super().__init__(daemon=True)
         self._sign = sign
         self._raw_key = ssh.serde.serialize_public(public_key)
         self._stopped = False
         self._listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self._listener.bind(path)
         self._listener.listen(1)
+        self._thread = threading.Thread(target=self._run, daemon=True)
+
+    def start(self) -> None:
+        self._thread.start()
 
     def stop(self) -> None:
         self._stopped = True
@@ -47,9 +50,9 @@ class _FakeAgent(threading.Thread):
         except OSError:
             pass
         self._listener.close()
-        self.join(timeout=5.0)
+        self._thread.join(timeout=5.0)
 
-    def run(self) -> None:
+    def _run(self) -> None:
         while not self._stopped:
             try:
                 conn = self._listener.accept()[0]
