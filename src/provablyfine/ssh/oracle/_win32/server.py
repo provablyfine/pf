@@ -25,8 +25,9 @@ import time
 import cryptography.hazmat.primitives.asymmetric.ed25519
 
 from .... import jwk
+from ... import _w32 as w32
 from ... import buffer, exceptions, wire
-from . import _win32api, peercred
+from . import peercred
 
 logger = logging.getLogger(__name__)
 
@@ -47,10 +48,10 @@ class _HandleTransport:
         self._handle = handle
 
     def recv(self, size: int) -> bytes:
-        return _win32api.read_file(self._handle, size)
+        return w32.pipe.read_file(self._handle, size)
 
     def send(self, data: bytes) -> int:
-        return _win32api.write_file(self._handle, data)
+        return w32.pipe.write_file(self._handle, data)
 
     def close(self) -> None:
         pass
@@ -59,7 +60,7 @@ class _HandleTransport:
 def _watchdog(anchor: peercred.Anchor, new_login_event: int | None, deadline: float) -> None:
     handles = (anchor.handle,) if new_login_event is None else (anchor.handle, new_login_event)
     timeout_ms = int(max(0.0, deadline - time.monotonic()) * 1000)
-    index = _win32api.wait_for_any(handles, timeout_ms)
+    index = w32.event.wait_for_any(handles, timeout_ms)
     if index is None:
         logger.debug("Oracle TTL expired, exiting")
     elif index == 0:
@@ -97,7 +98,7 @@ def serve(
         name="pf-oracle-watchdog",
     ).start()
     while True:
-        _win32api.connect_named_pipe(handle)
+        w32.pipe.connect_named_pipe(handle)
         try:
             if authorize(handle):
                 _serve_messages(handle, identities)
@@ -106,7 +107,7 @@ def serve(
         except (exceptions.Error, OSError):
             logger.debug("Oracle connection error", exc_info=True)
         finally:
-            _win32api.disconnect_named_pipe(handle)
+            w32.pipe.disconnect_named_pipe(handle)
 
 
 def _serve_messages(handle: int, identities: list[Identity]) -> None:

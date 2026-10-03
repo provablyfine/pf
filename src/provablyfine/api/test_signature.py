@@ -114,7 +114,7 @@ def _signed_request_with(
         "headers": [(k.lower().encode(), v.encode()) for k, v in prepared.headers.items()],
         "server": ("testserver", 80),
         "scheme": "http",
-        "app": app or _app(),
+        "app": app or _app(signature.NonceStore(started_at=0)),
     }
     request = starlette.requests.Request(scope)
     request.state.body = body

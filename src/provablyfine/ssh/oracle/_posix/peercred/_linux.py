@@ -84,6 +84,17 @@ def close_peer_identity(peer: PeerIdentity) -> None:
     os.close(peer.pidfd)
 
 
+def peer_user_id(conn: socket.socket) -> int:
+    """The effective uid of the process on the other end of `conn`.
+
+    `peer_identity()` reads this same uid and discards it, because what it is
+    after is a process. This is the function for a caller that wants only the
+    uid, so it need not open a pidfd it will never compare.
+    """
+    raw = conn.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize("3i"))
+    return struct.unpack("3i", raw)[1]
+
+
 def _pidfd_file_identity(pidfd: int) -> tuple[int, int]:
     """A pidfd's own (st_dev, st_ino) -- a stable, comparable process identity.
 

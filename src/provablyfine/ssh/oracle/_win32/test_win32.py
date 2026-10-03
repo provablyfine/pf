@@ -10,12 +10,15 @@ import subprocess
 import sys
 import threading
 import time
+import uuid
 
 import pytest
 
 from .... import jwk
+from ... import _w32 as w32
+from ... import _win32 as agent_transport
 from ... import agent, cert, exceptions, serde
-from . import _win32api, connection, peercred, session
+from . import connection, peercred, session
 
 _HELPER = "provablyfine.ssh.oracle._win32._test_helpers"
 _CMD = os.environ.get("COMSPEC") or "C:\\Windows\\System32\\cmd.exe"
@@ -55,7 +58,7 @@ def _read_pid_file(path: str, timeout: float = 30.0) -> int:
 
 def _pipe_is_up(name: str) -> bool:
     """Whether an oracle is still serving `name`."""
-    return _win32api.named_pipe_exists(name)
+    return w32.pipe.named_pipe_exists(name)
 
 
 def _wait_until_pipe_gone(name: str, timeout: float) -> float:
@@ -79,12 +82,12 @@ def _stop_oracle(anchor_pid: int, directory_url: str = _DIRECTORY_URL) -> None:
     event a second `pf login` would use. Keeps a failed test from leaving a
     process holding a pipe name the next run wants."""
     name = session._new_login_event_name(anchor_pid, peercred.process_starttime(anchor_pid), directory_url)
-    event = _win32api.open_event(name)
+    event = w32.event.open_event(name)
     if event is not None:
         try:
-            _win32api.set_event(event)
+            w32.event.set_event(event)
         finally:
-            _win32api.close_handle(event)
+            w32.process.close_handle(event)
 
 
 @pytest.fixture
@@ -306,7 +309,7 @@ def test_the_oracle_process_memory_is_not_readable_by_the_same_user(key: jwk.Pri
         out, _ = proc.communicate(timeout=60)
         target_token, _, control_token = out.strip().partition(" ")
         assert control_token.endswith("=OPENED"), f"the control open failed, so DENIED proves nothing: {out!r}"
-        assert target_token == f"{oracle_pid}=DENIED:{_win32api.ERROR_ACCESS_DENIED}", (
+        assert target_token == f"{oracle_pid}=DENIED:{w32.raw.ERROR_ACCESS_DENIED}", (
             f"the oracle's memory was readable: {out!r}"
         )
         assert _pipe_is_up(name), "the probe disturbed the oracle"
@@ -467,3 +470,37 @@ def test_is_descendant_of_walks_a_real_chain(tmp_path: pathlib.Path) -> None:
     finally:
         chain.kill()
         chain.wait(timeout=30)
+
+
+def _unique_pipe_name() -> str:
+    return f"\\\\.\\pipe\\pf-test-peer-{uuid.uuid4().hex[:12]}"
+
+
+def test_check_owner_passes_for_a_pipe_we_serve_ourselves() -> None:
+    """The client-side chain `ssh._win32._check_owner` runs on connect.
+
+    Both ends are this process, so this proves `GetNamedPipeServerProcessId`
+    answers on a client handle opened at `SECURITY_ANONYMOUS` (the level
+    `_open_pipe` uses, per O-5), that the token read agrees with our own, and
+    that a legitimate oracle is never rejected. Rejecting a peer that is *not*
+    ours needs a second account, which no unprivileged test can arrange.
+    """
+    name = _unique_pipe_name()
+    server = w32.pipe.create_named_pipe(name, inheritable=False)
+    stream = agent_transport._open_pipe(name)
+    try:
+        agent_transport._check_owner(stream, name)
+    finally:
+        stream.close()
+        w32.process.close_handle(server)
+
+
+def test_an_oracle_pipe_we_serve_passes_the_owner_check() -> None:
+    """No false positive: a legitimate oracle must never be rejected."""
+    name = _unique_pipe_name()
+    server = w32.pipe.create_named_pipe(name, inheritable=False)
+    try:
+        client = agent.Client(name, check_owner=True)
+        client.close()
+    finally:
+        w32.process.close_handle(server)

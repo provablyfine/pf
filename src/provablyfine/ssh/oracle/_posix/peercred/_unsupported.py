@@ -30,6 +30,10 @@ def peer_identity(_conn: socket.socket) -> PeerIdentity:
     raise exceptions.Error(_MESSAGE)
 
 
+def peer_user_id(_conn: socket.socket) -> int:
+    raise exceptions.Error(_MESSAGE)
+
+
 def close_peer_identity(_peer: PeerIdentity) -> None:
     raise exceptions.Error(_MESSAGE)
 
