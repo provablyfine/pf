@@ -417,7 +417,13 @@ def _run_tui(config_path: str, loop: asyncio.AbstractEventLoop, *, force_relogin
         sys.stderr.write(f"{e}\n")
         _exit_now(2)
 
-    if force_relogin or not relogin.has_valid_session(cfg):
+    try:
+        valid_session = relogin.has_valid_session(cfg)
+    except pfc.exceptions.UI as e:
+        sys.stderr.write(f"{e}\n")
+        _exit_now(2)
+
+    if force_relogin or not valid_session:
         cfg.role_id = None  # cleared at startup; set in-memory during login, never persisted
         cfg.session_key_fingerprint = None
         cfg.session_key_file = None

@@ -1,4 +1,4 @@
-"""Kernel-verified peer-process identity for the oracle's UNIX-socket peers.
+"""Kernel-verified peer-process identity for UNIX-socket peers.
 
 Pure, server-independent primitives, no socket-protocol knowledge -- just
 "who is on the other end of this connection, and is it who we think it is."
@@ -36,6 +36,7 @@ parent_is_launcher = _impl.parent_is_launcher
 parent_session_id = _impl.parent_session_id
 parent_tty_dev = _impl.parent_tty_dev
 peer_identity = _impl.peer_identity
+peer_user_id = _impl.peer_user_id
 peer_session_facts = _impl.peer_session_facts
 process_starttime = _impl.process_starttime
 reconstruct_anchor = _impl.reconstruct_anchor
@@ -56,6 +57,7 @@ __all__ = [
     "parent_tty_dev",
     "peer_identity",
     "peer_session_facts",
+    "peer_user_id",
     "process_starttime",
     "reconstruct_anchor",
     "same_process",

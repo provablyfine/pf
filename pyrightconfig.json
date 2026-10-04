@@ -11,7 +11,8 @@
     "**/test_*.py",
     "**/*linux*",
     "**/*darwin*",
-    "**/*win32*"
+    "**/*win32*",
+    "src/provablyfine/ssh/_w32"
   ],
   "pythonPlatform": "Linux",
   "typeCheckingMode": "strict"
