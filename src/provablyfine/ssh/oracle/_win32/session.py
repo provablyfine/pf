@@ -30,8 +30,9 @@ import logging
 import time
 
 from .... import jwk
+from ... import _w32 as w32
 from ... import exceptions, serde
-from . import _win32api, peercred, server, spawn
+from . import peercred, server, spawn
 
 logger = logging.getLogger(__name__)
 
@@ -54,11 +55,17 @@ def pipe_name(pid: int, creation_time: int, directory_url: str) -> str:
     to be: the access control is the peer-credential check in `authorize()`,
     not the name.
 
-    A squatter who created the pipe first is not a real exposure either.
-    `create_named_pipe` uses FILE_FLAG_FIRST_PIPE_INSTANCE, so `pf login`
-    fails loudly rather than sharing the name. To be *sent* a signing
-    request an impostor would have to list back our session public key, whose
-    fingerprint lives in the user's own config file.
+    A squatter who created the pipe first cannot get anything signed, for the
+    same reason: `create_named_pipe` uses FILE_FLAG_FIRST_PIPE_INSTANCE, so
+    `pf login` fails loudly rather than sharing the name, and to be *sent* a
+    signing request an impostor would have to list back our session public key,
+    whose fingerprint lives in the user's own config file.
+
+    It is still an exposure, because the name being free is the normal state
+    between an oracle exiting and the next command noticing. Whoever holds it
+    answers every `pf` we make in that window, and the answer they choose is
+    "no such key here", which reads as an expired session. That is what
+    `ssh.agent.Client(check_owner=True)` is for.
     """
     return f"\\\\.\\pipe\\pf-session-oracle-{_digest(pid, creation_time, directory_url)}"
 
@@ -120,7 +127,7 @@ def _spawn(key: jwk.Private, ttl: float, anchor_pid: int, directory_url: str) ->
             logon_sid=peercred.logon_sid(anchor),
         )
     finally:
-        _win32api.close_handle(handle)
+        w32.process.close_handle(handle)
         peercred.close_anchor(anchor)
     return name, pid
 
@@ -130,7 +137,7 @@ def _create_pipe_on_new_login(name: str, event_name: str) -> int:
     deadline = time.monotonic() + _NEW_LOGIN_TIMEOUT_SECONDS
     announced = False
     while True:
-        handle = _win32api.try_create_named_pipe(name, inheritable=True)
+        handle = w32.pipe.try_create_named_pipe(name, inheritable=True)
         if handle is not None:
             return handle
         if time.monotonic() >= deadline:
@@ -141,12 +148,12 @@ def _create_pipe_on_new_login(name: str, event_name: str) -> int:
         if not announced:
             logger.debug("A newer login is waiting on an existing session oracle")
             announced = True
-        predecessor = _win32api.open_event(event_name)
+        predecessor = w32.event.open_event(event_name)
         if predecessor is not None:
             try:
-                _win32api.set_event(predecessor)
+                w32.event.set_event(predecessor)
             finally:
-                _win32api.close_handle(predecessor)
+                w32.process.close_handle(predecessor)
         time.sleep(0.05)
 
 

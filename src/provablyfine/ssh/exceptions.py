@@ -9,5 +9,14 @@ class InvalidConfiguration(Error):
     from "oracle unavailable, degrade gracefully"."""
 
 
+class OraclePeerCheckFailed(Error):
+    """The endpoint we connected to is not served by a process running as us,
+    or its owner could not be read.
+
+    Deliberately not an `OSError` so that we can fail with a meaningful error
+    message.
+    """
+
+
 class InvalidSignature(Exception):
     pass

@@ -6,8 +6,21 @@ import subprocess
 import sys
 
 from .... import jwk
+from ... import _w32 as w32
 from ... import buffer
-from . import _win32api, peercred, server
+from . import peercred, server
+
+
+def oracle_process_security_attributes() -> w32.security.OwnedSecurityAttributes:
+    """A process-object DACL that keeps the oracle unreadable from outside.
+
+    The Windows counterpart of `_posix._runner._lock_down()`'s
+    `PR_SET_DUMPABLE`/`PT_DENY_ATTACH`
+    """
+    sid = w32.security.current_user_sid()
+    readable = w32.raw.PROCESS_QUERY_LIMITED_INFORMATION | w32.raw.SYNCHRONIZE
+    sddl = f"O:{sid}G:{sid}D:(A;;GA;;;SY)(A;;0x{readable:x};;;BA)(A;;0x{readable:x};;;{sid})"
+    return w32.security.security_attributes(sddl, inheritable=False)
 
 
 def spawn_subprocess(
@@ -24,27 +37,13 @@ def spawn_subprocess(
     """Start `_runner.py` in a fresh interpreter and return the child's pid.
 
     `subprocess.Popen` would do everything except one thing this needs: give
-    the child process object a security descriptor. Object access is decided
-    when a HANDLE is opened and never revisited, so a process that locks its
-    own DACL down after the fact leaves anything that opened it earlier still
-    reading. Only `CreateProcessW`'s `lpProcessAttributes` is in force from the
-    process object's first instant -- hence `_win32api.spawn_detached_process`
-    here rather than `Popen`. See `_win32api.oracle_process_security_attributes`
-    for what the descriptor says and why.
+    the child process object a security descriptor.
 
     The pipe HANDLE still crosses by inheritance, now through an explicit
     handle list instead of `STARTUPINFO.lpAttributeList`: it names exactly
     what the child receives (the pipe, the stdin read end, the NUL handle),
     which is `close_fds=True`'s job restated. The private key crosses over the
-    stdin pipe: POSIX's `pass_fds` does not exist here. It is buffered into
-    the pipe before the child starts, so the child never blocks on a parent
-    that has forgotten about it, and a failed spawn never leaves a child
-    waiting for a key that will not come.
-
-    The caller creates the pipe before calling this, which is the analogue of
-    POSIX's bind-before-spawn: it is accept-ready before the caller proceeds,
-    so there is no "is the oracle up yet" race, and the name is claimed before
-    anything else could take it.
+    stdin pipe.
     """
     payload = buffer.Writer()
     payload.write_string(key.to_pem())
@@ -63,20 +62,20 @@ def spawn_subprocess(
         "-" if event_name is None else event_name,
         "-" if logon_sid is None else logon_sid,
     ]
-    stdin_read, stdin_write = _win32api.create_inheritable_pipe()
-    std_null = _win32api.open_nul()
+    stdin_read, stdin_write = w32.pipe.create_inheritable_pipe()
+    std_null = w32.pipe.open_nul()
     try:
         try:
-            _win32api.write_file(stdin_write, payload.to_bytes())
+            w32.pipe.write_file(stdin_write, payload.to_bytes())
         finally:
-            _win32api.close_handle(stdin_write)
-        return _win32api.spawn_detached_process(
+            w32.process.close_handle(stdin_write)
+        return w32.spawn.spawn_detached_process(
             subprocess.list2cmdline(argv),
             inherit=(handle, stdin_read, std_null),
             std_input=stdin_read,
             std_null=std_null,
-            process_security=_win32api.oracle_process_security_attributes(),
+            process_security=oracle_process_security_attributes(),
         )
     finally:
-        _win32api.close_handle(stdin_read)
-        _win32api.close_handle(std_null)
+        w32.process.close_handle(stdin_read)
+        w32.process.close_handle(std_null)

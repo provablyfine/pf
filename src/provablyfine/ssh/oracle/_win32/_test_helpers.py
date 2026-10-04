@@ -10,8 +10,9 @@ import os
 import sys
 import time
 
+from ... import _w32 as w32
 from ... import agent, exceptions
-from . import _win32api, peercred
+from . import peercred
 
 
 def _shell_identity() -> None:
@@ -35,12 +36,12 @@ def _probe_process_memory(target_pid: str) -> None:
     and that a DENIED for the target is the target's DACL talking, not the
     machine's.
     """
-    _win32api.disable_debug_privilege()
+    w32.security.disable_debug_privilege()
     results: list[str] = []
     for pid in (int(target_pid), os.getpid()):
-        handle, error = _win32api.try_open_process_for_read(pid)
+        handle, error = w32.process.try_open_process_for_read(pid)
         if handle is not None:
-            _win32api.close_handle(handle)
+            w32.process.close_handle(handle)
             results.append(f"{pid}=OPENED")
         else:
             results.append(f"{pid}=DENIED:{error}")

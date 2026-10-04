@@ -14,8 +14,9 @@ import logging
 import secrets
 
 from .... import jwk
+from ... import _w32 as w32
 from ... import exceptions, serde
-from . import _win32api, peercred, server, spawn
+from . import peercred, server, spawn
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +43,7 @@ def spawn_oracle(key: jwk.Private, cert_blob: bytes, anchor: peercred.Anchor, tt
     # recomputed by anyone so it can be random rather than derived, and a
     # collision with a live pipe is not a case worth retrying.
     name = pipe_name(secrets.token_hex(16))
-    handle = _win32api.try_create_named_pipe(name, inheritable=True)
+    handle = w32.pipe.try_create_named_pipe(name, inheritable=True)
     if handle is None:
         raise exceptions.Error(f"Unable to create the connection oracle pipe {name}")
     try:
@@ -51,7 +52,7 @@ def spawn_oracle(key: jwk.Private, cert_blob: bytes, anchor: peercred.Anchor, tt
         # The child holds its own inherited copy; ours would otherwise keep the
         # pipe alive past the oracle's exit and leave `ssh` connecting to
         # nothing.
-        _win32api.close_handle(handle)
+        w32.process.close_handle(handle)
     return name
 
 
