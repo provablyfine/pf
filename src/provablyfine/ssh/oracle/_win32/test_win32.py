@@ -479,11 +479,10 @@ def _unique_pipe_name() -> str:
 def test_check_owner_passes_for_a_pipe_we_serve_ourselves() -> None:
     """The client-side chain `ssh._win32._check_owner` runs on connect.
 
-    Both ends are this process, so this proves `GetNamedPipeServerProcessId`
-    answers on a client handle opened at `SECURITY_ANONYMOUS` (the level
-    `_open_pipe` uses, per O-5), that the token read agrees with our own, and
-    that a legitimate oracle is never rejected. Rejecting a peer that is *not*
-    ours needs a second account, which no unprivileged test can arrange.
+    Both ends are this process, so this proves that `GetNamedPipeServerProcessId`
+    answers on a client handle opened at `SECURITY_ANONYMOUS`, that
+    the token read agrees with our own, and that a legitimate oracle is
+    never rejected.
     """
     name = _unique_pipe_name()
     server = w32.pipe.create_named_pipe(name, inheritable=False)
