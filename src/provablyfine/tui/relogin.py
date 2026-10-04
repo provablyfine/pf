@@ -114,30 +114,6 @@ def http_sig_login(cfg: client.Config, api: client.Client, screen: base.HasApp |
     return fp
 
 
-def oidc_login(api: client.Client, auth_name: str, cfg: client.Config, screen: base.HasApp | None = None) -> str:
-    session_key, fp = browser_login.generate_session_key(cfg.directory_url)
-    auth_public = client.Factory(api.config).public().get_public_auth(auth_name, "cli")
-    if not isinstance(auth_public.config, pfc.schemas.OidcConfig):
-        raise pfc.exceptions.UI(f"Auth '{auth_name}' is not OIDC")
-    id_token, nonce = browser_login.oidc_flow(auth_public.config)
-    session_http = api.session_auth(session=fp)
-    response = session_http.post(
-        url=session_http.directory.login_oidc,
-        json={
-            "auth_name": auth_public.name,
-            "client_type": "cli",
-            "id_token": id_token,
-            "nonce": nonce,
-            "session_public_key": session_key.public().to_dict(),
-        },
-    )
-    if response.status_code != 200:
-        raise pfc.exceptions.UI(f"OIDC login failed: {response.text}")
-    roles = [pfc.schemas.LoginRoleInfo(**r) for r in response.json().get("roles", [])]
-    _tui_select_role(roles, session_key, api, cfg, screen)
-    return fp
-
-
 def oidc_device_code_login(
     api: client.Client,
     auth_name: str,
@@ -176,8 +152,6 @@ def login(
     screen: base.HasApp | None = None,
 ) -> str:
     match auth_type:
-        case "oidc":
-            return oidc_login(api, auth_name, cfg, screen)
         case "oidc-device-code" | "oidc-secret-device-code":
             return oidc_device_code_login(api, auth_name, cfg, screen)
         case _:
@@ -245,7 +219,6 @@ class ReloginScreen(base.ModalScreen[None]):
     @textual.work
     async def on_mount(self) -> None:
         auth_name = self._cfg.auth_name or "default"
-        status = self.query_one("#status", textual.widgets.Label)
 
         try:
             auth_public = await client.Factory(self._api.config).async_public().get_public_auth(auth_name, "cli")
@@ -253,9 +226,6 @@ class ReloginScreen(base.ModalScreen[None]):
             self._finish(False, str(e))
             return
         auth_type = auth_public.config.type
-
-        if auth_type not in ("http_sig", "oidc-device-code", "oidc-secret-device-code"):
-            status.update(f"Opening browser for {auth_name}…")
 
         self._login(auth_name, auth_type)
 
@@ -265,8 +235,6 @@ class ReloginScreen(base.ModalScreen[None]):
             match auth_type:
                 case "http_sig":
                     fp = http_sig_login(self._cfg, self._api, screen=self)
-                case "oidc":
-                    fp = oidc_login(self._api, auth_name, self._cfg, screen=self)
                 case "oidc-device-code" | "oidc-secret-device-code":
 
                     def _show(user_code: str, uri: str) -> None:

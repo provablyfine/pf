@@ -1,8 +1,7 @@
-"""Mock OIDC provider for testing OIDC login flow."""
+"""Mock OIDC provider for the device code flow and token verification tests."""
 
 import base64
 import dataclasses
-import hashlib
 import http.server
 import json
 import secrets
@@ -22,21 +21,6 @@ import pytest
 def _b64url_encode(data: bytes) -> str:
     """Encode bytes as base64url without padding."""
     return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
-
-
-def _b64url_decode(s: str) -> bytes:
-    """Decode base64url string to bytes."""
-    s = s + "=" * (-len(s) % 4)
-    return base64.urlsafe_b64decode(s)
-
-
-@dataclasses.dataclass
-class _PendingCode:
-    """Pending authorization code with PKCE challenge and optional email."""
-
-    code_challenge: str
-    email: str
-    nonce: str | None = None
 
 
 @dataclasses.dataclass
@@ -60,8 +44,6 @@ class _MockOidcHandler(http.server.BaseHTTPRequestHandler):
             self._handle_discovery()
         elif path == "/jwks":
             self._handle_jwks()
-        elif path == "/authorize":
-            self._handle_authorize(parsed.query)
         else:
             self.send_error(404)
 
@@ -104,37 +86,6 @@ class _MockOidcHandler(http.server.BaseHTTPRequestHandler):
         self.send_header("content-type", "application/json")
         self.end_headers()
         self.wfile.write(json.dumps(jwks).encode("utf-8"))
-
-    def _handle_authorize(self, query: str) -> None:
-        provider = self.server.mock_provider  # type: ignore
-        params = urllib.parse.parse_qs(query)
-        redirect_uri = params.get("redirect_uri", [""])[0]
-        code_challenge = params.get("code_challenge", [""])[0]
-        nonce = params.get("nonce", [None])[0]
-
-        if not redirect_uri or not code_challenge:
-            self.send_error(400, "Missing redirect_uri or code_challenge")
-            return
-
-        # Check if an error should be returned
-        if provider._authorize_error:
-            error = provider._authorize_error
-            redirect = f"{redirect_uri}?error={urllib.parse.quote(error)}"
-            self.send_response(302)
-            self.send_header("location", redirect)
-            self.end_headers()
-            return
-
-        # Generate authorization code
-        code = secrets.token_urlsafe(32)
-        provider._pending_codes[code] = _PendingCode(
-            code_challenge=code_challenge, email="user@example.com", nonce=nonce
-        )
-
-        redirect = f"{redirect_uri}?code={urllib.parse.quote(code)}"
-        self.send_response(302)
-        self.send_header("location", redirect)
-        self.end_headers()
 
     def _send_json_error(self, status_code: int, error: str) -> None:
         self.send_response(status_code)
@@ -189,35 +140,7 @@ class _MockOidcHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(json.dumps({"id_token": id_token, "token_type": "Bearer"}).encode("utf-8"))
             return
 
-        code = params.get("code", [""])[0]
-        code_verifier = params.get("code_verifier", [""])[0]
-
-        if not code or not code_verifier:
-            self.send_error(400, "Missing code or code_verifier")
-            return
-
-        pending = provider._pending_codes.get(code)
-        if not pending:
-            self.send_error(400, "Invalid code")
-            return
-
-        # Verify PKCE: b64url(sha256(verifier)) == challenge
-        computed_challenge = _b64url_encode(hashlib.sha256(code_verifier.encode()).digest())
-        if computed_challenge != pending.code_challenge:
-            self.send_error(400, "PKCE verification failed")
-            return
-
-        # Generate and return id_token
-        id_token = provider.issue_token(pending.email, nonce=pending.nonce)
-        response = {"id_token": id_token, "token_type": "Bearer"}
-
-        self.send_response(200)
-        self.send_header("content-type", "application/json")
-        self.end_headers()
-        self.wfile.write(json.dumps(response).encode("utf-8"))
-
-        # Clean up
-        del provider._pending_codes[code]
+        self._send_json_error(400, "unsupported_grant_type")
 
 
 class MockOidcProvider:
@@ -226,9 +149,7 @@ class MockOidcProvider:
     def __init__(self, client_id: str = "test-client", client_secret: str | None = None) -> None:
         self.client_id = client_id
         self.client_secret = client_secret
-        self._authorize_error: str | None = None
         self.delay_s = 0.0
-        self._pending_codes: dict[str, _PendingCode] = {}
         self._pending_device_codes: dict[str, _PendingDeviceCode] = {}
 
         # Generate RSA-2048 key
@@ -249,10 +170,6 @@ class MockOidcProvider:
         # Start server in background thread
         self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
         self._thread.start()
-
-    def set_authorize_error(self, error: str | None) -> None:
-        """Set/clear the error to return from /authorize endpoint."""
-        self._authorize_error = error
 
     def accepts_client_secret(self, supplied: str | None) -> bool:
         """Whether a request carries the secret this provider requires. None means it requires none."""

@@ -11,7 +11,6 @@ import cryptography.hazmat.primitives.asymmetric.padding
 import cryptography.hazmat.primitives.hashes
 import provablyfine_client as pfc
 import pytest
-import requests
 
 import provablyfine.browser_login
 import provablyfine.cli.login
@@ -99,7 +98,7 @@ def oidc_env(api, mock_oidc, tmp_path) -> typing.Iterator[OidcEnv]:
 
 
 # =============================================================================
-# Group A: Server endpoint tests (call sc.oidc_login directly)
+# Server endpoint tests (call login_oidc directly)
 # =============================================================================
 
 
@@ -512,57 +511,7 @@ def test_endpoint_replay_nonce(oidc_env: OidcEnv) -> None:
 
 
 # =============================================================================
-# Group B: Full login.oidc_login flow tests (with browser mock)
-# =============================================================================
-
-
-@pytest.mark.real_session_oracle
-def test_full_oidc_login_flow(oidc_env: OidcEnv, monkeypatch) -> None:
-    """Complete OIDC login flow: discovery → PKCE → authorize → callback → token → server login."""
-
-    def fake_browser(url: str) -> None:
-        """Simulate browser by making the authorization request in a background thread."""
-
-        def _fetch():
-            try:
-                requests.get(url, allow_redirects=True, timeout=5)
-            except Exception:
-                pass  # Ignore errors; we just need to trigger the callback
-
-        threading.Thread(target=_fetch, daemon=True).start()
-
-    monkeypatch.setattr("provablyfine.browser_login.open_browser", fake_browser)
-
-    # Call the full OIDC login flow
-    provablyfine.cli.login.oidc_login(oidc_env.config, oidc_env.sc, "oidc-test")
-    assert oidc_env.config.session_key_fingerprint  # fingerprint stored in config
-
-
-@pytest.mark.real_session_oracle
-def test_full_oidc_login_flow_callback_error(oidc_env: OidcEnv, monkeypatch) -> None:
-    """Authorization server rejects the request; callback receives error instead of code."""
-    oidc_env.mock.set_authorize_error("access_denied")
-
-    def fake_browser(url: str) -> None:
-        """Simulate browser by making the authorization request."""
-
-        def _fetch():
-            try:
-                requests.get(url, allow_redirects=True, timeout=5)
-            except Exception:
-                pass
-
-        threading.Thread(target=_fetch, daemon=True).start()
-
-    monkeypatch.setattr("provablyfine.browser_login.open_browser", fake_browser)
-
-    # Should raise because callback never receives a code
-    with pytest.raises(pfc.exceptions.UI, match="did not receive an authorization code"):
-        provablyfine.cli.login.oidc_login(oidc_env.config, oidc_env.sc, "oidc-test")
-
-
-# =============================================================================
-# Group C: Device code flow tests
+# Device code flow tests
 # =============================================================================
 
 
@@ -707,7 +656,7 @@ def _finish_device_code_login(
 
 
 # =============================================================================
-# Group D: Device code flow with a client secret
+# Device code flow with a client secret
 # =============================================================================
 
 

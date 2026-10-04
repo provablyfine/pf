@@ -120,24 +120,6 @@ def http_sig_login(
     _select_role(result.roles, sc.session_with_private_key(session_key), role)
 
 
-def oidc_login(c: client.Config, sc: client.Factory, auth_name: str, role: str | None = None) -> None:
-    """OIDC login. Mutates c with new session key fields."""
-    auth_public = sc.public().get_public_auth(auth_name, "cli")
-    if not isinstance(auth_public.config, pfc.schemas.OidcConfig):
-        raise pfc.exceptions.UI(f"Auth '{auth_name}' is not OIDC")
-
-    session_key, session_fingerprint = browser_login.generate_session_key(c.directory_url)
-    print("Opening browser for OIDC login...")
-    id_token, nonce = browser_login.oidc_flow(auth_public.config)
-    result = sc.session_with_key(session_fingerprint).login_oidc(
-        auth_name, "cli", id_token, session_key.public().to_dict(), nonce
-    )
-    c.session_key_fingerprint = session_fingerprint
-    c.session_key_file = None
-    c.session_key_pem = None
-    _select_role(result.roles, sc.session_with_private_key(session_key), role)
-
-
 def oidc_device_code_login(c: client.Config, sc: client.Factory, auth_name: str, role: str | None = None) -> None:
     """OIDC device code login. Mutates c with new session key fields."""
     auth_public = sc.public().get_public_auth(auth_name, "cli")
@@ -167,8 +149,6 @@ def login(
     match auth_public.config.type:
         case "http_sig":
             http_sig_login(c, sc, session_key_path, role)
-        case "oidc":
-            oidc_login(c, sc, auth_name, role)
         case "oidc-device-code" | "oidc-secret-device-code":
             oidc_device_code_login(c, sc, auth_name, role)
         case _:
