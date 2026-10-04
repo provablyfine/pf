@@ -15,23 +15,7 @@ def oracle_process_security_attributes() -> w32.security.OwnedSecurityAttributes
     """A process-object DACL that keeps the oracle unreadable from outside.
 
     The Windows counterpart of `_posix._runner._lock_down()`'s
-    `PR_SET_DUMPABLE`/`PT_DENY_ATTACH`: object access is decided by this DACL
-    at `OpenProcess` time, and a process HANDLE is never rechecked after it is
-    granted, so the descriptor has to be in force from the process object's
-    first instant -- which only `CreateProcessW`'s `lpProcessAttributes`
-    achieves. Locking down from inside the runner instead would let anything
-    that opened a handle before the change keep reading forever.
-
-    The same user keeps `QUERY_LIMITED_INFORMATION|SYNCHRONIZE` (process times,
-    wait for exit), which `peercred`-style observation needs; that exposes no
-    memory. Administrators get the same limited rights *from the DACL*, on
-    purpose: their real power to read anything comes from `SeDebugPrivilege`,
-    which no DACL can gate and no claim here pretends to. A DACL that granted
-    Administrators full control would even weaken the boundary, because an
-    ssh-session/admin token has that group *enabled* without anyone holding
-    anything privileged. Deliberately absent for the user: `VM_READ`/
-    `VM_WRITE`, `CREATE_THREAD`, `SUSPEND_RESUME`, `TERMINATE`, and `WRITE_DAC`
-    (owner rights do not let a non-privileged user re-loosen this later).
+    `PR_SET_DUMPABLE`/`PT_DENY_ATTACH`
     """
     sid = w32.security.current_user_sid()
     readable = w32.raw.PROCESS_QUERY_LIMITED_INFORMATION | w32.raw.SYNCHRONIZE
@@ -53,27 +37,13 @@ def spawn_subprocess(
     """Start `_runner.py` in a fresh interpreter and return the child's pid.
 
     `subprocess.Popen` would do everything except one thing this needs: give
-    the child process object a security descriptor. Object access is decided
-    when a HANDLE is opened and never revisited, so a process that locks its
-    own DACL down after the fact leaves anything that opened it earlier still
-    reading. Only `CreateProcessW`'s `lpProcessAttributes` is in force from the
-    process object's first instant -- hence `w32.spawn.spawn_detached_process`
-    here rather than `Popen`. See `oracle_process_security_attributes` for what
-    the descriptor says and why.
+    the child process object a security descriptor.
 
     The pipe HANDLE still crosses by inheritance, now through an explicit
     handle list instead of `STARTUPINFO.lpAttributeList`: it names exactly
     what the child receives (the pipe, the stdin read end, the NUL handle),
     which is `close_fds=True`'s job restated. The private key crosses over the
-    stdin pipe: POSIX's `pass_fds` does not exist here. It is buffered into
-    the pipe before the child starts, so the child never blocks on a parent
-    that has forgotten about it, and a failed spawn never leaves a child
-    waiting for a key that will not come.
-
-    The caller creates the pipe before calling this, which is the analogue of
-    POSIX's bind-before-spawn: it is accept-ready before the caller proceeds,
-    so there is no "is the oracle up yet" race, and the name is claimed before
-    anything else could take it.
+    stdin pipe.
     """
     payload = buffer.Writer()
     payload.write_string(key.to_pem())

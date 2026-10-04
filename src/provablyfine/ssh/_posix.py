@@ -4,10 +4,6 @@
 system ssh-agent and pf's own oracle listen on a UNIX socket whose path is
 whatever the caller has; for the system agent that path is in the
 environment, which is the only resolution this endpoint must do.
-
-`check_owner` is for the case where the caller knows the path because pf
-derived it, and so can tell an impostor from an absent oracle. The check
-itself is `_check_owner` below.
 """
 
 from __future__ import annotations
@@ -35,9 +31,6 @@ def connect(path: str | None, *, check_owner: bool = False) -> wire.Transport:
 
 
 def _check_owner(sock: socket.socket, path: str) -> None:
-    # `ssh.oracle` is imported here rather than at module scope:
-    # `ssh/__init__.py` imports this module before it, so a top-level import
-    # would make that order load-bearing for a call made once per connection.
     from . import oracle
 
     try:

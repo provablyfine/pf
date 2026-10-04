@@ -1,14 +1,4 @@
-"""The Windows end of the ssh-agent client.
-
-`ssh.agent` dispatches here (or to `_posix.connect`) by platform. The system
-agent's pipe name is fixed and pf's own oracle's is derived, so unlike POSIX
-there is no environment to resolve. The raw Win32 calls live in
-`provablyfine.ssh._w32`; this module is the transport plus the owner check.
-
-`check_owner` is for the case where the caller knows the name because pf
-derived it, and so can tell an impostor from an absent oracle. The check
-itself is `_check_owner` below.
-"""
+"""The Windows end of the ssh-agent client."""
 
 from __future__ import annotations
 
@@ -36,10 +26,6 @@ def _open_pipe(name: str) -> typing.BinaryIO:
     A pipe instance serves one client at a time. pf's oracle has a single
     instance, so a client that arrives while another is being served, or while
     the server is re-arming after the previous one, is told the pipe is busy.
-    The system ssh-agent behaves the same way. `WaitNamedPipeW` is what makes
-    that waitable rather than fatal: it only succeeds when the pipe exists and
-    an instance becomes free. A pipe that does not exist, or that we may not
-    open, fails at once.
     """
     deadline = time.monotonic() + _PIPE_BUSY_TIMEOUT_SECONDS
     while True:
