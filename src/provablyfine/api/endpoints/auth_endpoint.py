@@ -10,6 +10,15 @@ router = fastapi.APIRouter(prefix="/auth", dependencies=[fastapi.Depends(signatu
 
 _204 = fastapi.responses.Response(status_code=204)
 
+# Which client_type each auth config type is valid for. http_sig works everywhere.
+# The oidc browser flow only runs in a web client. The device code flows are what
+# a cli does instead, and the secret one cannot be handed to a web client at all.
+_REQUIRED_CLIENT_TYPE: dict[str, str] = {
+    "oidc": "web",
+    "oidc-device-code": "cli",
+    "oidc-secret-device-code": "cli",
+}
+
 
 def _build_config(data: schemas.auth.AuthCreateRequest) -> dict[str, typing.Any]:
     if data.config.type == "oidc":
@@ -57,11 +66,10 @@ def create_endpoint(data: schemas.auth.AuthCreateRequest) -> schemas.auth.Auth:
             responses.problem_response(status_code=400, title="Auth config name must not be a pure integer")
         )
 
-    # The secret of an oidc-secret-device-code config is sent to the client that runs the flow.
-    # A web client cannot keep it secret, so the type is only ever valid for the cli.
-    if data.config.type == "oidc-secret-device-code" and data.client_type != "cli":
+    required = _REQUIRED_CLIENT_TYPE.get(data.config.type)
+    if required is not None and data.client_type != required:
         raise responses.ProblemHTTPException(
-            responses.problem_response(status_code=400, title="oidc-secret-device-code requires client_type cli")
+            responses.problem_response(status_code=400, title=f"{data.config.type} requires client_type {required}")
         )
 
     grants = grant.Grants.create()

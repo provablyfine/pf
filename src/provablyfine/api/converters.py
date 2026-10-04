@@ -575,11 +575,11 @@ def auth_config_to_schema(ac: model.auth_config.AuthConfig) -> schemas.auth.Auth
 
 def auth_config_to_public_schema(ac: model.auth_config.AuthConfig) -> schemas.auth.AuthPublic:
     config = _auth_config_to_config(ac)
-    if ac.client_type == "web" and isinstance(config, schemas.auth.OidcConfig):
-        # We do return client_secret to the client when client_type == cli. This is actually safe
-        # because the only case where this happens if for OIDC desktop applications that have a client_secret
-        # (for example, google) and in this case, the client_secret is known to be public.
-        # An oidc-secret-device-code config is always a cli config, so it never reaches this branch.
+    if isinstance(config, schemas.auth.OidcConfig):
+        # An oidc config is always a web config. A web client cannot keep a secret,
+        # so the client_secret never leaves the server.
+        # The secret of an oidc-secret-device-code config must be sent to the client
+        # that runs the flow, but that type is always a cli config and never reaches here.
         config = config.model_copy(update={"client_secret": None})
     return schemas.auth.AuthPublic(
         name=ac.name,

@@ -33,6 +33,9 @@ _AuthParamsResult = _HttpSigParams | _OidcParams
 # Auth configs that talk to an identity provider. They all ask for the same fields.
 _OIDC_TYPES = ("oidc", "oidc-device-code", "oidc-secret-device-code")
 
+# Auth types whose client_type is fixed by the type itself. The server rejects the others.
+_FIXED_CLIENT_TYPE = {"oidc": "web", "oidc-device-code": "cli", "oidc-secret-device-code": "cli"}
+
 
 class _AuthTypeScreen(base.ModalScreen[str | None]):
     DEFAULT_CSS = """
@@ -87,9 +90,10 @@ class _AuthParamsScreen(base.ModalScreen[_AuthParamsResult | None]):
         with textual.containers.VerticalGroup() as container:
             container.border_title = f"New {self._type} auth"
             yield base.Input(placeholder="Name", id="name", compact=True)
-            if self._type == "oidc-secret-device-code":
-                # A client secret only ever belongs to a cli client.
-                yield base.Input("cli", id="client_type", compact=True, disabled=True)
+            fixed_client_type = _FIXED_CLIENT_TYPE.get(self._type)
+            if fixed_client_type is not None:
+                # The auth type only works with this client type, so there is nothing to pick.
+                yield base.Input(fixed_client_type, id="client_type", compact=True, disabled=True)
             else:
                 yield base.Input(placeholder="Client type (cli or web)", id="client_type", compact=True)
             if self._type in _OIDC_TYPES:

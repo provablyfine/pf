@@ -78,7 +78,7 @@ def oidc_env(api, mock_oidc, tmp_path) -> typing.Iterator[OidcEnv]:
     # Create OIDC auth config pointing to mock OIDC provider
     sc.session().create_auth_oidc(
         name="oidc-test",
-        client_type="cli",
+        client_type="web",
         description="Test OIDC provider",
         issuer=mock_oidc.issuer,
         client_id=mock_oidc.client_id,
@@ -110,7 +110,7 @@ def test_endpoint_rs256(oidc_env: OidcEnv) -> None:
 
     oidc_env.sc.session_with_private_key(session_key).login_oidc(
         auth_name="oidc-test",
-        client_type="cli",
+        client_type="web",
         id_token=id_token,
         nonce=nonce,
         session_public_key=session_key.public().to_dict(),
@@ -130,7 +130,7 @@ def test_slow_identity_provider_does_not_block_other_writes(oidc_env: OidcEnv) -
             .session_with_private_key(session_key)
             .login_oidc(
                 auth_name="oidc-test",
-                client_type="cli",
+                client_type="web",
                 id_token=id_token,
                 nonce=nonce,
                 session_public_key=session_key.public().to_dict(),
@@ -157,7 +157,7 @@ def test_oidc_login_is_audited(oidc_env: OidcEnv) -> None:
 
     oidc_env.sc.session_with_private_key(session_key).login_oidc(
         auth_name="oidc-test",
-        client_type="cli",
+        client_type="web",
         id_token=id_token,
         nonce=nonce,
         session_public_key=session_key.public().to_dict(),
@@ -181,7 +181,7 @@ def test_endpoint_es256(oidc_env: OidcEnv) -> None:
 
     oidc_env.sc.session_with_private_key(session_key).login_oidc(
         auth_name="oidc-test",
-        client_type="cli",
+        client_type="web",
         id_token=id_token,
         nonce=nonce,
         session_public_key=session_key.public().to_dict(),
@@ -196,7 +196,7 @@ def test_endpoint_expired(oidc_env: OidcEnv) -> None:
     with pytest.raises(pfc.exceptions.UI):
         oidc_env.sc.session_with_private_key(session_key).login_oidc(
             auth_name="oidc-test",
-            client_type="cli",
+            client_type="web",
             id_token=id_token,
             nonce="irrelevant",
             session_public_key=session_key.public().to_dict(),
@@ -211,7 +211,7 @@ def test_endpoint_not_yet_valid(oidc_env: OidcEnv) -> None:
     with pytest.raises(pfc.exceptions.UI):
         oidc_env.sc.session_with_private_key(session_key).login_oidc(
             auth_name="oidc-test",
-            client_type="cli",
+            client_type="web",
             id_token=id_token,
             nonce="irrelevant",
             session_public_key=session_key.public().to_dict(),
@@ -226,7 +226,7 @@ def test_endpoint_wrong_issuer(oidc_env: OidcEnv) -> None:
     with pytest.raises(pfc.exceptions.UI):
         oidc_env.sc.session_with_private_key(session_key).login_oidc(
             auth_name="oidc-test",
-            client_type="cli",
+            client_type="web",
             id_token=id_token,
             nonce="irrelevant",
             session_public_key=session_key.public().to_dict(),
@@ -241,7 +241,7 @@ def test_endpoint_wrong_audience(oidc_env: OidcEnv) -> None:
     with pytest.raises(pfc.exceptions.UI) as excinfo:
         oidc_env.sc.session_with_private_key(session_key).login_oidc(
             auth_name="oidc-test",
-            client_type="cli",
+            client_type="web",
             id_token=id_token,
             nonce="irrelevant",
             session_public_key=session_key.public().to_dict(),
@@ -258,7 +258,7 @@ def test_endpoint_email_not_verified(oidc_env: OidcEnv) -> None:
     with pytest.raises(pfc.exceptions.UI):
         oidc_env.sc.session_with_private_key(session_key).login_oidc(
             auth_name="oidc-test",
-            client_type="cli",
+            client_type="web",
             id_token=id_token,
             nonce="irrelevant",
             session_public_key=session_key.public().to_dict(),
@@ -273,7 +273,7 @@ def test_endpoint_email_verified_missing_rejected_by_default(oidc_env: OidcEnv) 
     with pytest.raises(pfc.exceptions.UI):
         oidc_env.sc.session_with_private_key(session_key).login_oidc(
             auth_name="oidc-test",
-            client_type="cli",
+            client_type="web",
             id_token=id_token,
             nonce="irrelevant",
             session_public_key=session_key.public().to_dict(),
@@ -284,7 +284,7 @@ def test_endpoint_email_verified_absent_allowed_when_opted_out(oidc_env: OidcEnv
     """A missing email_verified claim is tolerated on an auth config that opted out of requiring it."""
     oidc_env.sc.session().create_auth_oidc(
         name="oidc-test-opt-out",
-        client_type="cli",
+        client_type="web",
         description="Test OIDC provider without email_verified",
         issuer=oidc_env.mock.issuer,
         client_id=oidc_env.mock.client_id,
@@ -296,7 +296,7 @@ def test_endpoint_email_verified_absent_allowed_when_opted_out(oidc_env: OidcEnv
 
     oidc_env.sc.session_with_private_key(session_key).login_oidc(
         auth_name="oidc-test-opt-out",
-        client_type="cli",
+        client_type="web",
         id_token=id_token,
         nonce="irrelevant",
         session_public_key=session_key.public().to_dict(),
@@ -307,7 +307,7 @@ def test_endpoint_email_explicitly_unverified_rejected_even_when_opted_out(oidc_
     """An explicit email_verified=false is never tolerated, even when the auth config opted out."""
     oidc_env.sc.session().create_auth_oidc(
         name="oidc-test-opt-out",
-        client_type="cli",
+        client_type="web",
         description="Test OIDC provider without email_verified",
         issuer=oidc_env.mock.issuer,
         client_id=oidc_env.mock.client_id,
@@ -320,7 +320,7 @@ def test_endpoint_email_explicitly_unverified_rejected_even_when_opted_out(oidc_
     with pytest.raises(pfc.exceptions.UI):
         oidc_env.sc.session_with_private_key(session_key).login_oidc(
             auth_name="oidc-test-opt-out",
-            client_type="cli",
+            client_type="web",
             id_token=id_token,
             nonce="irrelevant",
             session_public_key=session_key.public().to_dict(),
@@ -331,7 +331,7 @@ def test_endpoint_email_verified_string_rejected_even_when_opted_out(oidc_env: O
     """A non-boolean email_verified (a string, as some non-compliant providers send) is always rejected."""
     oidc_env.sc.session().create_auth_oidc(
         name="oidc-test-opt-out",
-        client_type="cli",
+        client_type="web",
         description="Test OIDC provider without email_verified",
         issuer=oidc_env.mock.issuer,
         client_id=oidc_env.mock.client_id,
@@ -344,7 +344,7 @@ def test_endpoint_email_verified_string_rejected_even_when_opted_out(oidc_env: O
     with pytest.raises(pfc.exceptions.UI):
         oidc_env.sc.session_with_private_key(session_key).login_oidc(
             auth_name="oidc-test-opt-out",
-            client_type="cli",
+            client_type="web",
             id_token=id_token,
             nonce="irrelevant",
             session_public_key=session_key.public().to_dict(),
@@ -356,7 +356,7 @@ def test_endpoint_require_email_verified_can_be_updated(oidc_env: OidcEnv) -> No
     sc = oidc_env.sc.session()
     created = sc.create_auth_oidc(
         name="oidc-test-updatable",
-        client_type="cli",
+        client_type="web",
         description="Test OIDC provider",
         issuer=oidc_env.mock.issuer,
         client_id=oidc_env.mock.client_id,
@@ -368,7 +368,7 @@ def test_endpoint_require_email_verified_can_be_updated(oidc_env: OidcEnv) -> No
     with pytest.raises(pfc.exceptions.UI):
         oidc_env.sc.session_with_private_key(session_key).login_oidc(
             auth_name="oidc-test-updatable",
-            client_type="cli",
+            client_type="web",
             id_token=id_token,
             nonce="before-update",
             session_public_key=session_key.public().to_dict(),
@@ -380,7 +380,7 @@ def test_endpoint_require_email_verified_can_be_updated(oidc_env: OidcEnv) -> No
     session_key_2 = _create_session_key()
     oidc_env.sc.session_with_private_key(session_key_2).login_oidc(
         auth_name="oidc-test-updatable",
-        client_type="cli",
+        client_type="web",
         id_token=id_token_2,
         nonce="after-update",
         session_public_key=session_key_2.public().to_dict(),
@@ -418,7 +418,7 @@ def test_endpoint_missing_email(oidc_env: OidcEnv) -> None:
     with pytest.raises(pfc.exceptions.UI):
         oidc_env.sc.session_with_private_key(session_key).login_oidc(
             auth_name="oidc-test",
-            client_type="cli",
+            client_type="web",
             id_token=id_token,
             nonce="irrelevant",
             session_public_key=session_key.public().to_dict(),
@@ -433,7 +433,7 @@ def test_endpoint_missing_kid(oidc_env: OidcEnv) -> None:
     with pytest.raises(pfc.exceptions.UI):
         oidc_env.sc.session_with_private_key(session_key).login_oidc(
             auth_name="oidc-test",
-            client_type="cli",
+            client_type="web",
             id_token=id_token,
             nonce="irrelevant",
             session_public_key=session_key.public().to_dict(),
@@ -448,7 +448,7 @@ def test_endpoint_unknown_auth(oidc_env: OidcEnv) -> None:
     with pytest.raises(pfc.exceptions.UI):
         oidc_env.sc.session_with_private_key(session_key).login_oidc(
             auth_name="no-such-auth",
-            client_type="cli",
+            client_type="web",
             id_token=id_token,
             nonce="irrelevant",
             session_public_key=session_key.public().to_dict(),
@@ -463,7 +463,7 @@ def test_endpoint_missing_nonce(oidc_env: OidcEnv) -> None:
     with pytest.raises(pfc.exceptions.UI):
         oidc_env.sc.session_with_private_key(session_key).login_oidc(
             auth_name="oidc-test",
-            client_type="cli",
+            client_type="web",
             id_token=id_token,
             nonce="some-nonce",
             session_public_key=session_key.public().to_dict(),
@@ -478,7 +478,7 @@ def test_endpoint_wrong_nonce(oidc_env: OidcEnv) -> None:
     with pytest.raises(pfc.exceptions.UI):
         oidc_env.sc.session_with_private_key(session_key).login_oidc(
             auth_name="oidc-test",
-            client_type="cli",
+            client_type="web",
             id_token=id_token,
             nonce="wrong-nonce",
             session_public_key=session_key.public().to_dict(),
@@ -493,7 +493,7 @@ def test_endpoint_replay_nonce(oidc_env: OidcEnv) -> None:
 
     oidc_env.sc.session_with_private_key(session_key1).login_oidc(
         auth_name="oidc-test",
-        client_type="cli",
+        client_type="web",
         id_token=id_token,
         nonce=nonce,
         session_public_key=session_key1.public().to_dict(),
@@ -503,7 +503,7 @@ def test_endpoint_replay_nonce(oidc_env: OidcEnv) -> None:
     with pytest.raises(pfc.exceptions.UI):
         oidc_env.sc.session_with_private_key(session_key2).login_oidc(
             auth_name="oidc-test",
-            client_type="cli",
+            client_type="web",
             id_token=id_token,
             nonce=nonce,
             session_public_key=session_key2.public().to_dict(),
@@ -824,6 +824,44 @@ def test_secret_device_code_config_requires_a_client_type_of_cli(
                     "issuer": oidc_secret_device_code_env.mock.issuer,
                     "client_id": oidc_secret_device_code_env.mock.client_id,
                     "client_secret": _DEVICE_CLIENT_SECRET,
+                },
+            },
+        )
+
+
+def test_oidc_config_requires_a_client_type_of_web(oidc_env: OidcEnv) -> None:
+    """The cli cannot run the browser redirect flow, so the type is refused for it."""
+    http = provablyfine.client.Client(oidc_env.config).session_auth(oidc_env.config.session_key_file)
+    with pytest.raises(pfc.exceptions.UI, match="oidc requires client_type web"):
+        http.post(
+            url=http.directory.auth,
+            json={
+                "name": "oidc-cli",
+                "client_type": "cli",
+                "description": "",
+                "config": {
+                    "type": "oidc",
+                    "issuer": oidc_env.mock.issuer,
+                    "client_id": oidc_env.mock.client_id,
+                },
+            },
+        )
+
+
+def test_device_code_config_requires_a_client_type_of_cli(oidc_env: OidcEnv) -> None:
+    """The device code flow is what a cli runs without a browser callback, so web is refused."""
+    http = provablyfine.client.Client(oidc_env.config).session_auth(oidc_env.config.session_key_file)
+    with pytest.raises(pfc.exceptions.UI, match="oidc-device-code requires client_type cli"):
+        http.post(
+            url=http.directory.auth,
+            json={
+                "name": "device-code-web",
+                "client_type": "web",
+                "description": "",
+                "config": {
+                    "type": "oidc-device-code",
+                    "issuer": oidc_env.mock.issuer,
+                    "client_id": oidc_env.mock.client_id,
                 },
             },
         )

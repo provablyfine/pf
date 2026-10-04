@@ -171,7 +171,7 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
 
     create_oidc_parser = create_type_subparsers.add_parser("oidc", help="OpenID Connect auth")
     create_oidc_parser.add_argument("-n", "--name", required=True, help="Name of auth config")
-    create_oidc_parser.add_argument("--client-type", required=True, choices=["cli", "web"], help="Client type")
+    create_oidc_parser.add_argument("--client-type", required=True, choices=["web"], help="Client type")
     create_oidc_parser.add_argument("--description", help="Description")
     create_oidc_parser.add_argument("--issuer", required=True, help="OIDC issuer URL")
     create_oidc_parser.add_argument("--client-id", required=True, help="OIDC client ID")
@@ -188,7 +188,7 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
         "oidc-device-code", help="OpenID Connect device code auth, without a client secret"
     )
     create_oidc_dc_parser.add_argument("-n", "--name", required=True, help="Name of auth config")
-    create_oidc_dc_parser.add_argument("--client-type", required=True, choices=["cli", "web"], help="Client type")
+    create_oidc_dc_parser.add_argument("--client-type", required=True, choices=["cli"], help="Client type")
     create_oidc_dc_parser.add_argument("--description", help="Description")
     create_oidc_dc_parser.add_argument("--issuer", required=True, help="OIDC issuer URL")
     create_oidc_dc_parser.add_argument("--client-id", required=True, help="OIDC client ID")
