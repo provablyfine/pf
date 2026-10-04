@@ -225,7 +225,7 @@ require a clear mapping of your security policy (who can access which hosts)
 to a set of [identities](XXX), [tags](XXX), [roles](XXX), and [boundaries](XXX).
 
 Realistically, most administrators probably want to authenticate users via
-their own [OIDC SSO](XXX).
+their own [OIDC SSO](admin/oidc.md).
 
 You also need to prepare a strategy to automate [host enrollment](XXX) in your
 tenant, ideally so that it happens when hosts are provisionned.
