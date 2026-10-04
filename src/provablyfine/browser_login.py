@@ -135,8 +135,23 @@ def oidc_flow(oidc_config: pfc.schemas.OidcConfig) -> tuple[str, str]:
     return id_token, nonce
 
 
+DeviceCodeConfig = pfc.schemas.OidcDeviceCodeConfig | pfc.schemas.OidcSecretDeviceCodeConfig
+
+
+def is_device_code_config(config: pfc.schemas.AuthConfig) -> typing.TypeGuard[DeviceCodeConfig]:
+    """Whether this config describes a device code flow, with or without a client secret."""
+    return isinstance(config, (pfc.schemas.OidcDeviceCodeConfig, pfc.schemas.OidcSecretDeviceCodeConfig))
+
+
+def _device_code_client_secret(config: DeviceCodeConfig) -> str | None:
+    """The secret the provider demands, or None when the device flow needs no client authentication."""
+    if isinstance(config, pfc.schemas.OidcSecretDeviceCodeConfig):
+        return config.client_secret
+    return None
+
+
 def oidc_device_code_flow(
-    config: pfc.schemas.OidcDeviceCodeConfig,
+    config: DeviceCodeConfig,
     display: typing.Callable[[str, str], None] | None = None,
 ) -> tuple[str, str]:
     """Run OIDC device code flow. Returns (id_token, nonce)."""
@@ -149,10 +164,11 @@ def oidc_device_code_flow(
     if not device_endpoint:
         raise pfc.exceptions.UI("OIDC provider does not support device code flow")
 
+    client_secret = _device_code_client_secret(config)
     nonce = base64url.encode(secrets.token_bytes(32))
     data: dict[str, str] = {"client_id": config.client_id, "scope": "openid email", "nonce": nonce}
-    if config.client_secret:
-        data["client_secret"] = config.client_secret
+    if client_secret is not None:
+        data["client_secret"] = client_secret
     device_resp = requests.post(device_endpoint, data=data, timeout=10)
     if device_resp.status_code != 200:
         raise pfc.exceptions.UI(f"Device authorization failed: {device_resp.text}")
@@ -175,8 +191,8 @@ def oidc_device_code_flow(
         "device_code": device["device_code"],
         "client_id": config.client_id,
     }
-    if config.client_secret:
-        token_data["client_secret"] = config.client_secret
+    if client_secret is not None:
+        token_data["client_secret"] = client_secret
 
     deadline = time.time() + expires_in
     while time.time() < deadline:

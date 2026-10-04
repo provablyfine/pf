@@ -141,7 +141,7 @@ def oidc_login(c: client.Config, sc: client.Factory, auth_name: str, role: str |
 def oidc_device_code_login(c: client.Config, sc: client.Factory, auth_name: str, role: str | None = None) -> None:
     """OIDC device code login. Mutates c with new session key fields."""
     auth_public = sc.public().get_public_auth(auth_name, "cli")
-    if not isinstance(auth_public.config, pfc.schemas.OidcDeviceCodeConfig):
+    if not browser_login.is_device_code_config(auth_public.config):
         raise pfc.exceptions.UI(f"Auth '{auth_name}' is not OIDC device code")
     session_key, session_fingerprint = browser_login.generate_session_key(c.directory_url)
     id_token, nonce = browser_login.oidc_device_code_flow(auth_public.config)
@@ -169,7 +169,7 @@ def login(
             http_sig_login(c, sc, session_key_path, role)
         case "oidc":
             oidc_login(c, sc, auth_name, role)
-        case "oidc-device-code":
+        case "oidc-device-code" | "oidc-secret-device-code":
             oidc_device_code_login(c, sc, auth_name, role)
         case _:
             raise pfc.exceptions.UI(f"Unsupported auth type: {auth_public.config.type}")

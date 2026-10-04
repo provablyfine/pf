@@ -147,7 +147,7 @@ def oidc_device_code_login(
 ) -> str:
     session_key, fp = browser_login.generate_session_key(cfg.directory_url)
     auth_public = client.Factory(api.config).public().get_public_auth(auth_name, "cli")
-    if not isinstance(auth_public.config, pfc.schemas.OidcDeviceCodeConfig):
+    if not browser_login.is_device_code_config(auth_public.config):
         raise pfc.exceptions.UI(f"Auth '{auth_name}' is not OIDC device code")
     id_token, nonce = browser_login.oidc_device_code_flow(auth_public.config, display=on_code)
     session_http = api.session_auth(session=fp)
@@ -178,7 +178,7 @@ def login(
     match auth_type:
         case "oidc":
             return oidc_login(api, auth_name, cfg, screen)
-        case "oidc-device-code":
+        case "oidc-device-code" | "oidc-secret-device-code":
             return oidc_device_code_login(api, auth_name, cfg, screen)
         case _:
             raise pfc.exceptions.UI(f"Unsupported browser auth type: {auth_type}")
@@ -254,7 +254,7 @@ class ReloginScreen(base.ModalScreen[None]):
             return
         auth_type = auth_public.config.type
 
-        if auth_type not in ("http_sig", "oidc-device-code"):
+        if auth_type not in ("http_sig", "oidc-device-code", "oidc-secret-device-code"):
             status.update(f"Opening browser for {auth_name}…")
 
         self._login(auth_name, auth_type)
@@ -267,7 +267,7 @@ class ReloginScreen(base.ModalScreen[None]):
                     fp = http_sig_login(self._cfg, self._api, screen=self)
                 case "oidc":
                     fp = oidc_login(self._api, auth_name, self._cfg, screen=self)
-                case "oidc-device-code":
+                case "oidc-device-code" | "oidc-secret-device-code":
 
                     def _show(user_code: str, uri: str) -> None:
                         browser_login.open_browser(uri)

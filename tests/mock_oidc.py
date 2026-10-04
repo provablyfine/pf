@@ -136,9 +136,18 @@ class _MockOidcHandler(http.server.BaseHTTPRequestHandler):
         self.send_header("location", redirect)
         self.end_headers()
 
+    def _send_json_error(self, status_code: int, error: str) -> None:
+        self.send_response(status_code)
+        self.send_header("content-type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps({"error": error}).encode("utf-8"))
+
     def _handle_device_authorization(self, body: str) -> None:
         provider = self.server.mock_provider  # type: ignore
         params = urllib.parse.parse_qs(body)
+        if not provider.accepts_client_secret(params.get("client_secret", [None])[0]):
+            self.send_error(400, "Invalid client_secret")
+            return
         nonce = params.get("nonce", [None])[0]
         device_code = secrets.token_urlsafe(32)
         user_code = secrets.token_hex(4).upper()
@@ -166,11 +175,11 @@ class _MockOidcHandler(http.server.BaseHTTPRequestHandler):
             if not pending_device:
                 self.send_error(400, "Invalid device_code")
                 return
+            if not provider.accepts_client_secret(params.get("client_secret", [None])[0]):
+                self._send_json_error(400, "invalid_client")
+                return
             if not pending_device.completed:
-                self.send_response(400)
-                self.send_header("content-type", "application/json")
-                self.end_headers()
-                self.wfile.write(json.dumps({"error": "authorization_pending"}).encode("utf-8"))
+                self._send_json_error(400, "authorization_pending")
                 return
             id_token = provider.issue_token(pending_device.email, nonce=pending_device.nonce)
             del provider._pending_device_codes[device_code]
@@ -214,8 +223,9 @@ class _MockOidcHandler(http.server.BaseHTTPRequestHandler):
 class MockOidcProvider:
     """Lightweight OIDC provider running in a background thread."""
 
-    def __init__(self, client_id: str = "test-client") -> None:
+    def __init__(self, client_id: str = "test-client", client_secret: str | None = None) -> None:
         self.client_id = client_id
+        self.client_secret = client_secret
         self._authorize_error: str | None = None
         self.delay_s = 0.0
         self._pending_codes: dict[str, _PendingCode] = {}
@@ -243,6 +253,10 @@ class MockOidcProvider:
     def set_authorize_error(self, error: str | None) -> None:
         """Set/clear the error to return from /authorize endpoint."""
         self._authorize_error = error
+
+    def accepts_client_secret(self, supplied: str | None) -> bool:
+        """Whether a request carries the secret this provider requires. None means it requires none."""
+        return self.client_secret is None or supplied == self.client_secret
 
     def complete_device_auth(self, device_code: str) -> None:
         """Mark device authorization as completed (simulates user visiting verification_uri)."""

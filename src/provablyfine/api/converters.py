@@ -544,7 +544,13 @@ def _auth_config_to_config(ac: model.auth_config.AuthConfig) -> schemas.auth.Aut
         config = schemas.auth.OidcDeviceCodeConfig(
             issuer=ac.config["issuer"],
             client_id=ac.config["client_id"],
-            client_secret=ac.config.get("client_secret"),
+            require_email_verified=ac.config.get("require_email_verified", True),
+        )
+    elif ac.type == "oidc-secret-device-code":
+        config = schemas.auth.OidcSecretDeviceCodeConfig(
+            issuer=ac.config["issuer"],
+            client_id=ac.config["client_id"],
+            client_secret=ac.config["client_secret"],
             require_email_verified=ac.config.get("require_email_verified", True),
         )
     elif ac.type == "http_sig":
@@ -569,10 +575,11 @@ def auth_config_to_schema(ac: model.auth_config.AuthConfig) -> schemas.auth.Auth
 
 def auth_config_to_public_schema(ac: model.auth_config.AuthConfig) -> schemas.auth.AuthPublic:
     config = _auth_config_to_config(ac)
-    if ac.client_type == "web" and isinstance(config, (schemas.auth.OidcConfig, schemas.auth.OidcDeviceCodeConfig)):
+    if ac.client_type == "web" and isinstance(config, schemas.auth.OidcConfig):
         # We do return client_secret to the client when client_type == cli. This is actually safe
         # because the only case where this happens if for OIDC desktop applications that have a client_secret
         # (for example, google) and in this case, the client_secret is known to be public.
+        # An oidc-secret-device-code config is always a cli config, so it never reaches this branch.
         config = config.model_copy(update={"client_secret": None})
     return schemas.auth.AuthPublic(
         name=ac.name,

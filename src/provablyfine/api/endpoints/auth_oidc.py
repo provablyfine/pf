@@ -162,7 +162,7 @@ async def _verify_oidc_login(request: fastapi.requests.Request, tenant_uuid: str
     # Look up auth config
     async with dependencies.tenant_read(request, tenant_uuid):
         ac = await asyncio.to_thread(model.auth_config.read_one, name=data.auth_name, client_type=data.client_type)
-    if ac is None or not ac.is_enabled or ac.type not in ("oidc", "oidc-device-code"):
+    if ac is None or not ac.is_enabled or ac.type not in ("oidc", "oidc-device-code", "oidc-secret-device-code"):
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=403, title="Auth config not found or not usable for OIDC login")
         )

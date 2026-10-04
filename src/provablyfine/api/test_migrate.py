@@ -5,6 +5,7 @@ import typing
 import alembic.autogenerate
 import alembic.command
 import alembic.runtime.migration
+import cryptography.fernet
 import pytest
 import sqlalchemy
 
@@ -15,6 +16,10 @@ if typing.TYPE_CHECKING:
 
 
 _TENANT = "0" * 32
+
+# Migrations that read encrypted columns are handed this key. Tests that store a row write
+# it with the same key.
+_KEK = cryptography.fernet.Fernet.generate_key().decode()
 
 
 def _sqlite_tenant(tmp_path: pathlib.Path) -> db.TenantDatabases:
@@ -38,7 +43,7 @@ def test_registry_migrations_match_model(tmp_path: pathlib.Path) -> None:
 
 def test_tenant_migrations_match_model(tmp_path: pathlib.Path) -> None:
     tenants = _sqlite_tenant(tmp_path)
-    migrate.upgrade_tenant(tenants, _TENANT)
+    migrate.upgrade_tenant(tenants, _TENANT, _KEK)
     assert _diffs(tenants.migration_engine(_TENANT), app_db.metadata) == []
 
 
@@ -119,7 +124,7 @@ def test_tenant_migration_upcasts_ssh_grants(tmp_path: pathlib.Path) -> None:
             {"d": json.dumps([])},
         )
 
-    migrate.upgrade_tenant(tenants, _TENANT)
+    migrate.upgrade_tenant(tenants, _TENANT, _KEK)
 
     with engine.connect() as connection:
         grant_list = json.loads(connection.execute(sqlalchemy.text("SELECT grant_list FROM role")).scalar_one())
@@ -189,7 +194,7 @@ def test_tenant_migration_adds_max_session_ttl(tmp_path: pathlib.Path) -> None:
             {"d": json.dumps([])},
         )
 
-    migrate.upgrade_tenant(tenants, _TENANT)
+    migrate.upgrade_tenant(tenants, _TENANT, _KEK)
 
     with engine.connect() as connection:
         grant_list = json.loads(connection.execute(sqlalchemy.text("SELECT grant_list FROM role")).scalar_one())
@@ -239,7 +244,7 @@ def test_registry_autoincrement_preserved(tmp_path: pathlib.Path) -> None:
 
 def test_tenant_autoincrement_preserved(tmp_path: pathlib.Path) -> None:
     tenants = _sqlite_tenant(tmp_path)
-    migrate.upgrade_tenant(tenants, _TENANT)
+    migrate.upgrade_tenant(tenants, _TENANT, _KEK)
     assert _tables_missing_autoincrement_ddl(tenants.engine(_TENANT), app_db.metadata) == []
 
 
@@ -293,7 +298,7 @@ def test_tenant_migration_nulls_out_unrestricted_bastions(tmp_path: pathlib.Path
             )
         )
 
-    migrate.upgrade_tenant(tenants, _TENANT)
+    migrate.upgrade_tenant(tenants, _TENANT, _KEK)
 
     with engine.connect() as connection:
         tag_id_lists = dict(
@@ -301,6 +306,67 @@ def test_tenant_migration_nulls_out_unrestricted_bastions(tmp_path: pathlib.Path
         )
     assert json.loads(tag_id_lists["https://unrestricted"]) is None
     assert json.loads(tag_id_lists["https://tagged"]) == [1, 2]
+
+
+# The revision just before `auth.type` split oidc-device-code into two types.
+_BEFORE_DEVICE_CODE_SPLIT = "736d98eea63f"
+
+
+def test_tenant_migration_splits_secret_device_code_auths(tmp_path: pathlib.Path) -> None:
+    """An oidc-device-code config that carries a client_secret becomes an oidc-secret-device-code one.
+
+    A config without a secret keeps its type. Only the type column is touched: the secret
+    was already inside the encrypted config, where it stays.
+    """
+    tenants = _sqlite_tenant(tmp_path)
+    config = migrate._alembic_config("tenant", tenants.registry_url, _TENANT)
+    alembic.command.upgrade(config, _BEFORE_DEVICE_CODE_SPLIT)
+
+    kek = cryptography.fernet.Fernet(_KEK)
+    issuer_and_client = {"issuer": "https://issuer", "client_id": "cid"}
+    rows = [
+        (1, "oidc-device-code", dict(issuer_and_client)),
+        (2, "oidc-device-code", {**issuer_and_client, "client_secret": "s"}),
+        (3, "oidc-device-code", {**issuer_and_client, "client_secret": ""}),
+        (4, "oidc", {**issuer_and_client, "client_secret": "s"}),
+    ]
+
+    engine = tenants.engine(_TENANT)
+    with engine.begin() as connection:
+        for row_id, auth_type, stored_config in rows:
+            connection.execute(
+                sqlalchemy.text(
+                    "INSERT INTO auth (id, name, client_type, description, created_at, is_enabled, type, config)"
+                    " VALUES (:id, :n, 'cli', '', 0, 1, :t, :c)"
+                ),
+                {
+                    "id": row_id,
+                    "n": f"auth{row_id}",
+                    "t": auth_type,
+                    "c": kek.encrypt(json.dumps(stored_config).encode()),
+                },
+            )
+
+    migrate.upgrade_tenant(tenants, _TENANT, _KEK)
+
+    with engine.connect() as connection:
+        types = dict(connection.execute(sqlalchemy.text("SELECT id, type FROM auth ORDER BY id")).all())
+        stored = connection.execute(sqlalchemy.text("SELECT config FROM auth WHERE id = 2")).scalar_one()
+    assert types == {
+        1: "oidc-device-code",
+        2: "oidc-secret-device-code",
+        3: "oidc-device-code",
+        4: "oidc",
+    }
+    assert json.loads(kek.decrypt(stored)) == {**issuer_and_client, "client_secret": "s"}
+
+
+def test_tenant_migration_without_a_kek_fails(tmp_path: pathlib.Path) -> None:
+    """The split reads encrypted configs, so a chain that reaches it without a key stops."""
+    tenants = _sqlite_tenant(tmp_path)
+    config = migrate._alembic_config("tenant", tenants.registry_url, _TENANT)
+    with pytest.raises(RuntimeError, match=r"pf\.kek"):
+        alembic.command.upgrade(config, "head")
 
 
 def test_registry_migration_drops_unique_tenant_name(tmp_path: pathlib.Path) -> None:

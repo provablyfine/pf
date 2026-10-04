@@ -260,12 +260,33 @@ class SessionClient:
         description: str,
         issuer: str,
         client_id: str,
-        client_secret: str | None,
         require_email_verified: bool = True,
     ) -> schemas.Auth:
         config: dict[str, typing.Any] = {"type": "oidc-device-code", "issuer": issuer, "client_id": client_id}
-        if client_secret is not None:
-            config["client_secret"] = client_secret
+        if not require_email_verified:
+            config["require_email_verified"] = False
+        body = {"name": name, "client_type": client_type, "description": description, "config": config}
+        response = self._session.post(self._directory.auth, auth=self._auth(), json=body)
+        if response.status_code != 201:
+            raise exceptions.UI(_problem_title(response, "Unable to create auth config"))
+        return schemas.Auth.model_validate(response.json())
+
+    def create_auth_oidc_secret_device_code(
+        self,
+        name: str,
+        client_type: str,
+        description: str,
+        issuer: str,
+        client_id: str,
+        client_secret: str,
+        require_email_verified: bool = True,
+    ) -> schemas.Auth:
+        config: dict[str, typing.Any] = {
+            "type": "oidc-secret-device-code",
+            "issuer": issuer,
+            "client_id": client_id,
+            "client_secret": client_secret,
+        }
         if not require_email_verified:
             config["require_email_verified"] = False
         body = {"name": name, "client_type": client_type, "description": description, "config": config}

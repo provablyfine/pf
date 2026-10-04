@@ -21,11 +21,19 @@ def _build_config(data: schemas.auth.AuthCreateRequest) -> dict[str, typing.Any]
         return config
     if data.config.type == "oidc-device-code":
         assert isinstance(data.config, schemas.auth.OidcDeviceCodeCreateConfig)
-        config = {"issuer": data.config.issuer, "client_id": data.config.client_id}
-        if data.config.client_secret is not None:
-            config["client_secret"] = data.config.client_secret
-        config["require_email_verified"] = data.config.require_email_verified
-        return config
+        return {
+            "issuer": data.config.issuer,
+            "client_id": data.config.client_id,
+            "require_email_verified": data.config.require_email_verified,
+        }
+    if data.config.type == "oidc-secret-device-code":
+        assert isinstance(data.config, schemas.auth.OidcSecretDeviceCodeCreateConfig)
+        return {
+            "issuer": data.config.issuer,
+            "client_id": data.config.client_id,
+            "client_secret": data.config.client_secret,
+            "require_email_verified": data.config.require_email_verified,
+        }
     return {}
 
 
@@ -47,6 +55,13 @@ def create_endpoint(data: schemas.auth.AuthCreateRequest) -> schemas.auth.Auth:
     if data.name.isdigit():
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=400, title="Auth config name must not be a pure integer")
+        )
+
+    # The secret of an oidc-secret-device-code config is sent to the client that runs the flow.
+    # A web client cannot keep it secret, so the type is only ever valid for the cli.
+    if data.config.type == "oidc-secret-device-code" and data.client_type != "cli":
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=400, title="oidc-secret-device-code requires client_type cli")
         )
 
     grants = grant.Grants.create()
@@ -134,7 +149,7 @@ def update_endpoint(auth_id: int, data: schemas.auth.AuthUpdateRequest) -> schem
                 "Not allowed to update auth config require_email_verified",
                 "Auth config does not exist",
             )
-        if ac.type not in ("oidc", "oidc-device-code"):
+        if ac.type not in ("oidc", "oidc-device-code", "oidc-secret-device-code"):
             raise responses.ProblemHTTPException(
                 responses.problem_response(
                     status_code=400, title="require_email_verified only applies to OIDC auth configs"

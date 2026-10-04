@@ -154,12 +154,19 @@ class OidcDeviceCodeConfig(_Base):
     type: typing.Literal["oidc-device-code"]
     issuer: str
     client_id: str
-    client_secret: str | None = None
+    require_email_verified: bool = True
+
+
+class OidcSecretDeviceCodeConfig(_Base):
+    type: typing.Literal["oidc-secret-device-code"]
+    issuer: str
+    client_id: str
+    client_secret: str
     require_email_verified: bool = True
 
 
 AuthConfig = typing.Annotated[
-    OidcConfig | OidcDeviceCodeConfig | HttpSigConfig,
+    OidcConfig | OidcDeviceCodeConfig | OidcSecretDeviceCodeConfig | HttpSigConfig,
     pydantic.Field(discriminator="type"),
 ]
 

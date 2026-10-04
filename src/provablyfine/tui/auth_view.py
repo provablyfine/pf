@@ -10,6 +10,16 @@ import textual.widgets
 
 from . import base
 
+# Auth configs that talk to an identity provider. The view shows the same fields for all of them.
+_OIDC_FAMILY = (
+    pfc.schemas.OidcConfig,
+    pfc.schemas.OidcDeviceCodeConfig,
+    pfc.schemas.OidcSecretDeviceCodeConfig,
+)
+
+# Configs that carry a client secret. oidc-device-code authenticates without one.
+_SECRET_BEARING = (pfc.schemas.OidcConfig, pfc.schemas.OidcSecretDeviceCodeConfig)
+
 
 class AuthViewScreen(base.Screen):
     BINDINGS: typing.ClassVar = [
@@ -25,7 +35,7 @@ class AuthViewScreen(base.Screen):
         self._saved_description: str = a.description
         self._saved_enabled: bool = a.is_enabled
         self._saved_require_email_verified: bool | None = (
-            a.config.require_email_verified if isinstance(a.config, pfc.schemas.OidcConfig) else None
+            a.config.require_email_verified if isinstance(a.config, _OIDC_FAMILY) else None
         )
 
     def compose(self) -> textual.app.ComposeResult:
@@ -36,15 +46,16 @@ class AuthViewScreen(base.Screen):
             yield base.Input(self._a.description, id="description", compact=True)
             yield textual.widgets.Label("Enabled", classes="field-label")
             yield textual.widgets.Checkbox(value=self._a.is_enabled, id="is_enabled", compact=True)
-            if isinstance(self._a.config, pfc.schemas.OidcConfig):
+            if isinstance(self._a.config, _OIDC_FAMILY):
                 yield textual.widgets.Label("Issuer", classes="field-label")
                 yield base.Input(self._a.config.issuer, id="issuer", compact=True, disabled=True)
                 yield textual.widgets.Label("Client ID", classes="field-label")
                 yield base.Input(self._a.config.client_id, id="client_id", compact=True, disabled=True)
-                yield textual.widgets.Label("Client secret", classes="field-label")
-                yield base.Input(
-                    "", placeholder="unchanged", id="client_secret", compact=True, password=True, disabled=True
-                )
+                if isinstance(self._a.config, _SECRET_BEARING):
+                    yield textual.widgets.Label("Client secret", classes="field-label")
+                    yield base.Input(
+                        "", placeholder="unchanged", id="client_secret", compact=True, password=True, disabled=True
+                    )
                 yield textual.widgets.Label("Require verified email", classes="field-label")
                 yield textual.widgets.Checkbox(
                     value=self._a.config.require_email_verified, id="require_email_verified", compact=True

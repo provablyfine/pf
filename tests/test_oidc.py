@@ -1,5 +1,6 @@
 """OIDC login e2e tests."""
 
+import asyncio
 import dataclasses
 import json
 import threading
@@ -611,7 +612,6 @@ def oidc_device_code_env(api, mock_oidc, tmp_path) -> typing.Iterator[OidcDevice
         description="Test OIDC device code provider",
         issuer=mock_oidc.issuer,
         client_id=mock_oidc.client_id,
-        client_secret=None,
     )
 
     sc.session().create_identity(
@@ -659,16 +659,27 @@ def test_device_code_endpoint_expired_token(oidc_device_code_env: OidcDeviceCode
 @pytest.mark.real_session_oracle
 def test_full_device_code_login_flow(oidc_device_code_env: OidcDeviceCodeEnv, monkeypatch: pytest.MonkeyPatch) -> None:
     """Complete device code login flow: device auth → poll → user completes → token → server login."""
+    _finish_device_code_login(
+        oidc_device_code_env.config, oidc_device_code_env.sc, "oidc-dc-test", oidc_device_code_env.mock, monkeypatch
+    )
+
+
+def _finish_device_code_login(
+    config: provablyfine.client.Config,
+    sc: provablyfine.client.Factory,
+    auth_name: str,
+    mock: mock_oidc.MockOidcProvider,
+    monkeypatch: pytest.MonkeyPatch,
+) -> str:
+    """Run a device code login, approve the code it asks for, and return the session key fingerprint."""
     monkeypatch.setattr("provablyfine.browser_login.open_browser", lambda url: None)
     result: list[str] = []
     error: list[Exception] = []
 
     def _run_login() -> None:
         try:
-            provablyfine.cli.login.oidc_device_code_login(
-                oidc_device_code_env.config, oidc_device_code_env.sc, "oidc-dc-test"
-            )
-            fp = oidc_device_code_env.config.session_key_fingerprint
+            provablyfine.cli.login.oidc_device_code_login(config, sc, auth_name)
+            fp = config.session_key_fingerprint
             if fp:
                 result.append(fp)
         except Exception as e:
@@ -681,14 +692,204 @@ def test_full_device_code_login_flow(oidc_device_code_env: OidcDeviceCodeEnv, mo
     deadline = time.time() + 10
     device_code = None
     while time.time() < deadline:
-        if oidc_device_code_env.mock._pending_device_codes:
-            device_code = next(iter(oidc_device_code_env.mock._pending_device_codes))
+        if mock._pending_device_codes:
+            device_code = next(iter(mock._pending_device_codes))
             break
         time.sleep(0.05)
 
     assert device_code is not None, "Device code not issued within timeout"
-    oidc_device_code_env.mock.complete_device_auth(device_code)
+    mock.complete_device_auth(device_code)
 
     login_thread.join(timeout=10)
     assert not error, f"Login failed: {error[0]}"
     assert result, "Login did not return a session fingerprint"
+    return result[0]
+
+
+# =============================================================================
+# Group D: Device code flow with a client secret
+# =============================================================================
+
+
+_DEVICE_CLIENT_SECRET = "device-client-secret"
+
+
+@dataclasses.dataclass
+class OidcSecretDeviceCodeEnv:
+    """Test environment with oidc-secret-device-code auth config."""
+
+    config: provablyfine.client.Config
+    sc: provablyfine.client.Factory
+    mock: mock_oidc.MockOidcProvider
+
+
+@pytest.fixture
+def oidc_secret_device_code_env(api, mock_oidc, tmp_path) -> typing.Iterator[OidcSecretDeviceCodeEnv]:
+    """Set up oidc-secret-device-code test environment, against a provider that demands a secret."""
+    mock_oidc.client_secret = _DEVICE_CLIENT_SECRET
+
+    account_key_obj = provablyfine.jwk.Private.generate_ed25519()
+    account_key_file = tmp_path / "account_key"
+    account_key_file.write_bytes(account_key_obj.to_pem())
+
+    config = provablyfine.client.Config(
+        directory_url=f"http://127.0.0.1:{api.port}/pf/t/00000000-0000-0000-0000-000000000001/directory",
+        account_key_file=str(account_key_file),
+    )
+
+    sc = provablyfine.client.Factory(config)
+    sc.invitation(sc.public().initialize(), str(account_key_file)).accept_invitation()
+
+    session_key_obj = provablyfine.jwk.Private.generate_ed25519()
+    session_key_file = tmp_path / "session_key"
+    session_key_file.write_bytes(session_key_obj.to_pem())
+    session_fingerprint = str(session_key_file)
+
+    result = sc.account(str(account_key_file), session_fingerprint).login_http_sig(session_key_obj.public().to_dict())
+    if result.roles:
+        sc.session_with_private_key(session_key_obj).update_session(result.roles[0].id)
+
+    config = provablyfine.client.Config(
+        directory_url=config.directory_url,
+        account_key_file=config.account_key_file,
+        session_key_file=str(session_key_file),
+    )
+    sc = provablyfine.client.Factory(config)
+
+    sc.session().create_auth_oidc_secret_device_code(
+        name="oidc-sdc-test",
+        client_type="cli",
+        description="Test OIDC device code provider that requires a client secret",
+        issuer=mock_oidc.issuer,
+        client_id=mock_oidc.client_id,
+        client_secret=_DEVICE_CLIENT_SECRET,
+    )
+
+    sc.session().create_identity(
+        name="user@example.com",
+        boundary_id_list=[],
+        boundary_name_list=[],
+        tag_id_list=[],
+        tag_name_value_list=[],
+    )
+
+    yield OidcSecretDeviceCodeEnv(config=config, sc=sc, mock=mock_oidc)
+
+
+def test_secret_device_code_endpoint_success(oidc_secret_device_code_env: OidcSecretDeviceCodeEnv) -> None:
+    """Server endpoint accepts oidc-secret-device-code auth config type."""
+    nonce = "test-nonce-secret-device-code"
+    id_token = oidc_secret_device_code_env.mock.issue_token("user@example.com", alg="RS256", nonce=nonce)
+    session_key = _create_session_key()
+
+    oidc_secret_device_code_env.sc.session_with_private_key(session_key).login_oidc(
+        auth_name="oidc-sdc-test",
+        client_type="cli",
+        id_token=id_token,
+        nonce=nonce,
+        session_public_key=session_key.public().to_dict(),
+    )
+
+
+@pytest.mark.real_session_oracle
+def test_full_secret_device_code_login_flow(
+    oidc_secret_device_code_env: OidcSecretDeviceCodeEnv, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The secret is sent to the provider, which is what lets the flow complete."""
+    _finish_device_code_login(
+        oidc_secret_device_code_env.config,
+        oidc_secret_device_code_env.sc,
+        "oidc-sdc-test",
+        oidc_secret_device_code_env.mock,
+        monkeypatch,
+    )
+
+
+@pytest.mark.real_session_oracle
+def test_device_code_flow_fails_without_the_secret(
+    oidc_secret_device_code_env: OidcSecretDeviceCodeEnv, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A provider that requires client authentication rejects a config that sends no secret."""
+    oidc_secret_device_code_env.sc.session().create_auth_oidc_device_code(
+        name="oidc-dc-no-secret",
+        client_type="cli",
+        description="Same provider, no client secret",
+        issuer=oidc_secret_device_code_env.mock.issuer,
+        client_id=oidc_secret_device_code_env.mock.client_id,
+    )
+    monkeypatch.setattr("provablyfine.browser_login.open_browser", lambda url: None)
+
+    with pytest.raises(pfc.exceptions.UI, match="Device authorization failed"):
+        provablyfine.cli.login.oidc_device_code_login(
+            oidc_secret_device_code_env.config, oidc_secret_device_code_env.sc, "oidc-dc-no-secret"
+        )
+
+
+def test_public_secret_device_code_config_keeps_the_secret(
+    oidc_secret_device_code_env: OidcSecretDeviceCodeEnv,
+) -> None:
+    """The cli must learn the secret from the public config, or it cannot run the flow."""
+    auth_public = oidc_secret_device_code_env.sc.public().get_public_auth("oidc-sdc-test", "cli")
+    assert isinstance(auth_public.config, pfc.schemas.OidcSecretDeviceCodeConfig)
+    assert auth_public.config.client_secret == _DEVICE_CLIENT_SECRET
+
+
+def test_device_code_config_rejects_a_secret(oidc_secret_device_code_env: OidcSecretDeviceCodeEnv) -> None:
+    """oidc-device-code has no client_secret. Sending one is a contract violation, not a silent drop."""
+    http = provablyfine.client.Client(oidc_secret_device_code_env.config).session_auth(
+        oidc_secret_device_code_env.config.session_key_file
+    )
+    with pytest.raises(pfc.exceptions.UI, match="Extra inputs are not permitted"):
+        http.post(
+            url=http.directory.auth,
+            json={
+                "name": "oidc-dc-with-secret",
+                "client_type": "cli",
+                "description": "",
+                "config": {
+                    "type": "oidc-device-code",
+                    "issuer": oidc_secret_device_code_env.mock.issuer,
+                    "client_id": oidc_secret_device_code_env.mock.client_id,
+                    "client_secret": _DEVICE_CLIENT_SECRET,
+                },
+            },
+        )
+
+
+def test_secret_device_code_config_requires_a_client_type_of_cli(
+    oidc_secret_device_code_env: OidcSecretDeviceCodeEnv,
+) -> None:
+    """A web client would receive the secret, so the type is refused for it."""
+    http = provablyfine.client.Client(oidc_secret_device_code_env.config).session_auth(
+        oidc_secret_device_code_env.config.session_key_file
+    )
+    with pytest.raises(pfc.exceptions.UI, match="requires client_type cli"):
+        http.post(
+            url=http.directory.auth,
+            json={
+                "name": "oidc-sdc-web",
+                "client_type": "web",
+                "description": "",
+                "config": {
+                    "type": "oidc-secret-device-code",
+                    "issuer": oidc_secret_device_code_env.mock.issuer,
+                    "client_id": oidc_secret_device_code_env.mock.client_id,
+                    "client_secret": _DEVICE_CLIENT_SECRET,
+                },
+            },
+        )
+
+
+def test_async_client_creates_both_device_code_types(oidc_device_code_env: OidcDeviceCodeEnv) -> None:
+    """The TUI creates auth configs through the async client, on both device code types."""
+    env = oidc_device_code_env
+
+    async def _create() -> list[str]:
+        sc = env.sc.async_session()
+        plain = await sc.create_auth_oidc_device_code("async-device", "cli", "", env.mock.issuer, env.mock.client_id)
+        secret = await sc.create_auth_oidc_secret_device_code(
+            "async-device-secret", "cli", "", env.mock.issuer, env.mock.client_id, _DEVICE_CLIENT_SECRET
+        )
+        return [plain.config.type, secret.config.type]
+
+    assert asyncio.run(_create()) == ["oidc-device-code", "oidc-secret-device-code"]

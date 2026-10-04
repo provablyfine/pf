@@ -4,6 +4,7 @@ import typing
 
 import alembic.command
 import alembic.script
+import cryptography.fernet
 import pytest
 import sqlalchemy
 import sqlalchemy.exc
@@ -82,7 +83,8 @@ def test_tenant_upgrade_runs_a_migration_inside_its_schema(
     config = migrate._alembic_config("tenant", tenants.registry_url, tenant_uuid)
     alembic.command.stamp(config, _BEFORE_BASTION_NULLABLE)
 
-    migrate.upgrade_tenant(tenants, tenant_uuid)
+    # The chain includes a migration that reads encrypted auth configs. It needs a key.
+    migrate.upgrade_tenant(tenants, tenant_uuid, cryptography.fernet.Fernet.generate_key().decode())
 
     head = alembic.script.ScriptDirectory.from_config(config).get_current_head()
     engine = tenants.migration_engine(tenant_uuid)
