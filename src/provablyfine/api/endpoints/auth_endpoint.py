@@ -23,11 +23,11 @@ _REQUIRED_CLIENT_TYPE: dict[str, str] = {
 def _build_config(data: schemas.auth.AuthCreateRequest) -> dict[str, typing.Any]:
     if data.config.type == "oidc":
         assert isinstance(data.config, schemas.auth.OidcCreateConfig)
-        config: dict[str, typing.Any] = {"issuer": data.config.issuer, "client_id": data.config.client_id}
-        if data.config.client_secret is not None:
-            config["client_secret"] = data.config.client_secret
-        config["require_email_verified"] = data.config.require_email_verified
-        return config
+        return {
+            "issuer": data.config.issuer,
+            "client_id": data.config.client_id,
+            "require_email_verified": data.config.require_email_verified,
+        }
     if data.config.type == "oidc-device-code":
         assert isinstance(data.config, schemas.auth.OidcDeviceCodeCreateConfig)
         return {

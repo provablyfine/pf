@@ -145,7 +145,6 @@ class OidcConfig(_Base):
     type: typing.Literal["oidc"]
     issuer: str
     client_id: str
-    client_secret: str | None = None
     callback_url: str
     require_email_verified: bool = True
 

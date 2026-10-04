@@ -132,12 +132,11 @@ class AsyncSessionClient:
         description: str,
         issuer: str,
         client_id: str,
-        client_secret: str | None,
         require_email_verified: bool = True,
     ) -> schemas.Auth:
         return await self._run(
             lambda: self._inner.create_auth_oidc(
-                name, client_type, description, issuer, client_id, client_secret, require_email_verified
+                name, client_type, description, issuer, client_id, require_email_verified
             )
         )
 

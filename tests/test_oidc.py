@@ -82,7 +82,6 @@ def oidc_env(api, mock_oidc, tmp_path) -> typing.Iterator[OidcEnv]:
         description="Test OIDC provider",
         issuer=mock_oidc.issuer,
         client_id=mock_oidc.client_id,
-        client_secret=None,
     )
 
     # Create identity with email matching the mock token
@@ -288,7 +287,6 @@ def test_endpoint_email_verified_absent_allowed_when_opted_out(oidc_env: OidcEnv
         description="Test OIDC provider without email_verified",
         issuer=oidc_env.mock.issuer,
         client_id=oidc_env.mock.client_id,
-        client_secret=None,
         require_email_verified=False,
     )
     id_token = oidc_env.mock.issue_token("user@example.com", nonce="irrelevant", email_verified=None)
@@ -311,7 +309,6 @@ def test_endpoint_email_explicitly_unverified_rejected_even_when_opted_out(oidc_
         description="Test OIDC provider without email_verified",
         issuer=oidc_env.mock.issuer,
         client_id=oidc_env.mock.client_id,
-        client_secret=None,
         require_email_verified=False,
     )
     id_token = oidc_env.mock.issue_token("user@example.com", nonce="irrelevant", email_verified=False)
@@ -335,7 +332,6 @@ def test_endpoint_email_verified_string_rejected_even_when_opted_out(oidc_env: O
         description="Test OIDC provider without email_verified",
         issuer=oidc_env.mock.issuer,
         client_id=oidc_env.mock.client_id,
-        client_secret=None,
         require_email_verified=False,
     )
     id_token = oidc_env.mock.issue_token("user@example.com", nonce="irrelevant", email_verified="true")
@@ -360,7 +356,6 @@ def test_endpoint_require_email_verified_can_be_updated(oidc_env: OidcEnv) -> No
         description="Test OIDC provider",
         issuer=oidc_env.mock.issuer,
         client_id=oidc_env.mock.client_id,
-        client_secret=None,
     )
 
     id_token = oidc_env.mock.issue_token("user@example.com", nonce="before-update", email_verified=None)

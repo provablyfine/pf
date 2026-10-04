@@ -537,7 +537,6 @@ def _auth_config_to_config(ac: model.auth_config.AuthConfig) -> schemas.auth.Aut
         config = schemas.auth.OidcConfig(
             issuer=ac.config["issuer"],
             client_id=ac.config["client_id"],
-            client_secret=ac.config.get("client_secret"),
             require_email_verified=ac.config.get("require_email_verified", True),
         )
     elif ac.type == "oidc-device-code":
@@ -574,13 +573,9 @@ def auth_config_to_schema(ac: model.auth_config.AuthConfig) -> schemas.auth.Auth
 
 
 def auth_config_to_public_schema(ac: model.auth_config.AuthConfig) -> schemas.auth.AuthPublic:
+    # An oidc config has no secret to leak. The secret of an oidc-secret-device-code
+    # config must reach the cli that runs the flow, so it is in its public config.
     config = _auth_config_to_config(ac)
-    if isinstance(config, schemas.auth.OidcConfig):
-        # An oidc config is always a web config. A web client cannot keep a secret,
-        # so the client_secret never leaves the server.
-        # The secret of an oidc-secret-device-code config must be sent to the client
-        # that runs the flow, but that type is always a cli config and never reaches here.
-        config = config.model_copy(update={"client_secret": None})
     return schemas.auth.AuthPublic(
         name=ac.name,
         description=ac.description,

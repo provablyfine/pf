@@ -239,12 +239,9 @@ class SessionClient:
         description: str,
         issuer: str,
         client_id: str,
-        client_secret: str | None,
         require_email_verified: bool = True,
     ) -> schemas.Auth:
         config: dict[str, typing.Any] = {"type": "oidc", "issuer": issuer, "client_id": client_id}
-        if client_secret is not None:
-            config["client_secret"] = client_secret
         if not require_email_verified:
             config["require_email_verified"] = False
         body = {"name": name, "client_type": client_type, "description": description, "config": config}

@@ -50,7 +50,6 @@ def _auth_create_oidc_function(args: argparse.Namespace) -> None:
         args.description or "",
         args.issuer,
         args.client_id,
-        args.client_secret,
         require_email_verified=not args.allow_unverified_email,
     )
 
@@ -108,8 +107,6 @@ def _auth_read_function(args: argparse.Namespace) -> None:
                 rows.append(["client_id", a.config.client_id])
                 rows.append(["callback_url", a.config.callback_url])
                 rows.append(["require_email_verified", a.config.require_email_verified])
-                if a.config.client_secret:
-                    rows.append(["client_secret", a.config.client_secret])
             elif isinstance(a.config, pfc.schemas.OidcDeviceCodeConfig):
                 rows.append(["issuer", a.config.issuer])
                 rows.append(["client_id", a.config.client_id])
@@ -175,7 +172,6 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
     create_oidc_parser.add_argument("--description", help="Description")
     create_oidc_parser.add_argument("--issuer", required=True, help="OIDC issuer URL")
     create_oidc_parser.add_argument("--client-id", required=True, help="OIDC client ID")
-    create_oidc_parser.add_argument("--client-secret", help="OIDC client secret (for providers that require it)")
     create_oidc_parser.add_argument(
         "--allow-unverified-email",
         action="store_true",

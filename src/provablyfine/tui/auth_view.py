@@ -17,8 +17,9 @@ _OIDC_FAMILY = (
     pfc.schemas.OidcSecretDeviceCodeConfig,
 )
 
-# Configs that carry a client secret. oidc-device-code authenticates without one.
-_SECRET_BEARING = (pfc.schemas.OidcConfig, pfc.schemas.OidcSecretDeviceCodeConfig)
+# Configs that carry a client secret. No other type stores one: the oidc browser flow
+# is run by a web app with its own credentials, never with a secret from this server.
+_SECRET_BEARING = (pfc.schemas.OidcSecretDeviceCodeConfig,)
 
 
 class AuthViewScreen(base.Screen):

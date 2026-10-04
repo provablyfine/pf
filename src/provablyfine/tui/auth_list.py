@@ -99,10 +99,8 @@ class _AuthParamsScreen(base.ModalScreen[_AuthParamsResult | None]):
             if self._type in _OIDC_TYPES:
                 yield base.Input(placeholder="Issuer", id="issuer", compact=True)
                 yield base.Input(placeholder="Client ID", id="client_id", compact=True)
-                optional = "" if self._type == "oidc-secret-device-code" else " (optional)"
-                yield base.Input(
-                    placeholder=f"Client secret{optional}", id="client_secret", compact=True, password=True
-                )
+                if self._type == "oidc-secret-device-code":
+                    yield base.Input(placeholder="Client secret", id="client_secret", compact=True, password=True)
                 yield textual.widgets.Checkbox(
                     "Require verified email", value=True, id="require_email_verified", compact=True
                 )
@@ -123,10 +121,12 @@ class _AuthParamsScreen(base.ModalScreen[_AuthParamsResult | None]):
             client_id = self.query_one("#client_id", textual.widgets.Input).value.strip()
             if not issuer or not client_id:
                 return
-            secret = self.query_one("#client_secret", textual.widgets.Input).value.strip()
-            if self._type == "oidc-secret-device-code" and not secret:
-                self.notify("This auth type requires a client secret", severity="error")
-                return
+            secret = ""
+            if self._type == "oidc-secret-device-code":
+                secret = self.query_one("#client_secret", textual.widgets.Input).value.strip()
+                if not secret:
+                    self.notify("This auth type requires a client secret", severity="error")
+                    return
             require_email_verified = self.query_one("#require_email_verified", textual.widgets.Checkbox).value
             self.dismiss(
                 _OidcParams(
@@ -210,7 +210,6 @@ class AuthListScreen(base.Screen):
                     "",
                     body.issuer,
                     body.client_id,
-                    body.client_secret or None,
                     body.require_email_verified,
                 )
             case _OidcParams(auth_type="oidc-device-code"):
