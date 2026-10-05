@@ -77,3 +77,31 @@ A raw tag id that does not exist is rejected, both at create and at update time
 
 And yes, we can delete an identity
   $ pfa -c config.json identity delete -i $USER2_ID
+
+List filters can be combined, keeping only identities matching every criterion
+  $ pfa -c config.json boundary create -n prod
+  $ pfa -c config.json tag create -n filter -v eu
+  $ PROD_ID=$(pfa -c config.json boundary list -n prod -q)
+  $ FILTER_TAG_ID=$(pfa -c config.json tag list -n filter -v eu -q)
+
+alice has the tag and the boundary, bob only the boundary, carol only the tag
+  $ pfa -c config.json identity create -n alice -b prod -t filter=eu
+  $ pfa -c config.json identity create -n bob -b prod
+  $ pfa -c config.json identity create -n carol -t filter=eu
+  $ ALICE_ID=$(pfa -c config.json identity list -n alice -q)
+  $ pfa -c config.json identity list --boundary-name prod -f json | jq -r '.[].name' | sort
+  alice
+  bob
+  $ pfa -c config.json identity list --tag-id $FILTER_TAG_ID -f json | jq -r '.[].name' | sort
+  alice
+  carol
+  $ pfa -c config.json identity list --tag-id $FILTER_TAG_ID --boundary-name prod -f json | jq -r '.[].name'
+  alice
+  $ pfa -c config.json identity list --tag-name filter --boundary-id $PROD_ID -f json | jq -r '.[].name'
+  alice
+  $ pfa -c config.json identity list -i $ALICE_ID --tag-name filter --boundary-id $PROD_ID -f json | jq -r '.[].name'
+  alice
+
+Filters with an empty intersection list nothing
+  $ pfa -c config.json identity list -i $ALICE_ID --tag-id $FILTER_TAG_ID --boundary-name does-not-exist -f json | jq -r '.[].name' | wc -l | tr -d ' '
+  0

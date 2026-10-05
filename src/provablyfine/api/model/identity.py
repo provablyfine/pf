@@ -154,9 +154,8 @@ def read_all(**kwargs: typing.Any) -> list[Identity]:
     query: dict[str, typing.Any] = {}
     if len(id_filter) > 0:
         id_set: set[int] = set(id_filter[0])
-        remaining_id_filter = id_filter[1:]
-        if len(remaining_id_filter) > 0:
-            id_set = id_set.intersection(set(i) for i in remaining_id_filter)
+        for other_ids in id_filter[1:]:
+            id_set = id_set.intersection(other_ids)
         query["id"] = list(id_set)
     if "name" in kwargs:
         query["name"] = kwargs["name"]
