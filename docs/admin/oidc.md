@@ -1,12 +1,32 @@
 # OIDC Authentication
 
-You can let your users log in to provablyfine with your existing identity provider
-(Okta, Microsoft Entra, Google Workspace, Keycloak, and so on) instead of managing
-SSH keys or invitations for every person. You register your provider once as an
-*auth* in your tenant, and each login proves the user's identity to that provider.
+By default, if you self-host provablyfine the system is configured
+to require users to log in via personal SSH keys. The managed
+demo environment we provide for free to help explore provablyfine is
+pre-configured to trust Google, GitHub, GitLab, and Codeberg so that
+if you have an active account within one of these systems, you
+can log in trivially.
 
-provablyfine acts as a standard OIDC client here. Nothing is configured in the
-server's YAML file. The provider's details live in the auth record you create.
+In both self-hosted and managed environments, you can extend the
+default configuration to allow your users to log in with your
+existing OIDC identity provider (Okta, Microsoft Entra, Google
+Workspace, Keycloak, and so on).
+
+## Supported Identity Providers
+
+Provablyfine acts as a standard OIDC client that uses the OIDC
+device code flow.
+
+The following IdPs have been tested and are known to work:
+
+- Google
+- Keycloack
+- Codeberg
+- GitLab
+
+The following IdPs are not supported:
+
+- GitHub
 
 ## How it works
 
@@ -19,18 +39,12 @@ server's YAML file. The provider's details live in the auth record you create.
    discovery document and key set, checks the signature, and checks the issuer,
    audience, expiry and nonce claims.
 4. The server matches the token's `email` claim to an identity. The identity must
-   already exist, and its name must be that email address. See
-   [Creating the auth](#creating-the-auth) below.
-5. A session is created. It expires after `session_duration_s` (1 hour by default),
-   and the user logs in again. The `pfat` TUI detects the expiry and re-runs the
-   login flow for you.
-
-Each `id_token` can be used exactly once. Replays are rejected.
+   already exist, and its name must be that email address.
+5. A session is created. It expires after `session_duration_s` (1 hour by default).
 
 ## Choosing an auth type
 
-There are three OIDC auth types. Pick by what your users log in with, and by whether
-your provider issued a public or a confidential client.
+There are three OIDC auth types:
 
 | Type | Client type | Flow | Needs a client secret |
 | --- | --- | --- | --- |
@@ -39,80 +53,73 @@ your provider issued a public or a confidential client.
 | `oidc-secret-device-code` | cli | Device code | Yes |
 
 The device code flow prints a URL and a short code. The user opens the URL on any
-device (typically their laptop or phone), signs in, and enters the code. The CLI
-polls the provider until the user is done. It works well for terminals, including
-remote SSH sessions, because the terminal itself never needs to host a redirect.
+device (typically their laptop or phone), signs in, and enters the code. Our CLI
+and TUI poll the provider until the user is done. This works well for terminals,
+including remote SSH sessions. Use `oidc-device-code` by default.
+`oidc-secret-device-code` is needed for some IdPs that have creative interpretations
+of the OIDC specification, aka, Google.
 
-`pf` and `pfat` use the CLI types. The `oidc` type is for web applications that run
-their own browser redirect flow.
+The `oidc` type is for web applications that run their own browser redirect flow.
+It is currently used exclusively by our managed demo environment. You do not need
+to use it, unless you have built a pure browser-based client for the provablyfine
+API.
+
 
 ## Setting up your provider
 
-Create an OIDC application (or "app registration") in your provider:
+### Google
 
-- Choose a native/public application for `oidc-device-code`, or a confidential
-  (server-side) one for `oidc-secret-device-code`.
-- Enable the device authorization grant. The provider must publish a
-  `device_authorization_endpoint` in its discovery document.
-- The application must issue tokens containing the `email` claim. The requested
-  scope is `openid email`, so make sure email is in the token.
+Create an application from the [Google Cloud Console](https://console.cloud.google.com):
 
-You need two values from it: the issuer URL and the client ID. For a confidential
-client you also need the client secret.
+1. Create a Project if you don't have one already and then select it.
+2. Go to "Google Auth Platform" from within the search bar
+3. In the "Branding" section, fill branding information
+4. In the "Client" section, create a client of type "Desktop". Save `Client ID`  and `Client secret`
+5. In the "Data access" section, configure the "userinfo.email" scope
 
-## Creating the auth
-
-The identity must exist before the user's first login, and its name must be the
-email address the provider will put in the token:
+and then create an `auth` within provablyfine:
 
 ```console
-$ pfa identity create -n alice@example.com
+pfa auth create oidc-secret-device-code -n google \
+    --issuer https://accounts.google.com \
+    --client-id CLIENT_ID --client-secret CLIENT_SECRET
 ```
 
-Then create the auth. With `pfat`, go to the Authentication section, press `a`,
-pick the type, and fill in the name, issuer and client ID.
+### GitLab
 
-With `pfa`:
+Create an application from the GitLab user settings:
+
+1. Go to the [Applications](https://gitlab.com/-/user_settings/applications) page
+2. Click on "Add new application"
+3. Fill the fields:
+   - name: whatever you want
+   - redirect url: "http://127.0.0.1/callback"
+   - uncheck "Confidential"
+   - check "Device authorization grant"
+   - check "openid" and "email" scopes
+4. Click "Save application", save the client id displayed on screen
+
+and then create an `auth` within provablyfine:
 
 ```console
-$ pfa auth create oidc-device-code -n default --client-type cli \
-    --issuer https://example.okta.com/oauth2/default \
-    --client-id 0oabc123DEFghiJKLmno
+pfa auth create oidc -n gitlab --issuer https://gitlab.com \
+    --client-id CLIENT_ID
 ```
 
-A confidential client uses `oidc-secret-device-code` and adds
-`--client-secret`. The secret is encrypted at rest with the tenant's key encryption
-key.
+### Codeberg
 
-An auth named `default` is picked up automatically by `pf login`. Otherwise pass
-`--auth NAME`.
+Create an application from the Codeberg settings:
 
-Two things to know:
+1. Go to the [Applications](https://codeberg.org/user/settings/applications) page
+2. Fill the fields:
+   - application name: whatever you want
+   - redirect URIs: http://127.0.0.1/callback
+   - uncheck "Confidential client"
+3. At the bottom of the page, click on "Create application"
 
-- The issuer and client ID cannot be changed after creation. Delete and recreate
-  the auth if they are wrong. The name, description, enabled flag and the email
-  verification requirement are editable.
-- By default the token's `email_verified` claim must be true. If your provider
-  never sends that claim at all, pass `--allow-unverified-email`. This only
-  tolerates a missing claim. A token that explicitly says the email is unverified
-  is always rejected.
-
-## Logging in
-
-Users run:
+and then create an `auth` within provablyfine:
 
 ```console
-$ pf login
-Open https://example.okta.com/activate
-Enter code: WQJV-RFHG
+pfa auth create oidc -n codeberg --issuer https://codeberg.org \
+    --client-id CLIENT_ID
 ```
-
-They finish the sign-in in the browser, and the command completes on its own. If the
-identity has several roles, `pf login` asks which one to activate.
-
-## provablyfine as an OIDC provider
-
-Separate note: provablyfine itself is also an OIDC issuer. Each tenant publishes
-keys and issues short-lived JWTs that the bastion and register component use to
-authenticate machine-to-machine connections. This is internal plumbing. There is
-nothing for you to configure, and it is unrelated to the login setup on this page.
