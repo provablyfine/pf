@@ -50,7 +50,6 @@ def _auth_create_oidc_function(args: argparse.Namespace) -> None:
         args.description or "",
         args.issuer,
         args.client_id,
-        args.client_secret,
         require_email_verified=not args.allow_unverified_email,
     )
 
@@ -59,6 +58,19 @@ def _auth_create_oidc_device_code_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     sc = client.Factory(c, timeout=args.timeout).session()
     sc.create_auth_oidc_device_code(
+        args.name,
+        args.client_type,
+        args.description or "",
+        args.issuer,
+        args.client_id,
+        require_email_verified=not args.allow_unverified_email,
+    )
+
+
+def _auth_create_oidc_secret_device_code_function(args: argparse.Namespace) -> None:
+    c = client.Config.load(args.config)
+    sc = client.Factory(c, timeout=args.timeout).session()
+    sc.create_auth_oidc_secret_device_code(
         args.name,
         args.client_type,
         args.description or "",
@@ -95,14 +107,15 @@ def _auth_read_function(args: argparse.Namespace) -> None:
                 rows.append(["client_id", a.config.client_id])
                 rows.append(["callback_url", a.config.callback_url])
                 rows.append(["require_email_verified", a.config.require_email_verified])
-                if a.config.client_secret:
-                    rows.append(["client_secret", a.config.client_secret])
             elif isinstance(a.config, pfc.schemas.OidcDeviceCodeConfig):
                 rows.append(["issuer", a.config.issuer])
                 rows.append(["client_id", a.config.client_id])
                 rows.append(["require_email_verified", a.config.require_email_verified])
-                if a.config.client_secret:
-                    rows.append(["client_secret", a.config.client_secret])
+            elif isinstance(a.config, pfc.schemas.OidcSecretDeviceCodeConfig):
+                rows.append(["issuer", a.config.issuer])
+                rows.append(["client_id", a.config.client_id])
+                rows.append(["require_email_verified", a.config.require_email_verified])
+                rows.append(["client_secret", a.config.client_secret])
             print(tabulate.tabulate(rows, tablefmt="plain"))
         case _:
             assert False, args.format
@@ -155,11 +168,10 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
 
     create_oidc_parser = create_type_subparsers.add_parser("oidc", help="OpenID Connect auth")
     create_oidc_parser.add_argument("-n", "--name", required=True, help="Name of auth config")
-    create_oidc_parser.add_argument("--client-type", required=True, choices=["cli", "web"], help="Client type")
+    create_oidc_parser.add_argument("--client-type", required=True, choices=["web"], help="Client type")
     create_oidc_parser.add_argument("--description", help="Description")
     create_oidc_parser.add_argument("--issuer", required=True, help="OIDC issuer URL")
     create_oidc_parser.add_argument("--client-id", required=True, help="OIDC client ID")
-    create_oidc_parser.add_argument("--client-secret", help="OIDC client secret (for providers that require it)")
     create_oidc_parser.add_argument(
         "--allow-unverified-email",
         action="store_true",
@@ -169,14 +181,13 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
     create_oidc_parser.set_defaults(func=_auth_create_oidc_function)
 
     create_oidc_dc_parser = create_type_subparsers.add_parser(
-        "oidc-device-code", help="OpenID Connect device code auth"
+        "oidc-device-code", help="OpenID Connect device code auth, without a client secret"
     )
     create_oidc_dc_parser.add_argument("-n", "--name", required=True, help="Name of auth config")
-    create_oidc_dc_parser.add_argument("--client-type", required=True, choices=["cli", "web"], help="Client type")
+    create_oidc_dc_parser.add_argument("--client-type", required=True, choices=["cli"], help="Client type")
     create_oidc_dc_parser.add_argument("--description", help="Description")
     create_oidc_dc_parser.add_argument("--issuer", required=True, help="OIDC issuer URL")
     create_oidc_dc_parser.add_argument("--client-id", required=True, help="OIDC client ID")
-    create_oidc_dc_parser.add_argument("--client-secret", help="OIDC client secret (for providers that require it)")
     create_oidc_dc_parser.add_argument(
         "--allow-unverified-email",
         action="store_true",
@@ -184,6 +195,23 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
         help="Accept a login whose provider never sends an email_verified claim",
     )
     create_oidc_dc_parser.set_defaults(func=_auth_create_oidc_device_code_function)
+
+    create_oidc_sdc_parser = create_type_subparsers.add_parser(
+        "oidc-secret-device-code", help="OpenID Connect device code auth, with a client secret"
+    )
+    create_oidc_sdc_parser.add_argument("-n", "--name", required=True, help="Name of auth config")
+    create_oidc_sdc_parser.add_argument("--client-type", required=True, choices=["cli"], help="Client type")
+    create_oidc_sdc_parser.add_argument("--description", help="Description")
+    create_oidc_sdc_parser.add_argument("--issuer", required=True, help="OIDC issuer URL")
+    create_oidc_sdc_parser.add_argument("--client-id", required=True, help="OIDC client ID")
+    create_oidc_sdc_parser.add_argument("--client-secret", required=True, help="OIDC client secret")
+    create_oidc_sdc_parser.add_argument(
+        "--allow-unverified-email",
+        action="store_true",
+        default=False,
+        help="Accept a login whose provider never sends an email_verified claim",
+    )
+    create_oidc_sdc_parser.set_defaults(func=_auth_create_oidc_secret_device_code_function)
 
     read_parser = subparsers.add_parser("read", help="Read an auth config")
     read_parser.add_argument("-i", "--id", type=int, required=True, help="ID of auth config")
@@ -203,7 +231,7 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
         "--require-verified-email",
         action="store_true",
         default=False,
-        help="Require the OIDC email_verified claim (OIDC/OIDC device-code auth configs only)",
+        help="Require the OIDC email_verified claim (OIDC auth configs only)",
     )
     eg2.add_argument(
         "--allow-unverified-email",

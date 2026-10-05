@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import typing
 
+import pydantic
+
 from . import base, jwk
 
 
@@ -12,7 +14,6 @@ class HttpSigConfig(base.APIBase):
 class OidcConfig(base.APIBase):
     issuer: str
     client_id: str
-    client_secret: str | None = None
     callback_url: str = "http://127.0.0.1/callback"
     require_email_verified: bool = True
     type: typing.Literal["oidc"] = "oidc"
@@ -21,12 +22,20 @@ class OidcConfig(base.APIBase):
 class OidcDeviceCodeConfig(base.APIBase):
     issuer: str
     client_id: str
-    client_secret: str | None = None
     require_email_verified: bool = True
     type: typing.Literal["oidc-device-code"] = "oidc-device-code"
 
 
-AuthConfig = OidcConfig | OidcDeviceCodeConfig | HttpSigConfig
+class OidcSecretDeviceCodeConfig(base.APIBase):
+    issuer: str
+    client_id: str
+    client_secret: str = pydantic.Field(min_length=1)
+    require_email_verified: bool = True
+    type: typing.Literal["oidc-secret-device-code"] = "oidc-secret-device-code"
+
+
+# Client-side schemas mirror these definitions. Keep the two in step.
+AuthConfig = OidcConfig | OidcDeviceCodeConfig | OidcSecretDeviceCodeConfig | HttpSigConfig
 
 
 class OidcCreateConfig(OidcConfig):
@@ -37,8 +46,20 @@ class OidcDeviceCodeCreateConfig(OidcDeviceCodeConfig):
     pass
 
 
+class OidcSecretDeviceCodeCreateConfig(OidcSecretDeviceCodeConfig):
+    pass
+
+
 class HttpSigCreateConfig(HttpSigConfig):
     pass
+
+
+# The discriminator selects the member by type. Without it pydantic reports the mismatch of
+# whichever member it tried first, which sends an admin to the wrong config type.
+AuthCreateConfig = typing.Annotated[
+    OidcCreateConfig | OidcDeviceCodeCreateConfig | OidcSecretDeviceCodeCreateConfig | HttpSigCreateConfig,
+    pydantic.Field(discriminator="type"),
+]
 
 
 class Auth(base.APIBase):
@@ -59,7 +80,7 @@ class AuthCreateRequest(base.APIBase):
     name: str
     client_type: str
     description: str = ""
-    config: OidcCreateConfig | OidcDeviceCodeCreateConfig | HttpSigCreateConfig
+    config: AuthCreateConfig
 
 
 class AuthUpdateRequest(base.APIBase):
@@ -96,7 +117,7 @@ class OidcJwksResponse(base.APIBase):
 class AuthPublicSummary(base.APIBase):
     name: str
     client_type: str
-    type: typing.Literal["http_sig", "oidc", "oidc-device-code"]
+    type: typing.Literal["http_sig", "oidc", "oidc-device-code", "oidc-secret-device-code"]
 
 
 class AuthPublicListResponse(base.APIBase):

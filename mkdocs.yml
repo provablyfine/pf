@@ -43,6 +43,7 @@ nav:
       - Auditing: admin/audit.md
       - Tenants: admin/tenants.md
       - Admin TUI: admin/tui.md
+      - OIDC Authentication: admin/oidc.md
   - Self-hosting:
       - API Server: self-hosting/api-server.md
       - Bastion: self-hosting/bastion.md

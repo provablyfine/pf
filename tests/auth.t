@@ -62,14 +62,18 @@ Create an auth config with an integer name (should fail)
   Auth config name must not be a pure integer
   [2]
 
+Create an oidc auth config for a cli client (should fail)
+  $ pfa -c config.json auth create oidc -n bad --client-type cli --issuer https://accounts.google.com --client-id my-client-id 2>&1 | grep -o "invalid choice"
+  invalid choice
+
 Create an oidc auth config
-  $ pfa -c config.json auth create oidc -n google --client-type cli --issuer https://accounts.google.com --client-id my-client-id
+  $ pfa -c config.json auth create oidc -n google --client-type web --issuer https://accounts.google.com --client-id my-client-id
 
 Read the oidc auth config
   $ pfa -c config.json auth read -i 4
   id                      4
   name                    google
-  client_type             cli
+  client_type             web
   type                    oidc
   description
   enabled                 True
@@ -80,12 +84,16 @@ Read the oidc auth config
   require_email_verified  True
 
 Create an oidc auth config without issuer (should fail)
-  $ pfa -c config.json auth create oidc -n bad-oidc --client-type cli --client-id my-client-id 2>&1 | grep "error:"
+  $ pfa -c config.json auth create oidc -n bad-oidc --client-type web --client-id my-client-id 2>&1 | grep "error:"
   pfa auth create oidc: error: the following arguments are required: --issuer
 
 Create an oidc auth config without client-id (should fail)
-  $ pfa -c config.json auth create oidc -n bad-oidc --client-type cli --issuer https://accounts.google.com 2>&1 | grep "error:"
+  $ pfa -c config.json auth create oidc -n bad-oidc --client-type web --issuer https://accounts.google.com 2>&1 | grep "error:"
   pfa auth create oidc: error: the following arguments are required: --client-id
+
+oidc has no client secret to give it
+  $ pfa -c config.json auth create oidc -n bad --client-type web --issuer https://accounts.google.com --client-id x --client-secret s 2>&1 | grep "error:"
+  pfa: error: unrecognized arguments: --client-secret s
 
 Create an oidc auth config that allows unverified email
   $ pfa -c config.json auth create oidc -n unverified-ok --client-type web --issuer https://accounts.google.com --client-id my-client-id-2 --allow-unverified-email
@@ -146,14 +154,18 @@ Public discovery endpoint returns correct data for http_sig
   {"name":"default","description":"Default HTTP signature authentication","config":{"type":"http_sig"}}
 
 Public discovery endpoint returns correct data for oidc
-  $ curl -s "http://127.0.0.1:$API_PORT/pf/t/00000000-0000-0000-0000-000000000001/public/auth/google?client_type=cli" && echo ""
-  {"name":"google","description":"","config":{"issuer":"https://accounts.google.com","client_id":"my-client-id","client_secret":null,"callback_url":"http://127.0.0.1/callback","require_email_verified":true,"type":"oidc"}}
+  $ curl -s "http://127.0.0.1:$API_PORT/pf/t/00000000-0000-0000-0000-000000000001/public/auth/google?client_type=web" && echo ""
+  {"name":"google","description":"","config":{"issuer":"https://accounts.google.com","client_id":"my-client-id","callback_url":"http://127.0.0.1/callback","require_email_verified":true,"type":"oidc"}}
 
 Public list endpoint filters by client_type
   $ curl -s "http://127.0.0.1:$API_PORT/pf/t/00000000-0000-0000-0000-000000000001/public/auth?client_type=cli" | jq -r '.auths[].name'
   default
   corp-http-sig
+
+Public list endpoint includes web oidc configs under client_type=web
+  $ curl -s "http://127.0.0.1:$API_PORT/pf/t/00000000-0000-0000-0000-000000000001/public/auth?client_type=web" | jq -r '.auths[].name'
   google
+  unverified-ok
 
 Public discovery endpoint returns 404 for unknown name
   $ curl -s -o /dev/null -w "%{http_code}\n" "http://127.0.0.1:$API_PORT/pf/t/00000000-0000-0000-0000-000000000001/public/auth/nonexistent?client_type=cli"
@@ -161,7 +173,7 @@ Public discovery endpoint returns 404 for unknown name
 
 Public discovery endpoint returns 404 for disabled auth config
   $ pfa -c config.json auth update -i 4 --disable
-  $ curl -s -o /dev/null -w "%{http_code}\n" "http://127.0.0.1:$API_PORT/pf/t/00000000-0000-0000-0000-000000000001/public/auth/google?client_type=cli"
+  $ curl -s -o /dev/null -w "%{http_code}\n" "http://127.0.0.1:$API_PORT/pf/t/00000000-0000-0000-0000-000000000001/public/auth/google?client_type=web"
   404
   $ pfa -c config.json auth update -i 4 --enable
 
@@ -200,3 +212,64 @@ pf login fails if the auth config does not exist
   $ pf -c config.json login --session-key session4 --auth nonexistent
   Auth config 'nonexistent' not found
   [2]
+
+Create an oidc-device-code auth config for a web client (should fail)
+  $ pfa -c config.json auth create oidc-device-code -n bad --client-type web --issuer https://accounts.google.com --client-id device-client-id 2>&1 | grep -o "invalid choice"
+  invalid choice
+
+Create an oidc-device-code auth config
+  $ pfa -c config.json auth create oidc-device-code -n device --client-type cli --issuer https://accounts.google.com --client-id device-client-id
+
+Read the oidc-device-code auth config
+  $ pfa -c config.json auth read -i 6
+  id                      6
+  name                    device
+  client_type             cli
+  type                    oidc-device-code
+  description
+  enabled                 True
+  created_at    .* (re)
+  issuer                  https://accounts.google.com
+  client_id               device-client-id
+  require_email_verified  True
+
+oidc-device-code has no client secret to give it
+  $ pfa -c config.json auth create oidc-device-code -n device-secret --client-type cli --issuer https://accounts.google.com --client-id x --client-secret s 2>&1 | grep "error:"
+  pfa: error: unrecognized arguments: --client-secret s
+
+Create an oidc-secret-device-code auth config without a secret (should fail)
+  $ pfa -c config.json auth create oidc-secret-device-code -n bad --client-type cli --issuer https://accounts.google.com --client-id x 2>&1 | grep "error:"
+  pfa auth create oidc-secret-device-code: error: the following arguments are required: --client-secret
+
+Create an oidc-secret-device-code auth config for a web client (should fail)
+  $ pfa -c config.json auth create oidc-secret-device-code -n bad --client-type web --issuer https://accounts.google.com --client-id x --client-secret s 2>&1 | grep -o "invalid choice"
+  invalid choice
+
+Create an oidc-secret-device-code auth config
+  $ pfa -c config.json auth create oidc-secret-device-code -n device-secret --client-type cli --issuer https://accounts.google.com --client-id secret-client-id --client-secret my-secret
+
+Read the oidc-secret-device-code auth config
+  $ pfa -c config.json auth read -i 7
+  id                      7
+  name                    device-secret
+  client_type             cli
+  type                    oidc-secret-device-code
+  description
+  enabled                 True
+  created_at    .* (re)
+  issuer                  https://accounts.google.com
+  client_id               secret-client-id
+  require_email_verified  True
+  client_secret           my-secret
+
+The secret is sent to the cli that runs the flow
+  $ curl -s "http://127.0.0.1:$API_PORT/pf/t/00000000-0000-0000-0000-000000000001/public/auth/device-secret?client_type=cli" && echo ""
+  {"name":"device-secret","description":"","config":{"issuer":"https://accounts.google.com","client_id":"secret-client-id","client_secret":"my-secret","require_email_verified":true,"type":"oidc-secret-device-code"}}
+
+require_email_verified applies to both device code types
+  $ pfa -c config.json auth update -i 6 --allow-unverified-email
+  $ pfa -c config.json auth read -i 6 -f json | jq .config.require_email_verified
+  false
+  $ pfa -c config.json auth update -i 7 --require-verified-email
+  $ pfa -c config.json auth read -i 7 -f json | jq .config.require_email_verified
+  true

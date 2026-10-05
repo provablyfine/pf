@@ -131,7 +131,7 @@ def create(conf: config.Config) -> fastapi.FastAPI:
         with registry_engine.connect() as registry_conn:
             tenant_rows = registry_db.create(registry_conn).tenant.read_all()
         for tenant_row in tenant_rows:
-            migrate.upgrade_tenant(tenants, tenant_row.uuid)
+            migrate.upgrade_tenant(tenants, tenant_row.uuid, kek)
 
         try:
             yield

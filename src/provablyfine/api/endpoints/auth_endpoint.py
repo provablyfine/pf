@@ -10,22 +10,39 @@ router = fastapi.APIRouter(prefix="/auth", dependencies=[fastapi.Depends(signatu
 
 _204 = fastapi.responses.Response(status_code=204)
 
+# Which client_type each auth config type is valid for. http_sig works everywhere.
+# The oidc browser flow only runs in a web client. The device code flows are what
+# a cli does instead, and the secret one cannot be handed to a web client at all.
+_REQUIRED_CLIENT_TYPE: dict[str, str] = {
+    "oidc": "web",
+    "oidc-device-code": "cli",
+    "oidc-secret-device-code": "cli",
+}
+
 
 def _build_config(data: schemas.auth.AuthCreateRequest) -> dict[str, typing.Any]:
     if data.config.type == "oidc":
         assert isinstance(data.config, schemas.auth.OidcCreateConfig)
-        config: dict[str, typing.Any] = {"issuer": data.config.issuer, "client_id": data.config.client_id}
-        if data.config.client_secret is not None:
-            config["client_secret"] = data.config.client_secret
-        config["require_email_verified"] = data.config.require_email_verified
-        return config
+        return {
+            "issuer": data.config.issuer,
+            "client_id": data.config.client_id,
+            "require_email_verified": data.config.require_email_verified,
+        }
     if data.config.type == "oidc-device-code":
         assert isinstance(data.config, schemas.auth.OidcDeviceCodeCreateConfig)
-        config = {"issuer": data.config.issuer, "client_id": data.config.client_id}
-        if data.config.client_secret is not None:
-            config["client_secret"] = data.config.client_secret
-        config["require_email_verified"] = data.config.require_email_verified
-        return config
+        return {
+            "issuer": data.config.issuer,
+            "client_id": data.config.client_id,
+            "require_email_verified": data.config.require_email_verified,
+        }
+    if data.config.type == "oidc-secret-device-code":
+        assert isinstance(data.config, schemas.auth.OidcSecretDeviceCodeCreateConfig)
+        return {
+            "issuer": data.config.issuer,
+            "client_id": data.config.client_id,
+            "client_secret": data.config.client_secret,
+            "require_email_verified": data.config.require_email_verified,
+        }
     return {}
 
 
@@ -47,6 +64,12 @@ def create_endpoint(data: schemas.auth.AuthCreateRequest) -> schemas.auth.Auth:
     if data.name.isdigit():
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=400, title="Auth config name must not be a pure integer")
+        )
+
+    required = _REQUIRED_CLIENT_TYPE.get(data.config.type)
+    if required is not None and data.client_type != required:
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=400, title=f"{data.config.type} requires client_type {required}")
         )
 
     grants = grant.Grants.create()
@@ -134,7 +157,7 @@ def update_endpoint(auth_id: int, data: schemas.auth.AuthUpdateRequest) -> schem
                 "Not allowed to update auth config require_email_verified",
                 "Auth config does not exist",
             )
-        if ac.type not in ("oidc", "oidc-device-code"):
+        if ac.type not in ("oidc", "oidc-device-code", "oidc-secret-device-code"):
             raise responses.ProblemHTTPException(
                 responses.problem_response(
                     status_code=400, title="require_email_verified only applies to OIDC auth configs"
