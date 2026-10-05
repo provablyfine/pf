@@ -10,8 +10,10 @@ import hashlib
 import itertools
 import json
 import logging
+import math
 import os
 import platform
+import random
 import signal
 import ssl
 import struct
@@ -409,6 +411,40 @@ async def _handle_work_conn(
 # ---------------------------------------------------------------------------
 
 
+_RECONNECT_MIN_DELAY = 1.0
+_RECONNECT_MAX_DELAY = 60.0
+# A link that held at least this long counts as healthy. See `_run_frp_client`.
+_RECONNECT_STABLE_SECONDS = 60.0
+# How many times the window must double to get from the minimum to the maximum.
+_RECONNECT_MAX_DOUBLINGS = math.ceil(math.log2(_RECONNECT_MAX_DELAY / _RECONNECT_MIN_DELAY))
+
+
+def _reconnect_delay(failures: int) -> float:
+    """Return how long to wait after `failures` consecutive connection failures.
+
+    The window doubles on every failure until `_RECONNECT_MAX_DELAY`, so a server
+    that is down, or a bastion that refuses us, is not hammered.
+    The wait is drawn from the upper half of the window. Jitter keeps several
+    hosts from retrying in lockstep once the server comes back.
+    """
+    assert failures >= 1
+    ceiling = min(_RECONNECT_MAX_DELAY, _RECONNECT_MIN_DELAY * 2.0 ** min(failures - 1, _RECONNECT_MAX_DOUBLINGS))
+    return random.uniform(max(_RECONNECT_MIN_DELAY, ceiling / 2.0), ceiling)  # noqa: S311  # jitter is not secret
+
+
+async def _wait_or_stop(delay: float, stop_event: asyncio.Event) -> None:
+    """Wait for `delay`, or until `stop_event` is set. Whichever comes first.
+
+    Plain `asyncio.wait_for()` raises `TimeoutError` when the delay expires, and
+    that is the normal path here, not an error. Cancellation does propagate, so
+    cancelling this task still stops it promptly.
+    """
+    try:
+        await asyncio.wait_for(stop_event.wait(), timeout=delay)
+    except TimeoutError:
+        pass
+
+
 async def _run_frp_client(
     session: _ManagedSession,
     bastion_url: str,
@@ -424,6 +460,8 @@ async def _run_frp_client(
     server_port = frps_bind_port or u.port or (443 if u.scheme == "https" else 80)
     ssl_ctx: ssl.SSLContext | None = ssl.create_default_context() if u.scheme == "https" else None
 
+    failures = 0
+
     while not stop_event.is_set():
         # Refresh token on each (re)connect attempt.
         try:
@@ -432,12 +470,11 @@ async def _run_frp_client(
             frpc_user = _jwt_audience(jwt_token)
         except Exception as e:
             logger.warning(f"Failed to obtain frp token for bastion={bastion_url}: {e}")
-            try:
-                await asyncio.wait_for(stop_event.wait(), timeout=5)
-            except TimeoutError:
-                pass
+            failures += 1
+            await _wait_or_stop(_reconnect_delay(failures), stop_event)
             continue
 
+        started = time.monotonic()
         connected = False
         try:
             async with _open_transport(host, server_port, ssl_ctx) as (recv, send):
@@ -464,11 +501,14 @@ async def _run_frp_client(
                 logger.warning(f"frp: transport connect failed for bastion={bastion_url}: {e}")
 
         if not stop_event.is_set():
-            logger.info(f"frp: reconnecting in 5s for bastion={bastion_url}")
-            try:
-                await asyncio.wait_for(stop_event.wait(), timeout=5)
-            except TimeoutError:
-                pass
+            if time.monotonic() - started >= _RECONNECT_STABLE_SECONDS:
+                # The link held for a while, so the failure looks transient.
+                # Start the next backoff from the beginning.
+                failures = 0
+            failures += 1
+            delay = _reconnect_delay(failures)
+            logger.info(f"frp: reconnecting in {delay:.1f}s for bastion={bastion_url}")
+            await _wait_or_stop(delay, stop_event)
 
 
 async def _frp_session(
@@ -691,10 +731,7 @@ def _register_function(args: argparse.Namespace) -> None:
             except Exception as e:
                 logger.debug(f"Poll error: {e}")
 
-            try:
-                await asyncio.wait_for(stop_event.wait(), timeout=args.poll_interval)
-            except TimeoutError:
-                pass
+            await _wait_or_stop(args.poll_interval, stop_event)
 
         for task in list(active_tasks.values()):
             task.cancel()
