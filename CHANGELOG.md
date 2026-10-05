@@ -1,3 +1,59 @@
+## 0.7.7 - 2026-10-05
+
+### Added
+
+- Client-side Windows port ([#51](https://github.com/provablyfine/pf/issues/51))
+- Provide the ability to switch between tenants ([#87](https://github.com/provablyfine/pf/issues/87))
+- Native Windows packaging: releases now ship a per-user `pf-setup.exe` installer (PyInstaller-frozen `pf`, Inno Setup) alongside the wheels; documented under "Native Windows" in the getting-started guide. ([#112](https://github.com/provablyfine/pf/issues/112))
+- Debian and RPM packages for the `pf`, `pfa`, and `pfat` client tools ([#113](https://github.com/provablyfine/pf/issues/113))
+- A session can now be ended by its owner: `DELETE /session/self`, and `logout()` in the Python client. Requests signed with an ended session get a 401 "Session key is logged out", which the TUI and CLI already handle as a session that needs a new login. ([#124](https://github.com/provablyfine/pf/issues/124))
+- Cascade identity deletion into grant objects ([#133](https://github.com/provablyfine/pf/issues/133))
+- Add support for MariaDB and PostgreSQL backends ([#142](https://github.com/provablyfine/pf/issues/142))
+
+### Fixed
+
+- When a session expires in the TUI, display the login screen before continuing. ([#84](https://github.com/provablyfine/pf/issues/84))
+- `pf bastion register` now backs off exponentially between failed reconnection attempts instead of retrying every 5 seconds ([#105](https://github.com/provablyfine/pf/issues/105))
+- Consolidate python wrappers for cram tests in a single file ([#110](https://github.com/provablyfine/pf/issues/110))
+- Control explicitly tour even timing to improve its demo-like feeling ([#115](https://github.com/provablyfine/pf/issues/115))
+- Environ class instances are designed to be singletons. Copying them leads to madness. ([#117](https://github.com/provablyfine/pf/issues/117))
+- Only delete our socket if it's our own ([#120](https://github.com/provablyfine/pf/issues/120))
+- Improve win32 test flakiness ([#122](https://github.com/provablyfine/pf/issues/122))
+- Wait long enough for the api server to be ready during tests for heavily loaded systems ([#125](https://github.com/provablyfine/pf/issues/125))
+- Wait until relogin dialog is really gone to verify that it's really gone ([#126](https://github.com/provablyfine/pf/issues/126))
+- Ignore exceptions while shutting down ([#127](https://github.com/provablyfine/pf/issues/127))
+- Disable /debug endpoints by default ([#129](https://github.com/provablyfine/pf/issues/129))
+- Eliminate TOCTOU race on tenant initialization and invitation accept ([#130](https://github.com/provablyfine/pf/issues/130))
+- An empty (but non-None) tag filter list on a grant now matches no one instead of matching everyone. ([#137](https://github.com/provablyfine/pf/issues/137))
+- Refuse to delete a tag that is both assigned to an identity and named by a grant. Cascade the deletion of a tag that is safe to delete into the grants that name it, instead of leaving them dangling. ([#138](https://github.com/provablyfine/pf/issues/138))
+- bastion tag list can be None ([#147](https://github.com/provablyfine/pf/issues/147))
+- Robustify nonce handling ([#149](https://github.com/provablyfine/pf/issues/149))
+- Defensively check JWK cache for frps plugin endpoint ([#150](https://github.com/provablyfine/pf/issues/150))
+- Make sure emails are verified ([#151](https://github.com/provablyfine/pf/issues/151))
+- The session key cannot be read from the oracle process on Linux, macOS, and win32 ([#152](https://github.com/provablyfine/pf/issues/152))
+- Reject SSH message frames that are bigger than 256K ([#153](https://github.com/provablyfine/pf/issues/153))
+- Verify KEK has valid length ([#154](https://github.com/provablyfine/pf/issues/154))
+- Validate user_extra_trusted_keys_filename ([#155](https://github.com/provablyfine/pf/issues/155))
+- Validate nonces AFTER requests are cryptographically validated ([#156](https://github.com/provablyfine/pf/issues/156))
+- Avoid 500 status on missing Content-Digest header ([#157](https://github.com/provablyfine/pf/issues/157))
+- Disable Swagger and ReDoc by default ([#158](https://github.com/provablyfine/pf/issues/158))
+- Use a single engine across all tenants on MySQL and Postgres ([#159](https://github.com/provablyfine/pf/issues/159))
+- Detect and refuse to run pf login via sudo ([#160](https://github.com/provablyfine/pf/issues/160))
+- Make sure an oracle is not able to impersonate the client on win32 ([#161](https://github.com/provablyfine/pf/issues/161))
+- Upgrade pyjwt to pull fix for CVE-2026-101918 ([#162](https://github.com/provablyfine/pf/issues/162))
+- Verify signatures returned by the oracle and display a meaningful message if they are invalid ([#163](https://github.com/provablyfine/pf/issues/163))
+- Prevent an unprivileged local user from denying pf login by squatting the session-oracle socket directory ([#165](https://github.com/provablyfine/pf/issues/165))
+- Refuse to use a session oracle whose socket or pipe is held by another local user, instead of reporting the session as expired ([#168](https://github.com/provablyfine/pf/issues/168))
+- Do not crash when identity filters are combined ([#170](https://github.com/provablyfine/pf/issues/170))
+- `pf openssh host-init` and `host-uninit` refuse invitation URLs and paths that cannot be safely embedded in the generated root shell script.
+
+### Changed
+
+- Narrow the scope of CLI session and SSH key to the current shell and its sub-processes on all platforms. ([#109](https://github.com/provablyfine/pf/issues/109))
+- TUI errors carried by `exceptions.UI` are now reported by a single top-level handler. ([#111](https://github.com/provablyfine/pf/issues/111))
+- Tenants are now addressed by UUID in URLs. Tenant names no longer have to be unique. ([#116](https://github.com/provablyfine/pf/issues/116))
+
+
 ## 0.7.6 - 2026-09-01
 
 ### Fixed
