@@ -114,10 +114,13 @@ $ pip install --global provablyfine
 ```
 
 Then, make your OpenSSH service know about the new centralized
-authentication system. Run this command on the server:
+authentication system. Run this command on the server as root:
 ```console
-$ pf openssh host-init --invitation $INVITATION_URL | sudo bash -s
+$ sudo pf openssh host-init --invitation $INVITATION_URL
 ```
+
+To see what the command would change without changing anything, add `--dry-run`.
+To undo the changes, run `sudo pf openssh host-uninit`.
 
 ## Connect to your new host
 

@@ -84,7 +84,12 @@ def add_subparsers(parser: argparse.ArgumentParser) -> None:
     authorized_principals_parser.add_argument("--certificate", help="base64 user certificate to parse", required=True)
     authorized_principals_parser.set_defaults(func=_authorized_principals)
 
-    host_init_parser = subparsers.add_parser("host-init", help="Initialize configuration of local SSH daemon")
+    host_init_parser = subparsers.add_parser(
+        "host-init", help="Initialize configuration of local SSH daemon. Run as root."
+    )
+    host_init_parser.add_argument(
+        "--dry-run", action="store_true", default=False, help="Print what would be done and change nothing"
+    )
     host_init_parser.add_argument("--invitation", required=True, help="Invitation key")
     host_init_parser.add_argument("--auth-user", default="nobody", help="User for AuthorizedPrincipalsCommandUser")
     host_init_parser.add_argument(
@@ -94,7 +99,10 @@ def add_subparsers(parser: argparse.ArgumentParser) -> None:
     host_init_parser.add_argument("--ca-pub-path", default="/etc/ssh/pf_ca.pub", help="Path to CA public key file")
     host_init_parser.set_defaults(func=openssh_host_init.host_init_daemon_function)
 
-    host_uninit_parser = subparsers.add_parser("host-uninit", help="Print a script to undo host-init")
+    host_uninit_parser = subparsers.add_parser("host-uninit", help="Undo host-init. Run as root.")
+    host_uninit_parser.add_argument(
+        "--dry-run", action="store_true", default=False, help="Print what would be done and change nothing"
+    )
     host_uninit_parser.add_argument(
         "--sshd-config-drop-in", default="/etc/ssh/sshd_config.d/10-pf.conf", help="Path to sshd_config.d drop-in file"
     )
