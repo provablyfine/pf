@@ -13,6 +13,7 @@ STATE_DIR = "/var/lib/pf"
 LOG_DIR = "/var/log/pf"
 CREDENTIAL = f"{STATE_DIR}/account.cred"
 CONFIG = f"{STATE_DIR}/config.json"
+ACCEPT_SCRATCH = f"{STATE_DIR}/accept.json"
 SYSTEMD_DIR = "/etc/systemd/system"
 NM_DISPATCHER_DIR = "/etc/NetworkManager/dispatcher.d"
 NM_DISPATCHER = f"{NM_DISPATCHER_DIR}/pf-host-refresh"
@@ -50,7 +51,11 @@ esac
 """
 
 
-def _find_pf(o: ops.Ops) -> str:
+def _find_pf(o: ops.Ops, requested: str | None) -> str:
+    if requested is not None:
+        if not o.is_executable(requested):
+            raise pfc.exceptions.UI(f"{requested} is not an executable file")
+        return requested
     for directory in PF_DIRECTORIES:
         candidate = f"{directory}/pf"
         if o.is_executable(candidate):
@@ -64,14 +69,6 @@ def _sshd_unit(o: ops.Ops) -> str:
     if result.returncode == 0 and any(line.startswith("sshd.service") for line in result.stdout.splitlines()):
         return "sshd"
     return "ssh"
-
-
-def _ssh_port(o: ops.Ops) -> str:
-    result = o.query(["sshd", "-T"])
-    for line in result.stdout.splitlines():
-        if line.startswith("port "):
-            return line.split()[1]
-    return "22"
 
 
 def _host_certificates(o: ops.Ops, host_keys_dir: str) -> list[str]:
@@ -103,7 +100,7 @@ class Linux:
             ("--auth-user", s.auth_user),
         ):
             common_steps.require_plain(value, what)
-        pf_bin = _find_pf(o)
+        pf_bin = _find_pf(o, s.pf_binary)
         drop_in_dir = os.path.dirname(s.sshd_config_drop_in)
 
         conflict = common_steps.conflicting_directive(
@@ -128,17 +125,22 @@ class Linux:
         )
 
         under_credentials = ["systemd-run", "--pipe", "--wait", _credential_property()]
+        # Accepting the invitation registers the account key with the server.
+        # The configuration it writes is not used, so it goes to a scratch file.
         o.run(
             [
                 *under_credentials,
                 pf_bin,
                 "-c",
-                "/dev/null",
+                ACCEPT_SCRATCH,
                 "accept",
                 f"--invitation={s.invitation}",
                 "--key=$CREDENTIALS_DIRECTORY/account",
             ]
         )
+        o.remove(ACCEPT_SCRATCH)
+        # pf keeps an empty lock file next to the configuration it writes.
+        o.remove(f"{ACCEPT_SCRATCH}.lock")
         o.run(["ssh-keygen", "-A"])
         o.run(
             [
@@ -154,16 +156,11 @@ class Linux:
         )
 
         o.make_dir(drop_in_dir, 0o755)
-        drop_in = [f"TrustedUserCAKeys {s.ca_pub_path}"]
-        drop_in += [f"HostCertificate {path}" for path in _host_certificates(o, s.host_keys_dir)]
-        drop_in += [
-            f"AuthorizedPrincipalsCommand {pf_bin} openssh auth-principals"
-            f" --host-certificate={s.host_keys_dir}/ssh_host_ed25519_key.cert"
-            " --username=%u --certificate=%k",
-            f"AuthorizedPrincipalsCommandUser {s.auth_user}",
-            "PubkeyAuthentication yes",
-        ]
-        o.write_file(s.sshd_config_drop_in, "\n".join(drop_in) + "\n", 0o644)
+        o.write_file(
+            s.sshd_config_drop_in,
+            common_steps.sshd_drop_in(pf_bin, s, _host_certificates(o, s.host_keys_dir)),
+            0o644,
+        )
 
         pam_block = (
             f"{PAM_BEGIN}\n"
@@ -204,7 +201,7 @@ class Linux:
             "[Service]\n"
             "Type=simple\n"
             f"LoadCredentialEncrypted=account:{CREDENTIAL}\n"
-            f"ExecStart={pf_bin} --config {CONFIG} bastion register --port {_ssh_port(o)}\n"
+            f"ExecStart={pf_bin} --config {CONFIG} bastion register --port {common_steps.ssh_port(o)}\n"
             "Restart=on-failure\n"
             "RestartSec=30s\n"
             "\n"

@@ -16,6 +16,8 @@ class Settings:
     ca_pub_path: str
     sshd_config_drop_in: str
     auth_user: str
+    # The pf that sshd and the services run. None lets the provider choose.
+    pf_binary: str | None = None
 
 
 class Provider(typing.Protocol):

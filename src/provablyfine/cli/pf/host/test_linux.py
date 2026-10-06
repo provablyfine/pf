@@ -106,7 +106,7 @@ def test_init_runs_the_steps_in_order(tmp_path: pathlib.Path) -> None:
             cred,
             "/usr/bin/pf",
             "-c",
-            "/dev/null",
+            "/var/lib/pf/accept.json",
             "accept",
             f"--invitation={INVITATION}",
             "--key=$CREDENTIALS_DIRECTORY/account",
@@ -360,3 +360,17 @@ def test_reload_sshd(tmp_path: pathlib.Path) -> None:
     dry = ops.DryRunOps(root=tmp_path, query=_queries(sshd_unit="ssh"))
     linux.Linux().reload_sshd(dry)
     assert _runs(dry) == [(SYSTEMCTL, "reload", "ssh")]
+
+
+def test_init_accepts_the_invitation_with_a_config_file_that_pf_can_write_and_removes_it(
+    tmp_path: pathlib.Path,
+) -> None:
+    # `pf -c /dev/null accept` fails: pf reads the config as JSON and /dev/null is empty.
+    _host(tmp_path)
+    dry = _init(tmp_path)
+    accept_index = next(i for i, a in enumerate(dry.actions) if isinstance(a, ops.Run) and "accept" in a.argv)
+    accept = dry.actions[accept_index]
+    assert isinstance(accept, ops.Run)
+    assert "/dev/null" not in accept.argv
+    assert dry.actions[accept_index + 1] == ops.Remove("/var/lib/pf/accept.json")
+    assert dry.actions[accept_index + 2] == ops.Remove("/var/lib/pf/accept.json.lock")

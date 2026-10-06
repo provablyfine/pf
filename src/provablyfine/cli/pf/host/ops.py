@@ -18,7 +18,9 @@ import os
 import pathlib
 import shlex
 import shutil
+import stat
 import subprocess
+import sys
 import typing
 
 import provablyfine_client as pfc
@@ -30,6 +32,8 @@ from .... import client
 class MakeDir:
     path: str
     mode: int
+    # User that owns the directory. None keeps the current owner.
+    owner: str | None = None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -55,7 +59,12 @@ class Run:
     stdin: bytes | None
 
 
-Action = MakeDir | WriteFile | Remove | Run
+@dataclasses.dataclass(frozen=True)
+class Note:
+    text: str
+
+
+Action = MakeDir | WriteFile | Remove | Run | Note
 
 
 @dataclasses.dataclass(frozen=True)
@@ -80,8 +89,9 @@ def run_query(argv: typing.Sequence[str]) -> QueryResult:
 
 def describe(action: Action) -> str:
     match action:
-        case MakeDir(path=path, mode=mode):
-            return f"mkdir -m {mode:o} {shlex.quote(path)}"
+        case MakeDir(path=path, mode=mode, owner=owner):
+            owned = f" (owner {owner})" if owner else ""
+            return f"mkdir -m {mode:o} {shlex.quote(path)}{owned}"
         case WriteFile(path=path, content=content, mode=mode, secret=secret):
             mode_text = "keep mode" if mode is None else f"mode {mode:o}"
             header = f"write {shlex.quote(path)} ({mode_text}, {len(content)} bytes)"
@@ -91,6 +101,8 @@ def describe(action: Action) -> str:
             return header + "\n" + "\n".join("  | " + line for line in text.split("\n"))
         case Remove(path=path, recursive=recursive):
             return f"rm {'-r ' if recursive else ''}{shlex.quote(path)}"
+        case Note(text=text):
+            return f"note: {text}"
         case Run(argv=argv, check=check, stdin=stdin):
             text = "run " + shlex.join(argv)
             if stdin is not None:
@@ -128,8 +140,38 @@ class Ops(abc.ABC):
     def query(self, argv: typing.Sequence[str]) -> QueryResult:
         return run_query(argv)
 
+    def _realpath(self, path: str) -> str:
+        return os.path.realpath(path)
+
+    def _stat(self, path: str) -> os.stat_result:
+        return os.stat(path)
+
+    def path_problem(self, path: str, trusted_uid: int = 0) -> str | None:
+        """Why sshd would refuse to run `path` as a command, or None if it would accept it.
+
+        sshd wants the file and every directory above it to belong to a
+        trusted user and to be closed to writes by group and others.
+        """
+        current = self._realpath(path)
+        while True:
+            try:
+                info = self._stat(current)
+            except OSError as e:
+                return f"cannot inspect {current}: {e.strerror}"
+            if info.st_uid != trusted_uid:
+                return f"{current} is owned by uid {info.st_uid}, not {trusted_uid}"
+            if info.st_mode & 0o022:
+                return f"{current} can be written by its group or by others (mode {stat.S_IMODE(info.st_mode):o})"
+            parent = os.path.dirname(current)
+            if parent == current:
+                return None
+            current = parent
+
     @abc.abstractmethod
-    def make_dir(self, path: str, mode: int) -> None: ...
+    def note(self, text: str) -> None: ...
+
+    @abc.abstractmethod
+    def make_dir(self, path: str, mode: int, owner: str | None = None) -> None: ...
 
     @abc.abstractmethod
     def write_file(self, path: str, content: bytes | str, mode: int | None, *, secret: bool = False) -> None: ...
@@ -148,9 +190,14 @@ def _as_bytes(content: bytes | str) -> bytes:
 class SystemOps(Ops):
     """Apply the operations to the machine."""
 
-    def make_dir(self, path: str, mode: int) -> None:
+    def note(self, text: str) -> None:
+        sys.stderr.write(f"note: {text}\n")
+
+    def make_dir(self, path: str, mode: int, owner: str | None = None) -> None:
         os.makedirs(path, exist_ok=True)
         os.chmod(path, mode)
+        if owner is not None:
+            shutil.chown(path, user=owner)
 
     def write_file(self, path: str, content: bytes | str, mode: int | None, *, secret: bool = False) -> None:
         if mode is None:
@@ -167,12 +214,16 @@ class SystemOps(Ops):
         pathlib.Path(path).unlink(missing_ok=True)
 
     def run(self, argv: typing.Sequence[str], *, check: bool = True, stdin: bytes | None = None) -> None:
+        # pf refuses to log in when it sees these, and children would inherit
+        # them from the sudo that started host-init.
+        environment = {name: value for name, value in os.environ.items() if not name.startswith("SUDO_")}
         try:
             result = subprocess.run(  # noqa: S603
                 list(argv),
                 check=False,
                 input=stdin,
                 stdin=None if stdin is not None else subprocess.DEVNULL,
+                env=environment,
             )
         except FileNotFoundError as e:
             if check:
@@ -194,10 +245,12 @@ class DryRunOps(Ops):
         self,
         root: pathlib.Path | None = None,
         query: typing.Callable[[typing.Sequence[str]], QueryResult] | None = None,
+        trusted_uid: int = 0,
     ) -> None:
         self.actions: list[Action] = []
         self._root = root
         self._query = query or run_query
+        self._trusted_uid = trusted_uid
 
     def _real(self, path: str) -> str:
         if self._root is None:
@@ -208,6 +261,18 @@ class DryRunOps(Ops):
         if self._root is None:
             return path
         return "/" + os.path.relpath(path, self._root)
+
+    def _realpath(self, path: str) -> str:
+        # A test root has no symbolic links to resolve.
+        return super()._realpath(path) if self._root is None else path
+
+    def _stat(self, path: str) -> os.stat_result:
+        if self._root is not None and path == "/":
+            return os.stat(self._root)
+        return os.stat(self._real(path))
+
+    def path_problem(self, path: str, trusted_uid: int = 0) -> str | None:
+        return super().path_problem(path, self._trusted_uid if self._root is not None else trusted_uid)
 
     def exists(self, path: str) -> bool:
         return super().exists(self._real(path))
@@ -227,8 +292,11 @@ class DryRunOps(Ops):
     def query(self, argv: typing.Sequence[str]) -> QueryResult:
         return self._query(argv)
 
-    def make_dir(self, path: str, mode: int) -> None:
-        self.actions.append(MakeDir(path, mode))
+    def note(self, text: str) -> None:
+        self.actions.append(Note(text))
+
+    def make_dir(self, path: str, mode: int, owner: str | None = None) -> None:
+        self.actions.append(MakeDir(path, mode, owner))
 
     def write_file(self, path: str, content: bytes | str, mode: int | None, *, secret: bool = False) -> None:
         self.actions.append(WriteFile(path, _as_bytes(content), mode, secret))

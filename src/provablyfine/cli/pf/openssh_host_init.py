@@ -58,6 +58,7 @@ def _settings(args: argparse.Namespace, invitation: str, directory_url: str) -> 
         ca_pub_path=args.ca_pub_path,
         sshd_config_drop_in=args.sshd_config_drop_in,
         auth_user=args.auth_user,
+        pf_binary=args.pf_binary,
     )
 
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import pathlib
 import stat
+import sys
 
 import provablyfine_client as pfc
 import pytest
@@ -137,3 +138,97 @@ def test_describe_shows_content_but_not_secrets() -> None:
     assert "run tool --flag 'a b'  (stdin: 7 bytes, not shown)" in text
     assert "run maybe  (failure ignored)" in text
     assert os.linesep in text
+
+
+def test_make_dir_owner_is_recorded_and_described() -> None:
+    dry = ops.DryRunOps()
+    dry.make_dir("/var/db/pf/deadlines", 0o700, owner="nobody")
+    assert dry.actions == [ops.MakeDir("/var/db/pf/deadlines", 0o700, "nobody")]
+    assert dry.describe() == "mkdir -m 700 /var/db/pf/deadlines (owner nobody)\n"
+
+
+def test_notes_are_recorded_and_described() -> None:
+    dry = ops.DryRunOps()
+    dry.note("check this")
+    assert dry.actions == [ops.Note("check this")]
+    assert dry.describe() == "note: check this\n"
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="needs a POSIX system")
+def test_path_problem_accepts_a_system_binary() -> None:
+    assert ops.SystemOps().path_problem("/bin/sh") is None
+
+
+def test_path_problem_names_the_first_unsafe_component(tmp_path: pathlib.Path) -> None:
+    tool = tmp_path / "opt" / "tool"
+    tool.parent.mkdir()
+    tool.write_text("#!/bin/sh\n")
+    tool.chmod(0o755)
+    tool.parent.chmod(0o775)
+    problem = ops.SystemOps().path_problem(str(tool), trusted_uid=os.getuid())
+    assert problem is not None
+    assert str(tool.parent) in problem
+    assert "written by its group or by others" in problem
+
+
+def test_path_problem_refuses_a_file_that_others_can_write(tmp_path: pathlib.Path) -> None:
+    tool = tmp_path / "tool"
+    tool.write_text("x")
+    tool.chmod(0o757)
+    problem = ops.SystemOps().path_problem(str(tool), trusted_uid=os.getuid())
+    assert problem is not None
+    assert "757" in problem
+
+
+def test_path_problem_refuses_a_path_owned_by_someone_else(tmp_path: pathlib.Path) -> None:
+    tool = tmp_path / "tool"
+    tool.write_text("x")
+    tool.chmod(0o755)
+    problem = ops.SystemOps().path_problem(str(tool), trusted_uid=os.getuid() + 1)
+    assert problem is not None
+    assert f"owned by uid {os.getuid()}" in problem
+
+
+def test_path_problem_looks_through_symbolic_links(tmp_path: pathlib.Path) -> None:
+    unsafe = tmp_path / "unsafe"
+    unsafe.mkdir()
+    unsafe.chmod(0o777)
+    (unsafe / "tool").write_text("x")
+    (unsafe / "tool").chmod(0o755)
+    link = tmp_path / "link"
+    link.symlink_to(unsafe / "tool")
+    problem = ops.SystemOps().path_problem(str(link), trusted_uid=os.getuid())
+    assert problem is not None
+    assert "unsafe" in problem
+
+
+def test_path_problem_reports_a_missing_path(tmp_path: pathlib.Path) -> None:
+    problem = ops.SystemOps().path_problem(str(tmp_path / "missing"), trusted_uid=os.getuid())
+    assert problem is not None
+    assert "cannot inspect" in problem
+
+
+def test_dry_run_path_problem_reads_under_its_root(tmp_path: pathlib.Path) -> None:
+    tool = tmp_path / "opt" / "provablyfine" / "pf"
+    tool.parent.mkdir(parents=True)
+    tool.write_text("x")
+    for path in (tool, tool.parent, tool.parent.parent):
+        path.chmod(0o755)
+    dry = ops.DryRunOps(root=tmp_path, trusted_uid=os.getuid())
+    assert dry.path_problem("/opt/provablyfine/pf") is None
+    tool.parent.chmod(0o775)
+    problem = dry.path_problem("/opt/provablyfine/pf")
+    assert problem is not None
+    assert problem.startswith("/opt/provablyfine ")
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="needs sh")
+def test_system_ops_run_hides_sudo_variables_from_children(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("SUDO_USER", "alice")
+    monkeypatch.setenv("SUDO_UID", "1000")
+    monkeypatch.setenv("KEEP_ME", "yes")
+    out = tmp_path / "out"
+    ops.SystemOps().run(["sh", "-c", f'echo "${{SUDO_USER-unset}} ${{SUDO_UID-unset}} $KEEP_ME" > {out}'])
+    assert out.read_text() == "unset unset yes\n"

@@ -8,7 +8,7 @@ import typing
 import provablyfine_client as pfc
 
 from .... import jwk
-from . import ops
+from . import base, ops
 
 # Values end up in sshd and service configuration files, where a space or a
 # newline would start another setting.
@@ -62,3 +62,37 @@ def remove_block(text: str, begin: str, end: str) -> str:
             continue
         kept.append(line)
     return "".join(kept)
+
+
+def ssh_port(o: ops.Ops) -> str:
+    """The port the local sshd listens on, 22 when it does not say."""
+    for line in o.query(["sshd", "-T"]).stdout.splitlines():
+        if line.startswith("port "):
+            return line.split()[1]
+    return "22"
+
+
+def sshd_drop_in(
+    pf_bin: str,
+    settings: base.Settings,
+    certificates: typing.Sequence[str],
+    principals_arguments: typing.Sequence[str] = (),
+) -> str:
+    """The sshd configuration that makes sshd trust the pf certificate authority."""
+    command = [
+        pf_bin,
+        "openssh",
+        "auth-principals",
+        f"--host-certificate={settings.host_keys_dir}/ssh_host_ed25519_key.cert",
+        "--username=%u",
+        "--certificate=%k",
+        *principals_arguments,
+    ]
+    lines = [f"TrustedUserCAKeys {settings.ca_pub_path}"]
+    lines += [f"HostCertificate {path}" for path in certificates]
+    lines += [
+        f"AuthorizedPrincipalsCommand {' '.join(command)}",
+        f"AuthorizedPrincipalsCommandUser {settings.auth_user}",
+        "PubkeyAuthentication yes",
+    ]
+    return "\n".join(lines) + "\n"

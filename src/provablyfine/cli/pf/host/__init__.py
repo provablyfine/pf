@@ -12,16 +12,23 @@ import sys
 
 import provablyfine_client as pfc
 
-from . import base, ops
+from . import base, ops, procs
 
 if sys.platform == "linux":
     from . import linux
+elif sys.platform == "darwin":
+    from . import darwin
+
+
+__all__ = ["apply", "base", "ops", "procs", "provider", "reload_sshd"]
 
 
 def provider() -> base.Provider:
     if sys.platform == "linux":
         return linux.Linux()
-    raise pfc.exceptions.UI("This command is not supported on native Windows or MacOS")
+    if sys.platform == "darwin":
+        return darwin.Darwin(sys.executable if getattr(sys, "frozen", False) else None)
+    raise pfc.exceptions.UI("This command is not supported on native Windows")
 
 
 def apply(dry_run: bool, action: collections.abc.Callable[[ops.Ops], None]) -> None:
@@ -36,6 +43,9 @@ def apply(dry_run: bool, action: collections.abc.Callable[[ops.Ops], None]) -> N
 
 
 def reload_sshd() -> None:
-    """Make the SSH daemon read new host certificates, on platforms where that is needed."""
+    """Make the SSH daemon read new host certificates, on platforms where that is needed.
+
+    On macOS launchd starts a new sshd for every connection, so nothing is needed.
+    """
     if sys.platform == "linux":
         linux.Linux().reload_sshd(ops.SystemOps())
