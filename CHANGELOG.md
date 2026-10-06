@@ -1,3 +1,14 @@
+## 0.7.9 - 2026-10-06
+
+### Added
+
+- MacOS package ([#175](https://github.com/provablyfine/pf/issues/175))
+
+### Fixed
+
+- Align package name with what the CI install smoke test expects ([#174](https://github.com/provablyfine/pf/issues/174))
+
+
 ## 0.7.8 - 2026-10-06
 
 ### Fixed
