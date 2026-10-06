@@ -1,3 +1,10 @@
+## 0.7.8 - 2026-10-06
+
+### Fixed
+
+- Commit uv.lock during release to avoid CI failures ([#173](https://github.com/provablyfine/pf/issues/173))
+
+
 ## 0.7.7 - 2026-10-05
 
 ### Added
