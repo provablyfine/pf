@@ -224,17 +224,17 @@ jobs:
             distro: ubuntu:24.04
           # amd64 rpm
           - os: ubuntu-latest
-            artifact: linux-rpm-x86_64
+            artifact: linux-rpm-amd64
             distro: rockylinux:9
           - os: ubuntu-latest
-            artifact: linux-rpm-x86_64
+            artifact: linux-rpm-amd64
             distro: fedora:latest
           # arm64
           - os: ubuntu-24.04-arm
             artifact: linux-deb-arm64
             distro: debian:12
           - os: ubuntu-24.04-arm
-            artifact: linux-rpm-aarch64
+            artifact: linux-rpm-arm64
             distro: rockylinux:9
     runs-on: ${{ matrix.os }}
     steps:
