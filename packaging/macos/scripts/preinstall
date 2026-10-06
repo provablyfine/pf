@@ -1,0 +1,5 @@
+#!/bin/sh
+# Runs as root before the payload is copied. Removing the previous payload
+# keeps files from older versions from lingering in /opt/provablyfine.
+rm -rf /opt/provablyfine
+exit 0

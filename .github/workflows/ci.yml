@@ -154,6 +154,22 @@ jobs:
           $version = uv version --short
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DMyAppVersion=$version" packaging\windows\pf.iss
 
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v8.1.0
+        with:
+          python-version: "3.12"
+      - name: Build PyInstaller payload
+        run: |
+          uv sync --no-dev --group build --frozen
+          uv run --no-sync --group build pyinstaller packaging/macos/pf.spec --noconfirm
+      - name: Build package
+        run: packaging/macos/build.sh
+      - name: Install, smoke-test and uninstall the package
+        run: packaging/macos/smoke.sh dist/provablyfine-*.pkg
+
   docs:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'

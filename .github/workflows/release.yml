@@ -206,6 +206,72 @@ jobs:
           name: linux-rpm-${{ matrix.arch }}
           path: dist/*.rpm
 
+  build-macos:
+    needs: [lint, test, audit]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            arch: arm64
+    runs-on: ${{ matrix.os }}
+    env:
+      # Signing and notarization run only when the repository has the secrets.
+      # MACOS_CERTIFICATES_P12 is a base64 .p12 holding the Developer ID
+      # Application and Developer ID Installer certificates.
+      HAVE_SIGNING: ${{ secrets.MACOS_CERTIFICATES_P12 != '' }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v8.1.0
+        with:
+          python-version: "3.12"
+      - name: Build PyInstaller payload
+        run: |
+          uv sync --no-dev --group build --frozen
+          uv run --no-sync --group build pyinstaller packaging/macos/pf.spec --noconfirm
+      - name: Import signing certificates
+        if: env.HAVE_SIGNING == 'true'
+        env:
+          MACOS_CERTIFICATES_P12: ${{ secrets.MACOS_CERTIFICATES_P12 }}
+          MACOS_CERTIFICATES_PASSWORD: ${{ secrets.MACOS_CERTIFICATES_PASSWORD }}
+        run: |
+          keychain="$RUNNER_TEMP/build.keychain-db"
+          keychain_password="$(uuidgen)"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          echo "$MACOS_CERTIFICATES_P12" | base64 --decode > "$RUNNER_TEMP/certificates.p12"
+          security import "$RUNNER_TEMP/certificates.p12" -k "$keychain" \
+            -P "$MACOS_CERTIFICATES_PASSWORD" -T /usr/bin/codesign -T /usr/bin/productbuild
+          rm "$RUNNER_TEMP/certificates.p12"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain"
+          security list-keychains -d user -s "$keychain" login.keychain
+          identities="$(security find-identity -v "$keychain")"
+          app_identity="$(echo "$identities" | sed -n 's/.*"\(Developer ID Application:[^"]*\)".*/\1/p' | head -1)"
+          installer_identity="$(echo "$identities" | sed -n 's/.*"\(Developer ID Installer:[^"]*\)".*/\1/p' | head -1)"
+          if [ -z "$app_identity" ] || [ -z "$installer_identity" ]; then
+            echo "the certificates must include Developer ID Application and Developer ID Installer" >&2
+            exit 1
+          fi
+          echo "MACOS_APP_IDENTITY=$app_identity" >> "$GITHUB_ENV"
+          echo "MACOS_INSTALLER_IDENTITY=$installer_identity" >> "$GITHUB_ENV"
+          echo "MACOS_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
+      - name: Build package
+        env:
+          MACOS_NOTARY_APPLE_ID: ${{ secrets.MACOS_NOTARY_APPLE_ID }}
+          MACOS_NOTARY_PASSWORD: ${{ secrets.MACOS_NOTARY_PASSWORD }}
+          MACOS_NOTARY_TEAM_ID: ${{ secrets.MACOS_NOTARY_TEAM_ID }}
+        run: packaging/macos/build.sh
+      - name: Install, smoke-test and uninstall the package
+        run: packaging/macos/smoke.sh dist/provablyfine-*.pkg
+      - name: Remove signing keychain
+        if: always() && env.HAVE_SIGNING == 'true'
+        run: security delete-keychain "$MACOS_KEYCHAIN" || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-pkg-${{ matrix.arch }}
+          path: dist/*.pkg
+
   smoke-test-linux:
     needs: [build-linux]
     strategy:
@@ -264,13 +330,13 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
 
   github-release:
-    needs: [publish-pypi, build-windows, smoke-test-linux]
+    needs: [publish-pypi, build-windows, build-macos, smoke-test-linux]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          pattern: '{wheel-*,sdist-*,windows-installer,linux-deb-*,linux-rpm-*}'
+          pattern: '{wheel-*,sdist-*,windows-installer,linux-deb-*,linux-rpm-*,macos-pkg-*}'
           merge-multiple: true
           path: dist/
       - name: Generate checksums

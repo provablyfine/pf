@@ -106,8 +106,8 @@ dev = [
     "pyte>=0.8.2",
 ]
 # Shared build group for the platform packaging jobs: pyinstaller payload for
-# the Windows installer (packaging/windows) and the Linux deb/rpm packages
-# (packaging/linux).
+# the Windows installer (packaging/windows), the Linux deb/rpm packages
+# (packaging/linux) and the macOS installer package (packaging/macos).
 build = [
     "pyinstaller>=6.11.0",
 ]
