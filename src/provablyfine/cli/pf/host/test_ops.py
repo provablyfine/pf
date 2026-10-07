@@ -10,6 +10,7 @@ import pytest
 
 from . import ops
 
+
 posix_only = pytest.mark.skipif(sys.platform == "win32", reason="needs POSIX file modes, owners, links or sh")
 
 
@@ -165,7 +166,6 @@ def test_notes_are_recorded_and_described() -> None:
     assert dry.describe() == "note: check this\n"
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="needs a POSIX system")
 def test_path_problem_accepts_a_system_binary() -> None:
     assert ops.SystemOps().path_problem("/bin/sh") is None
 
@@ -239,7 +239,6 @@ def test_dry_run_path_problem_reads_under_its_root(tmp_path: pathlib.Path) -> No
     assert problem.startswith("/opt/provablyfine ")
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="needs sh")
 def test_system_ops_run_hides_sudo_variables_from_children(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

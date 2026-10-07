@@ -11,6 +11,8 @@ import pytest
 
 from . import base, darwin, ops
 
+pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="host-init is POSIX-only")
+
 INVITATION = "https://example.com/pf/t/00000000-0000-0000-0000-000000000001/directory?invitation=3qFA-_8Kx9mLp0o1"
 DIRECTORY_URL = "https://example.com/pf/t/00000000-0000-0000-0000-000000000001/directory"
 INJECTION_URL = "https://x.invalid/directory?invitation=k';touch /tmp/PWNED;#"
