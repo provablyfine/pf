@@ -5,7 +5,7 @@ from __future__ import annotations
 import ctypes
 import ctypes.wintypes
 
-from .. import exceptions
+from .. import ssh
 from . import errors, raw
 
 
@@ -57,5 +57,5 @@ def wait_for_any(handles: tuple[int, ...], timeout_ms: int) -> int | None:
         errors.raise_last_error("WaitForMultipleObjects")
     index = int(result) - raw.WAIT_OBJECT_0
     if not 0 <= index < len(handles):
-        raise exceptions.Error(f"WaitForMultipleObjects returned an unexpected result: {result}")
+        raise ssh.exceptions.Error(f"WaitForMultipleObjects returned an unexpected result: {result}")
     return index

@@ -14,9 +14,9 @@ import sys
 if sys.platform == "win32":
     import time
 
-    import provablyfine.ssh._w32.event
-    import provablyfine.ssh._w32.pipe
-    import provablyfine.ssh._w32.process
+    import provablyfine._w32.event
+    import provablyfine._w32.pipe
+    import provablyfine._w32.process
     import provablyfine.ssh.exceptions
     import provablyfine.ssh.oracle._win32
     import provablyfine.ssh.oracle._win32.session
@@ -29,7 +29,7 @@ if sys.platform == "win32":
         `WaitNamedPipeW` instead, which distinguishes "no such pipe" from "pipe
         exists but every instance is busy" unambiguously.
         """
-        return provablyfine.ssh._w32.pipe.named_pipe_exists(path)
+        return provablyfine._w32.pipe.named_pipe_exists(path)
 
     def kill_oracle(path: str, directory_url: str) -> None:
         """Make the calling process's own oracle disappear, the way its TTL
@@ -47,17 +47,17 @@ if sys.platform == "win32":
         asynchronously to this call.
         """
         pid, creation_time = provablyfine.ssh.oracle._win32.peercred.login_shell_identity()
-        event = provablyfine.ssh._w32.event.open_event(
+        event = provablyfine._w32.event.open_event(
             provablyfine.ssh.oracle._win32.session._new_login_event_name(pid, creation_time, directory_url)
         )
         if event is None:
             raise provablyfine.ssh.exceptions.Error(f"No session oracle is listening at {path}")
         try:
-            provablyfine.ssh._w32.event.set_event(event)
+            provablyfine._w32.event.set_event(event)
         finally:
-            provablyfine.ssh._w32.process.close_handle(event)
+            provablyfine._w32.process.close_handle(event)
         deadline = time.monotonic() + provablyfine.ssh.oracle._win32.session._NEW_LOGIN_TIMEOUT_SECONDS
-        while provablyfine.ssh._w32.pipe.named_pipe_exists(path):
+        while provablyfine._w32.pipe.named_pipe_exists(path):
             if time.monotonic() >= deadline:
                 raise provablyfine.ssh.exceptions.Error(
                     f"Oracle at {path} did not exit after being signaled to stand down"

@@ -10,7 +10,7 @@ import os
 import sys
 import time
 
-from ... import _w32 as w32
+from .... import _w32 as w32
 from ... import agent, exceptions
 from . import peercred
 

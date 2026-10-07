@@ -52,7 +52,7 @@ def remove_block(text: str, begin: str, end: str) -> str:
     kept: list[str] = []
     inside = False
     for line in text.splitlines(keepends=True):
-        stripped = line.rstrip("\n")
+        stripped = line.rstrip("\r\n")
         if not inside and stripped == begin:
             inside = True
             continue
@@ -64,9 +64,10 @@ def remove_block(text: str, begin: str, end: str) -> str:
     return "".join(kept)
 
 
-def ssh_port(o: ops.Ops) -> str:
+def ssh_port(o: ops.Ops, config: str | None = None) -> str:
     """The port the local sshd listens on, 22 when it does not say."""
-    for line in o.query(["sshd", "-T"]).stdout.splitlines():
+    command = ["sshd", "-T"] if config is None else ["sshd", "-T", "-f", config]
+    for line in o.query(command).stdout.splitlines():
         if line.startswith("port "):
             return line.split()[1]
     return "22"

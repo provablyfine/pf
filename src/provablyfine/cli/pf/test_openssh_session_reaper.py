@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import os
 import pathlib
-import signal
 import subprocess
 import sys
 import time
@@ -15,7 +14,7 @@ import pytest
 
 from . import host, openssh_session_reaper
 
-pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="needs ps and POSIX signals")
+posix_only = pytest.mark.skipif(sys.platform == "win32", reason="needs POSIX processes, links or pipes")
 
 CONNECTION_ID = "6f1e2d3c-4b5a-4978-8a9b-0c1d2e3f4a5b"
 OTHER_CONNECTION_ID = "11111111-2222-4333-8444-555555555555"
@@ -27,7 +26,7 @@ class FakeTable:
     def __init__(self, procs: list[host.procs.Proc], started: dict[int, int]) -> None:
         self.procs = {p.pid: p for p in procs}
         self.started = dict(started)
-        self.sent: list[tuple[int, int]] = []
+        self.sent: list[tuple[int, bool]] = []
 
     def snapshot(self) -> host.procs.Snapshot:
         return dict(self.procs)
@@ -35,9 +34,9 @@ class FakeTable:
     def start_time(self, pid: int) -> int | None:
         return self.started.get(pid)
 
-    def send_signal(self, pid: int, number: int) -> None:
-        self.sent.append((pid, number))
-        if number == signal.SIGKILL:
+    def send_signal(self, pid: int, *, force: bool) -> None:
+        self.sent.append((pid, force))
+        if force:
             self.procs.pop(pid, None)
 
 
@@ -69,11 +68,15 @@ def _put(directory: pathlib.Path, record: openssh_session_reaper.Record) -> path
     return pathlib.Path(openssh_session_reaper.write_record(str(directory), record))
 
 
+def _monitor(snapshot: host.procs.Snapshot, proc: host.procs.Proc) -> bool:
+    return host.procs.is_sshd_monitor(proc)
+
+
 def _reaper(
     directory: pathlib.Path, table: FakeTable, clock: list[float], grace: float = 5.0
 ) -> openssh_session_reaper.Reaper:
     return openssh_session_reaper.Reaper(
-        str(directory), table, is_connection=host.procs.is_sshd_monitor, now=lambda: clock[0], grace=grace
+        str(directory), table, is_connection=_monitor, now=lambda: clock[0], grace=grace
     )
 
 
@@ -81,7 +84,8 @@ def test_a_record_survives_a_round_trip(tmp_path: pathlib.Path) -> None:
     record = _record()
     path = _put(tmp_path, record)
     assert path.name == f"100-{CONNECTION_ID}.json"
-    assert path.stat().st_mode & 0o777 == 0o600
+    if sys.platform != "win32":
+        assert path.stat().st_mode & 0o777 == 0o600
     assert openssh_session_reaper.read_record(str(path)) == record
 
 
@@ -122,6 +126,7 @@ def test_read_record_rejects_other_file_names(tmp_path: pathlib.Path) -> None:
     assert openssh_session_reaper.read_record(str(tmp_path / f"100-{CONNECTION_ID}.json")) is None
 
 
+@posix_only
 def test_read_record_does_not_follow_symbolic_links(tmp_path: pathlib.Path) -> None:
     real = _put(tmp_path, _record())
     link = tmp_path / f"200-{CONNECTION_ID}.json"
@@ -129,6 +134,7 @@ def test_read_record_does_not_follow_symbolic_links(tmp_path: pathlib.Path) -> N
     assert openssh_session_reaper.read_record(str(link)) is None
 
 
+@posix_only
 def test_read_record_does_not_block_on_a_pipe(tmp_path: pathlib.Path) -> None:
     fifo = tmp_path / f"100-{CONNECTION_ID}.json"
     os.mkfifo(fifo)
@@ -139,7 +145,13 @@ def test_register_session_records_the_connection_process_above_us(tmp_path: path
     table = _session_table()
     table.procs[4242] = host.procs.Proc(4242, 102, "pf openssh auth-principals")
     path = openssh_session_reaper.register_session(
-        str(tmp_path), deadline=5_000, connection_id=CONNECTION_ID, table=table, pid=4242, now=lambda: 1_000.5
+        str(tmp_path),
+        deadline=5_000,
+        connection_id=CONNECTION_ID,
+        table=table,
+        pid=4242,
+        now=lambda: 1_000.5,
+        is_connection=_monitor,
     )
     assert path == str(tmp_path / f"100-{CONNECTION_ID}.json")
     assert openssh_session_reaper.read_record(str(path)) == _record(written_ms=1_000_500)
@@ -185,7 +197,7 @@ def test_at_the_deadline_descendants_are_terminated_before_the_connection_proces
     _put(tmp_path, _record())
     clock = [5_000.0]
     _reaper(tmp_path, table, clock).tick()
-    assert table.sent == [(101, signal.SIGTERM), (102, signal.SIGTERM), (100, signal.SIGTERM)]
+    assert table.sent == [(101, False), (102, False), (100, False)]
 
 
 def test_a_session_that_does_not_end_is_killed_after_the_grace_period(tmp_path: pathlib.Path) -> None:
@@ -200,7 +212,7 @@ def test_a_session_that_does_not_end_is_killed_after_the_grace_period(tmp_path: 
     assert table.sent == []
     clock[0] = 5_005.0
     reaper.tick()
-    assert sorted(table.sent) == [(100, signal.SIGKILL), (101, signal.SIGKILL), (102, signal.SIGKILL)]
+    assert sorted(table.sent) == [(100, True), (101, True), (102, True)]
 
 
 def test_the_record_goes_away_once_the_session_has_ended(tmp_path: pathlib.Path) -> None:
@@ -259,7 +271,7 @@ def test_a_process_that_starts_in_the_same_second_the_record_was_written_is_acce
     table.started[100] = 1_000
     _put(tmp_path, _record(written_ms=1_000_900))
     _reaper(tmp_path, table, [9_999.0]).tick()
-    assert (100, signal.SIGTERM) in table.sent
+    assert (100, False) in table.sent
 
 
 def test_a_pid_that_is_reused_while_we_wait_is_not_signaled(tmp_path: pathlib.Path) -> None:
@@ -295,8 +307,8 @@ def test_two_connections_are_handled_independently(tmp_path: pathlib.Path) -> No
     _put(tmp_path, _record(deadline=5_000))
     _put(tmp_path, _record(pid=200, deadline=9_000, connection_id=OTHER_CONNECTION_ID))
     _reaper(tmp_path, table, [6_000.0]).tick()
-    assert (100, signal.SIGTERM) in table.sent
-    assert (200, signal.SIGTERM) not in table.sent
+    assert (100, False) in table.sent
+    assert (200, False) not in table.sent
 
 
 def test_a_missing_directory_is_not_an_error(tmp_path: pathlib.Path) -> None:
@@ -337,7 +349,7 @@ class _Tree:
     def stop(self) -> None:
         for pid in self.children:
             try:
-                os.kill(pid, signal.SIGKILL)
+                os.kill(pid, True)
             except ProcessLookupError:
                 pass
         self.shell.kill()
@@ -348,7 +360,7 @@ def _reaper_for(tree: _Tree, directory: pathlib.Path, clock: list[float]) -> ope
     return openssh_session_reaper.Reaper(
         str(directory),
         host.procs.PsTable(),
-        is_connection=lambda proc: proc.pid == tree.shell.pid,
+        is_connection=lambda snapshot, proc: proc.pid == tree.shell.pid,
         now=lambda: clock[0],
         grace=5.0,
     )
@@ -358,6 +370,7 @@ def _record_for(tree: _Tree) -> openssh_session_reaper.Record:
     return _record(pid=tree.shell.pid, written_ms=int(time.time() * 1000) + 1_000)
 
 
+@posix_only
 def test_the_reaper_ends_a_real_process_tree_with_sigterm(tmp_path: pathlib.Path) -> None:
     tree = _Tree(ignore_term=False)
     try:
@@ -375,6 +388,7 @@ def test_the_reaper_ends_a_real_process_tree_with_sigterm(tmp_path: pathlib.Path
         tree.stop()
 
 
+@posix_only
 def test_the_reaper_kills_a_real_process_tree_that_ignores_sigterm(tmp_path: pathlib.Path) -> None:
     tree = _Tree(ignore_term=True)
     try:
@@ -394,13 +408,14 @@ def test_the_reaper_kills_a_real_process_tree_that_ignores_sigterm(tmp_path: pat
 
 
 def test_the_reaper_command_refuses_to_run_unprivileged(tmp_path: pathlib.Path) -> None:
-    if os.geteuid() == 0:
-        pytest.skip("running as root")
+    if host.is_privileged():
+        pytest.skip("running with privileges")
     args = typing.cast("typing.Any", type("Args", (), {"deadline_dir": str(tmp_path), "interval": 1.0, "grace": 5.0}))
     with pytest.raises(pfc.exceptions.UI, match="must run as root"):
         openssh_session_reaper.session_reaper_function(args)
 
 
+@posix_only
 def test_a_directory_that_others_can_write_is_refused(tmp_path: pathlib.Path) -> None:
     tmp_path.chmod(0o777)
     problem = openssh_session_reaper._directory_problem(str(tmp_path))

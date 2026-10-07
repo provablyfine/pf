@@ -5,8 +5,8 @@ from __future__ import annotations
 import subprocess
 import sys
 
+from .... import _w32 as w32
 from .... import jwk
-from ... import _w32 as w32
 from ... import buffer
 from . import peercred, server
 

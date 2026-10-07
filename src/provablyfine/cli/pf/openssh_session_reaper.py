@@ -22,6 +22,7 @@ import os
 import re
 import signal
 import stat
+import sys
 import time
 import types
 import typing
@@ -85,12 +86,21 @@ def read_record(path: str) -> Record | None:
     if match is None:
         return None
     try:
-        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        info = os.lstat(path)
+    except OSError:
+        return None
+    # lstat does not follow links, so a symbolic link or a pipe is not a regular file here.
+    if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_RECORD_BYTES:
+        return None
+    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    try:
+        fd = os.open(path, flags)
     except OSError:
         return None
     try:
-        info = os.fstat(fd)
-        if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_RECORD_BYTES:
+        # The file may have been replaced between the two calls.
+        opened = os.fstat(fd)
+        if not stat.S_ISREG(opened.st_mode) or opened.st_size > MAX_RECORD_BYTES:
             return None
         data = os.read(fd, MAX_RECORD_BYTES + 1)
     finally:
@@ -125,6 +135,7 @@ def register_session(
     table: host.procs.ProcessTable,
     pid: int | None = None,
     now: typing.Callable[[], float] = time.time,
+    is_connection: host.procs.ConnectionTest | None = None,
 ) -> str | None:
     """Record that the connection above `pid` must end at `deadline`.
 
@@ -136,17 +147,12 @@ def register_session(
         )
         return None
     pid = os.getpid() if pid is None else pid
-    monitor = host.procs.find_ancestor(table.snapshot(), pid, host.procs.is_sshd_monitor)
+    monitor = host.procs.find_ancestor(table.snapshot(), pid, is_connection or host.procs.connection_test())
     if monitor is None:
         logger.warning(f"no sshd connection process above pid={pid}; the session deadline will not be enforced")
         return None
     record = Record(pid=monitor.pid, written_ms=int(now() * 1000), deadline=deadline, connection_id=connection_id)
     return write_record(directory, record)
-
-
-def is_launchd_connection(proc: host.procs.Proc) -> bool:
-    """A per-connection sshd process that launchd started, not a process that only looks like one."""
-    return host.procs.is_sshd_monitor(proc) and proc.ppid == 1
 
 
 class Reaper:
@@ -155,13 +161,13 @@ class Reaper:
         directory: str,
         table: host.procs.ProcessTable,
         *,
-        is_connection: typing.Callable[[host.procs.Proc], bool] = is_launchd_connection,
+        is_connection: host.procs.ConnectionTest | None = None,
         now: typing.Callable[[], float] = time.time,
         grace: float = 5.0,
     ) -> None:
         self._directory = directory
         self._table = table
-        self._is_connection = is_connection
+        self._is_connection = is_connection or host.procs.connection_test()
         self._now = now
         self._grace = grace
         # Start time of the process each record was first matched with.
@@ -211,7 +217,7 @@ class Reaper:
             return
         bound = self._bound.get(name)
         if bound is None:
-            if not self._is_connection(proc):
+            if not self._is_connection(snapshot, proc):
                 self._drop(name, f"pid {record.pid} is not an sshd connection process")
                 return
             if started > record.written_ms // 1000:
@@ -230,17 +236,22 @@ class Reaper:
             if now < record.deadline:
                 return
             logger.info(f"deadline reached, ending session connection_id={record.connection_id} pid={record.pid}")
-            for pid in host.procs.descendants(snapshot, record.pid):
-                self._table.send_signal(pid, signal.SIGTERM)
-            self._table.send_signal(record.pid, signal.SIGTERM)
+            self._signal([*host.procs.descendants(snapshot, record.pid), record.pid], force=False)
             self._ending[name] = now
             return
         if now - ended_at >= self._grace:
             logger.info(
                 f"session did not end in time, killing it connection_id={record.connection_id} pid={record.pid}"
             )
-            for pid in [*host.procs.descendants(snapshot, record.pid), record.pid]:
-                self._table.send_signal(pid, signal.SIGKILL)
+            self._signal([*host.procs.descendants(snapshot, record.pid), record.pid], force=True)
+
+    def _signal(self, pids: typing.Iterable[int], *, force: bool) -> None:
+        """Signal each process. A process that refuses must not stop the others from being signaled."""
+        for pid in pids:
+            try:
+                self._table.send_signal(pid, force=force)
+            except Exception:
+                logger.warning(f"could not signal pid={pid} force={force}", exc_info=True)
 
     def _request_stop(self, signum: int, frame: types.FrameType | None) -> None:
         self._stopping = True
@@ -262,16 +273,17 @@ def _directory_problem(directory: str) -> str | None:
         return f"cannot use {directory}: {e.strerror}"
     if not stat.S_ISDIR(info.st_mode):
         return f"{directory} is not a directory"
-    if info.st_mode & 0o022:
+    # Windows has no mode bits. The directory's access list is set when it is created.
+    if sys.platform != "win32" and info.st_mode & 0o022:
         return f"{directory} can be written by its group or by others"
     return None
 
 
 def session_reaper_function(args: argparse.Namespace) -> None:
     """End SSH sessions at their certificate deadline. Must run as root."""
-    if os.geteuid() != 0:
-        raise pfc.exceptions.UI("session-reaper must run as root")
+    if not host.is_privileged():
+        raise pfc.exceptions.UI("session-reaper must run as root, or as an administrator on Windows")
     problem = _directory_problem(args.deadline_dir)
     if problem is not None:
         raise pfc.exceptions.UI(problem)
-    Reaper(args.deadline_dir, host.procs.PsTable(), grace=args.grace).run(args.interval)
+    Reaper(args.deadline_dir, host.procs.default_table(), grace=args.grace).run(args.interval)

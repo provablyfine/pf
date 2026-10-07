@@ -59,6 +59,8 @@ def _settings(args: argparse.Namespace, invitation: str, directory_url: str) -> 
         sshd_config_drop_in=args.sshd_config_drop_in,
         auth_user=args.auth_user,
         pf_binary=args.pf_binary,
+        sshd_config=args.sshd_config,
+        sshd_service=args.sshd_service,
     )
 
 
@@ -80,6 +82,8 @@ def host_uninit_function(args: argparse.Namespace) -> None:
         ca_pub_path=args.ca_pub_path,
         sshd_config_drop_in=args.sshd_config_drop_in,
         auth_user="",
+        sshd_config=args.sshd_config,
+        sshd_service=args.sshd_service,
     )
     host.apply(args.dry_run, lambda o: provider.uninit(o, settings))
 

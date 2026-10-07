@@ -11,6 +11,7 @@ import ctypes.wintypes
 
 k32 = ctypes.WinDLL("kernel32", use_last_error=True)
 adv = ctypes.WinDLL("advapi32", use_last_error=True)
+shell32 = ctypes.WinDLL("shell32", use_last_error=True)
 
 # ntdll for the one call the public Toolhelp snapshot cannot answer for a HANDLE
 # we already hold, which is what makes the ancestry walk TOCTOU-safe.
@@ -40,6 +41,8 @@ PIPE_UNLIMITED_INSTANCES = 255
 
 ERROR_FILE_NOT_FOUND = 2
 ERROR_ACCESS_DENIED = 5
+ERROR_NO_MORE_FILES = 18
+ERROR_INVALID_PARAMETER = 87
 ERROR_INSUFFICIENT_BUFFER = 122
 ERROR_BROKEN_PIPE = 109
 ERROR_SEM_TIMEOUT = 121
@@ -53,6 +56,10 @@ WAIT_TIMEOUT = 0x00000102
 WAIT_FAILED = 0xFFFFFFFF
 
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+PROCESS_TERMINATE = 0x0001
+STILL_ACTIVE = 259
+TH32CS_SNAPPROCESS = 0x00000002
+MAX_PATH = 260
 PROCESS_VM_READ = 0x0010
 PROCESS_VM_OPERATION = 0x0008
 PROCESS_CREATE_THREAD = 0x0002
@@ -166,11 +173,28 @@ class PROCESS_INFORMATION(ctypes.Structure):
     )
 
 
+class PROCESSENTRY32W(ctypes.Structure):
+    _fields_ = (
+        ("dwSize", ctypes.wintypes.DWORD),
+        ("cntUsage", ctypes.wintypes.DWORD),
+        ("th32ProcessID", ctypes.wintypes.DWORD),
+        ("th32DefaultHeapID", ctypes.c_size_t),
+        ("th32ModuleID", ctypes.wintypes.DWORD),
+        ("cntThreads", ctypes.wintypes.DWORD),
+        ("th32ParentProcessID", ctypes.wintypes.DWORD),
+        ("pcPriClassBase", ctypes.wintypes.LONG),
+        ("dwFlags", ctypes.wintypes.DWORD),
+        ("szExeFile", ctypes.wintypes.WCHAR * MAX_PATH),
+    )
+
+
 _LPDWORD = ctypes.POINTER(ctypes.wintypes.DWORD)
 _LPFILETIME = ctypes.POINTER(ctypes.wintypes.FILETIME)
 
 k32.CloseHandle.argtypes = (ctypes.wintypes.HANDLE,)
 k32.CloseHandle.restype = ctypes.wintypes.BOOL
+k32.CreateToolhelp32Snapshot.argtypes = (ctypes.wintypes.DWORD, ctypes.wintypes.DWORD)
+k32.CreateToolhelp32Snapshot.restype = ctypes.wintypes.HANDLE
 k32.CreateEventW.argtypes = (
     ctypes.POINTER(SECURITY_ATTRIBUTES),
     ctypes.wintypes.BOOL,
@@ -227,6 +251,8 @@ k32.DisconnectNamedPipe.argtypes = (ctypes.wintypes.HANDLE,)
 k32.DisconnectNamedPipe.restype = ctypes.wintypes.BOOL
 k32.GetCurrentProcess.argtypes = ()
 k32.GetCurrentProcess.restype = ctypes.wintypes.HANDLE
+k32.GetExitCodeProcess.argtypes = (ctypes.wintypes.HANDLE, _LPDWORD)
+k32.GetExitCodeProcess.restype = ctypes.wintypes.BOOL
 k32.GetNamedPipeClientProcessId.argtypes = (ctypes.wintypes.HANDLE, ctypes.POINTER(ctypes.wintypes.ULONG))
 k32.GetNamedPipeClientProcessId.restype = ctypes.wintypes.BOOL
 k32.GetNamedPipeServerProcessId.argtypes = (ctypes.wintypes.HANDLE, ctypes.POINTER(ctypes.wintypes.ULONG))
@@ -246,6 +272,10 @@ k32.OpenEventW.argtypes = (ctypes.wintypes.DWORD, ctypes.wintypes.BOOL, ctypes.w
 k32.OpenEventW.restype = ctypes.wintypes.HANDLE
 k32.OpenProcess.argtypes = (ctypes.wintypes.DWORD, ctypes.wintypes.BOOL, ctypes.wintypes.DWORD)
 k32.OpenProcess.restype = ctypes.wintypes.HANDLE
+k32.Process32FirstW.argtypes = (ctypes.wintypes.HANDLE, ctypes.POINTER(PROCESSENTRY32W))
+k32.Process32FirstW.restype = ctypes.wintypes.BOOL
+k32.Process32NextW.argtypes = (ctypes.wintypes.HANDLE, ctypes.POINTER(PROCESSENTRY32W))
+k32.Process32NextW.restype = ctypes.wintypes.BOOL
 k32.QueryFullProcessImageNameW.argtypes = (
     ctypes.wintypes.HANDLE,
     ctypes.wintypes.DWORD,
@@ -265,6 +295,8 @@ k32.ResetEvent.argtypes = (ctypes.wintypes.HANDLE,)
 k32.ResetEvent.restype = ctypes.wintypes.BOOL
 k32.SetEvent.argtypes = (ctypes.wintypes.HANDLE,)
 k32.SetEvent.restype = ctypes.wintypes.BOOL
+k32.TerminateProcess.argtypes = (ctypes.wintypes.HANDLE, ctypes.wintypes.UINT)
+k32.TerminateProcess.restype = ctypes.wintypes.BOOL
 k32.UpdateProcThreadAttribute.argtypes = (
     ctypes.wintypes.LPVOID,
     ctypes.wintypes.DWORD,
@@ -338,3 +370,6 @@ nt.NtQueryInformationProcess.argtypes = (
     _LPDWORD,
 )
 nt.NtQueryInformationProcess.restype = ctypes.c_long
+
+shell32.IsUserAnAdmin.argtypes = ()
+shell32.IsUserAnAdmin.restype = ctypes.wintypes.BOOL

@@ -12,7 +12,7 @@
     "**/*linux*",
     "**/*darwin*",
     "**/*win32*",
-    "src/provablyfine/ssh/_w32"
+    "src/provablyfine/_w32"
   ],
   "pythonPlatform": "Linux",
   "typeCheckingMode": "strict"

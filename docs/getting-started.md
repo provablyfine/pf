@@ -9,6 +9,10 @@ On Windows, you can instead download `pf-setup.exe` from the
 it. The installer is currently unsigned, so Windows SmartScreen will warn you on
 first run; choose "More info" then "Run anyway" to proceed.
 
+The installer installs pf for the current user. To install it for all users in
+`C:\Program Files\pf`, choose that in the installer, or run it with `/ALLUSERS`.
+You need that to use the machine as a host.
+
 ### Linux packages
 
 For simple cli use, we recommend pipx:
@@ -108,12 +112,7 @@ $ pfa role member -i $USERS_ROLE_ID -a $(pfa whoami)
 
 ### Setup the host
 
-You need to install first `pf` on the server globally:
-```console
-$ pip install --global provablyfine
-```
-
-Then, make your OpenSSH service know about the new centralized
+Make your OpenSSH service know about the new centralized
 authentication system. Run this command on the server as root:
 ```console
 $ sudo pf openssh host-init --invitation $INVITATION_URL

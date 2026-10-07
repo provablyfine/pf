@@ -18,6 +18,8 @@ DIRECTORY_URL = "https://example.com/pf/t/00000000-0000-0000-0000-000000000001/d
 INJECTION_URL = "https://x.invalid/directory?invitation=k';touch /tmp/PWNED;#"
 PF = "/opt/provablyfine/pf"
 
+pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="the macOS provider tests need POSIX file owners")
+
 
 def _settings(**overrides: str | None) -> base.Settings:
     fields: dict[str, str | None] = {

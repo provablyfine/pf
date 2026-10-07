@@ -29,8 +29,8 @@ import hashlib
 import logging
 import time
 
+from .... import _w32 as w32
 from .... import jwk
-from ... import _w32 as w32
 from ... import exceptions, serde
 from . import peercred, server, spawn
 

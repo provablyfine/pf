@@ -8,3 +8,8 @@ elevated PowerShell:
   Start-Service ssh-agent
 
 You may need to open a new terminal for the updated PATH to take effect.
+
+To use this machine as an SSH host, install pf for all users, which puts it in
+Program Files, then run this in an elevated PowerShell:
+
+  pf openssh host-init --invitation INVITATION_URL
