@@ -149,3 +149,8 @@ def disable_debug_privilege() -> None:
         raw.adv.AdjustTokenPrivileges(token, False, ctypes.byref(state), 0, None, None)
     finally:
         process.close_handle(token.value or 0)
+
+
+def is_user_an_admin() -> bool:
+    """True when this process runs with an elevated administrator token."""
+    return bool(raw.shell32.IsUserAnAdmin())

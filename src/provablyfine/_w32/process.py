@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import ctypes
 import ctypes.wintypes
+import dataclasses
 
 from .. import ssh
 from . import errors, event, raw
@@ -20,11 +21,15 @@ def close_handle(handle: int) -> None:
     raw.k32.CloseHandle(handle)
 
 
-def open_process(pid: int) -> int | None:
-    """A HANDLE to `pid` with just enough access to read its times and image
-    and to wait on its exit, or None if it cannot be opened (already gone, or
-    owned by another user)."""
-    handle = raw.k32.OpenProcess(raw.PROCESS_QUERY_LIMITED_INFORMATION | raw.SYNCHRONIZE, False, pid)
+def open_process(pid: int, access: int = raw.PROCESS_QUERY_LIMITED_INFORMATION | raw.SYNCHRONIZE) -> int | None:
+    """A HANDLE to `pid`, or None if it cannot be opened (already gone, or
+    owned by another user).
+
+    The default access is just enough to read its times and image and to wait
+    on its exit. A caller that must see processes of other users, such as
+    SYSTEM, passes less: asking for `SYNCHRONIZE` can be refused.
+    """
+    handle = raw.k32.OpenProcess(access, False, pid)
     return None if not handle else handle
 
 
@@ -93,3 +98,63 @@ def process_parent_pid(handle: int) -> int:
     if status != 0:
         raise ssh.exceptions.Error(f"NtQueryInformationProcess failed with NTSTATUS 0x{status & 0xFFFFFFFF:08x}")
     return int(information.InheritedFromUniqueProcessId or 0)
+
+
+@dataclasses.dataclass(frozen=True)
+class ProcessEntry:
+    pid: int
+    parent_pid: int
+    image_name: str
+
+
+def snapshot() -> list[ProcessEntry]:
+    """Every process on the machine, from one Toolhelp snapshot.
+
+    A snapshot lists processes of other users too, SYSTEM included, which
+    WMI does not show to a standard user. It is a list of facts that may be
+    stale by the time it is read. To learn about a process we already hold a
+    HANDLE to, use `process_parent_pid` instead.
+    """
+    handle = raw.k32.CreateToolhelp32Snapshot(raw.TH32CS_SNAPPROCESS, 0)
+    if handle is None or handle == raw.INVALID_HANDLE_VALUE:
+        errors.raise_last_error("CreateToolhelp32Snapshot")
+    entries: list[ProcessEntry] = []
+    try:
+        entry = raw.PROCESSENTRY32W()
+        entry.dwSize = ctypes.sizeof(raw.PROCESSENTRY32W)
+        found = raw.k32.Process32FirstW(handle, ctypes.byref(entry))
+        while found:
+            entries.append(ProcessEntry(entry.th32ProcessID, entry.th32ParentProcessID, entry.szExeFile))
+            found = raw.k32.Process32NextW(handle, ctypes.byref(entry))
+        if ctypes.get_last_error() not in (0, raw.ERROR_NO_MORE_FILES):
+            errors.raise_last_error("Process32NextW")
+    finally:
+        close_handle(handle)
+    return entries
+
+
+def terminate(pid: int) -> None:
+    """End the process `pid`. Windows has no gentle request.
+
+    A process that is already gone is not an error: that is the outcome we
+    wanted.
+    """
+    handle = open_process(pid, raw.PROCESS_TERMINATE | raw.PROCESS_QUERY_LIMITED_INFORMATION)
+    if handle is None:
+        error = ctypes.get_last_error()
+        if error == raw.ERROR_INVALID_PARAMETER:
+            return
+        errors.raise_last_error("OpenProcess")
+    try:
+        if raw.k32.TerminateProcess(handle, 1):
+            return
+        error = ctypes.get_last_error()
+        # A process that has ended can still be opened while another process
+        # holds a handle to it. Ending it again is refused, which is fine.
+        code = ctypes.wintypes.DWORD()
+        if raw.k32.GetExitCodeProcess(handle, ctypes.byref(code)) and code.value != raw.STILL_ACTIVE:
+            return
+        ctypes.set_last_error(error)
+        errors.raise_last_error("TerminateProcess")
+    finally:
+        close_handle(handle)
