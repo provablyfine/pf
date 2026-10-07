@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import pathlib
+import sys
 import typing
 
 import provablyfine_client as pfc
 import pytest
 
 from . import base, linux, ops
+
+pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="host-init is POSIX-only")
 
 INVITATION = "https://example.com/pf/t/00000000-0000-0000-0000-000000000001/directory?invitation=3qFA-_8Kx9mLp0o1"
 DIRECTORY_URL = "https://example.com/pf/t/00000000-0000-0000-0000-000000000001/directory"
