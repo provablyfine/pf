@@ -99,7 +99,12 @@ class TestPsTable:
     def test_snapshot_follows_a_child_we_start(self) -> None:
         child = subprocess.Popen(["sleep", "30"])  # noqa: S607
         try:
+            # ps shows "[sleep]" while the child is still being exec'd.
+            deadline = time.monotonic() + 5
             table = procs.PsTable().snapshot()
+            while table[child.pid].command.startswith("[") and time.monotonic() < deadline:
+                time.sleep(0.05)
+                table = procs.PsTable().snapshot()
             assert table[child.pid].ppid == os.getpid()
             assert table[child.pid].command.startswith("sleep")
             assert child.pid in procs.descendants(table, os.getpid())

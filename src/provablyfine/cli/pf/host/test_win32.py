@@ -72,11 +72,11 @@ def _queries(
 
 def _host(tmp_path: pathlib.Path, *, config: str = ORIGINAL, certificates: bool = True) -> None:
     _skip_without_posix_paths()
-    pf = tmp_path / "C:" / "Program Files" / "provablyfine" / "pf.exe"
+    pf = tmp_path / "drive_c" / "Program Files" / "provablyfine" / "pf.exe"
     pf.parent.mkdir(parents=True)
     pf.write_text("exe")
     pf.chmod(0o755)
-    ssh = tmp_path / "C:" / "ProgramData" / "ssh"
+    ssh = tmp_path / "drive_c" / "ProgramData" / "ssh"
     (ssh / "sshd_config.d").mkdir(parents=True)
     (ssh / "sshd_config").write_bytes(config.encode())
     if certificates:
@@ -314,7 +314,7 @@ def test_init_puts_the_configuration_back_when_sshd_does_not_restart(tmp_path: p
 
 def test_init_can_edit_another_config_and_restart_another_service(tmp_path: pathlib.Path) -> None:
     _host(tmp_path)
-    spike = tmp_path / "C:" / "spike"
+    spike = tmp_path / "drive_c" / "spike"
     spike.mkdir()
     (spike / "sshd_config").write_text("Port 2222\n")
     dry = _init(
@@ -482,7 +482,9 @@ def test_init_changes_nothing_when_the_main_configuration_has_a_conflict(
 
 def test_init_sees_a_conflict_in_the_drop_in_directory(tmp_path: pathlib.Path) -> None:
     _host(tmp_path)
-    (tmp_path / "C:" / "ProgramData" / "ssh" / "sshd_config.d" / "50-other.conf").write_text("TrustedUserCAKeys C:/x\n")
+    (tmp_path / "drive_c" / "ProgramData" / "ssh" / "sshd_config.d" / "50-other.conf").write_text(
+        "TrustedUserCAKeys C:/x\n"
+    )
     with pytest.raises(pfc.exceptions.UI, match="conflicting sshd directive"):
         win32.Windows(PF).init(_dry(tmp_path), _settings())
 
@@ -497,7 +499,7 @@ def test_init_refuses_to_run_twice(tmp_path: pathlib.Path) -> None:
 
 def test_init_asks_for_the_openssh_server_when_it_is_missing(tmp_path: pathlib.Path) -> None:
     _host(tmp_path)
-    (tmp_path / "C:" / "ProgramData" / "ssh" / "sshd_config").unlink()
+    (tmp_path / "drive_c" / "ProgramData" / "ssh" / "sshd_config").unlink()
     with pytest.raises(pfc.exceptions.UI, match="OpenSSH Server optional feature"):
         win32.Windows(PF).init(_dry(tmp_path), _settings())
 
@@ -584,7 +586,7 @@ def test_paths_for_sshd_use_forward_slashes_and_quote_spaces() -> None:
 def _created_host(tmp_path: pathlib.Path, *, config: str | None = None, marker: str | None = "pf-auth") -> None:
     include = "# BEGIN pf\r\nInclude sshd_config.d/10-pf.conf\r\n# END pf\r\n"
     _host(tmp_path, config=config if config is not None else include + ORIGINAL)
-    state = tmp_path / "C:" / "ProgramData" / "pf"
+    state = tmp_path / "drive_c" / "ProgramData" / "pf"
     state.mkdir(parents=True)
     if marker is not None:
         (state / "auth-user-created").write_text(marker)

@@ -274,14 +274,17 @@ class DryRunOps(Ops):
     def _real(self, path: str) -> str:
         if self._root is None:
             return path
-        # A Windows path such as C:\ProgramData\ssh becomes the directory C: under the root.
-        return str(self._root / path.replace("\\", "/").lstrip("/"))
+        # A Windows path such as C:\ProgramData\ssh becomes the directory drive_c/ProgramData/ssh
+        # under the root. A colon cannot be part of a file name in a CI artifact.
+        posix = path.replace("\\", "/")
+        return str(self._root / re.sub(r"^([A-Za-z]):/", lambda m: f"drive_{m[1].lower()}/", posix).lstrip("/"))
 
     def _logical(self, path: str) -> str:
         if self._root is None:
             return path
         relative = os.path.relpath(path, self._root).replace(os.sep, "/")
-        return relative if re.match(r"[A-Za-z]:/", relative) else "/" + relative
+        drive = re.match(r"drive_([a-z])/", relative)
+        return f"{drive[1].upper()}:/{relative[len(drive[0]) :]}" if drive else "/" + relative
 
     def _realpath(self, path: str) -> str:
         # A test root has no symbolic links to resolve.
