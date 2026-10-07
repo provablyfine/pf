@@ -10,7 +10,6 @@ import pytest
 
 from . import ops
 
-
 posix_only = pytest.mark.skipif(sys.platform == "win32", reason="needs POSIX file modes, owners, links or sh")
 
 
@@ -252,8 +251,12 @@ def test_system_ops_run_hides_sudo_variables_from_children(
 
 def test_describe_shows_utf16_content_as_text() -> None:
     dry = ops.DryRunOps()
-    dry.write_file("C:\\task.xml", "<?xml version='1.0'?>\n<Task>caf\u00e9</Task>\n".encode("utf-16"), None)
+    dry.write_file(
+        "C:\\task.xml",
+        "<?xml version='1.0'?>\n<Task>caf\u00e9</Task>\n".encode("utf-16"),  # codespell:ignore
+        None,
+    )
     text = dry.describe()
-    assert "  | <Task>caf\u00e9</Task>" in text
+    assert "  | <Task>caf\u00e9</Task>" in text  # codespell:ignore
     assert "\x00" not in text
     assert "\ufffd" not in text
