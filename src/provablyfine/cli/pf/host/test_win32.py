@@ -134,6 +134,8 @@ def test_init_runs_the_steps_in_order(tmp_path: pathlib.Path) -> None:
         "icacls",  # the state directory is closed before anything goes into it
         "powershell:-",  # the principals user is created
         "icacls",  # the deadline directory is opened to that user
+        "icacls",  # the kill request directory is closed
+        "icacls",  # the live events directory is closed
         PF,  # accept
         "ssh-keygen",
         PF,  # host-refresh
@@ -150,7 +152,7 @@ def test_init_runs_the_steps_in_order(tmp_path: pathlib.Path) -> None:
         "schtasks",
         "schtasks",
     ]
-    accept = runs[3]
+    accept = runs[5]
     assert accept[1:3] == ("-c", "C:\\ProgramData\\pf\\accept.json")
     assert f"--invitation={INVITATION}" in accept
     assert "--key=C:\\ProgramData\\pf\\account.key" in accept
@@ -182,6 +184,32 @@ def test_init_opens_the_deadline_directory_to_the_principals_user_only(tmp_path:
         "pf-auth:(OI)(CI)M",
     )
     assert not os.path.commonpath(["C:/ProgramData/pf-deadlines", "C:/ProgramData/pf"]) == "C:/ProgramData/pf"
+
+
+def test_init_closes_the_live_events_directory_to_everyone_but_administrators(tmp_path: pathlib.Path) -> None:
+    _host(tmp_path)
+    runs = _runs(_init(tmp_path))
+    assert runs[4] == (
+        "icacls",
+        "C:\\ProgramData\\pf-live-events",
+        "/inheritance:r",
+        "/grant:r",
+        "*S-1-5-18:(OI)(CI)F",
+        "*S-1-5-32-544:(OI)(CI)F",
+    )
+
+
+def test_init_closes_the_kill_request_directory_to_everyone_but_administrators(tmp_path: pathlib.Path) -> None:
+    _host(tmp_path)
+    runs = _runs(_init(tmp_path))
+    assert runs[3] == (
+        "icacls",
+        "C:\\ProgramData\\pf-kill-requests",
+        "/inheritance:r",
+        "/grant:r",
+        "*S-1-5-18:(OI)(CI)F",
+        "*S-1-5-32-544:(OI)(CI)F",
+    )
 
 
 def test_init_creates_the_principals_user_with_a_password_nobody_sees(tmp_path: pathlib.Path) -> None:
@@ -383,6 +411,8 @@ def test_the_reaper_task_is_started_again_every_minute_when_it_is_not_running(tm
             "openssh",
             "session-reaper",
             "--deadline-dir=C:\\ProgramData\\pf-deadlines",
+            "--kill-dir=C:\\ProgramData\\pf-kill-requests",
+            "--live-dir=C:\\ProgramData\\pf-live-events",
         ]
     )
 
@@ -391,7 +421,10 @@ def test_the_bastion_task_registers_the_port_sshd_listens_on(tmp_path: pathlib.P
     _host(tmp_path)
     task = _task(_init(tmp_path, port="2200"), "host-bastion")
     arguments = task.findtext("t:Actions/t:Exec/t:Arguments", namespaces=XMLNS, default="")
-    assert arguments.endswith("--config C:\\ProgramData\\pf\\config.json bastion register --port 2200")
+    assert arguments.endswith(
+        "--config C:\\ProgramData\\pf\\config.json bastion register --port 2200"
+        " --live-events-dir=C:\\ProgramData\\pf-live-events"
+    )
     assert task.findtext("t:Triggers/t:TimeTrigger/t:Repetition/t:Interval", namespaces=XMLNS) == "PT5M"
     assert task.findtext("t:Settings/t:RunOnlyIfNetworkAvailable", namespaces=XMLNS) == "true"
 
@@ -613,7 +646,11 @@ def test_uninit_undoes_the_install(tmp_path: pathlib.Path) -> None:
         "C:\\ProgramData\\ssh\\ssh_host_rsa_key.cert",
         "C:\\ProgramData\\pf",
         "C:\\ProgramData\\pf-deadlines",
+        "C:\\ProgramData\\pf-kill-requests",
+        "C:\\ProgramData\\pf-live-events",
     ]
+    assert removed[-4].recursive
+    assert removed[-3].recursive
     assert removed[-2].recursive
     assert removed[-1].recursive
 

@@ -7,7 +7,18 @@ import provablyfine_client as pfc
 
 from ... import client, jwk, ssh
 from .. import common
-from . import audit_log_cli, auth_cli, bastion_cli, boundary_cli, grant_cli, identity_cli, role_cli, tag_cli, tenant_cli
+from . import (
+    audit_log_cli,
+    auth_cli,
+    bastion_cli,
+    boundary_cli,
+    grant_cli,
+    identity_cli,
+    live_cli,
+    role_cli,
+    tag_cli,
+    tenant_cli,
+)
 
 
 def _initialize_function(args: argparse.Namespace) -> None:
@@ -100,6 +111,9 @@ def pfa() -> None:
 
     audit_log_parser = subparsers.add_parser("audit-log", help="View audit log")
     audit_log_cli.add_subparser(audit_log_parser)
+
+    live_parser = subparsers.add_parser("live", help="View sessions that are open or ended")
+    live_cli.add_subparser(live_parser)
 
     whoami_parser = subparsers.add_parser("whoami", help="Print the name of the currently logged-in identity")
     common.setup_whoami_subparser(whoami_parser)

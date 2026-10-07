@@ -24,6 +24,10 @@ ACCEPT_SCRATCH = f"{STATE_DIR}/accept.json"
 # directory is not inside STATE_DIR: that one is closed to everyone but root,
 # and a user cannot reach a directory below a directory it cannot enter.
 DEADLINE_DIR = "/var/db/pf-deadlines"
+# Only root writes here, so the reaper trusts the requests in it.
+KILL_DIR = "/var/db/pf-kill-requests"
+# Only root writes here. The reaper leaves session events for pf bastion register.
+LIVE_DIR = "/var/db/pf-live-events"
 LAUNCHD_DIR = "/Library/LaunchDaemons"
 SSHD_LABEL = "com.openssh.sshd"
 SSHD_PLIST = "/System/Library/LaunchDaemons/ssh.plist"
@@ -117,6 +121,8 @@ class Darwin:
         o.make_dir(LOG_DIR, 0o755)
         # The principals command runs as this user and writes the records.
         o.make_dir(DEADLINE_DIR, 0o700, owner=s.auth_user)
+        o.make_dir(KILL_DIR, 0o700)
+        o.make_dir(LIVE_DIR, 0o700)
         o.write_file(ACCOUNT_KEY, common_steps.new_account_key_pem(), 0o600, secret=True)
         o.write_file(
             CONFIG,
@@ -171,13 +177,29 @@ class Darwin:
             ),
             BASTION_LABEL: _plist(
                 BASTION_LABEL,
-                [pf_bin, "--config", CONFIG, "bastion", "register", "--port", common_steps.ssh_port(o)],
+                [
+                    pf_bin,
+                    "--config",
+                    CONFIG,
+                    "bastion",
+                    "register",
+                    "--port",
+                    common_steps.ssh_port(o),
+                    f"--live-events-dir={LIVE_DIR}",
+                ],
                 "host-bastion",
                 keep_alive=True,
             ),
             REAPER_LABEL: _plist(
                 REAPER_LABEL,
-                [pf_bin, "openssh", "session-reaper", f"--deadline-dir={DEADLINE_DIR}"],
+                [
+                    pf_bin,
+                    "openssh",
+                    "session-reaper",
+                    f"--deadline-dir={DEADLINE_DIR}",
+                    f"--kill-dir={KILL_DIR}",
+                    f"--live-dir={LIVE_DIR}",
+                ],
                 "session-reaper",
                 keep_alive=True,
             ),
@@ -211,6 +233,8 @@ class Darwin:
             o.remove(certificate)
         o.remove(STATE_DIR, recursive=True)
         o.remove(DEADLINE_DIR, recursive=True)
+        o.remove(KILL_DIR, recursive=True)
+        o.remove(LIVE_DIR, recursive=True)
 
     def reload_sshd(self, o: ops.Ops) -> None:
         """launchd starts a new sshd for every connection, which reads its configuration again."""

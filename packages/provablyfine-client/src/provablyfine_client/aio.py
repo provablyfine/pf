@@ -78,6 +78,17 @@ class AsyncSessionClient:
     ) -> schemas.IdentitySelfTokenResponse:
         return await self._run(lambda: self._inner.get_self_token(service, hostname, purpose, connection_id))
 
+    async def list_live(
+        self,
+        hostname: str | None = None,
+        identity_id: int | None = None,
+        active: bool | None = None,
+    ) -> schemas.LiveListResponse:
+        return await self._run(lambda: self._inner.list_live(hostname, identity_id, active))
+
+    async def report_live(self, event: typing.Literal["start", "end"], report: schemas.LiveReportRequest) -> None:
+        return await self._run(lambda: self._inner.report_live(event, report))
+
     async def list_tags(
         self,
         id: int | None = None,

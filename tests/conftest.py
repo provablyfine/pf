@@ -260,7 +260,8 @@ def sshd_pam_image(tmp_path_factory):
     pam_line = (
         "session optional pam_exec.so /usr/bin/pf -d -d "
         "--log-filename=/var/log/pf/session-deadline.log "
-        "openssh session-deadline --ca-pub-path=/etc/ssh/keys/user-ca.pub"
+        "openssh session-deadline --ca-pub-path=/etc/ssh/keys/user-ca.pub "
+        "--live-events-dir=/var/lib/pf/live-events"
     )
     containerfile = _containerfile(
         packages=[],
@@ -270,6 +271,7 @@ RUN useradd -m -s /bin/bash alice && \\
     passwd -d root
 RUN echo '{pam_line}' >> /etc/pam.d/sshd
 RUN install -d -m 755 /var/log/pf
+RUN install -d -m 700 /var/lib/pf/live-events
 """,
         sshd_config=_sshd_config(permit_root_login=True, use_pam=True),
     )

@@ -49,3 +49,9 @@ Alice has bounded shell sessions
   alice
   $ podman exec $SSHD_CONTAINER_ID grep -o "session_deadline decoded connection_id=[0-9a-f-]* deadline=[0-9]*" /var/log/pf/session-deadline.log
   session_deadline decoded connection_id=[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12} deadline=[0-9]+ (re)
+
+Every session leaves a start and an end event for pf bastion register, bounded or not
+  $ sleep 1
+  $ podman exec $SSHD_CONTAINER_ID sh -c "ls /var/lib/pf/live-events | sed -E 's/^[0-9]+-([a-z]+)-.*/\1/' | sort | uniq -c | sed -E 's/^ +//'"
+  2 end
+  2 start

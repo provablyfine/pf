@@ -8,6 +8,7 @@ import subprocess
 import time
 
 from ... import jwk, ssh
+from . import live_events
 
 logger = logging.getLogger(__name__)
 
@@ -54,21 +55,35 @@ def _trusted_fingerprints(ca_pub_path: str) -> set[str]:
     return fingerprints
 
 
-def _handle_close_session() -> None:
+def _report(live_events_dir: str | None, kind: live_events.EventKind, connection_id: str) -> None:
+    """Leave an event for `pf bastion register`. The session id is empty when logind has none."""
+    if live_events_dir is None:
+        return
+    event = live_events.Event(
+        kind=kind,
+        connection_id=connection_id,
+        session_id=os.environ.get("XDG_SESSION_ID", ""),
+        at=int(time.time()),
+    )
+    live_events.write_event(live_events_dir, event)
+
+
+def _handle_close_session(live_events_dir: str | None) -> None:
     cert = _cert_from_auth_info()
     if cert is None or cert.extensions.connection_id is None:
         return
+    _report(live_events_dir, "end", cert.extensions.connection_id)
     unit = f"pf-deadline-{cert.extensions.connection_id}.timer"
     subprocess.run(["/usr/bin/systemctl", "stop", unit], check=False, capture_output=True)  # noqa: S603
 
 
-def _handle_open_session(ca_pub_path: str) -> None:
+def _handle_open_session(ca_pub_path: str, live_events_dir: str | None) -> None:
     cert = _cert_from_auth_info()
     if cert is None:
         return
     deadline = cert.extensions.session_deadline
-    if deadline is None:
-        # Unbounded grant
+    if deadline is None and (live_events_dir is None or cert.extensions.connection_id is None):
+        # Unbounded grant, and nobody to tell about it.
         return
     if cert.signer_public_key.ssh_fingerprint() not in _trusted_fingerprints(ca_pub_path):
         # sshd already validated the certificate's signature against
@@ -78,6 +93,11 @@ def _handle_open_session(ca_pub_path: str) -> None:
         logger.warning("certificate signer is not a trusted CA; ignoring")
         return
     connection_id = cert.extensions.connection_id
+    if connection_id is not None:
+        _report(live_events_dir, "start", connection_id)
+    if deadline is None:
+        # Unbounded grant
+        return
     if connection_id is None:
         logger.warning("We have a deadline but no connection_id. This certificate is invalid.")
         return
@@ -124,9 +144,9 @@ def session_deadline_function(args: argparse.Namespace) -> None:
     try:
         match os.environ.get("PAM_TYPE"):
             case "open_session":
-                _handle_open_session(args.ca_pub_path)
+                _handle_open_session(args.ca_pub_path, args.live_events_dir)
             case "close_session":
-                _handle_close_session()
+                _handle_close_session(args.live_events_dir)
             case _:
                 pass
     except Exception:

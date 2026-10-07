@@ -275,6 +275,20 @@ class AuditLogGrant(DBBase):
     permission: AuditLogPermission
 
 
+class LiveFilter(Filter):
+    pass
+
+
+class LivePermission(DBBase):
+    read: bool
+
+
+class LiveGrant(DBBase):
+    type: typing.Literal["live"] = "live"
+    filter: LiveFilter
+    permission: LivePermission
+
+
 Grant = typing.Annotated[
     BoundaryGrant
     | TagGrant
@@ -284,7 +298,8 @@ Grant = typing.Annotated[
     | TenantGrant
     | AuthGrant
     | BastionGrant
-    | AuditLogGrant,
+    | AuditLogGrant
+    | LiveGrant,
     pydantic.Field(discriminator="type"),
 ]
 

@@ -12,7 +12,7 @@ import provablyfine_client as pfc
 import psutil
 import pytest
 
-from . import host, openssh_session_reaper
+from . import host, live_events, openssh_session_reaper
 
 posix_only = pytest.mark.skipif(sys.platform == "win32", reason="needs POSIX processes, links or pipes")
 
@@ -311,6 +311,182 @@ def test_two_connections_are_handled_independently(tmp_path: pathlib.Path) -> No
     assert (200, False) not in table.sent
 
 
+def _killing_reaper(
+    directory: pathlib.Path, kill_directory: pathlib.Path, table: FakeTable, clock: list[float]
+) -> openssh_session_reaper.Reaper:
+    return openssh_session_reaper.Reaper(
+        str(directory), table, kill_directory=str(kill_directory), is_connection=_monitor, now=lambda: clock[0]
+    )
+
+
+def _kill_dir(tmp_path: pathlib.Path) -> pathlib.Path:
+    path = tmp_path / "kill"
+    path.mkdir()
+    return path
+
+
+def test_a_record_without_a_deadline_round_trips(tmp_path: pathlib.Path) -> None:
+    record = _record(deadline=None)
+    assert openssh_session_reaper.read_record(str(_put(tmp_path, record))) == record
+
+
+def test_a_record_without_a_deadline_field_is_rejected(tmp_path: pathlib.Path) -> None:
+    path = tmp_path / f"100-{CONNECTION_ID}.json"
+    path.write_text(json.dumps({"pid": 100, "written_ms": 1, "connection_id": CONNECTION_ID}))
+    assert openssh_session_reaper.read_record(str(path)) is None
+
+
+@pytest.mark.parametrize("deadline", [True, 0, -1, 1.5, "5"])
+def test_read_record_rejects_an_invalid_deadline(tmp_path: pathlib.Path, deadline: object) -> None:
+    path = tmp_path / f"100-{CONNECTION_ID}.json"
+    path.write_text(json.dumps({"pid": 100, "written_ms": 1, "deadline": deadline, "connection_id": CONNECTION_ID}))
+    assert openssh_session_reaper.read_record(str(path)) is None
+
+
+def test_register_session_records_a_connection_without_a_deadline(tmp_path: pathlib.Path) -> None:
+    table = _session_table()
+    table.procs[4242] = host.procs.Proc(4242, 102, "pf openssh auth-principals")
+    path = openssh_session_reaper.register_session(
+        str(tmp_path),
+        deadline=None,
+        connection_id=CONNECTION_ID,
+        table=table,
+        pid=4242,
+        now=lambda: 1_000.5,
+        is_connection=_monitor,
+    )
+    assert path is not None
+    assert openssh_session_reaper.read_record(path) == _record(deadline=None, written_ms=1_000_500)
+
+
+def test_a_session_without_a_deadline_is_never_ended_by_time(tmp_path: pathlib.Path) -> None:
+    table = _session_table()
+    path = _put(tmp_path, _record(deadline=None))
+    _reaper(tmp_path, table, [10.0**12]).tick()
+    assert table.sent == []
+    assert path.exists()
+
+
+def test_a_kill_request_ends_a_session_before_its_deadline(tmp_path: pathlib.Path) -> None:
+    table = _session_table()
+    kill = _kill_dir(tmp_path)
+    _put(tmp_path, _record(deadline=None))
+    reaper = _killing_reaper(tmp_path, kill, table, [100.0])
+    reaper.tick()
+    assert table.sent == []
+    assert openssh_session_reaper.request_kill(str(kill), CONNECTION_ID)
+    reaper.tick()
+    assert table.sent == [(101, False), (102, False), (100, False)]
+
+
+def test_a_session_that_ignores_a_kill_request_is_killed_after_the_grace_period(tmp_path: pathlib.Path) -> None:
+    table = _session_table()
+    kill = _kill_dir(tmp_path)
+    _put(tmp_path, _record())
+    clock = [100.0]
+    reaper = _killing_reaper(tmp_path, kill, table, clock)
+    openssh_session_reaper.request_kill(str(kill), CONNECTION_ID)
+    reaper.tick()
+    table.sent.clear()
+    clock[0] = 105.0
+    reaper.tick()
+    assert sorted(table.sent) == [(100, True), (101, True), (102, True)]
+
+
+def test_a_kill_request_only_ends_its_own_connection(tmp_path: pathlib.Path) -> None:
+    table = _session_table()
+    table.procs[200] = host.procs.Proc(200, 1, "sshd-session: bob [priv]")
+    table.started[200] = 1_000
+    kill = _kill_dir(tmp_path)
+    _put(tmp_path, _record(deadline=None))
+    _put(tmp_path, _record(pid=200, deadline=None, connection_id=OTHER_CONNECTION_ID))
+    openssh_session_reaper.request_kill(str(kill), OTHER_CONNECTION_ID)
+    _killing_reaper(tmp_path, kill, table, [100.0]).tick()
+    assert (200, False) in table.sent
+    assert (100, False) not in table.sent
+
+
+def test_a_kill_request_cannot_signal_a_process_that_is_not_an_sshd_connection(tmp_path: pathlib.Path) -> None:
+    table = _session_table()
+    kill = _kill_dir(tmp_path)
+    _put(tmp_path, _record(pid=900, deadline=None))
+    openssh_session_reaper.request_kill(str(kill), CONNECTION_ID)
+    _killing_reaper(tmp_path, kill, table, [100.0]).tick()
+    assert table.sent == []
+
+
+def test_a_kill_request_for_an_unknown_connection_is_removed_after_a_while(tmp_path: pathlib.Path) -> None:
+    table = _session_table()
+    kill = _kill_dir(tmp_path)
+    openssh_session_reaper.request_kill(str(kill), CONNECTION_ID)
+    clock = [100.0]
+    reaper = _killing_reaper(tmp_path, kill, table, clock)
+    reaper.tick()
+    clock[0] = 100.0 + openssh_session_reaper.KILL_REQUEST_TTL - 1
+    reaper.tick()
+    assert (kill / f"kill-{CONNECTION_ID}").exists()
+    clock[0] = 100.0 + openssh_session_reaper.KILL_REQUEST_TTL
+    reaper.tick()
+    assert list(kill.iterdir()) == []
+    assert table.sent == []
+
+
+def test_a_kill_request_waits_for_a_record_that_appears_later(tmp_path: pathlib.Path) -> None:
+    table = _session_table()
+    kill = _kill_dir(tmp_path)
+    openssh_session_reaper.request_kill(str(kill), CONNECTION_ID)
+    clock = [100.0]
+    reaper = _killing_reaper(tmp_path, kill, table, clock)
+    reaper.tick()
+    _put(tmp_path, _record(deadline=None))
+    clock[0] = 110.0
+    reaper.tick()
+    assert (100, False) in table.sent
+
+
+def test_a_kill_request_for_a_live_session_is_kept(tmp_path: pathlib.Path) -> None:
+    table = _session_table()
+    kill = _kill_dir(tmp_path)
+    _put(tmp_path, _record(deadline=None))
+    openssh_session_reaper.request_kill(str(kill), CONNECTION_ID)
+    clock = [100.0]
+    reaper = _killing_reaper(tmp_path, kill, table, clock)
+    reaper.tick()
+    clock[0] = 100.0 + 2 * openssh_session_reaper.KILL_REQUEST_TTL
+    reaper.tick()
+    assert (kill / f"kill-{CONNECTION_ID}").exists()
+
+
+def test_files_in_the_kill_directory_with_other_names_are_ignored(tmp_path: pathlib.Path) -> None:
+    table = _session_table()
+    kill = _kill_dir(tmp_path)
+    _put(tmp_path, _record(deadline=None))
+    for name in ("notes.txt", f"kill-{CONNECTION_ID}.json", CONNECTION_ID, f"kill-{CONNECTION_ID.upper()}"):
+        (kill / name).write_text("")
+    _killing_reaper(tmp_path, kill, table, [100.0]).tick()
+    assert table.sent == []
+    assert (kill / "notes.txt").exists()
+
+
+@pytest.mark.parametrize("connection_id", ["", "short", "../x", CONNECTION_ID.upper(), CONNECTION_ID + "0"])
+def test_request_kill_refuses_an_unexpected_connection_id(tmp_path: pathlib.Path, connection_id: str) -> None:
+    assert not openssh_session_reaper.request_kill(str(tmp_path), connection_id)
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_request_kill_reports_a_directory_it_cannot_write(tmp_path: pathlib.Path) -> None:
+    blocker = tmp_path / "file"
+    blocker.write_text("")
+    assert not openssh_session_reaper.request_kill(str(blocker / "sub"), CONNECTION_ID)
+
+
+def test_a_missing_kill_directory_is_not_an_error(tmp_path: pathlib.Path) -> None:
+    table = _session_table()
+    _put(tmp_path, _record(deadline=None))
+    _killing_reaper(tmp_path, tmp_path / "missing", table, [100.0]).tick()
+    assert table.sent == []
+
+
 def test_a_missing_directory_is_not_an_error(tmp_path: pathlib.Path) -> None:
     _reaper(tmp_path / "missing", _session_table(), [0.0]).tick()
 
@@ -424,3 +600,97 @@ def test_a_directory_that_others_can_write_is_refused(tmp_path: pathlib.Path) ->
     tmp_path.chmod(0o700)
     assert openssh_session_reaper._directory_problem(str(tmp_path)) is None
     assert openssh_session_reaper._directory_problem(str(tmp_path / "missing")) is not None
+
+
+def _live_reaper(
+    directory: pathlib.Path, live: pathlib.Path | None, table: FakeTable, clock: list[float]
+) -> openssh_session_reaper.Reaper:
+    return openssh_session_reaper.Reaper(
+        str(directory),
+        table,
+        live_directory=None if live is None else str(live),
+        is_connection=_monitor,
+        now=lambda: clock[0],
+    )
+
+
+def _events(live: pathlib.Path) -> list[tuple[str, str, str]]:
+    return [(e.kind, e.connection_id, e.session_id) for _, e in live_events.read_events(str(live))]
+
+
+def test_a_session_is_reported_once_when_it_starts_and_once_when_it_ends(tmp_path: pathlib.Path) -> None:
+    records, live = tmp_path / "records", tmp_path / "live"
+    records.mkdir()
+    live.mkdir()
+    table = _session_table()
+    _put(records, _record(deadline=None))
+    reaper = _live_reaper(records, live, table, [2_000.0])
+
+    reaper.tick()
+    reaper.tick()
+    assert _events(live) == [("start", CONNECTION_ID, "100")]
+
+    for pid in (100, 101, 102):
+        del table.procs[pid]
+    reaper.tick()
+    reaper.tick()
+    assert _events(live) == [("start", CONNECTION_ID, "100"), ("end", CONNECTION_ID, "100")]
+
+
+def test_the_start_is_dated_when_the_record_was_written(tmp_path: pathlib.Path) -> None:
+    records, live = tmp_path / "records", tmp_path / "live"
+    records.mkdir()
+    live.mkdir()
+    _put(records, _record(written_ms=1_000_500))
+
+    _live_reaper(records, live, _session_table(), [2_000.0]).tick()
+
+    [(_, event)] = live_events.read_events(str(live))
+    assert event.at == 1_000
+
+
+def test_a_session_killed_at_its_deadline_is_reported_as_ended(tmp_path: pathlib.Path) -> None:
+    records, live = tmp_path / "records", tmp_path / "live"
+    records.mkdir()
+    live.mkdir()
+    table = _session_table()
+    _put(records, _record())
+    clock = [5_000.0]
+    reaper = _live_reaper(records, live, table, clock)
+
+    reaper.tick()
+    clock[0] = 5_010.0
+    reaper.tick()
+    reaper.tick()
+
+    assert _events(live) == [("start", CONNECTION_ID, "100"), ("end", CONNECTION_ID, "100")]
+
+
+def test_a_record_that_is_not_a_session_is_not_reported(tmp_path: pathlib.Path) -> None:
+    records, live = tmp_path / "records", tmp_path / "live"
+    records.mkdir()
+    live.mkdir()
+    _put(records, _record(pid=900))
+
+    _live_reaper(records, live, _session_table(), [2_000.0]).tick()
+
+    assert _events(live) == []
+
+
+def test_nothing_is_reported_without_a_live_directory(tmp_path: pathlib.Path) -> None:
+    table = _session_table()
+    _put(tmp_path, _record(deadline=None))
+
+    _live_reaper(tmp_path, None, table, [2_000.0]).tick()
+
+    assert [p.name for p in tmp_path.iterdir()] == [f"100-{CONNECTION_ID}.json"]
+
+
+def test_a_live_directory_that_cannot_be_written_does_not_stop_the_reaper(tmp_path: pathlib.Path) -> None:
+    table = _session_table()
+    _put(tmp_path, _record())
+    clock = [5_000.0]
+
+    _live_reaper(tmp_path, tmp_path / "missing", table, clock).tick()
+
+    assert table.sent == [(101, False), (102, False), (100, False)]

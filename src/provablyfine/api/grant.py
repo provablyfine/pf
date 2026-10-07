@@ -721,6 +721,17 @@ class AuditLogChecker:
         return self._checker.can(check)
 
 
+class LiveChecker:
+    def __init__(self, boundaries: list[model.boundary.Boundary], roles: list[model.role.Role]):
+        self._checker = Checker[model.grant.LiveGrant](boundaries, roles, lambda g: True, model.grant.LiveGrant)
+
+    def can_read(self) -> bool:
+        def check(g: model.grant.LiveGrant) -> bool:
+            return g.permission.read
+
+        return self._checker.can(check)
+
+
 class Grants:
     def __init__(self, boundaries: list[model.boundary.Boundary], roles: list[model.role.Role]):
         self._boundaries = boundaries
@@ -770,3 +781,6 @@ class Grants:
 
     def audit_log(self) -> AuditLogChecker:
         return AuditLogChecker(self._boundaries, self._roles)
+
+    def live(self) -> LiveChecker:
+        return LiveChecker(self._boundaries, self._roles)

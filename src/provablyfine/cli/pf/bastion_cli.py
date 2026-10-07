@@ -30,7 +30,7 @@ import provablyfine_client as pfc
 from ... import client
 from .. import http as cli_http
 from .. import login, token_verify
-from . import _win32_stdio
+from . import _win32_stdio, live_events
 
 logger = logging.getLogger(__name__)
 
@@ -313,6 +313,22 @@ def _local_arch() -> str:
     return {"x86_64": "amd64", "aarch64": "arm64"}.get(m, m)
 
 
+# Reports a tunnel to the server: (event, connection id, session id, time).
+# It never raises: a registry that is down must not break a tunnel.
+LiveReporter = collections.abc.Callable[[live_events.EventKind, str, str, int], collections.abc.Awaitable[None]]
+
+
+async def _report_live_end(
+    start: asyncio.Future[None] | None, live: LiveReporter | None, connection_id: str, session_id: str
+) -> None:
+    """Report the end of a tunnel, after its start was reported."""
+    if live is None:
+        return
+    if start is not None:
+        await asyncio.wait([start])
+    await live("end", connection_id, session_id, int(time.time()))
+
+
 _HANDSHAKE_TAG = "T"
 _HANDSHAKE_ACCEPT_TAG = "A"
 
@@ -350,6 +366,7 @@ async def _handle_work_conn(
     local_port: int,
     frpc_user: str,
     verifier: token_verify.SingleIssuerVerifier,
+    live: LiveReporter | None = None,
 ) -> None:
     try:
         async with _open_transport(host, port, ssl_ctx) as (recv, send):
@@ -369,6 +386,13 @@ async def _handle_work_conn(
                 return
 
             local_reader, local_writer = await asyncio.open_connection(local_ip, local_port)
+
+            # Each token is used once, so its id tells two tunnels of the same connection apart.
+            assert verified.cid is not None
+            connection_id = verified.cid
+            live_start: asyncio.Future[None] | None = None
+            if live is not None:
+                live_start = asyncio.ensure_future(live("start", connection_id, verified.jti, int(time.time())))
 
             async def frps_to_local() -> None:
                 try:
@@ -402,6 +426,7 @@ async def _handle_work_conn(
                     await gather_coro
             finally:
                 local_writer.close()
+                await _report_live_end(live_start, live, connection_id, verified.jti)
     except Exception as e:
         logger.debug(f"work conn: failed: {e}")
 
@@ -454,6 +479,7 @@ async def _run_frp_client(
     stop_event: asyncio.Event,
     verifier: token_verify.SingleIssuerVerifier,
     frps_bind_port: int | None = None,
+    live: LiveReporter | None = None,
 ) -> None:
     u = urllib.parse.urlsplit(bastion_url)
     host = u.hostname or bastion_url
@@ -493,6 +519,7 @@ async def _run_frp_client(
                     port=port,
                     stop_event=stop_event,
                     verifier=verifier,
+                    live=live,
                 )
         except Exception as e:
             if connected:
@@ -525,6 +552,7 @@ async def _frp_session(
     port: int,
     stop_event: asyncio.Event,
     verifier: token_verify.SingleIssuerVerifier,
+    live: LiveReporter | None = None,
 ) -> None:
     # --- Login ---
     login_msg: dict[str, object] = {
@@ -575,7 +603,7 @@ async def _frp_session(
     def spawn_work_conn() -> None:
         logger.info("work connection created")
         t: asyncio.Task[None] = asyncio.create_task(
-            _handle_work_conn(host, server_port, ssl_ctx, run_id, address, port, frpc_user, verifier)
+            _handle_work_conn(host, server_port, ssl_ctx, run_id, address, port, frpc_user, verifier, live)
         )
         background_tasks.add(t)
         t.add_done_callback(background_tasks.discard)
@@ -650,6 +678,28 @@ class _ManagedSession:
     async def list_self_bastions(self) -> pfc.schemas.IdentitySelfBastionListResponse:
         return await self._call(lambda: self.sc.list_self_bastions())
 
+    async def report_live(self, event: live_events.EventKind, report: pfc.schemas.LiveReportRequest) -> None:
+        await self._call(lambda: self.sc.report_live(event, report))
+
+    async def report_live_event(
+        self,
+        kind: typing.Literal["relay", "host"],
+        event: live_events.EventKind,
+        connection_id: str,
+        session_id: str,
+        at: int,
+    ) -> None:
+        await self.report_live(
+            event, pfc.schemas.LiveReportRequest(connection_id=connection_id, kind=kind, session_id=session_id, at=at)
+        )
+
+    async def relay_reporter(self, event: live_events.EventKind, connection_id: str, session_id: str, at: int) -> None:
+        """Report a tunnel of the relay. Failures are logged and never raised."""
+        try:
+            await self.report_live_event("relay", event, connection_id, session_id, at)
+        except Exception as e:
+            logger.warning(f"cannot report live tunnel event={event} connection_id={connection_id}: {e}")
+
 
 # ---------------------------------------------------------------------------
 # CLI commands
@@ -698,6 +748,15 @@ def _register_function(args: argparse.Namespace) -> None:
 
         active_tasks: dict[int, asyncio.Task[None]] = {}
 
+        events_task: asyncio.Task[None] | None = None
+        if args.live_events_dir is not None:
+            events_task = asyncio.create_task(
+                live_events.run(
+                    args.live_events_dir,
+                    lambda e: session.report_live_event("host", e.kind, e.connection_id, e.session_id, e.at),
+                )
+            )
+
         def done_callback(bastion_id: int, task: asyncio.Task[None]) -> None:
             active_tasks.pop(bastion_id, None)
 
@@ -724,6 +783,7 @@ def _register_function(args: argparse.Namespace) -> None:
                             stop_event,
                             verifier,
                             frps_bind_port=args.frps_bind_port,
+                            live=session.relay_reporter,
                         )
                     )
                     active_tasks[bastion_id] = task
@@ -737,6 +797,9 @@ def _register_function(args: argparse.Namespace) -> None:
             task.cancel()
         if active_tasks:
             await asyncio.gather(*active_tasks.values(), return_exceptions=True)
+        if events_task is not None:
+            events_task.cancel()
+            await asyncio.gather(events_task, return_exceptions=True)
 
     asyncio.run(_run())
 
@@ -889,6 +952,12 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
         default=None,
         help="frps control port (overrides the port in the bastion URL;"
         " needed when the HTTP CONNECT port and the frps control port differ)",
+    )
+    register_parser.add_argument(
+        "--live-events-dir",
+        type=str,
+        default=None,
+        help="Directory where this host's session events are written; they are reported to the server",
     )
     register_parser.set_defaults(func=_register_function)
 

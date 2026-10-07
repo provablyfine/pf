@@ -208,6 +208,20 @@ class AuditLogGrant(base.APIBase):
     permission: AuditLogPermission
 
 
+class LiveFilter(base.APIBase):
+    pass
+
+
+class LivePermission(base.APIBase):
+    read: bool
+
+
+class LiveGrant(base.APIBase):
+    type: typing.Literal["live"] = "live"
+    filter: LiveFilter
+    permission: LivePermission
+
+
 class InvalidGrant(base.APIBase):
     type: typing.Literal["invalid"] = "invalid"
 
@@ -222,6 +236,7 @@ Grant = typing.Annotated[
     | AuthGrant
     | BastionGrant
     | AuditLogGrant
+    | LiveGrant
     | InvalidGrant,
     pydantic.Field(discriminator="type"),
 ]
