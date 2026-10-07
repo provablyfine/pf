@@ -1,11 +1,14 @@
 import argparse
 import base64
+import logging
 import os
 
 import provablyfine_client as pfc
 
 from ... import client, jwk, ssh
-from . import openssh_host_init, openssh_session_deadline
+from . import host, openssh_host_init, openssh_session_deadline, openssh_session_reaper
+
+logger = logging.getLogger(__name__)
 
 
 def _user_trusted_keys_function(args: argparse.Namespace) -> None:
@@ -37,6 +40,23 @@ def _sign_host_function(args: argparse.Namespace) -> None:
             f.write(openssh_certificate + b"\n")
 
 
+def _register_deadline(directory: str, cert: ssh.cert.Cert) -> None:
+    """Tell the session reaper about a connection that has a deadline.
+
+    A failure is logged and ignored. It must never stop a login.
+    """
+    deadline = cert.extensions.session_deadline
+    connection_id = cert.extensions.connection_id
+    if deadline is None or connection_id is None:
+        return
+    try:
+        openssh_session_reaper.register_session(
+            directory, deadline=deadline, connection_id=connection_id, table=host.procs.PsTable()
+        )
+    except Exception:
+        logger.warning("failed to register the session deadline; failing open", exc_info=True)
+
+
 def _authorized_principals(args: argparse.Namespace) -> None:
     with open(args.host_certificate, "rb") as f:
         data = f.read()
@@ -61,6 +81,8 @@ def _authorized_principals(args: argparse.Namespace) -> None:
         if host_id != host_identifier:
             raise pfc.exceptions.UI(f"Invalid user host id={host_id} expected={host_identifier}")
         accepted.append(principal)
+    if accepted and args.deadline_dir is not None:
+        _register_deadline(args.deadline_dir, cert)
     print("\n".join(accepted))
 
 
@@ -82,9 +104,19 @@ def add_subparsers(parser: argparse.ArgumentParser) -> None:
     )
     authorized_principals_parser.add_argument("--username", required=True)
     authorized_principals_parser.add_argument("--certificate", help="base64 user certificate to parse", required=True)
+    authorized_principals_parser.add_argument(
+        "--deadline-dir",
+        default=None,
+        help="Directory where to record connections that have a session deadline, for the session reaper",
+    )
     authorized_principals_parser.set_defaults(func=_authorized_principals)
 
-    host_init_parser = subparsers.add_parser("host-init", help="Initialize configuration of local SSH daemon")
+    host_init_parser = subparsers.add_parser(
+        "host-init", help="Initialize configuration of local SSH daemon. Run as root."
+    )
+    host_init_parser.add_argument(
+        "--dry-run", action="store_true", default=False, help="Print what would be done and change nothing"
+    )
     host_init_parser.add_argument("--invitation", required=True, help="Invitation key")
     host_init_parser.add_argument("--auth-user", default="nobody", help="User for AuthorizedPrincipalsCommandUser")
     host_init_parser.add_argument(
@@ -92,15 +124,38 @@ def add_subparsers(parser: argparse.ArgumentParser) -> None:
     )
     host_init_parser.add_argument("--host-keys-dir", default="/etc/ssh", help="Directory containing host SSH keys")
     host_init_parser.add_argument("--ca-pub-path", default="/etc/ssh/pf_ca.pub", help="Path to CA public key file")
+    host_init_parser.add_argument(
+        "--pf-binary",
+        default=None,
+        help="The pf binary that sshd and the services run. By default, the installed pf",
+    )
     host_init_parser.set_defaults(func=openssh_host_init.host_init_daemon_function)
 
-    host_uninit_parser = subparsers.add_parser("host-uninit", help="Print a script to undo host-init")
+    host_uninit_parser = subparsers.add_parser("host-uninit", help="Undo host-init. Run as root.")
+    host_uninit_parser.add_argument(
+        "--dry-run", action="store_true", default=False, help="Print what would be done and change nothing"
+    )
     host_uninit_parser.add_argument(
         "--sshd-config-drop-in", default="/etc/ssh/sshd_config.d/10-pf.conf", help="Path to sshd_config.d drop-in file"
     )
     host_uninit_parser.add_argument("--host-keys-dir", default="/etc/ssh", help="Directory containing host SSH keys")
     host_uninit_parser.add_argument("--ca-pub-path", default="/etc/ssh/pf_ca.pub", help="Path to CA public key file")
     host_uninit_parser.set_defaults(func=openssh_host_init.host_uninit_function)
+
+    session_reaper_parser = subparsers.add_parser(
+        "session-reaper",
+        help="End SSH sessions when their certificate deadline passes. Run as root. For hosts without PAM hooks.",
+    )
+    session_reaper_parser.add_argument(
+        "--deadline-dir", required=True, help="Directory where auth-principals records connections"
+    )
+    session_reaper_parser.add_argument(
+        "--interval", type=float, default=1.0, help="Seconds between checks of the records"
+    )
+    session_reaper_parser.add_argument(
+        "--grace", type=float, default=5.0, help="Seconds a session has to end before it is killed"
+    )
+    session_reaper_parser.set_defaults(func=openssh_session_reaper.session_reaper_function)
 
     session_deadline_parser = subparsers.add_parser(
         "session-deadline", help="PAM session hook enforcing a certificate's session TTL. For use with pam_exec."

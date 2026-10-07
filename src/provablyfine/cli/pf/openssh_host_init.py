@@ -1,14 +1,10 @@
 import argparse
 import base64
-import json
 import os
-import subprocess
-import sys
-
-import provablyfine_client as pfc
 
 from ... import client, jwk, ssh
 from .. import common, login
+from . import host
 
 
 def _sign_host_certificates_with_auth(auth_http: client.http_client.HttpClient, host_keys_dir: str) -> None:
@@ -40,7 +36,7 @@ def _sign_host_certificates_with_auth(auth_http: client.http_client.HttpClient, 
         openssh_cert = base64.b64decode(certificate)
         cert = ssh.cert.Cert.from_openssh(openssh_cert)
         pubkey_path = filename_from_fingerprint[cert.public_key.ssh_fingerprint()]
-        cert_path = pubkey_path.rstrip(".pub") + ".cert"
+        cert_path = pubkey_path.removesuffix(".pub") + ".cert"
         client.configuration.write_file_atomic(cert_path, openssh_cert + b"\n", mode="wb")
 
 
@@ -54,238 +50,45 @@ def _do_refresh(c: client.Config, host_keys_dir: str, ca_pub_path: str) -> None:
     client.configuration.write_file_atomic(ca_pub_path, ca_pubkey, mode="w")
 
 
-def _print_init_script(
-    invitation: str,
-    directory_url: str,
-    host_keys_dir: str,
-    ca_pub_path: str,
-    sshd_config_drop_in: str,
-    auth_user: str,
-) -> None:
-    sshd_drop_in_dir = os.path.dirname(sshd_config_drop_in)
-    config_json = json.dumps(
-        {
-            "directory_url": directory_url,
-            "account_key_file": "$CREDENTIALS_DIRECTORY/account",
-        }
+def _settings(args: argparse.Namespace, invitation: str, directory_url: str) -> host.base.Settings:
+    return host.base.Settings(
+        invitation=invitation,
+        directory_url=directory_url,
+        host_keys_dir=args.host_keys_dir,
+        ca_pub_path=args.ca_pub_path,
+        sshd_config_drop_in=args.sshd_config_drop_in,
+        auth_user=args.auth_user,
+        pf_binary=args.pf_binary,
     )
-    sys.stdout.write(f"""\
-#!/bin/sh
-set -eu
-
-_pf_bin=''
-for _d in /usr/local/bin /usr/bin /bin; do
-  if [ -x "$_d/pf" ]; then
-    _pf_bin="$_d/pf"
-    break
-  fi
-done
-if [ -z "$_pf_bin" ]; then
-  echo 'pf binary not found in system PATH (/usr/local/bin, /usr/bin, /bin)' >&2
-  exit 1
-fi
-
-for _pf_d in TrustedUserCAKeys AuthorizedPrincipalsCommand; do
-  if grep -rqE "^${{_pf_d}}" /etc/ssh/sshd_config {sshd_drop_in_dir}/ 2>/dev/null; then
-    echo "conflicting sshd directive '$_pf_d' found; remove before initializing pf" >&2
-    exit 1
-  fi
-done
-
-install -d -m 700 /var/lib/pf
-install -d -m 755 /var/log/pf
-openssl genpkey -algorithm ed25519 | systemd-creds encrypt --name=account - /var/lib/pf/account.cred
-
-cat > /var/lib/pf/config.json << 'PFEOF'
-{config_json}
-PFEOF
-
-systemd-run --pipe --wait --property=LoadCredentialEncrypted=account:/var/lib/pf/account.cred \\
-  $_pf_bin -c /dev/null accept --invitation='{invitation}' --key='$CREDENTIALS_DIRECTORY/account'
-
-ssh-keygen -A
-systemd-run --pipe --wait --property=LoadCredentialEncrypted=account:/var/lib/pf/account.cred \\
-  $_pf_bin openssh host-refresh --config=/var/lib/pf/config.json \\
-  --host-keys-dir={host_keys_dir} --ca-pub-path={ca_pub_path} --no-sshd-reload
-
-install -d -m 755 {sshd_drop_in_dir}
-
-cat > {sshd_config_drop_in} << PFEOF
-TrustedUserCAKeys {ca_pub_path}
-$(for cert in {host_keys_dir}/ssh_host_*_key.cert; do [ -f "$cert" ] && echo "HostCertificate $cert"; done)
-AuthorizedPrincipalsCommand $_pf_bin openssh auth-principals \\
-  --host-certificate={host_keys_dir}/ssh_host_ed25519_key.cert \\
-  --username=%u \\
-  --certificate=%k
-AuthorizedPrincipalsCommandUser {auth_user}
-PubkeyAuthentication yes
-PFEOF
-
-if grep -q '^# BEGIN pf$' /etc/pam.d/sshd 2>/dev/null; then
-  echo 'pf PAM block already present in /etc/pam.d/sshd; remove before re-running host-init' >&2
-  exit 1
-fi
-
-cat >> /etc/pam.d/sshd << PFEOF
-# BEGIN pf
-session optional pam_exec.so $_pf_bin -d -d --log-filename=/var/log/pf/session-deadline.log \\
-  openssh session-deadline --ca-pub-path={ca_pub_path}
-# END pf
-PFEOF
-
-cat > /etc/systemd/system/pf-host-refresh.service << PFEOF
-[Unit]
-Description=Provably Fine SSH host certificate refresh
-
-[Service]
-Type=oneshot
-ExecStart=$_pf_bin openssh host-refresh --config=/var/lib/pf/config.json \\
-  --host-keys-dir={host_keys_dir} --ca-pub-path={ca_pub_path}
-LoadCredentialEncrypted=account:/var/lib/pf/account.cred
-PFEOF
-
-cat > /etc/systemd/system/pf-host-refresh.timer << 'PFEOF'
-[Unit]
-Description=Provably Fine SSH host certificate refresh timer
-
-[Timer]
-OnCalendar=daily
-Persistent=true
-
-[Install]
-WantedBy=timers.target
-PFEOF
-
-systemctl daemon-reload
-systemctl enable --now pf-host-refresh.timer
-# The SSH daemon unit is 'sshd.service' on Fedora, 'ssh.service' on Debian/Ubuntu
-if systemctl list-unit-files --no-legend sshd.service 2>/dev/null | grep -q '^sshd\\.service'; then
-  _sshd_unit=sshd
-else
-  _sshd_unit=ssh
-fi
-if systemctl is-active "$_sshd_unit"; then
-  systemctl reload "$_sshd_unit"
-else
-  systemctl enable --now "$_sshd_unit"
-fi
-
-_ssh_port=$(sshd -T 2>/dev/null | awk '/^port /{{print $2}}')
-_ssh_port=${{_ssh_port:-22}}
-
-cat > /etc/systemd/system/pf-host-bastion.service << PFEOF
-[Unit]
-Description=Provably Fine bastion registration
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-LoadCredentialEncrypted=account:/var/lib/pf/account.cred
-ExecStart=$_pf_bin --config /var/lib/pf/config.json bastion register --port $_ssh_port
-Restart=on-failure
-RestartSec=30s
-
-[Install]
-WantedBy=multi-user.target
-PFEOF
-
-systemctl daemon-reload
-systemctl enable --now pf-host-bastion.service
-
-if [ -d /etc/NetworkManager/dispatcher.d ]; then
-  cat > /etc/NetworkManager/dispatcher.d/pf-host-refresh << 'PFEOF'
-#!/bin/sh
-case "$2" in
-  up|connectivity-change)
-    systemctl start pf-host-refresh.service
-    ;;
-esac
-PFEOF
-  chmod 755 /etc/NetworkManager/dispatcher.d/pf-host-refresh
-fi
-""")
-
-
-def _require_linux() -> None:
-    if sys.platform != "linux":
-        raise pfc.exceptions.UI("This command is not supported on native Windows or MacOS")
 
 
 def host_init_daemon_function(args: argparse.Namespace) -> None:
-    """Print a shell script to stdout that sets up pf on this host."""
-    _require_linux()
-
+    """Set up pf on this host. Must run as root unless --dry-run is given."""
+    provider = host.provider()
     invitation = common.parse_invitation(args.invitation)
-
-    _print_init_script(
-        args.invitation,
-        invitation.directory_url,
-        args.host_keys_dir,
-        args.ca_pub_path,
-        args.sshd_config_drop_in,
-        args.auth_user,
-    )
+    settings = _settings(args, args.invitation, invitation.directory_url)
+    host.apply(args.dry_run, lambda o: provider.init(o, settings))
 
 
 def host_uninit_function(args: argparse.Namespace) -> None:
-    """Print a shell script to stdout that undoes host-init."""
-    _require_linux()
-    lines = [
-        "#!/bin/sh",
-        "set -eu",
-        "",
-        "systemctl disable --now pf-host-refresh.timer || true",
-        "systemctl stop pf-host-refresh.service 2>/dev/null || true",
-        "rm -f /etc/systemd/system/pf-host-refresh.service",
-        "rm -f /etc/systemd/system/pf-host-refresh.timer",
-        "systemctl disable --now pf-host-bastion.service || true",
-        "rm -f /etc/systemd/system/pf-host-bastion.service",
-        "rm -f /etc/NetworkManager/dispatcher.d/pf-host-refresh",
-        "systemctl daemon-reload",
-        "",
-        "systemctl stop 'pf-deadline-*.timer' 2>/dev/null || true",
-        "sed -i '/^# BEGIN pf$/,/^# END pf$/d' /etc/pam.d/sshd 2>/dev/null || true",
-        "",
-        f"rm -f {args.sshd_config_drop_in}",
-        f"rm -f {args.ca_pub_path}",
-        f"rm -f {args.host_keys_dir}/ssh_host_*_key.cert",
-        "rm -rf /var/lib/pf",
-        "",
-        # The SSH daemon unit is 'sshd.service' on Fedora, 'ssh.service' on Debian/Ubuntu
-        "if systemctl list-unit-files --no-legend sshd.service 2>/dev/null | grep -q '^sshd\\.service'; then",
-        "  _sshd_unit=sshd",
-        "else",
-        "  _sshd_unit=ssh",
-        "fi",
-        'if systemctl is-active "$_sshd_unit"; then',
-        '  systemctl reload "$_sshd_unit"',
-        "fi",
-    ]
-    sys.stdout.write("\n".join(lines) + "\n")
-
-
-def _sshd_unit() -> str:
-    """Unit name of the local SSH daemon: 'sshd' on Fedora, 'ssh' on Debian/Ubuntu."""
-    result = subprocess.run(
-        ["/usr/bin/systemctl", "list-unit-files", "--no-legend", "sshd.service"],
-        check=False,
-        capture_output=True,
-        text=True,
+    """Undo host-init. Must run as root unless --dry-run is given."""
+    provider = host.provider()
+    settings = host.base.Settings(
+        invitation="",
+        directory_url="",
+        host_keys_dir=args.host_keys_dir,
+        ca_pub_path=args.ca_pub_path,
+        sshd_config_drop_in=args.sshd_config_drop_in,
+        auth_user="",
     )
-    if result.returncode == 0:
-        for line in result.stdout.splitlines():
-            if line.startswith("sshd.service"):
-                return "sshd"
-    return "ssh"
+    host.apply(args.dry_run, lambda o: provider.uninit(o, settings))
 
 
 def host_refresh_function(args: argparse.Namespace) -> None:
     """Refresh host SSH certificates and CA public key."""
-    _require_linux()
     c = client.configuration.Config.load(args.config)
     factory = client.Factory(c)
     login.ensure_session(c, factory)
     _do_refresh(c, args.host_keys_dir, args.ca_pub_path)
     if not args.no_sshd_reload:
-        subprocess.run(["/usr/bin/systemctl", "reload", _sshd_unit()], check=True, capture_output=True)  # noqa: S603
+        host.reload_sshd()
