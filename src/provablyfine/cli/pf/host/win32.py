@@ -1,6 +1,6 @@
 """host-init for Windows, with the OpenSSH server that ships with Windows.
 
-What the Windows sshd needs, as found by testing it:
+What the Windows sshd needs:
 
 - It reads sshd_config once, when the service starts, and sends it to the
   processes that handle connections. A change needs a restart of the service.
