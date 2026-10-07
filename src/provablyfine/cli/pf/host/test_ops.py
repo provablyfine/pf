@@ -10,7 +10,10 @@ import pytest
 
 from . import ops
 
+posix_only = pytest.mark.skipif(sys.platform == "win32", reason="needs POSIX file modes, owners, links or sh")
 
+
+@posix_only
 def test_system_ops_write_file_sets_mode_and_replaces_content(tmp_path: pathlib.Path) -> None:
     target = tmp_path / "nested" / "file"
     system = ops.SystemOps()
@@ -20,6 +23,7 @@ def test_system_ops_write_file_sets_mode_and_replaces_content(tmp_path: pathlib.
     assert stat.S_IMODE(target.stat().st_mode) == 0o640
 
 
+@posix_only
 def test_system_ops_write_file_without_mode_keeps_the_existing_mode(tmp_path: pathlib.Path) -> None:
     target = tmp_path / "file"
     target.write_text("old\n")
@@ -29,12 +33,14 @@ def test_system_ops_write_file_without_mode_keeps_the_existing_mode(tmp_path: pa
     assert stat.S_IMODE(target.stat().st_mode) == 0o600
 
 
+@posix_only
 def test_system_ops_write_file_without_mode_uses_644_for_a_new_file(tmp_path: pathlib.Path) -> None:
     target = tmp_path / "file"
     ops.SystemOps().write_file(str(target), "new\n", None)
     assert stat.S_IMODE(target.stat().st_mode) == 0o644
 
 
+@posix_only
 def test_system_ops_make_dir_applies_the_mode_to_an_existing_directory(tmp_path: pathlib.Path) -> None:
     directory = tmp_path / "state"
     directory.mkdir(mode=0o755)
@@ -56,6 +62,7 @@ def test_system_ops_remove(tmp_path: pathlib.Path) -> None:
     assert not tree.exists()
 
 
+@posix_only
 def test_system_ops_run_reports_failure_as_a_user_error() -> None:
     with pytest.raises(pfc.exceptions.UI, match="exit code 3"):
         ops.SystemOps().run(["sh", "-c", "exit 3"])
@@ -71,12 +78,14 @@ def test_system_ops_run_reports_a_missing_command() -> None:
         ops.SystemOps().run(["/nonexistent/command"])
 
 
+@posix_only
 def test_system_ops_run_passes_stdin(tmp_path: pathlib.Path) -> None:
     out = tmp_path / "out"
     ops.SystemOps().run(["sh", "-c", f"cat > {out}"], stdin=b"secret bytes")
     assert out.read_bytes() == b"secret bytes"
 
 
+@posix_only
 def test_query_reports_missing_commands_and_exit_codes() -> None:
     assert ops.run_query(["/nonexistent/command"]).returncode == 127
     result = ops.run_query(["sh", "-c", "echo hi; exit 2"])
@@ -100,6 +109,7 @@ def test_dry_run_records_changes_and_does_not_apply_them(tmp_path: pathlib.Path)
     assert not (tmp_path / "dir").exists()
 
 
+@posix_only
 def test_dry_run_reads_under_its_root(tmp_path: pathlib.Path) -> None:
     (tmp_path / "etc" / "ssh").mkdir(parents=True)
     (tmp_path / "etc" / "ssh" / "a.conf").write_text("A\n")
@@ -135,9 +145,10 @@ def test_describe_shows_content_but_not_secrets() -> None:
     text = dry.describe()
     assert "  | line one\n  | line two\n" in text
     assert "PRIVATE" not in text
-    assert "run tool --flag 'a b'  (stdin: 7 bytes, not shown)" in text
+    quoted = '"a b"' if sys.platform == "win32" else "'a b'"
+    assert f"run tool --flag {quoted}  (stdin: 7 bytes, not shown)" in text
     assert "run maybe  (failure ignored)" in text
-    assert os.linesep in text
+    assert text.endswith("\n")
 
 
 def test_make_dir_owner_is_recorded_and_described() -> None:
@@ -159,6 +170,7 @@ def test_path_problem_accepts_a_system_binary() -> None:
     assert ops.SystemOps().path_problem("/bin/sh") is None
 
 
+@posix_only
 def test_path_problem_names_the_first_unsafe_component(tmp_path: pathlib.Path) -> None:
     tool = tmp_path / "opt" / "tool"
     tool.parent.mkdir()
@@ -171,6 +183,7 @@ def test_path_problem_names_the_first_unsafe_component(tmp_path: pathlib.Path) -
     assert "written by its group or by others" in problem
 
 
+@posix_only
 def test_path_problem_refuses_a_file_that_others_can_write(tmp_path: pathlib.Path) -> None:
     tool = tmp_path / "tool"
     tool.write_text("x")
@@ -180,6 +193,7 @@ def test_path_problem_refuses_a_file_that_others_can_write(tmp_path: pathlib.Pat
     assert "757" in problem
 
 
+@posix_only
 def test_path_problem_refuses_a_path_owned_by_someone_else(tmp_path: pathlib.Path) -> None:
     tool = tmp_path / "tool"
     tool.write_text("x")
@@ -189,6 +203,7 @@ def test_path_problem_refuses_a_path_owned_by_someone_else(tmp_path: pathlib.Pat
     assert f"owned by uid {os.getuid()}" in problem
 
 
+@posix_only
 def test_path_problem_looks_through_symbolic_links(tmp_path: pathlib.Path) -> None:
     unsafe = tmp_path / "unsafe"
     unsafe.mkdir()
@@ -202,12 +217,14 @@ def test_path_problem_looks_through_symbolic_links(tmp_path: pathlib.Path) -> No
     assert "unsafe" in problem
 
 
+@posix_only
 def test_path_problem_reports_a_missing_path(tmp_path: pathlib.Path) -> None:
     problem = ops.SystemOps().path_problem(str(tmp_path / "missing"), trusted_uid=os.getuid())
     assert problem is not None
     assert "cannot inspect" in problem
 
 
+@posix_only
 def test_dry_run_path_problem_reads_under_its_root(tmp_path: pathlib.Path) -> None:
     tool = tmp_path / "opt" / "provablyfine" / "pf"
     tool.parent.mkdir(parents=True)
@@ -232,3 +249,12 @@ def test_system_ops_run_hides_sudo_variables_from_children(
     out = tmp_path / "out"
     ops.SystemOps().run(["sh", "-c", f'echo "${{SUDO_USER-unset}} ${{SUDO_UID-unset}} $KEEP_ME" > {out}'])
     assert out.read_text() == "unset unset yes\n"
+
+
+def test_describe_shows_utf16_content_as_text() -> None:
+    dry = ops.DryRunOps()
+    dry.write_file("C:\\task.xml", "<?xml version='1.0'?>\n<Task>caf\u00e9</Task>\n".encode("utf-16"), None)
+    text = dry.describe()
+    assert "  | <Task>caf\u00e9</Task>" in text
+    assert "\x00" not in text
+    assert "\ufffd" not in text

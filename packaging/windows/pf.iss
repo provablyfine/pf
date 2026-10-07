@@ -8,13 +8,19 @@ AppName=pf
 AppVersion={#MyAppVersion}
 AppPublisher=provablyfine
 AppPublisherURL=https://docs.provablyfine.net
-DefaultDirName={localappdata}\Programs\pf
+; Installs for the current user by default, in %LOCALAPPDATA%\Programs\pf, and
+; needs no elevation. The user can choose "all users" in the installer, or pass
+; /ALLUSERS, to install in Program Files. A host needs that: sshd only runs a
+; command that only administrators can change. The OpenSSH Authentication
+; Agent service (if disabled) is a separate, one-time, admin-required step the
+; user is told about, not something this installer attempts itself.
+; pf.exe is a 64-bit program. Without these lines, {autopf} is Program Files (x86).
+ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode=x64compatible
+DefaultDirName={autopf}\pf
 DisableProgramGroupPage=yes
-; Per-user install: no admin elevation required, and nothing here needs it —
-; the OpenSSH Authentication Agent service (if disabled) is a separate,
-; one-time, admin-required step the user is told about, not something this
-; installer attempts itself.
 PrivilegesRequired=lowest
+PrivilegesRequiredOverridesAllowed=dialog commandline
 OutputDir=..\..\dist
 OutputBaseFilename=pf-setup
 Compression=lzma2
@@ -28,20 +34,33 @@ InfoAfterFile=post_install_info.txt
 Source: "..\..\dist\pf\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs
 
 [Code]
-const
-  EnvironmentKey = 'Environment';
+function EnvironmentRoot: Integer;
+begin
+  if IsAdminInstallMode then
+    Result := HKEY_LOCAL_MACHINE
+  else
+    Result := HKEY_CURRENT_USER;
+end;
+
+function EnvironmentKey: string;
+begin
+  if IsAdminInstallMode then
+    Result := 'SYSTEM\CurrentControlSet\Control\Session Manager\Environment'
+  else
+    Result := 'Environment';
+end;
 
 procedure EnvAddPath(Path: string);
 var
   Paths: string;
 begin
-  if not RegQueryStringValue(HKEY_CURRENT_USER, EnvironmentKey, 'Path', Paths) then
+  if not RegQueryStringValue(EnvironmentRoot, EnvironmentKey, 'Path', Paths) then
     Paths := '';
   if Paths = '' then
     Paths := Path
   else if Pos(';' + Uppercase(Path) + ';', ';' + Uppercase(Paths) + ';') = 0 then
     Paths := Paths + ';' + Path;
-  RegWriteExpandStringValue(HKEY_CURRENT_USER, EnvironmentKey, 'Path', Paths);
+  RegWriteExpandStringValue(EnvironmentRoot, EnvironmentKey, 'Path', Paths);
 end;
 
 procedure EnvRemovePath(Path: string);
@@ -49,13 +68,13 @@ var
   Paths: string;
   P: Integer;
 begin
-  if not RegQueryStringValue(HKEY_CURRENT_USER, EnvironmentKey, 'Path', Paths) then
+  if not RegQueryStringValue(EnvironmentRoot, EnvironmentKey, 'Path', Paths) then
     exit;
   P := Pos(';' + Uppercase(Path) + ';', ';' + Uppercase(Paths) + ';');
   if P = 0 then
     exit;
   Delete(Paths, P - 1, Length(Path) + 1);
-  RegWriteExpandStringValue(HKEY_CURRENT_USER, EnvironmentKey, 'Path', Paths);
+  RegWriteExpandStringValue(EnvironmentRoot, EnvironmentKey, 'Path', Paths);
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);

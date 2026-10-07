@@ -51,7 +51,7 @@ def _register_deadline(directory: str, cert: ssh.cert.Cert) -> None:
         return
     try:
         openssh_session_reaper.register_session(
-            directory, deadline=deadline, connection_id=connection_id, table=host.procs.PsTable()
+            directory, deadline=deadline, connection_id=connection_id, table=host.procs.default_table()
         )
     except Exception:
         logger.warning("failed to register the session deadline; failing open", exc_info=True)
@@ -86,6 +86,15 @@ def _authorized_principals(args: argparse.Namespace) -> None:
     print("\n".join(accepted))
 
 
+def _add_windows_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--sshd-config",
+        default=None,
+        help="Windows only: the sshd_config file to edit. By default, the one in %%ProgramData%%\\ssh",
+    )
+    parser.add_argument("--sshd-service", default="sshd", help="Windows only: the name of the sshd service")
+
+
 def add_subparsers(parser: argparse.ArgumentParser) -> None:
     subparsers = parser.add_subparsers(required=True, dest="subcommand", metavar="subcommand")
 
@@ -118,12 +127,18 @@ def add_subparsers(parser: argparse.ArgumentParser) -> None:
         "--dry-run", action="store_true", default=False, help="Print what would be done and change nothing"
     )
     host_init_parser.add_argument("--invitation", required=True, help="Invitation key")
-    host_init_parser.add_argument("--auth-user", default="nobody", help="User for AuthorizedPrincipalsCommandUser")
+    defaults = host.defaults()
     host_init_parser.add_argument(
-        "--sshd-config-drop-in", default="/etc/ssh/sshd_config.d/10-pf.conf", help="Path to sshd_config.d drop-in file"
+        "--auth-user", default=defaults.auth_user, help="User for AuthorizedPrincipalsCommandUser"
     )
-    host_init_parser.add_argument("--host-keys-dir", default="/etc/ssh", help="Directory containing host SSH keys")
-    host_init_parser.add_argument("--ca-pub-path", default="/etc/ssh/pf_ca.pub", help="Path to CA public key file")
+    host_init_parser.add_argument(
+        "--sshd-config-drop-in", default=defaults.sshd_config_drop_in, help="Path to sshd_config.d drop-in file"
+    )
+    host_init_parser.add_argument(
+        "--host-keys-dir", default=defaults.host_keys_dir, help="Directory containing host SSH keys"
+    )
+    host_init_parser.add_argument("--ca-pub-path", default=defaults.ca_pub_path, help="Path to CA public key file")
+    _add_windows_options(host_init_parser)
     host_init_parser.add_argument(
         "--pf-binary",
         default=None,
@@ -136,10 +151,13 @@ def add_subparsers(parser: argparse.ArgumentParser) -> None:
         "--dry-run", action="store_true", default=False, help="Print what would be done and change nothing"
     )
     host_uninit_parser.add_argument(
-        "--sshd-config-drop-in", default="/etc/ssh/sshd_config.d/10-pf.conf", help="Path to sshd_config.d drop-in file"
+        "--sshd-config-drop-in", default=defaults.sshd_config_drop_in, help="Path to sshd_config.d drop-in file"
     )
-    host_uninit_parser.add_argument("--host-keys-dir", default="/etc/ssh", help="Directory containing host SSH keys")
-    host_uninit_parser.add_argument("--ca-pub-path", default="/etc/ssh/pf_ca.pub", help="Path to CA public key file")
+    host_uninit_parser.add_argument(
+        "--host-keys-dir", default=defaults.host_keys_dir, help="Directory containing host SSH keys"
+    )
+    host_uninit_parser.add_argument("--ca-pub-path", default=defaults.ca_pub_path, help="Path to CA public key file")
+    _add_windows_options(host_uninit_parser)
     host_uninit_parser.set_defaults(func=openssh_host_init.host_uninit_function)
 
     session_reaper_parser = subparsers.add_parser(

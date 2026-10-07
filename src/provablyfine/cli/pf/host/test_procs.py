@@ -63,10 +63,10 @@ def test_ancestors_stop_at_a_loop() -> None:
 
 def test_find_ancestor_returns_the_nearest_match() -> None:
     table = procs.parse_ps(PS_OUTPUT)
-    found = procs.find_ancestor(table, 102, procs.is_sshd_monitor)
+    found = procs.find_ancestor(table, 102, procs.macos_connection)
     assert found is not None
     assert found.pid == 100
-    assert procs.find_ancestor(table, 300, procs.is_sshd_monitor) is None
+    assert procs.find_ancestor(table, 300, procs.macos_connection) is None
 
 
 def test_descendants_lists_the_whole_subtree() -> None:
@@ -119,4 +119,49 @@ class TestPsTable:
     def test_send_signal_ignores_a_process_that_is_gone(self) -> None:
         child = subprocess.Popen(["true"])  # noqa: S607
         child.wait()
-        procs.PsTable().send_signal(child.pid, 15)
+        procs.PsTable().send_signal(child.pid, force=False)
+
+
+WINDOWS_TABLE = procs.parse_ps(
+    """\
+  500     4 services.exe
+ 3000   500 sshd.exe
+ 3100  3000 sshd.exe
+ 3200  3100 sshd.exe
+ 3300  3200 cmd.exe
+ 4000   500 notepad.exe
+ 5000  4000 sshd.exe
+"""
+)
+
+
+def test_windows_connection_is_the_sshd_below_the_service() -> None:
+    # 3000 is the service, 3100 the connection, 3200 the session.
+    assert [pid for pid, proc in WINDOWS_TABLE.items() if procs.windows_connection(WINDOWS_TABLE, proc)] == [3100]
+
+
+def test_windows_connection_ignores_case_and_other_programs() -> None:
+    table = procs.parse_ps("  1  0 SERVICES.EXE\n  2  1 SSHD.EXE\n  3  2 Sshd.exe\n  4  3 cmd.exe\n")
+    assert procs.windows_connection(table, table[3])
+    assert not procs.windows_connection(table, table[4])
+    assert not procs.windows_connection(table, table[2])
+
+
+def test_windows_connection_needs_services_exe_two_levels_up() -> None:
+    # An sshd.exe someone started by hand has no services.exe above it.
+    assert not procs.windows_connection(WINDOWS_TABLE, WINDOWS_TABLE[5000])
+    table = procs.parse_ps("  1  0 explorer.exe\n  2  1 sshd.exe\n  3  2 sshd.exe\n")
+    assert not procs.windows_connection(table, table[3])
+
+
+def test_find_ancestor_finds_the_windows_connection_from_the_command_below_it() -> None:
+    table = dict(WINDOWS_TABLE)
+    table[6000] = procs.Proc(6000, 3100, "pf.exe")
+    found = procs.find_ancestor(table, 6000, procs.windows_connection)
+    assert found is not None
+    assert found.pid == 3100
+
+
+def test_the_connection_test_matches_the_platform() -> None:
+    expected = procs.windows_connection if sys.platform == "win32" else procs.macos_connection
+    assert procs.connection_test() is expected

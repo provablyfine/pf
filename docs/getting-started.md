@@ -9,6 +9,10 @@ On Windows, you can instead download `pf-setup.exe` from the
 it. The installer is currently unsigned, so Windows SmartScreen will warn you on
 first run; choose "More info" then "Run anyway" to proceed.
 
+The installer installs pf for the current user. To install it for all users in
+`C:\Program Files\pf`, choose that in the installer, or run it with `/ALLUSERS`.
+You need that to use the machine as a host.
+
 ### Linux packages
 
 For simple cli use, we recommend pipx:
@@ -121,6 +125,57 @@ $ sudo pf openssh host-init --invitation $INVITATION_URL
 
 To see what the command would change without changing anything, add `--dry-run`.
 To undo the changes, run `sudo pf openssh host-uninit`.
+
+### Setup a macOS host
+
+Install the macOS installer package from the
+[latest release](https://github.com/provablyfine/pf/releases/latest) page.
+A `pf` installed with `pipx` or Homebrew does not work on a host.
+sshd only runs a command when only root can change it and every directory above it.
+
+Then run this command in a terminal:
+```console
+$ sudo pf openssh host-init --invitation $INVITATION_URL
+```
+
+macOS starts sshd for each connection, so there is nothing to restart.
+The command also installs three launchd jobs.
+They refresh the host certificates, register the host with the bastion, and end sessions
+when their certificate deadline passes.
+
+If Remote Login is off, the command tries to turn it on.
+Check it in System Settings, under General, Sharing.
+macOS only lets the members of the group `com.apple.access_ssh` log in over SSH, when that group exists.
+The command prints the `dseditgroup` command to add a user.
+
+### Setup a Windows host
+
+Install pf for all users. Run the installer, and choose to install for all users
+when it asks, or run it with `/ALLUSERS`.
+This puts pf in `C:\Program Files\pf`.
+A pf installed for one user does not work on a host.
+sshd only runs a command when only administrators can change it and every folder above it.
+
+The host also needs the OpenSSH Server feature of Windows.
+
+Then run this command in a terminal opened with Run as administrator:
+```console
+> pf openssh host-init --invitation $INVITATION_URL
+```
+
+The command adds one `Include` line at the top of `C:\ProgramData\ssh\sshd_config`.
+It keeps a copy of the file, checks the new one with `sshd -t`, and restarts the sshd service.
+Sessions that are open stay open.
+If sshd rejects the new file or does not restart, the command puts the old file back.
+
+The command creates a local user named `pf-auth` with no rights.
+sshd runs its check of the certificate as this user.
+It also adds three tasks to the Task Scheduler, in the folder `provablyfine`.
+They refresh the host certificates, register the host with the bastion, and end sessions
+when their certificate deadline passes.
+
+To remove all of this, run `pf openssh host-uninit` in the same way.
+Windows keeps the folder of the deleted user in `C:\Users`.
 
 ## Connect to your new host
 

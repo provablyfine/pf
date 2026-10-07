@@ -153,6 +153,10 @@ jobs:
           [IO.File]::WriteAllText($p, ($t -replace "`n", "`r`n"))
           $version = uv version --short
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DMyAppVersion=$version" packaging\windows\pf.iss
+      - name: Install for all users and smoke-test
+        run: |
+          Start-Process -FilePath dist\pf-setup.exe -ArgumentList '/VERYSILENT','/ALLUSERS','/SUPPRESSMSGBOXES','/NORESTART' -Wait
+          & "C:\Program Files\pf\pf.exe" version
 
   build-macos:
     runs-on: macos-latest

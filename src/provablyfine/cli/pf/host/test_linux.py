@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pathlib
+import sys
 import typing
 
 import provablyfine_client as pfc
@@ -16,6 +17,8 @@ DIRECTORY_URL = "https://example.com/pf/t/00000000-0000-0000-0000-000000000001/d
 INJECTION_URL = "https://x.invalid/directory?invitation=k';touch /tmp/PWNED;#"
 
 SYSTEMCTL = linux.SYSTEMCTL
+
+pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="the Linux provider tests lay out a POSIX tree")
 
 
 def _settings(**overrides: str) -> base.Settings:

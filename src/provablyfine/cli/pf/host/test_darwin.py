@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import pathlib
 import plistlib
+import sys
 import typing
 
 import provablyfine_client as pfc
@@ -14,6 +15,8 @@ INVITATION = "https://example.com/pf/t/00000000-0000-0000-0000-000000000001/dire
 DIRECTORY_URL = "https://example.com/pf/t/00000000-0000-0000-0000-000000000001/directory"
 INJECTION_URL = "https://x.invalid/directory?invitation=k';touch /tmp/PWNED;#"
 PF = "/opt/provablyfine/pf"
+
+pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="the macOS provider tests need POSIX file owners")
 
 
 def _settings(**overrides: str | None) -> base.Settings:

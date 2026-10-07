@@ -16,6 +16,7 @@ import dataclasses
 import glob
 import os
 import pathlib
+import re
 import shlex
 import shutil
 import stat
@@ -71,6 +72,7 @@ Action = MakeDir | WriteFile | Remove | Run | Note
 class QueryResult:
     returncode: int
     stdout: str
+    stderr: str = ""
 
 
 def run_query(argv: typing.Sequence[str]) -> QueryResult:
@@ -84,27 +86,41 @@ def run_query(argv: typing.Sequence[str]) -> QueryResult:
         )
     except FileNotFoundError:
         return QueryResult(returncode=127, stdout="")
-    return QueryResult(returncode=result.returncode, stdout=result.stdout)
+    return QueryResult(returncode=result.returncode, stdout=result.stdout, stderr=result.stderr)
+
+
+def _quote(argument: str) -> str:
+    """Quote an argument the way the platform's own shell would, so a person can read it."""
+    if sys.platform == "win32":
+        return subprocess.list2cmdline([argument])
+    return shlex.quote(argument)
+
+
+def _decode(content: bytes) -> str:
+    """Text for a person to read. Windows tools such as the task scheduler want UTF-16."""
+    if content.startswith((b"\xff\xfe", b"\xfe\xff")):
+        return content.decode("utf-16", errors="replace")
+    return content.decode("utf-8", errors="replace")
 
 
 def describe(action: Action) -> str:
     match action:
         case MakeDir(path=path, mode=mode, owner=owner):
             owned = f" (owner {owner})" if owner else ""
-            return f"mkdir -m {mode:o} {shlex.quote(path)}{owned}"
+            return f"mkdir -m {mode:o} {_quote(path)}{owned}"
         case WriteFile(path=path, content=content, mode=mode, secret=secret):
             mode_text = "keep mode" if mode is None else f"mode {mode:o}"
-            header = f"write {shlex.quote(path)} ({mode_text}, {len(content)} bytes)"
+            header = f"write {_quote(path)} ({mode_text}, {len(content)} bytes)"
             if secret:
                 return header + "\n  (content not shown)"
-            text = content.decode("utf-8", errors="replace").rstrip("\n")
+            text = _decode(content).rstrip("\r\n")
             return header + "\n" + "\n".join("  | " + line for line in text.split("\n"))
         case Remove(path=path, recursive=recursive):
-            return f"rm {'-r ' if recursive else ''}{shlex.quote(path)}"
+            return f"rm {'-r ' if recursive else ''}{_quote(path)}"
         case Note(text=text):
             return f"note: {text}"
         case Run(argv=argv, check=check, stdin=stdin):
-            text = "run " + shlex.join(argv)
+            text = "run " + " ".join(_quote(a) for a in argv)
             if stdin is not None:
                 text += f"  (stdin: {len(stdin)} bytes, not shown)"
             if not check:
@@ -123,7 +139,8 @@ class Ops(abc.ABC):
 
     def read_text(self, path: str) -> str | None:
         try:
-            with open(path, encoding="utf-8") as f:
+            # newline="" keeps CRLF as it is: a file that is read and written back must not change its line endings.
+            with open(path, encoding="utf-8", newline="") as f:
                 return f.read()
         except (FileNotFoundError, IsADirectoryError):
             return None
@@ -230,7 +247,9 @@ class SystemOps(Ops):
                 raise pfc.exceptions.UI(f"command not found: {argv[0]}") from e
             return
         if check and result.returncode != 0:
-            raise pfc.exceptions.UI(f"command failed with exit code {result.returncode}: {shlex.join(argv)}")
+            raise pfc.exceptions.UI(
+                f"command failed with exit code {result.returncode}: {' '.join(_quote(a) for a in argv)}"
+            )
 
 
 class DryRunOps(Ops):
@@ -255,12 +274,14 @@ class DryRunOps(Ops):
     def _real(self, path: str) -> str:
         if self._root is None:
             return path
-        return str(self._root / path.lstrip("/"))
+        # A Windows path such as C:\ProgramData\ssh becomes the directory C: under the root.
+        return str(self._root / path.replace("\\", "/").lstrip("/"))
 
     def _logical(self, path: str) -> str:
         if self._root is None:
             return path
-        return "/" + os.path.relpath(path, self._root)
+        relative = os.path.relpath(path, self._root).replace(os.sep, "/")
+        return relative if re.match(r"[A-Za-z]:/", relative) else "/" + relative
 
     def _realpath(self, path: str) -> str:
         # A test root has no symbolic links to resolve.

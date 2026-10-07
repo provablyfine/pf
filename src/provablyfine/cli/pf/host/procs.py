@@ -10,6 +10,7 @@ import os
 import re
 import signal
 import subprocess
+import sys
 import time
 import typing
 
@@ -23,6 +24,11 @@ class Proc:
 
 Snapshot = dict[int, Proc]
 
+# Tells whether a process is the per-connection sshd process that runs with
+# privileges. It gets the whole table, because on Windows the shape of the
+# tree is what identifies it.
+ConnectionTest = typing.Callable[[Snapshot, Proc], bool]
+
 # The title of the per-connection process that runs as root. OpenSSH 9.8 and
 # later call it "sshd-session: user [priv]". Older versions call it "sshd: user [priv]".
 _MONITOR = re.compile(r"sshd(-session)?: .* \[priv\]")
@@ -30,6 +36,32 @@ _MONITOR = re.compile(r"sshd(-session)?: .* \[priv\]")
 
 def is_sshd_monitor(proc: Proc) -> bool:
     return _MONITOR.fullmatch(proc.command.strip()) is not None
+
+
+def macos_connection(snapshot: Snapshot, proc: Proc) -> bool:
+    """The per-connection sshd that launchd started, not a process that only looks like one."""
+    return is_sshd_monitor(proc) and proc.ppid == 1
+
+
+def windows_connection(snapshot: Snapshot, proc: Proc) -> bool:
+    """The `sshd.exe -R` process: sshd.exe under the sshd.exe service, which services.exe started.
+
+    The session process and the service itself are also sshd.exe. They differ
+    by their parents.
+    """
+    if proc.command.lower() != "sshd.exe":
+        return False
+    parent = snapshot.get(proc.ppid)
+    if parent is None or parent.command.lower() != "sshd.exe":
+        return False
+    grandparent = snapshot.get(parent.ppid)
+    return grandparent is not None and grandparent.command.lower() == "services.exe"
+
+
+def connection_test() -> ConnectionTest:
+    if sys.platform == "win32":
+        return windows_connection
+    return macos_connection
 
 
 def parse_ps(output: str) -> Snapshot:
@@ -69,9 +101,9 @@ def ancestors(table: Snapshot, pid: int) -> list[Proc]:
     return found
 
 
-def find_ancestor(table: Snapshot, pid: int, predicate: typing.Callable[[Proc], bool]) -> Proc | None:
+def find_ancestor(table: Snapshot, pid: int, test: ConnectionTest) -> Proc | None:
     for proc in ancestors(table, pid):
-        if predicate(proc):
+        if test(table, proc):
             return proc
     return None
 
@@ -97,7 +129,11 @@ class ProcessTable(typing.Protocol):
     def start_time(self, pid: int) -> int | None:
         """When the process started, in whole seconds, or None if it is gone."""
 
-    def send_signal(self, pid: int, number: int) -> None: ...
+    def send_signal(self, pid: int, *, force: bool) -> None:
+        """Ask the process to end, or end it right away when `force` is set.
+
+        Windows has no gentle request, so it ends the process in both cases.
+        """
 
 
 def _ps(*arguments: str) -> str:
@@ -119,8 +155,16 @@ class PsTable:
     def start_time(self, pid: int) -> int | None:
         return parse_start_time(_ps("-o", "lstart=", "-p", str(pid)))
 
-    def send_signal(self, pid: int, number: int = signal.SIGTERM) -> None:
+    def send_signal(self, pid: int, *, force: bool) -> None:
         try:
-            os.kill(pid, number)
+            os.kill(pid, signal.SIGKILL if force else signal.SIGTERM)
         except ProcessLookupError:
             pass
+
+
+def default_table() -> ProcessTable:
+    if sys.platform == "win32":
+        from . import procs_win32
+
+        return procs_win32.Win32Table()
+    return PsTable()
