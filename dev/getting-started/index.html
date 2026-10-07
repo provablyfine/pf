@@ -1375,6 +1375,9 @@
 <a href="https://github.com/provablyfine/pf/releases/latest">latest release</a> and run
 it. The installer is currently unsigned, so Windows SmartScreen will warn you on
 first run; choose "More info" then "Run anyway" to proceed.</p>
+<p>The installer installs pf for the current user. To install it for all users in
+<code>C:\Program Files\pf</code>, choose that in the installer, or run it with <code>/ALLUSERS</code>.
+You need that to use the machine as a host.</p>
 <h3 id="linux-packages">Linux packages</h3>
 <p>For simple cli use, we recommend pipx:
 <div class="highlight"><pre><span></span><code><span class="gp">$ </span>pipx<span class="w"> </span>install<span class="w"> </span>provablyfine
@@ -1441,10 +1444,7 @@ $ pfa grant ssh --username root --capability shell pty user-rc --tag id=device |
 $ pfa role member -i $USERS_ROLE_ID -a $(pfa whoami)
 </code></pre></div>
 <h3 id="setup-the-host">Setup the host</h3>
-<p>You need to install first <code>pf</code> on the server globally:
-<div class="highlight"><pre><span></span><code><span class="gp">$ </span>pip<span class="w"> </span>install<span class="w"> </span>--global<span class="w"> </span>provablyfine
-</code></pre></div></p>
-<p>Then, make your OpenSSH service know about the new centralized
+<p>Make your OpenSSH service know about the new centralized
 authentication system. Run this command on the server as root:
 <div class="highlight"><pre><span></span><code><span class="gp">$ </span>sudo<span class="w"> </span>pf<span class="w"> </span>openssh<span class="w"> </span>host-init<span class="w"> </span>--invitation<span class="w"> </span><span class="nv">$INVITATION_URL</span>
 </code></pre></div></p>
