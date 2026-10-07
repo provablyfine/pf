@@ -17,7 +17,6 @@ What the Windows sshd needs, as found by testing it:
 
 from __future__ import annotations
 
-import ctypes
 import dataclasses
 import json
 import ntpath
@@ -78,7 +77,10 @@ _POWERSHELL = ("powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy"
 
 
 def is_elevated() -> bool:
-    return bool(ctypes.windll.shell32.IsUserAnAdmin())
+    # The Win32 layer only loads on Windows. This module is imported everywhere.
+    from .... import _w32 as w32
+
+    return w32.security.is_user_an_admin()
 
 
 def _require(value: str, pattern: re.Pattern[str], what: str) -> str:
