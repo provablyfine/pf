@@ -1445,9 +1445,11 @@ $ pfa role member -i $USERS_ROLE_ID -a $(pfa whoami)
 <div class="highlight"><pre><span></span><code><span class="gp">$ </span>pip<span class="w"> </span>install<span class="w"> </span>--global<span class="w"> </span>provablyfine
 </code></pre></div></p>
 <p>Then, make your OpenSSH service know about the new centralized
-authentication system. Run this command on the server:
-<div class="highlight"><pre><span></span><code><span class="gp">$ </span>pf<span class="w"> </span>openssh<span class="w"> </span>host-init<span class="w"> </span>--invitation<span class="w"> </span><span class="nv">$INVITATION_URL</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sudo<span class="w"> </span>bash<span class="w"> </span>-s
+authentication system. Run this command on the server as root:
+<div class="highlight"><pre><span></span><code><span class="gp">$ </span>sudo<span class="w"> </span>pf<span class="w"> </span>openssh<span class="w"> </span>host-init<span class="w"> </span>--invitation<span class="w"> </span><span class="nv">$INVITATION_URL</span>
 </code></pre></div></p>
+<p>To see what the command would change without changing anything, add <code>--dry-run</code>.
+To undo the changes, run <code>sudo pf openssh host-uninit</code>.</p>
 <h2 id="connect-to-your-new-host">Connect to your new host</h2>
 <p>First, you need to login under the <code>users</code> role:
 <div class="highlight"><pre><span></span><code><span class="gp">$ </span>pf<span class="w"> </span>login<span class="w"> </span>-r<span class="w"> </span>users
