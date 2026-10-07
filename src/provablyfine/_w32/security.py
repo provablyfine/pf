@@ -10,7 +10,7 @@ import ctypes
 import ctypes.wintypes
 import dataclasses
 
-from .. import exceptions
+from .. import ssh
 from . import errors, process, raw
 
 
@@ -103,7 +103,7 @@ def logon_sid(process_handle: int) -> str | None:
             * ctypes.alignment(raw.SID_AND_ATTRIBUTES),
             ctypes.sizeof(raw.TOKEN_GROUPS),
         )
-    except exceptions.Error:
+    except ssh.exceptions.Error:
         return None
     finally:
         process.close_handle(process_token.value or 0)

@@ -14,8 +14,8 @@ import uuid
 
 import pytest
 
+from .... import _w32 as w32
 from .... import jwk
-from ... import _w32 as w32
 from ... import _win32 as agent_transport
 from ... import agent, cert, exceptions, serde
 from . import connection, peercred, session

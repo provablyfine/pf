@@ -1,5 +1,5 @@
-"""The shared low-level Win32 layer, used by both the ssh-agent client and the
-signing oracle.
+"""The shared low-level Win32 layer, used by the ssh-agent client, the signing
+oracle and the host process table.
 
 Organized by OS domain over a single raw ctypes surface:
 

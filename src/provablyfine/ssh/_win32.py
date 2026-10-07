@@ -7,7 +7,7 @@ import os
 import time
 import typing
 
-from . import _w32 as w32
+from .. import _w32 as w32
 from . import exceptions, wire
 
 # Where Windows' OpenSSH agent listens. Unlike POSIX, there is no environment

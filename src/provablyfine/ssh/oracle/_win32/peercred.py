@@ -26,7 +26,7 @@ import dataclasses
 import os
 import re
 
-from ... import _w32 as w32
+from .... import _w32 as w32
 from ... import exceptions
 
 # `login_shell_identity()`'s walk only has to climb past the interpreter, a

@@ -5,7 +5,7 @@ from __future__ import annotations
 import ctypes
 import typing
 
-from .. import exceptions
+from .. import ssh
 from . import raw
 
 
@@ -15,7 +15,7 @@ def last_error_message(prefix: str) -> str:
 
 
 def raise_last_error(prefix: str) -> typing.NoReturn:
-    raise exceptions.Error(last_error_message(prefix))
+    raise ssh.exceptions.Error(last_error_message(prefix))
 
 
 def disable_wer_reporting() -> bool:

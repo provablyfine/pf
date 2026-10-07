@@ -9,7 +9,7 @@ from __future__ import annotations
 import ctypes
 import ctypes.wintypes
 
-from .. import exceptions
+from .. import ssh
 from . import errors, event, raw
 
 
@@ -91,5 +91,5 @@ def process_parent_pid(handle: int) -> int:
         handle, 0, ctypes.byref(information), ctypes.sizeof(information), ctypes.byref(returned)
     )
     if status != 0:
-        raise exceptions.Error(f"NtQueryInformationProcess failed with NTSTATUS 0x{status & 0xFFFFFFFF:08x}")
+        raise ssh.exceptions.Error(f"NtQueryInformationProcess failed with NTSTATUS 0x{status & 0xFFFFFFFF:08x}")
     return int(information.InheritedFromUniqueProcessId or 0)

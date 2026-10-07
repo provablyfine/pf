@@ -30,8 +30,8 @@ import logging
 import os
 import sys
 
+from .... import _w32 as w32
 from .... import jwk, log
-from ... import _w32 as w32
 from ... import buffer
 from . import connection, peercred, server, session
 
