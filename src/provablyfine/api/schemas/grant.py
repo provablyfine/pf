@@ -214,6 +214,7 @@ class LiveFilter(base.APIBase):
 
 class LivePermission(base.APIBase):
     read: bool
+    terminate: bool = False
 
 
 class LiveGrant(base.APIBase):

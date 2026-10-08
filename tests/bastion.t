@@ -90,6 +90,22 @@ Port forwarding for alice survives more than 10s
   $ kill -0 $ALICE_FWD_PID
   $ sleep 12
   $ kill -0 $ALICE_FWD_PID
+
+An administrator ends the tunnel of alice
+  $ ALICE_LIVE=$(pfa -c config.json live list --hostname host --active --format json | jq -r '[.[] | select(.kind == "relay")][0].id')
+  $ pfa -c config.json live terminate $ALICE_LIVE
+  $ sleep 2
+  $ kill -0 $ALICE_FWD_PID 2>/dev/null
+  [1]
+  $ pfa -c config.json live list --hostname host --active --format json | jq -r 'length'
+  0
+  $ grep -c "command: terminate kind=relay" $PF_LOG_DIRECTORY/pf.bastion.register.$REGISTER_PID.log
+  1
+
+Ending a session that already ended is refused
+  $ pfa -c config.json live terminate $ALICE_LIVE
+  .* (re)
+  [2]
   $ kill $ALICE_FWD_PID 2>/dev/null; true
 
 Grant a 10s shell to bob@host

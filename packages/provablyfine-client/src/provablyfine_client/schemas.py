@@ -601,9 +601,10 @@ class LiveFilter(_Base):
 
 class LivePermission(_Base):
     read: bool
+    terminate: bool = False
 
     def to_text(self) -> str:
-        output = _bool(self.read, "read")
+        output = _bool(self.read, "read") + _bool(self.terminate, "terminate")
         return " ".join(output)
 
 

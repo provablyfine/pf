@@ -466,6 +466,7 @@ class Windows:
                     "--port",
                     port,
                     f"--live-events-dir={LIVE_DIR}",
+                    f"--kill-dir={KILL_DIR}",
                 ],
                 repeat_minutes=5,
                 restart_on_failure=True,

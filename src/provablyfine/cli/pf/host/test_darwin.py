@@ -196,6 +196,7 @@ def test_init_installs_the_bastion_job_with_the_ssh_port(tmp_path: pathlib.Path)
         "--port",
         "2222",
         "--live-events-dir=/var/db/pf-live-events",
+        "--kill-dir=/var/db/pf-kill-requests",
     ]
     assert job["KeepAlive"] is True
     assert "StartInterval" not in job

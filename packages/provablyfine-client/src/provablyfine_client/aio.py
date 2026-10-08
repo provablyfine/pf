@@ -86,6 +86,9 @@ class AsyncSessionClient:
     ) -> schemas.LiveListResponse:
         return await self._run(lambda: self._inner.list_live(hostname, identity_id, active))
 
+    async def terminate_live(self, id: str) -> None:
+        return await self._run(lambda: self._inner.terminate_live(id))
+
     async def report_live(self, event: typing.Literal["start", "end"], report: schemas.LiveReportRequest) -> None:
         return await self._run(lambda: self._inner.report_live(event, report))
 

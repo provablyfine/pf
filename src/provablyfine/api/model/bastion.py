@@ -151,12 +151,7 @@ def _tenant_label() -> str:
     return hashlib.sha256(ctx.tenant_uuid.encode()).hexdigest()[:12]
 
 
-def generate_token(
-    hostname: str,
-    purpose: typing.Literal["connect", "register"],
-    deadline: int | None = None,
-    connection_id: str | None = None,
-) -> str:
+def _sign(hostname: str, use: str, extra: dict[str, typing.Any]) -> str:
     private_key = oidc_key.get_private_key()
     assert private_key.type == jwk.KeyType.ED25519
     self_identity = identity.read_one(id=ctx.identity_id)
@@ -171,10 +166,41 @@ def generate_token(
         "exp": now + 60,
         "jti": str(uuid.uuid4()),
         "name": self_identity.name,
-        "use": purpose,
+        "use": use,
     }
-    if deadline is not None:
-        claims["deadline"] = deadline
-    if connection_id is not None:
-        claims["cid"] = connection_id
+    claims.update(extra)
     return jwt.encode(claims, private_key.to_crypto(), algorithm="EdDSA", headers={"kid": private_key.thumbprint()})
+
+
+def generate_token(
+    hostname: str,
+    purpose: typing.Literal["connect", "register"],
+    deadline: int | None = None,
+    connection_id: str | None = None,
+) -> str:
+    extra: dict[str, typing.Any] = {}
+    if deadline is not None:
+        extra["deadline"] = deadline
+    if connection_id is not None:
+        extra["cid"] = connection_id
+    return _sign(hostname, purpose, extra)
+
+
+def generate_terminate_token(hostname: str, connection_id: str, kind: str, session_id: str, started_at: int) -> str:
+    """A token that tells `hostname` to end one session.
+
+    `started_at` is when the host said the session began.
+    A host that numbers sessions again after a reboot uses it to tell the session apart.
+
+    Only the server mints these, for the identity that is making the request.
+    Nothing in the token can be used to open a connection, and the host does not
+    take the target from anywhere else.
+    """
+    claims: dict[str, typing.Any] = {
+        "cmd": "terminate",
+        "cid": connection_id,
+        "kind": kind,
+        "sid": session_id,
+        "started": started_at,
+    }
+    return _sign(hostname, "command", claims)

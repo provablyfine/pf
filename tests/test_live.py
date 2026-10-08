@@ -143,3 +143,55 @@ def test_events_in_the_spool_reach_the_registry(api, tmp_path):
     [session] = sc.list_live(active=False).sessions
     assert (session.connection_id, session.kind, session.session_id) == (connection_id, "host", "9")
     assert list(spool.iterdir()) == []
+
+
+def _start_session(sc, host):
+    connection_id = base._sign_cert(sc, host)
+    sc.report_live("start", _report(connection_id, session_id="42"))
+    [session] = sc.list_live(active=True).sessions
+    return session
+
+
+def test_ending_an_unknown_session_is_refused(api, tmp_path):
+    _, sc, _host = _signed_in(api, tmp_path)
+
+    with pytest.raises(pfc.exceptions.UI):
+        sc.terminate_live("00000000-0000-0000-0000-000000000000")
+
+
+def test_ending_a_session_that_already_ended_is_refused(api, tmp_path):
+    _, sc, host = _signed_in(api, tmp_path)
+    session = _start_session(sc, host)
+    sc.report_live("end", _report(session.connection_id, session_id="42"))
+
+    with pytest.raises(pfc.exceptions.UI):
+        sc.terminate_live(session.id)
+
+
+def test_ending_a_session_needs_the_terminate_grant(api, tmp_path):
+    factory, sc, host = _signed_in(api, tmp_path)
+    session = _start_session(sc, host)
+    other = base._invite_second_identity(factory, sc, api.port, tmp_path)
+
+    with pytest.raises(pfc.exceptions.UI):
+        other.terminate_live(session.id)
+
+
+def test_ending_a_session_fails_when_no_bastion_can_reach_the_host(api, tmp_path):
+    _, sc, host = _signed_in(api, tmp_path)
+    session = _start_session(sc, host)
+
+    with pytest.raises(pfc.exceptions.UI, match="Unable to end the session"):
+        sc.terminate_live(session.id)
+
+    # The request is recorded even though the host could not be reached.
+    assert any(e.type == "live-session-terminate" for e in sc.list_audit_log().entries)
+    # The registry is not touched: the host reports the end of the session itself.
+    assert [s.id for s in sc.list_live(active=True).sessions] == [session.id]
+
+
+def test_a_command_token_cannot_be_requested_from_the_self_token_endpoint(api, tmp_path):
+    _, sc, host = _signed_in(api, tmp_path)
+
+    with pytest.raises(pfc.exceptions.UI):
+        sc.get_self_token("bastion", hostname=host, purpose=typing.cast(typing.Literal["register"], "command"))

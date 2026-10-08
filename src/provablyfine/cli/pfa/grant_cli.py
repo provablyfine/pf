@@ -198,6 +198,7 @@ def _live_function(args: argparse.Namespace) -> None:
         "filter": {},
         "permission": {
             "read": args.read,
+            "terminate": args.terminate,
         },
     }
     _output(args, grant)
@@ -359,4 +360,5 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
     live_parser.add_argument("-f", "--format", choices=["yaml", "json"], default="yaml")
     group = live_parser.add_argument_group("permission")
     group.add_argument("-r", "--read", action="store_true")
+    group.add_argument("-t", "--terminate", action="store_true")
     live_parser.set_defaults(func=_live_function)

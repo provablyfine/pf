@@ -424,6 +424,7 @@ def test_the_bastion_task_registers_the_port_sshd_listens_on(tmp_path: pathlib.P
     assert arguments.endswith(
         "--config C:\\ProgramData\\pf\\config.json bastion register --port 2200"
         " --live-events-dir=C:\\ProgramData\\pf-live-events"
+        " --kill-dir=C:\\ProgramData\\pf-kill-requests"
     )
     assert task.findtext("t:Triggers/t:TimeTrigger/t:Repetition/t:Interval", namespaces=XMLNS) == "PT5M"
     assert task.findtext("t:Settings/t:RunOnlyIfNetworkAvailable", namespaces=XMLNS) == "true"

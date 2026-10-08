@@ -281,6 +281,7 @@ class LiveFilter(Filter):
 
 class LivePermission(DBBase):
     read: bool
+    terminate: bool = False
 
 
 class LiveGrant(DBBase):
