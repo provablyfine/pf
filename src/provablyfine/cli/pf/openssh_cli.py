@@ -165,7 +165,12 @@ def add_subparsers(parser: argparse.ArgumentParser) -> None:
         help="End SSH sessions when their certificate deadline passes. Run as root. For hosts without PAM hooks.",
     )
     session_reaper_parser.add_argument(
-        "--deadline-dir", required=True, help="Directory where auth-principals records connections"
+        "--deadline-dir", default=None, help="Directory where auth-principals records connections"
+    )
+    session_reaper_parser.add_argument(
+        "--sessions-dir",
+        default=None,
+        help="Linux: directory where the PAM hook records open sessions. The reaper then only ends sessions on request",
     )
     session_reaper_parser.add_argument(
         "--kill-dir", default=None, help="Directory where kill requests are written. Only root may write there"
@@ -192,6 +197,11 @@ def add_subparsers(parser: argparse.ArgumentParser) -> None:
     )
     session_deadline_parser.add_argument(
         "--live-events-dir", default=None, help="Directory where session start and end events are written"
+    )
+    session_deadline_parser.add_argument(
+        "--sessions-dir",
+        default=None,
+        help="Directory where each open session is recorded, so that the session reaper can end it",
     )
     session_deadline_parser.set_defaults(func=openssh_pam_session_deadline_linux.session_deadline_function)
 

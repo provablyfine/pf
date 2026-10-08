@@ -90,9 +90,7 @@ def terminate_endpoint(id: str) -> fastapi.responses.Response:
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=404, title="Live session does not exist")
         )
-    token = model.bastion.generate_terminate_token(
-        row.hostname, row.connection_id, row.kind, row.session_id, row.started_at
-    )
+    token = model.bastion.generate_terminate_token(row.hostname, row.connection_id, row.kind, row.session_id)
     urls = [b.url for b in model.bastion.read_all()]
     model.audit_log.create(
         "live-session-terminate",

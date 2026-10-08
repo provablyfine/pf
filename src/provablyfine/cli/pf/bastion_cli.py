@@ -292,7 +292,7 @@ async def _run_command(
     """Carry out a command from the server. The target comes from the signed claims only."""
     assert verified.cid is not None and verified.sid is not None and verified.kind is not None
     logger.info(f"command: terminate kind={verified.kind} connection_id={verified.cid} session_id={verified.sid}")
-    reason = await terminator.terminate(verified.kind, verified.cid, verified.sid, verified.started)
+    reason = await terminator.terminate(verified.kind, verified.cid, verified.sid)
     if reason is None:
         await visitor.write_frame(send, None, visitor.ACCEPT_TAG, {"ok": True})
     else:

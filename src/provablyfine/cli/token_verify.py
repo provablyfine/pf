@@ -18,7 +18,6 @@ class VerifiedToken:
     cmd: str | None = None
     sid: str | None = None
     kind: str | None = None
-    started: int | None = None
 
 
 class SingleIssuerVerifier:
@@ -93,5 +92,4 @@ class SingleIssuerVerifier:
             cmd=payload.get("cmd"),
             sid=payload.get("sid"),
             kind=payload.get("kind"),
-            started=payload.get("started"),
         )

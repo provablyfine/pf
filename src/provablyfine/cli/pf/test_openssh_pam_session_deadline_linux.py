@@ -146,3 +146,41 @@ def test_nothing_is_reported_without_a_spool_directory(
     openssh_pam_session_deadline_linux._handle_close_session(None)
 
     assert list(tmp_path.iterdir()) == [tmp_path / "pf_ca.pub"]
+
+
+def test_an_open_session_is_recorded_for_the_reaper_until_it_closes(
+    monkeypatch: pytest.MonkeyPatch, ca_key: jwk.Private, tmp_path: pathlib.Path
+) -> None:
+    ca_path = _session_environment(monkeypatch, ca_key, tmp_path, deadline=None)
+    sessions = tmp_path / "sessions"
+
+    openssh_pam_session_deadline_linux._handle_open_session(ca_path, None, str(sessions))
+    assert [p.name for p in sessions.iterdir()] == [f"{CONNECTION_ID}-42"]
+
+    openssh_pam_session_deadline_linux._handle_close_session(None, str(sessions))
+    assert list(sessions.iterdir()) == []
+
+
+def test_a_session_is_not_recorded_without_a_logind_session_id(
+    monkeypatch: pytest.MonkeyPatch, ca_key: jwk.Private, tmp_path: pathlib.Path
+) -> None:
+    ca_path = _session_environment(monkeypatch, ca_key, tmp_path, deadline=None)
+    monkeypatch.delenv("XDG_SESSION_ID")
+    sessions = tmp_path / "sessions"
+
+    openssh_pam_session_deadline_linux._handle_open_session(ca_path, None, str(sessions))
+
+    assert not sessions.exists()
+
+
+def test_a_certificate_from_an_untrusted_signer_is_not_recorded(
+    monkeypatch: pytest.MonkeyPatch, ca_key: jwk.Private, tmp_path: pathlib.Path
+) -> None:
+    _session_environment(monkeypatch, ca_key, tmp_path, deadline=None)
+    other_ca = tmp_path / "other.pub"
+    other_ca.write_bytes(jwk.Private.generate_ed25519().public().to_openssh() + b"\n")
+    sessions = tmp_path / "sessions"
+
+    openssh_pam_session_deadline_linux._handle_open_session(str(other_ca), None, str(sessions))
+
+    assert not sessions.exists()

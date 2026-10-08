@@ -14,6 +14,9 @@ LOG_DIR = "/var/log/pf"
 CREDENTIAL = f"{STATE_DIR}/account.cred"
 CONFIG = f"{STATE_DIR}/config.json"
 LIVE_EVENTS_DIR = f"{STATE_DIR}/live-events"
+KILL_DIR = f"{STATE_DIR}/kill-requests"
+# In /run, so that a reboot forgets the sessions that it ended.
+SESSIONS_DIR = "/run/pf/sessions"
 ACCEPT_SCRATCH = f"{STATE_DIR}/accept.json"
 SYSTEMD_DIR = "/etc/systemd/system"
 NM_DISPATCHER_DIR = "/etc/NetworkManager/dispatcher.d"
@@ -29,6 +32,7 @@ CONFLICTING_DIRECTIVES = ("TrustedUserCAKeys", "AuthorizedPrincipalsCommand")
 REFRESH_SERVICE = f"{SYSTEMD_DIR}/pf-host-refresh.service"
 REFRESH_TIMER = f"{SYSTEMD_DIR}/pf-host-refresh.timer"
 BASTION_SERVICE = f"{SYSTEMD_DIR}/pf-host-bastion.service"
+REAPER_SERVICE = f"{SYSTEMD_DIR}/pf-host-reaper.service"
 
 _TIMER = """\
 [Unit]
@@ -165,11 +169,14 @@ class Linux:
 
         # Only root writes here, so pf bastion register trusts the events in it.
         o.make_dir(LIVE_EVENTS_DIR, 0o700)
+        # Same for the requests to end a session: the reaper trusts what it finds here.
+        o.make_dir(KILL_DIR, 0o700)
 
         pam_block = (
             f"{PAM_BEGIN}\n"
             f"session optional pam_exec.so {pf_bin} -d -d --log-filename={LOG_DIR}/pam-session-deadline.log"
-            f" openssh pam-session-deadline --ca-pub-path={s.ca_pub_path} --live-events-dir={LIVE_EVENTS_DIR}\n"
+            f" openssh pam-session-deadline --ca-pub-path={s.ca_pub_path} --live-events-dir={LIVE_EVENTS_DIR}"
+            f" --sessions-dir={SESSIONS_DIR}\n"
             f"{PAM_END}\n"
         )
         o.write_file(PAM_SSHD, common_steps.append_block(pam, pam_block), None)
@@ -206,7 +213,7 @@ class Linux:
             "Type=simple\n"
             f"LoadCredentialEncrypted=account:{CREDENTIAL}\n"
             f"ExecStart={pf_bin} --config {CONFIG} bastion register --port {common_steps.ssh_port(o)}"
-            f" --live-events-dir={LIVE_EVENTS_DIR}\n"
+            f" --live-events-dir={LIVE_EVENTS_DIR} --kill-dir={KILL_DIR}\n"
             "Restart=on-failure\n"
             "RestartSec=30s\n"
             "\n"
@@ -214,7 +221,23 @@ class Linux:
             "WantedBy=multi-user.target\n",
             0o644,
         )
+        o.write_file(
+            REAPER_SERVICE,
+            "[Unit]\n"
+            "Description=Provably Fine session reaper\n"
+            "\n"
+            "[Service]\n"
+            "Type=simple\n"
+            f"ExecStart={pf_bin} openssh session-reaper --kill-dir={KILL_DIR} --sessions-dir={SESSIONS_DIR}\n"
+            "Restart=on-failure\n"
+            "RestartSec=5s\n"
+            "\n"
+            "[Install]\n"
+            "WantedBy=multi-user.target\n",
+            0o644,
+        )
         o.run([SYSTEMCTL, "daemon-reload"])
+        o.run([SYSTEMCTL, "enable", "--now", "pf-host-reaper.service"])
         o.run([SYSTEMCTL, "enable", "--now", "pf-host-bastion.service"])
 
         if o.exists(NM_DISPATCHER_DIR):
@@ -228,6 +251,8 @@ class Linux:
         o.remove(REFRESH_TIMER)
         o.run([SYSTEMCTL, "disable", "--now", "pf-host-bastion.service"], check=False)
         o.remove(BASTION_SERVICE)
+        o.run([SYSTEMCTL, "disable", "--now", "pf-host-reaper.service"], check=False)
+        o.remove(REAPER_SERVICE)
         o.remove(NM_DISPATCHER)
         o.run([SYSTEMCTL, "daemon-reload"])
 
@@ -241,6 +266,7 @@ class Linux:
         for certificate in o.glob(f"{s.host_keys_dir}/ssh_host_*_key.cert"):
             o.remove(certificate)
         o.remove(STATE_DIR, recursive=True)
+        o.remove(os.path.dirname(SESSIONS_DIR), recursive=True)
 
         unit = _sshd_unit(o)
         if o.query([SYSTEMCTL, "is-active", unit]).returncode == 0:

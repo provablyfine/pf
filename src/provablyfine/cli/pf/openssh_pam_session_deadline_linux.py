@@ -8,7 +8,7 @@ import subprocess
 import time
 
 from ... import jwk, ssh
-from . import live_events
+from . import live_events, session_records
 
 logger = logging.getLogger(__name__)
 
@@ -68,11 +68,14 @@ def _report(live_events_dir: str | None, kind: live_events.EventKind, connection
     live_events.write_event(live_events_dir, event)
 
 
-def _handle_close_session(live_events_dir: str | None) -> None:
+def _handle_close_session(live_events_dir: str | None, sessions_dir: str | None = None) -> None:
     cert = _cert_from_auth_info()
     if cert is None or cert.extensions.connection_id is None:
         return
     _report(live_events_dir, "end", cert.extensions.connection_id)
+    session_id = os.environ.get("XDG_SESSION_ID")
+    if sessions_dir is not None and session_id:
+        session_records.remove(sessions_dir, cert.extensions.connection_id, session_id)
     if cert.extensions.session_deadline is None:
         # Opening the session set no timer, so there is none to stop.
         return
@@ -80,12 +83,14 @@ def _handle_close_session(live_events_dir: str | None) -> None:
     subprocess.run(["/usr/bin/systemctl", "stop", unit], check=False, capture_output=True)  # noqa: S603
 
 
-def _handle_open_session(ca_pub_path: str, live_events_dir: str | None) -> None:
+def _handle_open_session(ca_pub_path: str, live_events_dir: str | None, sessions_dir: str | None = None) -> None:
     cert = _cert_from_auth_info()
     if cert is None:
         return
     deadline = cert.extensions.session_deadline
-    if deadline is None and (live_events_dir is None or cert.extensions.connection_id is None):
+    if deadline is None and (
+        cert.extensions.connection_id is None or (live_events_dir is None and sessions_dir is None)
+    ):
         # Unbounded grant, and nobody to tell about it.
         return
     if cert.signer_public_key.ssh_fingerprint() not in _trusted_fingerprints(ca_pub_path):
@@ -98,6 +103,10 @@ def _handle_open_session(ca_pub_path: str, live_events_dir: str | None) -> None:
     connection_id = cert.extensions.connection_id
     if connection_id is not None:
         _report(live_events_dir, "start", connection_id)
+        session_id = os.environ.get("XDG_SESSION_ID")
+        if sessions_dir is not None and session_id:
+            # So that the session reaper can end this session when asked to.
+            session_records.write(sessions_dir, connection_id, session_id)
     if deadline is None:
         # Unbounded grant
         return
@@ -147,9 +156,9 @@ def session_deadline_function(args: argparse.Namespace) -> None:
     try:
         match os.environ.get("PAM_TYPE"):
             case "open_session":
-                _handle_open_session(args.ca_pub_path, args.live_events_dir)
+                _handle_open_session(args.ca_pub_path, args.live_events_dir, args.sessions_dir)
             case "close_session":
-                _handle_close_session(args.live_events_dir)
+                _handle_close_session(args.live_events_dir, args.sessions_dir)
             case _:
                 pass
     except Exception:
