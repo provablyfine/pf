@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import pathlib
+import sys
 
 import pytest
 
 from ... import jwk, ssh
 from . import live_events, openssh_session_deadline
+
+# Closing a session stops a systemd timer. The hook only runs on Linux hosts, which have systemctl.
+linux_only = pytest.mark.skipif(sys.platform != "linux", reason="the PAM hook runs on Linux, where systemctl exists")
 
 
 @pytest.fixture
@@ -102,6 +106,7 @@ def _session_environment(
     return str(ca_path)
 
 
+@linux_only
 def test_an_unbounded_session_is_reported_to_the_spool(
     monkeypatch: pytest.MonkeyPatch, ca_key: jwk.Private, tmp_path: pathlib.Path
 ) -> None:
@@ -133,6 +138,7 @@ def test_a_certificate_from_an_untrusted_signer_is_not_reported(
     assert live_events.read_events(str(spool)) == []
 
 
+@linux_only
 def test_nothing_is_reported_without_a_spool_directory(
     monkeypatch: pytest.MonkeyPatch, ca_key: jwk.Private, tmp_path: pathlib.Path
 ) -> None:
