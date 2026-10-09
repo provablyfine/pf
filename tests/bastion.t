@@ -99,7 +99,7 @@ An administrator ends the tunnel of alice
   [1]
   $ pfa -c config.json live list --hostname host --active --format json | jq -r 'length'
   0
-  $ grep -c "command: terminate kind=relay" $PF_LOG_DIRECTORY/pf.bastion.register.$REGISTER_PID.log
+  $ grep -c "terminate: connection_id=" $PF_LOG_DIRECTORY/pf.bastion.register.$REGISTER_PID.log
   1
 
 Ending a session that already ended is refused

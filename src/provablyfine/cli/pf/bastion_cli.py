@@ -5,6 +5,7 @@ import asyncio
 import base64
 import collections.abc
 import contextlib
+import dataclasses
 import functools
 import hashlib
 import itertools
@@ -25,8 +26,8 @@ import cryptography.hazmat.decrepit.ciphers.modes
 import cryptography.hazmat.primitives.ciphers
 import cryptography.hazmat.primitives.ciphers.algorithms
 import provablyfine_client as pfc
-import provablyfine_client.bastion_visitor as visitor
 
+from ... import bastion_visitor as visitor
 from ... import client
 from .. import http as cli_http
 from .. import login, token_verify
@@ -249,8 +250,23 @@ async def _report_live_end(
     await live("end", connection_id, session_id, int(time.time()))
 
 
-_CONNECT_USES = frozenset({"connect", "command"})
-_KINDS = frozenset({"relay", "host"})
+_VISITOR_USES = frozenset({"connect", "terminate"})
+
+
+@dataclasses.dataclass(frozen=True)
+class _Connect:
+    """The visitor wants a tunnel to sshd."""
+
+    connection_id: str
+    token_id: str
+    deadline: int | None
+
+
+@dataclasses.dataclass(frozen=True)
+class _Terminate:
+    """The server wants a connection ended."""
+
+    connection_id: str
 
 
 async def _reject(send: visitor.SendFn, reason: str) -> None:
@@ -263,36 +279,36 @@ async def _handshake_token(
     verifier: token_verify.SingleIssuerVerifier,
     expected_audience: str,
     now: int,
-) -> token_verify.VerifiedToken | None:
+) -> _Connect | _Terminate | None:
     """Read and verify the visitor's token. On success the caller sends the answer.
 
-    A token is for a connection or for a command.
-    The visitor is turned away if the token is for neither.
+    The `use` claim says what the visitor wants. Both uses need a connection id.
     """
     tag, msg = await visitor.read_frame(frp_reader)
     if tag != visitor.HANDSHAKE_TAG:
         await _reject(send, "token handshake required")
         return None
     token = msg.get("token")
-    verified = verifier.verify(str(token), expected_audience, now, _CONNECT_USES) if isinstance(token, str) else None
+    verified = verifier.verify(str(token), expected_audience, now, _VISITOR_USES) if isinstance(token, str) else None
+    # The server issues a cid with every connect and terminate token,
+    # so its absence means the token was not minted for this handshake.
     if verified is None or verified.cid is None:
-        # The token endpoint issues a cid with every connect token, and so does the command token,
-        # so its absence means the token was not minted for this handshake.
         await _reject(send, "invalid or unauthorized token")
         return None
-    if verified.use == "command" and (verified.cmd != "terminate" or not verified.sid or verified.kind not in _KINDS):
-        await _reject(send, "invalid or unauthorized token")
-        return None
-    return verified
+    match verified.use:
+        case "terminate":
+            return _Terminate(connection_id=verified.cid)
+        case "connect":
+            return _Connect(connection_id=verified.cid, token_id=verified.jti, deadline=verified.deadline)
+        case _:
+            await _reject(send, "invalid or unauthorized token")
+            return None
 
 
-async def _run_command(
-    send: visitor.SendFn, verified: token_verify.VerifiedToken, terminator: session_kill.Terminator
-) -> None:
-    """Carry out a command from the server. The target comes from the signed claims only."""
-    assert verified.cid is not None and verified.sid is not None and verified.kind is not None
-    logger.info(f"command: terminate kind={verified.kind} connection_id={verified.cid} session_id={verified.sid}")
-    reason = await terminator.terminate(verified.kind, verified.cid, verified.sid)
+async def _run_terminate(send: visitor.SendFn, request: _Terminate, terminator: session_kill.Terminator) -> None:
+    """End a connection on the server's behalf. The target comes from the signed claims only."""
+    logger.info(f"terminate: connection_id={request.connection_id}")
+    reason = terminator.terminate(request.connection_id)
     if reason is None:
         await visitor.write_frame(send, None, visitor.ACCEPT_TAG, {"ok": True})
     else:
@@ -324,22 +340,24 @@ async def _handle_work_conn(
                 logger.debug(f"work conn: rejected: {msg['error']}")
                 return
 
-            verified = await _handshake_token(frp_reader, send, verifier, frpc_user, int(time.time()))
-            if verified is None:
-                return
-            if verified.use == "command":
-                await _run_command(send, verified, terminator)
-                return
+            request = await _handshake_token(frp_reader, send, verifier, frpc_user, int(time.time()))
+            match request:
+                case None:
+                    return
+                case _Terminate():
+                    await _run_terminate(send, request, terminator)
+                    return
+                case _Connect():
+                    pass
             await visitor.write_frame(send, None, visitor.ACCEPT_TAG, {"ok": True})
 
             local_reader, local_writer = await asyncio.open_connection(local_ip, local_port)
 
             # Each token is used once, so its id tells two tunnels of the same connection apart.
-            assert verified.cid is not None
-            connection_id = verified.cid
+            connection_id = request.connection_id
             live_start: asyncio.Future[None] | None = None
             if live is not None:
-                live_start = asyncio.ensure_future(live("start", connection_id, verified.jti, int(time.time())))
+                live_start = asyncio.ensure_future(live("start", connection_id, request.token_id, int(time.time())))
 
             async def frps_to_local() -> None:
                 try:
@@ -363,30 +381,30 @@ async def _handle_work_conn(
 
             async def pump() -> None:
                 gather_coro = asyncio.gather(frps_to_local(), local_to_frps())
-                if verified.deadline is None:
+                if request.deadline is None:
                     await gather_coro
                     return
-                remaining = max(0, verified.deadline - int(time.time()))
+                remaining = max(0, request.deadline - int(time.time()))
                 try:
                     await asyncio.wait_for(gather_coro, timeout=remaining)
                 except TimeoutError:
-                    logger.info(f"work conn: deadline reached, closing tunnel (connection_id={verified.cid})")
+                    logger.info(f"work conn: deadline reached, closing tunnel (connection_id={connection_id})")
 
             pump_task = asyncio.ensure_future(pump())
 
             def close_tunnel() -> None:
                 pump_task.cancel()
 
-            terminator.track_tunnel(verified.jti, close_tunnel)
+            terminator.track_tunnel(connection_id, request.token_id, close_tunnel)
             try:
                 # wait() returns when the pumps are cancelled by a terminate request.
                 # If this task itself is cancelled, the cancellation propagates.
                 await asyncio.wait([pump_task])
             finally:
-                terminator.untrack_tunnel(verified.jti)
+                terminator.untrack_tunnel(connection_id, request.token_id)
                 pump_task.cancel()
                 local_writer.close()
-                await _report_live_end(live_start, live, connection_id, verified.jti)
+                await _report_live_end(live_start, live, connection_id, request.token_id)
     except Exception as e:
         logger.debug(f"work conn: failed: {e}")
 

@@ -141,6 +141,10 @@ def read_matching() -> list[Bastion]:
     return matching
 
 
+# What a token is for. The self-token endpoint hands out the first two only.
+TokenUse = typing.Literal["connect", "register", "terminate"]
+
+
 def _tenant_label() -> str:
     """A short, stable label for the current tenant, for use inside a DNS label.
 
@@ -151,7 +155,7 @@ def _tenant_label() -> str:
     return hashlib.sha256(ctx.tenant_uuid.encode()).hexdigest()[:12]
 
 
-def _sign(hostname: str, use: str, extra: dict[str, typing.Any]) -> str:
+def _sign(hostname: str, use: TokenUse, extra: dict[str, typing.Any]) -> str:
     private_key = oidc_key.get_private_key()
     assert private_key.type == jwk.KeyType.ED25519
     self_identity = identity.read_one(id=ctx.identity_id)
@@ -186,17 +190,11 @@ def generate_token(
     return _sign(hostname, purpose, extra)
 
 
-def generate_terminate_token(hostname: str, connection_id: str, kind: str, session_id: str) -> str:
-    """A token that tells `hostname` to end one session.
+def generate_terminate_token(hostname: str, connection_id: str) -> str:
+    """A token that tells `hostname` to end one connection.
 
     Only the server mints these, for the identity that is making the request.
-    Nothing in the token can be used to open a connection, and the host does not
-    take the target from anywhere else.
+    The token cannot be used to open a connection.
+    The host takes the target from the signed `cid` claim and from nowhere else.
     """
-    claims: dict[str, typing.Any] = {
-        "cmd": "terminate",
-        "cid": connection_id,
-        "kind": kind,
-        "sid": session_id,
-    }
-    return _sign(hostname, "command", claims)
+    return _sign(hostname, "terminate", {"cid": connection_id})

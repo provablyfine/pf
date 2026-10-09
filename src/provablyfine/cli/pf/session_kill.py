@@ -1,10 +1,10 @@
-"""End live sessions on request.
+"""End connections on request.
 
-The bastion relay calls this when the server sends a signed command.
-A session is either a tunnel that the relay carries, or a session that the host reports.
+The bastion relay calls this when the server sends a signed `terminate` token.
+A connection has tunnels that the relay carries, and a session on the host.
 
 Tunnels are closed here.
-Host sessions are ended by the session reaper, which runs with the rights to do it.
+The session is ended by the session reaper, which runs with the rights to do it.
 This process only leaves a request in a directory that the reaper reads.
 """
 
@@ -19,37 +19,42 @@ logger = logging.getLogger(__name__)
 
 
 class Terminator:
-    """Ends the sessions of one host."""
+    """Ends the connections of one host."""
 
     def __init__(self, kill_dir: str | None) -> None:
         self._kill_dir = kill_dir
-        self._tunnels: dict[str, collections.abc.Callable[[], None]] = {}
+        # The tunnels of each connection, by the id of the token that opened them.
+        self._tunnels: dict[str, dict[str, collections.abc.Callable[[], None]]] = {}
 
-    def track_tunnel(self, token_id: str, close: collections.abc.Callable[[], None]) -> None:
-        self._tunnels[token_id] = close
+    def track_tunnel(self, connection_id: str, token_id: str, close: collections.abc.Callable[[], None]) -> None:
+        self._tunnels.setdefault(connection_id, {})[token_id] = close
 
-    def untrack_tunnel(self, token_id: str) -> None:
-        self._tunnels.pop(token_id, None)
+    def untrack_tunnel(self, connection_id: str, token_id: str) -> None:
+        tunnels = self._tunnels.get(connection_id, {})
+        tunnels.pop(token_id, None)
+        if not tunnels:
+            self._tunnels.pop(connection_id, None)
 
-    async def terminate(self, kind: str, connection_id: str, session_id: str) -> str | None:
-        """End a session. Return None on success, or the reason it could not be done.
+    def terminate(self, connection_id: str) -> str | None:
+        """End a connection. Return None on success, or the reason nothing could be done.
 
-        A relay session id is the id of the token that opened the tunnel.
-        The host chooses the session ids of host sessions, so a host kill goes by connection id only.
+        It closes the tunnels that this relay carries for the connection.
+        It also leaves a request for the session reaper, which ends the session on the host.
+        Either one is enough, because the other follows: sshd ends the session when its connection closes,
+        and the tunnel closes when the session ends.
         """
-        if kind == "relay":
-            close = self._tunnels.get(session_id)
-            if close is None:
-                return "no such tunnel"
+        closed = 0
+        for close in list(self._tunnels.get(connection_id, {}).values()):
             close()
+            closed += 1
+        reason = self._request_host_kill(connection_id)
+        if closed or reason is None:
             return None
-        if kind == "host":
-            return self._request_host_kill(connection_id)
-        return "unknown kind"
+        return reason
 
     def _request_host_kill(self, connection_id: str) -> str | None:
         if self._kill_dir is None:
-            return "host sessions cannot be ended: no kill directory"
+            return "no kill directory"
         if not openssh_session_reaper.request_kill(self._kill_dir, connection_id):
             return "kill request not written"
         return None

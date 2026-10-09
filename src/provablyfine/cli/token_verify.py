@@ -14,10 +14,6 @@ class VerifiedToken:
     deadline: int | None
     cid: str | None
     use: str
-    # Only command tokens carry these: what to do, to which session.
-    cmd: str | None = None
-    sid: str | None = None
-    kind: str | None = None
 
 
 class SingleIssuerVerifier:
@@ -89,7 +85,4 @@ class SingleIssuerVerifier:
             deadline=payload.get("deadline"),
             cid=payload.get("cid"),
             use=payload["use"],
-            cmd=payload.get("cmd"),
-            sid=payload.get("sid"),
-            kind=payload.get("kind"),
         )

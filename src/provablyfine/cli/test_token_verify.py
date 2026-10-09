@@ -140,42 +140,34 @@ def test_verify_rejects_missing_use_claim(verifier: tuple[token_verify.SingleIss
     assert v.verify(token, _AUDIENCE, now, frozenset({"connect"})) is None
 
 
-def test_verify_returns_the_use_and_command_claims(
-    verifier: tuple[token_verify.SingleIssuerVerifier, jwk.Private],
-) -> None:
+def test_verify_returns_the_use(verifier: tuple[token_verify.SingleIssuerVerifier, jwk.Private]) -> None:
     v, private = verifier
     now = int(time.time())
-    token = _sign(private, _base_claims(now, use="command", cmd="terminate", cid="c-1", sid="42", kind="host"))
+    token = _sign(private, _base_claims(now, use="terminate", cid="c-1"))
 
-    result = v.verify(token, _AUDIENCE, now, frozenset({"connect", "command"}))
+    result = v.verify(token, _AUDIENCE, now, frozenset({"connect", "terminate"}))
 
     assert result is not None
-    assert (result.use, result.cmd, result.cid, result.sid, result.kind) == (
-        "command",
-        "terminate",
-        "c-1",
-        "42",
-        "host",
-    )
+    assert (result.use, result.cid) == ("terminate", "c-1")
 
 
-def test_verify_rejects_a_command_token_where_only_connect_is_expected(
+def test_verify_rejects_a_terminate_token_where_only_connect_is_expected(
     verifier: tuple[token_verify.SingleIssuerVerifier, jwk.Private],
 ) -> None:
     v, private = verifier
     now = int(time.time())
-    token = _sign(private, _base_claims(now, use="command", cmd="terminate"))
+    token = _sign(private, _base_claims(now, use="terminate", cid="c-1"))
 
     assert v.verify(token, _AUDIENCE, now, frozenset({"connect"})) is None
     # A refused token is not spent: the same token is still good for the right use.
-    assert v.verify(token, _AUDIENCE, now, frozenset({"command"})) is not None
+    assert v.verify(token, _AUDIENCE, now, frozenset({"terminate"})) is not None
 
 
-def test_verify_rejects_a_connect_token_where_only_command_is_expected(
+def test_verify_rejects_a_connect_token_where_only_terminate_is_expected(
     verifier: tuple[token_verify.SingleIssuerVerifier, jwk.Private],
 ) -> None:
     v, private = verifier
     now = int(time.time())
     token = _sign(private, _base_claims(now))
 
-    assert v.verify(token, _AUDIENCE, now, frozenset({"command"})) is None
+    assert v.verify(token, _AUDIENCE, now, frozenset({"terminate"})) is None

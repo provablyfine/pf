@@ -190,8 +190,8 @@ def test_ending_a_session_fails_when_no_bastion_can_reach_the_host(api, tmp_path
     assert [s.id for s in sc.list_live(active=True).sessions] == [session.id]
 
 
-def test_a_command_token_cannot_be_requested_from_the_self_token_endpoint(api, tmp_path):
+def test_a_terminate_token_cannot_be_requested_from_the_self_token_endpoint(api, tmp_path):
     _, sc, host = _signed_in(api, tmp_path)
 
     with pytest.raises(pfc.exceptions.UI):
-        sc.get_self_token("bastion", hostname=host, purpose=typing.cast(typing.Literal["register"], "command"))
+        sc.get_self_token("bastion", hostname=host, purpose=typing.cast(typing.Literal["register"], "terminate"))

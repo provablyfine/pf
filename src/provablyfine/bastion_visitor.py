@@ -1,9 +1,22 @@
 """The visitor side of a bastion tunnel.
 
-A visitor reaches a host that registered with the bastion.
-It opens an HTTP CONNECT tunnel, then proves who it is with a token.
+A host runs `pf bastion register`. It keeps a control connection open to an frps bastion
+and is reachable there under a name made from its identity name.
 
-This module also holds the frp message framing that the host side shares.
+A visitor reaches that host in three steps:
+
+1. It opens a TCP connection to the bastion and sends an HTTP CONNECT request for the host's name.
+   The bastion routes the connection to the host's relay.
+2. It sends one frp frame, tagged `T`, that holds a token signed by the server.
+3. The relay checks the token and answers with a frame tagged `A`.
+   If it accepts, the connection carries the visitor's bytes to the host from then on.
+
+The bastion does not check visitors. It only checks the host when the host registers.
+The relay does all the checking of a visitor, with the token.
+The `use` claim of the token tells the relay what the visitor wants:
+a `connect` token opens a tunnel to sshd, and a `terminate` token ends a connection.
+
+This module also holds the frp message framing, which the host side shares.
 """
 
 import asyncio
@@ -16,7 +29,7 @@ import struct
 import typing
 import urllib.parse
 
-from . import exceptions
+import provablyfine_client as pfc
 
 HANDSHAKE_TAG = "T"
 ACCEPT_TAG = "A"
@@ -122,12 +135,12 @@ async def _read_connect_status(reader: asyncio.StreamReader) -> tuple[str, int]:
     try:
         head = await reader.readuntil(b"\r\n\r\n")
     except (asyncio.IncompleteReadError, asyncio.LimitOverrunError) as e:
-        raise exceptions.UI("Unable to reach bastion: invalid response") from e
+        raise pfc.exceptions.UI("Unable to reach bastion: invalid response") from e
     if len(head) > _MAX_CONNECT_RESPONSE:
-        raise exceptions.UI("Unable to reach bastion: response too large")
+        raise pfc.exceptions.UI("Unable to reach bastion: response too large")
     parts = head.split(b"\r\n", 1)[0].decode("ascii", errors="replace").split(" ", 2)
     if len(parts) < 2 or not parts[1].isdigit():
-        raise exceptions.UI("Unable to reach bastion: invalid response")
+        raise pfc.exceptions.UI("Unable to reach bastion: invalid response")
     return parts[0], int(parts[1])
 
 
@@ -135,7 +148,7 @@ async def open_tunnel(url: str, hostname: str, token: str) -> Tunnel:
     """Open a tunnel to `hostname` through the bastion at `url` and present `token`.
 
     The token audience names the host on the bastion.
-    Raises `exceptions.UI` if the bastion or the host refuses.
+    Raises `pfc.exceptions.UI` if the bastion or the host refuses.
     """
     u = urllib.parse.urlsplit(url)
     host = u.hostname or url
@@ -143,7 +156,7 @@ async def open_tunnel(url: str, hostname: str, token: str) -> Tunnel:
     port = u.port if u.port is not None else scheme_port
 
     if u.scheme not in ["http", "https"]:
-        raise exceptions.UI(f"Unsupported url scheme={u.scheme}")
+        raise pfc.exceptions.UI(f"Unsupported url scheme={u.scheme}")
 
     ssl_context: ssl.SSLContext | None = None
     if u.scheme == "https":
@@ -158,11 +171,11 @@ async def open_tunnel(url: str, hostname: str, token: str) -> Tunnel:
 
         version, status_code = await _read_connect_status(reader)
         if version != "HTTP/1.1":
-            raise exceptions.UI(f"Unable to reach bastion: version={version}")
+            raise pfc.exceptions.UI(f"Unable to reach bastion: version={version}")
         if status_code == 404:
-            raise exceptions.UI(f'"{hostname}" is not registered')
+            raise pfc.exceptions.UI(f'"{hostname}" is not registered')
         if status_code != 200:
-            raise exceptions.UI(f"Unable to reach bastion: status_code={status_code}")
+            raise pfc.exceptions.UI(f"Unable to reach bastion: status_code={status_code}")
 
         async def raw_send(data: bytes) -> None:
             writer.write(data)
@@ -176,17 +189,17 @@ async def open_tunnel(url: str, hostname: str, token: str) -> Tunnel:
         try:
             tag, resp = await read_frame(frame_reader)
         except EOFError as e:
-            raise exceptions.UI("Bastion closed the connection") from e
+            raise pfc.exceptions.UI("Bastion closed the connection") from e
         if tag != ACCEPT_TAG or not resp.get("ok"):
             reason = resp.get("reason", "rejected") if tag == ACCEPT_TAG else f"unexpected response tag={tag!r}"
-            raise exceptions.UI(f"Bastion rejected connection: {reason}")
+            raise pfc.exceptions.UI(f"Bastion rejected connection: {reason}")
     except BaseException:
         writer.close()
         raise
     return Tunnel(reader=frame_reader, writer=writer)
 
 
-async def send_command(url: str, hostname: str, token: str) -> None:
-    """Send a command token to `hostname`. Return once the host has carried the command out."""
+async def send_token(url: str, hostname: str, token: str) -> None:
+    """Send a token that asks for an action on `hostname`. Return once the relay has carried it out."""
     tunnel = await open_tunnel(url, hostname, token)
     tunnel.writer.close()
