@@ -18,14 +18,16 @@ depends_on: str | None = None
 
 def upgrade() -> None:
     """Upgrade schema."""
+    # MySQL and MariaDB need a length for the keys. The tables declared in app_db.py use the same one.
+    text = sa.String().with_variant(sa.String(255), "mysql", "mariadb")
     op.create_table(
         "live_session",
-        sa.Column("id", sa.String(), nullable=False),
-        sa.Column("connection_id", sa.String(), nullable=False),
+        sa.Column("id", text, nullable=False),
+        sa.Column("connection_id", text, nullable=False),
         sa.Column("identity_id", sa.Integer(), nullable=False),
-        sa.Column("hostname", sa.String(), nullable=False),
-        sa.Column("kind", sa.String(), nullable=False),
-        sa.Column("session_id", sa.String(), nullable=False),
+        sa.Column("hostname", text, nullable=False),
+        sa.Column("kind", text, nullable=False),
+        sa.Column("session_id", text, nullable=False),
         sa.Column("started_at", sa.Integer(), nullable=False),
         sa.Column("ended_at", sa.Integer(), nullable=True),
         sa.Column("deadline", sa.Integer(), nullable=True),
