@@ -134,7 +134,7 @@ def _handle_open_session(ca_pub_path: str, live_events_dir: str | None) -> None:
 def session_deadline_function(args: argparse.Namespace) -> None:
     """PAM session hook enforcing a certificate's session_deadline extension.
 
-    Registered as `session optional pam_exec.so ... session-deadline` at the
+    Registered as `session optional pam_exec.so ... pam-session-deadline` at the
     end of the sshd PAM session stack. Fails open unconditionally: every
     error is logged and swallowed here so the caller always sees a normal
     (exit 0) return, regardless of what pam_exec's "optional" control flag
@@ -150,4 +150,4 @@ def session_deadline_function(args: argparse.Namespace) -> None:
             case _:
                 pass
     except Exception:
-        logger.warning("pf openssh session-deadline failed; failing open", exc_info=True)
+        logger.warning("pf openssh pam-session-deadline failed; failing open", exc_info=True)

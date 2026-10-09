@@ -6,7 +6,7 @@ import os
 import provablyfine_client as pfc
 
 from ... import client, jwk, ssh
-from . import host, openssh_host_init, openssh_session_deadline, openssh_session_reaper
+from . import host, openssh_host_init, openssh_pam_session_deadline_linux, openssh_session_reaper
 
 logger = logging.getLogger(__name__)
 
@@ -184,7 +184,8 @@ def add_subparsers(parser: argparse.ArgumentParser) -> None:
     session_reaper_parser.set_defaults(func=openssh_session_reaper.session_reaper_function)
 
     session_deadline_parser = subparsers.add_parser(
-        "session-deadline", help="PAM session hook enforcing a certificate's session TTL. For use with pam_exec."
+        "pam-session-deadline",
+        help="Linux only: PAM session hook enforcing a certificate's session TTL. For use with pam_exec.",
     )
     session_deadline_parser.add_argument(
         "--ca-pub-path", default="/etc/ssh/pf_ca.pub", help="Path to CA public key file"
@@ -192,7 +193,7 @@ def add_subparsers(parser: argparse.ArgumentParser) -> None:
     session_deadline_parser.add_argument(
         "--live-events-dir", default=None, help="Directory where session start and end events are written"
     )
-    session_deadline_parser.set_defaults(func=openssh_session_deadline.session_deadline_function)
+    session_deadline_parser.set_defaults(func=openssh_pam_session_deadline_linux.session_deadline_function)
 
     host_refresh_parser = subparsers.add_parser("host-refresh", help="Refresh configuration of local SSH daemon")
     host_refresh_parser.add_argument("--config", required=True, help="Path to pf config.json")

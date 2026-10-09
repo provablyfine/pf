@@ -1,6 +1,6 @@
 """End SSH sessions when the deadline in their certificate passes, or when asked to.
 
-Linux does this with a PAM hook (`openssh_session_deadline.py`). macOS has no
+Linux does this with a PAM hook (`openssh_pam_session_deadline_linux.py`). macOS has no
 `pam_exec`, so the work is split in two:
 
 - `auth-principals` registers the connection when sshd asks it about a

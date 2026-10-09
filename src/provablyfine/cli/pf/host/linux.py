@@ -168,8 +168,8 @@ class Linux:
 
         pam_block = (
             f"{PAM_BEGIN}\n"
-            f"session optional pam_exec.so {pf_bin} -d -d --log-filename={LOG_DIR}/session-deadline.log"
-            f" openssh session-deadline --ca-pub-path={s.ca_pub_path} --live-events-dir={LIVE_EVENTS_DIR}\n"
+            f"session optional pam_exec.so {pf_bin} -d -d --log-filename={LOG_DIR}/pam-session-deadline.log"
+            f" openssh pam-session-deadline --ca-pub-path={s.ca_pub_path} --live-events-dir={LIVE_EVENTS_DIR}\n"
             f"{PAM_END}\n"
         )
         o.write_file(PAM_SSHD, common_steps.append_block(pam, pam_block), None)

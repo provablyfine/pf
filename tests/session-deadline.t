@@ -41,13 +41,13 @@ Provision new user
 Root has unbounded shell sessions
   $ pf -c user.json ssh -n -o "Hostname=$SSHD_ADDRESS" -o "HostKeyAlias=host" -p $SSHD_PORT root@host "whoami"
   root
-  $ podman exec $SSHD_CONTAINER_ID sh -c "grep -c 'session_deadline decoded' /var/log/pf/session-deadline.log || true"
+  $ podman exec $SSHD_CONTAINER_ID sh -c "grep -c 'session_deadline decoded' /var/log/pf/pam-session-deadline.log || true"
   0
 
 Alice has bounded shell sessions
   $ pf -c user.json ssh -n -o "Hostname=$SSHD_ADDRESS" -o "HostKeyAlias=host" -p $SSHD_PORT alice@host "whoami"
   alice
-  $ podman exec $SSHD_CONTAINER_ID grep -o "session_deadline decoded connection_id=[0-9a-f-]* deadline=[0-9]*" /var/log/pf/session-deadline.log
+  $ podman exec $SSHD_CONTAINER_ID grep -o "session_deadline decoded connection_id=[0-9a-f-]* deadline=[0-9]*" /var/log/pf/pam-session-deadline.log
   session_deadline decoded connection_id=[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12} deadline=[0-9]+ (re)
 
 Every session leaves a start and an end event for pf bastion register, bounded or not

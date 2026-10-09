@@ -188,8 +188,8 @@ def test_init_adds_the_session_deadline_pam_block(tmp_path: pathlib.Path) -> Non
     assert pam.content.decode() == (
         "auth required pam_unix.so\n"
         "# BEGIN pf\n"
-        "session optional pam_exec.so /usr/bin/pf -d -d --log-filename=/var/log/pf/session-deadline.log"
-        " openssh session-deadline --ca-pub-path=/etc/ssh/pf_ca.pub --live-events-dir=/var/lib/pf/live-events\n"
+        "session optional pam_exec.so /usr/bin/pf -d -d --log-filename=/var/log/pf/pam-session-deadline.log"
+        " openssh pam-session-deadline --ca-pub-path=/etc/ssh/pf_ca.pub --live-events-dir=/var/lib/pf/live-events\n"
         "# END pf\n"
     )
 

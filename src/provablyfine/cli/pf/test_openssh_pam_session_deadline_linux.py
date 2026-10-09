@@ -6,10 +6,10 @@ import sys
 import pytest
 
 from ... import jwk, ssh
-from . import live_events, openssh_session_deadline
+from . import live_events, openssh_pam_session_deadline_linux
 
-# Closing a session stops a systemd timer. The hook only runs on Linux hosts, which have systemctl.
-linux_only = pytest.mark.skipif(sys.platform != "linux", reason="the PAM hook runs on Linux, where systemctl exists")
+# The hook is a PAM module for Linux hosts. Closing a session stops a systemd timer with systemctl.
+pytestmark = pytest.mark.skipif(sys.platform != "linux", reason="the PAM hook runs on Linux only")
 
 
 @pytest.fixture
@@ -39,14 +39,14 @@ def _auth_info_line(c: ssh.cert.Cert) -> str:
 
 def test_cert_from_auth_info_returns_none_when_absent(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("SSH_AUTH_INFO_0", raising=False)
-    assert openssh_session_deadline._cert_from_auth_info() is None
+    assert openssh_pam_session_deadline_linux._cert_from_auth_info() is None
 
 
 def test_cert_from_auth_info_skips_non_cert_lines(monkeypatch: pytest.MonkeyPatch, user_cert: ssh.cert.Cert) -> None:
     monkeypatch.setenv("SSH_AUTH_INFO_0", "password")
     monkeypatch.setenv("SSH_AUTH_INFO_1", _auth_info_line(user_cert))
     monkeypatch.delenv("SSH_AUTH_INFO_2", raising=False)
-    found = openssh_session_deadline._cert_from_auth_info()
+    found = openssh_pam_session_deadline_linux._cert_from_auth_info()
     assert found is not None
     assert found.identifier == user_cert.identifier
     assert found.serial_number == user_cert.serial_number
@@ -55,19 +55,19 @@ def test_cert_from_auth_info_skips_non_cert_lines(monkeypatch: pytest.MonkeyPatc
 def test_cert_from_auth_info_malformed_base64(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SSH_AUTH_INFO_0", "publickey ssh-ed25519-cert-v01@openssh.com not-valid-base64!!")
     monkeypatch.delenv("SSH_AUTH_INFO_1", raising=False)
-    assert openssh_session_deadline._cert_from_auth_info() is None
+    assert openssh_pam_session_deadline_linux._cert_from_auth_info() is None
 
 
 def test_trusted_fingerprints_missing_file(tmp_path: pathlib.Path) -> None:
     missing = str(tmp_path / "does-not-exist.pub")
-    assert openssh_session_deadline._trusted_fingerprints(missing) == set()
+    assert openssh_pam_session_deadline_linux._trusted_fingerprints(missing) == set()
 
 
 def test_trusted_fingerprints_reads_multiple_keys(tmp_path: pathlib.Path, ca_key: jwk.Private) -> None:
     other_key = jwk.Private.generate_ed25519()
     path = tmp_path / "pf_ca.pub"
     path.write_bytes(ca_key.public().to_openssh() + b"\n" + other_key.public().to_openssh() + b"\n")
-    fingerprints = openssh_session_deadline._trusted_fingerprints(str(path))
+    fingerprints = openssh_pam_session_deadline_linux._trusted_fingerprints(str(path))
     assert ca_key.public().ssh_fingerprint() in fingerprints
     assert other_key.public().ssh_fingerprint() in fingerprints
 
@@ -76,7 +76,7 @@ def test_trusted_fingerprints_ignores_untrusted_signer(tmp_path: pathlib.Path, u
     untrusted_signer = jwk.Private.generate_ed25519()
     path = tmp_path / "pf_ca.pub"
     path.write_bytes(untrusted_signer.public().to_openssh() + b"\n")
-    fingerprints = openssh_session_deadline._trusted_fingerprints(str(path))
+    fingerprints = openssh_pam_session_deadline_linux._trusted_fingerprints(str(path))
     assert user_cert.signer_public_key.ssh_fingerprint() not in fingerprints
 
 
@@ -106,7 +106,6 @@ def _session_environment(
     return str(ca_path)
 
 
-@linux_only
 def test_an_unbounded_session_is_reported_to_the_spool(
     monkeypatch: pytest.MonkeyPatch, ca_key: jwk.Private, tmp_path: pathlib.Path
 ) -> None:
@@ -114,8 +113,8 @@ def test_an_unbounded_session_is_reported_to_the_spool(
     spool = tmp_path / "spool"
     spool.mkdir()
 
-    openssh_session_deadline._handle_open_session(ca_path, str(spool))
-    openssh_session_deadline._handle_close_session(str(spool))
+    openssh_pam_session_deadline_linux._handle_open_session(ca_path, str(spool))
+    openssh_pam_session_deadline_linux._handle_close_session(str(spool))
 
     events = [e for _, e in live_events.read_events(str(spool))]
     assert [(e.kind, e.connection_id, e.session_id) for e in events] == [
@@ -133,18 +132,17 @@ def test_a_certificate_from_an_untrusted_signer_is_not_reported(
     spool = tmp_path / "spool"
     spool.mkdir()
 
-    openssh_session_deadline._handle_open_session(str(other_ca), str(spool))
+    openssh_pam_session_deadline_linux._handle_open_session(str(other_ca), str(spool))
 
     assert live_events.read_events(str(spool)) == []
 
 
-@linux_only
 def test_nothing_is_reported_without_a_spool_directory(
     monkeypatch: pytest.MonkeyPatch, ca_key: jwk.Private, tmp_path: pathlib.Path
 ) -> None:
     ca_path = _session_environment(monkeypatch, ca_key, tmp_path, deadline=None)
 
-    openssh_session_deadline._handle_open_session(ca_path, None)
-    openssh_session_deadline._handle_close_session(None)
+    openssh_pam_session_deadline_linux._handle_open_session(ca_path, None)
+    openssh_pam_session_deadline_linux._handle_close_session(None)
 
     assert list(tmp_path.iterdir()) == [tmp_path / "pf_ca.pub"]
