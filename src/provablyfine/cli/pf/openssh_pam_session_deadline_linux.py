@@ -73,6 +73,9 @@ def _handle_close_session(live_events_dir: str | None) -> None:
     if cert is None or cert.extensions.connection_id is None:
         return
     _report(live_events_dir, "end", cert.extensions.connection_id)
+    if cert.extensions.session_deadline is None:
+        # Opening the session set no timer, so there is none to stop.
+        return
     unit = f"pf-deadline-{cert.extensions.connection_id}.timer"
     subprocess.run(["/usr/bin/systemctl", "stop", unit], check=False, capture_output=True)  # noqa: S603
 
