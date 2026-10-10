@@ -48,6 +48,12 @@ DEADLINE_DIR = ntpath.join(PROGRAM_DATA, "pf-deadlines")
 BASTION_DIR = ntpath.join(PROGRAM_DATA, "pf-bastion")
 BASTION_KEY = ntpath.join(BASTION_DIR, "account.key")
 BASTION_CONFIG = ntpath.join(BASTION_DIR, "config.json")
+# The bastion task leaves requests here and the reaper reads them. Only SYSTEM, administrators
+# and the bastion account can write.
+KILL_DIR = ntpath.join(PROGRAM_DATA, "pf-kill-requests")
+# The reaper leaves session events here and the bastion task reads them. Only SYSTEM, administrators
+# and the bastion account can write.
+LIVE_DIR = ntpath.join(PROGRAM_DATA, "pf-live-events")
 
 DEFAULTS = base.Defaults(
     host_keys_dir=SSH_DIR,
@@ -393,11 +399,15 @@ class Windows:
         o.run(_icacls_closed(STATE_DIR))
         o.make_dir(LOG_DIR, 0o700)
         o.make_dir(DEADLINE_DIR, 0o700)
+        o.make_dir(KILL_DIR, 0o700)
+        o.make_dir(LIVE_DIR, 0o700)
         if o.query(["net", "user", s.auth_user]).returncode != 0:
             o.run([*_POWERSHELL, "-Command", "-"], stdin=account_script(s.auth_user, new_password()).encode())
             o.write_file(AUTH_USER_MARKER, s.auth_user, None)
         # The principals command runs as this user and writes the records.
         o.run(_icacls_closed(DEADLINE_DIR, f"{s.auth_user}:(OI)(CI)M"))
+        o.run(_icacls_closed(KILL_DIR, f"{_LOCAL_SERVICE}:(OI)(CI)M"))
+        o.run(_icacls_closed(LIVE_DIR, f"{_LOCAL_SERVICE}:(OI)(CI)M"))
 
         key_pem = common_steps.new_account_key_pem()
         o.write_file(ACCOUNT_KEY, key_pem, 0o600, secret=True)
@@ -480,6 +490,8 @@ class Windows:
                     "register",
                     "--port",
                     port,
+                    f"--live-events-dir={LIVE_DIR}",
+                    f"--kill-dir={KILL_DIR}",
                 ],
                 repeat_minutes=5,
                 restart_on_failure=True,
@@ -494,6 +506,8 @@ class Windows:
                     "openssh",
                     "session-reaper",
                     f"--deadline-dir={DEADLINE_DIR}",
+                    f"--kill-dir={KILL_DIR}",
+                    f"--live-dir={LIVE_DIR}",
                 ],
                 repeat_minutes=1,
                 restart_on_failure=True,
@@ -553,6 +567,8 @@ class Windows:
         o.remove(STATE_DIR, recursive=True)
         o.remove(DEADLINE_DIR, recursive=True)
         o.remove(BASTION_DIR, recursive=True)
+        o.remove(KILL_DIR, recursive=True)
+        o.remove(LIVE_DIR, recursive=True)
 
     def reload_sshd(self, o: ops.Ops) -> None:
         """sshd reads host certificates for every connection, so there is nothing to do."""

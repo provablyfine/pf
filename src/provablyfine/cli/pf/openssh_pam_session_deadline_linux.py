@@ -8,6 +8,7 @@ import subprocess
 import time
 
 from ... import jwk, ssh
+from . import live_events, session_records
 
 logger = logging.getLogger(__name__)
 
@@ -54,21 +55,43 @@ def _trusted_fingerprints(ca_pub_path: str) -> set[str]:
     return fingerprints
 
 
-def _handle_close_session() -> None:
+def _report(live_events_dir: str | None, kind: live_events.EventKind, connection_id: str) -> None:
+    """Leave an event for `pf bastion register`. The session id is empty when logind has none."""
+    if live_events_dir is None:
+        return
+    event = live_events.Event(
+        kind=kind,
+        connection_id=connection_id,
+        session_id=os.environ.get("XDG_SESSION_ID", ""),
+        at=int(time.time()),
+    )
+    live_events.write_event(live_events_dir, event)
+
+
+def _handle_close_session(live_events_dir: str | None, sessions_dir: str | None = None) -> None:
     cert = _cert_from_auth_info()
     if cert is None or cert.extensions.connection_id is None:
+        return
+    _report(live_events_dir, "end", cert.extensions.connection_id)
+    session_id = os.environ.get("XDG_SESSION_ID")
+    if sessions_dir is not None and session_id:
+        session_records.remove(sessions_dir, cert.extensions.connection_id, session_id)
+    if cert.extensions.session_deadline is None:
+        # Opening the session set no timer, so there is none to stop.
         return
     unit = f"pf-deadline-{cert.extensions.connection_id}.timer"
     subprocess.run(["/usr/bin/systemctl", "stop", unit], check=False, capture_output=True)  # noqa: S603
 
 
-def _handle_open_session(ca_pub_path: str) -> None:
+def _handle_open_session(ca_pub_path: str, live_events_dir: str | None, sessions_dir: str | None = None) -> None:
     cert = _cert_from_auth_info()
     if cert is None:
         return
     deadline = cert.extensions.session_deadline
-    if deadline is None:
-        # Unbounded grant
+    if deadline is None and (
+        cert.extensions.connection_id is None or (live_events_dir is None and sessions_dir is None)
+    ):
+        # Unbounded grant, and nobody to tell about it.
         return
     if cert.signer_public_key.ssh_fingerprint() not in _trusted_fingerprints(ca_pub_path):
         # sshd already validated the certificate's signature against
@@ -78,6 +101,15 @@ def _handle_open_session(ca_pub_path: str) -> None:
         logger.warning("certificate signer is not a trusted CA; ignoring")
         return
     connection_id = cert.extensions.connection_id
+    if connection_id is not None:
+        _report(live_events_dir, "start", connection_id)
+        session_id = os.environ.get("XDG_SESSION_ID")
+        if sessions_dir is not None and session_id:
+            # So that the session reaper can end this session when asked to.
+            session_records.write(sessions_dir, connection_id, session_id)
+    if deadline is None:
+        # Unbounded grant
+        return
     if connection_id is None:
         logger.warning("We have a deadline but no connection_id. This certificate is invalid.")
         return
@@ -114,7 +146,7 @@ def _handle_open_session(ca_pub_path: str) -> None:
 def session_deadline_function(args: argparse.Namespace) -> None:
     """PAM session hook enforcing a certificate's session_deadline extension.
 
-    Registered as `session optional pam_exec.so ... session-deadline` at the
+    Registered as `session optional pam_exec.so ... pam-session-deadline` at the
     end of the sshd PAM session stack. Fails open unconditionally: every
     error is logged and swallowed here so the caller always sees a normal
     (exit 0) return, regardless of what pam_exec's "optional" control flag
@@ -124,10 +156,10 @@ def session_deadline_function(args: argparse.Namespace) -> None:
     try:
         match os.environ.get("PAM_TYPE"):
             case "open_session":
-                _handle_open_session(args.ca_pub_path)
+                _handle_open_session(args.ca_pub_path, args.live_events_dir, args.sessions_dir)
             case "close_session":
-                _handle_close_session()
+                _handle_close_session(args.live_events_dir, args.sessions_dir)
             case _:
                 pass
     except Exception:
-        logger.warning("pf openssh session-deadline failed; failing open", exc_info=True)
+        logger.warning("pf openssh pam-session-deadline failed; failing open", exc_info=True)

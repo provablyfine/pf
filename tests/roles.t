@@ -42,6 +42,9 @@ List existing roles (there is one)
   grant        type:       audit-log
                filter:     *
                permission: read
+  grant        type:       live
+               filter:     *
+               permission: read terminate
 
 
 Create tags to be able to define tag-related permissions in role

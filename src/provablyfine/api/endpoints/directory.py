@@ -33,6 +33,7 @@ def directory_endpoint(
         bastion=f"{p}/bastion",
         tenant=f"{p}/tenant",
         audit_log=f"{p}/audit-log",
+        live=f"{p}/live",
         ping=f"{p}/ping",
         session=f"{p}/session",
     )

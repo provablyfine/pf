@@ -10,6 +10,7 @@ from . import (
     bastion_list,
     boundary_list,
     identity_list,
+    live_list,
     nav_pane,
     role_list,
     tag_list,
@@ -24,6 +25,7 @@ _FACTORIES: dict[str, collections.abc.Callable[[pfc.AsyncSessionClient], base.Sc
     "tags": tag_list.TagListScreen,
     "roles": role_list.RoleListScreen,
     "auths": auth_list.AuthListScreen,
+    "live": live_list.LiveListScreen,
     "audit_log": audit_log_list.AuditLogListScreen,
 }
 

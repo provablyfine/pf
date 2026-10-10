@@ -130,10 +130,19 @@ def test_init_runs_the_steps_in_order(tmp_path: pathlib.Path) -> None:
             "--ca-pub-path=/etc/ssh/pf_ca.pub",
             "--no-sshd-reload",
         ),
+        (
+            "useradd",
+            "--system",
+            "--no-create-home",
+            "--home-dir=/nonexistent",
+            "--shell=/usr/sbin/nologin",
+            "pf-bastion",
+        ),
         (SYSTEMCTL, "daemon-reload"),
         (SYSTEMCTL, "enable", "--now", "pf-host-refresh.timer"),
         (SYSTEMCTL, "reload", "sshd"),
         (SYSTEMCTL, "daemon-reload"),
+        (SYSTEMCTL, "enable", "--now", "pf-host-reaper.service"),
         (SYSTEMCTL, "enable", "--now", "pf-host-bastion.service"),
     ]
 
@@ -188,8 +197,10 @@ def test_init_adds_the_session_deadline_pam_block(tmp_path: pathlib.Path) -> Non
     assert pam.content.decode() == (
         "auth required pam_unix.so\n"
         "# BEGIN pf\n"
-        "session optional pam_exec.so /usr/bin/pf -d -d --log-filename=/var/log/pf/session-deadline.log"
-        " openssh session-deadline --ca-pub-path=/etc/ssh/pf_ca.pub\n"
+        "session optional pam_exec.so /usr/bin/pf -d -d --log-filename=/var/log/pf/pam-session-deadline.log"
+        " openssh pam-session-deadline --ca-pub-path=/etc/ssh/pf_ca.pub"
+        " --live-events-dir=/var/lib/pf-bastion/live-events"
+        " --sessions-dir=/run/pf/sessions\n"
         "# END pf\n"
     )
 
@@ -231,10 +242,11 @@ def test_init_installs_the_bastion_unit_with_the_ssh_port(tmp_path: pathlib.Path
         "\n"
         "[Service]\n"
         "Type=simple\n"
-        "DynamicUser=yes\n"
+        "User=pf-bastion\n"
         "LoadCredentialEncrypted=account:/var/lib/pf/account.cred\n"
         "LoadCredential=config:/var/lib/pf/config.json\n"
-        "ExecStart=/usr/bin/pf --config ${CREDENTIALS_DIRECTORY}/config bastion register --port 2222\n"
+        "ExecStart=/usr/bin/pf --config ${CREDENTIALS_DIRECTORY}/config bastion register --port 2222"
+        " --live-events-dir=/var/lib/pf-bastion/live-events --kill-dir=/var/lib/pf-bastion/kill-requests\n"
         "Restart=on-failure\n"
         "RestartSec=30s\n"
         "\n"
@@ -243,11 +255,34 @@ def test_init_installs_the_bastion_unit_with_the_ssh_port(tmp_path: pathlib.Path
     )
 
 
+def test_init_installs_the_reaper_unit(tmp_path: pathlib.Path) -> None:
+    _host(tmp_path)
+    dry = _init(tmp_path)
+    assert _written(dry, "/etc/systemd/system/pf-host-reaper.service").content.decode() == (
+        "[Unit]\n"
+        "Description=Provably Fine session reaper\n"
+        "\n"
+        "[Service]\n"
+        "Type=simple\n"
+        "ExecStart=/usr/bin/pf openssh session-reaper --kill-dir=/var/lib/pf-bastion/kill-requests"
+        " --sessions-dir=/run/pf/sessions\n"
+        "Restart=on-failure\n"
+        "RestartSec=5s\n"
+        "\n"
+        "[Install]\n"
+        "WantedBy=multi-user.target\n"
+    )
+    assert ops.MakeDir("/var/lib/pf-bastion/kill-requests", 0o700, "pf-bastion") in dry.actions
+
+
 def test_init_defaults_to_port_22_when_sshd_does_not_say(tmp_path: pathlib.Path) -> None:
     _host(tmp_path)
     dry = ops.DryRunOps(root=tmp_path, query=lambda argv: ops.QueryResult(1, ""))
     linux.Linux().init(dry, _settings())
-    assert b"--port 22\n" in _written(dry, "/etc/systemd/system/pf-host-bastion.service").content
+    assert (
+        b"--port 22 --live-events-dir=/var/lib/pf-bastion/live-events --kill-dir=/var/lib/pf-bastion/kill-requests\n"
+        in _written(dry, "/etc/systemd/system/pf-host-bastion.service").content
+    )
 
 
 @pytest.mark.parametrize(("unit", "expected"), [("sshd", "sshd"), ("ssh", "ssh")])
@@ -340,6 +375,7 @@ def test_uninit_undoes_the_install(tmp_path: pathlib.Path) -> None:
         "/etc/systemd/system/pf-host-refresh.service",
         "/etc/systemd/system/pf-host-refresh.timer",
         "/etc/systemd/system/pf-host-bastion.service",
+        "/etc/systemd/system/pf-host-reaper.service",
         "/etc/NetworkManager/dispatcher.d/pf-host-refresh",
         "/etc/ssh/sshd_config.d/10-pf.conf",
         "/etc/ssh/pf_ca.pub",
@@ -347,8 +383,15 @@ def test_uninit_undoes_the_install(tmp_path: pathlib.Path) -> None:
         "/etc/ssh/ssh_host_ed25519_key.cert",
         "/etc/ssh/ssh_host_rsa_key.cert",
         "/var/lib/pf",
+        "/var/lib/pf-bastion",
+        "/run/pf",
     ]
-    assert dry.actions[-2] == ops.Remove("/var/lib/pf", True)
+    assert [a for a in dry.actions if isinstance(a, ops.Remove)][-3:] == [
+        ops.Remove("/var/lib/pf", True),
+        ops.Remove("/var/lib/pf-bastion", True),
+        ops.Remove("/run/pf", True),
+    ]
+    assert ("userdel", "pf-bastion") in _runs(dry)
     assert _runs(dry)[-1] == (SYSTEMCTL, "reload", "sshd")
 
 
@@ -381,3 +424,21 @@ def test_init_accepts_the_invitation_with_a_config_file_that_pf_can_write_and_re
     assert "/dev/null" not in accept.argv
     assert dry.actions[accept_index + 1] == ops.Remove("/var/lib/pf/accept.json")
     assert dry.actions[accept_index + 2] == ops.Remove("/var/lib/pf/accept.json.lock")
+
+
+def test_init_makes_a_spool_directory_only_root_can_use(tmp_path: pathlib.Path) -> None:
+    _host(tmp_path)
+    assert ops.MakeDir("/var/lib/pf-bastion/live-events", 0o700, "pf-bastion") in _init(tmp_path).actions
+
+
+def test_init_reuses_an_existing_bastion_user(tmp_path: pathlib.Path) -> None:
+    _host(tmp_path)
+
+    def query(argv: typing.Sequence[str]) -> ops.QueryResult:
+        if list(argv) == ["id", "-u", "pf-bastion"]:
+            return ops.QueryResult(0, "990\n")
+        return _queries()(argv)
+
+    dry = ops.DryRunOps(root=tmp_path, query=query)
+    linux.Linux().init(dry, _settings())
+    assert not any(argv[0] == "useradd" for argv in _runs(dry))

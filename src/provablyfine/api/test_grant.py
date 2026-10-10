@@ -1110,6 +1110,90 @@ def test_audit_log_with_denied():
     assert not grants.audit_log().can_read()
 
 
+######## LIVE ########
+
+
+def test_empty_live():
+    assert not grant.Grants([], []).live().can_read()
+    assert not grant.Grants([], [role([])]).live().can_read()
+    assert not grant.Grants([boundary([], [])], [role([])]).live().can_read()
+
+
+@pytest.mark.parametrize("read", [False, True])
+def test_live_read(read: bool):
+    grants = single_grants({"type": "live", "filter": {}, "permission": {"read": read}})
+    assert grants.live().can_read() == read
+
+
+@pytest.mark.parametrize("read", [False, True])
+@pytest.mark.parametrize("terminate", [False, True])
+def test_live_terminate_is_independent_of_read(read: bool, terminate: bool):
+    grants = single_grants({"type": "live", "filter": {}, "permission": {"read": read, "terminate": terminate}})
+    assert grants.live().can_read() == read
+    assert grants.live().can_terminate() == terminate
+
+
+def test_live_grant_stored_before_terminate_existed_does_not_allow_it():
+    grants = single_grants({"type": "live", "filter": {}, "permission": {"read": True}})
+    assert not grants.live().can_terminate()
+
+
+def test_empty_live_terminate():
+    assert not grant.Grants([], []).live().can_terminate()
+    assert not grant.Grants([], [role([])]).live().can_terminate()
+    assert not grant.Grants([boundary([], [])], [role([])]).live().can_terminate()
+
+
+def test_live_terminate_is_limited_by_the_ceiling():
+    permission = {"read": True, "terminate": True}
+    grants = grant.Grants(
+        [boundary([{"type": "live", "filter": {}, "permission": {"read": True, "terminate": False}}], [])],
+        [role([{"type": "live", "filter": {}, "permission": permission}])],
+    )
+    assert grants.live().can_read()
+    assert not grants.live().can_terminate()
+
+
+def test_live_terminate_is_removed_by_a_denied_grant():
+    grants = grant.Grants(
+        [
+            boundary(
+                [{"type": "live", "filter": {}, "permission": {"read": True, "terminate": True}}],
+                [{"type": "live", "filter": {}, "permission": {"read": False, "terminate": True}}],
+            )
+        ],
+        [role([{"type": "live", "filter": {}, "permission": {"read": True, "terminate": True}}])],
+    )
+    assert grants.live().can_read()
+    assert not grants.live().can_terminate()
+
+
+def test_live_is_not_granted_by_audit_log():
+    grants = single_grants({"type": "audit-log", "filter": {}, "permission": {"read": True}})
+    assert not grants.live().can_read()
+
+
+def test_live_with_ceiling():
+    grants = grant.Grants(
+        [boundary([{"type": "live", "filter": {}, "permission": {"read": False}}], [])],
+        [role([{"type": "live", "filter": {}, "permission": {"read": True}}])],
+    )
+    assert not grants.live().can_read()
+
+
+def test_live_with_denied():
+    grants = grant.Grants(
+        [
+            boundary(
+                [{"type": "live", "filter": {}, "permission": {"read": True}}],
+                [{"type": "live", "filter": {}, "permission": {"read": True}}],
+            )
+        ],
+        [role([{"type": "live", "filter": {}, "permission": {"read": True}}])],
+    )
+    assert not grants.live().can_read()
+
+
 ######## SSH ########
 
 CAP = model.grant.SSHCapability

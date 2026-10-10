@@ -6,7 +6,7 @@ import os
 import provablyfine_client as pfc
 
 from ... import client, jwk, ssh
-from . import host, openssh_host_init, openssh_session_deadline, openssh_session_reaper
+from . import host, openssh_host_init, openssh_pam_session_deadline_linux, openssh_session_reaper
 
 logger = logging.getLogger(__name__)
 
@@ -40,21 +40,21 @@ def _sign_host_function(args: argparse.Namespace) -> None:
             f.write(openssh_certificate + b"\n")
 
 
-def _register_deadline(directory: str, cert: ssh.cert.Cert) -> None:
-    """Tell the session reaper about a connection that has a deadline.
+def _register_session(directory: str, cert: ssh.cert.Cert) -> None:
+    """Tell the session reaper about a connection, and about its deadline if it has one.
 
     A failure is logged and ignored. It must never stop a login.
     """
     deadline = cert.extensions.session_deadline
     connection_id = cert.extensions.connection_id
-    if deadline is None or connection_id is None:
+    if connection_id is None:
         return
     try:
         openssh_session_reaper.register_session(
             directory, deadline=deadline, connection_id=connection_id, table=host.procs.default_table()
         )
     except Exception:
-        logger.warning("failed to register the session deadline; failing open", exc_info=True)
+        logger.warning("failed to register the session; failing open", exc_info=True)
 
 
 def _authorized_principals(args: argparse.Namespace) -> None:
@@ -82,7 +82,7 @@ def _authorized_principals(args: argparse.Namespace) -> None:
             raise pfc.exceptions.UI(f"Invalid user host id={host_id} expected={host_identifier}")
         accepted.append(principal)
     if accepted and args.deadline_dir is not None:
-        _register_deadline(args.deadline_dir, cert)
+        _register_session(args.deadline_dir, cert)
     print("\n".join(accepted))
 
 
@@ -165,7 +165,22 @@ def add_subparsers(parser: argparse.ArgumentParser) -> None:
         help="End SSH sessions when their certificate deadline passes. Run as root. For hosts without PAM hooks.",
     )
     session_reaper_parser.add_argument(
-        "--deadline-dir", required=True, help="Directory where auth-principals records connections"
+        "--deadline-dir", default=None, help="Directory where auth-principals records connections"
+    )
+    session_reaper_parser.add_argument(
+        "--sessions-dir",
+        default=None,
+        help="Linux: directory where the PAM hook records open sessions. The reaper then only ends sessions on request",
+    )
+    session_reaper_parser.add_argument(
+        "--kill-dir",
+        default=None,
+        help="Directory where kill requests are written. Only root and the bastion account may write there",
+    )
+    session_reaper_parser.add_argument(
+        "--live-dir",
+        default=None,
+        help="Directory where session start and end events are written. Only root and the bastion account may write there",
     )
     session_reaper_parser.add_argument(
         "--interval", type=float, default=1.0, help="Seconds between checks of the records"
@@ -176,12 +191,21 @@ def add_subparsers(parser: argparse.ArgumentParser) -> None:
     session_reaper_parser.set_defaults(func=openssh_session_reaper.session_reaper_function)
 
     session_deadline_parser = subparsers.add_parser(
-        "session-deadline", help="PAM session hook enforcing a certificate's session TTL. For use with pam_exec."
+        "pam-session-deadline",
+        help="Linux only: PAM session hook enforcing a certificate's session TTL. For use with pam_exec.",
     )
     session_deadline_parser.add_argument(
         "--ca-pub-path", default="/etc/ssh/pf_ca.pub", help="Path to CA public key file"
     )
-    session_deadline_parser.set_defaults(func=openssh_session_deadline.session_deadline_function)
+    session_deadline_parser.add_argument(
+        "--live-events-dir", default=None, help="Directory where session start and end events are written"
+    )
+    session_deadline_parser.add_argument(
+        "--sessions-dir",
+        default=None,
+        help="Directory where each open session is recorded, so that the session reaper can end it",
+    )
+    session_deadline_parser.set_defaults(func=openssh_pam_session_deadline_linux.session_deadline_function)
 
     host_refresh_parser = subparsers.add_parser("host-refresh", help="Refresh configuration of local SSH daemon")
     host_refresh_parser.add_argument("--config", required=True, help="Path to pf config.json")

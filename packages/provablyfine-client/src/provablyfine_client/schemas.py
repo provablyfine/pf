@@ -594,6 +594,29 @@ class AuditLogGrant(_Base):
         return GrantText("audit-log", self.filter.to_text(), self.permission.to_text())
 
 
+class LiveFilter(_Base):
+    def to_text(self) -> str:
+        return "*"
+
+
+class LivePermission(_Base):
+    read: bool
+    terminate: bool = False
+
+    def to_text(self) -> str:
+        output = _bool(self.read, "read") + _bool(self.terminate, "terminate")
+        return " ".join(output)
+
+
+class LiveGrant(_Base):
+    type: typing.Literal["live"] = "live"
+    filter: LiveFilter
+    permission: LivePermission
+
+    def to_text(self) -> GrantText:
+        return GrantText("live", self.filter.to_text(), self.permission.to_text())
+
+
 class InvalidGrant(_Base):
     type: typing.Literal["invalid"] = "invalid"
 
@@ -611,6 +634,7 @@ Grant = typing.Annotated[
     | AuthGrant
     | BastionGrant
     | AuditLogGrant
+    | LiveGrant
     | InvalidGrant,
     pydantic.Field(discriminator="type"),
 ]
@@ -700,3 +724,26 @@ class AuditLogEntry(_Base):
 
 class AuditLogListResponse(_Base):
     entries: list[AuditLogEntry] = []
+
+
+class LiveSession(_Base):
+    id: str
+    connection_id: str
+    identity_id: int
+    hostname: str
+    kind: typing.Literal["relay", "host"]
+    session_id: str
+    started_at: int
+    ended_at: int | None = None
+    deadline: int | None = None
+
+
+class LiveListResponse(_Base):
+    sessions: list[LiveSession] = []
+
+
+class LiveReportRequest(_Base):
+    connection_id: str
+    kind: typing.Literal["relay", "host"]
+    session_id: str = ""
+    at: int

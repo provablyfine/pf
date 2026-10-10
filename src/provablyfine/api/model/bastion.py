@@ -141,6 +141,10 @@ def read_matching() -> list[Bastion]:
     return matching
 
 
+# What a token is for. The self-token endpoint hands out the first two only.
+TokenUse = typing.Literal["connect", "register", "terminate"]
+
+
 def _tenant_label() -> str:
     """A short, stable label for the current tenant, for use inside a DNS label.
 
@@ -151,12 +155,7 @@ def _tenant_label() -> str:
     return hashlib.sha256(ctx.tenant_uuid.encode()).hexdigest()[:12]
 
 
-def generate_token(
-    hostname: str,
-    purpose: typing.Literal["connect", "register"],
-    deadline: int | None = None,
-    connection_id: str | None = None,
-) -> str:
+def _sign(hostname: str, use: TokenUse, extra: dict[str, typing.Any]) -> str:
     private_key = oidc_key.get_private_key()
     assert private_key.type == jwk.KeyType.ED25519
     self_identity = identity.read_one(id=ctx.identity_id)
@@ -171,10 +170,31 @@ def generate_token(
         "exp": now + 60,
         "jti": str(uuid.uuid4()),
         "name": self_identity.name,
-        "use": purpose,
+        "use": use,
     }
-    if deadline is not None:
-        claims["deadline"] = deadline
-    if connection_id is not None:
-        claims["cid"] = connection_id
+    claims.update(extra)
     return jwt.encode(claims, private_key.to_crypto(), algorithm="EdDSA", headers={"kid": private_key.thumbprint()})
+
+
+def generate_token(
+    hostname: str,
+    purpose: typing.Literal["connect", "register"],
+    deadline: int | None = None,
+    connection_id: str | None = None,
+) -> str:
+    extra: dict[str, typing.Any] = {}
+    if deadline is not None:
+        extra["deadline"] = deadline
+    if connection_id is not None:
+        extra["cid"] = connection_id
+    return _sign(hostname, purpose, extra)
+
+
+def generate_terminate_token(hostname: str, connection_id: str) -> str:
+    """A token that tells `hostname` to end one connection.
+
+    Only the server mints these, for the identity that is making the request.
+    The token cannot be used to open a connection.
+    The host takes the target from the signed `cid` claim and from nowhere else.
+    """
+    return _sign(hostname, "terminate", {"cid": connection_id})

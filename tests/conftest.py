@@ -249,7 +249,7 @@ RUN useradd -m -s /bin/bash alice && \\
 
 @pytest.fixture(scope="session")
 def sshd_pam_image(tmp_path_factory):
-    """Build an SSH server container image with UsePAM and the pf session-deadline
+    """Build an SSH server container image with UsePAM and the pf pam-session-deadline
     PAM hook wired in, once per worker session.
 
     Kept as a separate image (rather than a use_pam toggle on `sshd_image`) so the
@@ -259,8 +259,9 @@ def sshd_pam_image(tmp_path_factory):
     _require_podman()
     pam_line = (
         "session optional pam_exec.so /usr/bin/pf -d -d "
-        "--log-filename=/var/log/pf/session-deadline.log "
-        "openssh session-deadline --ca-pub-path=/etc/ssh/keys/user-ca.pub"
+        "--log-filename=/var/log/pf/pam-session-deadline.log "
+        "openssh pam-session-deadline --ca-pub-path=/etc/ssh/keys/user-ca.pub "
+        "--live-events-dir=/var/lib/pf/live-events"
     )
     containerfile = _containerfile(
         packages=[],
@@ -270,6 +271,7 @@ RUN useradd -m -s /bin/bash alice && \\
     passwd -d root
 RUN echo '{pam_line}' >> /etc/pam.d/sshd
 RUN install -d -m 755 /var/log/pf
+RUN install -d -m 700 /var/lib/pf/live-events
 """,
         sshd_config=_sshd_config(permit_root_login=True, use_pam=True),
     )

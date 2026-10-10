@@ -187,8 +187,11 @@ def sign_user_certificate(data: schemas.ssh.SSHUserCertificateRequest) -> schema
 
     # Record the connection so the bastion token endpoint can later mirror the
     # exact deadline embedded in this certificate. Expired rows are swept
-    # opportunistically: past valid_before the certificate itself is unusable.
-    ctx.app_db.ssh_connection.delete(ctx.app_db.ssh_connection.columns.valid_before < now)
+    # opportunistically, but kept for a while: a host can report a session
+    # after the certificate expired (see model.live).
+    ctx.app_db.ssh_connection.delete(
+        ctx.app_db.ssh_connection.columns.valid_before < now - model.live.CONNECTION_RETENTION_S
+    )
     ctx.app_db.ssh_connection.create(
         connection_id=connection_id,
         identity_id=ctx.identity_id,

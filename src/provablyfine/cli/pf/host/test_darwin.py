@@ -108,7 +108,8 @@ def test_init_runs_the_steps_in_order(tmp_path: pathlib.Path) -> None:
         ops.MakeDir("/var/log/pf", 0o755),
         ops.MakeDir("/var/db/pf-deadlines", 0o700, "nobody"),
     ]
-    assert ops.MakeDir("/var/db/pf-bastion", 0o700, "_pfbastion") in dry.actions
+    for directory in ("pf-bastion", "pf-kill-requests", "pf-live-events"):
+        assert ops.MakeDir(f"/var/db/{directory}", 0o700, "_pfbastion") in dry.actions
     assert _runs(dry) == [
         ("dscl", ".", "-create", "/Groups/_pfbastion"),
         ("dscl", ".", "-create", "/Groups/_pfbastion", "PrimaryGroupID", "302"),
@@ -209,6 +210,8 @@ def test_init_installs_the_bastion_job_with_the_ssh_port(tmp_path: pathlib.Path)
         "register",
         "--port",
         "2222",
+        "--live-events-dir=/var/db/pf-live-events",
+        "--kill-dir=/var/db/pf-kill-requests",
     ]
     assert job["KeepAlive"] is True
     assert job["UserName"] == "_pfbastion"
@@ -219,7 +222,14 @@ def test_init_installs_the_bastion_job_with_the_ssh_port(tmp_path: pathlib.Path)
 def test_init_installs_the_session_reaper_job(tmp_path: pathlib.Path) -> None:
     _host(tmp_path)
     job = _service(_init(tmp_path), "net.provablyfine.session-reaper")
-    assert job["ProgramArguments"] == [PF, "openssh", "session-reaper", "--deadline-dir=/var/db/pf-deadlines"]
+    assert job["ProgramArguments"] == [
+        PF,
+        "openssh",
+        "session-reaper",
+        "--deadline-dir=/var/db/pf-deadlines",
+        "--kill-dir=/var/db/pf-kill-requests",
+        "--live-dir=/var/db/pf-live-events",
+    ]
     assert job["KeepAlive"] is True
 
 
@@ -349,6 +359,8 @@ def test_uninit_undoes_the_install(tmp_path: pathlib.Path) -> None:
         ops.Remove("/var/db/pf", True),
         ops.Remove("/var/db/pf-deadlines", True),
         ops.Remove("/var/db/pf-bastion", True),
+        ops.Remove("/var/db/pf-kill-requests", True),
+        ops.Remove("/var/db/pf-live-events", True),
     ]
 
 

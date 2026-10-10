@@ -192,6 +192,18 @@ def _ssh_function(args: argparse.Namespace) -> None:
     _output(args, grant)
 
 
+def _live_function(args: argparse.Namespace) -> None:
+    grant = {
+        "type": "live",
+        "filter": {},
+        "permission": {
+            "read": args.read,
+            "terminate": args.terminate,
+        },
+    }
+    _output(args, grant)
+
+
 def _audit_log_function(args: argparse.Namespace) -> None:
     grant = {
         "type": "audit-log",
@@ -343,3 +355,10 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
     group = audit_log_parser.add_argument_group("permission")
     group.add_argument("-r", "--read", action="store_true")
     audit_log_parser.set_defaults(func=_audit_log_function)
+
+    live_parser = subparsers.add_parser("live", help="Live sessions permission")
+    live_parser.add_argument("-f", "--format", choices=["yaml", "json"], default="yaml")
+    group = live_parser.add_argument_group("permission")
+    group.add_argument("-r", "--read", action="store_true")
+    group.add_argument("-t", "--terminate", action="store_true")
+    live_parser.set_defaults(func=_live_function)

@@ -109,6 +109,10 @@ def _provision(allow_tenant_create: bool):
         filter=model.grant.AuditLogFilter(),
         permission=model.grant.AuditLogPermission(read=True),
     )
+    live_grant_all = model.grant.LiveGrant(
+        filter=model.grant.LiveFilter(),
+        permission=model.grant.LivePermission(read=True, terminate=True),
+    )
 
     if allow_tenant_create:
         ceiling_list = None
@@ -147,6 +151,7 @@ def _provision(allow_tenant_create: bool):
         auth_grant_all,
         bastion_grant_all,
         audit_log_grant_all,
+        live_grant_all,
     ]
     root_role_id = model.role.create(
         name="root",

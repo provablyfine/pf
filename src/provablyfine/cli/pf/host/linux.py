@@ -13,6 +13,16 @@ STATE_DIR = "/var/lib/pf"
 LOG_DIR = "/var/log/pf"
 CREDENTIAL = f"{STATE_DIR}/account.cred"
 CONFIG = f"{STATE_DIR}/config.json"
+# The bastion service runs as its own system user. STATE_DIR is closed to everyone but root,
+# so what the service shares with the root hooks and the reaper lives in a directory of its own.
+BASTION_USER = "pf-bastion"
+BASTION_STATE_DIR = "/var/lib/pf-bastion"
+# Root hooks leave session events here and the bastion service reads them.
+LIVE_EVENTS_DIR = f"{BASTION_STATE_DIR}/live-events"
+# The bastion service leaves requests here and the root reaper reads them.
+KILL_DIR = f"{BASTION_STATE_DIR}/kill-requests"
+# In /run, so that a reboot forgets the sessions that it ended.
+SESSIONS_DIR = "/run/pf/sessions"
 ACCEPT_SCRATCH = f"{STATE_DIR}/accept.json"
 SYSTEMD_DIR = "/etc/systemd/system"
 NM_DISPATCHER_DIR = "/etc/NetworkManager/dispatcher.d"
@@ -28,6 +38,7 @@ CONFLICTING_DIRECTIVES = ("TrustedUserCAKeys", "AuthorizedPrincipalsCommand")
 REFRESH_SERVICE = f"{SYSTEMD_DIR}/pf-host-refresh.service"
 REFRESH_TIMER = f"{SYSTEMD_DIR}/pf-host-refresh.timer"
 BASTION_SERVICE = f"{SYSTEMD_DIR}/pf-host-bastion.service"
+REAPER_SERVICE = f"{SYSTEMD_DIR}/pf-host-reaper.service"
 
 _TIMER = """\
 [Unit]
@@ -77,6 +88,22 @@ def _host_certificates(o: ops.Ops, host_keys_dir: str) -> list[str]:
         return certificates
     # Host-refresh writes one certificate next to each host public key.
     return [path.removesuffix(".pub") + ".cert" for path in o.glob(f"{host_keys_dir}/ssh_host_*_key.pub")]
+
+
+def _ensure_bastion_user(o: ops.Ops) -> None:
+    """Create the system user the bastion service runs as: no login shell, no home directory."""
+    if o.query(["id", "-u", BASTION_USER]).returncode == 0:
+        return
+    o.run(
+        [
+            "useradd",
+            "--system",
+            "--no-create-home",
+            "--home-dir=/nonexistent",
+            "--shell=/usr/sbin/nologin",
+            BASTION_USER,
+        ]
+    )
 
 
 def _credential_property() -> str:
@@ -162,10 +189,16 @@ class Linux:
             0o644,
         )
 
+        _ensure_bastion_user(o)
+        o.make_dir(BASTION_STATE_DIR, 0o700, owner=BASTION_USER)
+        o.make_dir(LIVE_EVENTS_DIR, 0o700, owner=BASTION_USER)
+        o.make_dir(KILL_DIR, 0o700, owner=BASTION_USER)
+
         pam_block = (
             f"{PAM_BEGIN}\n"
-            f"session optional pam_exec.so {pf_bin} -d -d --log-filename={LOG_DIR}/session-deadline.log"
-            f" openssh session-deadline --ca-pub-path={s.ca_pub_path}\n"
+            f"session optional pam_exec.so {pf_bin} -d -d --log-filename={LOG_DIR}/pam-session-deadline.log"
+            f" openssh pam-session-deadline --ca-pub-path={s.ca_pub_path} --live-events-dir={LIVE_EVENTS_DIR}"
+            f" --sessions-dir={SESSIONS_DIR}\n"
             f"{PAM_END}\n"
         )
         o.write_file(PAM_SSHD, common_steps.append_block(pam, pam_block), None)
@@ -200,12 +233,13 @@ class Linux:
             "\n"
             "[Service]\n"
             "Type=simple\n"
-            "DynamicUser=yes\n"
+            f"User={BASTION_USER}\n"
             f"LoadCredentialEncrypted=account:{CREDENTIAL}\n"
             # The state directory is closed to everyone but root, so the config arrives as a credential too.
             f"LoadCredential=config:{CONFIG}\n"
             f"ExecStart={pf_bin} --config ${{CREDENTIALS_DIRECTORY}}/config"
-            f" bastion register --port {common_steps.ssh_port(o)}\n"
+            f" bastion register --port {common_steps.ssh_port(o)}"
+            f" --live-events-dir={LIVE_EVENTS_DIR} --kill-dir={KILL_DIR}\n"
             "Restart=on-failure\n"
             "RestartSec=30s\n"
             "\n"
@@ -213,7 +247,23 @@ class Linux:
             "WantedBy=multi-user.target\n",
             0o644,
         )
+        o.write_file(
+            REAPER_SERVICE,
+            "[Unit]\n"
+            "Description=Provably Fine session reaper\n"
+            "\n"
+            "[Service]\n"
+            "Type=simple\n"
+            f"ExecStart={pf_bin} openssh session-reaper --kill-dir={KILL_DIR} --sessions-dir={SESSIONS_DIR}\n"
+            "Restart=on-failure\n"
+            "RestartSec=5s\n"
+            "\n"
+            "[Install]\n"
+            "WantedBy=multi-user.target\n",
+            0o644,
+        )
         o.run([SYSTEMCTL, "daemon-reload"])
+        o.run([SYSTEMCTL, "enable", "--now", "pf-host-reaper.service"])
         o.run([SYSTEMCTL, "enable", "--now", "pf-host-bastion.service"])
 
         if o.exists(NM_DISPATCHER_DIR):
@@ -227,6 +277,8 @@ class Linux:
         o.remove(REFRESH_TIMER)
         o.run([SYSTEMCTL, "disable", "--now", "pf-host-bastion.service"], check=False)
         o.remove(BASTION_SERVICE)
+        o.run([SYSTEMCTL, "disable", "--now", "pf-host-reaper.service"], check=False)
+        o.remove(REAPER_SERVICE)
         o.remove(NM_DISPATCHER)
         o.run([SYSTEMCTL, "daemon-reload"])
 
@@ -240,6 +292,9 @@ class Linux:
         for certificate in o.glob(f"{s.host_keys_dir}/ssh_host_*_key.cert"):
             o.remove(certificate)
         o.remove(STATE_DIR, recursive=True)
+        o.remove(BASTION_STATE_DIR, recursive=True)
+        o.remove(os.path.dirname(SESSIONS_DIR), recursive=True)
+        o.run(["userdel", BASTION_USER], check=False)
 
         unit = _sshd_unit(o)
         if o.query([SYSTEMCTL, "is-active", unit]).returncode == 0:

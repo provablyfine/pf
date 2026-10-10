@@ -44,7 +44,7 @@ NAV_GROUPS: list[_Group] = [
             _Section("tenants", "Tenants"),
         ],
     ),
-    _Group("Audit", [_Section("audit_log", "Action log")]),
+    _Group("Audit", [_Section("live", "Live sessions"), _Section("audit_log", "Action log")]),
 ]
 
 NAV_ITEMS: list[tuple[str, str]] = [(section.id, section.label) for group in NAV_GROUPS for section in group.sections]
