@@ -722,8 +722,23 @@ class AuditLogChecker:
 
 
 class LiveChecker:
-    def __init__(self, boundaries: list[model.boundary.Boundary], roles: list[model.role.Role]):
-        self._checker = Checker[model.grant.LiveGrant](boundaries, roles, lambda g: True, model.grant.LiveGrant)
+    """`tag_id_list` is the tags of the host that runs the session."""
+
+    def __init__(
+        self,
+        boundaries: list[model.boundary.Boundary],
+        roles: list[model.role.Role],
+        tag_id_list: list[int] | None,
+    ):
+        def cmp(g: model.grant.LiveGrant) -> bool:
+            wanted = g.filter.tag_id_list
+            if wanted is None:
+                return True
+            if tag_id_list is None or len(wanted) == 0:
+                return False
+            return all(tag_id in tag_id_list for tag_id in wanted)
+
+        self._checker = Checker[model.grant.LiveGrant](boundaries, roles, cmp, model.grant.LiveGrant)
 
     def can_read(self) -> bool:
         def check(g: model.grant.LiveGrant) -> bool:
@@ -788,5 +803,11 @@ class Grants:
     def audit_log(self) -> AuditLogChecker:
         return AuditLogChecker(self._boundaries, self._roles)
 
-    def live(self) -> LiveChecker:
-        return LiveChecker(self._boundaries, self._roles)
+    def live(self, tag_id_list: list[int] | None = None) -> LiveChecker:
+        return LiveChecker(self._boundaries, self._roles, tag_id_list)
+
+    def live_read_somewhere(self) -> bool:
+        """Whether a role grants reading live sessions to some tag filter. Boundaries are checked per session."""
+        return any(
+            isinstance(g, model.grant.LiveGrant) and g.permission.read for r in self._roles for g in r.grant_list
+        )

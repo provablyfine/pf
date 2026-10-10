@@ -231,3 +231,14 @@ def test_nothing_changes_when_no_grant_names_the_tag(tenant_app_db: app_db.AppDb
     assert tag_references.find(42) == []
     assert _audit(tenant_app_db, "tag-delete-cascade") == []
     assert _audit(tenant_app_db, "role-update-grant-list") == before
+
+
+def test_remove_drops_a_live_grant_whose_filter_names_the_tag(tenant_app_db: app_db.AppDb) -> None:
+    live = grant.deserialize(
+        {"type": "live", "filter": {"tag_id_list": [42, 7]}, "permission": {"read": True, "terminate": False}}
+    )
+    keep = _ssh([7])
+    role_id = role.create("ops", "", [live, keep])
+    assert [o.name for o in tag_references.find(42)] == ["ops"]
+    tag_references.remove(42)
+    assert role.read_one(role_id).grant_list == [keep]  # pyright: ignore[reportOptionalMemberAccess]

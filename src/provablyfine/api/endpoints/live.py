@@ -25,6 +25,11 @@ report_router = fastapi.APIRouter(
 _204 = fastapi.responses.Response(status_code=204)
 
 
+def _host_tags() -> dict[str, list[int]]:
+    """The tags of every identity, by name. A host is an identity named like the hostname of its sessions."""
+    return {i.name: i.tag_id_list for i in model.identity.read_all()}
+
+
 @router.get("", status_code=200, responses={403: responses.PROBLEM})
 def list_endpoint(
     hostname: str | None = None,
@@ -32,11 +37,16 @@ def list_endpoint(
     active: bool | None = None,
 ) -> schemas.live.LiveListResponse:
     grants = grant.Grants.create()
-    if not grants.live().can_read():
+    if not grants.live_read_somewhere():
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=403, title="Not allowed to read live sessions")
         )
-    rows = model.live.read_all(hostname=hostname, identity_id=identity_id, active=active)
+    host_tags = _host_tags()
+    rows = [
+        r
+        for r in model.live.read_all(hostname=hostname, identity_id=identity_id, active=active)
+        if grants.live(host_tags.get(r.hostname, [])).can_read()
+    ]
     return schemas.live.LiveListResponse(
         sessions=[
             schemas.live.LiveSession(
@@ -81,14 +91,16 @@ async def _send_to_first_bastion(urls: list[str], hostname: str, token: str) -> 
 )
 def terminate_endpoint(id: str) -> fastapi.responses.Response:
     grants = grant.Grants.create()
-    if not grants.live().can_terminate():
-        raise responses.ProblemHTTPException(
-            responses.problem_response(status_code=403, title="Not allowed to end live sessions")
-        )
     row = model.live.read_one(id)
-    if row is None or row.ended_at is not None:
+    live = grants.live(_host_tags().get(row.hostname, []) if row is not None else None)
+    # A session the caller may not read looks the same as one that does not exist.
+    if row is None or row.ended_at is not None or not live.can_read():
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=404, title="Live session does not exist")
+        )
+    if not live.can_terminate():
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=403, title="Not allowed to end live sessions")
         )
     token = model.bastion.generate_terminate_token(row.hostname, row.connection_id)
     urls = [b.url for b in model.bastion.read_all()]

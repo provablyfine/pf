@@ -595,8 +595,11 @@ class AuditLogGrant(_Base):
 
 
 class LiveFilter(_Base):
+    tag_list: list[TagNameValue] | None = None
+
     def to_text(self) -> str:
-        return "*"
+        output = _filter_list(self.tag_list, "tag_list", _name_value)
+        return "*" if len(output) == 0 else " ".join(output)
 
 
 class LivePermission(_Base):

@@ -195,7 +195,7 @@ def _ssh_function(args: argparse.Namespace) -> None:
 def _live_function(args: argparse.Namespace) -> None:
     grant = {
         "type": "live",
-        "filter": {},
+        "filter": {"tag_list": _tag_list(args.tag)},
         "permission": {
             "read": args.read,
             "terminate": args.terminate,
@@ -358,6 +358,7 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
 
     live_parser = subparsers.add_parser("live", help="Live sessions permission")
     live_parser.add_argument("-f", "--format", choices=["yaml", "json"], default="yaml")
+    live_parser.add_argument("--tag", default=None, nargs="*", help="Only sessions of hosts with all these tags")
     group = live_parser.add_argument_group("permission")
     group.add_argument("-r", "--read", action="store_true")
     group.add_argument("-t", "--terminate", action="store_true")
