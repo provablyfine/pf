@@ -230,9 +230,7 @@ class SystemOps(Ops):
                 mode = os.stat(path).st_mode & 0o7777
             except FileNotFoundError:
                 mode = 0o644
-        client.configuration.write_file_atomic(path, _as_bytes(content), mode="wb", permissions=mode)
-        if owner is not None:
-            shutil.chown(path, user=owner)
+        client.configuration.write_file_atomic(path, _as_bytes(content), mode="wb", permissions=mode, owner=owner)
 
     def remove(self, path: str, *, recursive: bool = False) -> None:
         if recursive:

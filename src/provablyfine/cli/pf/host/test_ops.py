@@ -268,3 +268,13 @@ def test_write_file_owner_is_recorded_and_described() -> None:
     dry = ops.DryRunOps()
     dry.write_file("/var/db/pf-bastion/config.json", b"{}", 0o600, owner="_pfbastion")
     assert dry.describe().startswith("write /var/db/pf-bastion/config.json (mode 600, owner _pfbastion, 2 bytes)")
+
+
+@posix_only
+def test_write_file_with_an_unknown_owner_leaves_the_old_file_and_no_leftovers(tmp_path: pathlib.Path) -> None:
+    target = tmp_path / "key"
+    target.write_text("old")
+    with pytest.raises(LookupError):
+        ops.SystemOps().write_file(str(target), "new", 0o600, owner="no-such-user-for-pf-tests")
+    assert target.read_text() == "old"
+    assert [p.name for p in tmp_path.iterdir()] == ["key"]
