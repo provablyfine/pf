@@ -200,8 +200,12 @@ class Linux:
             "\n"
             "[Service]\n"
             "Type=simple\n"
+            "DynamicUser=yes\n"
             f"LoadCredentialEncrypted=account:{CREDENTIAL}\n"
-            f"ExecStart={pf_bin} --config {CONFIG} bastion register --port {common_steps.ssh_port(o)}\n"
+            # The state directory is closed to everyone but root, so the config arrives as a credential too.
+            f"LoadCredential=config:{CONFIG}\n"
+            f"ExecStart={pf_bin} --config ${{CREDENTIALS_DIRECTORY}}/config"
+            f" bastion register --port {common_steps.ssh_port(o)}\n"
             "Restart=on-failure\n"
             "RestartSec=30s\n"
             "\n"

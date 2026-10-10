@@ -262,3 +262,9 @@ def test_describe_shows_utf16_content_as_text() -> None:
     assert "  | <Task>caf\u00e9</Task>" in text  # codespell:ignore
     assert "\x00" not in text
     assert "\ufffd" not in text
+
+
+def test_write_file_owner_is_recorded_and_described() -> None:
+    dry = ops.DryRunOps()
+    dry.write_file("/var/db/pf-bastion/config.json", b"{}", 0o600, owner="_pfbastion")
+    assert dry.describe().startswith("write /var/db/pf-bastion/config.json (mode 600, owner _pfbastion, 2 bytes)")

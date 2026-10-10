@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import typing
 
@@ -25,6 +26,11 @@ def require_plain(value: str, what: str) -> str:
 
 def new_account_key_pem() -> bytes:
     return jwk.Private.generate_ed25519().to_pem()
+
+
+def client_config(directory_url: str, account_key_file: str) -> str:
+    """The pf configuration file of a host: where the directory is and which key signs requests."""
+    return json.dumps({"directory_url": directory_url, "account_key_file": account_key_file}) + "\n"
 
 
 def conflicting_directive(o: ops.Ops, paths: typing.Iterable[str], names: typing.Iterable[str]) -> str | None:

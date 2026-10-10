@@ -134,6 +134,7 @@ def test_init_runs_the_steps_in_order(tmp_path: pathlib.Path) -> None:
         "icacls",  # the state directory is closed before anything goes into it
         "powershell:-",  # the principals user is created
         "icacls",  # the deadline directory is opened to that user
+        "icacls",  # the bastion directory is opened to LOCAL SERVICE
         PF,  # accept
         "ssh-keygen",
         PF,  # host-refresh
@@ -150,7 +151,7 @@ def test_init_runs_the_steps_in_order(tmp_path: pathlib.Path) -> None:
         "schtasks",
         "schtasks",
     ]
-    accept = runs[3]
+    accept = runs[4]
     assert accept[1:3] == ("-c", "C:\\ProgramData\\pf\\accept.json")
     assert f"--invitation={INVITATION}" in accept
     assert "--key=C:\\ProgramData\\pf\\account.key" in accept
@@ -354,12 +355,13 @@ def test_init_registers_a_task_for_each_service_and_starts_it(tmp_path: pathlib.
     assert all(f"C:\\ProgramData\\pf\\{name}.xml" in removed for name in win32.TASKS)
 
 
-def test_the_tasks_run_as_system_the_installed_pf(tmp_path: pathlib.Path) -> None:
+def test_the_tasks_run_the_installed_pf_and_only_the_bastion_is_unprivileged(tmp_path: pathlib.Path) -> None:
     _host(tmp_path)
     dry = _init(tmp_path)
     for name in win32.TASKS:
         task = _task(dry, name)
-        assert task.findtext("t:Principals/t:Principal/t:UserId", namespaces=XMLNS) == "S-1-5-18"
+        expected = "S-1-5-19" if name == "host-bastion" else "S-1-5-18"
+        assert task.findtext("t:Principals/t:Principal/t:UserId", namespaces=XMLNS) == expected
         assert task.findtext("t:Actions/t:Exec/t:Command", namespaces=XMLNS) == PF
         assert task.find("t:Triggers/t:BootTrigger", XMLNS) is not None
         assert task.findtext("t:Settings/t:AllowHardTerminate", namespaces=XMLNS) == "true"
@@ -391,7 +393,9 @@ def test_the_bastion_task_registers_the_port_sshd_listens_on(tmp_path: pathlib.P
     _host(tmp_path)
     task = _task(_init(tmp_path, port="2200"), "host-bastion")
     arguments = task.findtext("t:Actions/t:Exec/t:Arguments", namespaces=XMLNS, default="")
-    assert arguments.endswith("--config C:\\ProgramData\\pf\\config.json bastion register --port 2200")
+    assert arguments.endswith("--config C:\\ProgramData\\pf-bastion\\config.json bastion register --port 2200")
+    assert task.findtext("t:Principals/t:Principal/t:UserId", namespaces=XMLNS) == "S-1-5-19"
+    assert task.findtext("t:Principals/t:Principal/t:RunLevel", namespaces=XMLNS) == "LeastPrivilege"
     assert task.findtext("t:Triggers/t:TimeTrigger/t:Repetition/t:Interval", namespaces=XMLNS) == "PT5M"
     assert task.findtext("t:Settings/t:RunOnlyIfNetworkAvailable", namespaces=XMLNS) == "true"
 
@@ -613,7 +617,9 @@ def test_uninit_undoes_the_install(tmp_path: pathlib.Path) -> None:
         "C:\\ProgramData\\ssh\\ssh_host_rsa_key.cert",
         "C:\\ProgramData\\pf",
         "C:\\ProgramData\\pf-deadlines",
+        "C:\\ProgramData\\pf-bastion",
     ]
+    assert removed[-3].recursive
     assert removed[-2].recursive
     assert removed[-1].recursive
 

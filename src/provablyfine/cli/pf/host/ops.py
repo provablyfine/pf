@@ -45,6 +45,8 @@ class WriteFile:
     mode: int | None
     # The content is not shown in a dry run.
     secret: bool = False
+    # User that owns the file. None keeps the current owner.
+    owner: str | None = None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -108,8 +110,10 @@ def describe(action: Action) -> str:
         case MakeDir(path=path, mode=mode, owner=owner):
             owned = f" (owner {owner})" if owner else ""
             return f"mkdir -m {mode:o} {_quote(path)}{owned}"
-        case WriteFile(path=path, content=content, mode=mode, secret=secret):
+        case WriteFile(path=path, content=content, mode=mode, secret=secret, owner=owner):
             mode_text = "keep mode" if mode is None else f"mode {mode:o}"
+            if owner:
+                mode_text += f", owner {owner}"
             header = f"write {_quote(path)} ({mode_text}, {len(content)} bytes)"
             if secret:
                 return header + "\n  (content not shown)"
@@ -191,7 +195,9 @@ class Ops(abc.ABC):
     def make_dir(self, path: str, mode: int, owner: str | None = None) -> None: ...
 
     @abc.abstractmethod
-    def write_file(self, path: str, content: bytes | str, mode: int | None, *, secret: bool = False) -> None: ...
+    def write_file(
+        self, path: str, content: bytes | str, mode: int | None, *, secret: bool = False, owner: str | None = None
+    ) -> None: ...
 
     @abc.abstractmethod
     def remove(self, path: str, *, recursive: bool = False) -> None: ...
@@ -216,13 +222,17 @@ class SystemOps(Ops):
         if owner is not None:
             shutil.chown(path, user=owner)
 
-    def write_file(self, path: str, content: bytes | str, mode: int | None, *, secret: bool = False) -> None:
+    def write_file(
+        self, path: str, content: bytes | str, mode: int | None, *, secret: bool = False, owner: str | None = None
+    ) -> None:
         if mode is None:
             try:
                 mode = os.stat(path).st_mode & 0o7777
             except FileNotFoundError:
                 mode = 0o644
         client.configuration.write_file_atomic(path, _as_bytes(content), mode="wb", permissions=mode)
+        if owner is not None:
+            shutil.chown(path, user=owner)
 
     def remove(self, path: str, *, recursive: bool = False) -> None:
         if recursive:
@@ -322,8 +332,10 @@ class DryRunOps(Ops):
     def make_dir(self, path: str, mode: int, owner: str | None = None) -> None:
         self.actions.append(MakeDir(path, mode, owner))
 
-    def write_file(self, path: str, content: bytes | str, mode: int | None, *, secret: bool = False) -> None:
-        self.actions.append(WriteFile(path, _as_bytes(content), mode, secret))
+    def write_file(
+        self, path: str, content: bytes | str, mode: int | None, *, secret: bool = False, owner: str | None = None
+    ) -> None:
+        self.actions.append(WriteFile(path, _as_bytes(content), mode, secret, owner))
 
     def remove(self, path: str, *, recursive: bool = False) -> None:
         self.actions.append(Remove(path, recursive))
