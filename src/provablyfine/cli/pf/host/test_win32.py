@@ -432,6 +432,7 @@ def test_the_bastion_task_registers_the_port_sshd_listens_on(tmp_path: pathlib.P
     )
     assert task.findtext("t:Principals/t:Principal/t:UserId", namespaces=XMLNS) == "S-1-5-19"
     assert task.findtext("t:Principals/t:Principal/t:RunLevel", namespaces=XMLNS) == "LeastPrivilege"
+    assert task.findtext("t:Principals/t:Principal/t:LogonType", namespaces=XMLNS) == "ServiceAccount"
     assert task.findtext("t:Triggers/t:TimeTrigger/t:Repetition/t:Interval", namespaces=XMLNS) == "PT5M"
     assert task.findtext("t:Settings/t:RunOnlyIfNetworkAvailable", namespaces=XMLNS) == "true"
 

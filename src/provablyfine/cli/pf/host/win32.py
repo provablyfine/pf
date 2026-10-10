@@ -205,6 +205,7 @@ def task_xml(
         f"<RegistrationInfo><Description>{xml.sax.saxutils.escape(description)}</Description></RegistrationInfo>"
         f"<Triggers>{''.join(triggers)}</Triggers>"
         f'<Principals><Principal id="Author"><UserId>{_LOCAL_SERVICE_SID if unprivileged else _SYSTEM_SID}</UserId>'
+        f"{'<LogonType>ServiceAccount</LogonType>' if unprivileged else ''}"
         f"<RunLevel>{'LeastPrivilege' if unprivileged else 'HighestAvailable'}</RunLevel>"
         "</Principal></Principals>"
         "<Settings>"
