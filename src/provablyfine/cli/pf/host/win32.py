@@ -42,9 +42,17 @@ ACCEPT_SCRATCH = ntpath.join(STATE_DIR, "accept.json")
 AUTH_USER_MARKER = ntpath.join(STATE_DIR, "auth-user-created")
 # The principals command writes here as an unprivileged user.
 DEADLINE_DIR = ntpath.join(PROGRAM_DATA, "pf-deadlines")
-# Only SYSTEM and administrators write here, so the reaper trusts the requests in it.
+# The bastion task runs as LOCAL SERVICE. It reads a private copy of the account
+# key and the configuration from here, and writes its log here, because STATE_DIR
+# is closed to everyone but administrators.
+BASTION_DIR = ntpath.join(PROGRAM_DATA, "pf-bastion")
+BASTION_KEY = ntpath.join(BASTION_DIR, "account.key")
+BASTION_CONFIG = ntpath.join(BASTION_DIR, "config.json")
+# The bastion task leaves requests here and the reaper reads them. Only SYSTEM, administrators
+# and the bastion account can write.
 KILL_DIR = ntpath.join(PROGRAM_DATA, "pf-kill-requests")
-# Only SYSTEM and administrators write here. The reaper leaves session events for pf bastion register.
+# The reaper leaves session events here and the bastion task reads them. Only SYSTEM, administrators
+# and the bastion account can write.
 LIVE_DIR = ntpath.join(PROGRAM_DATA, "pf-live-events")
 
 DEFAULTS = base.Defaults(
@@ -62,9 +70,12 @@ TASK_FOLDER = "provablyfine"
 TASKS = ("host-refresh", "host-bastion", "session-reaper")
 
 # Well known security identifiers. They do not depend on the language of Windows.
-_SYSTEM = "*S-1-5-18"
+_SYSTEM_SID = "S-1-5-18"
+_LOCAL_SERVICE_SID = "S-1-5-19"
+_SYSTEM = f"*{_SYSTEM_SID}"
 _ADMINISTRATORS = "*S-1-5-32-544"
 _USERS = "*S-1-5-32-545"
+_LOCAL_SERVICE = f"*{_LOCAL_SERVICE_SID}"
 _TRUSTED_SIDS = (
     "S-1-5-18",
     "S-1-5-32-544",
@@ -161,8 +172,11 @@ def task_xml(
     restart_on_failure: bool = False,
     needs_network: bool = False,
     time_limit: str = "PT0S",
+    unprivileged: bool = False,
 ) -> bytes:
-    """A scheduled task that runs as SYSTEM, in the format `schtasks /Create /XML` reads.
+    """A scheduled task in the format `schtasks /Create /XML` reads.
+
+    It runs as SYSTEM, or as LOCAL SERVICE when `unprivileged`.
 
     It starts at boot. `repeat_minutes` makes the scheduler start it again when
     it is not running, which keeps a long running program alive.
@@ -190,7 +204,9 @@ def task_xml(
         '<Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">'
         f"<RegistrationInfo><Description>{xml.sax.saxutils.escape(description)}</Description></RegistrationInfo>"
         f"<Triggers>{''.join(triggers)}</Triggers>"
-        '<Principals><Principal id="Author"><UserId>S-1-5-18</UserId><RunLevel>HighestAvailable</RunLevel>'
+        f'<Principals><Principal id="Author"><UserId>{_LOCAL_SERVICE_SID if unprivileged else _SYSTEM_SID}</UserId>'
+        f"{'<LogonType>ServiceAccount</LogonType>' if unprivileged else ''}"
+        f"<RunLevel>{'LeastPrivilege' if unprivileged else 'HighestAvailable'}</RunLevel>"
         "</Principal></Principals>"
         "<Settings>"
         "<MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>"
@@ -391,15 +407,25 @@ class Windows:
             o.write_file(AUTH_USER_MARKER, s.auth_user, None)
         # The principals command runs as this user and writes the records.
         o.run(_icacls_closed(DEADLINE_DIR, f"{s.auth_user}:(OI)(CI)M"))
-        o.run(_icacls_closed(KILL_DIR))
-        o.run(_icacls_closed(LIVE_DIR))
+        o.run(_icacls_closed(KILL_DIR, f"{_LOCAL_SERVICE}:(OI)(CI)M"))
+        o.run(_icacls_closed(LIVE_DIR, f"{_LOCAL_SERVICE}:(OI)(CI)M"))
 
-        o.write_file(ACCOUNT_KEY, common_steps.new_account_key_pem(), 0o600, secret=True)
+        key_pem = common_steps.new_account_key_pem()
+        o.write_file(ACCOUNT_KEY, key_pem, 0o600, secret=True)
         o.write_file(
             CONFIG,
-            json.dumps({"directory_url": s.directory_url, "account_key_file": ACCOUNT_KEY}) + "\n",
+            common_steps.client_config(s.directory_url, ACCOUNT_KEY),
             0o600,
         )
+        o.make_dir(BASTION_DIR, 0o700)
+        o.run(_icacls_closed(BASTION_DIR, f"{_LOCAL_SERVICE}:(OI)(CI)M"))
+        o.write_file(BASTION_KEY, key_pem, 0o600, secret=True)
+        o.write_file(
+            BASTION_CONFIG,
+            common_steps.client_config(s.directory_url, BASTION_KEY),
+            0o600,
+        )
+
         # Accepting the invitation registers the account key with the server.
         # The configuration it writes is not used, so it goes to a scratch file.
         o.run([pf_bin, "-c", ACCEPT_SCRATCH, "accept", f"--invitation={s.invitation}", f"--key={ACCOUNT_KEY}"])
@@ -458,9 +484,9 @@ class Windows:
                 "Register this host with the provablyfine bastion",
                 pf_bin,
                 [
-                    f"--log-filename={log.format('host-bastion')}",
+                    f"--log-filename={ntpath.join(BASTION_DIR, 'host-bastion.log')}",
                     "--config",
-                    CONFIG,
+                    BASTION_CONFIG,
                     "bastion",
                     "register",
                     "--port",
@@ -471,6 +497,7 @@ class Windows:
                 repeat_minutes=5,
                 restart_on_failure=True,
                 needs_network=True,
+                unprivileged=True,
             ),
             "session-reaper": task_xml(
                 "End SSH sessions when their provablyfine certificate deadline passes",
@@ -540,6 +567,7 @@ class Windows:
             o.run([*_POWERSHELL, "-Command", _profile_removal(created)], check=False)
         o.remove(STATE_DIR, recursive=True)
         o.remove(DEADLINE_DIR, recursive=True)
+        o.remove(BASTION_DIR, recursive=True)
         o.remove(KILL_DIR, recursive=True)
         o.remove(LIVE_DIR, recursive=True)
 

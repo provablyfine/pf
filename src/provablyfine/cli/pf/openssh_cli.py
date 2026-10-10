@@ -173,12 +173,15 @@ def add_subparsers(parser: argparse.ArgumentParser) -> None:
         help="Linux: directory where the PAM hook records open sessions. The reaper then only ends sessions on request",
     )
     session_reaper_parser.add_argument(
-        "--kill-dir", default=None, help="Directory where kill requests are written. Only root may write there"
+        "--kill-dir",
+        default=None,
+        help="Directory where kill requests are written. Only root and the bastion account may write there",
     )
     session_reaper_parser.add_argument(
         "--live-dir",
         default=None,
-        help="Directory where session start and end events are written. Only root may write there",
+        help="Directory where session start and end events are written. "
+        "Only root and the bastion account may write there",
     )
     session_reaper_parser.add_argument(
         "--interval", type=float, default=1.0, help="Seconds between checks of the records"

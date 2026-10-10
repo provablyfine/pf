@@ -13,8 +13,16 @@ STATE_DIR = "/var/lib/pf"
 LOG_DIR = "/var/log/pf"
 CREDENTIAL = f"{STATE_DIR}/account.cred"
 CONFIG = f"{STATE_DIR}/config.json"
-LIVE_EVENTS_DIR = f"{STATE_DIR}/live-events"
-KILL_DIR = f"{STATE_DIR}/kill-requests"
+# The bastion service runs as its own system user. STATE_DIR is closed to everyone but root,
+# so what the service shares with the root hooks and the reaper lives in a directory of its own.
+BASTION_USER = "pf-bastion"
+# Marks the account as created by pf, so that uninit never deletes an account that is not ours.
+BASTION_COMMENT = "provablyfine bastion"
+BASTION_STATE_DIR = "/var/lib/pf-bastion"
+# Root hooks leave session events here and the bastion service reads them.
+LIVE_EVENTS_DIR = f"{BASTION_STATE_DIR}/live-events"
+# The bastion service leaves requests here and the root reaper reads them.
+KILL_DIR = f"{BASTION_STATE_DIR}/kill-requests"
 # In /run, so that a reboot forgets the sessions that it ended.
 SESSIONS_DIR = "/run/pf/sessions"
 ACCEPT_SCRATCH = f"{STATE_DIR}/accept.json"
@@ -84,6 +92,41 @@ def _host_certificates(o: ops.Ops, host_keys_dir: str) -> list[str]:
     return [path.removesuffix(".pub") + ".cert" for path in o.glob(f"{host_keys_dir}/ssh_host_*_key.pub")]
 
 
+def _bastion_user_exists(o: ops.Ops) -> bool:
+    return o.query(["getent", "passwd", BASTION_USER]).returncode == 0
+
+
+def _is_bastion_user_ours(o: ops.Ops) -> bool:
+    """Whether the account exists and pf created it, which the comment field tells."""
+    result = o.query(["getent", "passwd", BASTION_USER])
+    fields = result.stdout.strip().split(":")
+    return result.returncode == 0 and len(fields) > 4 and fields[4] == BASTION_COMMENT
+
+
+def _require_no_foreign_bastion_user(o: ops.Ops) -> None:
+    if _bastion_user_exists(o) and not _is_bastion_user_ours(o):
+        raise pfc.exceptions.UI(
+            f"the account {BASTION_USER} exists and pf did not create it; remove it or rename it before initializing pf"
+        )
+
+
+def _ensure_bastion_user(o: ops.Ops) -> None:
+    """Create the system user the bastion service runs as: no login shell, no home directory."""
+    if _is_bastion_user_ours(o):
+        return
+    o.run(
+        [
+            "useradd",
+            "--system",
+            "--no-create-home",
+            "--home-dir=/nonexistent",
+            "--shell=/usr/sbin/nologin",
+            f"--comment={BASTION_COMMENT}",
+            BASTION_USER,
+        ]
+    )
+
+
 def _credential_property() -> str:
     return f"--property=LoadCredentialEncrypted=account:{CREDENTIAL}"
 
@@ -106,6 +149,12 @@ class Linux:
         ):
             common_steps.require_plain(value, what)
         pf_bin = _find_pf(o, s.pf_binary)
+        problem = common_steps.pf_install_problem(o, pf_bin, PF_DIRECTORIES)
+        if problem is not None:
+            raise pfc.exceptions.UI(
+                f"{pf_bin} is not a correct install: {problem}. "
+                "Install pf for the whole system, for example in /usr/local/bin."
+            )
         drop_in_dir = os.path.dirname(s.sshd_config_drop_in)
 
         conflict = common_steps.conflicting_directive(
@@ -113,6 +162,7 @@ class Linux:
         )
         if conflict is not None:
             raise pfc.exceptions.UI(f"conflicting sshd directive '{conflict}' found; remove before initializing pf")
+        _require_no_foreign_bastion_user(o)
         pam = o.read_text(PAM_SSHD) or ""
         if PAM_BEGIN in pam.splitlines():
             raise pfc.exceptions.UI(f"pf PAM block already present in {PAM_SSHD}; remove before re-running host-init")
@@ -167,10 +217,10 @@ class Linux:
             0o644,
         )
 
-        # Only root writes here, so pf bastion register trusts the events in it.
-        o.make_dir(LIVE_EVENTS_DIR, 0o700)
-        # Same for the requests to end a session: the reaper trusts what it finds here.
-        o.make_dir(KILL_DIR, 0o700)
+        _ensure_bastion_user(o)
+        o.make_dir(BASTION_STATE_DIR, 0o700, owner=BASTION_USER)
+        o.make_dir(LIVE_EVENTS_DIR, 0o700, owner=BASTION_USER)
+        o.make_dir(KILL_DIR, 0o700, owner=BASTION_USER)
 
         pam_block = (
             f"{PAM_BEGIN}\n"
@@ -211,8 +261,12 @@ class Linux:
             "\n"
             "[Service]\n"
             "Type=simple\n"
+            f"User={BASTION_USER}\n"
             f"LoadCredentialEncrypted=account:{CREDENTIAL}\n"
-            f"ExecStart={pf_bin} --config {CONFIG} bastion register --port {common_steps.ssh_port(o)}"
+            # The state directory is closed to everyone but root, so the config arrives as a credential too.
+            f"LoadCredential=config:{CONFIG}\n"
+            f"ExecStart={pf_bin} --config ${{CREDENTIALS_DIRECTORY}}/config"
+            f" bastion register --port {common_steps.ssh_port(o)}"
             f" --live-events-dir={LIVE_EVENTS_DIR} --kill-dir={KILL_DIR}\n"
             "Restart=on-failure\n"
             "RestartSec=30s\n"
@@ -266,7 +320,10 @@ class Linux:
         for certificate in o.glob(f"{s.host_keys_dir}/ssh_host_*_key.cert"):
             o.remove(certificate)
         o.remove(STATE_DIR, recursive=True)
+        o.remove(BASTION_STATE_DIR, recursive=True)
         o.remove(os.path.dirname(SESSIONS_DIR), recursive=True)
+        if _is_bastion_user_ours(o):
+            o.run(["userdel", BASTION_USER], check=False)
 
         unit = _sshd_unit(o)
         if o.query([SYSTEMCTL, "is-active", unit]).returncode == 0:

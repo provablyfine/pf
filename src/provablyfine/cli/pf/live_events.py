@@ -4,7 +4,7 @@ Whatever sees a session start or end on a host writes an event file here:
 the PAM hook on Linux, the session reaper on macOS and Windows.
 `pf bastion register` reads the files and reports them to the server.
 
-Only root, or SYSTEM on Windows, can write to the directory.
+Only root, or SYSTEM on Windows, and the account of `pf bastion register` can write to the directory.
 The reader still checks every file.
 
 A file stays until the server has accepted its event.

@@ -12,9 +12,9 @@ The records are written by an unprivileged user. The reaper treats them as
 untrusted input and checks every process before it signals it.
 
 A session can also be ended on request. The request is an empty file named
-`kill-<connection id>` in a second directory. Only root can write there, so
-the reaper trusts the name. The reaper still checks the process before it
-signals it.
+`kill-<connection id>` in a second directory. Only root and the bastion account
+can write there. The reaper uses the name and nothing else, and it still checks
+the process before it signals it.
 """
 
 from __future__ import annotations
@@ -187,7 +187,10 @@ def register_session(
 
 
 class KillRequests:
-    """The requests to end a session, left by `request_kill` in a directory that only root can write."""
+    """The requests to end a session, left by `request_kill`.
+
+    Only root and the bastion account can write to the directory.
+    """
 
     def __init__(self, directory: str | None, now: typing.Callable[[], float] = time.time) -> None:
         self._directory = directory

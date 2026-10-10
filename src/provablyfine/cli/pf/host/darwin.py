@@ -7,7 +7,6 @@ configuration again every time and never needs a reload. macOS has no
 
 from __future__ import annotations
 
-import json
 import os
 import plistlib
 
@@ -24,10 +23,21 @@ ACCEPT_SCRATCH = f"{STATE_DIR}/accept.json"
 # directory is not inside STATE_DIR: that one is closed to everyone but root,
 # and a user cannot reach a directory below a directory it cannot enter.
 DEADLINE_DIR = "/var/db/pf-deadlines"
-# Only root writes here, so the reaper trusts the requests in it.
+# The bastion job runs as its own hidden account. It reads a private copy of
+# the account key and the configuration from here, because STATE_DIR is closed.
+BASTION_USER = "_pfbastion"
+# Marks the account as created by pf, so that uninit never deletes an account that is not ours.
+BASTION_REAL_NAME = "provablyfine bastion"
+BASTION_DIR = "/var/db/pf-bastion"
+BASTION_KEY = f"{BASTION_DIR}/account.key"
+BASTION_CONFIG = f"{BASTION_DIR}/config.json"
+# The bastion account leaves requests here and the root reaper reads them.
+# The reaper only uses the names of the files.
 KILL_DIR = "/var/db/pf-kill-requests"
-# Only root writes here. The reaper leaves session events for pf bastion register.
+# The root reaper leaves session events here and the bastion account reads them.
 LIVE_DIR = "/var/db/pf-live-events"
+# The directories where the installer package puts pf.
+PF_DIRECTORIES = ("/opt/provablyfine",)
 LAUNCHD_DIR = "/Library/LaunchDaemons"
 SSHD_LABEL = "com.openssh.sshd"
 SSHD_PLIST = "/System/Library/LaunchDaemons/ssh.plist"
@@ -53,14 +63,18 @@ def _plist(
     *,
     keep_alive: bool = False,
     start_interval: int | None = None,
+    user: str | None = None,
+    log_directory: str = LOG_DIR,
 ) -> bytes:
     definition: dict[str, object] = {
         "Label": label,
         "ProgramArguments": argv,
         "RunAtLoad": True,
-        "StandardOutPath": f"{LOG_DIR}/{log_name}.log",
-        "StandardErrorPath": f"{LOG_DIR}/{log_name}.log",
+        "StandardOutPath": f"{log_directory}/{log_name}.log",
+        "StandardErrorPath": f"{log_directory}/{log_name}.log",
     }
+    if user is not None:
+        definition["UserName"] = user
     if keep_alive:
         definition["KeepAlive"] = True
     if start_interval is not None:
@@ -74,6 +88,61 @@ def _host_certificates(o: ops.Ops, host_keys_dir: str) -> list[str]:
         return certificates
     # Host-refresh writes one certificate next to each host public key.
     return [path.removesuffix(".pub") + ".cert" for path in o.glob(f"{host_keys_dir}/ssh_host_*_key.pub")]
+
+
+def _free_id(o: ops.Ops) -> int:
+    """A user and group id in the range macOS keeps for role accounts (450 to 499) that no account uses."""
+    used: set[int] = set()
+    for record, key in (("Users", "UniqueID"), ("Groups", "PrimaryGroupID")):
+        for line in o.query(["dscl", ".", "-list", f"/{record}", key]).stdout.splitlines():
+            fields = line.rsplit(None, 1)
+            if len(fields) == 2 and fields[1].lstrip("-").isdigit():
+                used.add(int(fields[1]))
+    for candidate in range(450, 500):
+        if candidate not in used:
+            return candidate
+    raise pfc.exceptions.UI("no free user id between 450 and 499 for the pf bastion account")
+
+
+def _bastion_account_exists(o: ops.Ops) -> bool:
+    return o.query(["dscl", ".", "-read", f"/Users/{BASTION_USER}", "RealName"]).returncode == 0
+
+
+def _is_bastion_account_ours(o: ops.Ops) -> bool:
+    """Whether the account exists and pf created it, which the real name tells.
+
+    dscl prints `RealName:` and then the name, on the same line or on the next one.
+    """
+    result = o.query(["dscl", ".", "-read", f"/Users/{BASTION_USER}", "RealName"])
+    return result.returncode == 0 and result.stdout.removeprefix("RealName:").strip() == BASTION_REAL_NAME
+
+
+def _require_no_foreign_bastion_account(o: ops.Ops) -> None:
+    if _bastion_account_exists(o) and not _is_bastion_account_ours(o):
+        raise pfc.exceptions.UI(
+            f"the account {BASTION_USER} exists and pf did not create it; remove it or rename it before initializing pf"
+        )
+
+
+def _ensure_bastion_account(o: ops.Ops) -> None:
+    """Create the hidden account the bastion job runs as: no login shell, no home directory."""
+    if _is_bastion_account_ours(o):
+        return
+    identifier = str(_free_id(o))
+    group = f"/Groups/{BASTION_USER}"
+    user = f"/Users/{BASTION_USER}"
+    o.run(["dscl", ".", "-create", group])
+    o.run(["dscl", ".", "-create", group, "PrimaryGroupID", identifier])
+    o.run(["dscl", ".", "-create", user])
+    for key, value in (
+        ("UniqueID", identifier),
+        ("PrimaryGroupID", identifier),
+        ("UserShell", "/usr/bin/false"),
+        ("NFSHomeDirectory", "/var/empty"),
+        ("RealName", BASTION_REAL_NAME),
+        ("IsHidden", "1"),
+    ):
+        o.run(["dscl", ".", "-create", user, key, value])
 
 
 class Darwin:
@@ -91,10 +160,10 @@ class Darwin:
             )
         if not o.is_executable(candidate):
             raise pfc.exceptions.UI(f"{candidate} is not an executable file")
-        problem = o.path_problem(candidate)
+        problem = common_steps.pf_install_problem(o, candidate, PF_DIRECTORIES)
         if problem is not None:
             raise pfc.exceptions.UI(
-                f"sshd would refuse to run {candidate}: {problem}. "
+                f"{candidate} is not a correct install: {problem}. "
                 "Install the provablyfine installer package, which puts pf in /opt/provablyfine."
             )
         return candidate
@@ -116,18 +185,31 @@ class Darwin:
         )
         if conflict is not None:
             raise pfc.exceptions.UI(f"conflicting sshd directive '{conflict}' found; remove before initializing pf")
+        _require_no_foreign_bastion_account(o)
 
         o.make_dir(STATE_DIR, 0o700)
         o.make_dir(LOG_DIR, 0o755)
         # The principals command runs as this user and writes the records.
         o.make_dir(DEADLINE_DIR, 0o700, owner=s.auth_user)
-        o.make_dir(KILL_DIR, 0o700)
-        o.make_dir(LIVE_DIR, 0o700)
-        o.write_file(ACCOUNT_KEY, common_steps.new_account_key_pem(), 0o600, secret=True)
+        key_pem = common_steps.new_account_key_pem()
+        o.write_file(ACCOUNT_KEY, key_pem, 0o600, secret=True)
         o.write_file(
             CONFIG,
-            json.dumps({"directory_url": s.directory_url, "account_key_file": ACCOUNT_KEY}) + "\n",
+            common_steps.client_config(s.directory_url, ACCOUNT_KEY),
             0o600,
+        )
+
+        # The bastion job runs as its own account and reads its own copy of the key.
+        _ensure_bastion_account(o)
+        o.make_dir(BASTION_DIR, 0o700, owner=BASTION_USER)
+        o.make_dir(KILL_DIR, 0o700, owner=BASTION_USER)
+        o.make_dir(LIVE_DIR, 0o700, owner=BASTION_USER)
+        o.write_file(BASTION_KEY, key_pem, 0o600, secret=True, owner=BASTION_USER)
+        o.write_file(
+            BASTION_CONFIG,
+            common_steps.client_config(s.directory_url, BASTION_KEY),
+            0o600,
+            owner=BASTION_USER,
         )
 
         # Accepting the invitation registers the account key with the server.
@@ -180,7 +262,7 @@ class Darwin:
                 [
                     pf_bin,
                     "--config",
-                    CONFIG,
+                    BASTION_CONFIG,
                     "bastion",
                     "register",
                     "--port",
@@ -190,6 +272,9 @@ class Darwin:
                 ],
                 "host-bastion",
                 keep_alive=True,
+                user=BASTION_USER,
+                # launchd opens the log as that user, and /var/log/pf belongs to root.
+                log_directory=BASTION_DIR,
             ),
             REAPER_LABEL: _plist(
                 REAPER_LABEL,
@@ -234,6 +319,10 @@ class Darwin:
             o.remove(certificate)
         o.remove(STATE_DIR, recursive=True)
         o.remove(DEADLINE_DIR, recursive=True)
+        o.remove(BASTION_DIR, recursive=True)
+        if _is_bastion_account_ours(o):
+            o.run(["dscl", ".", "-delete", f"/Users/{BASTION_USER}"], check=False)
+            o.run(["dscl", ".", "-delete", f"/Groups/{BASTION_USER}"], check=False)
         o.remove(KILL_DIR, recursive=True)
         o.remove(LIVE_DIR, recursive=True)
 

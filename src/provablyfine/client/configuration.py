@@ -5,6 +5,7 @@ import contextlib
 import dataclasses
 import json
 import os
+import shutil
 import tempfile
 import time
 import typing
@@ -24,8 +25,12 @@ def write_file_atomic(
     mode: str = "wb",
     *,
     permissions: int = 0o644,
+    owner: str | None = None,
 ) -> None:
     """Write `content` to `filepath`, atomically replacing any existing file.
+
+    `owner` names the user that owns the new file.
+    The owner is set before the file replaces the old one, so the file never has the wrong owner.
 
     os.replace, not os.rename: identical on POSIX, but os.rename refuses an
     existing destination on Windows (WinError 183)
@@ -38,6 +43,8 @@ def write_file_atomic(
         with os.fdopen(fd, mode) as f:
             f.write(content)
         os.chmod(tmp_path, permissions)
+        if owner is not None:
+            shutil.chown(tmp_path, user=owner)
         os.replace(tmp_path, filepath)
     except Exception:
         try:

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import pathlib
 import plistlib
 import sys
@@ -36,7 +35,7 @@ def _settings(**overrides: str | None) -> base.Settings:
 
 
 def _queries(
-    *, remote_login: bool = True, access_group: bool = True, port: str = "22"
+    *, remote_login: bool = True, access_group: bool = True, port: str = "22", bastion_account: str = ""
 ) -> typing.Callable[[typing.Sequence[str]], ops.QueryResult]:
     def query(argv: typing.Sequence[str]) -> ops.QueryResult:
         match list(argv):
@@ -46,6 +45,16 @@ def _queries(
                 return ops.QueryResult(0 if access_group else 56, "")
             case ["sshd", "-T"]:
                 return ops.QueryResult(0, f"port {port}\n")
+            case ["dscl", ".", "-read", "/Users/_pfbastion", "RealName"]:
+                if bastion_account == "foreign":
+                    return ops.QueryResult(0, "RealName:\n someone else\n")
+                if bastion_account == "ours":
+                    return ops.QueryResult(0, "RealName:\n provablyfine bastion\n")
+                return ops.QueryResult(56, "")
+            case ["dscl", ".", "-list", "/Users", "UniqueID"]:
+                return ops.QueryResult(0, "root 0\n_taken 450\nmathieu 501\n")
+            case ["dscl", ".", "-list", "/Groups", "PrimaryGroupID"]:
+                return ops.QueryResult(0, "wheel 0\n_taken2 451\n")
         return ops.QueryResult(127, "")
 
     return query
@@ -68,7 +77,7 @@ def _dry(
     tmp_path: pathlib.Path, *, remote_login: bool = True, access_group: bool = True, port: str = "22"
 ) -> ops.DryRunOps:
     query = _queries(remote_login=remote_login, access_group=access_group, port=port)
-    return ops.DryRunOps(root=tmp_path, query=query, trusted_uid=os.getuid())
+    return ops.DryRunOps(root=tmp_path, query=query)
 
 
 def _init(
@@ -97,14 +106,23 @@ def _runs(dry: ops.DryRunOps) -> list[tuple[str, ...]]:
 def test_init_runs_the_steps_in_order(tmp_path: pathlib.Path) -> None:
     _host(tmp_path)
     dry = _init(tmp_path)
-    assert dry.actions[:5] == [
+    assert dry.actions[:3] == [
         ops.MakeDir("/var/db/pf", 0o700),
         ops.MakeDir("/var/log/pf", 0o755),
         ops.MakeDir("/var/db/pf-deadlines", 0o700, "nobody"),
-        ops.MakeDir("/var/db/pf-kill-requests", 0o700),
-        ops.MakeDir("/var/db/pf-live-events", 0o700),
     ]
+    for directory in ("pf-bastion", "pf-kill-requests", "pf-live-events"):
+        assert ops.MakeDir(f"/var/db/{directory}", 0o700, "_pfbastion") in dry.actions
     assert _runs(dry) == [
+        ("dscl", ".", "-create", "/Groups/_pfbastion"),
+        ("dscl", ".", "-create", "/Groups/_pfbastion", "PrimaryGroupID", "452"),
+        ("dscl", ".", "-create", "/Users/_pfbastion"),
+        ("dscl", ".", "-create", "/Users/_pfbastion", "UniqueID", "452"),
+        ("dscl", ".", "-create", "/Users/_pfbastion", "PrimaryGroupID", "452"),
+        ("dscl", ".", "-create", "/Users/_pfbastion", "UserShell", "/usr/bin/false"),
+        ("dscl", ".", "-create", "/Users/_pfbastion", "NFSHomeDirectory", "/var/empty"),
+        ("dscl", ".", "-create", "/Users/_pfbastion", "RealName", "provablyfine bastion"),
+        ("dscl", ".", "-create", "/Users/_pfbastion", "IsHidden", "1"),
         (PF, "-c", "/var/db/pf/accept.json", "accept", f"--invitation={INVITATION}", "--key=/var/db/pf/account.key"),
         ("ssh-keygen", "-A"),
         (
@@ -190,7 +208,7 @@ def test_init_installs_the_bastion_job_with_the_ssh_port(tmp_path: pathlib.Path)
     assert job["ProgramArguments"] == [
         PF,
         "--config",
-        "/var/db/pf/config.json",
+        "/var/db/pf-bastion/config.json",
         "bastion",
         "register",
         "--port",
@@ -199,6 +217,8 @@ def test_init_installs_the_bastion_job_with_the_ssh_port(tmp_path: pathlib.Path)
         "--kill-dir=/var/db/pf-kill-requests",
     ]
     assert job["KeepAlive"] is True
+    assert job["UserName"] == "_pfbastion"
+    assert job["StandardOutPath"] == "/var/db/pf-bastion/host-bastion.log"
     assert "StartInterval" not in job
 
 
@@ -254,7 +274,9 @@ def test_init_refuses_a_pf_that_group_members_can_change(tmp_path: pathlib.Path)
     _host(tmp_path)
     (tmp_path / "opt" / "provablyfine").chmod(0o775)
     dry = _dry(tmp_path)
-    with pytest.raises(pfc.exceptions.UI, match=r"sshd would refuse to run /opt/provablyfine/pf: /opt/provablyfine "):
+    with pytest.raises(
+        pfc.exceptions.UI, match=r"/opt/provablyfine/pf is not a correct install: /opt/provablyfine can be written"
+    ):
         darwin.Darwin(PF).init(dry, _settings())
     assert dry.actions == []
 
@@ -275,13 +297,13 @@ def test_init_uses_the_pf_given_on_the_command_line(tmp_path: pathlib.Path) -> N
     other.chmod(0o755)
     dry = _dry(tmp_path)
     darwin.Darwin(None).init(dry, _settings(pf_binary="/opt/provablyfine/other"))
-    assert _runs(dry)[0][0] == "/opt/provablyfine/other"
+    assert ("/opt/provablyfine/other", "-c") == next(r for r in _runs(dry) if r[0] != "dscl")[:2]
 
 
 def test_init_still_checks_the_pf_given_on_the_command_line(tmp_path: pathlib.Path) -> None:
     _host(tmp_path)
     (tmp_path / "opt" / "provablyfine").chmod(0o775)
-    with pytest.raises(pfc.exceptions.UI, match="sshd would refuse"):
+    with pytest.raises(pfc.exceptions.UI, match="is not a correct install"):
         darwin.Darwin(None).init(_dry(tmp_path), _settings(pf_binary=PF))
 
 
@@ -320,12 +342,14 @@ def test_init_keeps_an_invitation_with_shell_syntax_as_one_argument(tmp_path: pa
 
 def test_uninit_undoes_the_install(tmp_path: pathlib.Path) -> None:
     _host(tmp_path)
-    dry = _dry(tmp_path)
+    dry = ops.DryRunOps(root=tmp_path, query=_queries(bastion_account="ours"))
     darwin.Darwin(PF).uninit(dry, _settings())
     assert _runs(dry) == [
         ("launchctl", "bootout", "system/net.provablyfine.host-refresh"),
         ("launchctl", "bootout", "system/net.provablyfine.host-bastion"),
         ("launchctl", "bootout", "system/net.provablyfine.session-reaper"),
+        ("dscl", ".", "-delete", "/Users/_pfbastion"),
+        ("dscl", ".", "-delete", "/Groups/_pfbastion"),
     ]
     assert all(not a.check for a in dry.actions if isinstance(a, ops.Run))
     assert [a for a in dry.actions if isinstance(a, ops.Remove)] == [
@@ -339,6 +363,7 @@ def test_uninit_undoes_the_install(tmp_path: pathlib.Path) -> None:
         ops.Remove("/etc/ssh/ssh_host_rsa_key.cert"),
         ops.Remove("/var/db/pf", True),
         ops.Remove("/var/db/pf-deadlines", True),
+        ops.Remove("/var/db/pf-bastion", True),
         ops.Remove("/var/db/pf-kill-requests", True),
         ops.Remove("/var/db/pf-live-events", True),
     ]
@@ -374,3 +399,52 @@ def test_the_deadline_directory_is_not_inside_the_root_only_state_directory() ->
     # The principals command runs as another user. It cannot reach a directory
     # below one that only root can enter, even when it owns the directory.
     assert not darwin.DEADLINE_DIR.startswith(darwin.STATE_DIR + "/")
+
+
+def test_free_id_skips_ids_of_records_whose_names_contain_a_space() -> None:
+    def query(argv: typing.Sequence[str]) -> ops.QueryResult:
+        if list(argv) == ["dscl", ".", "-list", "/Users", "UniqueID"]:
+            return ops.QueryResult(0, "root 0\nsome person 450\n")
+        return ops.QueryResult(0, "wheel 0\n")
+
+    assert darwin._free_id(ops.DryRunOps(query=query)) == 451  # pyright: ignore[reportPrivateUsage]
+
+
+def test_init_refuses_a_pf_that_the_bastion_account_cannot_run(tmp_path: pathlib.Path) -> None:
+    _host(tmp_path)
+    (tmp_path / "opt" / "provablyfine").chmod(0o750)
+    with pytest.raises(
+        pfc.exceptions.UI, match=r"is not a correct install: /opt/provablyfine is closed to other users"
+    ):
+        darwin.Darwin(PF).init(_dry(tmp_path), _settings())
+
+
+def test_init_reuses_an_existing_bastion_account(tmp_path: pathlib.Path) -> None:
+    _host(tmp_path)
+    dry = ops.DryRunOps(root=tmp_path, query=_queries(bastion_account="ours"))
+    darwin.Darwin(PF).init(dry, _settings())
+    assert not any(argv[0] == "dscl" for argv in _runs(dry))
+
+
+def test_init_refuses_an_account_that_pf_did_not_create(tmp_path: pathlib.Path) -> None:
+    _host(tmp_path)
+    dry = ops.DryRunOps(root=tmp_path, query=_queries(bastion_account="foreign"))
+    with pytest.raises(pfc.exceptions.UI, match="pf did not create it"):
+        darwin.Darwin(PF).init(dry, _settings())
+    assert dry.actions == []
+
+
+@pytest.mark.parametrize(("state", "deleted"), [("ours", True), ("foreign", False), ("", False)])
+def test_uninit_deletes_only_an_account_that_pf_created(tmp_path: pathlib.Path, state: str, deleted: bool) -> None:
+    _host(tmp_path)
+    dry = ops.DryRunOps(root=tmp_path, query=_queries(bastion_account=state))
+    darwin.Darwin(PF).uninit(dry, _settings())
+    assert (("dscl", ".", "-delete", "/Users/_pfbastion") in _runs(dry)) is deleted
+
+
+def test_bastion_key_and_config_belong_to_the_bastion_account(tmp_path: pathlib.Path) -> None:
+    _host(tmp_path)
+    dry = _init(tmp_path)
+    assert _written(dry, "/var/db/pf-bastion/account.key").owner == "_pfbastion"
+    assert _written(dry, "/var/db/pf-bastion/config.json").owner == "_pfbastion"
+    assert _written(dry, "/var/db/pf/account.key").owner is None

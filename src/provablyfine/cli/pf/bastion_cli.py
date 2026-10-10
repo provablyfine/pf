@@ -31,7 +31,7 @@ from ... import bastion_visitor as visitor
 from ... import client
 from .. import http as cli_http
 from .. import login, token_verify
-from . import _win32_stdio, live_events, session_kill
+from . import _win32_stdio, host, live_events, session_kill
 
 logger = logging.getLogger(__name__)
 
@@ -709,6 +709,10 @@ def _install_signal_handlers(
 
 @client.ssh_utils.exception
 def _register_function(args: argparse.Namespace) -> None:
+    if host.is_privileged():
+        raise pfc.exceptions.UI(
+            "bastion register must not run as root, or as an administrator on Windows. Run it as a normal user."
+        )
     c = client.Config.load(args.config)
     factory = client.Factory(c, timeout=args.timeout)
     login.ensure_session(c, factory)
