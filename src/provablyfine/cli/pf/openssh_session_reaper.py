@@ -187,7 +187,10 @@ def register_session(
 
 
 class KillRequests:
-    """The requests to end a session, left by `request_kill` in a directory that only root and the bastion account can write."""
+    """The requests to end a session, left by `request_kill`.
+
+    Only root and the bastion account can write to the directory.
+    """
 
     def __init__(self, directory: str | None, now: typing.Callable[[], float] = time.time) -> None:
         self._directory = directory

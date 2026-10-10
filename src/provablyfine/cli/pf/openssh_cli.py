@@ -180,7 +180,8 @@ def add_subparsers(parser: argparse.ArgumentParser) -> None:
     session_reaper_parser.add_argument(
         "--live-dir",
         default=None,
-        help="Directory where session start and end events are written. Only root and the bastion account may write there",
+        help="Directory where session start and end events are written. "
+        "Only root and the bastion account may write there",
     )
     session_reaper_parser.add_argument(
         "--interval", type=float, default=1.0, help="Seconds between checks of the records"
