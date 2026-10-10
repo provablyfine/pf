@@ -2064,3 +2064,10 @@ def test_live_filter_without_tags_matches_every_host():
 def test_live_read_somewhere_ignores_the_filter():
     assert single_grants(_live_grant([1])).live_read_somewhere()
     assert not grant.Grants([], []).live_read_somewhere()
+
+
+def test_live_read_somewhere_needs_a_live_grant_that_reads():
+    audit = {"type": "audit-log", "filter": {}, "permission": {"read": True}}
+    no_read = {"type": "live", "filter": {}, "permission": {"read": False, "terminate": True}}
+    assert not single_grants(audit).live_read_somewhere()
+    assert not single_grants(no_read).live_read_somewhere()
