@@ -36,7 +36,7 @@ def _settings(**overrides: str | None) -> base.Settings:
 
 
 def _queries(
-    *, remote_login: bool = True, access_group: bool = True, port: str = "22", bastion_account: bool = False
+    *, remote_login: bool = True, access_group: bool = True, port: str = "22", bastion_account: str = ""
 ) -> typing.Callable[[typing.Sequence[str]], ops.QueryResult]:
     def query(argv: typing.Sequence[str]) -> ops.QueryResult:
         match list(argv):
@@ -46,8 +46,12 @@ def _queries(
                 return ops.QueryResult(0 if access_group else 56, "")
             case ["sshd", "-T"]:
                 return ops.QueryResult(0, f"port {port}\n")
-            case ["dscl", ".", "-read", "/Users/_pfbastion"]:
-                return ops.QueryResult(0 if bastion_account else 56, "")
+            case ["dscl", ".", "-read", "/Users/_pfbastion", "RealName"]:
+                if bastion_account == "foreign":
+                    return ops.QueryResult(0, "RealName:\n someone else\n")
+                if bastion_account == "ours":
+                    return ops.QueryResult(0, "RealName:\n provablyfine bastion\n")
+                return ops.QueryResult(56, "")
             case ["dscl", ".", "-list", "/Users", "UniqueID"]:
                 return ops.QueryResult(0, "root 0\n_taken 300\nmathieu 501\n")
             case ["dscl", ".", "-list", "/Groups", "PrimaryGroupID"]:
@@ -337,7 +341,7 @@ def test_init_keeps_an_invitation_with_shell_syntax_as_one_argument(tmp_path: pa
 
 def test_uninit_undoes_the_install(tmp_path: pathlib.Path) -> None:
     _host(tmp_path)
-    dry = _dry(tmp_path)
+    dry = ops.DryRunOps(root=tmp_path, query=_queries(bastion_account="ours"), trusted_uid=os.getuid())
     darwin.Darwin(PF).uninit(dry, _settings())
     assert _runs(dry) == [
         ("launchctl", "bootout", "system/net.provablyfine.host-refresh"),
@@ -398,9 +402,25 @@ def test_the_deadline_directory_is_not_inside_the_root_only_state_directory() ->
 
 def test_init_reuses_an_existing_bastion_account(tmp_path: pathlib.Path) -> None:
     _host(tmp_path)
-    dry = ops.DryRunOps(root=tmp_path, query=_queries(bastion_account=True), trusted_uid=os.getuid())
+    dry = ops.DryRunOps(root=tmp_path, query=_queries(bastion_account="ours"), trusted_uid=os.getuid())
     darwin.Darwin(PF).init(dry, _settings())
     assert not any(argv[0] == "dscl" for argv in _runs(dry))
+
+
+def test_init_refuses_an_account_that_pf_did_not_create(tmp_path: pathlib.Path) -> None:
+    _host(tmp_path)
+    dry = ops.DryRunOps(root=tmp_path, query=_queries(bastion_account="foreign"), trusted_uid=os.getuid())
+    with pytest.raises(pfc.exceptions.UI, match="pf did not create it"):
+        darwin.Darwin(PF).init(dry, _settings())
+    assert dry.actions == []
+
+
+@pytest.mark.parametrize(("state", "deleted"), [("ours", True), ("foreign", False), ("", False)])
+def test_uninit_deletes_only_an_account_that_pf_created(tmp_path: pathlib.Path, state: str, deleted: bool) -> None:
+    _host(tmp_path)
+    dry = ops.DryRunOps(root=tmp_path, query=_queries(bastion_account=state), trusted_uid=os.getuid())
+    darwin.Darwin(PF).uninit(dry, _settings())
+    assert (("dscl", ".", "-delete", "/Users/_pfbastion") in _runs(dry)) is deleted
 
 
 def test_bastion_key_and_config_belong_to_the_bastion_account(tmp_path: pathlib.Path) -> None:

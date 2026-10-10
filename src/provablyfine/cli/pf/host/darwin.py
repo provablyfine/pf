@@ -26,6 +26,8 @@ DEADLINE_DIR = "/var/db/pf-deadlines"
 # The bastion job runs as its own hidden account. It reads a private copy of
 # the account key and the configuration from here, because STATE_DIR is closed.
 BASTION_USER = "_pfbastion"
+# Marks the account as created by pf, so that uninit never deletes an account that is not ours.
+BASTION_REAL_NAME = "provablyfine bastion"
 BASTION_DIR = "/var/db/pf-bastion"
 BASTION_KEY = f"{BASTION_DIR}/account.key"
 BASTION_CONFIG = f"{BASTION_DIR}/config.json"
@@ -100,9 +102,29 @@ def _free_id(o: ops.Ops) -> int:
     raise pfc.exceptions.UI("no free user id between 300 and 399 for the pf bastion account")
 
 
+def _bastion_account_exists(o: ops.Ops) -> bool:
+    return o.query(["dscl", ".", "-read", f"/Users/{BASTION_USER}", "RealName"]).returncode == 0
+
+
+def _is_bastion_account_ours(o: ops.Ops) -> bool:
+    """Whether the account exists and pf created it, which the real name tells.
+
+    dscl prints `RealName:` and then the name, on the same line or on the next one.
+    """
+    result = o.query(["dscl", ".", "-read", f"/Users/{BASTION_USER}", "RealName"])
+    return result.returncode == 0 and result.stdout.removeprefix("RealName:").strip() == BASTION_REAL_NAME
+
+
+def _require_no_foreign_bastion_account(o: ops.Ops) -> None:
+    if _bastion_account_exists(o) and not _is_bastion_account_ours(o):
+        raise pfc.exceptions.UI(
+            f"the account {BASTION_USER} exists and pf did not create it; remove it or rename it before initializing pf"
+        )
+
+
 def _ensure_bastion_account(o: ops.Ops) -> None:
     """Create the hidden account the bastion job runs as: no login shell, no home directory."""
-    if o.query(["dscl", ".", "-read", f"/Users/{BASTION_USER}"]).returncode == 0:
+    if _is_bastion_account_ours(o):
         return
     identifier = str(_free_id(o))
     group = f"/Groups/{BASTION_USER}"
@@ -115,7 +137,7 @@ def _ensure_bastion_account(o: ops.Ops) -> None:
         ("PrimaryGroupID", identifier),
         ("UserShell", "/usr/bin/false"),
         ("NFSHomeDirectory", "/var/empty"),
-        ("RealName", "provablyfine bastion"),
+        ("RealName", BASTION_REAL_NAME),
         ("IsHidden", "1"),
     ):
         o.run(["dscl", ".", "-create", user, key, value])
@@ -161,6 +183,7 @@ class Darwin:
         )
         if conflict is not None:
             raise pfc.exceptions.UI(f"conflicting sshd directive '{conflict}' found; remove before initializing pf")
+        _require_no_foreign_bastion_account(o)
 
         o.make_dir(STATE_DIR, 0o700)
         o.make_dir(LOG_DIR, 0o755)
@@ -295,8 +318,9 @@ class Darwin:
         o.remove(STATE_DIR, recursive=True)
         o.remove(DEADLINE_DIR, recursive=True)
         o.remove(BASTION_DIR, recursive=True)
-        o.run(["dscl", ".", "-delete", f"/Users/{BASTION_USER}"], check=False)
-        o.run(["dscl", ".", "-delete", f"/Groups/{BASTION_USER}"], check=False)
+        if _is_bastion_account_ours(o):
+            o.run(["dscl", ".", "-delete", f"/Users/{BASTION_USER}"], check=False)
+            o.run(["dscl", ".", "-delete", f"/Groups/{BASTION_USER}"], check=False)
         o.remove(KILL_DIR, recursive=True)
         o.remove(LIVE_DIR, recursive=True)
 

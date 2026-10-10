@@ -40,6 +40,7 @@ def _queries(
     sshd_unit: str = "sshd",
     active: bool = True,
     port: str = "2222",
+    bastion_user: str = "",
 ) -> typing.Callable[[typing.Sequence[str]], ops.QueryResult]:
     def query(argv: typing.Sequence[str]) -> ops.QueryResult:
         match list(argv):
@@ -49,6 +50,14 @@ def _queries(
                 return ops.QueryResult(0 if active else 3, "")
             case ["sshd", "-T"]:
                 return ops.QueryResult(0, f"port {port}\nlistenaddress 0.0.0.0\n")
+            case ["getent", "passwd", "pf-bastion"]:
+                if bastion_user == "ours":
+                    return ops.QueryResult(
+                        0, "pf-bastion:x:990:990:provablyfine bastion:/nonexistent:/usr/sbin/nologin\n"
+                    )
+                if bastion_user == "foreign":
+                    return ops.QueryResult(0, "pf-bastion:x:1001:1001:Some Person:/home/pf-bastion:/bin/bash\n")
+                return ops.QueryResult(2, "")
         return ops.QueryResult(127, "")
 
     return query
@@ -136,6 +145,7 @@ def test_init_runs_the_steps_in_order(tmp_path: pathlib.Path) -> None:
             "--no-create-home",
             "--home-dir=/nonexistent",
             "--shell=/usr/sbin/nologin",
+            "--comment=provablyfine bastion",
             "pf-bastion",
         ),
         (SYSTEMCTL, "daemon-reload"),
@@ -367,7 +377,7 @@ def test_init_changes_nothing_when_the_pam_block_is_already_there(tmp_path: path
 
 def test_uninit_undoes_the_install(tmp_path: pathlib.Path) -> None:
     _host(tmp_path, pam="auth required pam_unix.so\n# BEGIN pf\nsession optional x\n# END pf\nsession required y\n")
-    dry = ops.DryRunOps(root=tmp_path, query=_queries())
+    dry = ops.DryRunOps(root=tmp_path, query=_queries(bastion_user="ours"))
     linux.Linux().uninit(dry, _settings())
     assert _written(dry, "/etc/pam.d/sshd").content.decode() == "auth required pam_unix.so\nsession required y\n"
     removed = [a.path for a in dry.actions if isinstance(a, ops.Remove)]
@@ -431,14 +441,21 @@ def test_init_makes_a_spool_directory_only_root_can_use(tmp_path: pathlib.Path) 
     assert ops.MakeDir("/var/lib/pf-bastion/live-events", 0o700, "pf-bastion") in _init(tmp_path).actions
 
 
-def test_init_reuses_an_existing_bastion_user(tmp_path: pathlib.Path) -> None:
+def test_init_reuses_a_bastion_user_that_pf_created(tmp_path: pathlib.Path) -> None:
     _host(tmp_path)
-
-    def query(argv: typing.Sequence[str]) -> ops.QueryResult:
-        if list(argv) == ["id", "-u", "pf-bastion"]:
-            return ops.QueryResult(0, "990\n")
-        return _queries()(argv)
-
-    dry = ops.DryRunOps(root=tmp_path, query=query)
-    linux.Linux().init(dry, _settings())
+    dry = _init(tmp_path, queries=_queries(bastion_user="ours"))
     assert not any(argv[0] == "useradd" for argv in _runs(dry))
+
+
+def test_init_refuses_a_bastion_user_that_pf_did_not_create(tmp_path: pathlib.Path) -> None:
+    _host(tmp_path)
+    with pytest.raises(pfc.exceptions.UI, match="pf did not create it"):
+        _init(tmp_path, queries=_queries(bastion_user="foreign"))
+
+
+@pytest.mark.parametrize(("state", "deleted"), [("ours", True), ("foreign", False), ("", False)])
+def test_uninit_deletes_only_a_bastion_user_that_pf_created(tmp_path: pathlib.Path, state: str, deleted: bool) -> None:
+    _host(tmp_path)
+    dry = ops.DryRunOps(root=tmp_path, query=_queries(bastion_user=state))
+    linux.Linux().uninit(dry, _settings())
+    assert (("userdel", "pf-bastion") in _runs(dry)) is deleted

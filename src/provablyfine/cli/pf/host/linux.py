@@ -16,6 +16,8 @@ CONFIG = f"{STATE_DIR}/config.json"
 # The bastion service runs as its own system user. STATE_DIR is closed to everyone but root,
 # so what the service shares with the root hooks and the reaper lives in a directory of its own.
 BASTION_USER = "pf-bastion"
+# Marks the account as created by pf, so that uninit never deletes an account that is not ours.
+BASTION_COMMENT = "provablyfine bastion"
 BASTION_STATE_DIR = "/var/lib/pf-bastion"
 # Root hooks leave session events here and the bastion service reads them.
 LIVE_EVENTS_DIR = f"{BASTION_STATE_DIR}/live-events"
@@ -90,9 +92,27 @@ def _host_certificates(o: ops.Ops, host_keys_dir: str) -> list[str]:
     return [path.removesuffix(".pub") + ".cert" for path in o.glob(f"{host_keys_dir}/ssh_host_*_key.pub")]
 
 
+def _bastion_user_exists(o: ops.Ops) -> bool:
+    return o.query(["getent", "passwd", BASTION_USER]).returncode == 0
+
+
+def _is_bastion_user_ours(o: ops.Ops) -> bool:
+    """Whether the account exists and pf created it, which the comment field tells."""
+    result = o.query(["getent", "passwd", BASTION_USER])
+    fields = result.stdout.strip().split(":")
+    return result.returncode == 0 and len(fields) > 4 and fields[4] == BASTION_COMMENT
+
+
+def _require_no_foreign_bastion_user(o: ops.Ops) -> None:
+    if _bastion_user_exists(o) and not _is_bastion_user_ours(o):
+        raise pfc.exceptions.UI(
+            f"the account {BASTION_USER} exists and pf did not create it; remove it or rename it before initializing pf"
+        )
+
+
 def _ensure_bastion_user(o: ops.Ops) -> None:
     """Create the system user the bastion service runs as: no login shell, no home directory."""
-    if o.query(["id", "-u", BASTION_USER]).returncode == 0:
+    if _is_bastion_user_ours(o):
         return
     o.run(
         [
@@ -101,6 +121,7 @@ def _ensure_bastion_user(o: ops.Ops) -> None:
             "--no-create-home",
             "--home-dir=/nonexistent",
             "--shell=/usr/sbin/nologin",
+            f"--comment={BASTION_COMMENT}",
             BASTION_USER,
         ]
     )
@@ -135,6 +156,7 @@ class Linux:
         )
         if conflict is not None:
             raise pfc.exceptions.UI(f"conflicting sshd directive '{conflict}' found; remove before initializing pf")
+        _require_no_foreign_bastion_user(o)
         pam = o.read_text(PAM_SSHD) or ""
         if PAM_BEGIN in pam.splitlines():
             raise pfc.exceptions.UI(f"pf PAM block already present in {PAM_SSHD}; remove before re-running host-init")
@@ -294,7 +316,8 @@ class Linux:
         o.remove(STATE_DIR, recursive=True)
         o.remove(BASTION_STATE_DIR, recursive=True)
         o.remove(os.path.dirname(SESSIONS_DIR), recursive=True)
-        o.run(["userdel", BASTION_USER], check=False)
+        if _is_bastion_user_ours(o):
+            o.run(["userdel", BASTION_USER], check=False)
 
         unit = _sshd_unit(o)
         if o.query([SYSTEMCTL, "is-active", unit]).returncode == 0:
