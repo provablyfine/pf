@@ -276,7 +276,9 @@ class AuditLogGrant(DBBase):
 
 
 class LiveFilter(Filter):
-    pass
+    """Matches the sessions of hosts that hold all of these tags."""
+
+    tag_id_list: list[int] | None = None
 
 
 class LivePermission(DBBase):

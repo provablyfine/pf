@@ -2036,3 +2036,38 @@ def test_grants_create_without_active_role(real_app_db: app_db.AppDb) -> None:
 
     assert [b.id for b in grants._boundaries] == [boundary_id]
     assert grants._roles == []
+
+
+def _live_grant(tag_id_list: list[int] | None) -> dict[str, typing.Any]:
+    return {"type": "live", "filter": {"tag_id_list": tag_id_list}, "permission": {"read": True, "terminate": True}}
+
+
+def test_live_filter_needs_every_tag_on_the_host():
+    grants = single_grants(_live_grant([1, 2]))
+    assert grants.live([1, 2, 3]).can_read()
+    assert grants.live([1, 2, 3]).can_terminate()
+    assert not grants.live([1]).can_read()
+    assert not grants.live([1]).can_terminate()
+    assert not grants.live([]).can_read()
+    assert not grants.live(None).can_read()
+
+
+def test_live_filter_with_an_empty_tag_list_matches_nothing():
+    assert not single_grants(_live_grant([])).live([1]).can_read()
+
+
+def test_live_filter_without_tags_matches_every_host():
+    assert single_grants(_live_grant(None)).live([]).can_read()
+    assert single_grants(_live_grant(None)).live(None).can_read()
+
+
+def test_live_read_somewhere_ignores_the_filter():
+    assert single_grants(_live_grant([1])).live_read_somewhere()
+    assert not grant.Grants([], []).live_read_somewhere()
+
+
+def test_live_read_somewhere_needs_a_live_grant_that_reads():
+    audit = {"type": "audit-log", "filter": {}, "permission": {"read": True}}
+    no_read = {"type": "live", "filter": {}, "permission": {"read": False, "terminate": True}}
+    assert not single_grants(audit).live_read_somewhere()
+    assert not single_grants(no_read).live_read_somewhere()

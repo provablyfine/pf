@@ -209,7 +209,7 @@ class AuditLogGrant(base.APIBase):
 
 
 class LiveFilter(base.APIBase):
-    pass
+    tag_list: list[tag.TagNameValue] | None = None
 
 
 class LivePermission(base.APIBase):

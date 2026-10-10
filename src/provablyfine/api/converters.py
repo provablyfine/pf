@@ -311,7 +311,7 @@ def _grant_to_schema(converter: GrantConverter, grant: model.grant.Grant) -> sch
             permission = schemas.grant.AuditLogPermission(read=grant.permission.read)
             g = schemas.grant.AuditLogGrant(filter=filter, permission=permission)
         case "live":
-            filter = schemas.grant.LiveFilter()
+            filter = schemas.grant.LiveFilter(tag_list=converter.to_tag_list(grant.filter.tag_id_list))
             permission = schemas.grant.LivePermission(read=grant.permission.read, terminate=grant.permission.terminate)
             g = schemas.grant.LiveGrant(filter=filter, permission=permission)
         case _:
@@ -467,7 +467,7 @@ def _grant_from_schema(converter: GrantConverter, grant: schemas.grant.Grant) ->
             permission = model.grant.AuditLogPermission(read=grant.permission.read)
             g = model.grant.AuditLogGrant(filter=filter, permission=permission)
         case "live":
-            filter = model.grant.LiveFilter()
+            filter = model.grant.LiveFilter(tag_id_list=converter.from_tag_list(grant.filter.tag_list))
             permission = model.grant.LivePermission(read=grant.permission.read, terminate=grant.permission.terminate)
             g = model.grant.LiveGrant(filter=filter, permission=permission)
         case _:

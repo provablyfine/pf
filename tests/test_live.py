@@ -195,3 +195,44 @@ def test_a_terminate_token_cannot_be_requested_from_the_self_token_endpoint(api,
 
     with pytest.raises(pfc.exceptions.UI):
         sc.get_self_token("bastion", hostname=host, purpose=typing.cast(typing.Literal["register"], "terminate"))
+
+
+def _viewer(factory, sc, api, tmp_path, tag_list):
+    """A second identity whose only role has a live grant limited to hosts with these tags."""
+    other = base._invite_second_identity(factory, sc, api.port, tmp_path)
+    role = sc.create_role("viewer", "")
+    live = pfc.schemas.validate_grant(
+        {"type": "live", "filter": {"tag_list": tag_list}, "permission": {"read": True, "terminate": True}}
+    )
+    sc.update_role(role.id, grant_list=[live], member_list=[pfc.schemas.RoleMemberUpdateRequest(name="second")])
+    other.update_session(role.id)
+    return other, role.id
+
+
+def test_a_tag_filter_limits_the_sessions_a_grant_covers(api, tmp_path):
+    factory, sc, host = _signed_in(api, tmp_path)
+    prod = sc.create_tag("env", "prod")
+    session = _start_session(sc, host)
+    other, _ = _viewer(factory, sc, api, tmp_path, [{"name": "env", "value": "prod"}])
+
+    # The host does not hold the tag yet.
+    assert other.list_live().sessions == []
+    with pytest.raises(pfc.exceptions.UI, match="does not exist"):
+        other.terminate_live(session.id)
+
+    sc.update_identity(sc.get_self().id, tags=[pfc.schemas.IdentityTagOp(type="add", tag_id_list=[prod.id])])
+    assert [s.id for s in other.list_live().sessions] == [session.id]
+    # The session is visible now, so the request gets as far as the bastions.
+    with pytest.raises(pfc.exceptions.UI, match="Unable to end the session"):
+        other.terminate_live(session.id)
+
+
+def test_deleting_a_tag_drops_the_live_grants_that_name_it(api, tmp_path):
+    factory, sc, _host = _signed_in(api, tmp_path)
+    prod = sc.create_tag("env", "prod")
+    _, role_id = _viewer(factory, sc, api, tmp_path, [{"name": "env", "value": "prod"}])
+    assert [g.type for g in sc.get_role(role_id).grant_list] == ["live"]
+
+    sc.delete_tag(prod.id)
+
+    assert sc.get_role(role_id).grant_list == []

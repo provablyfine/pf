@@ -1,7 +1,8 @@
 """Grants that use a tag id to decide who matches, or to scope what tag ids a permission covers.
 
-A grant of type `identity` or `ssh` can have a `filter.tag_id_list`: an AND of tags the target
-identity must hold. Shrinking that list in place would change who the grant matches, since a
+A grant of type `identity`, `ssh` or `live` can have a `filter.tag_id_list`: an AND of tags the target
+identity (for `live`, the host of the session) must hold.
+Shrinking that list in place would change who the grant matches, since a
 filter nobody can currently satisfy would suddenly become satisfiable by whoever holds the
 remaining tags, the moment the dead id is dropped. So a grant whose filter names the tag is
 removed whole, the same way `identity_references` removes a grant that names a deleted identity.
@@ -38,7 +39,11 @@ class Owner:
 
 
 def _filter_names(g: grant.Grant, tag_id: int) -> bool:
-    return isinstance(g, grant.TripletGrant) and g.filter.tag_id_list is not None and tag_id in g.filter.tag_id_list
+    return (
+        isinstance(g, grant.TripletGrant | grant.LiveGrant)
+        and g.filter.tag_id_list is not None
+        and tag_id in g.filter.tag_id_list
+    )
 
 
 def _permission_names(g: grant.Grant, tag_id: int) -> bool:
