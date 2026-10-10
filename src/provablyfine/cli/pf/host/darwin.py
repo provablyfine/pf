@@ -36,6 +36,8 @@ BASTION_CONFIG = f"{BASTION_DIR}/config.json"
 KILL_DIR = "/var/db/pf-kill-requests"
 # The root reaper leaves session events here and the bastion account reads them.
 LIVE_DIR = "/var/db/pf-live-events"
+# The directories where the installer package puts pf.
+PF_DIRECTORIES = ("/opt/provablyfine",)
 LAUNCHD_DIR = "/Library/LaunchDaemons"
 SSHD_LABEL = "com.openssh.sshd"
 SSHD_PLIST = "/System/Library/LaunchDaemons/ssh.plist"
@@ -158,10 +160,10 @@ class Darwin:
             )
         if not o.is_executable(candidate):
             raise pfc.exceptions.UI(f"{candidate} is not an executable file")
-        problem = o.path_problem(candidate)
+        problem = common_steps.pf_install_problem(o, candidate, PF_DIRECTORIES)
         if problem is not None:
             raise pfc.exceptions.UI(
-                f"sshd would refuse to run {candidate}: {problem}. "
+                f"{candidate} is not a correct install: {problem}. "
                 "Install the provablyfine installer package, which puts pf in /opt/provablyfine."
             )
         return candidate

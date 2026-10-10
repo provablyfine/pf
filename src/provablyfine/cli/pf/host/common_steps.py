@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import stat
 import typing
 
 import provablyfine_client as pfc
@@ -31,6 +33,41 @@ def new_account_key_pem() -> bytes:
 def client_config(directory_url: str, account_key_file: str) -> str:
     """The pf configuration file of a host: where the directory is and which key signs requests."""
     return json.dumps({"directory_url": directory_url, "account_key_file": account_key_file}) + "\n"
+
+
+def pf_install_problem(
+    o: ops.Ops, path: str, prefixes: typing.Sequence[str], trusted_uid: int | None = None
+) -> str | None:
+    """Why `path` is not a correct system install of pf, or None when it is.
+
+    sshd and the services run pf with the rights of other users, so only a trusted user may be able to change it.
+    The resolved file must sit directly in one of `prefixes`.
+    The file and every directory above it must belong to the trusted user and be closed to writes by group and others.
+    Other users must be able to read and run the file and to search its directories.
+    The root directory is not checked.
+    `trusted_uid` is the owner of the root directory by default, which is root on a real system.
+
+    A script whose interpreter lives in a user directory, such as a venv, passes: only pf itself is inspected.
+    """
+    trusted = o.stat("/").st_uid if trusted_uid is None else trusted_uid
+    current = o.realpath(path)
+    if os.path.dirname(current) not in {o.realpath(prefix) for prefix in prefixes}:
+        return f"{current} is not in {' or '.join(prefixes)}"
+    needed = stat.S_IROTH | stat.S_IXOTH
+    while os.path.dirname(current) != current:
+        try:
+            info = o.stat(current)
+        except OSError as e:
+            return f"cannot inspect {current}: {e.strerror}"
+        if info.st_uid != trusted:
+            return f"{current} is owned by uid {info.st_uid}, not {trusted}"
+        if info.st_mode & 0o022:
+            return f"{current} can be written by its group or by others (mode {stat.S_IMODE(info.st_mode):o})"
+        if info.st_mode & needed != needed:
+            return f"{current} is closed to other users (mode {stat.S_IMODE(info.st_mode):o})"
+        current = os.path.dirname(current)
+        needed = stat.S_IXOTH
+    return None
 
 
 def conflicting_directive(o: ops.Ops, paths: typing.Iterable[str], names: typing.Iterable[str]) -> str | None:

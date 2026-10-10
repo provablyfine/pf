@@ -441,6 +441,22 @@ def test_init_makes_a_spool_directory_only_root_can_use(tmp_path: pathlib.Path) 
     assert ops.MakeDir("/var/lib/pf-bastion/live-events", 0o700, "pf-bastion") in _init(tmp_path).actions
 
 
+def test_init_refuses_a_pf_that_others_can_change(tmp_path: pathlib.Path) -> None:
+    _host(tmp_path)
+    (tmp_path / "usr" / "bin" / "pf").chmod(0o775)
+    with pytest.raises(pfc.exceptions.UI, match=r"/usr/bin/pf is not a correct install: .*written by its group"):
+        _init(tmp_path)
+
+
+def test_init_refuses_a_pf_that_the_bastion_user_cannot_run(tmp_path: pathlib.Path) -> None:
+    _host(tmp_path)
+    (tmp_path / "usr" / "bin").chmod(0o750)
+    with pytest.raises(
+        pfc.exceptions.UI, match=r"/usr/bin/pf is not a correct install: /usr/bin is closed to other users"
+    ):
+        _init(tmp_path)
+
+
 def test_init_reuses_a_bastion_user_that_pf_created(tmp_path: pathlib.Path) -> None:
     _host(tmp_path)
     dry = _init(tmp_path, queries=_queries(bastion_user="ours"))

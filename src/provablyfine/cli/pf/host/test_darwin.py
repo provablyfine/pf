@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import pathlib
 import plistlib
 import sys
@@ -78,7 +77,7 @@ def _dry(
     tmp_path: pathlib.Path, *, remote_login: bool = True, access_group: bool = True, port: str = "22"
 ) -> ops.DryRunOps:
     query = _queries(remote_login=remote_login, access_group=access_group, port=port)
-    return ops.DryRunOps(root=tmp_path, query=query, trusted_uid=os.getuid())
+    return ops.DryRunOps(root=tmp_path, query=query)
 
 
 def _init(
@@ -275,7 +274,9 @@ def test_init_refuses_a_pf_that_group_members_can_change(tmp_path: pathlib.Path)
     _host(tmp_path)
     (tmp_path / "opt" / "provablyfine").chmod(0o775)
     dry = _dry(tmp_path)
-    with pytest.raises(pfc.exceptions.UI, match=r"sshd would refuse to run /opt/provablyfine/pf: /opt/provablyfine "):
+    with pytest.raises(
+        pfc.exceptions.UI, match=r"/opt/provablyfine/pf is not a correct install: /opt/provablyfine can be written"
+    ):
         darwin.Darwin(PF).init(dry, _settings())
     assert dry.actions == []
 
@@ -302,7 +303,7 @@ def test_init_uses_the_pf_given_on_the_command_line(tmp_path: pathlib.Path) -> N
 def test_init_still_checks_the_pf_given_on_the_command_line(tmp_path: pathlib.Path) -> None:
     _host(tmp_path)
     (tmp_path / "opt" / "provablyfine").chmod(0o775)
-    with pytest.raises(pfc.exceptions.UI, match="sshd would refuse"):
+    with pytest.raises(pfc.exceptions.UI, match="is not a correct install"):
         darwin.Darwin(None).init(_dry(tmp_path), _settings(pf_binary=PF))
 
 
@@ -341,7 +342,7 @@ def test_init_keeps_an_invitation_with_shell_syntax_as_one_argument(tmp_path: pa
 
 def test_uninit_undoes_the_install(tmp_path: pathlib.Path) -> None:
     _host(tmp_path)
-    dry = ops.DryRunOps(root=tmp_path, query=_queries(bastion_account="ours"), trusted_uid=os.getuid())
+    dry = ops.DryRunOps(root=tmp_path, query=_queries(bastion_account="ours"))
     darwin.Darwin(PF).uninit(dry, _settings())
     assert _runs(dry) == [
         ("launchctl", "bootout", "system/net.provablyfine.host-refresh"),
@@ -409,16 +410,25 @@ def test_free_id_skips_ids_of_records_whose_names_contain_a_space() -> None:
     assert darwin._free_id(ops.DryRunOps(query=query)) == 451  # pyright: ignore[reportPrivateUsage]
 
 
+def test_init_refuses_a_pf_that_the_bastion_account_cannot_run(tmp_path: pathlib.Path) -> None:
+    _host(tmp_path)
+    (tmp_path / "opt" / "provablyfine").chmod(0o750)
+    with pytest.raises(
+        pfc.exceptions.UI, match=r"is not a correct install: /opt/provablyfine is closed to other users"
+    ):
+        darwin.Darwin(PF).init(_dry(tmp_path), _settings())
+
+
 def test_init_reuses_an_existing_bastion_account(tmp_path: pathlib.Path) -> None:
     _host(tmp_path)
-    dry = ops.DryRunOps(root=tmp_path, query=_queries(bastion_account="ours"), trusted_uid=os.getuid())
+    dry = ops.DryRunOps(root=tmp_path, query=_queries(bastion_account="ours"))
     darwin.Darwin(PF).init(dry, _settings())
     assert not any(argv[0] == "dscl" for argv in _runs(dry))
 
 
 def test_init_refuses_an_account_that_pf_did_not_create(tmp_path: pathlib.Path) -> None:
     _host(tmp_path)
-    dry = ops.DryRunOps(root=tmp_path, query=_queries(bastion_account="foreign"), trusted_uid=os.getuid())
+    dry = ops.DryRunOps(root=tmp_path, query=_queries(bastion_account="foreign"))
     with pytest.raises(pfc.exceptions.UI, match="pf did not create it"):
         darwin.Darwin(PF).init(dry, _settings())
     assert dry.actions == []
@@ -427,7 +437,7 @@ def test_init_refuses_an_account_that_pf_did_not_create(tmp_path: pathlib.Path) 
 @pytest.mark.parametrize(("state", "deleted"), [("ours", True), ("foreign", False), ("", False)])
 def test_uninit_deletes_only_an_account_that_pf_created(tmp_path: pathlib.Path, state: str, deleted: bool) -> None:
     _host(tmp_path)
-    dry = ops.DryRunOps(root=tmp_path, query=_queries(bastion_account=state), trusted_uid=os.getuid())
+    dry = ops.DryRunOps(root=tmp_path, query=_queries(bastion_account=state))
     darwin.Darwin(PF).uninit(dry, _settings())
     assert (("dscl", ".", "-delete", "/Users/_pfbastion") in _runs(dry)) is deleted
 

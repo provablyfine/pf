@@ -149,6 +149,12 @@ class Linux:
         ):
             common_steps.require_plain(value, what)
         pf_bin = _find_pf(o, s.pf_binary)
+        problem = common_steps.pf_install_problem(o, pf_bin, PF_DIRECTORIES)
+        if problem is not None:
+            raise pfc.exceptions.UI(
+                f"{pf_bin} is not a correct install: {problem}. "
+                "Install pf for the whole system, for example in /usr/local/bin."
+            )
         drop_in_dir = os.path.dirname(s.sshd_config_drop_in)
 
         conflict = common_steps.conflicting_directive(
