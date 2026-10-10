@@ -27,6 +27,7 @@ import os
 import re
 import signal
 import stat
+import subprocess
 import sys
 import time
 import types
@@ -35,11 +36,11 @@ import typing
 import provablyfine_client as pfc
 
 from ... import client
-from . import host, live_events
+from . import host, live_events, session_records
 
 logger = logging.getLogger(__name__)
 
-_CONNECTION_ID = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+_CONNECTION_ID = session_records.CONNECTION_ID
 _CONNECTION_ID_RE = re.compile(_CONNECTION_ID)
 _RECORD_NAME_RE = re.compile(rf"([0-9]+)-({_CONNECTION_ID})\.json")
 _KILL_NAME_RE = re.compile(rf"kill-({_CONNECTION_ID})")
@@ -185,6 +186,50 @@ def register_session(
     return write_record(directory, record)
 
 
+class KillRequests:
+    """The requests to end a session, left by `request_kill` in a directory that only root can write."""
+
+    def __init__(self, directory: str | None, now: typing.Callable[[], float] = time.time) -> None:
+        self._directory = directory
+        self._now = now
+        # When each request was first seen without a live session.
+        self._orphans: dict[str, float] = {}
+
+    def requested(self) -> set[str]:
+        """The connection ids that someone asked to end."""
+        if self._directory is None:
+            return set()
+        try:
+            names = os.listdir(self._directory)
+        except OSError:
+            return set()
+        matches = (_KILL_NAME_RE.fullmatch(name) for name in names)
+        return {m.group(1) for m in matches if m is not None}
+
+    def remove(self, connection_id: str) -> None:
+        if self._directory is None:
+            return
+        try:
+            os.unlink(os.path.join(self._directory, kill_request_name(connection_id)))
+        except FileNotFoundError:
+            pass
+
+    def expire(self, orphans: set[str]) -> None:
+        """Remove the requests that no live session claims after a while."""
+        if self._directory is None:
+            return
+        now = self._now()
+        for connection_id in [c for c in self._orphans if c not in orphans]:
+            del self._orphans[connection_id]
+        for connection_id in orphans:
+            first_seen = self._orphans.setdefault(connection_id, now)
+            if now - first_seen < KILL_REQUEST_TTL:
+                continue
+            logger.info(f"dropping kill request connection_id={connection_id} reason=no session")
+            self.remove(connection_id)
+            del self._orphans[connection_id]
+
+
 class Reaper:
     def __init__(
         self,
@@ -198,7 +243,7 @@ class Reaper:
         grace: float = 5.0,
     ) -> None:
         self._directory = directory
-        self._kill_directory = kill_directory
+        self._requests = KillRequests(kill_directory, now)
         self._live_directory = live_directory
         self._table = table
         self._is_connection = is_connection or host.procs.connection_test()
@@ -208,8 +253,6 @@ class Reaper:
         self._bound: dict[str, int] = {}
         # When each session was first asked to end.
         self._ending: dict[str, float] = {}
-        # When each kill request was first seen without a live session.
-        self._orphan_requests: dict[str, float] = {}
         # The records whose start was reported, so that their end is reported once.
         self._reported: dict[str, Record] = {}
         self._stopping = False
@@ -221,7 +264,7 @@ class Reaper:
             return
         snapshot = self._table.snapshot()
         present = set(names)
-        requested = self._requested()
+        requested = self._requests.requested()
         live: set[str] = set()
         for name in names:
             if _RECORD_NAME_RE.fullmatch(name) is None:
@@ -235,36 +278,7 @@ class Reaper:
                 live.add(record.connection_id)
         for name in [n for n in self._bound if n not in present]:
             self._forget(name)
-        self._expire_requests(requested - live)
-
-    def _requested(self) -> set[str]:
-        """The connection ids that someone asked to end."""
-        if self._kill_directory is None:
-            return set()
-        try:
-            names = os.listdir(self._kill_directory)
-        except OSError:
-            return set()
-        matches = (_KILL_NAME_RE.fullmatch(name) for name in names)
-        return {m.group(1) for m in matches if m is not None}
-
-    def _expire_requests(self, orphans: set[str]) -> None:
-        """Remove the requests that no live session claims after a while."""
-        if self._kill_directory is None:
-            return
-        now = self._now()
-        for connection_id in [c for c in self._orphan_requests if c not in orphans]:
-            del self._orphan_requests[connection_id]
-        for connection_id in orphans:
-            first_seen = self._orphan_requests.setdefault(connection_id, now)
-            if now - first_seen < KILL_REQUEST_TTL:
-                continue
-            logger.info(f"dropping kill request connection_id={connection_id} reason=no session")
-            try:
-                os.unlink(os.path.join(self._kill_directory, kill_request_name(connection_id)))
-            except FileNotFoundError:
-                pass
-            del self._orphan_requests[connection_id]
+        self._requests.expire(requested - live)
 
     def _forget(self, name: str) -> None:
         self._bound.pop(name, None)
@@ -357,6 +371,81 @@ class Reaper:
         logger.info("session reaper stopped")
 
 
+_LOGINCTL = "/usr/bin/loginctl"
+_LOGINCTL_TIMEOUT_S = 10.0
+
+
+def loginctl_terminate_session(session_id: str) -> bool:
+    """Ask logind to end a session. Returns whether it did."""
+    try:
+        result = subprocess.run(  # noqa: S603
+            [_LOGINCTL, "terminate-session", session_id],
+            check=False,
+            capture_output=True,
+            stdin=subprocess.DEVNULL,
+            timeout=_LOGINCTL_TIMEOUT_S,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        logger.warning(f"loginctl failed session_id={session_id}", exc_info=True)
+        return False
+    if result.returncode != 0:
+        logger.warning(f"loginctl terminate-session failed session_id={session_id} stderr={result.stderr!r}")
+        return False
+    return True
+
+
+class LogindReaper:
+    """Ends Linux sessions on request.
+
+    The PAM hook records each open session in `sessions_directory`.
+    A request names a connection id. The records turn it into logind session ids.
+    A request that finds no session waits a while, because the session may still be starting.
+    Deadlines are not handled here. The PAM hook sets a timer for them.
+    """
+
+    def __init__(
+        self,
+        kill_directory: str,
+        sessions_directory: str,
+        *,
+        terminate: typing.Callable[[str], bool] = loginctl_terminate_session,
+        now: typing.Callable[[], float] = time.time,
+    ) -> None:
+        self._requests = KillRequests(kill_directory, now)
+        self._sessions_directory = sessions_directory
+        self._terminate = terminate
+        self._stopping = False
+
+    def tick(self) -> None:
+        requested = self._requests.requested()
+        unclaimed: set[str] = set()
+        for connection_id in sorted(requested):
+            session_ids = session_records.session_ids(self._sessions_directory, connection_id)
+            if not session_ids:
+                unclaimed.add(connection_id)
+                continue
+            for session_id in session_ids:
+                logger.info(f"kill requested, ending session connection_id={connection_id} session_id={session_id}")
+                self._terminate(session_id)
+            self._requests.remove(connection_id)
+        self._requests.expire(unclaimed)
+
+    def _request_stop(self, signum: int, frame: types.FrameType | None) -> None:
+        self._stopping = True
+
+    def run(self, interval: float) -> None:
+        signal.signal(signal.SIGTERM, self._request_stop)
+        signal.signal(signal.SIGINT, self._request_stop)
+        logger.info("session reaper started")
+        while not self._stopping:
+            try:
+                self.tick()
+            except Exception:
+                logger.warning("failed to handle kill requests", exc_info=True)
+            time.sleep(interval)
+        logger.info("session reaper stopped")
+
+
 def _directory_problem(directory: str) -> str | None:
     try:
         info = os.lstat(directory)
@@ -371,9 +460,19 @@ def _directory_problem(directory: str) -> str | None:
 
 
 def session_reaper_function(args: argparse.Namespace) -> None:
-    """End SSH sessions at their certificate deadline. Must run as root."""
+    """End SSH sessions at their certificate deadline, or when asked to. Must run as root."""
     if not host.is_privileged():
         raise pfc.exceptions.UI("session-reaper must run as root, or as an administrator on Windows")
+    if args.sessions_dir is not None:
+        if args.kill_dir is None:
+            raise pfc.exceptions.UI("--sessions-dir needs --kill-dir")
+        problem = _directory_problem(args.kill_dir)
+        if problem is not None:
+            raise pfc.exceptions.UI(problem)
+        LogindReaper(args.kill_dir, args.sessions_dir).run(args.interval)
+        return
+    if args.deadline_dir is None:
+        raise pfc.exceptions.UI("session-reaper needs --deadline-dir or --sessions-dir")
     problem = _directory_problem(args.deadline_dir)
     if problem is not None:
         raise pfc.exceptions.UI(problem)

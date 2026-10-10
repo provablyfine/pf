@@ -44,7 +44,7 @@ List existing roles (there is one)
                permission: read
   grant        type:       live
                filter:     *
-               permission: read
+               permission: read terminate
 
 
 Create tags to be able to define tag-related permissions in role

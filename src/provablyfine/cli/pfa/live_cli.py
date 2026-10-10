@@ -20,20 +20,26 @@ def _list_function(args: argparse.Namespace) -> None:
         args.format = "quiet"
     match args.format:
         case "quiet":
-            output = "\n".join(s.connection_id for s in sessions)
+            output = "\n".join(s.id for s in sessions)
         case "json":
             output = json.dumps([s.model_dump() for s in sessions], indent=2)
         case "text":
             rows = [
-                [s.connection_id, s.hostname, s.identity_id, s.kind, _time(s.started_at), _time(s.ended_at)]
+                [s.id, s.connection_id, s.hostname, s.identity_id, s.kind, _time(s.started_at), _time(s.ended_at)]
                 for s in sessions
             ]
-            headers = ["connection", "host", "identity", "kind", "started", "ended"]
+            headers = ["id", "connection", "host", "identity", "kind", "started", "ended"]
             output = tabulate.tabulate(rows, headers=headers) if rows else ""
         case _:
             assert False
     if output:
         print(output)
+
+
+def _terminate_function(args: argparse.Namespace) -> None:
+    c = client.Config.load(args.config)
+    sc = client.Factory(c, timeout=args.timeout).session()
+    sc.terminate_live(args.id)
 
 
 def add_subparser(parser: argparse.ArgumentParser) -> None:
@@ -48,6 +54,10 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
     state.add_argument("--ended", action="store_true", help="Only sessions that ended")
     list_parser.add_argument("--format", choices=["text", "json", "quiet"], default="text")
     list_parser.add_argument(
-        "-q", "--quiet", action="store_true", default=False, help="Quiet output (connection ids only)"
+        "-q", "--quiet", action="store_true", default=False, help="Quiet output (session ids only)"
     )
     list_parser.set_defaults(func=_list_function)
+
+    terminate_parser = subparsers.add_parser("terminate", help="End a live session")
+    terminate_parser.add_argument("id", help="Id of the session, as shown by list")
+    terminate_parser.set_defaults(func=_terminate_function)

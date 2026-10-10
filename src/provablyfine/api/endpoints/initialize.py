@@ -111,7 +111,7 @@ def _provision(allow_tenant_create: bool):
     )
     live_grant_all = model.grant.LiveGrant(
         filter=model.grant.LiveFilter(),
-        permission=model.grant.LivePermission(read=True),
+        permission=model.grant.LivePermission(read=True, terminate=True),
     )
 
     if allow_tenant_create:

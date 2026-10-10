@@ -128,6 +128,12 @@ class SessionClient:
             raise exceptions.UI(_problem_title(response, "Unable to list live sessions"))
         return schemas.LiveListResponse.model_validate(response.json())
 
+    def terminate_live(self, id: str) -> None:
+        """End a live session. The server tells the host, and answers once the host has done it."""
+        response = self._session.post(f"{self._directory.live}/{id}/terminate", auth=self._auth())
+        if response.status_code != 204:
+            raise exceptions.UI(_problem_title(response, "Unable to end the live session"))
+
     def report_live(self, event: typing.Literal["start", "end"], report: schemas.LiveReportRequest) -> None:
         """Report that a session started or ended. Hosts and relays report their own sessions."""
         response = self._session.post(

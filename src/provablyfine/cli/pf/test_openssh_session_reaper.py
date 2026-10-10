@@ -694,3 +694,86 @@ def test_a_live_directory_that_cannot_be_written_does_not_stop_the_reaper(tmp_pa
     _live_reaper(tmp_path, tmp_path / "missing", table, clock).tick()
 
     assert table.sent == [(101, False), (102, False), (100, False)]
+
+
+######## LogindReaper ########
+
+
+def _logind_reaper(
+    tmp_path: pathlib.Path, clock: list[float]
+) -> tuple[openssh_session_reaper.LogindReaper, pathlib.Path, pathlib.Path, list[str]]:
+    kill = tmp_path / "kill"
+    sessions = tmp_path / "sessions"
+    kill.mkdir()
+    sessions.mkdir()
+    ended: list[str] = []
+
+    def terminate(session_id: str) -> bool:
+        ended.append(session_id)
+        return True
+
+    reaper = openssh_session_reaper.LogindReaper(str(kill), str(sessions), terminate=terminate, now=lambda: clock[0])
+    return reaper, kill, sessions, ended
+
+
+def test_a_request_ends_every_recorded_session_of_the_connection(tmp_path: pathlib.Path) -> None:
+    reaper, kill, sessions, ended = _logind_reaper(tmp_path, [100.0])
+    (sessions / f"{CONNECTION_ID}-42").write_text("")
+    (sessions / f"{CONNECTION_ID}-c3").write_text("")
+    (sessions / f"{OTHER_CONNECTION_ID}-7").write_text("")
+    assert openssh_session_reaper.request_kill(str(kill), CONNECTION_ID)
+
+    reaper.tick()
+
+    assert sorted(ended) == ["42", "c3"]
+    assert list(kill.iterdir()) == []
+
+
+def test_without_a_request_no_session_is_ended(tmp_path: pathlib.Path) -> None:
+    reaper, _kill, sessions, ended = _logind_reaper(tmp_path, [100.0])
+    (sessions / f"{CONNECTION_ID}-42").write_text("")
+
+    reaper.tick()
+
+    assert ended == []
+
+
+def test_a_request_waits_for_a_session_that_is_still_starting(tmp_path: pathlib.Path) -> None:
+    clock = [100.0]
+    reaper, kill, sessions, ended = _logind_reaper(tmp_path, clock)
+    openssh_session_reaper.request_kill(str(kill), CONNECTION_ID)
+
+    reaper.tick()
+    assert ended == []
+    assert (kill / f"kill-{CONNECTION_ID}").exists()
+
+    (sessions / f"{CONNECTION_ID}-42").write_text("")
+    clock[0] = 110.0
+    reaper.tick()
+
+    assert ended == ["42"]
+    assert list(kill.iterdir()) == []
+
+
+def test_a_request_with_no_session_is_dropped_after_a_while(tmp_path: pathlib.Path) -> None:
+    clock = [100.0]
+    reaper, kill, _sessions, ended = _logind_reaper(tmp_path, clock)
+    openssh_session_reaper.request_kill(str(kill), CONNECTION_ID)
+
+    reaper.tick()
+    clock[0] = 100.0 + openssh_session_reaper.KILL_REQUEST_TTL + 1
+    reaper.tick()
+
+    assert ended == []
+    assert list(kill.iterdir()) == []
+
+
+def test_records_with_other_names_are_not_sessions(tmp_path: pathlib.Path) -> None:
+    reaper, kill, sessions, ended = _logind_reaper(tmp_path, [100.0])
+    for name in (f"{CONNECTION_ID}-../x", f"{CONNECTION_ID}-4 2", f"{CONNECTION_ID}-", f"{CONNECTION_ID}-{'a' * 33}"):
+        (sessions / name.replace("/", "_")).write_text("")
+    openssh_session_reaper.request_kill(str(kill), CONNECTION_ID)
+
+    reaper.tick()
+
+    assert ended == []

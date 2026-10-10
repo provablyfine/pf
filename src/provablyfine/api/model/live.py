@@ -61,6 +61,10 @@ def end(*, connection_id: str, hostname: str, kind: Kind, session_id: str, at: i
         table.update(ended_at=max(at, row.started_at)).where(id=row.id, ended_at=None)
 
 
+def read_one(id: str) -> app_db.LiveSessionRow | None:
+    return ctx.app_db.live_session.read_one(id=id)
+
+
 def read_all(
     *, hostname: str | None = None, identity_id: int | None = None, active: bool | None = None
 ) -> list[app_db.LiveSessionRow]:

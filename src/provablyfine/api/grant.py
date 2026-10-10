@@ -731,6 +731,12 @@ class LiveChecker:
 
         return self._checker.can(check)
 
+    def can_terminate(self) -> bool:
+        def check(g: model.grant.LiveGrant) -> bool:
+            return g.permission.terminate
+
+        return self._checker.can(check)
+
 
 class Grants:
     def __init__(self, boundaries: list[model.boundary.Boundary], roles: list[model.role.Role]):

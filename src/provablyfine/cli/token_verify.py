@@ -13,6 +13,7 @@ class VerifiedToken:
     jti: str
     deadline: int | None
     cid: str | None
+    use: str
 
 
 class SingleIssuerVerifier:
@@ -35,7 +36,9 @@ class SingleIssuerVerifier:
         for j in expired:
             del self._seen_jti[j]
 
-    def verify(self, token: str, expected_audience: str, now: int, expected_use: str) -> VerifiedToken | None:
+    def verify(
+        self, token: str, expected_audience: str, now: int, expected_use: frozenset[str]
+    ) -> VerifiedToken | None:
         try:
             unverified = jwt.decode_complete(token, options={"verify_signature": False, "require": ["iss"]})
         except jwt.exceptions.InvalidTokenError as e:
@@ -64,7 +67,7 @@ class SingleIssuerVerifier:
             logger.debug(f"token: rejected: {e}")
             return None
 
-        if payload["use"] != expected_use:
+        if payload["use"] not in expected_use:
             logger.debug(f"token: wrong purpose: {payload['use']}")
             return None
 
@@ -81,4 +84,5 @@ class SingleIssuerVerifier:
             jti=jti,
             deadline=payload.get("deadline"),
             cid=payload.get("cid"),
+            use=payload["use"],
         )

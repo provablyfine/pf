@@ -186,6 +186,7 @@ class Darwin:
                     "--port",
                     common_steps.ssh_port(o),
                     f"--live-events-dir={LIVE_DIR}",
+                    f"--kill-dir={KILL_DIR}",
                 ],
                 "host-bastion",
                 keep_alive=True,
