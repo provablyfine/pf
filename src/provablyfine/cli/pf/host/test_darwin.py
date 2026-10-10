@@ -53,9 +53,9 @@ def _queries(
                     return ops.QueryResult(0, "RealName:\n provablyfine bastion\n")
                 return ops.QueryResult(56, "")
             case ["dscl", ".", "-list", "/Users", "UniqueID"]:
-                return ops.QueryResult(0, "root 0\n_taken 300\nmathieu 501\n")
+                return ops.QueryResult(0, "root 0\n_taken 450\nmathieu 501\n")
             case ["dscl", ".", "-list", "/Groups", "PrimaryGroupID"]:
-                return ops.QueryResult(0, "wheel 0\n_taken2 301\n")
+                return ops.QueryResult(0, "wheel 0\n_taken2 451\n")
         return ops.QueryResult(127, "")
 
     return query
@@ -116,10 +116,10 @@ def test_init_runs_the_steps_in_order(tmp_path: pathlib.Path) -> None:
         assert ops.MakeDir(f"/var/db/{directory}", 0o700, "_pfbastion") in dry.actions
     assert _runs(dry) == [
         ("dscl", ".", "-create", "/Groups/_pfbastion"),
-        ("dscl", ".", "-create", "/Groups/_pfbastion", "PrimaryGroupID", "302"),
+        ("dscl", ".", "-create", "/Groups/_pfbastion", "PrimaryGroupID", "452"),
         ("dscl", ".", "-create", "/Users/_pfbastion"),
-        ("dscl", ".", "-create", "/Users/_pfbastion", "UniqueID", "302"),
-        ("dscl", ".", "-create", "/Users/_pfbastion", "PrimaryGroupID", "302"),
+        ("dscl", ".", "-create", "/Users/_pfbastion", "UniqueID", "452"),
+        ("dscl", ".", "-create", "/Users/_pfbastion", "PrimaryGroupID", "452"),
         ("dscl", ".", "-create", "/Users/_pfbastion", "UserShell", "/usr/bin/false"),
         ("dscl", ".", "-create", "/Users/_pfbastion", "NFSHomeDirectory", "/var/empty"),
         ("dscl", ".", "-create", "/Users/_pfbastion", "RealName", "provablyfine bastion"),
@@ -398,6 +398,15 @@ def test_the_deadline_directory_is_not_inside_the_root_only_state_directory() ->
     # The principals command runs as another user. It cannot reach a directory
     # below one that only root can enter, even when it owns the directory.
     assert not darwin.DEADLINE_DIR.startswith(darwin.STATE_DIR + "/")
+
+
+def test_free_id_skips_ids_of_records_whose_names_contain_a_space() -> None:
+    def query(argv: typing.Sequence[str]) -> ops.QueryResult:
+        if list(argv) == ["dscl", ".", "-list", "/Users", "UniqueID"]:
+            return ops.QueryResult(0, "root 0\nsome person 450\n")
+        return ops.QueryResult(0, "wheel 0\n")
+
+    assert darwin._free_id(ops.DryRunOps(query=query)) == 451  # pyright: ignore[reportPrivateUsage]
 
 
 def test_init_reuses_an_existing_bastion_account(tmp_path: pathlib.Path) -> None:

@@ -89,17 +89,17 @@ def _host_certificates(o: ops.Ops, host_keys_dir: str) -> list[str]:
 
 
 def _free_id(o: ops.Ops) -> int:
-    """A user and group id in the range macOS keeps for service accounts that no account uses."""
+    """A user and group id in the range macOS keeps for role accounts (450 to 499) that no account uses."""
     used: set[int] = set()
     for record, key in (("Users", "UniqueID"), ("Groups", "PrimaryGroupID")):
         for line in o.query(["dscl", ".", "-list", f"/{record}", key]).stdout.splitlines():
-            fields = line.split()
+            fields = line.rsplit(None, 1)
             if len(fields) == 2 and fields[1].lstrip("-").isdigit():
                 used.add(int(fields[1]))
-    for candidate in range(300, 400):
+    for candidate in range(450, 500):
         if candidate not in used:
             return candidate
-    raise pfc.exceptions.UI("no free user id between 300 and 399 for the pf bastion account")
+    raise pfc.exceptions.UI("no free user id between 450 and 499 for the pf bastion account")
 
 
 def _bastion_account_exists(o: ops.Ops) -> bool:
