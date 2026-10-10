@@ -13,6 +13,7 @@ STATE_DIR = "/var/lib/pf"
 LOG_DIR = "/var/log/pf"
 CREDENTIAL = f"{STATE_DIR}/account.cred"
 CONFIG = f"{STATE_DIR}/config.json"
+LIVE_EVENTS_DIR = f"{STATE_DIR}/live-events"
 ACCEPT_SCRATCH = f"{STATE_DIR}/accept.json"
 SYSTEMD_DIR = "/etc/systemd/system"
 NM_DISPATCHER_DIR = "/etc/NetworkManager/dispatcher.d"
@@ -162,10 +163,13 @@ class Linux:
             0o644,
         )
 
+        # Only root writes here, so pf bastion register trusts the events in it.
+        o.make_dir(LIVE_EVENTS_DIR, 0o700)
+
         pam_block = (
             f"{PAM_BEGIN}\n"
-            f"session optional pam_exec.so {pf_bin} -d -d --log-filename={LOG_DIR}/session-deadline.log"
-            f" openssh session-deadline --ca-pub-path={s.ca_pub_path}\n"
+            f"session optional pam_exec.so {pf_bin} -d -d --log-filename={LOG_DIR}/pam-session-deadline.log"
+            f" openssh pam-session-deadline --ca-pub-path={s.ca_pub_path} --live-events-dir={LIVE_EVENTS_DIR}\n"
             f"{PAM_END}\n"
         )
         o.write_file(PAM_SSHD, common_steps.append_block(pam, pam_block), None)
@@ -201,7 +205,8 @@ class Linux:
             "[Service]\n"
             "Type=simple\n"
             f"LoadCredentialEncrypted=account:{CREDENTIAL}\n"
-            f"ExecStart={pf_bin} --config {CONFIG} bastion register --port {common_steps.ssh_port(o)}\n"
+            f"ExecStart={pf_bin} --config {CONFIG} bastion register --port {common_steps.ssh_port(o)}"
+            f" --live-events-dir={LIVE_EVENTS_DIR}\n"
             "Restart=on-failure\n"
             "RestartSec=30s\n"
             "\n"

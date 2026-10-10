@@ -1110,6 +1110,47 @@ def test_audit_log_with_denied():
     assert not grants.audit_log().can_read()
 
 
+######## LIVE ########
+
+
+def test_empty_live():
+    assert not grant.Grants([], []).live().can_read()
+    assert not grant.Grants([], [role([])]).live().can_read()
+    assert not grant.Grants([boundary([], [])], [role([])]).live().can_read()
+
+
+@pytest.mark.parametrize("read", [False, True])
+def test_live_read(read: bool):
+    grants = single_grants({"type": "live", "filter": {}, "permission": {"read": read}})
+    assert grants.live().can_read() == read
+
+
+def test_live_is_not_granted_by_audit_log():
+    grants = single_grants({"type": "audit-log", "filter": {}, "permission": {"read": True}})
+    assert not grants.live().can_read()
+
+
+def test_live_with_ceiling():
+    grants = grant.Grants(
+        [boundary([{"type": "live", "filter": {}, "permission": {"read": False}}], [])],
+        [role([{"type": "live", "filter": {}, "permission": {"read": True}}])],
+    )
+    assert not grants.live().can_read()
+
+
+def test_live_with_denied():
+    grants = grant.Grants(
+        [
+            boundary(
+                [{"type": "live", "filter": {}, "permission": {"read": True}}],
+                [{"type": "live", "filter": {}, "permission": {"read": True}}],
+            )
+        ],
+        [role([{"type": "live", "filter": {}, "permission": {"read": True}}])],
+    )
+    assert not grants.live().can_read()
+
+
 ######## SSH ########
 
 CAP = model.grant.SSHCapability

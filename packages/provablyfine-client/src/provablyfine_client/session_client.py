@@ -108,6 +108,36 @@ class SessionClient:
             raise exceptions.UI(_problem_title(response, "Failed to get token"))
         return schemas.IdentitySelfTokenResponse.model_validate(response.json())
 
+    # Live sessions
+
+    def list_live(
+        self,
+        hostname: str | None = None,
+        identity_id: int | None = None,
+        active: bool | None = None,
+    ) -> schemas.LiveListResponse:
+        params: dict[str, int | str] = {}
+        if hostname is not None:
+            params["hostname"] = hostname
+        if identity_id is not None:
+            params["identity_id"] = identity_id
+        if active is not None:
+            params["active"] = "true" if active else "false"
+        response = self._session.get(self._directory.live, auth=self._auth(), params=params)
+        if response.status_code != 200:
+            raise exceptions.UI(_problem_title(response, "Unable to list live sessions"))
+        return schemas.LiveListResponse.model_validate(response.json())
+
+    def report_live(self, event: typing.Literal["start", "end"], report: schemas.LiveReportRequest) -> None:
+        """Report that a session started or ended. Hosts and relays report their own sessions."""
+        response = self._session.post(
+            f"{self._directory.identity}/self/live/{event}",
+            auth=self._auth(),
+            json=report.model_dump(),
+        )
+        if response.status_code != 204:
+            raise exceptions.UI(_problem_title(response, f"Unable to report live session {event}"))
+
     # Tags
 
     def list_tags(

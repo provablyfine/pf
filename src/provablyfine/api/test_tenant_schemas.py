@@ -82,6 +82,13 @@ def test_tenant_upgrade_runs_a_migration_inside_its_schema(
     tenant_uuid = _new_tenant(tenants, request)
     config = migrate._alembic_config("tenant", tenants.registry_url, tenant_uuid)
     alembic.command.stamp(config, _BEFORE_BASTION_NULLABLE)
+    # The schema is at head, so the tables that later migrations create exist already. Take them away.
+    old_engine = tenants.migration_engine(tenant_uuid)
+    try:
+        with old_engine.begin() as connection:
+            connection.execute(sqlalchemy.text("DROP TABLE live_session"))
+    finally:
+        old_engine.dispose()
 
     # The chain includes a migration that reads encrypted auth configs. It needs a key.
     migrate.upgrade_tenant(tenants, tenant_uuid, cryptography.fernet.Fernet.generate_key().decode())

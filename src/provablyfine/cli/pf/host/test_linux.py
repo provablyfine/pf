@@ -188,8 +188,8 @@ def test_init_adds_the_session_deadline_pam_block(tmp_path: pathlib.Path) -> Non
     assert pam.content.decode() == (
         "auth required pam_unix.so\n"
         "# BEGIN pf\n"
-        "session optional pam_exec.so /usr/bin/pf -d -d --log-filename=/var/log/pf/session-deadline.log"
-        " openssh session-deadline --ca-pub-path=/etc/ssh/pf_ca.pub\n"
+        "session optional pam_exec.so /usr/bin/pf -d -d --log-filename=/var/log/pf/pam-session-deadline.log"
+        " openssh pam-session-deadline --ca-pub-path=/etc/ssh/pf_ca.pub --live-events-dir=/var/lib/pf/live-events\n"
         "# END pf\n"
     )
 
@@ -232,7 +232,8 @@ def test_init_installs_the_bastion_unit_with_the_ssh_port(tmp_path: pathlib.Path
         "[Service]\n"
         "Type=simple\n"
         "LoadCredentialEncrypted=account:/var/lib/pf/account.cred\n"
-        "ExecStart=/usr/bin/pf --config /var/lib/pf/config.json bastion register --port 2222\n"
+        "ExecStart=/usr/bin/pf --config /var/lib/pf/config.json bastion register --port 2222"
+        " --live-events-dir=/var/lib/pf/live-events\n"
         "Restart=on-failure\n"
         "RestartSec=30s\n"
         "\n"
@@ -245,7 +246,10 @@ def test_init_defaults_to_port_22_when_sshd_does_not_say(tmp_path: pathlib.Path)
     _host(tmp_path)
     dry = ops.DryRunOps(root=tmp_path, query=lambda argv: ops.QueryResult(1, ""))
     linux.Linux().init(dry, _settings())
-    assert b"--port 22\n" in _written(dry, "/etc/systemd/system/pf-host-bastion.service").content
+    assert (
+        b"--port 22 --live-events-dir=/var/lib/pf/live-events\n"
+        in _written(dry, "/etc/systemd/system/pf-host-bastion.service").content
+    )
 
 
 @pytest.mark.parametrize(("unit", "expected"), [("sshd", "sshd"), ("ssh", "ssh")])
@@ -379,3 +383,8 @@ def test_init_accepts_the_invitation_with_a_config_file_that_pf_can_write_and_re
     assert "/dev/null" not in accept.argv
     assert dry.actions[accept_index + 1] == ops.Remove("/var/lib/pf/accept.json")
     assert dry.actions[accept_index + 2] == ops.Remove("/var/lib/pf/accept.json.lock")
+
+
+def test_init_makes_a_spool_directory_only_root_can_use(tmp_path: pathlib.Path) -> None:
+    _host(tmp_path)
+    assert ops.MakeDir("/var/lib/pf/live-events", 0o700) in _init(tmp_path).actions

@@ -308,6 +308,30 @@ ssh_connection = orm.make_table(
 )
 
 
+class LiveSessionRow(typing.NamedTuple):
+    id: typing.Annotated[str, orm.Col(primary_key=True)]
+    connection_id: str
+    identity_id: int
+    hostname: str
+    # "relay" for a tunnel seen by the bastion relay, "host" for a session seen on the host.
+    kind: str
+    # The session id on the host (XDG_SESSION_ID or a process id). Empty when there is none.
+    session_id: str
+    started_at: int
+    ended_at: int | None
+    deadline: int | None
+
+
+live_session = orm.make_table(
+    "live_session",
+    metadata,
+    LiveSessionRow,
+    sqlalchemy.Index("idx_live_session_unique", "connection_id", "kind", "session_id", unique=True),
+    sqlalchemy.Index("idx_live_session_hostname", "hostname"),
+    sqlalchemy.Index("idx_live_session_ended_at", "ended_at"),
+)
+
+
 # ============================================================================
 # Typed DAO
 # ============================================================================
@@ -391,6 +415,10 @@ class AppDb(orm.Dao):
     @property
     def ssh_connection(self) -> orm.Table[SshConnectionRow]:
         return self._get(ssh_connection)
+
+    @property
+    def live_session(self) -> orm.Table[LiveSessionRow]:
+        return self._get(live_session)
 
 
 def create(connection: sqlalchemy.engine.Connection) -> AppDb:

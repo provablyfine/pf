@@ -42,6 +42,10 @@ ACCEPT_SCRATCH = ntpath.join(STATE_DIR, "accept.json")
 AUTH_USER_MARKER = ntpath.join(STATE_DIR, "auth-user-created")
 # The principals command writes here as an unprivileged user.
 DEADLINE_DIR = ntpath.join(PROGRAM_DATA, "pf-deadlines")
+# Only SYSTEM and administrators write here, so the reaper trusts the requests in it.
+KILL_DIR = ntpath.join(PROGRAM_DATA, "pf-kill-requests")
+# Only SYSTEM and administrators write here. The reaper leaves session events for pf bastion register.
+LIVE_DIR = ntpath.join(PROGRAM_DATA, "pf-live-events")
 
 DEFAULTS = base.Defaults(
     host_keys_dir=SSH_DIR,
@@ -380,11 +384,15 @@ class Windows:
         o.run(_icacls_closed(STATE_DIR))
         o.make_dir(LOG_DIR, 0o700)
         o.make_dir(DEADLINE_DIR, 0o700)
+        o.make_dir(KILL_DIR, 0o700)
+        o.make_dir(LIVE_DIR, 0o700)
         if o.query(["net", "user", s.auth_user]).returncode != 0:
             o.run([*_POWERSHELL, "-Command", "-"], stdin=account_script(s.auth_user, new_password()).encode())
             o.write_file(AUTH_USER_MARKER, s.auth_user, None)
         # The principals command runs as this user and writes the records.
         o.run(_icacls_closed(DEADLINE_DIR, f"{s.auth_user}:(OI)(CI)M"))
+        o.run(_icacls_closed(KILL_DIR))
+        o.run(_icacls_closed(LIVE_DIR))
 
         o.write_file(ACCOUNT_KEY, common_steps.new_account_key_pem(), 0o600, secret=True)
         o.write_file(
@@ -457,6 +465,7 @@ class Windows:
                     "register",
                     "--port",
                     port,
+                    f"--live-events-dir={LIVE_DIR}",
                 ],
                 repeat_minutes=5,
                 restart_on_failure=True,
@@ -470,6 +479,8 @@ class Windows:
                     "openssh",
                     "session-reaper",
                     f"--deadline-dir={DEADLINE_DIR}",
+                    f"--kill-dir={KILL_DIR}",
+                    f"--live-dir={LIVE_DIR}",
                 ],
                 repeat_minutes=1,
                 restart_on_failure=True,
@@ -528,6 +539,8 @@ class Windows:
             o.run([*_POWERSHELL, "-Command", _profile_removal(created)], check=False)
         o.remove(STATE_DIR, recursive=True)
         o.remove(DEADLINE_DIR, recursive=True)
+        o.remove(KILL_DIR, recursive=True)
+        o.remove(LIVE_DIR, recursive=True)
 
     def reload_sshd(self, o: ops.Ops) -> None:
         """sshd reads host certificates for every connection, so there is nothing to do."""

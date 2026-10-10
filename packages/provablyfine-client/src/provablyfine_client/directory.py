@@ -45,6 +45,10 @@ class Directory:
         return self._load()["audit_log"]
 
     @property
+    def live(self) -> str:
+        return self._load()["live"]
+
+    @property
     def auth(self) -> str:
         return self._load()["auth"]
 

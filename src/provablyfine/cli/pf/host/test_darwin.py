@@ -97,10 +97,12 @@ def _runs(dry: ops.DryRunOps) -> list[tuple[str, ...]]:
 def test_init_runs_the_steps_in_order(tmp_path: pathlib.Path) -> None:
     _host(tmp_path)
     dry = _init(tmp_path)
-    assert dry.actions[:3] == [
+    assert dry.actions[:5] == [
         ops.MakeDir("/var/db/pf", 0o700),
         ops.MakeDir("/var/log/pf", 0o755),
         ops.MakeDir("/var/db/pf-deadlines", 0o700, "nobody"),
+        ops.MakeDir("/var/db/pf-kill-requests", 0o700),
+        ops.MakeDir("/var/db/pf-live-events", 0o700),
     ]
     assert _runs(dry) == [
         (PF, "-c", "/var/db/pf/accept.json", "accept", f"--invitation={INVITATION}", "--key=/var/db/pf/account.key"),
@@ -193,6 +195,7 @@ def test_init_installs_the_bastion_job_with_the_ssh_port(tmp_path: pathlib.Path)
         "register",
         "--port",
         "2222",
+        "--live-events-dir=/var/db/pf-live-events",
     ]
     assert job["KeepAlive"] is True
     assert "StartInterval" not in job
@@ -201,7 +204,14 @@ def test_init_installs_the_bastion_job_with_the_ssh_port(tmp_path: pathlib.Path)
 def test_init_installs_the_session_reaper_job(tmp_path: pathlib.Path) -> None:
     _host(tmp_path)
     job = _service(_init(tmp_path), "net.provablyfine.session-reaper")
-    assert job["ProgramArguments"] == [PF, "openssh", "session-reaper", "--deadline-dir=/var/db/pf-deadlines"]
+    assert job["ProgramArguments"] == [
+        PF,
+        "openssh",
+        "session-reaper",
+        "--deadline-dir=/var/db/pf-deadlines",
+        "--kill-dir=/var/db/pf-kill-requests",
+        "--live-dir=/var/db/pf-live-events",
+    ]
     assert job["KeepAlive"] is True
 
 
@@ -328,6 +338,8 @@ def test_uninit_undoes_the_install(tmp_path: pathlib.Path) -> None:
         ops.Remove("/etc/ssh/ssh_host_rsa_key.cert"),
         ops.Remove("/var/db/pf", True),
         ops.Remove("/var/db/pf-deadlines", True),
+        ops.Remove("/var/db/pf-kill-requests", True),
+        ops.Remove("/var/db/pf-live-events", True),
     ]
 
 
