@@ -29,6 +29,9 @@ def update_session_self(data: schemas.session.SessionSelfUpdateRequest) -> fasta
 @router.delete("/self", status_code=204, responses={401: PROBLEM})
 def logout_session_self() -> fastapi.responses.Response:
     """End the caller's own session. Later requests signed with its key get a 401."""
-    ctx.app_db.identity_session_key.update(logged_out_at=int(time.time())).where(id=ctx.session_key_id)
-    model.audit_log.create("session-logout", session_key_id=ctx.session_key_id)
+    updated = ctx.app_db.identity_session_key.update(logged_out_at=int(time.time())).where(
+        id=ctx.session_key_id, logged_out_at=None
+    )
+    if updated > 0:
+        model.audit_log.create("session-logout", session_key_id=ctx.session_key_id)
     return fastapi.responses.Response(status_code=204)
