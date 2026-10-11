@@ -85,7 +85,7 @@ def delete_endpoint(boundary_id: int) -> fastapi.responses.Response:
             responses.problem_response(status_code=400, title="Boundary is still in use")
         )
 
-    if not model.boundary.delete(boundary.id):
+    if not model.boundary.delete(boundary):
         raise responses.not_found("Boundary does not exist")
     return _204
 

@@ -39,21 +39,20 @@ def create(
     return boundary_id
 
 
-def delete(id: int) -> bool:
+def delete(boundary: Boundary) -> bool:
     """Delete a boundary that no identity uses. The audit entry keeps what the boundary contained.
 
     Return False if the boundary is already gone, for example deleted by a concurrent request.
     """
-    boundary = ctx.app_db.boundary.read_one(id=id)
-    if boundary is None or ctx.app_db.boundary.delete(id=id) == 0:
+    if ctx.app_db.boundary.delete(id=boundary.id) == 0:
         return False
     audit_log.create(
         "boundary-delete",
-        id=id,
+        id=boundary.id,
         name=boundary.name,
         description=boundary.description,
-        ceiling_list=boundary.ceiling_list,
-        denied_list=boundary.denied_list,
+        ceiling_list=None if boundary.ceiling_list is None else [grant.serialize(g) for g in boundary.ceiling_list],
+        denied_list=[grant.serialize(g) for g in boundary.denied_list],
     )
     return True
 
