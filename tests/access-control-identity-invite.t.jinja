@@ -6,8 +6,7 @@ Initialize server and login
   .* (re)
 
 Create temporary user for tests below
-  $ pfa -c config.json identity create -n user4 -b boundary -t $PERSON_ID
-  $ USER4_ID=$(pfa -c config.json identity list -n user4 -q)
+  $ USER4_ID=$(pfa -c config.json identity create -n user4 -b boundary -t $PERSON_ID)
 
 {% for grant in [
   "--invite manual",

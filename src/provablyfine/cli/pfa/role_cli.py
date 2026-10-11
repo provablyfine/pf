@@ -86,7 +86,9 @@ def _role_delete_function(args: argparse.Namespace) -> None:
 def _role_create_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     sc = client.Factory(c, timeout=args.timeout).session()
-    sc.create_role(args.name, args.description or "")
+    created = sc.create_role(args.name, args.description or "")
+
+    print(created.id)
 
 
 def _role_update_function(args: argparse.Namespace) -> None:

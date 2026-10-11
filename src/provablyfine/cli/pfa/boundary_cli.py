@@ -94,7 +94,9 @@ def _boundary_delete_function(args: argparse.Namespace) -> None:
 def _boundary_create_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     sc = client.Factory(c, timeout=args.timeout).session()
-    sc.create_boundary(args.name, args.description or "")
+    created = sc.create_boundary(args.name, args.description or "")
+
+    print(created.id)
 
 
 def _boundary_update_function(args: argparse.Namespace) -> None:

@@ -5,16 +5,14 @@ Initialize server and login
   .* (re)
 
 Create an unprivileged identity
-  $ pfa -c config.json identity create -n user1
-  $ USER1_ID=$(pfa -c config.json identity list -n user1 -q)
+  $ USER1_ID=$(pfa -c config.json identity create -n user1)
   $ INVITATION=$(pfa -c config.json identity invite -i $USER1_ID --manual)
   $ ssh-keygen -t ed25519 -f user1 -N "" > /dev/null
   $ pf -c user1.json accept --invitation=$INVITATION --key user1
   $ ssh-keygen -t ed25519 -f user1-session -N "" > /dev/null
   $ pf -c user1.json login --session-key user1-session
   $ ROOT_ID=$(pfa -c config.json identity list -n root -q)
-  $ pfa -c config.json tag create -n env -v prod
-  $ TAG_ID=$(pfa -c config.json tag list -n env -v prod -q)
+  $ TAG_ID=$(pfa -c config.json tag create -n env -v prod)
 
 Identities
   $ pfa -c user1.json identity delete -i $ROOT_ID

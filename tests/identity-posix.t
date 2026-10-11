@@ -3,8 +3,7 @@ Initialize server and login
   .* (re)
 
 Create a user identity
-  $ pfa -c config.json identity create -n user
-  $ USER_ID=$(pfa -c config.json identity list -n user -q)
+  $ USER_ID=$(pfa -c config.json identity create -n user)
   $ ROOT_ID=$(pfa -c config.json identity list -n root -q)
 
 Admin can update her own unix_username
@@ -49,8 +48,7 @@ Invalid unix_username values are rejected
   $ pfa -c config.json identity update -i $USER_ID --unix-username ""
 
 Unix username can be set at creation time
-  $ pfa -c config.json identity create -n user-create-posix --unix-username bob
-  $ USER_CREATE_ID=$(pfa -c config.json identity list -n user-create-posix -q)
+  $ USER_CREATE_ID=$(pfa -c config.json identity create -n user-create-posix --unix-username bob)
   $ pfa -c config.json identity read -i $USER_CREATE_ID
   id             [0-9]+ (re)
   name           user-create-posix
@@ -82,8 +80,7 @@ Set unix_username (manual mode: admin sets it directly)
   unix_username  alice
 
 Unix username must be unique across identities
-  $ pfa -c config.json identity create -n user2
-  $ USER2_ID=$(pfa -c config.json identity list -n user2 -q)
+  $ USER2_ID=$(pfa -c config.json identity create -n user2)
   $ pfa -c config.json identity update -i $USER2_ID --unix-username alice
   Identity already exists. "unix_username" must be unique. alice
   [2]
@@ -101,11 +98,10 @@ Cleared unix_username is null in JSON output
   null
 
 Set up for {self} resolution test: host with device tag, role with {self} + literal grant
-  $ pfa -c config.json tag create -n id -v device
-  $ DEVICE_TAG_ID=$(pfa -c config.json tag list -n id -v device -q)
+  $ DEVICE_TAG_ID=$(pfa -c config.json tag create -n id -v device)
   $ pfa -c config.json identity create -n host -t $DEVICE_TAG_ID
-  $ pfa -c config.json role create -n role
-  $ ROLE_ID=$(pfa -c config.json role list -n role -q)
+  [0-9]+ (re)
+  $ ROLE_ID=$(pfa -c config.json role create -n role)
   $ pfa -c config.json grant ssh --tag id=device --username '{self}' deploy --capability shell pty user-rc | pfa -c config.json role grant -i $ROLE_ID --add
   $ pfa -c config.json role member -i $ROLE_ID -a user
   $ pfa -c config.json identity update -i $USER_ID --unix-username alice

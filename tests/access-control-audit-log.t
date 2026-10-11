@@ -5,7 +5,6 @@ Initialize server and login
 Setup user1 in a role with no grants
   $ source $TESTDIR/access-control-identity-fixture.sh
   .* (re)
-  $ ROLE_ID=$(pfa -c config.json role list -n role -q)
 
 Without audit-log grant, user1 cannot read audit log
   $ pfa -c user1.json audit-log list

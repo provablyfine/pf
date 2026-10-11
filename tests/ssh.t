@@ -3,16 +3,13 @@ Initialize server and login
   .* (re)
 
 Create admin objects
-  $ pfa -c config.json tag create -n id -v device
-  $ DEVICE_TAG_ID=$(pfa -c config.json tag list -n id -v device -q)
-  $ pfa -c config.json role create -n role
-  $ ROLE_ID=$(pfa -c config.json role list -n role -q)
+  $ DEVICE_TAG_ID=$(pfa -c config.json tag create -n id -v device)
+  $ ROLE_ID=$(pfa -c config.json role create -n role)
   $ pfa -c config.json grant ssh --tag id=device --username root --capability shell pty user-rc | pfa -c config.json role grant -i $ROLE_ID --add
   $ pfa -c config.json grant ssh --tag id=device --username alice --capability shell pty user-rc | pfa -c config.json role grant -i $ROLE_ID --add
 
 Provision new host
-  $ pfa -c config.json identity create -n host -t $DEVICE_TAG_ID
-  $ HOST_ID=$(pfa -c config.json identity list -n host -q)
+  $ HOST_ID=$(pfa -c config.json identity create -n host -t $DEVICE_TAG_ID)
   $ INVITATION=$(pfa -c config.json identity invite --manual -i $HOST_ID)
   $ echo $INVITATION
   .* (re)
@@ -29,8 +26,7 @@ New host SSH setup
   $ podman exec $SSHD_CONTAINER_ID pkill -HUP sshd
 
 Provision new user
-  $ pfa -c config.json identity create -n user
-  $ USER_ID=$(pfa -c config.json identity list -n user -q)
+  $ USER_ID=$(pfa -c config.json identity create -n user)
   $ pfa -c config.json role member -i $ROLE_ID -a user
 # XXX: test $USER_ID above
   $ INVITATION=$(pfa -c config.json identity invite --manual -i $USER_ID)
@@ -107,8 +103,7 @@ Forwarding capabilities reach the certificate
   permit_agent_forwarding permit_pty permit_user_rc permit_x11_forwarding
 
 A boundary ceiling caps forwarding capabilities.
-  $ pfa -c config.json boundary create -n capped -d "shell without forwarding"
-  $ CAPPED_ID=$(pfa -c config.json boundary list -n capped -q)
+  $ CAPPED_ID=$(pfa -c config.json boundary create -n capped -d "shell without forwarding")
   $ pfa -c config.json boundary ceiling -i $CAPPED_ID --set <<EOF
   > - type: ssh
   >   filter: {name: null, tag_list: null, boundary_list: null}
@@ -120,8 +115,7 @@ A boundary ceiling caps forwarding capabilities.
   > EOF
 
 Provision a user inside that boundary
-  $ pfa -c config.json identity create -n capped-user -b capped
-  $ CAPPED_USER_ID=$(pfa -c config.json identity list -n capped-user -q)
+  $ CAPPED_USER_ID=$(pfa -c config.json identity create -n capped-user -b capped)
   $ pfa -c config.json role member -i $ROLE_ID -a capped-user
   $ INVITATION=$(pfa -c config.json identity invite --manual -i $CAPPED_USER_ID)
   $ ssh-keygen -t ed25519 -f capped-account -N "" > /dev/null
@@ -141,8 +135,7 @@ The ceiling covers no port-forwarding , so that capability is gone too
   [2]
 
 A deny is targeted
-  $ pfa -c config.json boundary create -n targeted -d "no X11 for bob"
-  $ TARGETED_ID=$(pfa -c config.json boundary list -n targeted -q)
+  $ TARGETED_ID=$(pfa -c config.json boundary create -n targeted -d "no X11 for bob")
   $ pfa -c config.json boundary denied -i $TARGETED_ID --set <<EOF
   > - type: ssh
   >   filter: {name: null, tag_list: null, boundary_list: null}
@@ -152,8 +145,7 @@ A deny is targeted
   >     command_list: []
   >     max_session_ttl_s: null
   > EOF
-  $ pfa -c config.json identity create -n targeted-user -b targeted
-  $ TARGETED_USER_ID=$(pfa -c config.json identity list -n targeted-user -q)
+  $ TARGETED_USER_ID=$(pfa -c config.json identity create -n targeted-user -b targeted)
   $ pfa -c config.json role member -i $ROLE_ID -a targeted-user
   $ INVITATION=$(pfa -c config.json identity invite --manual -i $TARGETED_USER_ID)
   $ ssh-keygen -t ed25519 -f targeted-account -N "" > /dev/null
@@ -192,8 +184,7 @@ Denying every capability for alice drops only her
   host    command  charlie     /bin/true
 
 An "ssh" grant with a None username_list applies to any username
-  $ pfa -c config.json role create -n wildcard
-  $ WILDCARD_ROLE_ID=$(pfa -c config.json role list -n wildcard -q)
+  $ WILDCARD_ROLE_ID=$(pfa -c config.json role create -n wildcard)
   $ pfa -c config.json role grant -i $WILDCARD_ROLE_ID --set <<EOF
   > - type: ssh
   >   filter: {name: null, tag_list: [{name: id, value: device}], boundary_list: null}
@@ -203,8 +194,7 @@ An "ssh" grant with a None username_list applies to any username
   >     command_list: ["/bin/true"]
   >     max_session_ttl_s: null
   > EOF
-  $ pfa -c config.json identity create -n wildcard-user -b targeted
-  $ WILDCARD_USER_ID=$(pfa -c config.json identity list -n wildcard-user -q)
+  $ WILDCARD_USER_ID=$(pfa -c config.json identity create -n wildcard-user -b targeted)
   $ pfa -c config.json role member -i $WILDCARD_ROLE_ID -a wildcard-user
   $ INVITATION=$(pfa -c config.json identity invite --manual -i $WILDCARD_USER_ID)
   $ ssh-keygen -t ed25519 -f wildcard-account -N "" > /dev/null
@@ -236,11 +226,9 @@ An empty details cell means the entry has no command axis at all
   host    command  *           /bin/true
 
 Grant access to alice@host with a bounded ttl
-  $ pfa -c config.json role create -n ttl
-  $ TTL_ROLE_ID=$(pfa -c config.json role list -n ttl -q)
+  $ TTL_ROLE_ID=$(pfa -c config.json role create -n ttl)
   $ pfa -c config.json grant ssh --tag id=device --username alice --capability shell --max-session-ttl 3600 | pfa -c config.json role grant -i $TTL_ROLE_ID --set
-  $ pfa -c config.json identity create -n ttl-user
-  $ TTL_USER_ID=$(pfa -c config.json identity list -n ttl-user -q)
+  $ TTL_USER_ID=$(pfa -c config.json identity create -n ttl-user)
   $ pfa -c config.json role member -i $TTL_ROLE_ID -a ttl-user
   $ INVITATION=$(pfa -c config.json identity invite --manual -i $TTL_USER_ID)
   $ ssh-keygen -t ed25519 -f ttl-account -N "" > /dev/null

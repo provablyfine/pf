@@ -3,10 +3,8 @@ Initialize server and login
   .* (re)
 
 Create role and user1
-  $ pfa -c config.json role create -n role
-  $ ROLE_ID=$(pfa -c config.json role list -n role -q)
-  $ pfa -c config.json identity create -n user1
-  $ USER1_ID=$(pfa -c config.json identity list -n user1 -q)
+  $ ROLE_ID=$(pfa -c config.json role create -n role)
+  $ USER1_ID=$(pfa -c config.json identity create -n user1)
   $ pfa -c config.json role member -i $ROLE_ID -a user1
   $ INVITATION=$(pfa -c config.json identity invite -i $USER1_ID --manual)
   $ ssh-keygen -t ed25519 -f user1 -N "" > /dev/null
@@ -16,9 +14,9 @@ Create role and user1
 
 Create bastions for testing
   $ pfa -c config.json bastion create --url http://bastion1.example.com
+  [0-9]+ (re)
   $ BASTION1_ID=$(pfa -c config.json bastion list -q | head -1)
-  $ pfa -c config.json bastion create --url http://bastion2.example.com
-  $ BASTION2_ID=$(pfa -c config.json bastion list -q | tail -1)
+  $ BASTION2_ID=$(pfa -c config.json bastion create --url http://bastion2.example.com)
 
 Check that grant "--read" is actually enforcing access control
   $ pfa -c user1.json bastion list -q
@@ -44,6 +42,7 @@ Check that grant "{{grant}}" is actually enforcing access control
   [2]
   $ pfa -c config.json grant bastion {{grant}} | pfa -c config.json role grant -i $ROLE_ID --add
   $ pfa -c user1.json bastion create --url http://bastion3.example.com
+  [0-9]+ (re)
   $ pfa -c config.json role read -i $ROLE_ID -f json | jq '.grant_list[-1]' | pfa -c config.json role grant -i $ROLE_ID --del
 {% endfor %}
 

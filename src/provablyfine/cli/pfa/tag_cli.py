@@ -54,7 +54,9 @@ def tag_list_function(args: argparse.Namespace) -> None:
 def _tag_create_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     sc = client.Factory(c, timeout=args.timeout).session()
-    sc.create_tag(name=args.name, value=args.value)
+    created = sc.create_tag(name=args.name, value=args.value)
+
+    print(created.id)
 
 
 def _tag_delete_function(args: argparse.Namespace) -> None:
