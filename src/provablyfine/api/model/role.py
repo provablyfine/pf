@@ -29,6 +29,23 @@ def create(name: str, description: str, grant_list: typing.Sequence[grant.Grant]
     return role_id
 
 
+def delete(role: Role) -> bool:
+    """Delete a role that has no members. The audit entry keeps what the role contained.
+
+    Return False if the role is already gone, for example deleted by a concurrent request.
+    """
+    if ctx.app_db.role.delete(id=role.id) == 0:
+        return False
+    audit_log.create(
+        "role-delete",
+        id=role.id,
+        name=role.name,
+        description=role.description,
+        grant_list=[grant.serialize(g) for g in role.grant_list],
+    )
+    return True
+
+
 def _from_db(role: app_db.RoleRow, member_id_list: list[int]) -> Role:
     grant_list: list[grant.Grant] = [grant.deserialize(g) for g in role.grant_list]
     return Role(

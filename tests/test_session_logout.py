@@ -47,3 +47,9 @@ def test_logout_ends_only_the_calling_session(api, tmp_path: pathlib.Path) -> No
     # The identity can log in again.
     third, _ = _login(sc, account_key_file)
     third.ping()
+
+    types = [e.type for e in third.list_audit_log().entries]
+    # One entry per session that chose a role, and one for the single logout.
+    assert types.count("session-set-role") == 3
+    assert types.count("session-logout") == 1
+    assert types.count("role-add-members") == 1
