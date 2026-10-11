@@ -182,3 +182,32 @@ Delete bastions 2 and 3
 
 Verify all bastions are gone
   $ pfa -c config.json bastion list -q
+
+Create two bastions and a role and a boundary that name them
+  $ pfa -c config.json bastion create --url http://doomed.example.com
+  $ pfa -c config.json bastion create --url http://kept.example.com
+  $ DOOMED_ID=$(pfa -c config.json bastion list -q | head -1)
+  $ KEPT_ID=$(pfa -c config.json bastion list -q | tail -1)
+  $ pfa -c config.json role create -n ops
+  $ ROLE_ID=$(pfa -c config.json role list -n ops -q)
+  $ pfa -c config.json boundary create -n guard
+  $ BOUNDARY_ID=$(pfa -c config.json boundary list -n guard -q)
+  $ pfa -c config.json grant bastion --read --id $DOOMED_ID | pfa -c config.json role grant -i $ROLE_ID --add
+  $ pfa -c config.json grant bastion --read --id $KEPT_ID | pfa -c config.json role grant -i $ROLE_ID --add
+  $ pfa -c config.json grant bastion --read --id $DOOMED_ID | pfa -c config.json boundary denied -i $BOUNDARY_ID --add
+  $ pfa -c config.json grant bastion --read --id $DOOMED_ID | pfa -c config.json boundary ceiling -i $BOUNDARY_ID --add
+  $ pfa -c config.json role read -i $ROLE_ID -f json | jq --argjson d $DOOMED_ID --argjson k $KEPT_ID '[.grant_list[].filter.id] == [$d, $k]'
+  true
+
+Deleting a bastion removes the grants that name it, and only those
+  $ pfa -c config.json bastion delete -i $DOOMED_ID
+  $ pfa -c config.json role read -i $ROLE_ID -f json | jq --argjson k $KEPT_ID '[.grant_list[].filter.id] == [$k]'
+  true
+  $ pfa -c config.json boundary read -i $BOUNDARY_ID -f json | jq -c '[.denied_list, .ceiling_list]'
+  [[],[]]
+
+The audit log keeps the removed grants
+  $ pfa -c config.json audit-log list --format json | jq -r '.[] | select(.type == "bastion-delete-cascade") | "\(.details.owner_name) \(.details.list)"' | sort
+  guard ceiling_list
+  guard denied_list
+  ops grant_list
