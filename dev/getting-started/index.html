@@ -1431,13 +1431,12 @@ pong
 you can register it within your tenant.</p>
 <h3 id="create-a-new-host-identity">Create a new host identity</h3>
 <p>First, on your local host, create an identity associated with this OpenSSH server instance:
-<div class="highlight"><pre><span></span><code><span class="gp">$ </span>pfa<span class="w"> </span>identity<span class="w"> </span>create<span class="w"> </span>-n<span class="w"> </span>demo<span class="w"> </span>--tag<span class="w"> </span><span class="nv">id</span><span class="o">=</span>device
-<span class="gp">$ </span><span class="nv">INVITATION_URL</span><span class="o">=</span><span class="k">$(</span>pfa<span class="w"> </span>identity<span class="w"> </span>invite<span class="w"> </span>--manual<span class="w"> </span>-i<span class="w"> </span><span class="k">$(</span>pfa<span class="w"> </span>identity<span class="w"> </span>list<span class="w"> </span>-n<span class="w"> </span>demo<span class="w"> </span>-q<span class="k">))</span>
+<div class="highlight"><pre><span></span><code><span class="gp">$ </span><span class="nv">DEMO_ID</span><span class="o">=</span><span class="k">$(</span>pfa<span class="w"> </span>identity<span class="w"> </span>create<span class="w"> </span>-n<span class="w"> </span>demo<span class="w"> </span>--tag<span class="w"> </span><span class="nv">id</span><span class="o">=</span>device<span class="k">)</span>
+<span class="gp">$ </span><span class="nv">INVITATION_URL</span><span class="o">=</span><span class="k">$(</span>pfa<span class="w"> </span>identity<span class="w"> </span>invite<span class="w"> </span>--manual<span class="w"> </span>-i<span class="w"> </span><span class="nv">$DEMO_ID</span><span class="k">)</span>
 </code></pre></div></p>
 <h3 id="grant-yourself-access-to-the-host">Grant yourself access to the host</h3>
 <div class="highlight"><pre><span></span><code># Create a role
-$ pfa role create -n users
-$ USERS_ROLE_ID=$(pfa role list -n users -q)
+$ USERS_ROLE_ID=$(pfa role create -n users)
 # Grant ssh permissions to all hosts to the new role
 $ pfa grant ssh --username root --capability shell pty user-rc --tag id=device | pfa role grant -i $USERS_ROLE_ID --set
 # Add ourselves to the role
