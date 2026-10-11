@@ -82,6 +82,7 @@ def remove(bastion_id: int) -> list[Owner]:
     for owner, list_name, removed in changes:
         audit_log.create(
             "bastion-delete-cascade",
+            refs=audit_log.refs(grants=removed),
             bastion_id=bastion_id,
             owner_type=owner.type,
             owner_id=owner.id,

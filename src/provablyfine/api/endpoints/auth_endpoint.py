@@ -186,5 +186,6 @@ def delete_endpoint(auth_id: int) -> fastapi.responses.Response:
         raise responses.forbidden_or_not_found(
             grants.auth(ac.id).can_read, "Not allowed to delete auth config", "Auth config does not exist"
         )
-    model.auth_config.delete(id=auth_id)
+    if not model.auth_config.delete(auth_id):
+        raise responses.not_found("Auth config does not exist")
     return _204

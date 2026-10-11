@@ -118,5 +118,6 @@ def delete_endpoint(bastion_id: int) -> fastapi.responses.Response:
         )
 
     model.bastion_references.remove(bastion_id)
-    model.bastion.delete(id=bastion_id)
+    if not model.bastion.delete(bastion_id):
+        raise responses.not_found("Bastion not found")
     return _204

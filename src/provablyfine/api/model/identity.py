@@ -29,6 +29,7 @@ def create(name: str, boundary_id_list: list[int], tag_id_list: list[int], unix_
         ctx.app_db.identity_tag.create(tag_id=tag_id, identity_id=identity_id)
     audit_log.create(
         "identity-create",
+        refs=audit_log.refs(tags=tag_id_list, boundaries=boundary_id_list),
         id=identity_id,
         name=name,
         boundary_id_list=boundary_id_list,
@@ -116,7 +117,16 @@ def delete(id: int) -> None:
     ctx.app_db.role_member.delete(identity_id=id)
     ctx.app_db.ssh_connection.delete(identity_id=id)
     ctx.app_db.identity.delete(id=id)
-    audit_log.create("identity-delete", id=id, **snapshot)
+    audit_log.create(
+        "identity-delete",
+        refs=audit_log.refs(
+            tags=snapshot["tag_id_list"],
+            boundaries=snapshot["boundary_id_list"],
+            roles={*snapshot["role_id_list"], *(s["role_id"] for s in snapshot["live_sessions"] if s["role_id"])},
+        ),
+        id=id,
+        **snapshot,
+    )
 
 
 def read_one(**kwargs: typing.Any) -> Identity | None:
@@ -214,6 +224,7 @@ def update(
             ctx.app_db.identity_tag.create(tag_id=tag_id, identity_id=id)
         audit_log.create(
             "identity-add-tags",
+            refs=audit_log.refs(tags=added_tag_id_list),
             id=id,
             added_tag_id_list=added_tag_id_list,
         )
@@ -221,6 +232,7 @@ def update(
         ctx.app_db.identity_tag.delete(identity_id=id, tag_id=deleted_tag_id_list)
         audit_log.create(
             "identity-delete-tags",
+            refs=audit_log.refs(tags=deleted_tag_id_list),
             id=id,
             deleted_tag_id_list=deleted_tag_id_list,
         )

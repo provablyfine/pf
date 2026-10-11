@@ -25,23 +25,39 @@ def create(name: str, description: str, grant_list: typing.Sequence[grant.Grant]
         grant_list=grants,
     )
     assert role_id is not None
-    audit_log.create("role-create", id=role_id, name=name, description=description, grant_list=grants)
+    audit_log.create(
+        "role-create",
+        refs=audit_log.refs(grants=grant_list),
+        id=role_id,
+        name=name,
+        description=description,
+        grant_list=grants,
+    )
     return role_id
 
 
-def delete(role: Role) -> bool:
+def delete(id: int) -> bool:
     """Delete a role that has no members. The audit entry keeps what the role contained.
+
+    The row is locked before it is read, so the entry holds what was deleted,
+    not what an earlier read of the role saw.
 
     Return False if the role is already gone, for example deleted by a concurrent request.
     """
-    if ctx.app_db.role.delete(id=role.id) == 0:
+    row = ctx.app_db.role.read_one_for_update(id=id)
+    if row is None:
+        return False
+    grants = [grant.deserialize(g) for g in row.grant_list]
+    refs = audit_log.refs(grants=grants)
+    if ctx.app_db.role.delete(id=id) == 0:
         return False
     audit_log.create(
         "role-delete",
-        id=role.id,
-        name=role.name,
-        description=role.description,
-        grant_list=[grant.serialize(g) for g in role.grant_list],
+        refs=refs,
+        id=id,
+        name=row.name,
+        description=row.description,
+        grant_list=row.grant_list,
     )
     return True
 
@@ -101,8 +117,9 @@ def update(
         role_fields["grant_list"] = [grant.serialize(g) for g in grant_list]
         audit_log.create(
             "role-update-grant-list",
+            refs=audit_log.refs(grants=grant_list),
             id=id,
-            permission_list=[grant.serialize(g) for g in grant_list],
+            grant_list=[grant.serialize(g) for g in grant_list],
         )
 
     if len(role_fields) > 0:
@@ -113,6 +130,7 @@ def update(
             ctx.app_db.role_member.create(role_id=id, identity_id=member_id)
         audit_log.create(
             "role-add-members",
+            refs=audit_log.refs(identities=added_member_id_list),
             id=id,
             added_member_id_list=added_member_id_list,
         )
@@ -120,6 +138,7 @@ def update(
         ctx.app_db.role_member.delete(role_id=id, identity_id=deleted_member_id_list)
         audit_log.create(
             "role-delete-members",
+            refs=audit_log.refs(identities=deleted_member_id_list),
             id=id,
             deleted_member_id_list=deleted_member_id_list,
         )

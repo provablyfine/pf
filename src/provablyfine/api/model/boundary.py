@@ -30,6 +30,7 @@ def create(
     assert boundary_id is not None  # we just created it
     audit_log.create(
         "boundary-create",
+        refs=audit_log.refs(grants=[*(ceiling_list or []), *denied_list]),
         id=boundary_id,
         name=name,
         description=description,
@@ -39,20 +40,29 @@ def create(
     return boundary_id
 
 
-def delete(boundary: Boundary) -> bool:
+def delete(id: int) -> bool:
     """Delete a boundary that no identity uses. The audit entry keeps what the boundary contained.
+
+    The row is locked before it is read, so the entry holds what was deleted,
+    not what an earlier read of the boundary saw.
 
     Return False if the boundary is already gone, for example deleted by a concurrent request.
     """
-    if ctx.app_db.boundary.delete(id=boundary.id) == 0:
+    row = ctx.app_db.boundary.read_one_for_update(id=id)
+    if row is None:
+        return False
+    boundary = _from_db(row)
+    refs = audit_log.refs(grants=[*(boundary.ceiling_list or []), *boundary.denied_list])
+    if ctx.app_db.boundary.delete(id=id) == 0:
         return False
     audit_log.create(
         "boundary-delete",
-        id=boundary.id,
-        name=boundary.name,
-        description=boundary.description,
-        ceiling_list=None if boundary.ceiling_list is None else [grant.serialize(g) for g in boundary.ceiling_list],
-        denied_list=[grant.serialize(g) for g in boundary.denied_list],
+        refs=refs,
+        id=id,
+        name=row.name,
+        description=row.description,
+        ceiling_list=row.ceiling_list,
+        denied_list=row.denied_list,
     )
     return True
 
@@ -106,6 +116,7 @@ def update(
         update_fields["ceiling_list"] = db_ceiling_list
         audit_log.create(
             "boundary-update-ceiling-list",
+            refs=audit_log.refs(grants=ceiling_list or []),
             id=id,
             ceiling_list=db_ceiling_list,
         )
@@ -114,6 +125,7 @@ def update(
         update_fields["denied_list"] = db_denied_list
         audit_log.create(
             "boundary-update-denied-list",
+            refs=audit_log.refs(grants=denied_list),
             id=id,
             denied_list=db_denied_list,
         )

@@ -57,7 +57,12 @@ def accept(id: str, public_key_id: str) -> bool:
     ).where(id=invitation.id, is_accepted=False, is_revoked=False)
     if changed == 0:
         return False
-    audit_log.create("identity-invitation-accepted", id=invitation.id, identity_id=invitation.identity_id)
+    audit_log.create(
+        "identity-invitation-accepted",
+        id=invitation.id,
+        identity_id=invitation.identity_id,
+        public_key_id=public_key_id,
+    )
     return True
 
 

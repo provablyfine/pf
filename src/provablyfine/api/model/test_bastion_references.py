@@ -1,7 +1,7 @@
 """Deleting a bastion removes the grants that name it, and only those."""
 
 from .. import app_db
-from . import bastion_references, boundary, grant, role
+from . import bastion, bastion_references, boundary, grant, role
 
 
 def _bastion(bastion_id: int | None) -> grant.Grant:
@@ -30,18 +30,20 @@ def test_only_the_grants_that_name_the_bastion_are_removed(tenant_app_db: app_db
 
 
 def test_removed_grants_are_written_to_the_audit_log(tenant_app_db: app_db.AppDb) -> None:
-    role.create("ops", "", [_bastion(7)])
-    boundary.create("guard", "", None, [_bastion(7), _bastion(8)])
+    bastion_id = bastion.create("https://bastion.example", None, None)
+    role.create("ops", "", [_bastion(bastion_id)])
+    boundary.create("guard", "", None, [_bastion(bastion_id), _bastion(bastion_id + 1)])
 
-    bastion_references.remove(7)
+    bastion_references.remove(bastion_id)
 
     entries = {
         (a.details["owner_name"], a.details["list"]): a.details for a in _audit(tenant_app_db, "bastion-delete-cascade")
     }
     assert set(entries) == {("ops", "grant_list"), ("guard", "denied_list")}
     for details in entries.values():
-        assert details["bastion_id"] == 7
-        assert [g["filter"]["id"] for g in details["removed_grants"]] == [7]
+        assert details["bastion_id"] == bastion_id
+        assert [g["filter"]["id"] for g in details["removed_grants"]] == [bastion_id]
+        assert details["refs"]["bastion"][str(bastion_id)] == {"url": "https://bastion.example"}
 
 
 def test_a_ceiling_that_loses_its_last_grant_denies_everything(tenant_app_db: app_db.AppDb) -> None:

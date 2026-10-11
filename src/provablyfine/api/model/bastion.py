@@ -33,6 +33,7 @@ def create(url: str, ssh_proxy_jump: str | None, tag_id_list: list[int] | None) 
     assert bastion_id is not None
     audit_log.create(
         "bastion-create",
+        refs=audit_log.refs(tags=tag_id_list or []),
         id=bastion_id,
         url=url,
         ssh_proxy_jump=ssh_proxy_jump,
@@ -89,15 +90,30 @@ def update(
     if len(update_fields) > 0:
         audit_log.create(
             "bastion-update",
+            refs=audit_log.refs(tags=update_fields.get("tag_id_list") or []),
             id=id,
             **update_fields,
         )
         ctx.app_db.bastion.update(**update_fields).where(id=id)
 
 
-def delete(id: int) -> None:
-    audit_log.create("bastion-delete", id=id)
-    ctx.app_db.bastion.delete(id=id)
+def delete(id: int) -> bool:
+    """Delete a bastion. The audit entry keeps what the bastion was.
+
+    Return False if the bastion is already gone, for example deleted by a concurrent request.
+    """
+    row = ctx.app_db.bastion.read_one_for_update(id=id)
+    if row is None or ctx.app_db.bastion.delete(id=id) == 0:
+        return False
+    audit_log.create(
+        "bastion-delete",
+        refs=audit_log.refs(tags=row.tag_id_list or []),
+        id=id,
+        url=row.url,
+        ssh_proxy_jump=row.ssh_proxy_jump,
+        tag_id_list=row.tag_id_list,
+    )
+    return True
 
 
 def remove_tag(tag_id: int) -> list[int]:

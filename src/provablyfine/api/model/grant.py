@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import enum
 import logging
 import typing
@@ -313,3 +314,71 @@ def deserialize(data: app_db.SerializedGrant) -> Grant:
 
 def serialize(grant: Grant) -> app_db.SerializedGrant:
     return grant.model_dump()
+
+
+@dataclasses.dataclass
+class RefIds:
+    """The object ids a list of grants names, by kind.
+
+    `uses_self` is True if an ssh username list has `{self}`.
+    That entry means the caller's `unix_username` at the time of the check.
+    """
+
+    tag: set[int] = dataclasses.field(default_factory=set[int])
+    identity: set[int] = dataclasses.field(default_factory=set[int])
+    boundary: set[int] = dataclasses.field(default_factory=set[int])
+    role: set[int] = dataclasses.field(default_factory=set[int])
+    bastion: set[int] = dataclasses.field(default_factory=set[int])
+    auth: set[int] = dataclasses.field(default_factory=set[int])
+    tenant: set[int] = dataclasses.field(default_factory=set[int])
+    uses_self: bool = False
+
+
+def referenced_ids(grant_list: typing.Iterable[Grant]) -> RefIds:
+    """Collect every object id the grants name, wherever it sits in the grant.
+
+    `test_grant_ref_ids.py` fails if a grant field that looks like an id is not read here.
+    """
+    refs = RefIds()
+    for g in grant_list:
+        match g:
+            case TagGrant():
+                _add(refs.tag, g.filter.id)
+            case RoleGrant():
+                _add(refs.role, g.filter.id)
+            case BoundaryGrant():
+                _add(refs.boundary, g.filter.id)
+            case BastionGrant():
+                _add(refs.bastion, g.filter.id)
+            case AuthGrant():
+                _add(refs.auth, g.filter.id)
+            case TenantGrant():
+                _add(refs.tenant, g.filter.id)
+            case AuditLogGrant():
+                pass
+            case LiveGrant():
+                refs.tag.update(g.filter.tag_id_list or [])
+            case IdentityGrant():
+                _triplet(refs, g)
+                p = g.permission
+                refs.tag.update(p.add_tag_id_list or [])
+                refs.tag.update(p.del_tag_id_list or [])
+                if p.create is not None:
+                    refs.tag.update(p.create.allowed_tag_id_list or [])
+                    refs.boundary.update(p.create.required_boundary_id_list or [])
+            case SSHGrant():
+                _triplet(refs, g)
+                if g.permission.username_list is not None and "{self}" in g.permission.username_list:
+                    refs.uses_self = True
+    return refs
+
+
+def _add(ids: set[int], id: int | None) -> None:
+    if id is not None:
+        ids.add(id)
+
+
+def _triplet(refs: RefIds, g: IdentityGrant | SSHGrant) -> None:
+    _add(refs.identity, g.filter.id)
+    refs.tag.update(g.filter.tag_id_list or [])
+    refs.boundary.update(g.filter.boundary_id_list or [])
