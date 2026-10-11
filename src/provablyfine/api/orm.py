@@ -115,10 +115,11 @@ class Table[T]:
         statement = self._table.update().values(**kwargs)
         return Update(self, statement)
 
-    def delete(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+    def delete(self, *args: typing.Any, **kwargs: typing.Any) -> int:
+        """Delete the matching rows and return how many were deleted."""
         statement = self._table.delete()
         statement = self._where(statement, *args, **kwargs)
-        self._connection.execute(statement)
+        return self._connection.execute(statement).rowcount
 
 
 class Update:

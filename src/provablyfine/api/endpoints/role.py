@@ -70,7 +70,8 @@ def delete_endpoint(role_id: int) -> fastapi.responses.Response:
     if member is not None:
         raise responses.ProblemHTTPException(responses.problem_response(status_code=400, title="Role is still in use"))
 
-    model.role.delete(role.id)
+    if not model.role.delete(role.id):
+        raise responses.not_found("Role not found")
     return _204
 
 
