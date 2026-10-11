@@ -3,9 +3,7 @@ Initialize server and login
   .* (re)
 
 Create a role
-  $ pfa -c config.json role create -n test-role
-  [0-9]+ (re)
-  $ ROLE_ID=$(pfa -c config.json role list -n test-role -q)
+  $ ROLE_ID=$(pfa -c config.json role create -n test-role)
 
 Create an identity
   $ pfa -c config.json identity create -n test-identity

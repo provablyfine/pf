@@ -2,25 +2,20 @@
 pfa -c config.json boundary create -n boundary >/dev/null
 
 # Create tag
-pfa -c config.json tag create -n id -v person >/dev/null
-pfa -c config.json tag create -n id -v device >/dev/null
-PERSON_ID=$(pfa -c config.json tag list -n id -v person -q)
-DEVICE_ID=$(pfa -c config.json tag list -n id -v device -q)
+PERSON_ID=$(pfa -c config.json tag create -n id -v person)
+DEVICE_ID=$(pfa -c config.json tag create -n id -v device)
 
 # Create role
-pfa -c config.json role create -n role >/dev/null
-ROLE_ID=$(pfa -c config.json role list -n role -q)
+ROLE_ID=$(pfa -c config.json role create -n role)
 
 # Create identity user1 and add to role before inviting
-pfa -c config.json identity create -n user1 >/dev/null
-USER1_ID=$(pfa -c config.json identity list -n user1 -q)
+USER1_ID=$(pfa -c config.json identity create -n user1)
 pfa -c config.json role member -i $ROLE_ID -a user1
 INVITATION=$(pfa -c config.json identity invite -i $USER1_ID --manual)
 echo $INVITATION
 
 # Create identity user2
-pfa -c config.json identity create -n user2 >/dev/null
-USER2_ID=$(pfa -c config.json identity list -n user2 -q)
+USER2_ID=$(pfa -c config.json identity create -n user2)
 
 # New user accepts invitation and logs in
 ssh-keygen -t ed25519 -f user1 -N "" > /dev/null

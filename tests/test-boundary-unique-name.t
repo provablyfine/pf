@@ -3,9 +3,7 @@ Initialize server and login
   .* (re)
 
 Create a boundary
-  $ pfa -c config.json boundary create -n test-boundary
-  [0-9]+ (re)
-  $ BOUNDARY_ID=$(pfa -c config.json boundary list -n test-boundary -q)
+  $ BOUNDARY_ID=$(pfa -c config.json boundary create -n test-boundary)
   $ pfa -c config.json boundary read -i $BOUNDARY_ID | head -3
   id           .* (re)
   name         test-boundary

@@ -7,9 +7,7 @@ Create tag
   [0-9]+ (re)
 
 Create role
-  $ pfa -c config.json role create -n test
-  [0-9]+ (re)
-  $ ROLE_ID=$(pfa -c config.json role list -n test -q)
+  $ ROLE_ID=$(pfa -c config.json role create -n test)
 
 Find root id
   $ IDENTITY_ID=$(pfa -c config.json identity list -n root -q)

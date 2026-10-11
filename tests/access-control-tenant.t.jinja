@@ -3,12 +3,8 @@ Initialize server and login
   .* (re)
 
 Create role and user1
-  $ pfa -c config.json role create -n role
-  [0-9]+ (re)
-  $ ROLE_ID=$(pfa -c config.json role list -n role -q)
-  $ pfa -c config.json identity create -n user1
-  [0-9]+ (re)
-  $ USER1_ID=$(pfa -c config.json identity list -n user1 -q)
+  $ ROLE_ID=$(pfa -c config.json role create -n role)
+  $ USER1_ID=$(pfa -c config.json identity create -n user1)
   $ pfa -c config.json role member -i $ROLE_ID -a user1
   $ INVITATION=$(pfa -c config.json identity invite -i $USER1_ID --manual)
   $ ssh-keygen -t ed25519 -f user1 -N "" > /dev/null

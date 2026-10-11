@@ -95,18 +95,12 @@ Child tenant (acme) cannot create sub-tenants (denied_list blocks it)
   [2]
 
 Child tenant (acme) CAN use SSH grants (pf hosts returns accessible hosts)
-  $ pfa -c acme.json tag create -n type -v device
-  [0-9]+ (re)
-  $ DEVICE_TAG=$(pfa -c acme.json tag list -n type -v device -q)
+  $ DEVICE_TAG=$(pfa -c acme.json tag create -n type -v device)
   $ pfa -c acme.json identity create -n acme-host -t $DEVICE_TAG
   [0-9]+ (re)
-  $ pfa -c acme.json role create -n ssh-role
-  [0-9]+ (re)
-  $ ROLE_ID=$(pfa -c acme.json role list -n ssh-role -q)
+  $ ROLE_ID=$(pfa -c acme.json role create -n ssh-role)
   $ pfa -c acme.json grant ssh --tag type=device --username alice --capability shell pty user-rc | pfa -c acme.json role grant -i $ROLE_ID --add
-  $ pfa -c acme.json identity create -n user1
-  [0-9]+ (re)
-  $ USER1_ID=$(pfa -c acme.json identity list -n user1 -q)
+  $ USER1_ID=$(pfa -c acme.json identity create -n user1)
   $ pfa -c acme.json role member -i $ROLE_ID -a user1
   $ INVITATION=$(pfa -c acme.json identity invite --manual -i $USER1_ID)
   $ ssh-keygen -t ed25519 -f acme-user1 -N "" > /dev/null

@@ -56,9 +56,7 @@ Create tags to be able to define tag-related permissions in role
   [0-9]+ (re)
 
 Create a new role
-  $ pfa -c config.json role create -n developer
-  [0-9]+ (re)
-  $ ROLE_ID=$(pfa -c config.json role list -n developer -q)
+  $ ROLE_ID=$(pfa -c config.json role create -n developer)
   $ pfa -c config.json role grant -i $ROLE_ID --set <<EOF
   > - type: identity
   >   filter:
@@ -161,9 +159,7 @@ Generate the SSH grant type
   {"username_list":["root"],"capability_list":["shell"],"command_list":[],"max_session_ttl_s":3600}
 
 Add SSH-specific grants
-  $ pfa -c config.json role create -n ssh-new
-  [0-9]+ (re)
-  $ SSH_ROLE_ID=$(pfa -c config.json role list -n ssh-new -q)
+  $ SSH_ROLE_ID=$(pfa -c config.json role create -n ssh-new)
   $ pfa -c config.json role grant -i $SSH_ROLE_ID --set <<EOF
   > - type: ssh
   >   filter:

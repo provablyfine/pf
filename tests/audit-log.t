@@ -7,8 +7,7 @@ List audit log with table format shows signing-key-create events
   .* (re)
 
 Create a tag to generate an audit event
-  $ pfa -c config.json tag create -n env -v prod
-  [0-9]+ (re)
+  $ TAG_ID=$(pfa -c config.json tag create -n env -v prod)
 
 Verify tag-create event exists in audit log
   $ pfa -c config.json audit-log list --object-type tag | grep -q tag-create && echo "OK"
@@ -41,7 +40,6 @@ Create more tags
   [0-9]+ (re)
 
 Delete first tag
-  $ TAG_ID=$(pfa -c config.json tag list -n env -v prod -q)
   $ pfa -c config.json tag delete -i $TAG_ID
 
 Verify tag-delete event exists

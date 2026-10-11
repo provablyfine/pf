@@ -70,11 +70,9 @@ Update name and description
   [2]
 
 Create a new boundary
-  $ pfa -c config.json boundary create -n non-admin -d "Most users are not admins and they should get a boundary that derives from this"
-  [0-9]+ (re)
+  $ BOUNDARY_ID=$(pfa -c config.json boundary create -n non-admin -d "Most users are not admins and they should get a boundary that derives from this")
 
 Make sure important permissions are denied from these users
-  $ BOUNDARY_ID=$(pfa -c config.json boundary list -n non-admin -q)
   $ pfa -c config.json grant role --create |pfa -c config.json boundary denied -i $BOUNDARY_ID --add
   $ pfa -c config.json grant role --update grant_list | pfa -c config.json boundary denied -i $BOUNDARY_ID --add
   $ pfa -c config.json grant tag -crd | pfa -c config.json boundary denied -i $BOUNDARY_ID --add
