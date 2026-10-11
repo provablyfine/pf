@@ -117,5 +117,6 @@ def delete_endpoint(bastion_id: int) -> fastapi.responses.Response:
             grants.bastion(bastion.id).can_read, "Not allowed to delete bastion", "Bastion not found"
         )
 
+    model.bastion_references.remove(bastion_id)
     model.bastion.delete(id=bastion_id)
     return _204
