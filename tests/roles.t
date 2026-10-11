@@ -49,11 +49,15 @@ List existing roles (there is one)
 
 Create tags to be able to define tag-related permissions in role
   $ pfa -c config.json tag create -n env -v dev
+  [0-9]+ (re)
   $ pfa -c config.json tag create -n env -v preprod
+  [0-9]+ (re)
   $ pfa -c config.json tag create -n env -v prod
+  [0-9]+ (re)
 
 Create a new role
   $ pfa -c config.json role create -n developer
+  [0-9]+ (re)
   $ ROLE_ID=$(pfa -c config.json role list -n developer -q)
   $ pfa -c config.json role grant -i $ROLE_ID --set <<EOF
   > - type: identity
@@ -94,10 +98,12 @@ Create a new role
 
 Add first member to developer role
   $ pfa -c config.json identity create -n user1
+  [0-9]+ (re)
   $ pfa -c config.json role member -i $ROLE_ID -a user1
 
 Add second member to role that already has a member
   $ pfa -c config.json identity create -n user2
+  [0-9]+ (re)
   $ pfa -c config.json role member -i $ROLE_ID -a user2
   $ pfa -c config.json role read -i $ROLE_ID | grep ^member
   member       user1
@@ -156,6 +162,7 @@ Generate the SSH grant type
 
 Add SSH-specific grants
   $ pfa -c config.json role create -n ssh-new
+  [0-9]+ (re)
   $ SSH_ROLE_ID=$(pfa -c config.json role list -n ssh-new -q)
   $ pfa -c config.json role grant -i $SSH_ROLE_ID --set <<EOF
   > - type: ssh

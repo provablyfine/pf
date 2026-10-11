@@ -6,6 +6,7 @@ Initialize server and login
 
 Create an unprivileged identity
   $ pfa -c config.json identity create -n user1
+  [0-9]+ (re)
   $ USER1_ID=$(pfa -c config.json identity list -n user1 -q)
   $ INVITATION=$(pfa -c config.json identity invite -i $USER1_ID --manual)
   $ ssh-keygen -t ed25519 -f user1 -N "" > /dev/null
@@ -14,6 +15,7 @@ Create an unprivileged identity
   $ pf -c user1.json login --session-key user1-session
   $ ROOT_ID=$(pfa -c config.json identity list -n root -q)
   $ pfa -c config.json tag create -n env -v prod
+  [0-9]+ (re)
   $ TAG_ID=$(pfa -c config.json tag list -n env -v prod -q)
 
 Identities

@@ -38,13 +38,15 @@ def _auth_list_function(args: argparse.Namespace) -> None:
 def _auth_create_http_sig_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     sc = client.Factory(c, timeout=args.timeout).session()
-    sc.create_auth_http_sig(args.name, args.client_type, args.description or "")
+    created = sc.create_auth_http_sig(args.name, args.client_type, args.description or "")
+
+    print(created.id)
 
 
 def _auth_create_oidc_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     sc = client.Factory(c, timeout=args.timeout).session()
-    sc.create_auth_oidc(
+    created = sc.create_auth_oidc(
         args.name,
         args.client_type,
         args.description or "",
@@ -52,12 +54,14 @@ def _auth_create_oidc_function(args: argparse.Namespace) -> None:
         args.client_id,
         require_email_verified=not args.allow_unverified_email,
     )
+
+    print(created.id)
 
 
 def _auth_create_oidc_device_code_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     sc = client.Factory(c, timeout=args.timeout).session()
-    sc.create_auth_oidc_device_code(
+    created = sc.create_auth_oidc_device_code(
         args.name,
         args.client_type,
         args.description or "",
@@ -66,11 +70,13 @@ def _auth_create_oidc_device_code_function(args: argparse.Namespace) -> None:
         require_email_verified=not args.allow_unverified_email,
     )
 
+    print(created.id)
+
 
 def _auth_create_oidc_secret_device_code_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     sc = client.Factory(c, timeout=args.timeout).session()
-    sc.create_auth_oidc_secret_device_code(
+    created = sc.create_auth_oidc_secret_device_code(
         args.name,
         args.client_type,
         args.description or "",
@@ -79,6 +85,8 @@ def _auth_create_oidc_secret_device_code_function(args: argparse.Namespace) -> N
         args.client_secret,
         require_email_verified=not args.allow_unverified_email,
     )
+
+    print(created.id)
 
 
 def _auth_read_function(args: argparse.Namespace) -> None:

@@ -4,6 +4,7 @@ Initialize server and login
 
 Create a role (gets id=2)
   $ pfa -c config.json role create -n test
+  [0-9]+ (re)
 
 Trigger a ValidationError by sending a boundary grant with the required
 'permission.create' field removed. The client validates the grant before sending

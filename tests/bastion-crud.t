@@ -7,25 +7,30 @@ List empty bastions
 
 Create bastion 1 (minimal)
   $ pfa -c config.json bastion create --url http://bastion1.example.com
+  [0-9]+ (re)
   $ BASTION1_ID=$(pfa -c config.json bastion list -q)
   $ echo "BASTION1_ID=$BASTION1_ID"
   BASTION1_ID=1
 
 Create bastion 2 (with ssh-proxy-jump)
   $ pfa -c config.json bastion create --url http://bastion2.example.com --ssh-proxy-jump user@jump.example.com:22
+  [0-9]+ (re)
 
 Create tag for bastion 3
   $ pfa -c config.json tag create -n env -v prod
+  [0-9]+ (re)
   $ TAG_ID=$(pfa -c config.json tag list -q)
 
 Create bastion 3 (with tag)
   $ pfa -c config.json bastion create --url http://bastion3.example.com -t $TAG_ID
+  [0-9]+ (re)
   $ BASTION3_ID=$(pfa -c config.json bastion list -q | tail -1)
   $ echo "BASTION3_ID=$BASTION3_ID"
   BASTION3_ID=3
 
 Create bastion 4 (-t with no values means visible to no one)
   $ pfa -c config.json bastion create --url http://bastion4.example.com -t
+  [0-9]+ (re)
   $ BASTION4_ID=$(pfa -c config.json bastion list -q | tail -1)
   $ pfa -c config.json bastion read -i $BASTION4_ID
   id    4
@@ -185,12 +190,16 @@ Verify all bastions are gone
 
 Create two bastions and a role and a boundary that name them
   $ pfa -c config.json bastion create --url http://doomed.example.com
+  [0-9]+ (re)
   $ pfa -c config.json bastion create --url http://kept.example.com
+  [0-9]+ (re)
   $ DOOMED_ID=$(pfa -c config.json bastion list -q | head -1)
   $ KEPT_ID=$(pfa -c config.json bastion list -q | tail -1)
   $ pfa -c config.json role create -n ops
+  [0-9]+ (re)
   $ ROLE_ID=$(pfa -c config.json role list -n ops -q)
   $ pfa -c config.json boundary create -n guard
+  [0-9]+ (re)
   $ BOUNDARY_ID=$(pfa -c config.json boundary list -n guard -q)
   $ pfa -c config.json grant bastion --read --id $DOOMED_ID | pfa -c config.json role grant -i $ROLE_ID --add
   $ pfa -c config.json grant bastion --read --id $KEPT_ID | pfa -c config.json role grant -i $ROLE_ID --add

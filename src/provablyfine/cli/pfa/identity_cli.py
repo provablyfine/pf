@@ -97,7 +97,7 @@ def _identity_create_function(args: argparse.Namespace) -> None:
     boundary_name_list = [b for b in args.boundary if not b.isdigit()]
     tag_id_list = [int(t) for t in args.tag if t.isdigit()]
     tag_name_value_list = [_parse_tag(t) for t in args.tag if not t.isdigit()]
-    sc.create_identity(
+    created = sc.create_identity(
         args.name,
         boundary_id_list,
         boundary_name_list,
@@ -105,6 +105,8 @@ def _identity_create_function(args: argparse.Namespace) -> None:
         tag_name_value_list,
         unix_username=args.unix_username,
     )
+
+    print(created.id)
 
 
 def _identity_invite_function(args: argparse.Namespace) -> None:

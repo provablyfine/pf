@@ -14,6 +14,7 @@ Initialize server and login
 %}
 Check that grant "{{grant}}" is actually enforcing access control
   $ pfa -c config.json identity create -n user4 -b boundary -t $PERSON_ID
+  [0-9]+ (re)
   $ USER4_ID=$(pfa -c config.json identity list -n user4 -q)
   $ pfa -c user1.json identity delete -i $USER4_ID
   Identity not found
@@ -30,6 +31,7 @@ Check that grant "{{grant}}" is actually enforcing access control
 Check that grant "{{grant}}" is actually enforcing access control
 and is removed together with the identity
   $ pfa -c config.json identity create -n user4 -b boundary -t $PERSON_ID
+  [0-9]+ (re)
   $ USER4_ID=$(pfa -c config.json identity list -n user4 -q)
   $ pfa -c user1.json identity delete -i $USER4_ID
   Identity not found

@@ -4,14 +4,17 @@ Initialize server and login
 
 Create admin objects
   $ pfa -c config.json tag create -n id -v device
+  [0-9]+ (re)
   $ DEVICE_TAG_ID=$(pfa -c config.json tag list -n id -v device -q)
   $ pfa -c config.json role create -n role
+  [0-9]+ (re)
   $ ROLE_ID=$(pfa -c config.json role list -n role -q)
   $ pfa -c config.json grant ssh --tag id=device --username root --capability shell pty user-rc | pfa -c config.json role grant -i $ROLE_ID --add
   $ pfa -c config.json grant ssh --tag id=device --username alice --capability shell pty user-rc | pfa -c config.json role grant -i $ROLE_ID --add
 
 Provision new host
   $ pfa -c config.json identity create -n host -t $DEVICE_TAG_ID
+  [0-9]+ (re)
   $ HOST_ID=$(pfa -c config.json identity list -n host -q)
   $ INVITATION=$(pfa -c config.json identity invite --manual -i $HOST_ID)
   $ echo $INVITATION
@@ -30,6 +33,7 @@ New host SSH setup
 
 Provision new user
   $ pfa -c config.json identity create -n user
+  [0-9]+ (re)
   $ USER_ID=$(pfa -c config.json identity list -n user -q)
   $ pfa -c config.json role member -i $ROLE_ID -a user
 # XXX: test $USER_ID above
@@ -108,6 +112,7 @@ Forwarding capabilities reach the certificate
 
 A boundary ceiling caps forwarding capabilities.
   $ pfa -c config.json boundary create -n capped -d "shell without forwarding"
+  [0-9]+ (re)
   $ CAPPED_ID=$(pfa -c config.json boundary list -n capped -q)
   $ pfa -c config.json boundary ceiling -i $CAPPED_ID --set <<EOF
   > - type: ssh
@@ -121,6 +126,7 @@ A boundary ceiling caps forwarding capabilities.
 
 Provision a user inside that boundary
   $ pfa -c config.json identity create -n capped-user -b capped
+  [0-9]+ (re)
   $ CAPPED_USER_ID=$(pfa -c config.json identity list -n capped-user -q)
   $ pfa -c config.json role member -i $ROLE_ID -a capped-user
   $ INVITATION=$(pfa -c config.json identity invite --manual -i $CAPPED_USER_ID)
@@ -142,6 +148,7 @@ The ceiling covers no port-forwarding , so that capability is gone too
 
 A deny is targeted
   $ pfa -c config.json boundary create -n targeted -d "no X11 for bob"
+  [0-9]+ (re)
   $ TARGETED_ID=$(pfa -c config.json boundary list -n targeted -q)
   $ pfa -c config.json boundary denied -i $TARGETED_ID --set <<EOF
   > - type: ssh
@@ -153,6 +160,7 @@ A deny is targeted
   >     max_session_ttl_s: null
   > EOF
   $ pfa -c config.json identity create -n targeted-user -b targeted
+  [0-9]+ (re)
   $ TARGETED_USER_ID=$(pfa -c config.json identity list -n targeted-user -q)
   $ pfa -c config.json role member -i $ROLE_ID -a targeted-user
   $ INVITATION=$(pfa -c config.json identity invite --manual -i $TARGETED_USER_ID)
@@ -193,6 +201,7 @@ Denying every capability for alice drops only her
 
 An "ssh" grant with a None username_list applies to any username
   $ pfa -c config.json role create -n wildcard
+  [0-9]+ (re)
   $ WILDCARD_ROLE_ID=$(pfa -c config.json role list -n wildcard -q)
   $ pfa -c config.json role grant -i $WILDCARD_ROLE_ID --set <<EOF
   > - type: ssh
@@ -204,6 +213,7 @@ An "ssh" grant with a None username_list applies to any username
   >     max_session_ttl_s: null
   > EOF
   $ pfa -c config.json identity create -n wildcard-user -b targeted
+  [0-9]+ (re)
   $ WILDCARD_USER_ID=$(pfa -c config.json identity list -n wildcard-user -q)
   $ pfa -c config.json role member -i $WILDCARD_ROLE_ID -a wildcard-user
   $ INVITATION=$(pfa -c config.json identity invite --manual -i $WILDCARD_USER_ID)
@@ -237,9 +247,11 @@ An empty details cell means the entry has no command axis at all
 
 Grant access to alice@host with a bounded ttl
   $ pfa -c config.json role create -n ttl
+  [0-9]+ (re)
   $ TTL_ROLE_ID=$(pfa -c config.json role list -n ttl -q)
   $ pfa -c config.json grant ssh --tag id=device --username alice --capability shell --max-session-ttl 3600 | pfa -c config.json role grant -i $TTL_ROLE_ID --set
   $ pfa -c config.json identity create -n ttl-user
+  [0-9]+ (re)
   $ TTL_USER_ID=$(pfa -c config.json identity list -n ttl-user -q)
   $ pfa -c config.json role member -i $TTL_ROLE_ID -a ttl-user
   $ INVITATION=$(pfa -c config.json identity invite --manual -i $TTL_USER_ID)

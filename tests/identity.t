@@ -19,14 +19,19 @@ List existing identities (there is one)
 
 Create a boundary to be able to create an identity with it
   $ pfa -c config.json boundary create -n boundary1
+  [0-9]+ (re)
 
 Create tags to be able to tag and untag identity
   $ pfa -c config.json tag create -n env -v dev
+  [0-9]+ (re)
   $ pfa -c config.json tag create -n env -v preprod
+  [0-9]+ (re)
   $ pfa -c config.json tag create -n env -v prod
+  [0-9]+ (re)
 
 Create a new identity to be able to update and delete it
   $ pfa -c config.json identity create -n user2 -b boundary1 -t env=dev
+  [0-9]+ (re)
   $ USER2_ID=$(pfa -c config.json identity list -n user2 -q)
   $ pfa -c config.json identity update -i $USER2_ID -n hello
   $ pfa -c config.json identity list
@@ -60,6 +65,7 @@ Identity names must be unique: cannot create a duplicate
 
 Identity names must be unique: cannot rename to an existing name
   $ pfa -c config.json identity create -n user3 -b boundary1
+  [0-9]+ (re)
   $ USER3_ID=$(pfa -c config.json identity list -n user3 -q)
   $ pfa -c config.json identity update -i $USER3_ID -n hello
   Identity already exists. "name" must be unique. hello
@@ -80,14 +86,19 @@ And yes, we can delete an identity
 
 List filters can be combined, keeping only identities matching every criterion
   $ pfa -c config.json boundary create -n prod
+  [0-9]+ (re)
   $ pfa -c config.json tag create -n filter -v eu
+  [0-9]+ (re)
   $ PROD_ID=$(pfa -c config.json boundary list -n prod -q)
   $ FILTER_TAG_ID=$(pfa -c config.json tag list -n filter -v eu -q)
 
 alice has the tag and the boundary, bob only the boundary, carol only the tag
   $ pfa -c config.json identity create -n alice -b prod -t filter=eu
+  [0-9]+ (re)
   $ pfa -c config.json identity create -n bob -b prod
+  [0-9]+ (re)
   $ pfa -c config.json identity create -n carol -t filter=eu
+  [0-9]+ (re)
   $ ALICE_ID=$(pfa -c config.json identity list -n alice -q)
   $ pfa -c config.json identity list --boundary-name prod -f json | jq -r '.[].name' | sort
   alice

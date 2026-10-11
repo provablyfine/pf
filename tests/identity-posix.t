@@ -4,6 +4,7 @@ Initialize server and login
 
 Create a user identity
   $ pfa -c config.json identity create -n user
+  [0-9]+ (re)
   $ USER_ID=$(pfa -c config.json identity list -n user -q)
   $ ROOT_ID=$(pfa -c config.json identity list -n root -q)
 
@@ -50,6 +51,7 @@ Invalid unix_username values are rejected
 
 Unix username can be set at creation time
   $ pfa -c config.json identity create -n user-create-posix --unix-username bob
+  [0-9]+ (re)
   $ USER_CREATE_ID=$(pfa -c config.json identity list -n user-create-posix -q)
   $ pfa -c config.json identity read -i $USER_CREATE_ID
   id             [0-9]+ (re)
@@ -83,6 +85,7 @@ Set unix_username (manual mode: admin sets it directly)
 
 Unix username must be unique across identities
   $ pfa -c config.json identity create -n user2
+  [0-9]+ (re)
   $ USER2_ID=$(pfa -c config.json identity list -n user2 -q)
   $ pfa -c config.json identity update -i $USER2_ID --unix-username alice
   Identity already exists. "unix_username" must be unique. alice
@@ -102,9 +105,12 @@ Cleared unix_username is null in JSON output
 
 Set up for {self} resolution test: host with device tag, role with {self} + literal grant
   $ pfa -c config.json tag create -n id -v device
+  [0-9]+ (re)
   $ DEVICE_TAG_ID=$(pfa -c config.json tag list -n id -v device -q)
   $ pfa -c config.json identity create -n host -t $DEVICE_TAG_ID
+  [0-9]+ (re)
   $ pfa -c config.json role create -n role
+  [0-9]+ (re)
   $ ROLE_ID=$(pfa -c config.json role list -n role -q)
   $ pfa -c config.json grant ssh --tag id=device --username '{self}' deploy --capability shell pty user-rc | pfa -c config.json role grant -i $ROLE_ID --add
   $ pfa -c config.json role member -i $ROLE_ID -a user

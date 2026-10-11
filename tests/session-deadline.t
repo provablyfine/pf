@@ -4,14 +4,17 @@ Initialize server and login
 
 Create admin objects
   $ pfa -c config.json tag create -n id -v device
+  [0-9]+ (re)
   $ DEVICE_TAG_ID=$(pfa -c config.json tag list -n id -v device -q)
   $ pfa -c config.json role create -n role
+  [0-9]+ (re)
   $ ROLE_ID=$(pfa -c config.json role list -n role -q)
   $ pfa -c config.json grant ssh --tag id=device --username root --capability shell pty user-rc | pfa -c config.json role grant -i $ROLE_ID --add
   $ pfa -c config.json grant ssh --tag id=device --username alice --capability shell pty user-rc --max-session-ttl 3600 | pfa -c config.json role grant -i $ROLE_ID --add
 
 Provision new host
   $ pfa -c config.json identity create -n host -t $DEVICE_TAG_ID
+  [0-9]+ (re)
   $ HOST_ID=$(pfa -c config.json identity list -n host -q)
   $ INVITATION=$(pfa -c config.json identity invite --manual -i $HOST_ID)
   $ echo $INVITATION
@@ -30,6 +33,7 @@ New host SSH setup
 
 Provision new user
   $ pfa -c config.json identity create -n user
+  [0-9]+ (re)
   $ USER_ID=$(pfa -c config.json identity list -n user -q)
   $ pfa -c config.json role member -i $ROLE_ID -a user
   $ INVITATION=$(pfa -c config.json identity invite --manual -i $USER_ID)

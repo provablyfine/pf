@@ -24,6 +24,7 @@ Read the default auth config
 
 Create a new http_sig auth config
   $ pfa -c config.json auth create http_sig -n corporate --client-type cli
+  [0-9]+ (re)
 
 List auth configs (two now)
   $ pfa -c config.json auth list -q
@@ -47,6 +48,7 @@ Create a duplicate auth config (same name + client_type)
 
 Create same name with different client_type (allowed)
   $ pfa -c config.json auth create http_sig -n default --client-type web
+  [0-9]+ (re)
 
 List auth configs (three now)
   $ pfa -c config.json auth list -q
@@ -68,6 +70,7 @@ Create an oidc auth config for a cli client (should fail)
 
 Create an oidc auth config
   $ pfa -c config.json auth create oidc -n google --client-type web --issuer https://accounts.google.com --client-id my-client-id
+  [0-9]+ (re)
 
 Read the oidc auth config
   $ pfa -c config.json auth read -i 4
@@ -97,6 +100,7 @@ oidc has no client secret to give it
 
 Create an oidc auth config that allows unverified email
   $ pfa -c config.json auth create oidc -n unverified-ok --client-type web --issuer https://accounts.google.com --client-id my-client-id-2 --allow-unverified-email
+  [0-9]+ (re)
   $ pfa -c config.json auth read -i 5 -f json | jq .config.require_email_verified
   false
 
@@ -219,6 +223,7 @@ Create an oidc-device-code auth config for a web client (should fail)
 
 Create an oidc-device-code auth config
   $ pfa -c config.json auth create oidc-device-code -n device --client-type cli --issuer https://accounts.google.com --client-id device-client-id
+  [0-9]+ (re)
 
 Read the oidc-device-code auth config
   $ pfa -c config.json auth read -i 6
@@ -247,6 +252,7 @@ Create an oidc-secret-device-code auth config for a web client (should fail)
 
 Create an oidc-secret-device-code auth config
   $ pfa -c config.json auth create oidc-secret-device-code -n device-secret --client-type cli --issuer https://accounts.google.com --client-id secret-client-id --client-secret my-secret
+  [0-9]+ (re)
 
 Read the oidc-secret-device-code auth config
   $ pfa -c config.json auth read -i 7

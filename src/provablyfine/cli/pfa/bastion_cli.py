@@ -86,7 +86,9 @@ def _bastion_create_function(args: argparse.Namespace) -> None:
     else:
         tag_id_list = [int(t) for t in args.tag if t.isdigit()]
         tag_name_value_list = [_parse_tag(t) for t in args.tag if not t.isdigit()]
-    sc.create_bastion(args.url, args.ssh_proxy_jump, tag_id_list, tag_name_value_list)
+    created = sc.create_bastion(args.url, args.ssh_proxy_jump, tag_id_list, tag_name_value_list)
+
+    print(created.id)
 
 
 def _bastion_update_function(args: argparse.Namespace) -> None:

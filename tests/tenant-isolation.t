@@ -2,6 +2,7 @@ Initialize root tenant and create a root-specific tag
   $ bash $TESTDIR/fixture.sh
   .* (re)
   $ pfa -c config.json tag create -n scope -v root-only
+  [0-9]+ (re)
 
 Create and initialize child tenant "acme"
   $ pfa -c config.json tenant create --name acme --display-name "Acme Corp"
@@ -14,6 +15,7 @@ Create and initialize child tenant "acme"
   $ ssh-keygen -t ed25519 -f acme-session -N "" > /dev/null
   $ pfa -c acme.json login --session-key acme-session
   $ pfa -c acme.json tag create -n scope -v acme-only
+  [0-9]+ (re)
 
 Create and initialize child tenant "beta"
   $ pfa -c config.json tenant create --name beta --display-name "Beta Corp"
@@ -26,6 +28,7 @@ Create and initialize child tenant "beta"
   $ ssh-keygen -t ed25519 -f beta-session -N "" > /dev/null
   $ pfa -c beta.json login --session-key beta-session
   $ pfa -c beta.json tag create -n scope -v beta-only
+  [0-9]+ (re)
 
 Scenario 1: child tenant cannot see owner tenant
 
@@ -93,12 +96,16 @@ Child tenant (acme) cannot create sub-tenants (denied_list blocks it)
 
 Child tenant (acme) CAN use SSH grants (pf hosts returns accessible hosts)
   $ pfa -c acme.json tag create -n type -v device
+  [0-9]+ (re)
   $ DEVICE_TAG=$(pfa -c acme.json tag list -n type -v device -q)
   $ pfa -c acme.json identity create -n acme-host -t $DEVICE_TAG
+  [0-9]+ (re)
   $ pfa -c acme.json role create -n ssh-role
+  [0-9]+ (re)
   $ ROLE_ID=$(pfa -c acme.json role list -n ssh-role -q)
   $ pfa -c acme.json grant ssh --tag type=device --username alice --capability shell pty user-rc | pfa -c acme.json role grant -i $ROLE_ID --add
   $ pfa -c acme.json identity create -n user1
+  [0-9]+ (re)
   $ USER1_ID=$(pfa -c acme.json identity list -n user1 -q)
   $ pfa -c acme.json role member -i $ROLE_ID -a user1
   $ INVITATION=$(pfa -c acme.json identity invite --manual -i $USER1_ID)

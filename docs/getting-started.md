@@ -94,16 +94,15 @@ you can register it within your tenant.
 
 First, on your local host, create an identity associated with this OpenSSH server instance:
 ```console
-$ pfa identity create -n demo --tag id=device
-$ INVITATION_URL=$(pfa identity invite --manual -i $(pfa identity list -n demo -q))
+$ DEMO_ID=$(pfa identity create -n demo --tag id=device)
+$ INVITATION_URL=$(pfa identity invite --manual -i $DEMO_ID)
 ```
 
 ### Grant yourself access to the host
 
 ```
 # Create a role
-$ pfa role create -n users
-$ USERS_ROLE_ID=$(pfa role list -n users -q)
+$ USERS_ROLE_ID=$(pfa role create -n users)
 # Grant ssh permissions to all hosts to the new role
 $ pfa grant ssh --username root --capability shell pty user-rc --tag id=device | pfa role grant -i $USERS_ROLE_ID --set
 # Add ourselves to the role

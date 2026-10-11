@@ -4,9 +4,11 @@ Initialize server and login
 
 Create tag
   $ pfa -c config.json tag create -n env -v dev
+  [0-9]+ (re)
 
 Create role
   $ pfa -c config.json role create -n test
+  [0-9]+ (re)
   $ ROLE_ID=$(pfa -c config.json role list -n test -q)
 
 Find root id
