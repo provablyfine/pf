@@ -3,7 +3,7 @@ import time
 import fastapi
 import fastapi.responses
 
-from .. import responses, schemas, signature
+from .. import model, responses, schemas, signature
 from ..context import ctx
 
 router = fastapi.APIRouter(prefix="/session", dependencies=[fastapi.Depends(signature.verify_session)])
@@ -22,6 +22,7 @@ def update_session_self(data: schemas.session.SessionSelfUpdateRequest) -> fasta
     # So the update only applies to a session that still has no role.
     if ctx.app_db.identity_session_key.update(role_id=data.role_id).where(id=ctx.session_key_id, role_id=None) == 0:
         raise responses.ProblemHTTPException(responses.problem_response(409, "Session role already set"))
+    model.audit_log.create("session-set-role", session_key_id=ctx.session_key_id, role_id=data.role_id)
     return fastapi.responses.Response(status_code=204)
 
 
@@ -29,4 +30,5 @@ def update_session_self(data: schemas.session.SessionSelfUpdateRequest) -> fasta
 def logout_session_self() -> fastapi.responses.Response:
     """End the caller's own session. Later requests signed with its key get a 401."""
     ctx.app_db.identity_session_key.update(logged_out_at=int(time.time())).where(id=ctx.session_key_id)
+    model.audit_log.create("session-logout", session_key_id=ctx.session_key_id)
     return fastapi.responses.Response(status_code=204)

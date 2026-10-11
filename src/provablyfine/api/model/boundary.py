@@ -39,6 +39,21 @@ def create(
     return boundary_id
 
 
+def delete(id: int) -> None:
+    """Delete a boundary that no identity uses. The audit entry keeps what the boundary contained."""
+    boundary = ctx.app_db.boundary.read_one(id=id)
+    assert boundary is not None
+    ctx.app_db.boundary.delete(id=id)
+    audit_log.create(
+        "boundary-delete",
+        id=id,
+        name=boundary.name,
+        description=boundary.description,
+        ceiling_list=boundary.ceiling_list,
+        denied_list=boundary.denied_list,
+    )
+
+
 def _from_db(b: app_db.BoundaryRow) -> Boundary:
     return Boundary(
         id=b.id,

@@ -45,3 +45,13 @@ Delete first tag
 Verify tag-delete event exists
   $ pfa -c config.json audit-log list --object-type tag | grep -q tag-delete && echo "OK"
   OK
+
+Deleting a role and a boundary leaves an audit event
+  $ BOUNDARY_ID=$(pfa -c config.json boundary create -n audit-b)
+  $ ROLE_ID=$(pfa -c config.json role create -n audit-r)
+  $ pfa -c config.json boundary delete -i $BOUNDARY_ID
+  $ pfa -c config.json role delete -i $ROLE_ID
+  $ pfa -c config.json audit-log list --object-type boundary | grep -q boundary-delete && echo "OK"
+  OK
+  $ pfa -c config.json audit-log list --object-type role | grep -q role-delete && echo "OK"
+  OK

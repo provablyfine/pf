@@ -85,7 +85,7 @@ def delete_endpoint(boundary_id: int) -> fastapi.responses.Response:
             responses.problem_response(status_code=400, title="Boundary is still in use")
         )
 
-    ctx.app_db.boundary.delete(id=boundary.id)
+    model.boundary.delete(boundary.id)
     return _204
 
 

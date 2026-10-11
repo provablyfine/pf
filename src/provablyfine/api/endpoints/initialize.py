@@ -162,7 +162,7 @@ def _provision(allow_tenant_create: bool):
         ),
         grant_list=all_grants,
     )
-    ctx.app_db.role_member.create(role_id=root_role_id, identity_id=root_id)
+    model.role.update(root_role_id, added_member_id_list=[root_id])
 
     model.auth_config.create(
         name="default",

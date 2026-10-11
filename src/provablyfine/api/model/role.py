@@ -29,6 +29,14 @@ def create(name: str, description: str, grant_list: typing.Sequence[grant.Grant]
     return role_id
 
 
+def delete(id: int) -> None:
+    """Delete a role that has no members. The audit entry keeps what the role contained."""
+    role = ctx.app_db.role.read_one(id=id)
+    assert role is not None
+    ctx.app_db.role.delete(id=id)
+    audit_log.create("role-delete", id=id, name=role.name, description=role.description, grant_list=role.grant_list)
+
+
 def _from_db(role: app_db.RoleRow, member_id_list: list[int]) -> Role:
     grant_list: list[grant.Grant] = [grant.deserialize(g) for g in role.grant_list]
     return Role(
