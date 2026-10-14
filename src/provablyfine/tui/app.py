@@ -9,6 +9,7 @@ import typing
 import provablyfine_client as pfc
 import textual
 import textual.app
+import textual.binding
 import textual.containers
 import textual.message
 import textual.screen
@@ -263,6 +264,7 @@ class _ContextSelectScreen(base.ModalScreen[str | None]):
 class TuiApp(base.App):
     TITLE = "Provably Fine"
     BINDINGS: typing.ClassVar = [
+        textual.binding.Binding("ctrl+q", "quit", "Quit", priority=True),
         ("ctrl+t", "switch_context", "Switch context"),
         ("ctrl+r", "switch_role", "Switch role"),
     ]
