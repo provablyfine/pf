@@ -122,6 +122,15 @@ class Table[T]:
         rows = self._connection.execute(statement)
         return [self._row_type(*row) for row in rows]
 
+    def read_page(
+        self, *args: typing.Any, order_by: str, descending: bool, limit: int, **kwargs: typing.Any
+    ) -> list[T]:
+        """Like `read_all`, ordered by one column and cut after `limit` rows."""
+        column = self._table.columns[order_by]
+        statement = self._where(self._table.select(), *args, **kwargs)
+        statement = statement.order_by(column.desc() if descending else column.asc()).limit(limit)
+        return [self._row_type(*row) for row in self._connection.execute(statement)]
+
     def update(self, **kwargs: typing.Any) -> Update:
         statement = self._table.update().values(**kwargs)
         return Update(self, statement)

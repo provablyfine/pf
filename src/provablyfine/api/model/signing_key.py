@@ -4,7 +4,7 @@ import typing
 from ... import jwk
 from .. import app_db, responses
 from ..context import ctx
-from . import audit_log
+from . import audit_log, audit_types
 
 
 def create(key_type: app_db.SigningKeyType, crypto_key_type: jwk.KeyType, valid_after: int, valid_before: int):
@@ -14,7 +14,7 @@ def create(key_type: app_db.SigningKeyType, crypto_key_type: jwk.KeyType, valid_
         type=key_type, serial_number=1, key=encrypted_key, valid_after=valid_after, valid_before=valid_before
     )
     audit_log.create(
-        "signing-key-create",
+        audit_types.SIGNING_KEY_CREATE,
         key_type=key_type.name,
         crypto_key_type=crypto_key_type.name,
         valid_after=valid_after,
@@ -49,7 +49,7 @@ def allocate_serial_numbers(id: int, count: int) -> int:
         if count == 0:
             return first
         if ctx.app_db.signing_key.update(serial_number=first + count).where(id=id, serial_number=first) == 1:
-            audit_log.create("signing-key-update-serial", id=id, serial_number=first + count)
+            audit_log.create(audit_types.SIGNING_KEY_UPDATE_SERIAL, id=id, serial_number=first + count)
             return first
     raise responses.ProblemHTTPException(
         responses.problem_response(status_code=409, title="Unable to reserve serial numbers, try again")

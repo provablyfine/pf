@@ -66,12 +66,13 @@ def test_the_cascade_entries_carry_the_removed_grants(api, tmp_path) -> None:
 
     sc.delete_identity(second_id)
 
-    (entry,) = _audit(sc, "identity-delete-cascade")
-    assert entry.details["identity_id"] == second_id
-    assert entry.details["owner_name"] == "guard"
-    assert entry.details["list"] == "denied_list"
-    assert len(entry.details["removed_grants"]) == 1
-    assert entry.details["removed_grants"][0]["filter"]["id"] == second_id
+    entries = [e for e in _audit(sc, "boundary-update-denied-list") if "cause" in e.details]
+    (entry,) = entries
+    assert entry.details["cause"]["type"] == "identity"
+    assert entry.details["cause"]["id"] == str(second_id)
+    assert entry.details["id"] == guard.id
+    assert len(entry.details["old"]) == 1
+    assert entry.details["old"][0]["filter"]["id"] == second_id
 
 
 def test_the_sessions_of_a_deleted_identity_stop_and_are_recorded(api, tmp_path) -> None:
@@ -99,7 +100,7 @@ def test_every_login_is_audited(api, tmp_path) -> None:
     base._invite_second_identity(factory, sc, api.port, tmp_path)
     second_id = _identity_id(sc, "second")
 
-    logins = _audit(sc, "session-create")
+    logins = _audit(sc, "session-login")
 
     assert [e.details["method"] for e in logins] == ["http_sig", "http_sig"]
     assert {e.details["identity_id"] for e in logins} == {1, second_id}

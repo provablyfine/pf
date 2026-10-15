@@ -1,7 +1,7 @@
 """Deleting a bastion removes the grants that name it, and only those."""
 
 from .. import app_db
-from . import bastion, bastion_references, boundary, grant, role
+from . import audit_log, bastion, bastion_references, boundary, grant, role
 
 
 def _bastion(bastion_id: int | None) -> grant.Grant:
@@ -29,21 +29,30 @@ def test_only_the_grants_that_name_the_bastion_are_removed(tenant_app_db: app_db
     assert [g.filter.id for g in kept.grant_list if isinstance(g, grant.BastionGrant)] == [8, None]
 
 
-def test_removed_grants_are_written_to_the_audit_log(tenant_app_db: app_db.AppDb) -> None:
+def test_the_update_entries_name_the_bastion_and_keep_the_old_grants(tenant_app_db: app_db.AppDb) -> None:
     bastion_id = bastion.create("https://bastion.example", None, None)
     role.create("ops", "", [_bastion(bastion_id)])
     boundary.create("guard", "", None, [_bastion(bastion_id), _bastion(bastion_id + 1)])
 
-    bastion_references.remove(bastion_id)
+    with audit_log.cause("bastion", bastion_id, "https://bastion.example", "delete"):
+        bastion_references.remove(bastion_id)
 
-    entries = {
-        (a.details["owner_name"], a.details["list"]): a.details for a in _audit(tenant_app_db, "bastion-delete-cascade")
-    }
-    assert set(entries) == {("ops", "grant_list"), ("guard", "denied_list")}
-    for details in entries.values():
-        assert details["bastion_id"] == bastion_id
-        assert [g["filter"]["id"] for g in details["removed_grants"]] == [bastion_id]
-        assert details["refs"]["bastion"][str(bastion_id)] == {"url": "https://bastion.example"}
+    role_entry, boundary_entry = (
+        *_audit(tenant_app_db, "role-update-grant-list"),
+        *_audit(tenant_app_db, "boundary-update-denied-list"),
+    )
+    for entry, old_count in ((role_entry, 1), (boundary_entry, 2)):
+        assert entry.details["cause"] == {
+            "type": "bastion",
+            "id": str(bastion_id),
+            "name": "https://bastion.example",
+            "action": "delete",
+        }
+        assert len(entry.details["old"]) == old_count
+        assert entry.details["old"][0]["filter"]["id"] == bastion_id
+    # Searching for the bastion finds what its deletion changed.
+    found = audit_log.read_page(ref_type="bastion", ref_id=str(bastion_id))
+    assert {e.type for e in found.entries} >= {"role-update-grant-list", "boundary-update-denied-list"}
 
 
 def test_a_ceiling_that_loses_its_last_grant_denies_everything(tenant_app_db: app_db.AppDb) -> None:
@@ -75,5 +84,4 @@ def test_nothing_changes_when_no_grant_names_the_bastion(tenant_app_db: app_db.A
 
     assert bastion_references.remove(7) == []
     assert bastion_references.find(7) == []
-    assert _audit(tenant_app_db, "bastion-delete-cascade") == []
     assert _audit(tenant_app_db, "role-update-grant-list") == before

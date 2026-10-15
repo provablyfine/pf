@@ -7,7 +7,7 @@ import textual.app
 import textual.containers
 import textual.widgets
 
-from . import auth_view, base
+from . import audit_log_list, auth_view, base
 
 
 @dataclasses.dataclass
@@ -148,6 +148,7 @@ class AuthListScreen(base.Screen):
         ("enter", "view_auth", "View"),
         ("a", "add_auth", "Add"),
         ("d", "delete_auth", "Delete"),
+        ("h", "history", "History"),
         ("escape", "app.pop_screen", "Back"),
     ]
 
@@ -250,3 +251,11 @@ class AuthListScreen(base.Screen):
         self._auths.pop(index)
         self._populate_table(table)
         self.notify(f"Auth '{a.name}' deleted")
+
+    def action_history(self) -> None:
+        """Open the audit log on the entries about the selected object."""
+        if not self._auths:
+            return
+        table = self.query_one(textual.widgets.DataTable[str])
+        item = self._auths[table.cursor_row]
+        self.app.push_screen(audit_log_list.AuditLogListScreen(self._auth, "auth:#" + str(item.id)))

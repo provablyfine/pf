@@ -105,7 +105,7 @@ def terminate_endpoint(id: str) -> fastapi.responses.Response:
     token = model.bastion.generate_terminate_token(row.hostname, row.connection_id)
     urls = [b.url for b in model.bastion.read_all()]
     model.audit_log.create(
-        "live-session-terminate",
+        model.audit_types.LIVE_SESSION_TERMINATE,
         live_session_id=row.id,
         connection_id=row.connection_id,
         hostname=row.hostname,

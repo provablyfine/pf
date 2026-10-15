@@ -386,3 +386,61 @@ def test_registry_migration_drops_unique_tenant_name(tmp_path: pathlib.Path) -> 
             )
     with engine.connect() as connection:
         assert connection.execute(sqlalchemy.text("SELECT count(*) FROM tenant")).scalar_one() == 2
+
+
+def test_tenant_migration_splits_audit_types_and_backfills_refs(tmp_path: pathlib.Path) -> None:
+    tenants = _sqlite_tenant(tmp_path)
+    config = migrate._alembic_config("tenant", tenants.registry_url, _TENANT, _KEK)
+    alembic.command.upgrade(config, "e5a1b7c3d902")
+
+    engine = tenants.engine(_TENANT)
+    entries = [
+        (1, "role-delete-members", "7", {"id": 3, "name": "ops", "identity_id": 9}),
+        (2, "create-user-certificate", "7", {"host_id": 5, "hostname": "db1", "username": "root"}),
+        (3, "bastion-delete-cascade", "7", {"bastion_id": 4, "owner_type": "role", "owner_id": 3, "owner_name": "ops"}),
+        (4, "role-update-grant-list", None, {"id": 3, "refs": {"tag": {"11": {"name": "env", "value": "prod"}}}}),
+        (5, "something-from-the-future", None, {}),
+    ]
+    with engine.begin() as connection:
+        connection.execute(
+            sqlalchemy.text("INSERT INTO identity (id, created_at, name) VALUES (7, 1, 'alice')"),
+        )
+        connection.execute(
+            sqlalchemy.text("INSERT INTO role (id, name, description, grant_list) VALUES (3, 'admin', '', '[]')")
+        )
+        for entry_id, entry_type, by, details in entries:
+            connection.execute(
+                sqlalchemy.text(
+                    "INSERT INTO audit_log (id, at, level, type, by_identity_id, details)"
+                    " VALUES (:id, 1, 1, :type, :by, :details)"
+                ),
+                {"id": entry_id, "type": entry_type, "by": by, "details": json.dumps(details)},
+            )
+
+    migrate.upgrade_tenant(tenants, _TENANT, _KEK)
+
+    with engine.connect() as connection:
+        rows = {
+            r[0]: r[1:]
+            for r in connection.execute(
+                sqlalchemy.text("SELECT id, type, object_type, action, by_identity_name FROM audit_log")
+            )
+        }
+        refs = {
+            (r[0], r[1], r[2]): r[3]
+            for r in connection.execute(
+                sqlalchemy.text("SELECT entry_id, object_type, object_id, object_name FROM audit_log_ref")
+            )
+        }
+
+    assert rows[1] == ("role-remove-members", "role", "remove-members", "alice")
+    assert rows[2] == ("certificate-create-user", "certificate", "create-user", "alice")
+    assert rows[5] == ("something-from-the-future", "something-from-the-future", "", None)
+    assert refs[(1, "role", "3")] == "ops"
+    assert refs[(1, "identity", "9")] is None  # not in the log, not a live identity: nothing to name it with
+    assert refs[(2, "identity", "5")] == "db1"  # the host of the certificate
+    assert refs[(3, "bastion", "4")] is None
+    assert refs[(3, "role", "3")] == "ops"
+    # An update entry has no name of its own: the live role gives it one.
+    assert refs[(4, "role", "3")] == "admin"
+    assert refs[(4, "tag", "11")] == "env"

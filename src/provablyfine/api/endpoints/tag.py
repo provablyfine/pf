@@ -40,7 +40,7 @@ def create_endpoint(data: schemas.tag.TagCreateRequest) -> schemas.tag.Tag:
         tag_id = ctx.app_db.tag.create(name=data.name, value=data.value)
     except sqlalchemy.exc.IntegrityError:
         raise responses.ProblemHTTPException(responses.problem_response(status_code=400, title="Tag already exists"))
-    model.audit_log.create("tag-create", id=tag_id, name=data.name, value=data.value)
+    model.audit_log.create(model.audit_types.TAG_CREATE, id=tag_id, name=data.name, value=data.value)
     tag = ctx.app_db.tag.read_one(id=tag_id)
     assert tag is not None
     return converters.tag_to_schema(tag)
@@ -65,10 +65,11 @@ def delete_endpoint(tag_id: int) -> fastapi.responses.Response:
     if is_identity_tagged and is_acl_referenced:
         raise responses.ProblemHTTPException(responses.problem_response(status_code=400, title="Tag is still in use"))
 
-    model.tag_references.remove(tag_id)
+    with model.audit_log.cause("tag", tag.id, tag.name, "delete"):
+        model.tag_references.remove(tag_id)
     model.bastion.remove_tag(tag_id)
     if is_identity_tagged:
         ctx.app_db.identity_tag.delete(tag_id=tag_id)
-    model.audit_log.create("tag-delete", id=tag_id, name=tag.name, value=tag.value)
+    model.audit_log.create(model.audit_types.TAG_DELETE, id=tag_id, name=tag.name, value=tag.value)
     ctx.app_db.tag.delete(id=tag_id)
     return _204

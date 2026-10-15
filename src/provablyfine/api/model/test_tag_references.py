@@ -1,7 +1,7 @@
 """Deleting a tag removes or rewrites the grants that name it, and only those."""
 
 from .. import app_db
-from . import boundary, grant, role, tag_references
+from . import audit_log, boundary, grant, role, tag_references
 
 
 def _ssh(tag_id_list: list[int] | None, host: str = "shell") -> grant.Grant:
@@ -185,19 +185,20 @@ def test_remove_leaves_a_tag_grant_with_no_filter_id_alone(tenant_app_db: app_db
     assert len(kept.grant_list) == 1
 
 
-def test_changed_grants_are_written_to_the_audit_log(tenant_app_db: app_db.AppDb) -> None:
+def test_the_update_entries_name_the_tag_and_keep_the_old_grants(tenant_app_db: app_db.AppDb) -> None:
     role.create("ops", "", [_ssh([42])])
     boundary.create("guard", "", None, [_ssh([42])])
 
-    tag_references.remove(42)
+    with audit_log.cause("tag", 42, "env", "delete"):
+        tag_references.remove(42)
 
-    entries = {
-        (a.details["owner_name"], a.details["list"]): a.details for a in _audit(tenant_app_db, "tag-delete-cascade")
-    }
-    assert set(entries) == {("ops", "grant_list"), ("guard", "denied_list")}
-    for details in entries.values():
-        assert details["tag_id"] == 42
-        assert [g["filter"]["tag_id_list"] for g in details["affected_grants"]] == [[42]]
+    role_entry, boundary_entry = (
+        *_audit(tenant_app_db, "role-update-grant-list"),
+        *_audit(tenant_app_db, "boundary-update-denied-list"),
+    )
+    for entry in (role_entry, boundary_entry):
+        assert entry.details["cause"] == {"type": "tag", "id": "42", "name": "env", "action": "delete"}
+        assert [g["filter"]["tag_id_list"] for g in entry.details["old"]] == [[42]]
 
 
 def test_a_ceiling_that_loses_its_last_grant_denies_everything(tenant_app_db: app_db.AppDb) -> None:
@@ -229,7 +230,6 @@ def test_nothing_changes_when_no_grant_names_the_tag(tenant_app_db: app_db.AppDb
 
     assert tag_references.remove(42) == []
     assert tag_references.find(42) == []
-    assert _audit(tenant_app_db, "tag-delete-cascade") == []
     assert _audit(tenant_app_db, "role-update-grant-list") == before
 
 

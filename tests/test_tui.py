@@ -14,6 +14,7 @@ import provablyfine.jwk
 import provablyfine.ssh.agent
 import provablyfine.ssh.oracle
 import provablyfine.tui.app
+import provablyfine.tui.audit_log_list
 import provablyfine.tui.base
 import provablyfine.tui.checkbox_input
 import provablyfine.tui.grant_edit
@@ -1215,6 +1216,34 @@ async def test_tui_tag_delete(api):
 
 
 #        assert not any(t.name == "env" and t.value == "prod" for t in resp.tags)
+
+
+@pytest.mark.anyio
+async def test_tui_audit_log_history_of_an_object(api):
+    """`h` on a tag opens the audit log on the entries about that tag, and the filter bar narrows it further."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        auth = _setup(api, tmpdir)
+        tag = await auth.create_tag("env", "prod")
+        await auth.create_tag("team", "ops")
+        app = provablyfine.tui.app.TuiApp(auth)
+
+        async with app.run_test(size=(200, 50)) as pilot:
+            await pilot.pause()  # app startup
+            await _goto(pilot, "tags")
+            await pilot.pause()  # screen transition
+            await pilot.pause()  # TagListScreen.on_mount calls list_tags()
+
+            await pilot.press("h")  # history of row 0
+            await _wait(pilot, app)  # AuditLogListScreen.on_mount loads the first page
+
+            screen = app.screen
+            assert isinstance(screen, provablyfine.tui.audit_log_list.AuditLogListScreen)
+            assert screen.query_one("#audit-object", textual.widgets.Input).value == f"tag:#{tag.id}"
+            table = screen.query_one(textual.widgets.DataTable)
+            assert table.row_count == 1
+            assert "tag-create" in str(table.get_row_at(0))
+
+        assert not [n for n in app._notifications if n.severity == "error"]
 
 
 @pytest.mark.anyio

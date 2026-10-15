@@ -6,7 +6,7 @@ import textual.app
 import textual.containers
 import textual.widgets
 
-from . import base
+from . import audit_log_list, base
 
 
 class _TagCreateScreen(base.ModalScreen[pfc.schemas.TagNameValue | None]):
@@ -39,6 +39,7 @@ class TagListScreen(base.Screen):
     BINDINGS: typing.ClassVar = [
         ("a", "add_tag", "Add"),
         ("d", "delete_tag", "Delete"),
+        ("h", "history", "History"),
         ("escape", "app.pop_screen", "Back"),
     ]
 
@@ -86,3 +87,11 @@ class TagListScreen(base.Screen):
         self._tags.pop(index)
         self._populate_table(table)
         self.notify(f"Tag '{tag.name}={tag.value}' deleted")
+
+    def action_history(self) -> None:
+        """Open the audit log on the entries about the selected object."""
+        if not self._tags:
+            return
+        table = self.query_one(textual.widgets.DataTable[str])
+        item = self._tags[table.cursor_row]
+        self.app.push_screen(audit_log_list.AuditLogListScreen(self._auth, "tag:#" + str(item.id)))

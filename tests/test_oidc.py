@@ -165,7 +165,7 @@ def test_oidc_login_is_audited(oidc_env: OidcEnv) -> None:
     sc = oidc_env.sc.session()
     user_id = next(i.id for i in sc.list_identities().identities if i.name == "user@example.com")
     (entry,) = [
-        e for e in sc.list_audit_log().entries if e.type == "session-create" and e.details["identity_id"] == user_id
+        e for e in sc.list_audit_log().entries if e.type == "session-login" and e.details["identity_id"] == user_id
     ]
     assert entry.details["method"] == "oidc"
     assert entry.details["session_key_id"] == session_key.public().thumbprint()

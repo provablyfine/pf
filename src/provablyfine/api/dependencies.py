@@ -70,7 +70,7 @@ The OIDC login works this way.
 To keep something when a request is rejected, use `ctx.after_rollback(action)`.
 A rejection rolls back everything the request wrote, including its audit entries.
 The action runs in its own transaction after the rollback.
-`audit_log.create_warning_after_rollback` does this.
+`audit_log.create_after_rollback` does this.
 
 # Async code
 

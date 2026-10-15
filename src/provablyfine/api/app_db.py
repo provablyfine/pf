@@ -253,6 +253,9 @@ class AuditLogRow(typing.NamedTuple):
     type: str
     by_identity_id: str | None
     details: dict[str, typing.Any]
+    object_type: str
+    action: str
+    by_identity_name: str | None
 
 
 audit_log = orm.make_table(
@@ -262,6 +265,28 @@ audit_log = orm.make_table(
     sqlalchemy.Index("idx_audit_log_type", "type"),
     sqlalchemy.Index("idx_audit_log_by_identity_id", "by_identity_id"),
     sqlalchemy.Index("idx_audit_log_at", "at"),
+    sqlalchemy.Index("idx_audit_log_object_type_action", "object_type", "action"),
+    sqlite_autoincrement=True,
+)
+
+
+class AuditLogRefRow(typing.NamedTuple):
+    """An object that an audit entry is about, with the name it had when the entry was written."""
+
+    id: typing.Annotated[int, orm.Col(primary_key=True)]
+    entry_id: int
+    object_type: str
+    object_id: str
+    object_name: str | None
+
+
+audit_log_ref = orm.make_table(
+    "audit_log_ref",
+    metadata,
+    AuditLogRefRow,
+    sqlalchemy.Index("idx_audit_log_ref_entry_id", "entry_id"),
+    sqlalchemy.Index("idx_audit_log_ref_object_id", "object_type", "object_id"),
+    sqlalchemy.Index("idx_audit_log_ref_object_name", "object_type", "object_name"),
     sqlite_autoincrement=True,
 )
 
@@ -403,6 +428,10 @@ class AppDb(orm.Dao):
     @property
     def audit_log(self) -> orm.Table[AuditLogRow]:
         return self._get(audit_log)
+
+    @property
+    def audit_log_ref(self) -> orm.Table[AuditLogRefRow]:
+        return self._get(audit_log_ref)
 
     @property
     def oidc_key(self) -> orm.Table[OidcKeyRow]:

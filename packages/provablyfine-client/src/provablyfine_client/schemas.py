@@ -716,17 +716,28 @@ class IdentitiesResponse(_Base):
     identities: list[Identity] = []
 
 
+class AuditLogRef(_Base):
+    type: str
+    id: str
+    name: str | None = None
+
+
 class AuditLogEntry(_Base):
     id: int
     at: int
     level: int
     type: str
+    object_type: str = ""
+    action: str = ""
     by_identity_id: str | None = None
+    by_identity_name: str | None = None
+    refs: list[AuditLogRef] = []
     details: dict[str, typing.Any] = {}
 
 
 class AuditLogListResponse(_Base):
     entries: list[AuditLogEntry] = []
+    next_cursor: str | None = None
 
 
 class LiveSession(_Base):
