@@ -22,7 +22,12 @@ def update_session_self(data: schemas.session.SessionSelfUpdateRequest) -> fasta
     # So the update only applies to a session that still has no role.
     if ctx.app_db.identity_session_key.update(role_id=data.role_id).where(id=ctx.session_key_id, role_id=None) == 0:
         raise responses.ProblemHTTPException(responses.problem_response(409, "Session role already set"))
-    model.audit_log.create("session-set-role", session_key_id=ctx.session_key_id, role_id=data.role_id)
+    model.audit_log.create(
+        "session-set-role",
+        refs=model.audit_log.refs(roles=[data.role_id]),
+        session_key_id=ctx.session_key_id,
+        role_id=data.role_id,
+    )
     return fastapi.responses.Response(status_code=204)
 
 

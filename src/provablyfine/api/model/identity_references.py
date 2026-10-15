@@ -82,6 +82,7 @@ def remove(identity_id: int) -> list[Owner]:
     for owner, list_name, removed in changes:
         audit_log.create(
             "identity-delete-cascade",
+            refs=audit_log.refs(grants=removed),
             identity_id=identity_id,
             owner_type=owner.type,
             owner_id=owner.id,

@@ -159,6 +159,7 @@ def remove(tag_id: int) -> list[Owner]:
     for owner, list_name, referencing in changes:
         audit_log.create(
             "tag-delete-cascade",
+            refs=audit_log.refs(grants=referencing),
             tag_id=tag_id,
             owner_type=owner.type,
             owner_id=owner.id,

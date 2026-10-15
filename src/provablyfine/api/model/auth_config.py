@@ -81,6 +81,21 @@ def update(id: int, config_audit_fields: dict[str, typing.Any] | None = None, **
     audit_log.create("auth-update", id=id, **audit_fields)
 
 
-def delete(id: int) -> None:
-    ctx.app_db.auth.delete(id=id)
-    audit_log.create("auth-delete", id=id)
+def delete(id: int) -> bool:
+    """Delete an auth config. The audit entry keeps what it was, without its secrets.
+
+    Return False if the auth config is already gone, for example deleted by a concurrent request.
+    """
+    row = ctx.app_db.auth.read_one_for_update(id=id)
+    if row is None or ctx.app_db.auth.delete(id=id) == 0:
+        return False
+    audit_log.create(
+        "auth-delete",
+        id=id,
+        name=row.name,
+        client_type=row.client_type,
+        description=row.description,
+        auth_type=row.type,
+        is_enabled=row.is_enabled,
+    )
+    return True

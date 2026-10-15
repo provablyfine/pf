@@ -105,6 +105,17 @@ class Table[T]:
             return self._row_type(*row)
         return None
 
+    def read_one_for_update(self, *args: typing.Any, **kwargs: typing.Any) -> T | None:
+        """Like `read_one`, but locks the row until the transaction ends.
+
+        Postgres and MySQL make a concurrent writer wait.
+        SQLite already serializes writers, and SQLAlchemy emits no lock clause for it.
+        """
+        statement = self._where(self._table.select(), *args, **kwargs).with_for_update()
+        for row in self._connection.execute(statement):
+            return self._row_type(*row)
+        return None
+
     def read_all(self, *args: typing.Any, **kwargs: typing.Any) -> list[T]:
         statement = self._table.select()
         statement = self._where(statement, *args, **kwargs)

@@ -203,6 +203,9 @@ def sign_user_certificate(data: schemas.ssh.SSHUserCertificateRequest) -> schema
     model.audit_log.create(
         "create-user-certificate",
         signing_key_id=signer.id,
+        host_id=host.id,
+        hostname=host.name,
+        username=data.username,
         public_key=public_key.to_dict(),
         serial_number=cert.serial_number,
         principals=cert.principals,
