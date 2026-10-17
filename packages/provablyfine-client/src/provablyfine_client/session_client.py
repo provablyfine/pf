@@ -16,6 +16,16 @@ def _problem_title(response: typing.Any, default: str) -> str:
     return default
 
 
+def _problem_message(response: typing.Any, default: str) -> str:
+    """The title of a problem, with its detail when there is one."""
+    title = _problem_title(response, default)
+    try:
+        detail = response.json().get("detail")
+    except Exception:
+        return title
+    return f"{title} {detail}" if detail else title
+
+
 class SessionClient:
     """API methods that require session authentication."""
 
@@ -735,8 +745,15 @@ class SessionClient:
                 params[key] = value
         response = self._session.get(self._directory.audit_log, auth=self._auth(), params=params)
         if response.status_code != 200:
-            raise exceptions.UI(_problem_title(response, "Unable to list audit log"))
+            raise exceptions.UI(_problem_message(response, "Unable to list audit log"))
         return schemas.AuditLogListResponse.model_validate(response.json())
+
+    def list_audit_log_types(self) -> schemas.AuditLogTypesResponse:
+        """The object types and actions that audit log entries can have, as the server knows them."""
+        response = self._session.get(f"{self._directory.audit_log}/types", auth=self._auth())
+        if response.status_code != 200:
+            raise exceptions.UI(_problem_message(response, "Unable to list audit log types"))
+        return schemas.AuditLogTypesResponse.model_validate(response.json())
 
     def iter_audit_log(self, **filters: typing.Any) -> collections.abc.Iterator[schemas.AuditLogEntry]:
         """Every matching entry, following `next_cursor` until the last page. Takes the filters of `list_audit_log`."""

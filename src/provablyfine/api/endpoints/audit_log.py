@@ -7,16 +7,32 @@ from .. import grant, model, responses, schemas, signature
 router = fastapi.APIRouter(prefix="/audit-log", dependencies=[fastapi.Depends(signature.verify_session)])
 
 
+@router.get("/types", status_code=200)
+def types_endpoint() -> schemas.audit.AuditLogTypesResponse:
+    """The object types and actions that entries can have.
+
+    Any logged in identity may read this, because it needs no audit log permission.
+    That is only safe while the answer is the same for every tenant.
+    Never put anything in it that comes from a tenant's data.
+    """
+    return schemas.audit.AuditLogTypesResponse(
+        object_types=[
+            schemas.audit.AuditLogObjectTypeInfo(object_type=object_type, actions=actions)
+            for object_type, actions in sorted(model.audit_types.actions_by_object_type().items())
+        ]
+    )
+
+
 @router.get("", status_code=200, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
 def list_endpoint(
     level: int | None = None,
-    object_type: typing.Annotated[list[str] | None, fastapi.Query()] = None,
-    action: typing.Annotated[list[str] | None, fastapi.Query()] = None,
+    object_type: typing.Annotated[list[model.audit_types.ObjectType] | None, fastapi.Query()] = None,
+    action: typing.Annotated[list[model.audit_types.Action] | None, fastapi.Query()] = None,
     type_prefix: str | None = None,
     by_identity_id: str | None = None,
     start_time: int | None = None,
     end_time: int | None = None,
-    ref_type: str | None = None,
+    ref_type: model.audit_types.ObjectType | None = None,
     ref_id: str | None = None,
     ref_name: str | None = None,
     order: typing.Literal["asc", "desc"] = "desc",
@@ -58,12 +74,14 @@ def list_endpoint(
             at=r.at,
             level=r.level,
             type=r.type,
-            object_type=r.object_type,
-            action=r.action,
+            object_type=model.audit_types.ObjectType(r.object_type),
+            action=model.audit_types.Action(r.action),
             by_identity_id=r.by_identity_id,
             by_identity_name=r.by_identity_name,
             refs=[
-                schemas.audit.AuditLogRef(type=ref.object_type, id=ref.object_id, name=ref.object_name)
+                schemas.audit.AuditLogRef(
+                    type=model.audit_types.ObjectType(ref.object_type), id=ref.object_id, name=ref.object_name
+                )
                 for ref in page.refs[r.id]
             ],
             details=r.details,

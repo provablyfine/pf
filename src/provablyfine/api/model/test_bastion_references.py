@@ -1,7 +1,7 @@
 """Deleting a bastion removes the grants that name it, and only those."""
 
 from .. import app_db
-from . import audit_log, bastion, bastion_references, boundary, grant, role
+from . import audit_log, audit_types, bastion, bastion_references, boundary, grant, role
 
 
 def _bastion(bastion_id: int | None) -> grant.Grant:
@@ -34,7 +34,9 @@ def test_the_update_entries_name_the_bastion_and_keep_the_old_grants(tenant_app_
     role.create("ops", "", [_bastion(bastion_id)])
     boundary.create("guard", "", None, [_bastion(bastion_id), _bastion(bastion_id + 1)])
 
-    with audit_log.cause("bastion", bastion_id, "https://bastion.example", "delete"):
+    with audit_log.cause(
+        audit_types.ObjectType.BASTION, bastion_id, "https://bastion.example", audit_types.Action.DELETE
+    ):
         bastion_references.remove(bastion_id)
 
     role_entry, boundary_entry = (
@@ -51,7 +53,7 @@ def test_the_update_entries_name_the_bastion_and_keep_the_old_grants(tenant_app_
         assert len(entry.details["old"]) == old_count
         assert entry.details["old"][0]["filter"]["id"] == bastion_id
     # Searching for the bastion finds what its deletion changed.
-    found = audit_log.read_page(ref_type="bastion", ref_id=str(bastion_id))
+    found = audit_log.read_page(ref_type=audit_types.ObjectType.BASTION, ref_id=str(bastion_id))
     assert {e.type for e in found.entries} >= {"role-update-grant-list", "boundary-update-denied-list"}
 
 

@@ -30,7 +30,7 @@ def test_a_deleted_object_stays_findable_by_name(tenant_app_db: app_db.AppDb) ->
     assert created is not None
     assert role.delete(created.id)
 
-    page = audit_log.read_page(ref_type="role", ref_name="ops")
+    page = audit_log.read_page(ref_type=audit_types.ObjectType.ROLE, ref_name="ops")
 
     assert sorted(e.type for e in page.entries) == ["role-create", "role-delete"]
 
@@ -72,9 +72,13 @@ def test_filters_combine_and_take_several_values(tenant_app_db: app_db.AppDb) ->
     audit_log.create(audit_types.TAG_DELETE, id=1, name="a", value=None)
     audit_log.create(audit_types.ROLE_CREATE, id=1, name="r")
 
-    both = audit_log.read_page(object_type=["tag", "role"], action=["create"])
-    only_tags = audit_log.read_page(object_type=["tag"], action=["create", "delete"])
-    by_ref = audit_log.read_page(ref_type="tag", ref_id="1")
+    both = audit_log.read_page(
+        object_type=[audit_types.ObjectType.TAG, audit_types.ObjectType.ROLE], action=[audit_types.Action.CREATE]
+    )
+    only_tags = audit_log.read_page(
+        object_type=[audit_types.ObjectType.TAG], action=[audit_types.Action.CREATE, audit_types.Action.DELETE]
+    )
+    by_ref = audit_log.read_page(ref_type=audit_types.ObjectType.TAG, ref_id="1")
 
     assert sorted(e.type for e in both.entries) == ["role-create", "tag-create"]
     assert sorted(e.type for e in only_tags.entries) == ["tag-create", "tag-delete"]
@@ -93,9 +97,12 @@ def test_a_rename_keeps_the_old_value_and_is_found_under_both_names(tenant_app_d
         ("role", str(role_id), "operations"),
         ("role", str(role_id), "ops"),
     }
-    assert [e.id for e in audit_log.read_page(ref_type="role", ref_name="ops", action=["update-name"]).entries] == [
-        entry.id
-    ]
+    assert [
+        e.id
+        for e in audit_log.read_page(
+            ref_type=audit_types.ObjectType.ROLE, ref_name="ops", action=[audit_types.Action.UPDATE_NAME]
+        ).entries
+    ] == [entry.id]
 
 
 def test_a_repeated_warning_is_written_once(tenant_app_db: app_db.AppDb) -> None:

@@ -435,7 +435,7 @@ def test_tenant_migration_splits_audit_types_and_backfills_refs(tmp_path: pathli
 
     assert rows[1] == ("role-remove-members", "role", "remove-members", "alice")
     assert rows[2] == ("certificate-create-user", "certificate", "create-user", "alice")
-    assert rows[5] == ("something-from-the-future", "something-from-the-future", "", None)
+    assert rows[5] == ("something-from-the-future", "unknown", "unknown", None)
     assert refs[(1, "role", "3")] == "ops"
     assert refs[(1, "identity", "9")] is None  # not in the log, not a live identity: nothing to name it with
     assert refs[(2, "identity", "5")] == "db1"  # the host of the certificate

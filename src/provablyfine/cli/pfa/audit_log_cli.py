@@ -92,22 +92,47 @@ def _list_function(args: argparse.Namespace) -> None:
         print(f"More entries: --cursor {next_cursor}")
 
 
+def _types_function(args: argparse.Namespace) -> None:
+    c = client.Config.load(args.config)
+    sc = client.Factory(c, timeout=args.timeout).session()
+    object_types = sc.list_audit_log_types().object_types
+    match args.format:
+        case "json":
+            print(json.dumps([t.model_dump() for t in object_types], indent=2))
+        case "text":
+            rows = [[t.object_type, " ".join(t.actions)] for t in object_types]
+            print(tabulate.tabulate(rows, headers=["object type", "actions"], maxcolwidths=80))
+        case _:
+            assert False
+
+
 def add_subparser(parser: argparse.ArgumentParser) -> None:
     subparsers = parser.add_subparsers(required=True, dest="subcommand", metavar="subcommand")
 
-    list_parser = subparsers.add_parser("list", help="List audit log entries, newest first")
+    list_parser = subparsers.add_parser(
+        "list",
+        help="List audit log entries, newest first",
+        description="List audit log entries, newest first. Run 'pfa audit-log types' for the values of "
+        "--object-type and --action.",
+        epilog="examples:\n"
+        "  pfa audit-log list --object-type role --action update-grant-list\n"
+        "  pfa audit-log list --object role:admin --follow\n"
+        "  pfa audit-log list --level 2 --start-time 1700000000 --all",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     f = list_parser.add_argument_group("Filter criteria")
     f.add_argument("--level", type=int, choices=[1, 2], help="1=INFO 2=WARNING")
     f.add_argument(
         "--object-type",
         dest="object_type",
         action="append",
-        help="Object type of the entry (e.g. role, identity). Repeat to allow several",
+        help="Object type of the entry (e.g. role, identity). Repeat to allow several. See 'pfa audit-log types'",
     )
     f.add_argument(
         "--action",
         action="append",
-        help="Action of the entry (e.g. create, update-name, remove-members). Repeat to allow several",
+        help="Action of the entry (e.g. create, update-name, remove-members). Repeat to allow several. "
+        "See 'pfa audit-log types'",
     )
     f.add_argument(
         "--object",
@@ -139,3 +164,7 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
     list_parser.add_argument("--format", choices=["text", "json", "jsonl", "quiet"], default="text")
     list_parser.add_argument("-q", "--quiet", action="store_true", default=False, help="Quiet output (IDs only)")
     list_parser.set_defaults(func=_list_function)
+
+    types_parser = subparsers.add_parser("types", help="List the object types and actions of audit log entries")
+    types_parser.add_argument("--format", choices=["text", "json"], default="text")
+    types_parser.set_defaults(func=_types_function)

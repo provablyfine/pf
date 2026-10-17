@@ -366,6 +366,9 @@ class AsyncSessionClient:
             )
         )
 
+    async def list_audit_log_types(self) -> schemas.AuditLogTypesResponse:
+        return await self._run(self._inner.list_audit_log_types)
+
     async def find_object_ids(self, object_type: str, name: str) -> list[str]:
         return await self._run(lambda: self._inner.find_object_ids(object_type, name))
 

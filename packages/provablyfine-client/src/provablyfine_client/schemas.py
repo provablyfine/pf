@@ -735,6 +735,15 @@ class AuditLogEntry(_Base):
     details: dict[str, typing.Any] = {}
 
 
+class AuditLogObjectTypeInfo(_Base):
+    object_type: str
+    actions: list[str] = []
+
+
+class AuditLogTypesResponse(_Base):
+    object_types: list[AuditLogObjectTypeInfo] = []
+
+
 class AuditLogListResponse(_Base):
     entries: list[AuditLogEntry] = []
     next_cursor: str | None = None

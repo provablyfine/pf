@@ -1242,6 +1242,8 @@ async def test_tui_audit_log_history_of_an_object(api):
             table = screen.query_one(textual.widgets.DataTable)
             assert table.row_count == 1
             assert "tag-create" in str(table.get_row_at(0))
+            # The completion comes from the server, not from a list in the TUI.
+            assert {"create", "update-grant-list"} <= set(screen._actions_by_type["role"])
 
         assert not [n for n in app._notifications if n.severity == "error"]
 

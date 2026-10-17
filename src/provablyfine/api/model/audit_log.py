@@ -60,12 +60,14 @@ _cause_var: contextvars.ContextVar[dict[str, typing.Any] | None] = contextvars.C
 
 
 @contextlib.contextmanager
-def cause(object_type: str, object_id: int | str, name: str | None, action: str) -> collections.abc.Generator[None]:
+def cause(
+    object_type: audit_types.ObjectType, object_id: int | str, name: str | None, action: audit_types.Action
+) -> collections.abc.Generator[None]:
     """Say that the entries written inside the block happen because of `action` on this object.
 
     Deleting a bastion rewrites the roles that name it. Those entries name the bastion as their cause.
     """
-    token = _cause_var.set({"type": object_type, "id": str(object_id), "name": name, "action": action})
+    token = _cause_var.set({"type": object_type.value, "id": str(object_id), "name": name, "action": action.value})
     try:
         yield
     finally:
@@ -136,15 +138,15 @@ def _write(
     audit_type: audit_types.AuditType, at: int, by_identity_id: int | None, details: dict[str, typing.Any]
 ) -> None:
     db = ctx.app_db
-    by_identity_name = _name("identity", by_identity_id) if by_identity_id is not None else None
+    by_identity_name = _name(audit_types.ObjectType.IDENTITY, by_identity_id) if by_identity_id is not None else None
     entry_id = db.audit_log.create(
-        level=audit_type.level,
+        level=int(audit_type.level),
         at=at,
         type=audit_type.type,
         by_identity_id=by_identity_id,
         details=details,
-        object_type=audit_type.object_type,
-        action=audit_type.action,
+        object_type=audit_type.object_type.value,
+        action=audit_type.action.value,
         by_identity_name=by_identity_name,
     )
     assert entry_id is not None
@@ -155,16 +157,16 @@ def _write(
 
 
 _NAMED_TABLES = {
-    "identity": ("identity", "name"),
-    "role": ("role", "name"),
-    "boundary": ("boundary", "name"),
-    "tag": ("tag", "name"),
-    "bastion": ("bastion", "url"),
-    "auth": ("auth", "name"),
+    audit_types.ObjectType.IDENTITY: ("identity", "name"),
+    audit_types.ObjectType.ROLE: ("role", "name"),
+    audit_types.ObjectType.BOUNDARY: ("boundary", "name"),
+    audit_types.ObjectType.TAG: ("tag", "name"),
+    audit_types.ObjectType.BASTION: ("bastion", "url"),
+    audit_types.ObjectType.AUTH: ("auth", "name"),
 }
 
 
-def _name(object_type: str, object_id: int | str) -> str | None:
+def _name(object_type: audit_types.ObjectType, object_id: int | str) -> str | None:
     """The name an object has now, or None if it is gone or has none."""
     named = _NAMED_TABLES.get(object_type)
     if named is None:
@@ -189,7 +191,7 @@ def _entry_refs(audit_type: audit_types.AuditType, details: dict[str, typing.Any
     target_id = None if audit_type.target_key is None else _text(details, audit_type.target_key)
     if target_id is not None:
         name = _text(details, "name") or _text(details, "url") or _name(audit_type.object_type, target_id)
-        found[(audit_type.object_type, target_id)] = name
+        found[(audit_type.object_type.value, target_id)] = name
     # A cascade names the object whose deletion caused it.
     cause_details: dict[str, typing.Any] | None = details.get("cause")
     if cause_details is not None:
@@ -199,8 +201,8 @@ def _entry_refs(audit_type: audit_types.AuditType, details: dict[str, typing.Any
         )
     # A rename is found under the old name as well as the new one.
     old_name = _text(details, "old")
-    if target_id is not None and audit_type.action == "update-name" and old_name is not None:
-        extra.append((audit_type.object_type, target_id, old_name))
+    if target_id is not None and audit_type.action == audit_types.Action.UPDATE_NAME and old_name is not None:
+        extra.append((audit_type.object_type.value, target_id, old_name))
     # A cascade says which role or boundary it rewrote.
     owner_type, owner_id = _text(details, "owner_type"), _text(details, "owner_id")
     if owner_type is not None and owner_id is not None:
@@ -208,11 +210,13 @@ def _entry_refs(audit_type: audit_types.AuditType, details: dict[str, typing.Any
     # Entries about a session or an invitation say whose it is.
     identity_id = _text(details, "identity_id")
     if identity_id is not None:
-        found.setdefault(("identity", identity_id), _name("identity", identity_id))
+        found.setdefault(
+            (audit_types.ObjectType.IDENTITY.value, identity_id), _name(audit_types.ObjectType.IDENTITY, identity_id)
+        )
     # A certificate says which host it is for.
     host_id = _text(details, "host_id")
     if host_id is not None:
-        found.setdefault(("identity", host_id), _text(details, "hostname"))
+        found.setdefault((audit_types.ObjectType.IDENTITY.value, host_id), _text(details, "hostname"))
     refs: dict[str, dict[str, dict[str, typing.Any] | None]] = details.get("refs") or {}
     for kind, by_id in refs.items():
         for object_id, label in by_id.items():
@@ -255,13 +259,13 @@ def _decode_cursor(cursor: str, descending: bool) -> int:
 
 def read_page(
     level: int | None = None,
-    object_type: list[str] | None = None,
-    action: list[str] | None = None,
+    object_type: list[audit_types.ObjectType] | None = None,
+    action: list[audit_types.Action] | None = None,
     type_prefix: str | None = None,
     by_identity_id: str | None = None,
     start_time: int | None = None,
     end_time: int | None = None,
-    ref_type: str | None = None,
+    ref_type: audit_types.ObjectType | None = None,
     ref_id: str | None = None,
     ref_name: str | None = None,
     descending: bool = True,
@@ -282,9 +286,9 @@ def read_page(
     if type_prefix is not None:
         positional.append(col.type.like(f"{_escape_like(type_prefix)}%", escape="\\"))
     if object_type:
-        kwargs["object_type"] = object_type
+        kwargs["object_type"] = [o.value for o in object_type]
     if action:
-        kwargs["action"] = action
+        kwargs["action"] = [a.value for a in action]
     if level is not None:
         kwargs["level"] = level
     if by_identity_id is not None:
@@ -293,7 +297,7 @@ def read_page(
         ref = ctx.app_db.audit_log_ref.columns
         conditions: list[typing.Any] = []
         if ref_type is not None:
-            conditions.append(ref.object_type == ref_type)
+            conditions.append(ref.object_type == ref_type.value)
         if ref_id is not None:
             conditions.append(ref.object_id == ref_id)
         if ref_name is not None:

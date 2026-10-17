@@ -1,7 +1,7 @@
 """Deleting an identity removes the grants that name it, and only those."""
 
 from .. import app_db
-from . import audit_log, boundary, grant, identity_references, role
+from . import audit_log, audit_types, boundary, grant, identity_references, role
 
 
 def _ssh(identity_id: int | None, host: str = "shell") -> grant.Grant:
@@ -38,7 +38,7 @@ def test_the_update_entries_name_the_identity_and_keep_the_old_grants(tenant_app
     role.create("ops", "", [_ssh(7)])
     boundary.create("guard", "", None, [_ssh(7), _ssh(8)])
 
-    with audit_log.cause("identity", 7, "alice", "delete"):
+    with audit_log.cause(audit_types.ObjectType.IDENTITY, 7, "alice", audit_types.Action.DELETE):
         identity_references.remove(7)
 
     role_entry, boundary_entry = (

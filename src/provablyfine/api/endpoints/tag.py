@@ -65,7 +65,7 @@ def delete_endpoint(tag_id: int) -> fastapi.responses.Response:
     if is_identity_tagged and is_acl_referenced:
         raise responses.ProblemHTTPException(responses.problem_response(status_code=400, title="Tag is still in use"))
 
-    with model.audit_log.cause("tag", tag.id, tag.name, "delete"):
+    with model.audit_log.cause(model.audit_types.ObjectType.TAG, tag.id, tag.name, model.audit_types.Action.DELETE):
         model.tag_references.remove(tag_id)
     model.bastion.remove_tag(tag_id)
     if is_identity_tagged:

@@ -1,7 +1,7 @@
 """Deleting a tag removes or rewrites the grants that name it, and only those."""
 
 from .. import app_db
-from . import audit_log, boundary, grant, role, tag_references
+from . import audit_log, audit_types, boundary, grant, role, tag_references
 
 
 def _ssh(tag_id_list: list[int] | None, host: str = "shell") -> grant.Grant:
@@ -189,7 +189,7 @@ def test_the_update_entries_name_the_tag_and_keep_the_old_grants(tenant_app_db: 
     role.create("ops", "", [_ssh([42])])
     boundary.create("guard", "", None, [_ssh([42])])
 
-    with audit_log.cause("tag", 42, "env", "delete"):
+    with audit_log.cause(audit_types.ObjectType.TAG, 42, "env", audit_types.Action.DELETE):
         tag_references.remove(42)
 
     role_entry, boundary_entry = (

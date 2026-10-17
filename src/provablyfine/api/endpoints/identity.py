@@ -263,7 +263,9 @@ def delete_endpoint(identity_id: int) -> fastapi.responses.Response:
 
     # The grants that name this identity are removed in the same transaction.
     # Nobody's permissions change: they were about this identity, and its id is never reused.
-    with model.audit_log.cause("identity", identity.id, identity.name, "delete"):
+    with model.audit_log.cause(
+        model.audit_types.ObjectType.IDENTITY, identity.id, identity.name, model.audit_types.Action.DELETE
+    ):
         model.identity_references.remove(identity.id)
     model.identity.delete(id=identity.id)
     return _204

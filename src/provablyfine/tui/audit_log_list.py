@@ -13,20 +13,6 @@ from . import auto_complete, base, clipboard
 
 _PAGE_SIZE = 100
 _POLL_SECONDS = 30
-_OBJECT_TYPES = [
-    "auth",
-    "bastion",
-    "boundary",
-    "certificate",
-    "identity",
-    "identity-invitation",
-    "live-session",
-    "public-key",
-    "role",
-    "session",
-    "signing-key",
-    "tag",
-]
 
 
 class AuditLogListScreen(base.Screen):
@@ -74,6 +60,8 @@ class AuditLogListScreen(base.Screen):
         self._cursor: str | None = None
         self._newest_id: int | None = None
         self._loading = False
+        # Object type -> actions, as the server knows them. Filled when the screen opens.
+        self._actions_by_type: dict[str, list[str]] = {}
 
     def compose(self) -> textual.app.ComposeResult:
         with textual.containers.Horizontal(id="audit-filters"):
@@ -90,18 +78,35 @@ class AuditLogListScreen(base.Screen):
         yield textual.widgets.DataTable(cursor_type="row", id="audit-table")
         yield textual.widgets.Label("No audit log entries", id="audit-log-placeholder")
         yield textual.widgets.Static(id="audit-detail")
-        yield auto_complete.MultiAutoComplete(
-            "#audit-types", candidates=[textual_autocomplete.DropdownItem(main=t) for t in _OBJECT_TYPES]
-        )
+        yield auto_complete.MultiAutoComplete("#audit-types", candidates=self._object_type_candidates)
+        yield auto_complete.MultiAutoComplete("#audit-actions", candidates=self._action_candidates)
         yield auto_complete.MonoAutoComplete(
             "#audit-level",
             candidates=[textual_autocomplete.DropdownItem(main=v) for v in ("all", "warn", "info")],
         )
         yield textual.widgets.Footer(compact=True, show_command_palette=False)
 
+    def _object_type_candidates(
+        self, state: textual_autocomplete.TargetState
+    ) -> list[textual_autocomplete.DropdownItem]:
+        return [textual_autocomplete.DropdownItem(main=t) for t in self._actions_by_type]
+
+    def _action_candidates(self, state: textual_autocomplete.TargetState) -> list[textual_autocomplete.DropdownItem]:
+        """The actions of the object types already chosen, or all of them when none is."""
+        chosen = [t for t in self._input("types").split() if t in self._actions_by_type]
+        types = chosen or list(self._actions_by_type)
+        actions = dict.fromkeys(a for t in types for a in self._actions_by_type[t])
+        return [textual_autocomplete.DropdownItem(main=a) for a in actions]
+
     async def on_mount(self) -> None:
         table = self.query_one(textual.widgets.DataTable[str])
         table.add_columns("Time", "Level", "Type", "By", "About")
+        try:
+            types = await self._auth.list_audit_log_types()
+            self._actions_by_type = {t.object_type: t.actions for t in types.object_types}
+        except pfc.exceptions.UI as e:
+            # Filtering by hand still works without the completion.
+            self.notify(str(e), severity="warning")
         self._update_follow_title()
         self.set_interval(_POLL_SECONDS, self._poll)
         await self._reload()

@@ -67,6 +67,10 @@ _TYPES: dict[str, tuple[str, str, str | None]] = {
     "signing-key-update-serial": ("signing-key", "update-serial", "id"),
     "create-user-certificate": ("certificate", "create-user", None),
     "create-host-certificate": ("certificate", "create-host", None),
+    # Names that older versions wrote.
+    "create-signing-key": ("signing-key", "create", "signing_key_id"),
+    "identity-update-unix-uid": ("identity", "update-unix-uid", "id"),
+    "identity-update-unix-gid": ("identity", "update-unix-gid", "id"),
     "denylist-add": ("public-key", "denylisted", "public_key_id"),
     "denylist-check-failed": ("public-key", "rejected", "public_key_id"),
 }
@@ -143,8 +147,10 @@ def _backfill(connection: sa.engine.Connection) -> None:
     ).fetchall()
     for entry_id, old_type, by_identity_id, details in rows:
         details = typing.cast(dict[str, typing.Any], details) if isinstance(details, dict) else {}
-        object_type, action, target_key = _TYPES.get(old_type, (old_type, "", None))
-        new_type = f"{object_type}-{action}" if action else old_type
+        known = old_type in _TYPES
+        object_type, action, target_key = _TYPES.get(old_type, ("unknown", "unknown", None))
+        # A type that no version writes now keeps its string, so that nothing is lost.
+        new_type = f"{object_type}-{action}" if known else old_type
         by_name = live["identity"].get(str(by_identity_id)) if by_identity_id is not None else None
         connection.execute(
             audit_log.update()
