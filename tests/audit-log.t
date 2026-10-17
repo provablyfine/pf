@@ -6,6 +6,15 @@ List audit log with table format shows signing-key-create events
   $ pfa -c config.json audit-log list | grep signing-key-create | wc -l
   .* (re)
 
+List the object types and actions that the server knows
+  $ pfa -c config.json audit-log types | grep -E "^(role|tag) " | cut -c1-30
+  role .* (re)
+  tag .* (re)
+
+A wrong action is refused with the list of valid ones
+  $ pfa -c config.json audit-log list --action nope 2>&1 | grep -c "create"
+  1
+
 Create a tag to generate an audit event
   $ TAG_ID=$(pfa -c config.json tag create -n env -v prod)
 

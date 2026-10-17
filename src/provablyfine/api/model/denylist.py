@@ -3,7 +3,7 @@ import typing
 
 from .. import responses
 from ..context import ctx
-from . import audit_log
+from . import audit_log, audit_types
 
 
 def create(key_id: str, **kwargs: typing.Any) -> None:
@@ -19,7 +19,7 @@ def create(key_id: str, **kwargs: typing.Any) -> None:
     if ctx.app_db.public_key_denylist.read_one(key_id=key_id) is None:
         now = int(time.time())
         ctx.app_db.public_key_denylist.create_if_absent(id=key_id, key_id=key_id, created_at=now)
-    audit_log.create_warning(type="denylist-add", public_key_id=key_id, **kwargs)
+    audit_log.create(audit_types.PUBLIC_KEY_DENYLISTED, public_key_id=key_id, **kwargs)
 
 
 def enforce_not_denied(key_id: str) -> None:
@@ -27,5 +27,5 @@ def enforce_not_denied(key_id: str) -> None:
     if denylist_entry:
         # Purposely return an error that is not very clear
         # because the client is probably malevolent
-        audit_log.create_warning_after_rollback(type="denylist-check-failed", public_key_id=key_id)
+        audit_log.create_after_rollback(audit_types.PUBLIC_KEY_REJECTED, public_key_id=key_id)
         raise responses.ProblemHTTPException(responses.problem_response(status_code=403, title="Unable to use key"))

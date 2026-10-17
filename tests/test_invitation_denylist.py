@@ -40,6 +40,6 @@ def test_second_key_on_an_accepted_invitation_is_denied_every_time(api, tmp_path
     sc = factory.session()
     sc.update_session(result.roles[0].id)
     audit = [e.type for e in sc.list_audit_log().entries]
-    assert audit.count("denylist-add") == 1
+    assert audit.count("public-key-denylisted") == 1
     # The refused retry is a rejected request: its warning must survive the rollback.
-    assert audit.count("denylist-check-failed") == 1
+    assert audit.count("public-key-rejected") == 1

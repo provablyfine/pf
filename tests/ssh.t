@@ -98,8 +98,8 @@ Grant bob a shell with agent and X11 forwarding
 Forwarding capabilities reach the certificate
   $ pf -c user.json ssh -n -o "Hostname=$SSHD_ADDRESS" -o "HostKeyAlias=host" -p $SSHD_PORT bob@host "whoami"
   bob
-  $ CERT_EXTENSIONS="[.[] | select(.type==\"create-user-certificate\")] | last | .details.extensions | with_entries(select(.value)) | del(.connection_id, .session_deadline) | keys_unsorted | join(\" \")"
-  $ pfa -c config.json audit-log list --format json | jq -r "$CERT_EXTENSIONS"
+  $ CERT_EXTENSIONS="[.[] | select(.type==\"certificate-create-user\")] | last | .details.extensions | with_entries(select(.value)) | del(.connection_id, .session_deadline) | keys_unsorted | join(\" \")"
+  $ pfa -c config.json audit-log list --order asc --all --format json | jq -r "$CERT_EXTENSIONS"
   permit_agent_forwarding permit_pty permit_user_rc permit_x11_forwarding
 
 A boundary ceiling caps forwarding capabilities.
@@ -126,7 +126,7 @@ Provision a user inside that boundary
 The very same bob grant now yields a certificate with neither forwarding
   $ pf -c capped.json ssh -n -o "Hostname=$SSHD_ADDRESS" -o "HostKeyAlias=host" -p $SSHD_PORT bob@host "whoami"
   bob
-  $ pfa -c config.json audit-log list --format json | jq -r "$CERT_EXTENSIONS"
+  $ pfa -c config.json audit-log list --order asc --all --format json | jq -r "$CERT_EXTENSIONS"
   permit_pty permit_user_rc
 
 The ceiling covers no port-forwarding , so that capability is gone too
@@ -156,7 +156,7 @@ A deny is targeted
 bob keeps his shell and his agent forwarding, and loses only X11
   $ pf -c targeted.json ssh -n -o "Hostname=$SSHD_ADDRESS" -o "HostKeyAlias=host" -p $SSHD_PORT bob@host "whoami"
   bob
-  $ pfa -c config.json audit-log list --format json | jq -r "$CERT_EXTENSIONS"
+  $ pfa -c config.json audit-log list --order asc --all --format json | jq -r "$CERT_EXTENSIONS"
   permit_agent_forwarding permit_pty permit_user_rc
 
 Denying every capability for alice drops only her
@@ -239,12 +239,12 @@ Grant access to alice@host with a bounded ttl
   alice
 
 The deadline (issued_at + ttl) and connection id land in the audit entry
-  $ CERT_DETAILS="[.[] | select(.type==\"create-user-certificate\")] | last | .details"
-  $ pfa -c config.json audit-log list --format json | jq -r "$CERT_DETAILS | .extensions.connection_id"
+  $ CERT_DETAILS="[.[] | select(.type==\"certificate-create-user\")] | last | .details"
+  $ pfa -c config.json audit-log list --order asc --all --format json | jq -r "$CERT_DETAILS | .extensions.connection_id"
   [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12} (re)
-  $ pfa -c config.json audit-log list --format json | jq -r "$CERT_DETAILS | .extensions.session_deadline - .valid_after"
+  $ pfa -c config.json audit-log list --order asc --all --format json | jq -r "$CERT_DETAILS | .extensions.session_deadline - .valid_after"
   3610
-  $ pfa -c config.json audit-log list --format json | jq -r "$CERT_DETAILS | .valid_before - .valid_after"
+  $ pfa -c config.json audit-log list --order asc --all --format json | jq -r "$CERT_DETAILS | .valid_before - .valid_after"
   70
 
 Empty tag filter denies unconditionally, even though host carries the id=device tag (regression test for #137)

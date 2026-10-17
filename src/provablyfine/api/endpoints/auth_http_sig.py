@@ -104,7 +104,7 @@ def login_endpoint(
         logged_out_at=None,
     )
     model.audit_log.create(
-        "session-create",
+        model.audit_types.SESSION_LOGIN,
         identity_id=ctx.identity_id,
         session_key_id=session_key.thumbprint(),
         login_ip=request.client.host if request.client else None,

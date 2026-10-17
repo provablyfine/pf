@@ -263,14 +263,19 @@ def delete_endpoint(identity_id: int) -> fastapi.responses.Response:
 
     # The grants that name this identity are removed in the same transaction.
     # Nobody's permissions change: they were about this identity, and its id is never reused.
-    model.identity_references.remove(identity.id)
+    with model.audit_log.cause(
+        model.audit_types.ObjectType.IDENTITY, identity.id, identity.name, model.audit_types.Action.DELETE
+    ):
+        model.identity_references.remove(identity.id)
     model.identity.delete(id=identity.id)
     return _204
 
 
 def _refuse_delete(identity_id: int, reason: str, title: str) -> typing.NoReturn:
     # The refusal rolls the request back. The warning is written after the rollback so that it is kept.
-    model.audit_log.create_warning_after_rollback("identity-delete-refused", identity_id=identity_id, reason=reason)
+    model.audit_log.create_after_rollback(
+        model.audit_types.IDENTITY_DELETE_REFUSED, identity_id=identity_id, reason=reason
+    )
     raise responses.ProblemHTTPException(responses.problem_response(status_code=400, title=title))
 
 

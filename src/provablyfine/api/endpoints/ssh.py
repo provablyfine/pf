@@ -57,7 +57,7 @@ def sign_host_certificate(data: schemas.ssh.SSHHostCertificateRequest) -> schema
 
     for c in certificates:
         model.audit_log.create(
-            "create-host-certificate",
+            model.audit_types.CERTIFICATE_CREATE_HOST,
             signing_key_id=signer.id,
             public_key=c.public_key.to_dict(),
             identifier=c.identifier,
@@ -201,7 +201,7 @@ def sign_user_certificate(data: schemas.ssh.SSHUserCertificateRequest) -> schema
     )
 
     model.audit_log.create(
-        "create-user-certificate",
+        model.audit_types.CERTIFICATE_CREATE_USER,
         signing_key_id=signer.id,
         host_id=host.id,
         hostname=host.name,

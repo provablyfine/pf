@@ -5,7 +5,7 @@ import typing
 
 from .. import app_db
 from ..context import ctx
-from . import audit_log
+from . import audit_log, audit_types
 
 
 @dataclasses.dataclass(frozen=True)
@@ -50,7 +50,7 @@ def create(name: str, client_type: str, description: str, type: str, config: dic
     audit_fields: dict[str, typing.Any] = {"name": name}
     if "require_email_verified" in config:
         audit_fields["require_email_verified"] = config["require_email_verified"]
-    audit_log.create("auth-create", id=auth_id, **audit_fields)
+    audit_log.create(audit_types.AUTH_CREATE, id=auth_id, **audit_fields)
     return auth_id
 
 
@@ -78,7 +78,7 @@ def update(id: int, config_audit_fields: dict[str, typing.Any] | None = None, **
         update_fields["config"] = ctx.kek.encrypt(json.dumps(update_fields["config"]).encode())
     if update_fields:
         ctx.app_db.auth.update(**update_fields).where(id=id)
-    audit_log.create("auth-update", id=id, **audit_fields)
+    audit_log.create(audit_types.AUTH_UPDATE, id=id, **audit_fields)
 
 
 def delete(id: int) -> bool:
@@ -90,7 +90,7 @@ def delete(id: int) -> bool:
     if row is None or ctx.app_db.auth.delete(id=id) == 0:
         return False
     audit_log.create(
-        "auth-delete",
+        audit_types.AUTH_DELETE,
         id=id,
         name=row.name,
         client_type=row.client_type,

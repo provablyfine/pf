@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import collections.abc
 import typing
 
 from . import _sentinel, directory, exceptions, http_session, http_signatures, schemas, signer
@@ -13,6 +14,16 @@ def _problem_title(response: typing.Any, default: str) -> str:
     except Exception:
         pass
     return default
+
+
+def _problem_message(response: typing.Any, default: str) -> str:
+    """The title of a problem, with its detail when there is one."""
+    title = _problem_title(response, default)
+    try:
+        detail = response.json().get("detail")
+    except Exception:
+        return title
+    return f"{title} {detail}" if detail else title
 
 
 class SessionClient:
@@ -699,23 +710,78 @@ class SessionClient:
     def list_audit_log(
         self,
         level: int | None = None,
-        object_type: str | None = None,
+        object_type: str | list[str] | None = None,
         by_identity_id: str | None = None,
         start_time: int | None = None,
         end_time: int | None = None,
+        action: str | list[str] | None = None,
+        ref_type: str | None = None,
+        ref_id: str | None = None,
+        ref_name: str | None = None,
+        order: str | None = None,
+        limit: int | None = None,
+        cursor: str | None = None,
     ) -> schemas.AuditLogListResponse:
-        params: dict[str, int | str] = {}
+        """List one page of the audit log. Pass `next_cursor` of a response as `cursor` for the next page."""
+        params: dict[str, int | str | list[str]] = {}
         if level is not None:
             params["level"] = level
         if object_type is not None:
-            params["object_type"] = object_type
-        if by_identity_id is not None:
-            params["by_identity_id"] = by_identity_id
-        if start_time is not None:
-            params["start_time"] = start_time
-        if end_time is not None:
-            params["end_time"] = end_time
+            params["object_type"] = [object_type] if isinstance(object_type, str) else object_type
+        if action is not None:
+            params["action"] = [action] if isinstance(action, str) else action
+        for key, value in (
+            ("by_identity_id", by_identity_id),
+            ("start_time", start_time),
+            ("end_time", end_time),
+            ("ref_type", ref_type),
+            ("ref_id", ref_id),
+            ("ref_name", ref_name),
+            ("order", order),
+            ("limit", limit),
+            ("cursor", cursor),
+        ):
+            if value is not None:
+                params[key] = value
         response = self._session.get(self._directory.audit_log, auth=self._auth(), params=params)
         if response.status_code != 200:
-            raise exceptions.UI(_problem_title(response, "Unable to list audit log"))
+            raise exceptions.UI(_problem_message(response, "Unable to list audit log"))
         return schemas.AuditLogListResponse.model_validate(response.json())
+
+    def list_audit_log_types(self) -> schemas.AuditLogTypesResponse:
+        """The object types and actions that audit log entries can have, as the server knows them."""
+        response = self._session.get(f"{self._directory.audit_log}/types", auth=self._auth())
+        if response.status_code != 200:
+            raise exceptions.UI(_problem_message(response, "Unable to list audit log types"))
+        return schemas.AuditLogTypesResponse.model_validate(response.json())
+
+    def iter_audit_log(self, **filters: typing.Any) -> collections.abc.Iterator[schemas.AuditLogEntry]:
+        """Every matching entry, following `next_cursor` until the last page. Takes the filters of `list_audit_log`."""
+        cursor: str | None = filters.pop("cursor", None)
+        while True:
+            page = self.list_audit_log(cursor=cursor, **filters)
+            yield from page.entries
+            if page.next_cursor is None:
+                return
+            cursor = page.next_cursor
+
+    def find_object_ids(self, object_type: str, name: str) -> list[str]:
+        """The ids of the live objects of this type that have this name. Used to follow a rename in the audit log.
+
+        Raises `exceptions.UI` for a type that has no names to look up.
+        """
+        match object_type:
+            case "role":
+                return [str(r.id) for r in self.list_roles(name=name).roles]
+            case "boundary":
+                return [str(b.id) for b in self.list_boundaries(name=name).boundaries]
+            case "identity":
+                return [str(i.id) for i in self.list_identities(name=name).identities]
+            case "tag":
+                return [str(t.id) for t in self.list_tags(name=name).tags]
+            case "bastion":
+                return [str(b.id) for b in self.list_bastions().bastions if b.url == name]
+            case "auth":
+                return [str(a.id) for a in self.list_auths().auths if a.name == name]
+            case _:
+                raise exceptions.UI(f"Cannot look up objects of type {object_type!r} by name")

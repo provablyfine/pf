@@ -337,14 +337,40 @@ class AsyncSessionClient:
     async def list_audit_log(
         self,
         level: int | None = None,
-        object_type: str | None = None,
+        object_type: str | list[str] | None = None,
         by_identity_id: str | None = None,
         start_time: int | None = None,
         end_time: int | None = None,
+        action: str | list[str] | None = None,
+        ref_type: str | None = None,
+        ref_id: str | None = None,
+        ref_name: str | None = None,
+        order: str | None = None,
+        limit: int | None = None,
+        cursor: str | None = None,
     ) -> schemas.AuditLogListResponse:
         return await self._run(
-            lambda: self._inner.list_audit_log(level, object_type, by_identity_id, start_time, end_time)
+            lambda: self._inner.list_audit_log(
+                level,
+                object_type,
+                by_identity_id,
+                start_time,
+                end_time,
+                action,
+                ref_type,
+                ref_id,
+                ref_name,
+                order,
+                limit,
+                cursor,
+            )
         )
+
+    async def list_audit_log_types(self) -> schemas.AuditLogTypesResponse:
+        return await self._run(self._inner.list_audit_log_types)
+
+    async def find_object_ids(self, object_type: str, name: str) -> list[str]:
+        return await self._run(lambda: self._inner.find_object_ids(object_type, name))
 
 
 class AsyncAccountClient:

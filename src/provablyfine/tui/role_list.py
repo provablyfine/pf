@@ -6,7 +6,7 @@ import textual.app
 import textual.containers
 import textual.widgets
 
-from . import _utils, base, role_view
+from . import _utils, audit_log_list, base, role_view
 
 
 class _RoleNameScreen(base.ModalScreen[str | None]):
@@ -38,6 +38,7 @@ class RoleListScreen(base.Screen):
         ("enter", "view_role", "View"),
         ("a", "add_role", "Add"),
         ("d", "delete_role", "Delete"),
+        ("h", "history", "History"),
         ("escape", "app.pop_screen", "Back"),
     ]
 
@@ -108,3 +109,11 @@ class RoleListScreen(base.Screen):
         self._roles.pop(index)
         self._populate_table(table)
         self.notify(f"Role '{role.name}' deleted")
+
+    def action_history(self) -> None:
+        """Open the audit log on the entries about the selected object."""
+        if not self._roles:
+            return
+        table = self.query_one(textual.widgets.DataTable[str])
+        item = self._roles[table.cursor_row]
+        self.app.push_screen(audit_log_list.AuditLogListScreen(self._auth, "role:#" + str(item.id)))

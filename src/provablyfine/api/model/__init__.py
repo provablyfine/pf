@@ -1,5 +1,6 @@
 from . import (
     audit_log,
+    audit_types,
     auth_config,
     bastion,
     bastion_references,
@@ -18,6 +19,7 @@ from . import (
 
 __all__ = [
     "audit_log",
+    "audit_types",
     "auth_config",
     "bastion",
     "bastion_references",

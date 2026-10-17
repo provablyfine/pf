@@ -35,10 +35,12 @@ def test_deleting_a_bastion_removes_the_grants_that_name_it(api, tmp_path) -> No
     # An emptied ceiling denies everything. It must not become "no ceiling".
     assert boundaries["guard"].ceiling_list == []
 
-    entries = [e for e in sc.list_audit_log().entries if e.type == "bastion-delete-cascade"]
-    assert {(e.details["owner_name"], e.details["list"]) for e in entries} == {
-        ("ops", "grant_list"),
-        ("guard", "denied_list"),
-        ("guard", "ceiling_list"),
+    # One entry per changed list, each naming the deleted bastion as its cause.
+    entries = sc.list_audit_log(ref_type="bastion", ref_id=str(doomed.id)).entries
+    caused = [e for e in entries if "cause" in e.details]
+    assert {e.type for e in caused} == {
+        "role-update-grant-list",
+        "boundary-update-denied-list",
+        "boundary-update-ceiling-list",
     }
-    assert all(e.details["bastion_id"] == doomed.id for e in entries)
+    assert all(e.details["cause"]["id"] == str(doomed.id) for e in caused)

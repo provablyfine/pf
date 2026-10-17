@@ -80,7 +80,7 @@ def test_denying_a_key_twice_is_not_an_error(tenant_app_db: app_db.AppDb) -> Non
     model.denylist.create("key", identity_invitation_id="invitation")
 
     assert len(tenant_app_db.public_key_denylist.read_all(key_id="key")) == 1
-    audit = [a for a in tenant_app_db.audit_log.read_all() if a.type == "denylist-add"]
+    audit = [a for a in tenant_app_db.audit_log.read_all() if a.type == "public-key-denylisted"]
     assert len(audit) == 2
 
 
@@ -92,7 +92,7 @@ def test_refusing_a_denied_key_leaves_its_audit_entry_for_after_the_rollback(ten
             model.denylist.enforce_not_denied("key")
 
     # Nothing is written in the request's own transaction, which is about to roll back.
-    assert not [a for a in tenant_app_db.audit_log.read_all() if a.type == "denylist-check-failed"]
+    assert not [a for a in tenant_app_db.audit_log.read_all() if a.type == "public-key-rejected"]
     assert len(deferred.after_rollback) == 1
     deferred.after_rollback[0]()
-    assert len([a for a in tenant_app_db.audit_log.read_all() if a.type == "denylist-check-failed"]) == 1
+    assert len([a for a in tenant_app_db.audit_log.read_all() if a.type == "public-key-rejected"]) == 1
