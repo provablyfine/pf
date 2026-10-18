@@ -214,7 +214,6 @@ def oidc_login_endpoint(
     except sqlalchemy.exc.IntegrityError:
         model.audit_log.create_after_rollback(
             model.audit_types.SESSION_REJECTED,
-            dedupe_key=f"{session_key.thumbprint()}:oidc-nonce-replayed",
             session_key_id=session_key.thumbprint(),
             reason="oidc-nonce-replayed",
             email=email,
@@ -229,7 +228,6 @@ def oidc_login_endpoint(
         # The identity provider vouched for this email, so it is a real person, not an anonymous stranger.
         model.audit_log.create_after_rollback(
             model.audit_types.SESSION_REJECTED,
-            dedupe_key=f"{email}:oidc-no-identity",
             session_key_id=session_key.thumbprint(),
             reason="oidc-no-identity",
             email=email,

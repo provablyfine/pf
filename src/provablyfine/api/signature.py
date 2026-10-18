@@ -166,7 +166,7 @@ def _audit_rejection(key_id: str, reason: str, identity_id: int | None) -> None:
     audit_type = _REJECTION_TYPES[kind]
     assert audit_type.target_key is not None
     details: dict[str, typing.Any] = {audit_type.target_key: raw_id, "reason": reason, "identity_id": identity_id}
-    model.audit_log.create_after_rollback(audit_type, dedupe_key=f"{raw_id}:{reason}", **details)
+    model.audit_log.create_after_rollback(audit_type, **details)
 
 
 def verify(

@@ -2,7 +2,6 @@
 
 import base64
 import json
-import uuid
 
 import pytest
 
@@ -162,18 +161,6 @@ def test_a_rename_keeps_the_old_value_and_is_found_under_both_names(tenant_app_d
             ref_type=audit_types.ObjectType.ROLE, ref_name="ops", action=[audit_types.Action.UPDATE_NAME]
         ).entries
     ] == [entry.id]
-
-
-def test_a_repeated_warning_is_written_once(tenant_app_db: app_db.AppDb) -> None:
-    """The entry is written after a rollback, so a test can only check what the dedupe lets through."""
-    # The table lives as long as the process, so each run uses keys of its own.
-    key = f"session-rejected:{uuid.uuid4()}"
-    first = audit_log.first_in_window(f"{key}:expired", 1000)
-    again = audit_log.first_in_window(f"{key}:expired", 1030)
-    other = audit_log.first_in_window(f"{key}:revoked", 1030)
-    later = audit_log.first_in_window(f"{key}:expired", 1061)
-
-    assert (first, again, other, later) == (True, False, True, True)
 
 
 def test_following_returns_the_same_entries_in_both_orders_and_across_pages(tenant_app_db: app_db.AppDb) -> None:

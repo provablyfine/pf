@@ -5,7 +5,6 @@ import contextvars
 import dataclasses
 import hashlib
 import json
-import threading
 import time
 import typing
 
@@ -92,41 +91,13 @@ def create(audit_type: audit_types.AuditType, refs: dict[str, typing.Any] | None
     _write(audit_type, now, by_identity_id, {**details, **extra})
 
 
-_DEDUPE_SECONDS = 60
-_DEDUPE_MAX_KEYS = 4096
-_dedupe_lock = threading.Lock()
-_dedupe_seen: dict[str, int] = {}
-
-
-def first_in_window(key: str, now: int) -> bool:
-    """True if `key` was not seen in the last minute. The table never grows past `_DEDUPE_MAX_KEYS`."""
-    with _dedupe_lock:
-        last = _dedupe_seen.get(key)
-        if last is not None and now - last < _DEDUPE_SECONDS:
-            return False
-        if len(_dedupe_seen) >= _DEDUPE_MAX_KEYS:
-            for stale in [k for k, t in _dedupe_seen.items() if now - t >= _DEDUPE_SECONDS]:
-                del _dedupe_seen[stale]
-            if len(_dedupe_seen) >= _DEDUPE_MAX_KEYS:
-                _dedupe_seen.clear()
-        _dedupe_seen[key] = now
-        return True
-
-
-def create_after_rollback(
-    audit_type: audit_types.AuditType, dedupe_key: str | None = None, **details: typing.Any
-) -> None:
+def create_after_rollback(audit_type: audit_types.AuditType, **details: typing.Any) -> None:
     """Record an entry about a request that is about to be rejected. Call it right before raising.
 
     Rejecting a request rolls its transaction back, and a plain `create` with it.
     This one is written in its own transaction, after the rollback.
-
-    With a `dedupe_key`, the entry is written at most once a minute for that key, per server process.
-    A client that retries a rejected request in a loop cannot fill the log with it.
     """
     now = int(time.time())
-    if dedupe_key is not None and not first_in_window(f"{audit_type.type}:{dedupe_key}", now):
-        return
     by_identity_id = ctx.identity_id
 
     def write() -> None:
