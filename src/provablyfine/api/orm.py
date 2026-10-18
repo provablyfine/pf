@@ -122,14 +122,6 @@ class Table[T]:
         rows = self._connection.execute(statement)
         return [self._row_type(*row) for row in rows]
 
-    def query(self, statement: typing.Any) -> list[sqlalchemy.Row[typing.Any]]:
-        """Run a select that the other methods cannot express, such as a join or a group by.
-
-        Build it from `columns` of the tables involved. The rows are not converted to the row type.
-        """
-        result: sqlalchemy.CursorResult[typing.Any] = self._connection.execute(statement)
-        return list(result.all())
-
     def read_page(
         self, *args: typing.Any, order_by: str, descending: bool, limit: int, **kwargs: typing.Any
     ) -> list[T]:

@@ -748,8 +748,7 @@ class AuditLogObject(_Base):
     type: str
     id: str
     names: list[str] = []
-    first_seen: int
-    last_seen: int
+    first_seen: int | None = None
 
 
 class AuditLogObjectsResponse(_Base):

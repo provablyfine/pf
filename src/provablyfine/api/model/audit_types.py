@@ -76,15 +76,18 @@ class AuditType:
     level: app_db.AuditLogLevel = app_db.AuditLogLevel.INFO
     # The key of `details` that holds the id of the object the entry is about.
     target_key: str | None = "id"
+    # The entry gives the object the name it carries in `details`. Creating and renaming do.
+    # An update that may or may not rename carries the name only when it changes it.
+    names_object: bool = False
 
     @property
     def type(self) -> str:
         return f"{self.object_type}-{self.action}"
 
 
-IDENTITY_CREATE = AuditType(ObjectType.IDENTITY, Action.CREATE)
+IDENTITY_CREATE = AuditType(ObjectType.IDENTITY, Action.CREATE, names_object=True)
 IDENTITY_DELETE = AuditType(ObjectType.IDENTITY, Action.DELETE)
-IDENTITY_UPDATE_NAME = AuditType(ObjectType.IDENTITY, Action.UPDATE_NAME)
+IDENTITY_UPDATE_NAME = AuditType(ObjectType.IDENTITY, Action.UPDATE_NAME, names_object=True)
 IDENTITY_UPDATE_UNIX_USERNAME = AuditType(ObjectType.IDENTITY, Action.UPDATE_UNIX_USERNAME)
 IDENTITY_ADD_TAGS = AuditType(ObjectType.IDENTITY, Action.ADD_TAGS)
 IDENTITY_REMOVE_TAGS = AuditType(ObjectType.IDENTITY, Action.REMOVE_TAGS)
@@ -96,30 +99,30 @@ IDENTITY_INVITATION_CREATE = AuditType(ObjectType.IDENTITY_INVITATION, Action.CR
 IDENTITY_INVITATION_ACCEPTED = AuditType(ObjectType.IDENTITY_INVITATION, Action.ACCEPTED)
 IDENTITY_INVITATION_REJECTED = AuditType(ObjectType.IDENTITY_INVITATION, Action.REJECTED, app_db.AuditLogLevel.WARNING)
 
-ROLE_CREATE = AuditType(ObjectType.ROLE, Action.CREATE)
+ROLE_CREATE = AuditType(ObjectType.ROLE, Action.CREATE, names_object=True)
 ROLE_DELETE = AuditType(ObjectType.ROLE, Action.DELETE)
-ROLE_UPDATE_NAME = AuditType(ObjectType.ROLE, Action.UPDATE_NAME)
+ROLE_UPDATE_NAME = AuditType(ObjectType.ROLE, Action.UPDATE_NAME, names_object=True)
 ROLE_UPDATE_DESCRIPTION = AuditType(ObjectType.ROLE, Action.UPDATE_DESCRIPTION)
 ROLE_UPDATE_GRANT_LIST = AuditType(ObjectType.ROLE, Action.UPDATE_GRANT_LIST)
 ROLE_ADD_MEMBERS = AuditType(ObjectType.ROLE, Action.ADD_MEMBERS)
 ROLE_REMOVE_MEMBERS = AuditType(ObjectType.ROLE, Action.REMOVE_MEMBERS)
 
-BOUNDARY_CREATE = AuditType(ObjectType.BOUNDARY, Action.CREATE)
+BOUNDARY_CREATE = AuditType(ObjectType.BOUNDARY, Action.CREATE, names_object=True)
 BOUNDARY_DELETE = AuditType(ObjectType.BOUNDARY, Action.DELETE)
-BOUNDARY_UPDATE_NAME = AuditType(ObjectType.BOUNDARY, Action.UPDATE_NAME)
+BOUNDARY_UPDATE_NAME = AuditType(ObjectType.BOUNDARY, Action.UPDATE_NAME, names_object=True)
 BOUNDARY_UPDATE_DESCRIPTION = AuditType(ObjectType.BOUNDARY, Action.UPDATE_DESCRIPTION)
 BOUNDARY_UPDATE_CEILING_LIST = AuditType(ObjectType.BOUNDARY, Action.UPDATE_CEILING_LIST)
 BOUNDARY_UPDATE_DENIED_LIST = AuditType(ObjectType.BOUNDARY, Action.UPDATE_DENIED_LIST)
 
-TAG_CREATE = AuditType(ObjectType.TAG, Action.CREATE)
+TAG_CREATE = AuditType(ObjectType.TAG, Action.CREATE, names_object=True)
 TAG_DELETE = AuditType(ObjectType.TAG, Action.DELETE)
 
-BASTION_CREATE = AuditType(ObjectType.BASTION, Action.CREATE)
-BASTION_UPDATE = AuditType(ObjectType.BASTION, Action.UPDATE)
+BASTION_CREATE = AuditType(ObjectType.BASTION, Action.CREATE, names_object=True)
+BASTION_UPDATE = AuditType(ObjectType.BASTION, Action.UPDATE, names_object=True)
 BASTION_DELETE = AuditType(ObjectType.BASTION, Action.DELETE)
 
-AUTH_CREATE = AuditType(ObjectType.AUTH, Action.CREATE)
-AUTH_UPDATE = AuditType(ObjectType.AUTH, Action.UPDATE)
+AUTH_CREATE = AuditType(ObjectType.AUTH, Action.CREATE, names_object=True)
+AUTH_UPDATE = AuditType(ObjectType.AUTH, Action.UPDATE, names_object=True)
 AUTH_DELETE = AuditType(ObjectType.AUTH, Action.DELETE)
 
 SESSION_LOGIN = AuditType(ObjectType.SESSION, Action.LOGIN, target_key="session_key_id")

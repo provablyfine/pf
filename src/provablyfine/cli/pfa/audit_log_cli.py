@@ -131,15 +131,12 @@ def _objects_function(args: argparse.Namespace) -> None:
                     o.type,
                     o.id,
                     ", ".join(o.names),
-                    datetime.datetime.fromtimestamp(o.first_seen).isoformat(),
-                    datetime.datetime.fromtimestamp(o.last_seen).isoformat(),
+                    "" if o.first_seen is None else datetime.datetime.fromtimestamp(o.first_seen).isoformat(),
                 ]
                 for o in objects
             ]
             if rows:
-                print(
-                    tabulate.tabulate(rows, headers=["type", "id", "names", "first seen", "last seen"], maxcolwidths=60)
-                )
+                print(tabulate.tabulate(rows, headers=["type", "id", "names", "first seen"], maxcolwidths=60))
             if not response.is_last:
                 print(f"More objects: --cursor {response.next_cursor}")
         case _:

@@ -133,10 +133,18 @@ def _write(
             action=audit_type.action.value,
             by_identity_name=by_identity_name,
         )
-        for object_type, object_id, object_name in refs:
+        for ref in refs:
             db.audit_log_ref.create(
-                entry_id=counter.value, object_type=object_type, object_id=object_id, object_name=object_name
+                entry_id=counter.value, object_type=ref.object_type, object_id=ref.object_id, object_name=ref.name
             )
+            if ref.names_object and ref.name is not None:
+                # A rename back to an earlier name, or to the same name, is rejected by the unique key.
+                db.audit_log_object_name.create_if_absent(
+                    object_type=ref.object_type,
+                    object_id=ref.object_id,
+                    object_name=ref.name,
+                    first_entry_id=counter.value,
+                )
 
     ctx.before_commit(insert)
 
@@ -169,14 +177,26 @@ def _text(details: dict[str, typing.Any], key: str) -> str | None:
     return None if value is None else str(value)
 
 
-def _entry_refs(audit_type: audit_types.AuditType, details: dict[str, typing.Any]) -> list[tuple[str, str, str | None]]:
+@dataclasses.dataclass(frozen=True)
+class _Ref:
+    object_type: str
+    object_id: str
+    name: str | None
+    # The entry gives the object this name. A ref that only mentions the object does not.
+    names_object: bool = False
+
+
+def _entry_refs(audit_type: audit_types.AuditType, details: dict[str, typing.Any]) -> list[_Ref]:
     """Every object the entry is about, once each: the target first, then the objects it names."""
     found: dict[tuple[str, str], str | None] = {}
-    extra: list[tuple[str, str, str | None]] = []
+    named: set[tuple[str, str]] = set()
+    extra: list[_Ref] = []
     target_id = None if audit_type.target_key is None else _text(details, audit_type.target_key)
     if target_id is not None:
-        name = _text(details, "name") or _text(details, "url") or _name(audit_type.object_type, target_id)
-        found[(audit_type.object_type.value, target_id)] = name
+        carried = _text(details, "name") or _text(details, "url")
+        found[(audit_type.object_type.value, target_id)] = carried or _name(audit_type.object_type, target_id)
+        if audit_type.names_object and carried is not None:
+            named.add((audit_type.object_type.value, target_id))
     # A cascade names the object whose deletion caused it.
     cause_details: dict[str, typing.Any] | None = details.get("cause")
     if cause_details is not None:
@@ -187,7 +207,7 @@ def _entry_refs(audit_type: audit_types.AuditType, details: dict[str, typing.Any
     # A rename is found under the old name as well as the new one.
     old_name = _text(details, "old")
     if target_id is not None and audit_type.action == audit_types.Action.UPDATE_NAME and old_name is not None:
-        extra.append((audit_type.object_type.value, target_id, old_name))
+        extra.append(_Ref(audit_type.object_type.value, target_id, old_name))
     # A cascade says which role or boundary it rewrote.
     owner_type, owner_id = _text(details, "owner_type"), _text(details, "owner_id")
     if owner_type is not None and owner_id is not None:
@@ -207,7 +227,10 @@ def _entry_refs(audit_type: audit_types.AuditType, details: dict[str, typing.Any
         for object_id, label in by_id.items():
             name = None if label is None else _text(label, "name") or _text(label, "url")
             found.setdefault((kind, str(object_id)), name)
-    return [(object_type, object_id, name) for (object_type, object_id), name in found.items()] + extra
+    return [
+        _Ref(object_type, object_id, name, (object_type, object_id) in named)
+        for (object_type, object_id), name in found.items()
+    ] + extra
 
 
 @dataclasses.dataclass(frozen=True)
@@ -275,15 +298,11 @@ MAX_FOLLOWED_OBJECTS = 100
 
 
 def _objects_with_name(ref_type: audit_types.ObjectType, ref_name: str, limit: int) -> list[str]:
-    """The ids of the objects that ever had this name, found in the log itself. At most `limit`."""
-    ref = ctx.app_db.audit_log_ref.columns
-    statement = (
-        sqlalchemy.select(ref.object_id)
-        .where(ref.object_type == ref_type.value, ref.object_name == ref_name)
-        .distinct()
-        .limit(limit)
+    """The ids of the objects that ever had this name. At most `limit`."""
+    rows = ctx.app_db.audit_log_object_name.read_page(
+        object_type=ref_type.value, object_name=ref_name, order_by="id", descending=False, limit=limit
     )
-    return sorted(str(row[0]) for row in ctx.app_db.audit_log_ref.query(statement))
+    return sorted(r.object_id for r in rows)
 
 
 def _filter_key(**filters: object) -> str:
@@ -408,9 +427,10 @@ class NamedObject:
 
     object_type: str
     object_id: str
+    # Every name it had, in the order it got them.
     names: list[str]
-    first_seen: int
-    last_seen: int
+    # When the entry that gave it its first name was written. None once that entry is gone.
+    first_seen: int | None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -421,18 +441,18 @@ class ObjectsPage:
     is_last: bool
 
 
-def _encode_objects_cursor(position: tuple[int, str] | None, descending: bool, filter_key: str) -> str:
+def _encode_objects_cursor(position: int | None, descending: bool, filter_key: str) -> str:
     payload: dict[str, object] = {"v": _CURSOR_VERSION, "d": descending, "f": filter_key}
     if position is not None:
-        payload["e"], payload["o"] = position
+        payload["e"] = position
     return base64.urlsafe_b64encode(json.dumps(payload).encode()).decode().rstrip("=")
 
 
-def _decode_objects_cursor(cursor: str, descending: bool, filter_key: str) -> tuple[int, str] | None:
+def _decode_objects_cursor(cursor: str, descending: bool, filter_key: str) -> int | None:
     try:
         data = json.loads(base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4)))
         version, cursor_descending, cursor_filter_key = data["v"], data["d"], data["f"]
-        entry, object_id = data.get("e"), data.get("o")
+        position = data.get("e")
     except (ValueError, KeyError, TypeError) as e:
         raise InvalidCursor("Invalid cursor") from e
     if version != _CURSOR_VERSION:
@@ -441,11 +461,9 @@ def _decode_objects_cursor(cursor: str, descending: bool, filter_key: str) -> tu
         raise InvalidCursor("Invalid cursor")
     if cursor_descending != descending or cursor_filter_key != filter_key:
         raise InvalidCursor("Cursor does not match the requested order and filters")
-    if entry is None and object_id is None:
-        return None
-    if not isinstance(entry, int) or not isinstance(object_id, str):
+    if position is not None and not isinstance(position, int):
         raise InvalidCursor("Invalid cursor")
-    return entry, object_id
+    return position
 
 
 def objects_with_name(
@@ -457,81 +475,46 @@ def objects_with_name(
 ) -> ObjectsPage:
     """One page of the objects that ever had this name, even if they were renamed or deleted since.
 
-    They are ordered by the first entry that gave them the name, which is in commit order.
+    They are ordered by when they got the name, which is the order of the rows, and the rows are in commit order.
     A name can have been used by any number of objects, so the result is paged like the entries:
     the cursor holds the position and the page never grows with the number of objects.
-    Each object comes with all the names it had and when the log first and last mentions it.
+    Each object comes with all the names it had.
     The ids are the ones to give as `ref_id`.
     """
     filter_key = _filter_key(kind="objects", ref_type=ref_type.value, ref_name=ref_name)
     position = None if cursor is None else _decode_objects_cursor(cursor, descending, filter_key)
-    ref = ctx.app_db.audit_log_ref.columns
-    col = ctx.app_db.audit_log.columns
+    table = ctx.app_db.audit_log_object_name
+    after: list[typing.Any] = []
+    if position is not None:
+        after.append(table.columns.id < position if descending else table.columns.id > position)
     limit = max(1, min(limit, MAX_LIMIT))
 
-    # The objects of this page, in order. The first entry that gave each its name is its position.
-    first_entry = sqlalchemy.func.min(ref.entry_id)
-    page_query = (
-        sqlalchemy.select(ref.object_id, first_entry)
-        .where(ref.object_type == ref_type.value, ref.object_name == ref_name)
-        .group_by(ref.object_id)
-    )
-    if position is not None:
-        after_entry, after_id = position
-        if descending:
-            page_query = page_query.having(
-                sqlalchemy.or_(
-                    first_entry < after_entry, sqlalchemy.and_(first_entry == after_entry, ref.object_id < after_id)
-                )
-            )
-        else:
-            page_query = page_query.having(
-                sqlalchemy.or_(
-                    first_entry > after_entry, sqlalchemy.and_(first_entry == after_entry, ref.object_id > after_id)
-                )
-            )
-    order = (first_entry.desc(), ref.object_id.desc()) if descending else (first_entry.asc(), ref.object_id.asc())
     # One more than asked tells whether there is a next page.
-    found = [
-        typing.cast(tuple[str, int], tuple(row))
-        for row in ctx.app_db.audit_log_ref.query(page_query.order_by(*order).limit(limit + 1))
-    ]
-    is_last = len(found) <= limit
-    found = found[:limit]
-    next_position = (found[-1][1], found[-1][0]) if found else position
-    next_cursor = _encode_objects_cursor(next_position, descending, filter_key)
-    if not found:
+    rows = table.read_page(
+        *after, object_type=ref_type.value, object_name=ref_name, order_by="id", descending=descending, limit=limit + 1
+    )
+    is_last = len(rows) <= limit
+    rows = rows[:limit]
+    next_cursor = _encode_objects_cursor(rows[-1].id if rows else position, descending, filter_key)
+    if not rows:
         return ObjectsPage(objects=[], next_cursor=next_cursor, is_last=True)
 
-    # The names and times of these objects only. The page size bounds this query.
-    ids = [object_id for object_id, _ in found]
-    joined = sqlalchemy.join(ref.entry_id.table, col.id.table, ref.entry_id == col.id)
-    detail = (
-        sqlalchemy.select(
-            ref.object_id,
-            ref.object_name,
-            sqlalchemy.func.min(col.at),
-            sqlalchemy.func.max(col.at),
-            sqlalchemy.func.min(ref.entry_id),
-        )
-        .select_from(joined)
-        .where(ref.object_type == ref_type.value, ref.object_id.in_(ids))
-        .group_by(ref.object_id, ref.object_name)
-    )
-    # Entry ids are in commit order, so the first entry id orders names reliably, unlike the time in seconds.
-    by_id: dict[str, list[tuple[str | None, int, int, int]]] = {}
-    for row in ctx.app_db.audit_log_ref.query(detail):
-        object_id, name, first, last, first_named = typing.cast(tuple[str, str | None, int, int, int], tuple(row))
-        by_id.setdefault(object_id, []).append((name, first, last, first_named))
+    # Every name of these objects. The page size bounds this query.
+    names: dict[str, list[app_db.AuditLogObjectNameRow]] = {}
+    for named in sorted(
+        table.read_all(object_type=ref_type.value, object_id=[r.object_id for r in rows]), key=lambda n: n.id
+    ):
+        names.setdefault(named.object_id, []).append(named)
+    first_entries = {n[0].first_entry_id for n in names.values()}
+    at = {e.id: e.at for e in ctx.app_db.audit_log.read_all(id=sorted(first_entries))}
     objects = [
         NamedObject(
             object_type=ref_type.value,
-            object_id=object_id,
-            names=[name for name, _, _, _ in sorted(by_id[object_id], key=lambda r: r[3]) if name is not None],
-            first_seen=min(first for _, first, _, _ in by_id[object_id]),
-            last_seen=max(last for _, _, last, _ in by_id[object_id]),
+            object_id=r.object_id,
+            names=[n.object_name for n in names[r.object_id]],
+            first_seen=at.get(names[r.object_id][0].first_entry_id),
         )
-        for object_id in ids
+        for r in rows
     ]
     return ObjectsPage(objects=objects, next_cursor=next_cursor, is_last=is_last)
 

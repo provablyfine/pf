@@ -87,6 +87,7 @@ def test_tenant_upgrade_runs_a_migration_inside_its_schema(
     try:
         with old_engine.begin() as connection:
             connection.execute(sqlalchemy.text("DROP TABLE live_session"))
+            connection.execute(sqlalchemy.text("DROP TABLE audit_log_object_name"))
             connection.execute(sqlalchemy.text("DROP TABLE audit_log_ref"))
             connection.execute(sqlalchemy.text("DROP TABLE audit_log_counter"))
             if connection.dialect.name == "sqlite":

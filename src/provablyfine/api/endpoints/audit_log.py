@@ -57,7 +57,6 @@ def objects_endpoint(
                 id=o.object_id,
                 names=o.names,
                 first_seen=o.first_seen,
-                last_seen=o.last_seen,
             )
             for o in page.objects
         ],

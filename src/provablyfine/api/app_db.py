@@ -291,6 +291,30 @@ audit_log_ref = orm.make_table(
 )
 
 
+class AuditLogObjectNameRow(typing.NamedTuple):
+    """A name that an object had. One row per object and name, written by the first entry that gave it.
+
+    It holds no time. A time here would outlive the entry that it came from.
+    """
+
+    id: typing.Annotated[int, orm.Col(primary_key=True)]
+    object_type: str
+    object_id: str
+    object_name: str
+    first_entry_id: int
+
+
+audit_log_object_name = orm.make_table(
+    "audit_log_object_name",
+    metadata,
+    AuditLogObjectNameRow,
+    sqlalchemy.UniqueConstraint("object_type", "object_id", "object_name", name="uq_audit_log_object_name"),
+    sqlalchemy.Index("idx_audit_log_object_name_name", "object_type", "object_name"),
+    sqlalchemy.Index("idx_audit_log_object_name_object", "object_type", "object_id"),
+    sqlite_autoincrement=True,
+)
+
+
 class AuditLogCounterRow(typing.NamedTuple):
     """The last entry id that was handed out. It has one row, with id 1.
 
@@ -447,6 +471,10 @@ class AppDb(orm.Dao):
     @property
     def audit_log_ref(self) -> orm.Table[AuditLogRefRow]:
         return self._get(audit_log_ref)
+
+    @property
+    def audit_log_object_name(self) -> orm.Table[AuditLogObjectNameRow]:
+        return self._get(audit_log_object_name)
 
     @property
     def audit_log_counter(self) -> orm.Table[AuditLogCounterRow]:

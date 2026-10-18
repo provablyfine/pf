@@ -6,7 +6,7 @@ import json
 import pytest
 
 from .. import app_db
-from . import audit_log, audit_types, role
+from . import audit_log, audit_types, bastion, role
 
 
 def _refs(tenant_app_db: app_db.AppDb, entry_id: int) -> set[tuple[str, str, str | None]]:
@@ -295,6 +295,59 @@ def test_the_objects_behind_a_name_come_with_all_their_names(tenant_app_db: app_
     assert page.objects[1].names == ["ops", "operations"]
     assert page.objects[0].names == ["ops"]
     assert audit_log.objects_with_name(audit_types.ObjectType.ROLE, "nobody").objects == []
+
+
+def test_renaming_back_or_to_the_same_name_does_not_list_an_object_twice(tenant_app_db: app_db.AppDb) -> None:
+    role_id = role.create("ops", "", [])
+    role.update(role_id, name="operations")
+    role.update(role_id, name="ops")
+    role.update(role_id, name="ops")
+
+    page = audit_log.objects_with_name(audit_types.ObjectType.ROLE, "ops")
+
+    assert [(o.object_id, o.names) for o in page.objects] == [(str(role_id), ["ops", "operations"])]
+    assert len(tenant_app_db.audit_log_object_name.read_all()) == 2
+
+
+def test_an_object_that_is_only_mentioned_is_not_found_by_the_name_in_the_mention(
+    tenant_app_db: app_db.AppDb,
+) -> None:
+    ops = role.create("ops", "", [])
+    # This identity is not created through the audit log. It is only named by the entry that adds it to the role.
+    identity_id = tenant_app_db.identity.create(name="zed", created_at=0, unix_username=None)
+    assert identity_id is not None
+    role.update(ops, added_member_id_list=[identity_id])
+
+    assert audit_log.objects_with_name(audit_types.ObjectType.IDENTITY, "zed").objects == []
+    mentioned = audit_log.read_page(ref_type=audit_types.ObjectType.IDENTITY, ref_name="zed")
+    assert [e.type for e in mentioned.entries] == ["role-add-members"]
+
+
+def test_an_update_names_a_bastion_only_when_it_changes_the_url(tenant_app_db: app_db.AppDb) -> None:
+    bastion_id = bastion.create("https://a.example", None, None)
+    bastion.update(bastion_id, ssh_proxy_jump="jump")
+    bastion.update(bastion_id, url="https://b.example")
+
+    page = audit_log.objects_with_name(audit_types.ObjectType.BASTION, "https://b.example")
+
+    assert [(o.object_id, o.names) for o in page.objects] == [
+        (str(bastion_id), ["https://a.example", "https://b.example"])
+    ]
+    assert len(tenant_app_db.audit_log_object_name.read_all(object_id=str(bastion_id))) == 2
+
+
+def test_the_first_time_of_an_object_comes_from_its_first_entry(tenant_app_db: app_db.AppDb) -> None:
+    role_id = role.create("ops", "", [])
+    created = tenant_app_db.audit_log.read_one(type="role-create")
+    assert created is not None
+
+    page = audit_log.objects_with_name(audit_types.ObjectType.ROLE, "ops")
+    assert [o.first_seen for o in page.objects] == [created.at]
+
+    # Once the entry is gone, nothing else in the log holds the time.
+    tenant_app_db.audit_log.delete(id=created.id)
+    page = audit_log.objects_with_name(audit_types.ObjectType.ROLE, "ops")
+    assert [(o.object_id, o.first_seen) for o in page.objects] == [(str(role_id), None)]
 
 
 def _many_objects_named_ops(count: int, batch: str = "a") -> list[str]:

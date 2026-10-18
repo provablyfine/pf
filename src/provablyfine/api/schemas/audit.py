@@ -55,8 +55,8 @@ class AuditLogObject(base.APIBase):
     type: model.audit_types.ObjectType
     id: str
     names: list[str]
-    first_seen: int
-    last_seen: int
+    # When the entry that gave the object its first name was written. None once that entry is gone.
+    first_seen: int | None = None
 
 
 class AuditLogObjectsResponse(base.APIBase):
