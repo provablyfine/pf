@@ -797,7 +797,7 @@ async def test_verify_invitation_rejects_key_expiring_exactly_now(
     assert _title(exc_info.value) == "Invitation is expired"
 
 
-def _rejection_entries() -> list[app_db.AuditLog]:
+def _rejection_entries() -> list[app_db.AuditLogRow]:
     """Write what the rejected request left behind, as the request's rollback handler does, and read it back."""
     deferred = context._deferred_var.get()  # pyright: ignore[reportPrivateUsage]
     assert deferred is not None
