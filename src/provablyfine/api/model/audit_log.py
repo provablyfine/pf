@@ -63,10 +63,7 @@ _cause_var: contextvars.ContextVar[dict[str, typing.Any] | None] = contextvars.C
 def cause(
     object_type: audit_types.ObjectType, object_id: int | str, name: str | None, action: audit_types.Action
 ) -> collections.abc.Generator[None]:
-    """Say that the entries written inside the block happen because of `action` on this object.
-
-    Deleting a bastion rewrites the roles that name it. Those entries name the bastion as their cause.
-    """
+    """Say that the entries written inside the block happen because of `action` on this object."""
     token = _cause_var.set({"type": object_type.value, "id": str(object_id), "name": name, "action": action.value})
     try:
         yield
