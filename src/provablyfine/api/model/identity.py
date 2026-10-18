@@ -101,7 +101,7 @@ def delete(id: int) -> None:
 
     Its keys and sessions go at once: the next request signed with one of them is a 401.
     The audit entry keeps what is lost with them (see `_deletion_snapshot`).
-    The grants that name the identity are removed by `identity_references.remove`. Call it first.
+    The grants that name the identity are removed by `identity_grants.remove`. Call it first.
 
     Certificates that were already issued cannot be revoked. They stay valid until they expire,
     and an SSH session that is already open runs until its deadline.

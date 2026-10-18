@@ -266,7 +266,7 @@ def delete_endpoint(identity_id: int) -> fastapi.responses.Response:
     with model.audit_log.cause(
         model.audit_types.ObjectType.IDENTITY, identity.id, identity.name, model.audit_types.Action.DELETE
     ):
-        model.identity_references.remove(identity.id)
+        model.identity_grants.remove(identity.id)
     model.identity.delete(id=identity.id)
     return _204
 

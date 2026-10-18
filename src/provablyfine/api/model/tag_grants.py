@@ -5,7 +5,7 @@ identity (for `live`, the host of the session) must hold.
 Shrinking that list in place would change who the grant matches, since a
 filter nobody can currently satisfy would suddenly become satisfiable by whoever holds the
 remaining tags, the moment the dead id is dropped. So a grant whose filter names the tag is
-removed whole, the same way `identity_references` removes a grant that names a deleted identity.
+removed whole, the same way `identity_grants` removes a grant that names a deleted identity.
 
 A grant of type `identity` can also have `permission.add_tag_id_list`, `permission.del_tag_id_list`,
 or `permission.create.allowed_tag_id_list`. These are plain allow-sets, not AND-filters. Dropping
@@ -132,7 +132,7 @@ def remove(tag_id: int) -> list[Owner]:
     that named the tag id. That is all that is needed to put a removed deny rule back, or to
     re-add a dropped tag id to an allow-list.
 
-    Nothing here takes a row lock ahead of reading. `identity_references.remove()`, which this
+    Nothing here takes a row lock ahead of reading. `identity_grants.remove()`, which this
     mirrors, has the same gap: a concurrent write to the same role or boundary between the read
     and the write can be lost. Closing that is out of scope for this function.
     """

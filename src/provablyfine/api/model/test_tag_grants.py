@@ -1,7 +1,7 @@
 """Deleting a tag removes or rewrites the grants that name it, and only those."""
 
 from .. import app_db
-from . import audit_log, audit_types, boundary, grant, role, tag_references
+from . import audit_log, audit_types, boundary, grant, role, tag_grants
 
 
 def _ssh(tag_id_list: list[int] | None, host: str = "shell") -> grant.Grant:
@@ -70,38 +70,38 @@ def _audit(tenant_app_db: app_db.AppDb, type: str) -> list[app_db.AuditLogRow]:
 
 def test_find_sees_a_filter_tag_id_list_on_an_ssh_grant(tenant_app_db: app_db.AppDb) -> None:
     role.create("ops", "", [_ssh([42])])
-    assert [o.name for o in tag_references.find(42)] == ["ops"]
+    assert [o.name for o in tag_grants.find(42)] == ["ops"]
 
 
 def test_find_sees_a_filter_tag_id_list_on_an_identity_grant(tenant_app_db: app_db.AppDb) -> None:
     role.create("ops", "", [_identity(filter_tag_id_list=[42])])
-    assert [o.name for o in tag_references.find(42)] == ["ops"]
+    assert [o.name for o in tag_grants.find(42)] == ["ops"]
 
 
 def test_find_sees_an_add_tag_id_list(tenant_app_db: app_db.AppDb) -> None:
     role.create("ops", "", [_identity(add_tag_id_list=[42])])
-    assert [o.name for o in tag_references.find(42)] == ["ops"]
+    assert [o.name for o in tag_grants.find(42)] == ["ops"]
 
 
 def test_find_sees_a_del_tag_id_list(tenant_app_db: app_db.AppDb) -> None:
     role.create("ops", "", [_identity(del_tag_id_list=[42])])
-    assert [o.name for o in tag_references.find(42)] == ["ops"]
+    assert [o.name for o in tag_grants.find(42)] == ["ops"]
 
 
 def test_find_sees_a_create_allowed_tag_id_list(tenant_app_db: app_db.AppDb) -> None:
     role.create("ops", "", [_identity(create_tag_id_list=[42])])
-    assert [o.name for o in tag_references.find(42)] == ["ops"]
+    assert [o.name for o in tag_grants.find(42)] == ["ops"]
 
 
 def test_find_sees_boundary_ceiling_and_denied_lists(tenant_app_db: app_db.AppDb) -> None:
     boundary.create("ceiling-guard", "", [_ssh([42])], [])
     boundary.create("denied-guard", "", None, [_ssh([42])])
-    assert {o.name for o in tag_references.find(42)} == {"ceiling-guard", "denied-guard"}
+    assert {o.name for o in tag_grants.find(42)} == {"ceiling-guard", "denied-guard"}
 
 
 def test_find_is_empty_when_nothing_names_the_tag(tenant_app_db: app_db.AppDb) -> None:
     role.create("ops", "", [_ssh([1]), _identity(add_tag_id_list=[2])])
-    assert tag_references.find(42) == []
+    assert tag_grants.find(42) == []
 
 
 def test_find_does_not_see_a_tag_grant_about_the_tag_object(tenant_app_db: app_db.AppDb) -> None:
@@ -109,7 +109,7 @@ def test_find_does_not_see_a_tag_grant_about_the_tag_object(tenant_app_db: app_d
     # (e.g. "may delete tag 42"), not a filter that matches identities by tag.
     # It must never feed the refusal decision.
     role.create("ops", "", [_tag_grant(42)])
-    assert tag_references.find(42) == []
+    assert tag_grants.find(42) == []
 
 
 def test_remove_drops_a_filter_grant_whole_even_with_other_tags_in_the_list(tenant_app_db: app_db.AppDb) -> None:
@@ -117,7 +117,7 @@ def test_remove_drops_a_filter_grant_whole_even_with_other_tags_in_the_list(tena
     # which nobody satisfies today because tag 42 is required too.
     role_id = role.create("ops", "", [_ssh([1, 42]), _ssh([1])])
 
-    changed = tag_references.remove(42)
+    changed = tag_grants.remove(42)
 
     assert [o.name for o in changed] == ["ops"]
     kept = role.read_one(role_id)
@@ -128,7 +128,7 @@ def test_remove_drops_a_filter_grant_whole_even_with_other_tags_in_the_list(tena
 def test_remove_strips_the_tag_from_an_add_tag_id_list_and_keeps_the_grant(tenant_app_db: app_db.AppDb) -> None:
     role_id = role.create("ops", "", [_identity(add_tag_id_list=[1, 42])])
 
-    tag_references.remove(42)
+    tag_grants.remove(42)
 
     kept = role.read_one(role_id)
     assert kept is not None
@@ -141,7 +141,7 @@ def test_remove_strips_the_tag_from_an_add_tag_id_list_and_keeps_the_grant(tenan
 def test_remove_strips_the_tag_from_a_del_tag_id_list_and_keeps_the_grant(tenant_app_db: app_db.AppDb) -> None:
     role_id = role.create("ops", "", [_identity(del_tag_id_list=[1, 42])])
 
-    tag_references.remove(42)
+    tag_grants.remove(42)
 
     kept = role.read_one(role_id)
     assert kept is not None
@@ -155,7 +155,7 @@ def test_remove_strips_the_tag_from_a_create_allowed_tag_id_list_and_keeps_the_g
 ) -> None:
     role_id = role.create("ops", "", [_identity(create_tag_id_list=[1, 42])])
 
-    tag_references.remove(42)
+    tag_grants.remove(42)
 
     kept = role.read_one(role_id)
     assert kept is not None
@@ -168,7 +168,7 @@ def test_remove_strips_the_tag_from_a_create_allowed_tag_id_list_and_keeps_the_g
 def test_remove_drops_a_tag_grant_about_the_tag_object(tenant_app_db: app_db.AppDb) -> None:
     role_id = role.create("ops", "", [_tag_grant(42), _tag_grant(None)])
 
-    changed = tag_references.remove(42)
+    changed = tag_grants.remove(42)
 
     assert [o.name for o in changed] == ["ops"]
     kept = role.read_one(role_id)
@@ -179,7 +179,7 @@ def test_remove_drops_a_tag_grant_about_the_tag_object(tenant_app_db: app_db.App
 def test_remove_leaves_a_tag_grant_with_no_filter_id_alone(tenant_app_db: app_db.AppDb) -> None:
     role_id = role.create("ops", "", [_tag_grant(None)])
 
-    assert tag_references.remove(42) == []
+    assert tag_grants.remove(42) == []
     kept = role.read_one(role_id)
     assert kept is not None
     assert len(kept.grant_list) == 1
@@ -190,7 +190,7 @@ def test_the_update_entries_name_the_tag_and_keep_the_old_grants(tenant_app_db: 
     boundary.create("guard", "", None, [_ssh([42])])
 
     with audit_log.cause(audit_types.ObjectType.TAG, 42, "env", audit_types.Action.DELETE):
-        tag_references.remove(42)
+        tag_grants.remove(42)
 
     role_entry, boundary_entry = (
         *_audit(tenant_app_db, "role-update-grant-list"),
@@ -204,7 +204,7 @@ def test_the_update_entries_name_the_tag_and_keep_the_old_grants(tenant_app_db: 
 def test_a_ceiling_that_loses_its_last_grant_denies_everything(tenant_app_db: app_db.AppDb) -> None:
     boundary_id = boundary.create("guard", "", [_ssh([42])], [])
 
-    tag_references.remove(42)
+    tag_grants.remove(42)
 
     remaining = boundary.read_one(id=boundary_id)
     assert remaining is not None
@@ -215,7 +215,7 @@ def test_a_ceiling_that_loses_its_last_grant_denies_everything(tenant_app_db: ap
 def test_a_boundary_without_a_ceiling_keeps_having_none(tenant_app_db: app_db.AppDb) -> None:
     boundary_id = boundary.create("guard", "", None, [_ssh([42])])
 
-    tag_references.remove(42)
+    tag_grants.remove(42)
 
     remaining = boundary.read_one(id=boundary_id)
     assert remaining is not None
@@ -228,8 +228,8 @@ def test_nothing_changes_when_no_grant_names_the_tag(tenant_app_db: app_db.AppDb
     boundary.create("guard", "", [_ssh([1])], [_ssh([1])])
     before = _audit(tenant_app_db, "role-update-grant-list")
 
-    assert tag_references.remove(42) == []
-    assert tag_references.find(42) == []
+    assert tag_grants.remove(42) == []
+    assert tag_grants.find(42) == []
     assert _audit(tenant_app_db, "role-update-grant-list") == before
 
 
@@ -239,6 +239,6 @@ def test_remove_drops_a_live_grant_whose_filter_names_the_tag(tenant_app_db: app
     )
     keep = _ssh([7])
     role_id = role.create("ops", "", [live, keep])
-    assert [o.name for o in tag_references.find(42)] == ["ops"]
-    tag_references.remove(42)
+    assert [o.name for o in tag_grants.find(42)] == ["ops"]
+    tag_grants.remove(42)
     assert role.read_one(role_id).grant_list == [keep]  # pyright: ignore[reportOptionalMemberAccess]

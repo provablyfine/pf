@@ -61,15 +61,16 @@ def delete_endpoint(tag_id: int) -> fastapi.responses.Response:
         )
 
     is_identity_tagged = ctx.app_db.identity_tag.read_one(tag_id=tag_id) is not None
-    is_acl_referenced = len(model.tag_references.find(tag_id)) > 0
+    is_acl_referenced = len(model.tag_grants.find(tag_id)) > 0
     if is_identity_tagged and is_acl_referenced:
         raise responses.ProblemHTTPException(responses.problem_response(status_code=400, title="Tag is still in use"))
 
+    # Everything that changes because the tag is gone is recorded with the tag as its cause.
     with model.audit_log.cause(model.audit_types.ObjectType.TAG, tag.id, tag.name, model.audit_types.Action.DELETE):
-        model.tag_references.remove(tag_id)
-    model.bastion.remove_tag(tag_id)
-    if is_identity_tagged:
-        ctx.app_db.identity_tag.delete(tag_id=tag_id)
+        model.tag_grants.remove(tag_id)
+        model.bastion.remove_tag(tag_id)
+        for tagged in ctx.app_db.identity_tag.read_all(tag_id=tag_id):
+            model.identity.update(tagged.identity_id, deleted_tag_id_list=[tag_id])
     model.audit_log.create(model.audit_types.TAG_DELETE, id=tag_id, name=tag.name, value=tag.value)
     ctx.app_db.tag.delete(id=tag_id)
     return _204
