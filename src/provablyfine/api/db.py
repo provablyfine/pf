@@ -43,6 +43,11 @@ def create_engine(
             pool_options["pool_size"] = pool_size
         if max_overflow is not None:
             pool_options["max_overflow"] = max_overflow
+    if sqlalchemy.make_url(url).get_backend_name() in ("mysql", "mariadb"):
+        # Postgres reads the latest committed data on every statement. MariaDB defaults to a snapshot taken at the
+        # first read. A write to a row that another request committed since then fails with error 1020.
+        # The audit counter is such a row, so match Postgres.
+        pool_options["isolation_level"] = "READ COMMITTED"
     engine = sqlalchemy.create_engine(url, echo=echo, **pool_options)
     if engine.dialect.name == "sqlite":
         _begin_sqlite_transactions(engine)
