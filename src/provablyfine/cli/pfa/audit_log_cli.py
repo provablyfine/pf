@@ -16,8 +16,10 @@ def _split_object(value: str) -> tuple[str, str]:
     return object_type, rest
 
 
-def _fetch(sc: pfc.SessionClient, args: argparse.Namespace) -> tuple[list[pfc.schemas.AuditLogEntry], str | None]:
-    """The entries to show, and the cursor to continue from if there are more."""
+def _fetch(
+    sc: pfc.SessionClient, args: argparse.Namespace
+) -> tuple[list[pfc.schemas.AuditLogEntry], pfc.schemas.AuditLogListResponse]:
+    """The entries to show, and the last page that was read. Its cursor is where to continue from."""
     filters: dict[str, typing.Any] = {
         "level": args.level,
         "object_type": args.object_type,
@@ -38,25 +40,32 @@ def _fetch(sc: pfc.SessionClient, args: argparse.Namespace) -> tuple[list[pfc.sc
     elif args.follow:
         raise pfc.exceptions.UI("--follow needs --object")
 
-    if args.all:
-        return list(sc.iter_audit_log(**filters)), None
     page = sc.list_audit_log(**filters, limit=args.limit, cursor=args.cursor)
-    return page.entries, None if page.is_last else page.next_cursor
+    entries = list(page.entries)
+    while args.all and not page.is_last:
+        page = sc.list_audit_log(**filters, limit=args.limit, cursor=page.next_cursor)
+        entries.extend(page.entries)
+    return entries, page
 
 
 def _list_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     sc = client.Factory(c, timeout=args.timeout).session()
-    entries, next_cursor = _fetch(sc, args)
+    entries, page = _fetch(sc, args)
     if args.quiet:
         args.format = "quiet"
     match args.format:
         case "quiet":
             output = "\n".join(str(e.id) for e in entries)
         case "json":
-            output = json.dumps([e.model_dump() for e in entries], indent=2)
-        case "jsonl":
-            output = "\n".join(json.dumps(e.model_dump()) for e in entries)
+            output = json.dumps(
+                {
+                    "entries": [e.model_dump() for e in entries],
+                    "next_cursor": page.next_cursor,
+                    "is_last": page.is_last,
+                },
+                indent=2,
+            )
         case "text":
             rows: list[list[str | int]] = []
             for entry in entries:
@@ -75,8 +84,8 @@ def _list_function(args: argparse.Namespace) -> None:
             assert False
     if output:
         print(output)
-    if next_cursor is not None and args.format == "text":
-        print(f"More entries: --cursor {next_cursor}")
+    if not page.is_last and args.format == "text":
+        print(f"More entries: --cursor {page.next_cursor}")
 
 
 def _types_function(args: argparse.Namespace) -> None:
@@ -97,16 +106,25 @@ def _objects_function(args: argparse.Namespace) -> None:
     c = client.Config.load(args.config)
     sc = client.Factory(c, timeout=args.timeout).session()
     object_type, name = args.object
-    if args.all:
-        objects = list(sc.iter_audit_log_objects(object_type, name, order=args.order))
-        next_cursor = None
-    else:
-        response = sc.list_audit_log_objects(object_type, name, order=args.order, limit=args.limit, cursor=args.cursor)
-        objects = response.objects
-        next_cursor = None if response.is_last else response.next_cursor
+    response = sc.list_audit_log_objects(object_type, name, order=args.order, limit=args.limit, cursor=args.cursor)
+    objects = list(response.objects)
+    while args.all and not response.is_last:
+        response = sc.list_audit_log_objects(
+            object_type, name, order=args.order, limit=args.limit, cursor=response.next_cursor
+        )
+        objects.extend(response.objects)
     match args.format:
         case "json":
-            print(json.dumps([o.model_dump() for o in objects], indent=2))
+            print(
+                json.dumps(
+                    {
+                        "objects": [o.model_dump() for o in objects],
+                        "next_cursor": response.next_cursor,
+                        "is_last": response.is_last,
+                    },
+                    indent=2,
+                )
+            )
         case "text":
             rows = [
                 [
@@ -122,8 +140,8 @@ def _objects_function(args: argparse.Namespace) -> None:
                 print(
                     tabulate.tabulate(rows, headers=["type", "id", "names", "first seen", "last seen"], maxcolwidths=60)
                 )
-            if next_cursor is not None:
-                print(f"More objects: --cursor {next_cursor}")
+            if not response.is_last:
+                print(f"More objects: --cursor {response.next_cursor}")
         case _:
             assert False
 
@@ -183,8 +201,19 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
     p.add_argument("--order", choices=["asc", "desc"], default="desc", help="By entry id. Default: desc")
     p.add_argument("--limit", type=int, help="Entries per page. Server default: 100, maximum: 1000")
     p.add_argument("--cursor", help="Continue after the page that printed this cursor")
-    p.add_argument("--all", action="store_true", default=False, help="Read every page")
-    list_parser.add_argument("--format", choices=["text", "json", "jsonl", "quiet"], default="text")
+    p.add_argument(
+        "--all",
+        action="store_true",
+        default=False,
+        help="Read every page, from the start or from --cursor. --limit is the page size",
+    )
+    list_parser.add_argument(
+        "--format",
+        choices=["text", "json", "quiet"],
+        default="text",
+        help="json is an object with entries, next_cursor and is_last. Pass next_cursor to --cursor to continue. "
+        "quiet prints the entry ids only and cannot be continued",
+    )
     list_parser.add_argument("-q", "--quiet", action="store_true", default=False, help="Quiet output (IDs only)")
     list_parser.set_defaults(func=_list_function)
 
@@ -206,6 +235,16 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
     )
     objects_parser.add_argument("--limit", type=int, help="Objects per page. Server default: 100, maximum: 1000")
     objects_parser.add_argument("--cursor", help="Continue after the page that printed this cursor")
-    objects_parser.add_argument("--all", action="store_true", default=False, help="Read every page")
-    objects_parser.add_argument("--format", choices=["text", "json"], default="text")
+    objects_parser.add_argument(
+        "--all",
+        action="store_true",
+        default=False,
+        help="Read every page, from the start or from --cursor. --limit is the page size",
+    )
+    objects_parser.add_argument(
+        "--format",
+        choices=["text", "json"],
+        default="text",
+        help="json is an object with objects, next_cursor and is_last",
+    )
     objects_parser.set_defaults(func=_objects_function)

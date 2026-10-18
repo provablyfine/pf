@@ -98,7 +98,7 @@ Grant bob a shell with agent and X11 forwarding
 Forwarding capabilities reach the certificate
   $ pf -c user.json ssh -n -o "Hostname=$SSHD_ADDRESS" -o "HostKeyAlias=host" -p $SSHD_PORT bob@host "whoami"
   bob
-  $ CERT_EXTENSIONS="[.[] | select(.type==\"certificate-create-user\")] | last | .details.extensions | with_entries(select(.value)) | del(.connection_id, .session_deadline) | keys_unsorted | join(\" \")"
+  $ CERT_EXTENSIONS="[.entries[] | select(.type==\"certificate-create-user\")] | last | .details.extensions | with_entries(select(.value)) | del(.connection_id, .session_deadline) | keys_unsorted | join(\" \")"
   $ pfa -c config.json audit-log list --order asc --all --format json | jq -r "$CERT_EXTENSIONS"
   permit_agent_forwarding permit_pty permit_user_rc permit_x11_forwarding
 
@@ -239,7 +239,7 @@ Grant access to alice@host with a bounded ttl
   alice
 
 The deadline (issued_at + ttl) and connection id land in the audit entry
-  $ CERT_DETAILS="[.[] | select(.type==\"certificate-create-user\")] | last | .details"
+  $ CERT_DETAILS="[.entries[] | select(.type==\"certificate-create-user\")] | last | .details"
   $ pfa -c config.json audit-log list --order asc --all --format json | jq -r "$CERT_DETAILS | .extensions.connection_id"
   [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12} (re)
   $ pfa -c config.json audit-log list --order asc --all --format json | jq -r "$CERT_DETAILS | .extensions.session_deadline - .valid_after"
