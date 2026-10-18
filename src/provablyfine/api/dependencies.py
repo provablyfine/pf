@@ -53,6 +53,9 @@ It is never told "created" for data that is not there.
 The transaction of a write request holds the write lock of the tenant.
 Do not call another service or send an email inside it.
 
+To write something at the very end of the request, use `ctx.before_commit(action)`.
+The audit log does this, because every entry takes the same counter lock.
+
 To do something after the commit, use `ctx.after_commit(action)`.
 The action runs when the data is committed and before the response is sent.
 If it raises a `ProblemHTTPException`, the client gets that error.
@@ -204,6 +207,10 @@ async def tenant_context(
                 ctx.set_deferred(deferred),
             ):
                 yield
+                # The handler returned normally. These writes go last, so that the locks they take are held
+                # for the shortest time, and are taken after every lock of the handler.
+                for action in deferred.before_commit:
+                    await asyncio.to_thread(action)
     except responses.ProblemHTTPException:
         await _run_after_rollback(engine, deferred)
         raise

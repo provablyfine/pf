@@ -23,6 +23,47 @@ def types_endpoint() -> schemas.audit.AuditLogTypesResponse:
     )
 
 
+@router.get("/objects", status_code=200, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
+def objects_endpoint(
+    ref_type: model.audit_types.ObjectType,
+    ref_name: str,
+    order: typing.Literal["asc", "desc"] = "desc",
+    limit: typing.Annotated[int, fastapi.Query(ge=1, le=model.audit_log.MAX_LIMIT)] = model.audit_log.DEFAULT_LIMIT,
+    cursor: str | None = None,
+) -> schemas.audit.AuditLogObjectsResponse:
+    """The objects that ever had this name, even if they are deleted or renamed since.
+
+    Use it to find the `ref_id` of the one you mean, when several objects used the same name over time.
+    They are ordered by when they first got the name, newest first by default, and paged like the entries.
+    Pass `next_cursor` back as `cursor` to read what comes after the page.
+    """
+    grants = grant.Grants.create()
+    if not grants.audit_log().can_read():
+        raise responses.ProblemHTTPException(
+            responses.problem_response(status_code=403, title="Not allowed to read audit log")
+        )
+    try:
+        page = model.audit_log.objects_with_name(
+            ref_type, ref_name, descending=order == "desc", limit=limit, cursor=cursor
+        )
+    except model.audit_log.InvalidCursor as e:
+        raise responses.ProblemHTTPException(responses.problem_response(status_code=400, title=str(e))) from e
+    return schemas.audit.AuditLogObjectsResponse(
+        objects=[
+            schemas.audit.AuditLogObject(
+                type=model.audit_types.ObjectType(o.object_type),
+                id=o.object_id,
+                names=o.names,
+                first_seen=o.first_seen,
+                last_seen=o.last_seen,
+            )
+            for o in page.objects
+        ],
+        next_cursor=page.next_cursor,
+        is_last=page.is_last,
+    )
+
+
 @router.get("", status_code=200, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
 def list_endpoint(
     level: int | None = None,
@@ -35,6 +76,7 @@ def list_endpoint(
     ref_type: model.audit_types.ObjectType | None = None,
     ref_id: str | None = None,
     ref_name: str | None = None,
+    ref_follow: bool = False,
     order: typing.Literal["asc", "desc"] = "desc",
     limit: typing.Annotated[int, fastapi.Query(ge=1, le=model.audit_log.MAX_LIMIT)] = model.audit_log.DEFAULT_LIMIT,
     cursor: str | None = None,
@@ -43,7 +85,11 @@ def list_endpoint(
 
     Filters apply together. `object_type` and `action` take several values.
     `ref_type` with `ref_id` or `ref_name` finds the entries about one object.
-    Follow `next_cursor` to read the next page.
+    With `ref_follow`, `ref_name` finds every object that ever had that name, and all the entries about them,
+    even if they were renamed or deleted.
+    Pass `next_cursor` back as `cursor` to read what comes after the page.
+    `is_last` says that nothing came after it at the time of the query.
+    The cursor stays valid, so a reader that has caught up can save it and resume later.
     """
     grants = grant.Grants.create()
     if not grants.audit_log().can_read():
@@ -62,11 +108,12 @@ def list_endpoint(
             ref_type=ref_type,
             ref_id=ref_id,
             ref_name=ref_name,
+            ref_follow=ref_follow,
             descending=order == "desc",
             limit=limit,
             cursor=cursor,
         )
-    except model.audit_log.InvalidCursor as e:
+    except (model.audit_log.InvalidCursor, model.audit_log.InvalidFilter) as e:
         raise responses.ProblemHTTPException(responses.problem_response(status_code=400, title=str(e))) from e
     entries = [
         schemas.audit.AuditLogEntry(
@@ -88,4 +135,4 @@ def list_endpoint(
         )
         for r in page.entries
     ]
-    return schemas.audit.AuditLogListResponse(entries=entries, next_cursor=page.next_cursor)
+    return schemas.audit.AuditLogListResponse(entries=entries, next_cursor=page.next_cursor, is_last=page.is_last)

@@ -426,6 +426,7 @@ def test_tenant_migration_splits_audit_types_and_backfills_refs(tmp_path: pathli
                 sqlalchemy.text("SELECT id, type, object_type, action, by_identity_name FROM audit_log")
             )
         }
+        counter = connection.execute(sqlalchemy.text("SELECT value FROM audit_log_counter WHERE id = 1")).scalar_one()
         refs = {
             (r[0], r[1], r[2]): r[3]
             for r in connection.execute(
@@ -433,6 +434,8 @@ def test_tenant_migration_splits_audit_types_and_backfills_refs(tmp_path: pathli
             )
         }
 
+    # The next entry takes the id after the highest one.
+    assert counter == 5
     assert rows[1] == ("role-remove-members", "role", "remove-members", "alice")
     assert rows[2] == ("certificate-create-user", "certificate", "create-user", "alice")
     assert rows[5] == ("something-from-the-future", "unknown", "unknown", None)

@@ -744,9 +744,28 @@ class AuditLogTypesResponse(_Base):
     object_types: list[AuditLogObjectTypeInfo] = []
 
 
+class AuditLogObject(_Base):
+    type: str
+    id: str
+    names: list[str] = []
+    first_seen: int
+    last_seen: int
+
+
+class AuditLogObjectsResponse(_Base):
+    objects: list[AuditLogObject] = []
+    # Pass it back as `cursor` to read what comes after these objects. It is set on the last page too.
+    next_cursor: str
+    # True when no object came after these ones at the time of the query.
+    is_last: bool
+
+
 class AuditLogListResponse(_Base):
     entries: list[AuditLogEntry] = []
-    next_cursor: str | None = None
+    # Pass it back as `cursor` to read what comes after these entries. It is set on the last page too.
+    next_cursor: str
+    # True when nothing came after these entries at the time of the query.
+    is_last: bool
 
 
 class LiveSession(_Base):

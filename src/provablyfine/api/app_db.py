@@ -291,6 +291,21 @@ audit_log_ref = orm.make_table(
 )
 
 
+class AuditLogCounterRow(typing.NamedTuple):
+    """The last entry id that was handed out. It has one row, with id 1.
+
+    Writing an entry increments it in the same transaction. The row stays locked until the commit,
+    so entry ids are handed out in commit order, and a rolled back request leaves no hole.
+    A reader that has seen entry N has seen every entry below N.
+    """
+
+    id: typing.Annotated[int, orm.Col(primary_key=True)]
+    value: int
+
+
+audit_log_counter = orm.make_table("audit_log_counter", metadata, AuditLogCounterRow)
+
+
 class OidcKeyRow(typing.NamedTuple):
     id: typing.Annotated[int, orm.Col(primary_key=True)]
     private_key: bytes
@@ -432,6 +447,10 @@ class AppDb(orm.Dao):
     @property
     def audit_log_ref(self) -> orm.Table[AuditLogRefRow]:
         return self._get(audit_log_ref)
+
+    @property
+    def audit_log_counter(self) -> orm.Table[AuditLogCounterRow]:
+        return self._get(audit_log_counter)
 
     @property
     def oidc_key(self) -> orm.Table[OidcKeyRow]:

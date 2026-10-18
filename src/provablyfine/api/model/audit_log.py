@@ -3,6 +3,7 @@ import collections.abc
 import contextlib
 import contextvars
 import dataclasses
+import hashlib
 import json
 import threading
 import time
@@ -137,23 +138,39 @@ def create_after_rollback(
 def _write(
     audit_type: audit_types.AuditType, at: int, by_identity_id: int | None, details: dict[str, typing.Any]
 ) -> None:
-    db = ctx.app_db
+    """Name the objects now, and insert the entry at the end of the request.
+
+    The names are the ones the objects have at this point of the request. The insert waits,
+    because it takes the counter lock, which every audited request takes, and holds it until the commit.
+    """
     by_identity_name = _name(audit_types.ObjectType.IDENTITY, by_identity_id) if by_identity_id is not None else None
-    entry_id = db.audit_log.create(
-        level=int(audit_type.level),
-        at=at,
-        type=audit_type.type,
-        by_identity_id=by_identity_id,
-        details=details,
-        object_type=audit_type.object_type.value,
-        action=audit_type.action.value,
-        by_identity_name=by_identity_name,
-    )
-    assert entry_id is not None
-    for object_type, object_id, object_name in _entry_refs(audit_type, details):
-        db.audit_log_ref.create(
-            entry_id=entry_id, object_type=object_type, object_id=object_id, object_name=object_name
+    refs = _entry_refs(audit_type, details)
+
+    def insert() -> None:
+        db = ctx.app_db
+        # The lock on this row is held until the commit. Entries are numbered in the order they commit,
+        # and a request that rolls back gives its number back.
+        if db.audit_log_counter.update(value=db.audit_log_counter.columns.value + 1).where(id=1) != 1:
+            raise AssertionError("The audit log counter is missing")
+        counter = db.audit_log_counter.read_one_for_update(id=1)
+        assert counter is not None
+        db.audit_log.create(
+            id=counter.value,
+            level=int(audit_type.level),
+            at=at,
+            type=audit_type.type,
+            by_identity_id=by_identity_id,
+            details=details,
+            object_type=audit_type.object_type.value,
+            action=audit_type.action.value,
+            by_identity_name=by_identity_name,
         )
+        for object_type, object_id, object_name in refs:
+            db.audit_log_ref.create(
+                entry_id=counter.value, object_type=object_type, object_id=object_id, object_name=object_name
+            )
+
+    ctx.before_commit(insert)
 
 
 _NAMED_TABLES = {
@@ -229,10 +246,17 @@ def _entry_refs(audit_type: audit_types.AuditType, details: dict[str, typing.Any
 class Page:
     entries: list[app_db.AuditLogRow]
     refs: dict[int, list[app_db.AuditLogRefRow]]
-    next_cursor: str | None
+    # Where to continue. Always set, also on the last page and on an empty page.
+    next_cursor: str
+    # True when there was nothing after the entries of this page at the time of the query.
+    is_last: bool
 
 
 class InvalidCursor(Exception):
+    pass
+
+
+class InvalidFilter(Exception):
     pass
 
 
@@ -240,21 +264,72 @@ DEFAULT_LIMIT = 100
 MAX_LIMIT = 1000
 
 
-def _encode_cursor(last_id: int, descending: bool) -> str:
-    raw = json.dumps({"id": last_id, "d": descending}).encode()
-    return base64.urlsafe_b64encode(raw).decode().rstrip("=")
+# The cursor format is versioned. A cursor that an exporter saved must keep working after an upgrade,
+# so a new format is added next to this one. Never change what version 1 means once it is released.
+_CURSOR_VERSION = 1
 
 
-def _decode_cursor(cursor: str, descending: bool) -> int:
+def _encode_cursor(position: int | None, descending: bool, filter_key: str, followed_ids: list[str] | None) -> str:
+    """A cursor holds the position after the last entry read. None is the start of the log.
+
+    A read that follows a name also holds the ids that the name had on the first page.
+    Every page of the read then is about the same objects.
+    """
+    payload: dict[str, object] = {"v": _CURSOR_VERSION, "id": position, "d": descending, "f": filter_key}
+    if followed_ids is not None:
+        payload["ids"] = followed_ids
+    return base64.urlsafe_b64encode(json.dumps(payload).encode()).decode().rstrip("=")
+
+
+def _decode_cursor(cursor: str, descending: bool, filter_key: str) -> tuple[int | None, list[str] | None]:
     try:
         raw = base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4))
         data = json.loads(raw)
-        last_id, cursor_descending = data["id"], data["d"]
+        version, position, cursor_descending, cursor_filter_key = data["v"], data["id"], data["d"], data["f"]
+        followed_ids = data.get("ids")
     except (ValueError, KeyError, TypeError) as e:
         raise InvalidCursor("Invalid cursor") from e
-    if not isinstance(last_id, int) or cursor_descending != descending:
-        raise InvalidCursor("Cursor does not match the requested order")
-    return last_id
+    if version != _CURSOR_VERSION:
+        raise InvalidCursor("Unsupported cursor version")
+    if (position is not None and not isinstance(position, int)) or not isinstance(cursor_descending, bool):
+        raise InvalidCursor("Invalid cursor")
+    if followed_ids is not None and not (
+        isinstance(followed_ids, list) and all(isinstance(i, str) for i in typing.cast(list[object], followed_ids))
+    ):
+        raise InvalidCursor("Invalid cursor")
+    if cursor_descending != descending or cursor_filter_key != filter_key:
+        raise InvalidCursor("Cursor does not match the requested order and filters")
+    return position, typing.cast(list[str] | None, followed_ids)
+
+
+# A name that matches more objects than this cannot be followed. The ids travel in every cursor.
+MAX_FOLLOWED_OBJECTS = 100
+
+
+def _objects_with_name(ref_type: audit_types.ObjectType, ref_name: str, limit: int) -> list[str]:
+    """The ids of the objects that ever had this name, found in the log itself. At most `limit`."""
+    ref = ctx.app_db.audit_log_ref.columns
+    statement = (
+        sqlalchemy.select(ref.object_id)
+        .where(ref.object_type == ref_type.value, ref.object_name == ref_name)
+        .distinct()
+        .limit(limit)
+    )
+    return sorted(str(row[0]) for row in ctx.app_db.audit_log_ref.query(statement))
+
+
+def _filter_key(**filters: object) -> str:
+    """A short digest of the filters, so that a cursor can only continue the query it came from."""
+    canonical = json.dumps(
+        {
+            k: sorted(typing.cast(list[str], v)) if isinstance(v, list) else v
+            for k, v in filters.items()
+            if v is not None
+        },
+        sort_keys=True,
+        default=str,
+    )
+    return hashlib.sha256(canonical.encode()).hexdigest()[:12]
 
 
 def read_page(
@@ -268,14 +343,34 @@ def read_page(
     ref_type: audit_types.ObjectType | None = None,
     ref_id: str | None = None,
     ref_name: str | None = None,
+    ref_follow: bool = False,
     descending: bool = True,
     limit: int = DEFAULT_LIMIT,
     cursor: str | None = None,
 ) -> Page:
     """Read one page of entries, in `id` order, with the objects each entry is about.
 
-    All filters apply together. Raises `InvalidCursor` for a cursor that is not from the same order.
+    All filters apply together.
+    Raises `InvalidCursor` for a cursor that is not from a query with the same order and filters.
+
+    With `ref_follow`, `ref_name` selects the objects that ever had that name, and the entries are
+    all the ones about those objects, under any of their names.
+    The objects are found on the first page and travel in the cursor, so the whole read is about the same ones.
+    Raises `InvalidFilter` without a `ref_type`, or when the name matches more than `MAX_FOLLOWED_OBJECTS` objects.
     """
+    filter_key = _filter_key(
+        level=level,
+        object_type=None if object_type is None else [o.value for o in object_type],
+        action=None if action is None else [a.value for a in action],
+        type_prefix=type_prefix,
+        by_identity_id=by_identity_id,
+        start_time=start_time,
+        end_time=end_time,
+        ref_type=None if ref_type is None else ref_type.value,
+        ref_id=ref_id,
+        ref_name=ref_name,
+        ref_follow=ref_follow,
+    )
     positional: list[typing.Any] = []
     kwargs: dict[str, typing.Any] = {}
     col = ctx.app_db.audit_log.columns
@@ -293,6 +388,22 @@ def read_page(
         kwargs["level"] = level
     if by_identity_id is not None:
         kwargs["by_identity_id"] = by_identity_id
+    if ref_follow and ref_name is None:
+        raise InvalidFilter("ref_follow needs ref_name")
+    position, followed_ids = (None, None) if cursor is None else _decode_cursor(cursor, descending, filter_key)
+    if ref_follow:
+        if ref_type is None or ref_name is None:
+            raise InvalidFilter("Following a name needs ref_type")
+        if cursor is None:
+            # Every object that ever had this name. They are fixed for the whole read, whatever happens to the log.
+            followed_ids = _objects_with_name(ref_type, ref_name, MAX_FOLLOWED_OBJECTS + 1)
+            if len(followed_ids) > MAX_FOLLOWED_OBJECTS:
+                raise InvalidFilter(
+                    f"The name {ref_name!r} was used by more than {MAX_FOLLOWED_OBJECTS} {ref_type.value} objects."
+                    " List them with the audit log objects command, and ask for one of them with ref_id"
+                )
+        elif followed_ids is None:
+            raise InvalidCursor("Invalid cursor")
     if ref_type is not None or ref_id is not None or ref_name is not None:
         ref = ctx.app_db.audit_log_ref.columns
         conditions: list[typing.Any] = []
@@ -300,12 +411,13 @@ def read_page(
             conditions.append(ref.object_type == ref_type.value)
         if ref_id is not None:
             conditions.append(ref.object_id == ref_id)
-        if ref_name is not None:
+        if ref_name is not None and not ref_follow:
             conditions.append(ref.object_name == ref_name)
+        if ref_follow:
+            conditions.append(ref.object_id.in_(followed_ids or []))
         positional.append(col.id.in_(sqlalchemy.select(ref.entry_id).where(*conditions)))
-    if cursor is not None:
-        last_id = _decode_cursor(cursor, descending)
-        positional.append(col.id < last_id if descending else col.id > last_id)
+    if position is not None:
+        positional.append(col.id < position if descending else col.id > position)
 
     limit = max(1, min(limit, MAX_LIMIT))
     # One more row than asked tells whether there is a next page.
@@ -316,8 +428,144 @@ def read_page(
     if rows:
         for ref_row in ctx.app_db.audit_log_ref.read_all(entry_id=list(refs)):
             refs[ref_row.entry_id].append(ref_row)
-    next_cursor = _encode_cursor(rows[-1].id, descending) if has_more else None
-    return Page(entries=rows, refs=refs, next_cursor=next_cursor)
+    # With no entry, the position does not move. Reading again later continues from the same place.
+    next_position = rows[-1].id if rows else position
+    next_cursor = _encode_cursor(next_position, descending, filter_key, followed_ids if ref_follow else None)
+    return Page(entries=rows, refs=refs, next_cursor=next_cursor, is_last=not has_more)
+
+
+@dataclasses.dataclass(frozen=True)
+class NamedObject:
+    """An object that ever had a name, as the audit log knows it."""
+
+    object_type: str
+    object_id: str
+    names: list[str]
+    first_seen: int
+    last_seen: int
+
+
+@dataclasses.dataclass(frozen=True)
+class ObjectsPage:
+    objects: list[NamedObject]
+    # Where to continue. Always set, as for entries.
+    next_cursor: str
+    is_last: bool
+
+
+def _encode_objects_cursor(position: tuple[int, str] | None, descending: bool, filter_key: str) -> str:
+    payload: dict[str, object] = {"v": _CURSOR_VERSION, "d": descending, "f": filter_key}
+    if position is not None:
+        payload["e"], payload["o"] = position
+    return base64.urlsafe_b64encode(json.dumps(payload).encode()).decode().rstrip("=")
+
+
+def _decode_objects_cursor(cursor: str, descending: bool, filter_key: str) -> tuple[int, str] | None:
+    try:
+        data = json.loads(base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4)))
+        version, cursor_descending, cursor_filter_key = data["v"], data["d"], data["f"]
+        entry, object_id = data.get("e"), data.get("o")
+    except (ValueError, KeyError, TypeError) as e:
+        raise InvalidCursor("Invalid cursor") from e
+    if version != _CURSOR_VERSION:
+        raise InvalidCursor("Unsupported cursor version")
+    if not isinstance(cursor_descending, bool):
+        raise InvalidCursor("Invalid cursor")
+    if cursor_descending != descending or cursor_filter_key != filter_key:
+        raise InvalidCursor("Cursor does not match the requested order and filters")
+    if entry is None and object_id is None:
+        return None
+    if not isinstance(entry, int) or not isinstance(object_id, str):
+        raise InvalidCursor("Invalid cursor")
+    return entry, object_id
+
+
+def objects_with_name(
+    ref_type: audit_types.ObjectType,
+    ref_name: str,
+    descending: bool = True,
+    limit: int = DEFAULT_LIMIT,
+    cursor: str | None = None,
+) -> ObjectsPage:
+    """One page of the objects that ever had this name, even if they were renamed or deleted since.
+
+    They are ordered by the first entry that gave them the name, which is in commit order.
+    A name can have been used by any number of objects, so the result is paged like the entries:
+    the cursor holds the position and the page never grows with the number of objects.
+    Each object comes with all the names it had and when the log first and last mentions it.
+    The ids are the ones to give as `ref_id`.
+    """
+    filter_key = _filter_key(kind="objects", ref_type=ref_type.value, ref_name=ref_name)
+    position = None if cursor is None else _decode_objects_cursor(cursor, descending, filter_key)
+    ref = ctx.app_db.audit_log_ref.columns
+    col = ctx.app_db.audit_log.columns
+    limit = max(1, min(limit, MAX_LIMIT))
+
+    # The objects of this page, in order. The first entry that gave each its name is its position.
+    first_entry = sqlalchemy.func.min(ref.entry_id)
+    page_query = (
+        sqlalchemy.select(ref.object_id, first_entry)
+        .where(ref.object_type == ref_type.value, ref.object_name == ref_name)
+        .group_by(ref.object_id)
+    )
+    if position is not None:
+        after_entry, after_id = position
+        if descending:
+            page_query = page_query.having(
+                sqlalchemy.or_(
+                    first_entry < after_entry, sqlalchemy.and_(first_entry == after_entry, ref.object_id < after_id)
+                )
+            )
+        else:
+            page_query = page_query.having(
+                sqlalchemy.or_(
+                    first_entry > after_entry, sqlalchemy.and_(first_entry == after_entry, ref.object_id > after_id)
+                )
+            )
+    order = (first_entry.desc(), ref.object_id.desc()) if descending else (first_entry.asc(), ref.object_id.asc())
+    # One more than asked tells whether there is a next page.
+    found = [
+        typing.cast(tuple[str, int], tuple(row))
+        for row in ctx.app_db.audit_log_ref.query(page_query.order_by(*order).limit(limit + 1))
+    ]
+    is_last = len(found) <= limit
+    found = found[:limit]
+    next_position = (found[-1][1], found[-1][0]) if found else position
+    next_cursor = _encode_objects_cursor(next_position, descending, filter_key)
+    if not found:
+        return ObjectsPage(objects=[], next_cursor=next_cursor, is_last=True)
+
+    # The names and times of these objects only. The page size bounds this query.
+    ids = [object_id for object_id, _ in found]
+    joined = sqlalchemy.join(ref.entry_id.table, col.id.table, ref.entry_id == col.id)
+    detail = (
+        sqlalchemy.select(
+            ref.object_id,
+            ref.object_name,
+            sqlalchemy.func.min(col.at),
+            sqlalchemy.func.max(col.at),
+            sqlalchemy.func.min(ref.entry_id),
+        )
+        .select_from(joined)
+        .where(ref.object_type == ref_type.value, ref.object_id.in_(ids))
+        .group_by(ref.object_id, ref.object_name)
+    )
+    # Entry ids are in commit order, so the first entry id orders names reliably, unlike the time in seconds.
+    by_id: dict[str, list[tuple[str | None, int, int, int]]] = {}
+    for row in ctx.app_db.audit_log_ref.query(detail):
+        object_id, name, first, last, first_named = typing.cast(tuple[str, str | None, int, int, int], tuple(row))
+        by_id.setdefault(object_id, []).append((name, first, last, first_named))
+    objects = [
+        NamedObject(
+            object_type=ref_type.value,
+            object_id=object_id,
+            names=[name for name, _, _, _ in sorted(by_id[object_id], key=lambda r: r[3]) if name is not None],
+            first_seen=min(first for _, first, _, _ in by_id[object_id]),
+            last_seen=max(last for _, _, last, _ in by_id[object_id]),
+        )
+        for object_id in ids
+    ]
+    return ObjectsPage(objects=objects, next_cursor=next_cursor, is_last=is_last)
 
 
 def _escape_like(text: str) -> str:

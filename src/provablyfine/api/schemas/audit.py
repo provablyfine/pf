@@ -31,8 +31,11 @@ class AuditLogEntry(base.APIBase):
 
 class AuditLogListResponse(base.APIBase):
     entries: list[AuditLogEntry] = pydantic.Field(default_factory=list[AuditLogEntry])
-    # Pass it back as `cursor` to read the next page. None on the last page.
-    next_cursor: str | None = None
+    # Pass it back as `cursor` to read what comes after these entries.
+    # It is set on the last page too, so that a reader that has caught up can resume from it later.
+    next_cursor: str
+    # True when nothing came after these entries at the time of the query.
+    is_last: bool
 
 
 class AuditLogObjectTypeInfo(base.APIBase):
@@ -44,3 +47,21 @@ class AuditLogTypesResponse(base.APIBase):
     """The kinds of entries that the server writes. It is the same for every tenant."""
 
     object_types: list[AuditLogObjectTypeInfo] = pydantic.Field(default_factory=list[AuditLogObjectTypeInfo])
+
+
+class AuditLogObject(base.APIBase):
+    """An object that had the name, with every name it had. Give its `id` as `ref_id`."""
+
+    type: model.audit_types.ObjectType
+    id: str
+    names: list[str]
+    first_seen: int
+    last_seen: int
+
+
+class AuditLogObjectsResponse(base.APIBase):
+    objects: list[AuditLogObject] = pydantic.Field(default_factory=list[AuditLogObject])
+    # Pass it back as `cursor` to read what comes after these objects. It is set on the last page too.
+    next_cursor: str
+    # True when no object came after these ones at the time of the query.
+    is_last: bool

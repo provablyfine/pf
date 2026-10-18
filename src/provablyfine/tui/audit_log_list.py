@@ -18,8 +18,9 @@ _POLL_SECONDS = 30
 class AuditLogListScreen(base.Screen):
     """The audit log, newest first, one page at a time.
 
-    `object_filter` is `TYPE:NAME`, or `TYPE:#ID`. With `follow`, the live object of that name is also found by id,
-    so that entries from before a rename show up too.
+    `object_filter` is `TYPE:NAME`, or `TYPE:#ID`.
+    With `follow`, the entries about every object that ever had that name are shown,
+    so that entries from before and after a rename show up together.
     """
 
     DEFAULT_CSS = """
@@ -118,63 +119,45 @@ class AuditLogListScreen(base.Screen):
     def _input(self, name: str) -> str:
         return self.query_one(f"#audit-{name}", textual.widgets.Input).value.strip()
 
-    async def _filters(self) -> list[dict[str, typing.Any]]:
-        """One set of query parameters per query to make. Several only when following a rename."""
-        common: dict[str, typing.Any] = {}
+    async def _filters(self) -> dict[str, typing.Any]:
+        """The query parameters that the filter bar describes."""
+        query: dict[str, typing.Any] = {}
         types = self._input("types").split()
         if types:
-            common["object_type"] = types
+            query["object_type"] = types
         actions = self._input("actions").split()
         if actions:
-            common["action"] = actions
+            query["action"] = actions
         level = self._input("level")
         if level in ("warn", "info"):
-            common["level"] = 2 if level == "warn" else 1
+            query["level"] = 2 if level == "warn" else 1
         by = self._input("by")
         if by:
             if by.isdigit():
-                common["by_identity_id"] = by
+                query["by_identity_id"] = by
             else:
                 found = (await self._auth.list_identities(name=by)).identities
-                common["by_identity_id"] = str(found[0].id) if found else "-1"
+                query["by_identity_id"] = str(found[0].id) if found else "-1"
         object_filter = self._input("object")
-        if not object_filter:
-            return [common]
-        object_type, _, name = object_filter.partition(":")
-        if not name:
-            return [{**common, "ref_type": object_type}]
-        if name.startswith("#"):
-            # `TYPE:#ID` is one object, by id. It is found under every name it has had.
-            return [{**common, "ref_type": object_type, "ref_id": name[1:]}]
-        queries = [{**common, "ref_type": object_type, "ref_name": name}]
-        if self._follow:
-            for object_id in await self._auth.find_object_ids(object_type, name):
-                queries.append({**common, "ref_type": object_type, "ref_id": object_id})
-        return queries
+        if object_filter:
+            object_type, _, name = object_filter.partition(":")
+            query["ref_type"] = object_type
+            if name.startswith("#"):
+                # `TYPE:#ID` is one object, by id. It is found under every name it has had.
+                query["ref_id"] = name[1:]
+            elif name:
+                query["ref_name"] = name
+                query["ref_follow"] = self._follow
+        return query
 
     async def _reload(self) -> None:
         if self._loading:
             return
         self._loading = True
         try:
-            queries = await self._filters()
-            if len(queries) == 1:
-                page = await self._auth.list_audit_log(**queries[0], limit=_PAGE_SIZE)
-                self._entries = page.entries
-                self._cursor = page.next_cursor
-            else:
-                # A cursor cannot span several queries, so each is read to its end and the results are merged.
-                merged: dict[int, pfc.schemas.AuditLogEntry] = {}
-                for query in queries:
-                    cursor: str | None = None
-                    while True:
-                        page = await self._auth.list_audit_log(**query, limit=1000, cursor=cursor)
-                        merged.update((e.id, e) for e in page.entries)
-                        cursor = page.next_cursor
-                        if cursor is None:
-                            break
-                self._entries = sorted(merged.values(), key=lambda e: e.id, reverse=True)
-                self._cursor = None
+            page = await self._auth.list_audit_log(**await self._filters(), limit=_PAGE_SIZE)
+            self._entries = page.entries
+            self._cursor = None if page.is_last else page.next_cursor
         except pfc.exceptions.UI as e:
             self.notify(str(e), severity="error")
             return
@@ -193,15 +176,14 @@ class AuditLogListScreen(base.Screen):
             return
         self._loading = True
         try:
-            queries = await self._filters()
-            page = await self._auth.list_audit_log(**queries[0], limit=_PAGE_SIZE, cursor=self._cursor)
+            page = await self._auth.list_audit_log(**await self._filters(), limit=_PAGE_SIZE, cursor=self._cursor)
         except pfc.exceptions.UI as e:
             self.notify(str(e), severity="error")
             return
         finally:
             self._loading = False
         self._entries.extend(page.entries)
-        self._cursor = page.next_cursor
+        self._cursor = None if page.is_last else page.next_cursor
         self._add_rows(page.entries)
         self._update_table_title()
 
@@ -222,8 +204,7 @@ class AuditLogListScreen(base.Screen):
         if self.app.screen is not self or self._loading:
             return
         try:
-            queries = await self._filters()
-            page = await self._auth.list_audit_log(**queries[0], limit=1)
+            page = await self._auth.list_audit_log(**await self._filters(), limit=1)
         except pfc.exceptions.UI:
             return
         if page.entries and (self._newest_id is None or page.entries[0].id > self._newest_id):

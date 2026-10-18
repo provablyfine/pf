@@ -17,7 +17,7 @@ def _split_object(value: str) -> tuple[str, str]:
 
 
 def _fetch(sc: pfc.SessionClient, args: argparse.Namespace) -> tuple[list[pfc.schemas.AuditLogEntry], str | None]:
-    """The entries to show, and the cursor of the next page if there is one."""
+    """The entries to show, and the cursor to continue from if there are more."""
     filters: dict[str, typing.Any] = {
         "level": args.level,
         "object_type": args.object_type,
@@ -27,34 +27,21 @@ def _fetch(sc: pfc.SessionClient, args: argparse.Namespace) -> tuple[list[pfc.sc
         "end_time": args.end_time,
         "order": args.order,
     }
-    ref_filters: list[dict[str, typing.Any]] = []
     if args.object is not None:
         object_type, name = args.object
-        ref_filters.append({"ref_type": object_type, "ref_name": name})
-        if args.follow:
-            # The same object under another name: a rename keeps the id.
-            for object_id in sc.find_object_ids(object_type, name):
-                ref_filters.append({"ref_type": object_type, "ref_id": object_id})
+        filters.update(ref_type=object_type, ref_name=name, ref_follow=args.follow)
     elif args.object_id is not None:
+        if args.follow:
+            raise pfc.exceptions.UI("--follow needs --object. An object id already follows the object through renames")
         object_type, object_id = args.object_id
-        ref_filters.append({"ref_type": object_type, "ref_id": object_id})
+        filters.update(ref_type=object_type, ref_id=object_id)
     elif args.follow:
         raise pfc.exceptions.UI("--follow needs --object")
 
-    if len(ref_filters) <= 1:
-        extra = ref_filters[0] if ref_filters else {}
-        if args.all:
-            return list(sc.iter_audit_log(**filters, **extra)), None
-        page = sc.list_audit_log(**filters, **extra, limit=args.limit, cursor=args.cursor)
-        return page.entries, page.next_cursor
-
-    # Several queries are merged. A cursor cannot span them, so the whole result is read.
-    by_id: dict[int, pfc.schemas.AuditLogEntry] = {}
-    for extra in ref_filters:
-        for entry in sc.iter_audit_log(**filters, **extra):
-            by_id[entry.id] = entry
-    entries = sorted(by_id.values(), key=lambda e: e.id, reverse=args.order == "desc")
-    return entries, None
+    if args.all:
+        return list(sc.iter_audit_log(**filters)), None
+    page = sc.list_audit_log(**filters, limit=args.limit, cursor=args.cursor)
+    return page.entries, None if page.is_last else page.next_cursor
 
 
 def _list_function(args: argparse.Namespace) -> None:
@@ -106,6 +93,41 @@ def _types_function(args: argparse.Namespace) -> None:
             assert False
 
 
+def _objects_function(args: argparse.Namespace) -> None:
+    c = client.Config.load(args.config)
+    sc = client.Factory(c, timeout=args.timeout).session()
+    object_type, name = args.object
+    if args.all:
+        objects = list(sc.iter_audit_log_objects(object_type, name, order=args.order))
+        next_cursor = None
+    else:
+        response = sc.list_audit_log_objects(object_type, name, order=args.order, limit=args.limit, cursor=args.cursor)
+        objects = response.objects
+        next_cursor = None if response.is_last else response.next_cursor
+    match args.format:
+        case "json":
+            print(json.dumps([o.model_dump() for o in objects], indent=2))
+        case "text":
+            rows = [
+                [
+                    o.type,
+                    o.id,
+                    ", ".join(o.names),
+                    datetime.datetime.fromtimestamp(o.first_seen).isoformat(),
+                    datetime.datetime.fromtimestamp(o.last_seen).isoformat(),
+                ]
+                for o in objects
+            ]
+            if rows:
+                print(
+                    tabulate.tabulate(rows, headers=["type", "id", "names", "first seen", "last seen"], maxcolwidths=60)
+                )
+            if next_cursor is not None:
+                print(f"More objects: --cursor {next_cursor}")
+        case _:
+            assert False
+
+
 def add_subparser(parser: argparse.ArgumentParser) -> None:
     subparsers = parser.add_subparsers(required=True, dest="subcommand", metavar="subcommand")
 
@@ -151,7 +173,8 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
         "--follow",
         action="store_true",
         default=False,
-        help="With --object, also include the entries about the live object with this name, under its other names",
+        help="With --object, also include the entries about every object that ever had this name, "
+        "under all the names it had, even if it is deleted now",
     )
     f.add_argument("--by", dest="by_identity_id", help="Identity ID of author")
     f.add_argument("--start-time", dest="start_time", type=int, help="Start Unix timestamp")
@@ -168,3 +191,21 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
     types_parser = subparsers.add_parser("types", help="List the object types and actions of audit log entries")
     types_parser.add_argument("--format", choices=["text", "json"], default="text")
     types_parser.set_defaults(func=_types_function)
+
+    objects_parser = subparsers.add_parser(
+        "objects",
+        help="List the objects that ever had a name, to find the id to give to --object-id",
+        description="List the objects that ever had a name, newest first, even if they were renamed or deleted. "
+        "Each one is shown with all the names it had. Give its id to 'pfa audit-log list --object-id TYPE:ID'.",
+    )
+    objects_parser.add_argument(
+        "--object", type=_split_object, required=True, metavar="TYPE:NAME", help="For example role:ops"
+    )
+    objects_parser.add_argument(
+        "--order", choices=["asc", "desc"], default="desc", help="By when the object first got the name. Default: desc"
+    )
+    objects_parser.add_argument("--limit", type=int, help="Objects per page. Server default: 100, maximum: 1000")
+    objects_parser.add_argument("--cursor", help="Continue after the page that printed this cursor")
+    objects_parser.add_argument("--all", action="store_true", default=False, help="Read every page")
+    objects_parser.add_argument("--format", choices=["text", "json"], default="text")
+    objects_parser.set_defaults(func=_objects_function)

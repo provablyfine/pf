@@ -718,12 +718,19 @@ class SessionClient:
         ref_type: str | None = None,
         ref_id: str | None = None,
         ref_name: str | None = None,
+        ref_follow: bool = False,
         order: str | None = None,
         limit: int | None = None,
         cursor: str | None = None,
     ) -> schemas.AuditLogListResponse:
-        """List one page of the audit log. Pass `next_cursor` of a response as `cursor` for the next page."""
+        """List one page of the audit log.
+
+        Pass `next_cursor` of a response as `cursor` to read what comes after it.
+        The cursor is also set on the last page, so a reader that has caught up can keep it and resume later.
+        """
         params: dict[str, int | str | list[str]] = {}
+        if ref_follow:
+            params["ref_follow"] = "true"
         if level is not None:
             params["level"] = level
         if object_type is not None:
@@ -755,33 +762,45 @@ class SessionClient:
             raise exceptions.UI(_problem_message(response, "Unable to list audit log types"))
         return schemas.AuditLogTypesResponse.model_validate(response.json())
 
+    def list_audit_log_objects(
+        self,
+        ref_type: str,
+        ref_name: str,
+        order: str | None = None,
+        limit: int | None = None,
+        cursor: str | None = None,
+    ) -> schemas.AuditLogObjectsResponse:
+        """One page of the objects that ever had this name. Their ids can be given as `ref_id`.
+
+        Pass `next_cursor` of a response as `cursor` to read what comes after it.
+        """
+        params: dict[str, str | int] = {"ref_type": ref_type, "ref_name": ref_name}
+        for key, value in (("order", order), ("limit", limit), ("cursor", cursor)):
+            if value is not None:
+                params[key] = value
+        response = self._session.get(f"{self._directory.audit_log}/objects", auth=self._auth(), params=params)
+        if response.status_code != 200:
+            raise exceptions.UI(_problem_message(response, "Unable to list audit log objects"))
+        return schemas.AuditLogObjectsResponse.model_validate(response.json())
+
+    def iter_audit_log_objects(
+        self, ref_type: str, ref_name: str, order: str | None = None, limit: int | None = None
+    ) -> collections.abc.Iterator[schemas.AuditLogObject]:
+        """Every object that ever had this name, page after page."""
+        cursor: str | None = None
+        while True:
+            page = self.list_audit_log_objects(ref_type, ref_name, order, limit, cursor)
+            yield from page.objects
+            if page.is_last:
+                return
+            cursor = page.next_cursor
+
     def iter_audit_log(self, **filters: typing.Any) -> collections.abc.Iterator[schemas.AuditLogEntry]:
-        """Every matching entry, following `next_cursor` until the last page. Takes the filters of `list_audit_log`."""
+        """Every matching entry, page after page, until the last one. Takes the filters of `list_audit_log`."""
         cursor: str | None = filters.pop("cursor", None)
         while True:
             page = self.list_audit_log(cursor=cursor, **filters)
             yield from page.entries
-            if page.next_cursor is None:
+            if page.is_last:
                 return
             cursor = page.next_cursor
-
-    def find_object_ids(self, object_type: str, name: str) -> list[str]:
-        """The ids of the live objects of this type that have this name. Used to follow a rename in the audit log.
-
-        Raises `exceptions.UI` for a type that has no names to look up.
-        """
-        match object_type:
-            case "role":
-                return [str(r.id) for r in self.list_roles(name=name).roles]
-            case "boundary":
-                return [str(b.id) for b in self.list_boundaries(name=name).boundaries]
-            case "identity":
-                return [str(i.id) for i in self.list_identities(name=name).identities]
-            case "tag":
-                return [str(t.id) for t in self.list_tags(name=name).tags]
-            case "bastion":
-                return [str(b.id) for b in self.list_bastions().bastions if b.url == name]
-            case "auth":
-                return [str(a.id) for a in self.list_auths().auths if a.name == name]
-            case _:
-                raise exceptions.UI(f"Cannot look up objects of type {object_type!r} by name")

@@ -64,3 +64,13 @@ Deleting a role and a boundary leaves an audit event
   OK
   $ pfa -c config.json audit-log list --object-type role | grep -q role-delete && echo "OK"
   OK
+
+List the objects that had a name, and the ids to ask for
+  $ pfa -c config.json audit-log objects --object tag:nothing
+  $ pfa -c config.json role create -n ops > /dev/null
+  $ pfa -c config.json audit-log objects --object role:ops | tail -n 1 | cut -d' ' -f1
+  role
+
+Following needs a name
+  $ pfa -c config.json audit-log list --object-id role:1 --follow 2>&1 | grep -c "needs --object"
+  1
