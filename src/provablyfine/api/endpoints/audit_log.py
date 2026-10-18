@@ -23,7 +23,9 @@ def types_endpoint() -> schemas.audit.AuditLogTypesResponse:
     )
 
 
-@router.get("/objects", status_code=200, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
+@router.get(
+    "/objects", status_code=200, responses={400: responses.PROBLEM, 403: responses.PROBLEM, 422: responses.PROBLEM}
+)
 def objects_endpoint(
     ref_type: model.audit_types.ObjectType,
     ref_name: str,
@@ -64,7 +66,7 @@ def objects_endpoint(
     )
 
 
-@router.get("", status_code=200, responses={400: responses.PROBLEM, 403: responses.PROBLEM})
+@router.get("", status_code=200, responses={400: responses.PROBLEM, 403: responses.PROBLEM, 422: responses.PROBLEM})
 def list_endpoint(
     level: int | None = None,
     object_type: typing.Annotated[list[model.audit_types.ObjectType] | None, fastapi.Query()] = None,
