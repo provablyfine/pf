@@ -199,6 +199,18 @@ def read_ppid(pid: int) -> int | None:
     raise exceptions.Error(f"/proc/{pid}/status has no PPid field")
 
 
+def parent_of(pid: int) -> tuple[int, int] | None:
+    """The `(pid, starttime)` of `pid`'s parent, or None at the top of the tree
+    or when the trail is lost because a process exited."""
+    ppid = read_ppid(pid)
+    if ppid is None or ppid == 0:
+        return None
+    try:
+        return ppid, process_starttime(ppid)
+    except FileNotFoundError:
+        return None
+
+
 def is_descendant_of(pid: int, anchor: Anchor, *, max_depth: int = 64) -> bool:
     """Walk `pid`'s ancestors looking for the process pinned by `anchor`.
 

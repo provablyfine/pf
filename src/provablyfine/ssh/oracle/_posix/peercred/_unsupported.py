@@ -62,6 +62,10 @@ def is_descendant_of(_pid: int, _anchor: Anchor, *, max_depth: int = 64) -> bool
     raise exceptions.Error(_MESSAGE)
 
 
+def parent_of(_pid: int) -> tuple[int, int] | None:
+    raise exceptions.Error(_MESSAGE)
+
+
 def process_starttime(_pid: int) -> int:
     raise exceptions.Error(_MESSAGE)
 

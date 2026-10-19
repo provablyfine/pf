@@ -22,9 +22,11 @@ than chosen: the created-after-child rejection in `is_descendant_of()`, and
 
 from __future__ import annotations
 
+import collections.abc
 import dataclasses
 import os
 import re
+import sys
 
 from .... import _w32 as w32
 from ... import exceptions
@@ -222,7 +224,20 @@ def reconstruct_anchor(token: str) -> Anchor:
     return _pin(int(pid_text), expected_creation_time=int(creation_text))
 
 
+def _is_python_installation_file(image: str) -> bool:
+    """Whether `image` lives in the venv or in the Python install we run from.
+
+    This is what recognises a console script such as `Scripts\\pfa.exe`. It
+    stays alive while it waits for the interpreter it started, so it is a
+    launcher too, whatever its name.
+    """
+    path = os.path.normcase(image)
+    return any(path.startswith(os.path.normcase(prefix) + os.sep) for prefix in {sys.prefix, sys.base_prefix})
+
+
 def _is_launcher(image: str) -> bool:
+    if _is_python_installation_file(image):
+        return True
     stem = os.path.basename(image).lower()
     if stem.endswith(".exe"):
         stem = stem[:-4]
@@ -316,6 +331,47 @@ def login_shell_identity() -> tuple[int, int]:
         # still gives a stable, correct -- just narrower -- binding: this
         # process and its descendants.
         return current, w32.process.process_creation_time(handle)
+    finally:
+        w32.process.close_handle(handle)
+
+
+def ancestors(*, max_depth: int = 64) -> collections.abc.Iterator[tuple[int, int]]:
+    """The `(pid, creation_time)` of our login shell, then of its parent, and so on.
+
+    The walk starts at `login_shell_identity()`, so the launchers between us
+    and the shell are already skipped.
+
+    It ends at the first ancestor it cannot trust or read. That includes a
+    "parent" that was created after its child, which is a recycled pid.
+    """
+    pid, created = login_shell_identity()
+    yield pid, created
+    handle = w32.process.open_process(pid)
+    if handle is None:
+        return
+    try:
+        if w32.process.process_creation_time(handle) != created:
+            return
+        for _ in range(max_depth):
+            parent = w32.process.process_parent_pid(handle)
+            if parent == 0:
+                return
+            parent_handle = w32.process.open_process(parent)
+            if parent_handle is None:
+                return
+            try:
+                parent_created = w32.process.process_creation_time(parent_handle)
+            except exceptions.Error:
+                w32.process.close_handle(parent_handle)
+                return
+            if parent_created > created:
+                w32.process.close_handle(parent_handle)
+                return
+            w32.process.close_handle(handle)
+            handle, created = parent_handle, parent_created
+            yield parent, parent_created
+    except exceptions.Error:
+        return
     finally:
         w32.process.close_handle(handle)
 
