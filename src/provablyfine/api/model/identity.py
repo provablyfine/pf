@@ -4,7 +4,7 @@ import typing
 
 from ... import _sentinel
 from ..context import ctx
-from . import audit_log, utils
+from . import audit_log, audit_types, utils
 
 # The identity that `initialize` creates for the first administrator of a tenant.
 FOUNDING_ID = 1
@@ -28,7 +28,7 @@ def create(name: str, boundary_id_list: list[int], tag_id_list: list[int], unix_
     for tag_id in tag_id_list:
         ctx.app_db.identity_tag.create(tag_id=tag_id, identity_id=identity_id)
     audit_log.create(
-        "identity-create",
+        audit_types.IDENTITY_CREATE,
         refs=audit_log.refs(tags=tag_id_list, boundaries=boundary_id_list),
         id=identity_id,
         name=name,
@@ -101,7 +101,7 @@ def delete(id: int) -> None:
 
     Its keys and sessions go at once: the next request signed with one of them is a 401.
     The audit entry keeps what is lost with them (see `_deletion_snapshot`).
-    The grants that name the identity are removed by `identity_references.remove`. Call it first.
+    The grants that name the identity are removed by `identity_grants.remove`. Call it first.
 
     Certificates that were already issued cannot be revoked. They stay valid until they expire,
     and an SSH session that is already open runs until its deadline.
@@ -118,7 +118,7 @@ def delete(id: int) -> None:
     ctx.app_db.ssh_connection.delete(identity_id=id)
     ctx.app_db.identity.delete(id=id)
     audit_log.create(
-        "identity-delete",
+        audit_types.IDENTITY_DELETE,
         refs=audit_log.refs(
             tags=snapshot["tag_id_list"],
             boundaries=snapshot["boundary_id_list"],
@@ -205,15 +205,23 @@ def update(
     unix_username: str | _sentinel.Unset | None = _sentinel.UNSET,
 ) -> None:
     update_fields: dict[str, typing.Any] = {}
+    # The entries say what the identity had before. The row is locked so that this is what the update replaces.
+    old = ctx.app_db.identity.read_one_for_update(id=id)
     if not isinstance(name, _sentinel.Unset):
         audit_log.create(
-            "identity-update-name",
+            audit_types.IDENTITY_UPDATE_NAME,
             id=id,
             name=name,
+            old=None if old is None else old.name,
         )
         update_fields["name"] = name
     if not isinstance(unix_username, _sentinel.Unset):
-        audit_log.create("identity-update-unix-username", id=id, unix_username=unix_username)
+        audit_log.create(
+            audit_types.IDENTITY_UPDATE_UNIX_USERNAME,
+            id=id,
+            unix_username=unix_username,
+            old=None if old is None else old.unix_username,
+        )
         update_fields["unix_username"] = unix_username
 
     if len(update_fields) > 0:
@@ -223,7 +231,7 @@ def update(
         for tag_id in added_tag_id_list:
             ctx.app_db.identity_tag.create(tag_id=tag_id, identity_id=id)
         audit_log.create(
-            "identity-add-tags",
+            audit_types.IDENTITY_ADD_TAGS,
             refs=audit_log.refs(tags=added_tag_id_list),
             id=id,
             added_tag_id_list=added_tag_id_list,
@@ -231,7 +239,7 @@ def update(
     if not isinstance(deleted_tag_id_list, _sentinel.Unset) and len(deleted_tag_id_list) > 0:
         ctx.app_db.identity_tag.delete(identity_id=id, tag_id=deleted_tag_id_list)
         audit_log.create(
-            "identity-delete-tags",
+            audit_types.IDENTITY_REMOVE_TAGS,
             refs=audit_log.refs(tags=deleted_tag_id_list),
             id=id,
             deleted_tag_id_list=deleted_tag_id_list,

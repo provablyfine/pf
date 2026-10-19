@@ -53,3 +53,7 @@ def test_logout_ends_only_the_calling_session(api, tmp_path: pathlib.Path) -> No
     assert types.count("session-set-role") == 3
     assert types.count("session-logout") == 1
     assert types.count("role-add-members") == 1
+    # Each of the two requests that used the ended session is a warning.
+    rejected = third.list_audit_log(object_type="session", action="rejected").entries
+    assert [(e.level, e.details["reason"]) for e in rejected] == [(2, "logged-out")] * 2
+    assert rejected[0].details["session_key_id"] == next(r for r in rejected[0].refs if r.type == "session").id

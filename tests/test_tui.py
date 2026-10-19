@@ -14,10 +14,12 @@ import provablyfine.jwk
 import provablyfine.ssh.agent
 import provablyfine.ssh.oracle
 import provablyfine.tui.app
+import provablyfine.tui.audit_log_list
 import provablyfine.tui.base
 import provablyfine.tui.checkbox_input
 import provablyfine.tui.grant_edit
 import provablyfine.tui.identity_list
+import provablyfine.tui.multi_select
 import provablyfine.tui.nav_pane
 import provablyfine.tui.relogin
 import provablyfine.tui.role_list
@@ -1215,6 +1217,92 @@ async def test_tui_tag_delete(api):
 
 
 #        assert not any(t.name == "env" and t.value == "prod" for t in resp.tags)
+
+
+@pytest.mark.anyio
+async def test_tui_audit_log_history_of_an_object(api):
+    """`h` on a tag opens the audit log on the entries about that tag, and the filter bar narrows it further."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        auth = _setup(api, tmpdir)
+        tag = await auth.create_tag("env", "prod")
+        await auth.create_tag("team", "ops")
+        app = provablyfine.tui.app.TuiApp(auth)
+
+        async with app.run_test(size=(200, 50)) as pilot:
+            await pilot.pause()  # app startup
+            await _goto(pilot, "tags")
+            await pilot.pause()  # screen transition
+            await pilot.pause()  # TagListScreen.on_mount calls list_tags()
+
+            await pilot.press("h")  # history of row 0
+            await _wait(pilot, app)  # AuditLogListScreen.on_mount loads the first page
+
+            screen = app.screen
+            assert isinstance(screen, provablyfine.tui.audit_log_list.AuditLogListScreen)
+            assert screen.query_one("#audit-object", textual.widgets.Input).value == f"tag:#{tag.id}"
+            table = screen.query_one(textual.widgets.DataTable)
+            assert table.row_count == 1
+            assert "tag-create" in str(table.get_row_at(0))
+            # The completion comes from the server, not from a list in the TUI.
+            assert {"create", "update-grant-list"} <= set(screen._actions_by_type["role"])
+
+        assert not [n for n in app._notifications if n.severity == "error"]
+
+
+@pytest.mark.anyio
+async def test_tui_audit_log_filters_and_paging(api):
+    """Paging keeps the filters of the last apply, and a newer reload replaces the one in flight."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        auth = _setup(api, tmpdir)
+        for value in ("a", "b", "c"):
+            await auth.create_tag("env", value)
+        app = provablyfine.tui.app.TuiApp(auth)
+
+        async with app.run_test(size=(200, 50)) as pilot:
+            await pilot.pause()  # app startup
+            await _goto(pilot, "audit_log")
+            await pilot.pause()  # screen transition
+            await _wait(pilot, app)  # AuditLogListScreen.on_mount loads the first page
+
+            screen = app.screen
+            assert isinstance(screen, provablyfine.tui.audit_log_list.AuditLogListScreen)
+            table = screen.query_one(textual.widgets.DataTable)
+            screen._page_size = 2
+
+            # Choose the object type "tag" in the checklist, then apply with enter.
+            types = screen.query_one("#audit-types", provablyfine.tui.multi_select.MultiSelect)
+            types.focus()
+            await pilot.press("space")  # opens the checklist
+            await pilot.press(*["down"] * list(screen._actions_by_type).index("tag"))
+            await pilot.press("space")  # checks "tag"
+            await pilot.press("enter")  # closes the checklist
+            assert types.selected == ["tag"]
+            assert "filters edited" in str(table.border_title)
+            await pilot.press("enter")  # applies
+            await _wait(pilot, app)
+            assert table.row_count == 2
+            assert "filters edited" not in str(table.border_title)
+
+            # An edit that is not applied does not break the next page.
+            by = screen.query_one("#audit-by", textual.widgets.Input)
+            by.value = "nobody"
+            await pilot.pause()  # Input.Changed reaches the screen
+            assert "filters edited" in str(table.border_title)
+            table.focus()
+            await pilot.press("down", "down")
+            await _wait(pilot, app)
+            assert table.row_count == 3
+
+            # Two reloads in a row: the second one wins, whatever the order of the answers.
+            first = asyncio.create_task(screen._reload())
+            await asyncio.sleep(0)
+            by.value = ""
+            await screen._reload()
+            await first
+            await _wait(pilot, app)
+            assert table.row_count == 2
+
+        assert not [n for n in app._notifications if n.severity == "error"]
 
 
 @pytest.mark.anyio

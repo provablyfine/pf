@@ -1,7 +1,7 @@
 """Deleting an identity removes the grants that name it, and only those."""
 
 from .. import app_db
-from . import boundary, grant, identity_references, role
+from . import audit_log, audit_types, boundary, grant, identity_grants, role
 
 
 def _ssh(identity_id: int | None, host: str = "shell") -> grant.Grant:
@@ -26,7 +26,7 @@ def _audit(tenant_app_db: app_db.AppDb, type: str) -> list[app_db.AuditLogRow]:
 def test_only_the_grants_that_name_the_identity_are_removed(tenant_app_db: app_db.AppDb) -> None:
     role_id = role.create("ops", "", [_ssh(7), _ssh(8), _ssh(None)])
 
-    changed = identity_references.remove(7)
+    changed = identity_grants.remove(7)
 
     assert [o.name for o in changed] == ["ops"]
     kept = role.read_one(role_id)
@@ -34,26 +34,27 @@ def test_only_the_grants_that_name_the_identity_are_removed(tenant_app_db: app_d
     assert [g.filter.id for g in kept.grant_list if isinstance(g, grant.SSHGrant)] == [8, None]
 
 
-def test_removed_grants_are_written_to_the_audit_log(tenant_app_db: app_db.AppDb) -> None:
+def test_the_update_entries_name_the_identity_and_keep_the_old_grants(tenant_app_db: app_db.AppDb) -> None:
     role.create("ops", "", [_ssh(7)])
     boundary.create("guard", "", None, [_ssh(7), _ssh(8)])
 
-    identity_references.remove(7)
+    with audit_log.cause(audit_types.ObjectType.IDENTITY, 7, "alice", audit_types.Action.DELETE):
+        identity_grants.remove(7)
 
-    entries = {
-        (a.details["owner_name"], a.details["list"]): a.details
-        for a in _audit(tenant_app_db, "identity-delete-cascade")
-    }
-    assert set(entries) == {("ops", "grant_list"), ("guard", "denied_list")}
-    for details in entries.values():
-        assert details["identity_id"] == 7
-        assert [g["filter"]["id"] for g in details["removed_grants"]] == [7]
+    role_entry, boundary_entry = (
+        *_audit(tenant_app_db, "role-update-grant-list"),
+        *_audit(tenant_app_db, "boundary-update-denied-list"),
+    )
+    for entry, old_count in ((role_entry, 1), (boundary_entry, 2)):
+        assert entry.details["cause"] == {"type": "identity", "id": "7", "name": "alice", "action": "delete"}
+        assert len(entry.details["old"]) == old_count
+        assert entry.details["old"][0]["filter"]["id"] == 7
 
 
 def test_a_ceiling_that_loses_its_last_grant_denies_everything(tenant_app_db: app_db.AppDb) -> None:
     boundary_id = boundary.create("guard", "", [_ssh(7)], [])
 
-    identity_references.remove(7)
+    identity_grants.remove(7)
 
     remaining = boundary.read_one(id=boundary_id)
     assert remaining is not None
@@ -64,7 +65,7 @@ def test_a_ceiling_that_loses_its_last_grant_denies_everything(tenant_app_db: ap
 def test_a_boundary_without_a_ceiling_keeps_having_none(tenant_app_db: app_db.AppDb) -> None:
     boundary_id = boundary.create("guard", "", None, [_ssh(7)])
 
-    identity_references.remove(7)
+    identity_grants.remove(7)
 
     remaining = boundary.read_one(id=boundary_id)
     assert remaining is not None
@@ -77,7 +78,6 @@ def test_nothing_changes_when_no_grant_names_the_identity(tenant_app_db: app_db.
     boundary.create("guard", "", [_ssh(8)], [_ssh(8)])
     before = _audit(tenant_app_db, "role-update-grant-list")
 
-    assert identity_references.remove(7) == []
-    assert identity_references.find(7) == []
-    assert _audit(tenant_app_db, "identity-delete-cascade") == []
+    assert identity_grants.remove(7) == []
+    assert identity_grants.find(7) == []
     assert _audit(tenant_app_db, "role-update-grant-list") == before

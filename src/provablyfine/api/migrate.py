@@ -57,6 +57,7 @@ def create_tenant_tables(tenants: db.TenantDatabases, tenant_uuid: str) -> None:
     logger.info("creating tenant tables")
     with db.begin(tenants.engine(tenant_uuid), write=True) as conn:
         app_db.metadata.create_all(conn)
+        app_db.create(conn).audit_log_counter.create(id=1, value=0)
     _stamp_head("tenant", tenants.registry_url, tenant_uuid)
 
 

@@ -150,7 +150,36 @@ def _build_signature_base(
     return "\n".join(parts).encode()
 
 
-def verify(request: fastapi.requests.Request, key_id: str, key: jwk.Symmetric | jwk.Public) -> None:
+_REJECTION_TYPES = {
+    "session": model.audit_types.SESSION_REJECTED,
+    "account": model.audit_types.ACCOUNT_KEY_REJECTED,
+    "invitation": model.audit_types.IDENTITY_INVITATION_REJECTED,
+}
+
+
+def _audit_rejection(key_id: str, reason: str, identity_id: int | None) -> None:
+    """Record that a key we know was refused. Only keys that exist are recorded, so strangers cannot fill the log.
+
+    `key_id` is `kind:id`, the form that `verify` takes. Call it right before raising.
+    """
+    kind, _, raw_id = key_id.partition(":")
+    audit_type = _REJECTION_TYPES[kind]
+    assert audit_type.target_key is not None
+    details: dict[str, typing.Any] = {audit_type.target_key: raw_id, "reason": reason, "identity_id": identity_id}
+    model.audit_log.create_after_rollback(audit_type, **details)
+
+
+def verify(
+    request: fastapi.requests.Request,
+    key_id: str,
+    key: jwk.Symmetric | jwk.Public,
+    audit_identity_id: int | None = None,
+) -> None:
+    """Check the request signature. Raise a problem if it is not valid.
+
+    Pass `audit_identity_id` for a key that is known to belong to an identity. A signature that does not
+    verify, or one that is replayed, is then recorded as a warning. Leave it out for a key the caller made up.
+    """
     if _CONTENT_DIGEST_HEADER not in request.headers:
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=400, title="Missing Content-Digest header")
@@ -244,6 +273,8 @@ def verify(request: fastapi.requests.Request, key_id: str, key: jwk.Symmetric | 
                     responses.problem_response(status_code=400, title="Unsupported key type", detail=key_id)
                 )
     except cryptography.exceptions.InvalidSignature:
+        if audit_identity_id is not None:
+            _audit_rejection(key_id, "invalid-signature", audit_identity_id)
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=400, title="Invalid signature", detail=key_id)
         )
@@ -263,6 +294,8 @@ def verify(request: fastapi.requests.Request, key_id: str, key: jwk.Symmetric | 
     # cannot fill our nonce store.
     nonce_store: NonceStore = request.app.state.nonce_store
     if not nonce_store.check_and_add(key_id, nonce, now=now, created=created):
+        if audit_identity_id is not None:
+            _audit_rejection(key_id, "replayed", audit_identity_id)
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=400, title="Signature nonce has already been used", detail=key_id)
         )
@@ -293,11 +326,13 @@ async def verify_invitation(
             responses.problem_response(status_code=401, title="Invitation does not exist")
         )
     if invitation.is_revoked:
+        _audit_rejection(f"invitation:{key_id}", "revoked", invitation.identity_id)
         raise responses.ProblemHTTPException(responses.problem_response(status_code=401, title="Invitation is revoked"))
     now = int(time.time())
     if invitation.expires_at <= now:
+        _audit_rejection(f"invitation:{key_id}", "expired", invitation.identity_id)
         raise responses.ProblemHTTPException(responses.problem_response(status_code=401, title="Invitation is expired"))
-    verify(request, key_id=f"invitation:{key_id}", key=invitation.key)
+    verify(request, key_id=f"invitation:{key_id}", key=invitation.key, audit_identity_id=invitation.identity_id)
     with ctx.set_identity_id(invitation.identity_id):
         yield invitation
 
@@ -310,6 +345,7 @@ async def verify_account(request: fastapi.requests.Request) -> typing.AsyncGener
             responses.problem_response(status_code=401, title="Account does not exist")
         )
     if account_key.is_revoked:
+        _audit_rejection(f"account:{key_id}", "revoked", account_key.identity_id)
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=401, title="Account key is revoked")
         )
@@ -317,7 +353,7 @@ async def verify_account(request: fastapi.requests.Request) -> typing.AsyncGener
     crypto_policy.enforce_key_is_allowed(key)
     assert key.thumbprint() == key_id
     await asyncio.to_thread(model.denylist.enforce_not_denied, key.thumbprint())
-    verify(request, key_id=f"account:{key_id}", key=key)
+    verify(request, key_id=f"account:{key_id}", key=key, audit_identity_id=account_key.identity_id)
     with ctx.set_identity_id(account_key.identity_id):
         yield
 
@@ -330,15 +366,18 @@ async def verify_session(request: fastapi.requests.Request) -> typing.AsyncGener
             responses.problem_response(status_code=401, title="Session does not exist")
         )
     if session_key.is_revoked:
+        _audit_rejection(f"session:{key_id}", "revoked", session_key.identity_id)
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=401, title="Session key is revoked")
         )
     if session_key.logged_out_at is not None:
+        _audit_rejection(f"session:{key_id}", "logged-out", session_key.identity_id)
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=401, title="Session key is logged out")
         )
     now = int(time.time())
     if session_key.expires_at <= now:
+        _audit_rejection(f"session:{key_id}", "expired", session_key.identity_id)
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=401, title="Session key is expired")
         )
@@ -346,7 +385,7 @@ async def verify_session(request: fastapi.requests.Request) -> typing.AsyncGener
     crypto_policy.enforce_key_is_allowed(key)
     assert key.thumbprint() == key_id
     await asyncio.to_thread(model.denylist.enforce_not_denied, key.thumbprint())
-    verify(request, key_id=f"session:{key_id}", key=key)
+    verify(request, key_id=f"session:{key_id}", key=key, audit_identity_id=session_key.identity_id)
     with ctx.set_identity_id(session_key.identity_id):
         with ctx.set_active_role_id(session_key.role_id):
             with ctx.set_session_key_id(key_id):

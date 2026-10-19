@@ -5,7 +5,7 @@ identity (for `live`, the host of the session) must hold.
 Shrinking that list in place would change who the grant matches, since a
 filter nobody can currently satisfy would suddenly become satisfiable by whoever holds the
 remaining tags, the moment the dead id is dropped. So a grant whose filter names the tag is
-removed whole, the same way `identity_references` removes a grant that names a deleted identity.
+removed whole, the same way `identity_grants` removes a grant that names a deleted identity.
 
 A grant of type `identity` can also have `permission.add_tag_id_list`, `permission.del_tag_id_list`,
 or `permission.create.allowed_tag_id_list`. These are plain allow-sets, not AND-filters. Dropping
@@ -26,7 +26,7 @@ import dataclasses
 import typing
 
 from ... import _sentinel
-from . import audit_log, boundary, grant, role
+from . import boundary, grant, role
 
 
 @dataclasses.dataclass(frozen=True)
@@ -126,21 +126,23 @@ def remove(tag_id: int) -> list[Owner]:
     A ceiling that loses its last grant becomes `[]`, which denies everything. It must never
     become `None`, which means there is no ceiling.
 
-    Each list that changes gets an audit entry with the grants as they were, before the change,
+    Each role or boundary that changes gets its own update entry, which holds the list as it was.
+    The caller wraps this in `audit_log.cause` so that each entry names the deleted tag.
+    That entry has the grants, before the change,
     that named the tag id. That is all that is needed to put a removed deny rule back, or to
     re-add a dropped tag id to an allow-list.
 
-    Nothing here takes a row lock ahead of reading. `identity_references.remove()`, which this
+    Nothing here takes a row lock ahead of reading. `identity_grants.remove()`, which this
     mirrors, has the same gap: a concurrent write to the same role or boundary between the read
     and the write can be lost. Closing that is out of scope for this function.
     """
-    changes: list[tuple[Owner, str, list[grant.Grant]]] = []
+    changes: list[Owner] = []
     for r in role.read_all():
         referencing = [g for g in r.grant_list if _names(g, tag_id)]
         if not referencing:
             continue
         role.update(r.id, grant_list=_rewrite(r.grant_list, tag_id))
-        changes.append((Owner("role", r.id, r.name), "grant_list", referencing))
+        changes.append(Owner("role", r.id, r.name))
     for b in boundary.read_all():
         denied_referencing = [g for g in b.denied_list if _names(g, tag_id)]
         ceiling_referencing = [g for g in b.ceiling_list or [] if _names(g, tag_id)]
@@ -153,18 +155,7 @@ def remove(tag_id: int) -> list[Owner]:
         )
         owner = Owner("boundary", b.id, b.name)
         if denied_referencing:
-            changes.append((owner, "denied_list", denied_referencing))
+            changes.append(owner)
         if ceiling_referencing:
-            changes.append((owner, "ceiling_list", ceiling_referencing))
-    for owner, list_name, referencing in changes:
-        audit_log.create(
-            "tag-delete-cascade",
-            refs=audit_log.refs(grants=referencing),
-            tag_id=tag_id,
-            owner_type=owner.type,
-            owner_id=owner.id,
-            owner_name=owner.name,
-            list=list_name,
-            affected_grants=[grant.serialize(g) for g in referencing],
-        )
-    return list(dict.fromkeys(owner for owner, _, _ in changes))
+            changes.append(owner)
+    return list(dict.fromkeys(changes))

@@ -253,6 +253,9 @@ class AuditLogRow(typing.NamedTuple):
     type: str
     by_identity_id: str | None
     details: dict[str, typing.Any]
+    object_type: str
+    action: str
+    by_identity_name: str | None
 
 
 audit_log = orm.make_table(
@@ -262,8 +265,69 @@ audit_log = orm.make_table(
     sqlalchemy.Index("idx_audit_log_type", "type"),
     sqlalchemy.Index("idx_audit_log_by_identity_id", "by_identity_id"),
     sqlalchemy.Index("idx_audit_log_at", "at"),
+    sqlalchemy.Index("idx_audit_log_object_type_action", "object_type", "action"),
     sqlite_autoincrement=True,
 )
+
+
+class AuditLogRefRow(typing.NamedTuple):
+    """An object that an audit entry is about, with the name it had when the entry was written."""
+
+    id: typing.Annotated[int, orm.Col(primary_key=True)]
+    entry_id: int
+    object_type: str
+    object_id: str
+    object_name: str | None
+
+
+audit_log_ref = orm.make_table(
+    "audit_log_ref",
+    metadata,
+    AuditLogRefRow,
+    sqlalchemy.Index("idx_audit_log_ref_entry_id", "entry_id"),
+    sqlalchemy.Index("idx_audit_log_ref_object_id", "object_type", "object_id"),
+    sqlalchemy.Index("idx_audit_log_ref_object_name", "object_type", "object_name"),
+    sqlite_autoincrement=True,
+)
+
+
+class AuditLogObjectNameRow(typing.NamedTuple):
+    """A name that an object had. One row per object and name, written by the first entry that gave it.
+
+    It holds no time. A time here would outlive the entry that it came from.
+    """
+
+    id: typing.Annotated[int, orm.Col(primary_key=True)]
+    object_type: str
+    object_id: str
+    object_name: str
+    first_entry_id: int
+
+
+audit_log_object_name = orm.make_table(
+    "audit_log_object_name",
+    metadata,
+    AuditLogObjectNameRow,
+    sqlalchemy.UniqueConstraint("object_type", "object_id", "object_name", name="uq_audit_log_object_name"),
+    sqlalchemy.Index("idx_audit_log_object_name_name", "object_type", "object_name"),
+    sqlalchemy.Index("idx_audit_log_object_name_object", "object_type", "object_id"),
+    sqlite_autoincrement=True,
+)
+
+
+class AuditLogCounterRow(typing.NamedTuple):
+    """The last entry id that was handed out. It has one row, with id 1.
+
+    Writing an entry increments it in the same transaction. The row stays locked until the commit,
+    so entry ids are handed out in commit order, and a rolled back request leaves no hole.
+    A reader that has seen entry N has seen every entry below N.
+    """
+
+    id: typing.Annotated[int, orm.Col(primary_key=True)]
+    value: int
+
+
+audit_log_counter = orm.make_table("audit_log_counter", metadata, AuditLogCounterRow)
 
 
 class OidcKeyRow(typing.NamedTuple):
@@ -403,6 +467,18 @@ class AppDb(orm.Dao):
     @property
     def audit_log(self) -> orm.Table[AuditLogRow]:
         return self._get(audit_log)
+
+    @property
+    def audit_log_ref(self) -> orm.Table[AuditLogRefRow]:
+        return self._get(audit_log_ref)
+
+    @property
+    def audit_log_object_name(self) -> orm.Table[AuditLogObjectNameRow]:
+        return self._get(audit_log_object_name)
+
+    @property
+    def audit_log_counter(self) -> orm.Table[AuditLogCounterRow]:
+        return self._get(audit_log_counter)
 
     @property
     def oidc_key(self) -> orm.Table[OidcKeyRow]:

@@ -3,7 +3,7 @@ import time
 
 from ... import jwk
 from ..context import ctx
-from . import audit_log
+from . import audit_log, audit_types
 
 
 @dataclasses.dataclass
@@ -36,7 +36,7 @@ def create(identity_id: int, expiration_delay_s: int) -> str:
         is_revoked=False,
         is_accepted=False,
     )
-    audit_log.create("identity-invitation-create", id=id, identity_id=identity_id, expires_at=expires_at)
+    audit_log.create(audit_types.IDENTITY_INVITATION_CREATE, id=id, identity_id=identity_id, expires_at=expires_at)
     return id
 
 
@@ -58,7 +58,7 @@ def accept(id: str, public_key_id: str) -> bool:
     if changed == 0:
         return False
     audit_log.create(
-        "identity-invitation-accepted",
+        audit_types.IDENTITY_INVITATION_ACCEPTED,
         id=invitation.id,
         identity_id=invitation.identity_id,
         public_key_id=public_key_id,

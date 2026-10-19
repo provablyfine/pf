@@ -795,3 +795,161 @@ async def test_verify_invitation_rejects_key_expiring_exactly_now(
         async with contextlib.aclosing(signature.verify_invitation(request)) as agen:
             await agen.__anext__()
     assert _title(exc_info.value) == "Invitation is expired"
+
+
+def _rejection_entries() -> list[app_db.AuditLogRow]:
+    """Write what the rejected request left behind, as the request's rollback handler does, and read it back."""
+    deferred = context._deferred_var.get()  # pyright: ignore[reportPrivateUsage]
+    assert deferred is not None
+    token = context._deferred_var.set(None)  # pyright: ignore[reportPrivateUsage]
+    try:
+        for action in deferred.after_rollback:
+            action()
+    finally:
+        context._deferred_var.reset(token)  # pyright: ignore[reportPrivateUsage]
+    return [e for e in ctx.app_db.audit_log.read_all() if e.action == "rejected"]
+
+
+def test_invalid_signature_of_a_known_key_is_audited(real_app_db: app_db.AppDb) -> None:
+    key = secrets.token_bytes(32)
+    request, key_id = _signed_request(key, tamper=_corrupt_signature)
+    with pytest.raises(responses.ProblemHTTPException):
+        signature.verify(request, key_id=key_id, key=jwk.Symmetric.from_bytes(key), audit_identity_id=7)
+    [entry] = _rejection_entries()
+    assert entry.type == "session-rejected"
+    assert entry.level == int(app_db.AuditLogLevel.WARNING)
+    assert entry.details == {
+        "session_key_id": key_id.partition(":")[2],
+        "reason": "invalid-signature",
+        "identity_id": 7,
+    }
+
+
+def test_replayed_signature_of_a_known_key_is_audited(real_app_db: app_db.AppDb) -> None:
+    key = secrets.token_bytes(32)
+    request, key_id = _signed_request(key, app=_app())
+    jwk_key = jwk.Symmetric.from_bytes(key)
+    signature.verify(request, key_id=key_id, key=jwk_key, audit_identity_id=7)
+    with pytest.raises(responses.ProblemHTTPException):
+        signature.verify(request, key_id=key_id, key=jwk_key, audit_identity_id=7)
+    [entry] = _rejection_entries()
+    assert entry.details == {"session_key_id": key_id.partition(":")[2], "reason": "replayed", "identity_id": 7}
+
+
+def test_rejection_of_an_unknown_key_is_not_audited(real_app_db: app_db.AppDb) -> None:
+    key = secrets.token_bytes(32)
+    request, key_id = _signed_request(key, tamper=_corrupt_signature)
+    with pytest.raises(responses.ProblemHTTPException):
+        signature.verify(request, key_id=key_id, key=jwk.Symmetric.from_bytes(key))
+    assert _rejection_entries() == []
+
+
+async def _verify_rejected(verifier: typing.Callable[..., typing.Any], request: starlette.requests.Request) -> None:
+    with pytest.raises(responses.ProblemHTTPException):
+        async with contextlib.aclosing(verifier(request)) as agen:
+            await agen.__anext__()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("case", ["revoked", "logged-out", "expired"])
+async def test_rejected_session_key_is_audited(real_app_db: app_db.AppDb, case: str) -> None:
+    identity_id = _seed_identity()
+    priv = jwk.Private.generate_ed25519()
+    now = int(time.time())
+    _seed_session_key(
+        identity_id,
+        priv.public(),
+        expires_at=now - 1 if case == "expired" else now + 3600,
+        is_revoked=case == "revoked",
+        logged_out_at=now if case == "logged-out" else None,
+    )
+    request, _ = _signed_request_with(_Ed25519Signer("session", priv))
+    await _verify_rejected(signature.verify_session, request)
+    [entry] = _rejection_entries()
+    assert entry.type == "session-rejected"
+    assert entry.details == {"session_key_id": priv.public().thumbprint(), "reason": case, "identity_id": identity_id}
+
+
+@pytest.mark.anyio
+async def test_revoked_account_key_is_audited(real_app_db: app_db.AppDb) -> None:
+    identity_id = _seed_identity()
+    priv = jwk.Private.generate_ed25519()
+    _seed_account_key(identity_id, priv.public(), is_revoked=True)
+    request, _ = _signed_request_with(_Ed25519Signer("account", priv))
+    await _verify_rejected(signature.verify_account, request)
+    [entry] = _rejection_entries()
+    assert entry.type == "account-key-rejected"
+    assert entry.details == {
+        "account_key_id": priv.public().thumbprint(),
+        "reason": "revoked",
+        "identity_id": identity_id,
+    }
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("case", ["revoked", "expired"])
+async def test_rejected_invitation_is_audited(real_app_db: app_db.AppDb, case: str) -> None:
+    identity_id = _seed_identity()
+    invitation_id = model.identity_invitation_key.create(
+        identity_id=identity_id, expiration_delay_s=-1 if case == "expired" else 3600
+    )
+    if case == "revoked":
+        ctx.app_db.identity_invitation_key.update(is_revoked=True).where(id=invitation_id)
+    invitation = model.identity_invitation_key.read(invitation_id)
+    assert invitation is not None
+    request, _ = _signed_request_with(client_signer.HmacSigner("invitation", invitation.key.to_bytes()))
+    await _verify_rejected(signature.verify_invitation, request)
+    [entry] = _rejection_entries()
+    assert entry.type == "identity-invitation-rejected"
+    assert entry.details == {
+        "id": invitation_id,
+        "reason": case,
+        "identity_id": identity_id,
+    }
+
+
+def test_audit_rejection_keeps_everything_after_the_kind_in_the_target(real_app_db: app_db.AppDb) -> None:
+    signature._audit_rejection("session:a:b", "revoked", 3)  # pyright: ignore[reportPrivateUsage]
+    [entry] = _rejection_entries()
+    assert entry.details == {"session_key_id": "a:b", "reason": "revoked", "identity_id": 3}
+
+
+@pytest.mark.anyio
+async def test_bad_signature_of_a_session_key_is_audited(real_app_db: app_db.AppDb) -> None:
+    identity_id = _seed_identity()
+    priv = jwk.Private.generate_ed25519()
+    _seed_session_key(identity_id, priv.public(), expires_at=int(time.time()) + 3600)
+    request, _ = _signed_request_with(_Ed25519Signer("session", priv), tamper=_corrupt_signature)
+    await _verify_rejected(signature.verify_session, request)
+    [entry] = _rejection_entries()
+    assert entry.details == {
+        "session_key_id": priv.public().thumbprint(),
+        "reason": "invalid-signature",
+        "identity_id": identity_id,
+    }
+
+
+@pytest.mark.anyio
+async def test_bad_signature_of_an_account_key_is_audited(real_app_db: app_db.AppDb) -> None:
+    identity_id = _seed_identity()
+    priv = jwk.Private.generate_ed25519()
+    _seed_account_key(identity_id, priv.public())
+    request, _ = _signed_request_with(_Ed25519Signer("account", priv), tamper=_corrupt_signature)
+    await _verify_rejected(signature.verify_account, request)
+    [entry] = _rejection_entries()
+    assert entry.details["identity_id"] == identity_id
+    assert entry.details["reason"] == "invalid-signature"
+
+
+@pytest.mark.anyio
+async def test_bad_signature_of_an_invitation_is_audited(real_app_db: app_db.AppDb) -> None:
+    identity_id = _seed_identity()
+    invitation_id = model.identity_invitation_key.create(identity_id=identity_id, expiration_delay_s=3600)
+    invitation = model.identity_invitation_key.read(invitation_id)
+    assert invitation is not None
+    request, _ = _signed_request_with(
+        client_signer.HmacSigner("invitation", invitation.key.to_bytes()), tamper=_corrupt_signature
+    )
+    await _verify_rejected(signature.verify_invitation, request)
+    [entry] = _rejection_entries()
+    assert entry.details == {"id": invitation_id, "reason": "invalid-signature", "identity_id": identity_id}

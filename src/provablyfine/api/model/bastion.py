@@ -8,7 +8,7 @@ import jwt
 
 from ... import _sentinel, jwk
 from ..context import ctx
-from . import audit_log, identity, oidc_key
+from . import audit_log, audit_types, identity, oidc_key
 
 
 @dataclasses.dataclass(frozen=True)
@@ -32,7 +32,7 @@ def create(url: str, ssh_proxy_jump: str | None, tag_id_list: list[int] | None) 
     )
     assert bastion_id is not None
     audit_log.create(
-        "bastion-create",
+        audit_types.BASTION_CREATE,
         refs=audit_log.refs(tags=tag_id_list or []),
         id=bastion_id,
         url=url,
@@ -89,7 +89,7 @@ def update(
 
     if len(update_fields) > 0:
         audit_log.create(
-            "bastion-update",
+            audit_types.BASTION_UPDATE,
             refs=audit_log.refs(tags=update_fields.get("tag_id_list") or []),
             id=id,
             **update_fields,
@@ -106,7 +106,7 @@ def delete(id: int) -> bool:
     if row is None or ctx.app_db.bastion.delete(id=id) == 0:
         return False
     audit_log.create(
-        "bastion-delete",
+        audit_types.BASTION_DELETE,
         refs=audit_log.refs(tags=row.tag_id_list or []),
         id=id,
         url=row.url,

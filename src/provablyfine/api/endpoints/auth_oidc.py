@@ -212,6 +212,12 @@ def oidc_login_endpoint(
     try:
         ctx.app_db.oidc_nonce.create(nonce=data.nonce, expires_at=token_exp)
     except sqlalchemy.exc.IntegrityError:
+        model.audit_log.create_after_rollback(
+            model.audit_types.SESSION_REJECTED,
+            session_key_id=session_key.thumbprint(),
+            reason="oidc-nonce-replayed",
+            email=email,
+        )
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=403, title="OIDC nonce has already been used")
         )
@@ -219,6 +225,13 @@ def oidc_login_endpoint(
     # Look up identity by email
     identity = model.identity.read_one(name=email)
     if identity is None:
+        # The identity provider vouched for this email, so it is a real person, not an anonymous stranger.
+        model.audit_log.create_after_rollback(
+            model.audit_types.SESSION_REJECTED,
+            session_key_id=session_key.thumbprint(),
+            reason="oidc-no-identity",
+            email=email,
+        )
         raise responses.ProblemHTTPException(
             responses.problem_response(status_code=403, title="No identity for this account")
         )
@@ -239,7 +252,7 @@ def oidc_login_endpoint(
     )
     # No identity is set in the context during an OIDC login: name it in the details.
     model.audit_log.create(
-        "session-create",
+        model.audit_types.SESSION_LOGIN,
         identity_id=identity.id,
         session_key_id=session_key.thumbprint(),
         login_ip=request.client.host if request.client else None,

@@ -204,7 +204,7 @@ Deleting a bastion removes the grants that name it, and only those
   [[],[]]
 
 The audit log keeps the removed grants
-  $ pfa -c config.json audit-log list --format json | jq -r '.[] | select(.type == "bastion-delete-cascade") | "\(.details.owner_name) \(.details.list)"' | sort
-  guard ceiling_list
-  guard denied_list
-  ops grant_list
+  $ pfa -c config.json audit-log list --all --format json | jq -r '.entries[] | select(.details.cause.type == "bastion") | "\(.refs[] | select(.type == "role" or .type == "boundary") | .name) \(.action)"' | sort
+  guard update-ceiling-list
+  guard update-denied-list
+  ops update-grant-list

@@ -22,6 +22,9 @@ _tenant_uuid_var: contextvars.ContextVar[str | None] = contextvars.ContextVar("t
 class Deferred:
     """Work that waits for the end of the request's tenant transaction."""
 
+    before_commit: list[collections.abc.Callable[[], None]] = dataclasses.field(
+        default_factory=list[collections.abc.Callable[[], None]]
+    )
     after_commit: list[collections.abc.Callable[[], None]] = dataclasses.field(
         default_factory=list[collections.abc.Callable[[], None]]
     )
@@ -35,6 +38,21 @@ _deferred_var: contextvars.ContextVar[Deferred | None] = contextvars.ContextVar(
 
 class RequestContext:
     """A proxy that makes contextvars feel like regular attributes."""
+
+    def before_commit(self, action: collections.abc.Callable[[], None]) -> None:
+        """Run `action` when the handler has returned, in the request's transaction, right before the commit.
+
+        Use it for a write that takes a lock that other requests also take, and that nothing else in the
+        request needs to wait for. The lock is then held for as short a time as possible,
+        and it is taken after every other lock of the request, so it cannot take part in a deadlock.
+        The action has database access. If it raises, the request fails and nothing is committed.
+        Outside a request there is nothing to wait for, and the action runs at once.
+        """
+        deferred = _deferred_var.get()
+        if deferred is None:
+            action()
+        else:
+            deferred.before_commit.append(action)
 
     def after_commit(self, action: collections.abc.Callable[[], None]) -> None:
         """Run `action` once the request's transaction has committed, before the response is sent.

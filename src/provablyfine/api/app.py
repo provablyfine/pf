@@ -186,6 +186,7 @@ def create(conf: config.Config) -> fastapi.FastAPI:
     async def generic_exception_handler(
         request: fastapi.requests.Request, exc: Exception
     ) -> fastapi.responses.Response:
+        logger.error("Unhandled error in %s %s", request.method, request.url.path, exc_info=exc)
         if not request.app.state.config.debug:
             return responses.problem_response(status_code=500, title="Internal Server Error")
         tb = _format_endpoint_traceback(exc)

@@ -8,7 +8,7 @@ import textual.app
 import textual.containers
 import textual.widgets
 
-from . import _utils, base, clipboard, identity_view
+from . import _utils, audit_log_list, base, clipboard, identity_view
 
 
 class _IdentitiesTable(textual.widgets.DataTable[str]):
@@ -125,6 +125,8 @@ class IdentityListScreen(base.Screen):
         ("a", "add_identity", "Add"),
         ("d", "delete_identity", "Delete"),
         ("i", "invite_identity", "Invite"),
+        ("h", "history", "History"),
+        ("H", "activity", "Activity"),
         ("escape", "app.pop_screen", "Back"),
     ]
 
@@ -214,3 +216,19 @@ class IdentityListScreen(base.Screen):
             await self.app.push_screen_wait(_InviteSecretScreen(secret))
         else:
             self.notify(f"Invitation sent to '{identity.name}'")
+
+    def action_history(self) -> None:
+        """Open the audit log on the entries about the selected object."""
+        if not self._identities:
+            return
+        table = self.query_one(textual.widgets.DataTable[str])
+        item = self._identities[table.cursor_row]
+        self.app.push_screen(audit_log_list.AuditLogListScreen(self._auth, "identity:#" + str(item.id)))
+
+    def action_activity(self) -> None:
+        """Open the audit log on what the selected identity did."""
+        if not self._identities:
+            return
+        table = self.query_one(textual.widgets.DataTable[str])
+        identity = self._identities[table.cursor_row]
+        self.app.push_screen(audit_log_list.AuditLogListScreen(self._auth, by_identity=str(identity.id)))

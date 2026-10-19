@@ -4,7 +4,7 @@ import typing
 from ... import _sentinel
 from .. import app_db
 from ..context import ctx
-from . import audit_log, grant
+from . import audit_log, audit_types, grant
 
 
 @dataclasses.dataclass
@@ -29,7 +29,7 @@ def create(
     )
     assert boundary_id is not None  # we just created it
     audit_log.create(
-        "boundary-create",
+        audit_types.BOUNDARY_CREATE,
         refs=audit_log.refs(grants=[*(ceiling_list or []), *denied_list]),
         id=boundary_id,
         name=name,
@@ -56,7 +56,7 @@ def delete(id: int) -> bool:
     if ctx.app_db.boundary.delete(id=id) == 0:
         return False
     audit_log.create(
-        "boundary-delete",
+        audit_types.BOUNDARY_DELETE,
         refs=refs,
         id=id,
         name=row.name,
@@ -97,37 +97,43 @@ def update(
     denied_list: list[grant.Grant] | _sentinel.Unset = _sentinel.UNSET,
 ) -> None:
     update_fields: dict[str, typing.Any] = {}
+    # The entries say what the boundary held before. The row is locked so that this is what the update replaces.
+    old = ctx.app_db.boundary.read_one_for_update(id=id)
     if not isinstance(name, _sentinel.Unset):
         update_fields["name"] = name
         audit_log.create(
-            "boundary-update-name",
+            audit_types.BOUNDARY_UPDATE_NAME,
             id=id,
             name=name,
+            old=None if old is None else old.name,
         )
     if not isinstance(description, _sentinel.Unset):
         update_fields["description"] = description
         audit_log.create(
-            "boundary-update-description",
+            audit_types.BOUNDARY_UPDATE_DESCRIPTION,
             id=id,
             description=description,
+            old=None if old is None else old.description,
         )
     if not isinstance(ceiling_list, _sentinel.Unset):
         db_ceiling_list = None if ceiling_list is None else [grant.serialize(g) for g in ceiling_list]
         update_fields["ceiling_list"] = db_ceiling_list
         audit_log.create(
-            "boundary-update-ceiling-list",
+            audit_types.BOUNDARY_UPDATE_CEILING_LIST,
             refs=audit_log.refs(grants=ceiling_list or []),
             id=id,
             ceiling_list=db_ceiling_list,
+            old=None if old is None else old.ceiling_list,
         )
     if not isinstance(denied_list, _sentinel.Unset):
         db_denied_list = [grant.serialize(g) for g in denied_list]
         update_fields["denied_list"] = db_denied_list
         audit_log.create(
-            "boundary-update-denied-list",
+            audit_types.BOUNDARY_UPDATE_DENIED_LIST,
             refs=audit_log.refs(grants=denied_list),
             id=id,
             denied_list=db_denied_list,
+            old=None if old is None else old.denied_list,
         )
     if len(update_fields) == 0:
         return

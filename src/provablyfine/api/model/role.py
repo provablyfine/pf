@@ -5,7 +5,7 @@ import typing
 
 from .. import app_db
 from ..context import ctx
-from . import audit_log, grant, utils
+from . import audit_log, audit_types, grant, utils
 
 
 @dataclasses.dataclass(frozen=True)
@@ -26,7 +26,7 @@ def create(name: str, description: str, grant_list: typing.Sequence[grant.Grant]
     )
     assert role_id is not None
     audit_log.create(
-        "role-create",
+        audit_types.ROLE_CREATE,
         refs=audit_log.refs(grants=grant_list),
         id=role_id,
         name=name,
@@ -52,7 +52,7 @@ def delete(id: int) -> bool:
     if ctx.app_db.role.delete(id=id) == 0:
         return False
     audit_log.create(
-        "role-delete",
+        audit_types.ROLE_DELETE,
         refs=refs,
         id=id,
         name=row.name,
@@ -98,28 +98,33 @@ def update(
     deleted_member_id_list: list[int] | None = None,
 ):
     role_fields: dict[str, typing.Any] = {}
+    # The entries say what the role held before. The row is locked so that this is what the update replaces.
+    old = ctx.app_db.role.read_one_for_update(id=id)
     if name is not None:
         role_fields["name"] = name
         audit_log.create(
-            "role-update-name",
+            audit_types.ROLE_UPDATE_NAME,
             id=id,
             name=name,
+            old=None if old is None else old.name,
         )
     if description is not None:
         role_fields["description"] = description
         audit_log.create(
-            "role-update-description",
+            audit_types.ROLE_UPDATE_DESCRIPTION,
             id=id,
             description=description,
+            old=None if old is None else old.description,
         )
 
     if grant_list is not None:
         role_fields["grant_list"] = [grant.serialize(g) for g in grant_list]
         audit_log.create(
-            "role-update-grant-list",
+            audit_types.ROLE_UPDATE_GRANT_LIST,
             refs=audit_log.refs(grants=grant_list),
             id=id,
             grant_list=[grant.serialize(g) for g in grant_list],
+            old=None if old is None else old.grant_list,
         )
 
     if len(role_fields) > 0:
@@ -129,7 +134,7 @@ def update(
         for member_id in added_member_id_list:
             ctx.app_db.role_member.create(role_id=id, identity_id=member_id)
         audit_log.create(
-            "role-add-members",
+            audit_types.ROLE_ADD_MEMBERS,
             refs=audit_log.refs(identities=added_member_id_list),
             id=id,
             added_member_id_list=added_member_id_list,
@@ -137,7 +142,7 @@ def update(
     if deleted_member_id_list is not None and len(deleted_member_id_list) > 0:
         ctx.app_db.role_member.delete(role_id=id, identity_id=deleted_member_id_list)
         audit_log.create(
-            "role-delete-members",
+            audit_types.ROLE_REMOVE_MEMBERS,
             refs=audit_log.refs(identities=deleted_member_id_list),
             id=id,
             deleted_member_id_list=deleted_member_id_list,

@@ -7,7 +7,7 @@ import textual.containers
 import textual.widgets
 import textual_autocomplete
 
-from . import base, bastion_view, checkbox_input
+from . import audit_log_list, base, bastion_view, checkbox_input
 
 
 class _BastionFormResult(typing.TypedDict):
@@ -83,6 +83,7 @@ class BastionListScreen(base.Screen):
         ("enter", "view_bastion", "View"),
         ("a", "add_bastion", "Add"),
         ("d", "delete_bastion", "Delete"),
+        ("h", "history", "History"),
         ("escape", "app.pop_screen", "Back"),
     ]
 
@@ -159,3 +160,11 @@ class BastionListScreen(base.Screen):
         self._bastions.pop(index)
         self._populate_table(table)
         self.notify(f"Bastion '{bastion.url}' deleted")
+
+    def action_history(self) -> None:
+        """Open the audit log on the entries about the selected object."""
+        if not self._bastions:
+            return
+        table = self.query_one(textual.widgets.DataTable[str])
+        item = self._bastions[table.cursor_row]
+        self.app.push_screen(audit_log_list.AuditLogListScreen(self._auth, "bastion:#" + str(item.id)))
