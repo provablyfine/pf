@@ -19,6 +19,10 @@ recorded:
      for why an arbitrary pid's asid can't be read directly there).
   3. The parent's controlling TTY device number, when it has one.
 
+The oracle is named after the login shell. A later `pf` finds it by walking up
+its own ancestors until one has an oracle, so a script run from the login shell
+reaches it too. See `current_socket_path`.
+
 Factors 2 and 3 are *omitted*, not treated as always-matching, when
 unavailable. e.g. under a test harness, CI runner, or `su`/container shell
 with no PAM-assigned session and no controlling terminal, this degrades to
@@ -53,6 +57,9 @@ _SUN_PATH_MAX = 104
 # Below this, there's no room left for the "pf-so-<16 hex chars>/s" suffix
 # (~24 bytes) a tempdir needs to append
 _MAX_TEMPDIR_LEN = _SUN_PATH_MAX - 30
+
+# How far up the process tree `current_socket_path` looks for an oracle.
+_MAX_ANCESTORS = 64
 
 
 def _tempdir() -> str:
@@ -91,16 +98,40 @@ def socket_path(parent_pid: int, parent_starttime: int, directory_url: str) -> s
     return os.path.join(tempdir, f"pf-so-{digest}", "s")
 
 
-def current_socket_path(directory_url: str) -> str:
-    """Recompute this invocation's session-oracle path from its own parent.
+def _ancestors() -> collections.abc.Iterator[tuple[int, int]]:
+    """The `(pid, starttime)` of our parent, then its parent, and so on up the tree."""
+    pid = os.getppid()
+    current: tuple[int, int] | None = (pid, peercred.process_starttime(pid))
+    for _ in range(_MAX_ANCESTORS):
+        if current is None:
+            return
+        yield current
+        current = peercred.parent_of(current[0])
 
-    Used by later `pf`/`pfa` invocations in the same shell to find the
-    oracle `pf login` spawned there for this tenant.
+
+def current_socket_path(directory_url: str) -> str:
+    """Find the session oracle `pf login` spawned for this tenant.
+
+    `pf login` binds the oracle to its parent shell. A later `pf` can be a
+    few levels below that shell, for example when a script runs it.
+
+    So this walks up from our parent and returns the path of the nearest
+    ancestor that has an oracle. The first oracle found is the answer, even
+    if it later refuses us. A farther oracle is never tried.
+
+    When no ancestor has an oracle, this returns the path of our parent,
+    where the caller will fail to connect.
     """
     spawn.require_platform_supported()
-    parent_pid = os.getppid()
-    parent_starttime = peercred.process_starttime(parent_pid)
-    return socket_path(parent_pid, parent_starttime, directory_url)
+    first: str | None = None
+    for pid, starttime in _ancestors():
+        path = socket_path(pid, starttime, directory_url)
+        if os.path.exists(path):
+            return path
+        if first is None:
+            first = path
+    assert first is not None
+    return first
 
 
 def spawn_oracle(key: jwk.Private, directory_url: str, ttl: float = 1800) -> str:

@@ -263,6 +263,18 @@ def parent_is_launcher() -> bool:
         return False
 
 
+def parent_of(pid: int) -> tuple[int, int] | None:
+    """The `(pid, starttime)` of `pid`'s parent, or None at the top of the tree,
+    when the trail is lost, or when the parent belongs to another user."""
+    try:
+        ppid = int(_bsdinfo(pid).pbi_ppid)
+        if ppid == 0:
+            return None
+        return ppid, process_starttime(ppid)
+    except (ProcessLookupError, PermissionError):
+        return None
+
+
 def is_descendant_of(pid: int, anchor: Anchor, *, max_depth: int = 64) -> bool:
     """Walk `pid`'s ancestors looking for the process pinned by `anchor`.
 
