@@ -230,12 +230,21 @@ class SessionClient:
         id: int,
         display_name: str | None = None,
         is_enabled: bool | None = None,
+        audit_retention_days: int | None = None,
+        activity_retention_days: int | None = None,
+        retention_purge_enabled: bool | None = None,
     ) -> None:
         data: dict[str, str | bool | int] = {}
         if display_name is not None:
             data["display_name"] = display_name
         if is_enabled is not None:
             data["is_enabled"] = is_enabled
+        if audit_retention_days is not None:
+            data["audit_retention_days"] = audit_retention_days
+        if activity_retention_days is not None:
+            data["activity_retention_days"] = activity_retention_days
+        if retention_purge_enabled is not None:
+            data["retention_purge_enabled"] = retention_purge_enabled
         if not data:
             raise exceptions.UI("Nothing to update")
         response = self._session.patch(f"{self._directory.tenant}/{id}", auth=self._auth(), json=data)

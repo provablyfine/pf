@@ -57,7 +57,7 @@ class TenantListScreen(base.Screen):
 
     async def on_mount(self) -> None:
         table = self.query_one(self._StrDataTable)
-        table.add_columns("Name", "Display Name", "Enabled")
+        table.add_columns("Name", "Display Name", "Enabled", "Audit days", "Activity days", "Purge")
         self._tenants = (await self._auth.list_tenants()).tenants
         self._populate_table(table)
 
@@ -68,6 +68,9 @@ class TenantListScreen(base.Screen):
                 tenant.name,
                 tenant.display_name,
                 "yes" if tenant.is_enabled else "no",
+                str(tenant.audit_retention_days),
+                str(tenant.activity_retention_days),
+                "on" if tenant.retention_purge_enabled else "PAUSED",
             )
         self.query_one("#tenants-placeholder").display = not bool(self._tenants)
 

@@ -152,6 +152,18 @@ class RequestContext:
             _identity_id_var.set(None)
 
     @contextlib.contextmanager
+    def without_identity(self):
+        """Forget the identity inside the block.
+
+        Use it to write in the database of another tenant, where the caller's identity id means nothing.
+        """
+        token = _identity_id_var.set(None)
+        try:
+            yield
+        finally:
+            _identity_id_var.reset(token)
+
+    @contextlib.contextmanager
     def set_active_role_id(self, role_id: int | None):
         token = _active_role_id_var.set(role_id)
         try:
