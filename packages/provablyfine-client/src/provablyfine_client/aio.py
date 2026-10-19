@@ -124,8 +124,20 @@ class AsyncSessionClient:
         id: int,
         display_name: str | None = None,
         is_enabled: bool | None = None,
+        audit_retention_days: int | None = None,
+        activity_retention_days: int | None = None,
+        retention_purge_enabled: bool | None = None,
     ) -> None:
-        return await self._run(lambda: self._inner.update_tenant(id, display_name, is_enabled))
+        return await self._run(
+            lambda: self._inner.update_tenant(
+                id,
+                display_name,
+                is_enabled,
+                audit_retention_days,
+                activity_retention_days,
+                retention_purge_enabled,
+            )
+        )
 
     async def delete_tenant(self, id: int) -> None:
         return await self._run(lambda: self._inner.delete_tenant(id))

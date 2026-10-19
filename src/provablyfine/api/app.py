@@ -97,6 +97,9 @@ def create(conf: config.Config) -> fastapi.FastAPI:
                 is_initialized=False,
                 created_at=int(time.time()),
                 is_deleted=False,
+                audit_retention_days=conf.default_retention_days,
+                activity_retention_days=conf.default_retention_days,
+                retention_purge_enabled=True,
             )
 
     @contextlib.asynccontextmanager

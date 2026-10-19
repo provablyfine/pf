@@ -65,6 +65,7 @@ pf = "provablyfine.cli.pf.main:pf"
 pfa = "provablyfine.cli.pfa.main:pfa"
 pfat = "provablyfine.tui.app:pfat"
 pf-api-rotate = "provablyfine.api.rotate:main"
+pf-api-purge = "provablyfine.api.purge:main"
 
 [tool.coverage.run]
 source = [
