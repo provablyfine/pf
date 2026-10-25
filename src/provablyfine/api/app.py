@@ -14,7 +14,19 @@ import pydantic
 import sqlalchemy
 import sqlalchemy.exc
 
-from . import config, db, dependencies, endpoints, jwt_validator, middleware, migrate, registry_db, responses, signature
+from . import (
+    config,
+    db,
+    dependencies,
+    endpoints,
+    jwt_validator,
+    middleware,
+    migrate,
+    registry_db,
+    responses,
+    shell_ticket,
+    signature,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -127,6 +139,7 @@ def create(conf: config.Config) -> fastapi.FastAPI:
         app.state.kek = kek
         app.state.debug_store = _InMemoryDebugStore()
         app.state.nonce_store = signature.NonceStore()
+        app.state.shell_ticket_store = shell_ticket.ShellTicketStore()
 
         with registry_engine.connect() as registry_conn:
             tenant_rows = registry_db.create(registry_conn).tenant.read_all()
