@@ -385,15 +385,8 @@ def read_user_trusted_keys(request: fastapi.Request) -> fastapi.responses.Respon
 
 @router.get("/host/trusted-keys", status_code=200)
 def read_host_trusted_keys() -> fastapi.responses.Response:
-    now = int(time.time())
-    signing_keys = model.signing_key.read_all(
-        ctx.app_db.signing_key.columns.valid_before > now,
-        type=app_db.SigningKeyType.HOST,
-    )
-    trusted_keys = [b"@cert-authority * " + signing_key.key.public().to_openssh() for signing_key in signing_keys]
-
     return fastapi.responses.Response(
-        content=b"\n".join(trusted_keys),
+        content=model.signing_key.read_host_trusted_keys_text(),
         status_code=200,
         media_type="text/plain",
     )

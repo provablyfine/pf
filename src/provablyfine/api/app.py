@@ -239,6 +239,7 @@ def create(conf: config.Config) -> fastapi.FastAPI:
     fastapi_app.include_router(endpoints.role.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
     fastapi_app.include_router(endpoints.tag.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
     fastapi_app.include_router(endpoints.ssh.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
+    fastapi_app.include_router(endpoints.ssh_shell.router, prefix=_tenant_prefix)
     fastapi_app.include_router(endpoints.bastion.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
     fastapi_app.include_router(endpoints.tenant.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
     fastapi_app.include_router(endpoints.live.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
