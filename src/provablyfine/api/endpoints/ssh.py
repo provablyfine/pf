@@ -225,9 +225,7 @@ def _issue_user_certificate(
     sessions = ctx.app_db.identity_session_key.read_all(identity_id=ctx.identity_id, is_revoked=False)
     ip_address_list = [s.login_ip for s in sessions if s.login_ip and s.logged_out_at is None and s.expires_at > now]
     grant_converter = converters.GrantConverter()
-    bastion_list = [
-        converters.bastion_to_schema(grant_converter, bastion) for bastion in model.bastion.read_matching()
-    ]
+    bastion_list = [converters.bastion_to_schema(grant_converter, bastion) for bastion in model.bastion.read_matching()]
 
     return _IssuedCertificate(
         cert=cert,
@@ -289,7 +287,7 @@ def issue_shell_ticket(
 
     ticket_id = request.app.state.shell_ticket_store.issue(
         shell_ticket.Ticket(
-            identity_id=ctx.identity_id,
+            identity_id=caller.id,
             active_role_id=ctx.active_role_id,
             hostname=data.hostname,
             username=data.username,

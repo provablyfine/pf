@@ -45,7 +45,8 @@ def _mint_connect_tokens(ticket: shell_ticket.Ticket) -> list[tuple[schemas.bast
                 ticket.hostname, "connect", deadline=ticket.deadline, connection_id=ticket.connection_id
             ),
         )
-        for bastion in ticket.bastion_list if bastion.url
+        for bastion in ticket.bastion_list
+        if bastion.url
     ]
 
 
@@ -75,7 +76,7 @@ async def _dial_bastion(
     for bastion, token in bastion_tokens:
         try:
             tunnel = await bastion_visitor.open_tunnel(bastion.url, hostname, token)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             logger.info(f"shell: bastion={bastion.url} unreachable for hostname={hostname}: {e}")
             continue
         return tunnel.reader, tunnel.writer
@@ -86,7 +87,7 @@ async def _open_ssh_connection(
     ticket: shell_ticket.Ticket,
     tunnel_reader_writer: tuple[bastion_visitor.FrpReader, asyncio.StreamWriter],
     known_hosts: bytes,
-) -> tuple[asyncssh.SSHClientConnection, asyncssh.SSHClientProcess]:
+) -> tuple[asyncssh.SSHClientConnection, asyncssh.SSHClientProcess[bytes]]:
     """Bridges the bastion tunnel into asyncssh over a loopback TCP pair.
 
     Not `socket.socketpair()`: that defaults to `AF_UNIX`, which has no `(host, port)`
@@ -169,7 +170,7 @@ async def _bridge_ssh(
     ticket: shell_ticket.Ticket,
     tunnel_streams: tuple[bastion_visitor.FrpReader, asyncio.StreamWriter],
     known_hosts: bytes,
-) -> tuple[asyncssh.SSHClientConnection, asyncssh.SSHClientProcess] | None:
+) -> tuple[asyncssh.SSHClientConnection, asyncssh.SSHClientProcess[bytes]] | None:
     try:
         return await _open_ssh_connection(ticket, tunnel_streams, known_hosts)
     except Exception:
@@ -216,7 +217,7 @@ async def _report_live_end(
         )
 
 
-async def _pump(websocket: fastapi.WebSocket, process: asyncssh.SSHClientProcess) -> None:
+async def _pump(websocket: fastapi.WebSocket, process: asyncssh.SSHClientProcess[bytes]) -> None:
     async def input_to_ssh() -> None:
         while True:
             message = await websocket.receive()
