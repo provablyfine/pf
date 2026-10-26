@@ -72,15 +72,30 @@ def _new_login_event_name(pid: int, creation_time: int, directory_url: str) -> s
 
 
 def current_socket_path(directory_url: str) -> str:
-    """Recompute this invocation's oracle name from its own login shell.
+    """Find the session oracle `pf login` spawned for this tenant.
 
-    Used by later `pf`/`pfa` invocations in the same shell to find the oracle
-    `pf login` spawned there for this tenant. Named "socket path" because its
-    callers are cross-platform; on Windows the string is a named pipe, not a
-    path.
+    `pf login` binds the oracle to its login shell. A later `pf` can be a few
+    levels below that shell, for example when a script runs it.
+
+    So this walks up from the login shell and returns the name of the nearest
+    ancestor that has an oracle. The first oracle found is the answer, even if
+    it later refuses us. A farther oracle is never tried.
+
+    When no ancestor has an oracle, this returns the name for our login shell,
+    where the caller will fail to connect.
+
+    Named "socket path" because its callers are cross-platform; on Windows the
+    string is a named pipe, not a path.
     """
-    pid, creation_time = peercred.login_shell_identity()
-    return pipe_name(pid, creation_time, directory_url)
+    first: str | None = None
+    for pid, creation_time in peercred.ancestors():
+        name = pipe_name(pid, creation_time, directory_url)
+        if w32.pipe.named_pipe_exists(name):
+            return name
+        if first is None:
+            first = name
+    assert first is not None
+    return first
 
 
 def spawn_oracle(key: jwk.Private, directory_url: str, ttl: float = 1800) -> str:

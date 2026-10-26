@@ -14,3 +14,14 @@ the session key, fingerprint stored (not the key file or PEM)
 Verify subsequent command works via the oracle-held session key
   $ pfa -c config.json auth list -q
   1
+
+A shell started by the login shell finds the same oracle
+  $ sh -c 'pfa -c config.json auth list -q'
+  1
+
+So does a script, which is one more level down
+  $ printf '#!/bin/sh\npfa -c config.json auth list -q\n' > script.sh
+  $ sh script.sh
+  1
+  $ sh -c 'sh script.sh'
+  1

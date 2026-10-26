@@ -106,6 +106,14 @@ def self_anchored_oracle(key: jwk.Private) -> collections.abc.Iterator[str]:
         _stop_oracle(os.getpid())
 
 
+def test_console_script_in_the_venv_is_a_launcher() -> None:
+    """`Scripts\\pfa.exe` waits for the interpreter it starts, so anchoring on
+    it would bind the oracle to a process that exits with the command."""
+    console_script = os.path.join(sys.prefix, "Scripts", "pfa.exe")
+    assert peercred._is_launcher(console_script)
+    assert not peercred._is_launcher(os.path.join(os.environ.get("SystemRoot", "C:\\Windows"), "System32", "cmd.exe"))
+
+
 def test_login_shell_identity_skips_our_own_python_and_is_stable() -> None:
     """The bug that actually bites on Windows.
 
