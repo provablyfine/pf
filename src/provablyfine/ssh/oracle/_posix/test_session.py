@@ -38,6 +38,52 @@ def test_current_socket_path_is_deterministic() -> None:
     ) == session.current_socket_path("https://a.example/pf/t/00000000-0000-0000-0000-000000000001/")
 
 
+_INNER = (
+    "from provablyfine.ssh.oracle._posix import session; import sys; print(session.current_socket_path(sys.argv[1]))"
+)
+_OUTER = (
+    "import subprocess, sys;"
+    "r = subprocess.run([sys.executable, '-c', sys.argv[1], sys.argv[2]], capture_output=True, text=True, check=True);"
+    "sys.stdout.write(r.stdout)"
+)
+
+
+def _path_found_from_a_grandchild(directory_url: str) -> str:
+    """`current_socket_path` as seen by a process two levels below this one."""
+    cmd = [sys.executable, "-c", _OUTER, _INNER, directory_url]
+    return subprocess.run(cmd, capture_output=True, text=True, check=True).stdout.strip()  # noqa: S603
+
+
+def test_current_socket_path_without_any_oracle_is_the_parents() -> None:
+    url = "https://no-oracle.example/pf/t/00000000-0000-0000-0000-000000000001/"
+    parent = os.getppid()
+    assert session.current_socket_path(url) == session.socket_path(parent, peercred.process_starttime(parent), url)
+
+
+@pytest.mark.xdist_group(name="pf-session-oracle")
+def test_current_socket_path_finds_the_oracle_of_a_distant_ancestor() -> None:
+    # The oracle is bound to this test's parent. The grandchild's own parent is
+    # a subprocess and the next one up is this process, so neither has an oracle.
+    url = "https://distant.example/pf/t/00000000-0000-0000-0000-000000000001/"
+    path = session.spawn_oracle(jwk.Private.generate_ed25519(), url, ttl=10)
+    try:
+        assert _path_found_from_a_grandchild(url) == path
+    finally:
+        _cleanup(path)
+
+
+def test_current_socket_path_prefers_the_nearest_oracle() -> None:
+    # A socket bound at this process's own name stands in for a nearer login.
+    url = "https://nearest.example/pf/t/00000000-0000-0000-0000-000000000002/"
+    own = session.socket_path(os.getpid(), peercred.process_starttime(os.getpid()), url)
+    sock = spawn.bind_socket(own, replace=True)
+    try:
+        assert _path_found_from_a_grandchild(url) == own
+    finally:
+        sock.close()
+        _cleanup(own)
+
+
 def test_socket_path_differs_for_different_parents() -> None:
     url = "https://a.example/pf/t/00000000-0000-0000-0000-000000000001/"
     a = session.socket_path(parent_pid=111, parent_starttime=222, directory_url=url)
