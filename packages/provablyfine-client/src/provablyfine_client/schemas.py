@@ -743,8 +743,20 @@ class AuditLogEntry(_Base):
     action: str = ""
     by_identity_id: str | None = None
     by_identity_name: str | None = None
+    # Set when the author belongs to another tenant. Then by_identity_id is None.
+    by_tenant_id: int | None = None
+    by_tenant_name: str | None = None
     refs: list[AuditLogRef] = []
     details: dict[str, typing.Any] = {}
+
+    @property
+    def author(self) -> str:
+        """Who did it, with the tenant of an author who belongs to another one: `alice@corp.com (acme)`."""
+        name = self.by_identity_name or self.by_identity_id or ""
+        if self.by_tenant_id is None:
+            return name
+        tenant = f"({self.by_tenant_name or self.by_tenant_id})"
+        return f"{name} {tenant}" if name else tenant
 
 
 class AuditLogObjectTypeInfo(_Base):

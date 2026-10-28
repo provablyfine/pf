@@ -721,6 +721,7 @@ class SessionClient:
         level: int | None = None,
         object_type: str | list[str] | None = None,
         by_identity_id: str | None = None,
+        by_tenant_id: int | None = None,
         start_time: int | None = None,
         end_time: int | None = None,
         action: str | list[str] | None = None,
@@ -748,6 +749,7 @@ class SessionClient:
             params["action"] = [action] if isinstance(action, str) else action
         for key, value in (
             ("by_identity_id", by_identity_id),
+            ("by_tenant_id", by_tenant_id),
             ("start_time", start_time),
             ("end_time", end_time),
             ("ref_type", ref_type),

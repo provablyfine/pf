@@ -56,6 +56,47 @@ def _resolve[R: typing.NamedTuple](
     return {str(i): labels.get(i) for i in sorted(ids)}
 
 
+@dataclasses.dataclass(frozen=True)
+class ForeignAuthor:
+    """An author who belongs to another tenant than the one that holds the entry.
+
+    The identity id of such an author means nothing in this tenant, so only its name is kept.
+    The tenant id is the stable key. The names are what they were when the entry was written.
+    """
+
+    tenant_id: int
+    tenant_name: str
+    identity_name: str | None
+
+
+_foreign_author_var: contextvars.ContextVar[ForeignAuthor | None] = contextvars.ContextVar(
+    "audit_foreign_author", default=None
+)
+
+
+def caller_as_foreign_author(tenant_name: str) -> ForeignAuthor:
+    """Describe the caller, so that its entries can be written in the database of another tenant.
+
+    Call it while the caller's own tenant is still the current one, because it reads the identity name.
+    """
+    identity_id = ctx.identity_id
+    identity_name = _name(audit_types.ObjectType.IDENTITY, identity_id) if identity_id is not None else None
+    return ForeignAuthor(tenant_id=ctx.tenant_id, tenant_name=tenant_name, identity_name=identity_name)
+
+
+@contextlib.contextmanager
+def written_by(author: ForeignAuthor) -> collections.abc.Generator[None]:
+    """Attribute the entries written inside the block to an author of another tenant.
+
+    Use it inside `ctx.in_other_tenant`, where the caller's identity id means nothing.
+    """
+    token = _foreign_author_var.set(author)
+    try:
+        yield
+    finally:
+        _foreign_author_var.reset(token)
+
+
 _cause_var: contextvars.ContextVar[dict[str, typing.Any] | None] = contextvars.ContextVar("audit_cause", default=None)
 
 
@@ -85,7 +126,7 @@ def create(audit_type: audit_types.AuditType, refs: dict[str, typing.Any] | None
     current_cause = _cause_var.get()
     if current_cause is not None:
         extra["cause"] = current_cause
-    _write(audit_type, now, by_identity_id, {**details, **extra})
+    _write(audit_type, now, by_identity_id, {**details, **extra}, _foreign_author_var.get())
 
 
 def create_after_rollback(audit_type: audit_types.AuditType, **details: typing.Any) -> None:
@@ -97,21 +138,33 @@ def create_after_rollback(audit_type: audit_types.AuditType, **details: typing.A
     now = int(time.time())
     by_identity_id = ctx.identity_id
 
+    foreign_author = _foreign_author_var.get()
+
     def write() -> None:
-        _write(audit_type, now, by_identity_id, details)
+        _write(audit_type, now, by_identity_id, details, foreign_author)
 
     ctx.after_rollback(write)
 
 
 def _write(
-    audit_type: audit_types.AuditType, at: int, by_identity_id: int | None, details: dict[str, typing.Any]
+    audit_type: audit_types.AuditType,
+    at: int,
+    by_identity_id: int | None,
+    details: dict[str, typing.Any],
+    foreign_author: ForeignAuthor | None,
 ) -> None:
     """Name the objects now, and insert the entry at the end of the request.
 
     The names are the ones the objects have at this point of the request. The insert waits,
     because it takes the counter lock, which every audited request takes, and holds it until the commit.
     """
-    by_identity_name = _name(audit_types.ObjectType.IDENTITY, by_identity_id) if by_identity_id is not None else None
+    if foreign_author is not None:
+        assert by_identity_id is None, "An author of another tenant has no identity id here"
+        by_identity_name = foreign_author.identity_name
+    else:
+        by_identity_name = (
+            _name(audit_types.ObjectType.IDENTITY, by_identity_id) if by_identity_id is not None else None
+        )
     refs = _entry_refs(audit_type, details)
 
     def insert() -> None:
@@ -132,6 +185,8 @@ def _write(
             object_type=audit_type.object_type.value,
             action=audit_type.action.value,
             by_identity_name=by_identity_name,
+            by_tenant_id=None if foreign_author is None else foreign_author.tenant_id,
+            by_tenant_name=None if foreign_author is None else foreign_author.tenant_name,
         )
         for ref in refs:
             db.audit_log_ref.create(
@@ -325,6 +380,7 @@ def read_page(
     action: list[audit_types.Action] | None = None,
     type_prefix: str | None = None,
     by_identity_id: str | None = None,
+    by_tenant_id: int | None = None,
     start_time: int | None = None,
     end_time: int | None = None,
     ref_type: audit_types.ObjectType | None = None,
@@ -351,6 +407,7 @@ def read_page(
         action=None if action is None else [a.value for a in action],
         type_prefix=type_prefix,
         by_identity_id=by_identity_id,
+        by_tenant_id=by_tenant_id,
         start_time=start_time,
         end_time=end_time,
         ref_type=None if ref_type is None else ref_type.value,
@@ -375,6 +432,8 @@ def read_page(
         kwargs["level"] = level
     if by_identity_id is not None:
         kwargs["by_identity_id"] = by_identity_id
+    if by_tenant_id is not None:
+        kwargs["by_tenant_id"] = by_tenant_id
     if ref_follow and ref_name is None:
         raise InvalidFilter("ref_follow needs ref_name")
     position, followed_ids = (None, None) if cursor is None else _decode_cursor(cursor, descending, filter_key)

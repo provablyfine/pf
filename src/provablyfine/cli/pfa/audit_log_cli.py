@@ -25,6 +25,7 @@ def _fetch(
         "object_type": args.object_type,
         "action": args.action,
         "by_identity_id": args.by_identity_id,
+        "by_tenant_id": args.by_tenant_id,
         "start_time": args.start_time,
         "end_time": args.end_time,
         "order": args.order,
@@ -71,7 +72,7 @@ def _list_function(args: argparse.Namespace) -> None:
             for entry in entries:
                 level_str = "WARN" if entry.level == 2 else "INFO"
                 at_str = datetime.datetime.fromtimestamp(entry.at).isoformat()
-                by = entry.by_identity_name or entry.by_identity_id or ""
+                by = entry.author
                 about = ", ".join(f"{r.type}:{r.name or r.id}" for r in entry.refs[:3])
                 rows.append([entry.id, at_str, level_str, entry.type, by, about])
             if len(rows) == 0:
@@ -192,6 +193,7 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
         "under all the names it had, even if it is deleted now",
     )
     f.add_argument("--by", dest="by_identity_id", help="Identity ID of author")
+    f.add_argument("--by-tenant", dest="by_tenant_id", type=int, help="Tenant ID of an author from another tenant")
     f.add_argument("--start-time", dest="start_time", type=int, help="Start Unix timestamp")
     f.add_argument("--end-time", dest="end_time", type=int, help="End Unix timestamp")
     p = list_parser.add_argument_group("Paging")

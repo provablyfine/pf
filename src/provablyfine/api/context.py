@@ -152,16 +152,26 @@ class RequestContext:
             _identity_id_var.set(None)
 
     @contextlib.contextmanager
-    def without_identity(self):
-        """Forget the identity inside the block.
+    def in_other_tenant(self, app_db: app_db_module.AppDb) -> collections.abc.Generator[None]:
+        """Work in the database of another tenant, inside a transaction that the caller holds open.
 
-        Use it to write in the database of another tenant, where the caller's identity id means nothing.
+        The caller's identity id means nothing there, so the block has no identity.
+        Writes that wait for the end of the request wait for the end of the block instead,
+        because the request's own wait list would run them against the caller's database.
+        They run when the block returns normally, and are dropped if it raises.
         """
-        token = _identity_id_var.set(None)
+        deferred = Deferred()
+        app_db_token = _app_db_var.set(app_db)
+        identity_token = _identity_id_var.set(None)
+        deferred_token = _deferred_var.set(deferred)
         try:
             yield
+            for action in deferred.before_commit:
+                action()
         finally:
-            _identity_id_var.reset(token)
+            _deferred_var.reset(deferred_token)
+            _identity_id_var.reset(identity_token)
+            _app_db_var.reset(app_db_token)
 
     @contextlib.contextmanager
     def set_active_role_id(self, role_id: int | None):

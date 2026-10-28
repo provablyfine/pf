@@ -35,22 +35,28 @@ def _record_retention_change(
     request: fastapi.requests.Request,
     row: registry_db.TenantRow,
     changes: dict[str, dict[str, int | bool]],
+    caller_tenant_name: str,
 ) -> None:
     """Write the change in the audit log of the tenant that it is about.
 
-    The caller may belong to the tenant that owns this one. Its identity id means nothing there.
+    The caller may belong to the tenant that owns this one. Its identity id means nothing there,
+    so the entry names the caller's tenant and identity instead.
+    The caller's own log gets an entry too, which says which tenant was changed.
     """
-    caller_tenant_id = ctx.tenant_id
-    if caller_tenant_id == row.id:
-        # The request already holds the write transaction of this tenant. A second one would wait for it.
-        model.audit_log.create(model.audit_types.RETENTION_SET, changes=changes, by_tenant_id=caller_tenant_id)
+    if ctx.tenant_id == row.id:
+        model.audit_log.create(model.audit_types.RETENTION_SET, changes=changes)
         return
+    author = model.audit_log.caller_as_foreign_author(caller_tenant_name)
+    model.audit_log.create(
+        model.audit_types.RETENTION_SET, changes=changes, tenant_id=row.id, tenant_name=row.display_name
+    )
+    # The request already holds the write transaction of its own tenant. This one is for the tenant that changed.
     with (
         db.begin(request.app.state.tenants.engine(row.uuid), write=True) as connection,
-        ctx.set_app_db(app_db.create(connection)),
-        ctx.without_identity(),
+        ctx.in_other_tenant(app_db.create(connection)),
+        model.audit_log.written_by(author),
     ):
-        model.audit_log.create(model.audit_types.RETENTION_SET, changes=changes, by_tenant_id=caller_tenant_id)
+        model.audit_log.create(model.audit_types.RETENTION_SET, changes=changes)
 
 
 def _row_to_schema(row: registry_db.TenantRow) -> schemas.tenant.TenantReadResponse:
@@ -185,7 +191,9 @@ def update_endpoint(
         if f in update_kwargs and update_kwargs[f] != getattr(row, f)
     }
     if changes:
-        _record_retention_change(request, row, changes)
+        caller_row = reg_db.tenant.read_one(id=ctx.tenant_id)
+        assert caller_row is not None
+        _record_retention_change(request, row, changes, caller_row.display_name)
 
     return _204
 
