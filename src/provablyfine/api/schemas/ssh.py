@@ -33,6 +33,15 @@ class SSHUserCertificateResponse(SSHCertificateResponse):
     ip_address_list: list[str] = pydantic.Field(default_factory=list[str])
 
 
+class SSHShellTicketRequest(base.APIBase):
+    hostname: str
+    username: str
+
+
+class SSHShellTicketResponse(base.APIBase):
+    ticket: str
+
+
 class SSHHostEntry(base.APIBase):
     hostname: str
     type: typing.Literal["shell", "port", "command"]
