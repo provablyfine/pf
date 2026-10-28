@@ -894,6 +894,29 @@ def test_filter_one_tenant(read, update, delete):
         )
 
 
+_TENANT_UPDATE_FIELDS = [
+    "display_name",
+    "is_enabled",
+    "audit_retention_days",
+    "activity_retention_days",
+    "retention_purge_enabled",
+]
+
+
+@pytest.mark.parametrize("granted", _TENANT_UPDATE_FIELDS)
+def test_tenant_update_fields_are_granted_independently(granted):
+    update = {field: field == granted for field in _TENANT_UPDATE_FIELDS}
+    grants = single_grants(
+        {
+            "type": "tenant",
+            "filter": {"id": None},
+            "permission": _crud(create=False, read=False, update=update, delete=False),
+        }
+    )
+    for field in _TENANT_UPDATE_FIELDS:
+        assert grants.tenant(1).can_update(field) == (field == granted)
+
+
 ######## AUTH ########
 
 
