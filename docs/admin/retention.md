@@ -23,7 +23,7 @@ pfa tenant update -i 1 --audit-retention-days 90 --activity-retention-days 30
 ```
 
 The server refuses a period outside its limits. The limits are 30 to 365 days by default.
-The server administrator sets them with `retention_min_days` and `retention_max_days` in the 
+The server administrator sets them with `retention_min_days` and `retention_max_days` in the
 server configuration.
 
 ## When data is deleted
