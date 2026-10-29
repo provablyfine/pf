@@ -49,3 +49,15 @@ The entry can be found by the tenant of its author
 The owner has an entry of its own, which says which tenant was changed
   $ pfa -c config.json audit-log list --all --format json | jq -c '.entries[] | select(.type == "retention-set" and .details.tenant_id == 2) | {by_tenant_id, tenant_name: .details.tenant_name}'
   {"by_tenant_id":null,"tenant_name":"Acme Corp"}
+
+Renaming a tenant is recorded in its own log and in the log of the owner
+  $ pfa -c config.json tenant update -i 2 --display-name "Acme Inc"
+  $ pfa -c acme.json audit-log list --all --format json | jq -c '.entries[] | select(.type == "tenant-update") | {by_tenant_name, changes: .details.changes}'
+  {"by_tenant_name":"root","changes":{"display_name":{"old":"Acme Corp","new":"Acme Inc"}}}
+  $ pfa -c config.json audit-log list --all --format json | jq -c '.entries[] | select(.type == "tenant-update") | {tenant_id: .details.tenant_id, tenant_name: .details.tenant_name, changes: .details.changes}'
+  {"tenant_id":2,"tenant_name":"Acme Corp","changes":{"display_name":{"old":"Acme Corp","new":"Acme Inc"}}}
+
+Disabling a tenant is recorded in the log of the owner
+  $ pfa -c config.json tenant update -i 2 --disable
+  $ pfa -c config.json audit-log list --all --format json | jq -c '.entries[] | select(.type == "tenant-update") | .details.changes.is_enabled | values'
+  {"old":true,"new":false}

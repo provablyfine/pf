@@ -31,6 +31,7 @@ class ObjectType(enum.StrEnum):
     SESSION = "session"
     SIGNING_KEY = "signing-key"
     TAG = "tag"
+    TENANT = "tenant"
     # An entry from an older version whose type is no longer written.
     UNKNOWN = "unknown"
 
@@ -153,6 +154,10 @@ PUBLIC_KEY_DENYLISTED = AuditType(
 PUBLIC_KEY_REJECTED = AuditType(
     ObjectType.PUBLIC_KEY, Action.REJECTED, app_db.AuditLogLevel.WARNING, target_key="public_key_id"
 )
+
+# A change to the display name or to the enabled flag of a tenant. It is written in the tenant
+# that changed and in the tenant of the caller when they differ.
+TENANT_UPDATE = AuditType(ObjectType.TENANT, Action.UPDATE, target_key=None)
 
 # Who changed a retention value, and what a purge deleted. The details name no one but the actor.
 RETENTION_SET = AuditType(ObjectType.RETENTION, Action.SET, target_key=None)
