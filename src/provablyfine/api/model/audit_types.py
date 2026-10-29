@@ -155,12 +155,12 @@ PUBLIC_KEY_REJECTED = AuditType(
     ObjectType.PUBLIC_KEY, Action.REJECTED, app_db.AuditLogLevel.WARNING, target_key="public_key_id"
 )
 
-# A change to the display name or to the enabled flag of a tenant. It is written in the tenant
-# that changed and in the tenant of the caller when they differ.
+# A change to a tenant: its display name, whether it is enabled, or one of its retention values.
+# It is written in the tenant that changed and in the tenant of the caller when they differ.
+# It is never purged, because it holds the retention changes. A tenant changes rarely, so it stays small.
 TENANT_UPDATE = AuditType(ObjectType.TENANT, Action.UPDATE, target_key=None)
 
-# Who changed a retention value, and what a purge deleted. The details name no one but the actor.
-RETENTION_SET = AuditType(ObjectType.RETENTION, Action.SET, target_key=None)
+# What a purge deleted. The details name no one but the actor.
 RETENTION_PURGE = AuditType(ObjectType.RETENTION, Action.PURGE, target_key=None)
 
 
@@ -172,7 +172,7 @@ class RetentionClass(enum.Enum):
     AUDIT = "audit"
     # Logins, rejections and connections.
     ACTIVITY = "activity"
-    # The proof that retention ran. Never purged. It holds no personal data.
+    # The proof that retention ran, and the changes to the tenant. Never purged. They hold no personal data.
     EXEMPT = "exempt"
 
 
@@ -188,7 +188,7 @@ ACTIVITY_TYPES = (
     CERTIFICATE_CREATE_HOST,
 )
 
-EXEMPT_TYPES = (RETENTION_SET, RETENTION_PURGE)
+EXEMPT_TYPES = (TENANT_UPDATE, RETENTION_PURGE)
 
 
 def retention_class(entry_type: str) -> RetentionClass:

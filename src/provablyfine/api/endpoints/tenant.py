@@ -14,8 +14,13 @@ router = fastapi.APIRouter(prefix="/tenant", dependencies=[fastapi.Depends(signa
 
 _204 = fastapi.responses.Response(status_code=204)
 
-_RETENTION_FIELDS = ("audit_retention_days", "activity_retention_days", "retention_purge_enabled")
-_TENANT_FIELDS = ("display_name", "is_enabled")
+_AUDITED_FIELDS = (
+    "display_name",
+    "is_enabled",
+    "audit_retention_days",
+    "activity_retention_days",
+    "retention_purge_enabled",
+)
 
 
 def _check_retention_days(data: schemas.tenant.TenantUpdateRequest) -> None:
@@ -34,7 +39,6 @@ def _check_retention_days(data: schemas.tenant.TenantUpdateRequest) -> None:
 
 def _record_change(
     request: fastapi.requests.Request,
-    audit_type: model.audit_types.AuditType,
     row: registry_db.TenantRow,
     changes: dict[str, dict[str, int | bool | str]],
     caller_tenant_name: str,
@@ -46,17 +50,19 @@ def _record_change(
     The caller's own log gets an entry too, which says which tenant was changed.
     """
     if ctx.tenant_id == row.id:
-        model.audit_log.create(audit_type, changes=changes)
+        model.audit_log.create(model.audit_types.TENANT_UPDATE, changes=changes)
         return
     author = model.audit_log.caller_as_foreign_author(caller_tenant_name)
-    model.audit_log.create(audit_type, changes=changes, tenant_id=row.id, tenant_name=row.display_name)
+    model.audit_log.create(
+        model.audit_types.TENANT_UPDATE, changes=changes, tenant_id=row.id, tenant_name=row.display_name
+    )
     # The request already holds the write transaction of its own tenant. This one is for the tenant that changed.
     with (
         db.begin(request.app.state.tenants.engine(row.uuid), write=True) as connection,
         ctx.in_other_tenant(app_db.create(connection)),
         model.audit_log.written_by(author),
     ):
-        model.audit_log.create(audit_type, changes=changes)
+        model.audit_log.create(model.audit_types.TENANT_UPDATE, changes=changes)
 
 
 def _row_to_schema(row: registry_db.TenantRow) -> schemas.tenant.TenantReadResponse:
@@ -185,22 +191,15 @@ def update_endpoint(
     if update_kwargs:
         reg_db.tenant.update(**update_kwargs).where(id=tenant_id)
 
-    caller_tenant_name: str | None = None
-    for audit_type, fields in (
-        (model.audit_types.RETENTION_SET, _RETENTION_FIELDS),
-        (model.audit_types.TENANT_UPDATE, _TENANT_FIELDS),
-    ):
-        changes = {
-            f: {"old": getattr(row, f), "new": update_kwargs[f]}
-            for f in fields
-            if f in update_kwargs and update_kwargs[f] != getattr(row, f)
-        }
-        if changes:
-            if caller_tenant_name is None:
-                caller_row = reg_db.tenant.read_one(id=ctx.tenant_id)
-                assert caller_row is not None
-                caller_tenant_name = caller_row.display_name
-            _record_change(request, audit_type, row, changes, caller_tenant_name)
+    changes = {
+        f: {"old": getattr(row, f), "new": update_kwargs[f]}
+        for f in _AUDITED_FIELDS
+        if f in update_kwargs and update_kwargs[f] != getattr(row, f)
+    }
+    if changes:
+        caller_row = reg_db.tenant.read_one(id=ctx.tenant_id)
+        assert caller_row is not None
+        _record_change(request, row, changes, caller_row.display_name)
 
     return _204
 
