@@ -14,8 +14,6 @@ router = fastapi.APIRouter(prefix="/tenant", dependencies=[fastapi.Depends(signa
 
 _204 = fastapi.responses.Response(status_code=204)
 
-_RETENTION_FIELDS = ("audit_retention_days", "activity_retention_days", "retention_purge_enabled")
-
 
 def _check_retention_days(data: schemas.tenant.TenantUpdateRequest) -> None:
     low, high = ctx.config.retention_min_days, ctx.config.retention_max_days
@@ -31,10 +29,10 @@ def _check_retention_days(data: schemas.tenant.TenantUpdateRequest) -> None:
             )
 
 
-def _record_retention_change(
+def _record_change(
     request: fastapi.requests.Request,
     row: registry_db.TenantRow,
-    changes: dict[str, dict[str, int | bool]],
+    changes: dict[str, dict[str, int | bool | str]],
     caller_tenant_name: str,
 ) -> None:
     """Write the change in the audit log of the tenant that it is about.
@@ -44,11 +42,11 @@ def _record_retention_change(
     The caller's own log gets an entry too, which says which tenant was changed.
     """
     if ctx.tenant_id == row.id:
-        model.audit_log.create(model.audit_types.RETENTION_SET, changes=changes)
+        model.audit_log.create(model.audit_types.TENANT_UPDATE, changes=changes)
         return
     author = model.audit_log.caller_as_foreign_author(caller_tenant_name)
     model.audit_log.create(
-        model.audit_types.RETENTION_SET, changes=changes, tenant_id=row.id, tenant_name=row.display_name
+        model.audit_types.TENANT_UPDATE, changes=changes, tenant_id=row.id, tenant_name=row.display_name
     )
     # The request already holds the write transaction of its own tenant. This one is for the tenant that changed.
     with (
@@ -56,7 +54,7 @@ def _record_retention_change(
         ctx.in_other_tenant(app_db.create(connection)),
         model.audit_log.written_by(author),
     ):
-        model.audit_log.create(model.audit_types.RETENTION_SET, changes=changes)
+        model.audit_log.create(model.audit_types.TENANT_UPDATE, changes=changes)
 
 
 def _row_to_schema(row: registry_db.TenantRow) -> schemas.tenant.TenantReadResponse:
@@ -181,19 +179,22 @@ def update_endpoint(
 
     _check_retention_days(data)
 
-    update_kwargs = {f: getattr(data, f) for f in data.model_fields_set}
+    # Schema order, so that the entries of the audit log do not depend on set ordering.
+    update_kwargs = {
+        f: getattr(data, f) for f in schemas.tenant.TenantUpdateRequest.model_fields if f in data.model_fields_set
+    }
     if update_kwargs:
         reg_db.tenant.update(**update_kwargs).where(id=tenant_id)
 
     changes = {
         f: {"old": getattr(row, f), "new": update_kwargs[f]}
-        for f in _RETENTION_FIELDS
-        if f in update_kwargs and update_kwargs[f] != getattr(row, f)
+        for f in update_kwargs
+        if update_kwargs[f] != getattr(row, f)
     }
     if changes:
         caller_row = reg_db.tenant.read_one(id=ctx.tenant_id)
         assert caller_row is not None
-        _record_retention_change(request, row, changes, caller_row.display_name)
+        _record_change(request, row, changes, caller_row.display_name)
 
     return _204
 

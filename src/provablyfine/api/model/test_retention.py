@@ -45,7 +45,7 @@ def test_each_class_is_purged_with_its_own_period(
         old_activity = _entry(audit_types.SESSION_LOGIN, 40, session_key_id="a")
         young_activity = _entry(audit_types.SESSION_LOGIN, 10, session_key_id="b")
         # The audit period is long, the activity period is short. Types are not mixed up.
-        old_set = _entry(audit_types.RETENTION_SET, 900, field="audit_retention_days", old=365, new=30)
+        old_set = _entry(audit_types.TENANT_UPDATE, 900, changes={"audit_retention_days": {"old": 365, "new": 30}})
 
     result = retention.purge_tenant(engine, audit_retention_days=90, activity_retention_days=30, now=NOW)
 
@@ -136,7 +136,7 @@ def test_a_run_that_deletes_something_is_recorded_and_the_record_survives(
     assert second.total == 0
     with db.begin(engine) as connection:
         entries = app_db.create(connection).audit_log.read_all()
-    assert [e.type for e in entries] == [audit_types.RETENTION_PURGE.type]
+    assert [e.type for e in entries] == [audit_types.TENANT_PURGE_EXPIRED.type]
     assert entries[0].details["highest_entry_id"] == old
     assert entries[0].details["audit_entries"] == 1
 
@@ -175,4 +175,4 @@ def test_activity_and_exempt_types_are_registered_and_disjoint() -> None:
     assert activity.isdisjoint(exempt)
     assert audit_types.retention_class(audit_types.PUBLIC_KEY_DENYLISTED.type) is audit_types.RetentionClass.AUDIT
     assert audit_types.retention_class(audit_types.SESSION_LOGIN.type) is audit_types.RetentionClass.ACTIVITY
-    assert audit_types.retention_class(audit_types.RETENTION_SET.type) is audit_types.RetentionClass.EXEMPT
+    assert audit_types.retention_class(audit_types.TENANT_UPDATE.type) is audit_types.RetentionClass.EXEMPT

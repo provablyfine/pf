@@ -26,11 +26,11 @@ class ObjectType(enum.StrEnum):
     IDENTITY_INVITATION = "identity-invitation"
     LIVE_SESSION = "live-session"
     PUBLIC_KEY = "public-key"
-    RETENTION = "retention"
     ROLE = "role"
     SESSION = "session"
     SIGNING_KEY = "signing-key"
     TAG = "tag"
+    TENANT = "tenant"
     # An entry from an older version whose type is no longer written.
     UNKNOWN = "unknown"
 
@@ -52,7 +52,7 @@ class Action(enum.StrEnum):
     LOGOUT = "logout"
     REJECTED = "rejected"
     REMOVE_MEMBERS = "remove-members"
-    PURGE = "purge"
+    PURGE_EXPIRED = "purge-expired"
     REMOVE_TAGS = "remove-tags"
     SET = "set"
     SET_ROLE = "set-role"
@@ -154,9 +154,13 @@ PUBLIC_KEY_REJECTED = AuditType(
     ObjectType.PUBLIC_KEY, Action.REJECTED, app_db.AuditLogLevel.WARNING, target_key="public_key_id"
 )
 
-# Who changed a retention value, and what a purge deleted. The details name no one but the actor.
-RETENTION_SET = AuditType(ObjectType.RETENTION, Action.SET, target_key=None)
-RETENTION_PURGE = AuditType(ObjectType.RETENTION, Action.PURGE, target_key=None)
+# A change to a tenant: its display name, whether it is enabled, or one of its retention values.
+# It is written in the tenant that changed and in the tenant of the caller when they differ.
+# It is never purged, because it holds the retention changes. A tenant changes rarely, so it stays small.
+TENANT_UPDATE = AuditType(ObjectType.TENANT, Action.UPDATE, target_key=None)
+
+# What a purge deleted. The details name no one but the actor.
+TENANT_PURGE_EXPIRED = AuditType(ObjectType.TENANT, Action.PURGE_EXPIRED, target_key=None)
 
 
 @enum.unique
@@ -167,7 +171,8 @@ class RetentionClass(enum.Enum):
     AUDIT = "audit"
     # Logins, rejections and connections.
     ACTIVITY = "activity"
-    # The proof that retention ran. Never purged. It holds no personal data.
+    # The proof that retention ran, and the changes to the tenant. Never purged.
+    # They name the identity that made the change. They hold no other data about a person.
     EXEMPT = "exempt"
 
 
@@ -183,7 +188,7 @@ ACTIVITY_TYPES = (
     CERTIFICATE_CREATE_HOST,
 )
 
-EXEMPT_TYPES = (RETENTION_SET, RETENTION_PURGE)
+EXEMPT_TYPES = (TENANT_UPDATE, TENANT_PURGE_EXPIRED)
 
 
 def retention_class(entry_type: str) -> RetentionClass:

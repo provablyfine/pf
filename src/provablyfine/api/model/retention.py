@@ -96,7 +96,7 @@ def purge_tenant(
     if result.total:
         with db.begin(engine, write=True) as connection, ctx.set_app_db(app_db.create(connection)):
             audit_log.create(
-                audit_types.RETENTION_PURGE,
+                audit_types.TENANT_PURGE_EXPIRED,
                 audit_cutoff=audit_cutoff,
                 activity_cutoff=activity_cutoff,
                 highest_entry_id=result.highest_entry_id,
