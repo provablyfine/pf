@@ -16,9 +16,6 @@ We record in the audit log metadata (count, start and end date of
 the entries that were deleted) about each data purge. These entries
 are never deleted.
 
-Changes to a tenant are never deleted either.
-This covers the display name, the enabled flag and the retention values.
-
 ## Changing the deletion policy
 
 ```bash
