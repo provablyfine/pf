@@ -14,14 +14,6 @@ router = fastapi.APIRouter(prefix="/tenant", dependencies=[fastapi.Depends(signa
 
 _204 = fastapi.responses.Response(status_code=204)
 
-_AUDITED_FIELDS = (
-    "display_name",
-    "is_enabled",
-    "audit_retention_days",
-    "activity_retention_days",
-    "retention_purge_enabled",
-)
-
 
 def _check_retention_days(data: schemas.tenant.TenantUpdateRequest) -> None:
     low, high = ctx.config.retention_min_days, ctx.config.retention_max_days
@@ -193,8 +185,8 @@ def update_endpoint(
 
     changes = {
         f: {"old": getattr(row, f), "new": update_kwargs[f]}
-        for f in _AUDITED_FIELDS
-        if f in update_kwargs and update_kwargs[f] != getattr(row, f)
+        for f in update_kwargs
+        if update_kwargs[f] != getattr(row, f)
     }
     if changes:
         caller_row = reg_db.tenant.read_one(id=ctx.tenant_id)
