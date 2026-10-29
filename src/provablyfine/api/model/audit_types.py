@@ -171,7 +171,8 @@ class RetentionClass(enum.Enum):
     AUDIT = "audit"
     # Logins, rejections and connections.
     ACTIVITY = "activity"
-    # The proof that retention ran, and the changes to the tenant. Never purged. They hold no personal data.
+    # The proof that retention ran, and the changes to the tenant. Never purged.
+    # They name the identity that made the change. They hold no other data about a person.
     EXEMPT = "exempt"
 
 
