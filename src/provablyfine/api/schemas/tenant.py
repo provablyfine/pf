@@ -17,6 +17,9 @@ class TenantCreateRequest(base.APIBase):
 class TenantUpdateRequest(base.APIBase):
     display_name: str | None = None
     is_enabled: bool | None = None
+    audit_retention_days: int | None = None
+    activity_retention_days: int | None = None
+    retention_purge_enabled: bool | None = None
 
 
 class TenantReadResponse(base.APIBase):
@@ -29,6 +32,9 @@ class TenantReadResponse(base.APIBase):
     is_initialized: bool
     is_deleted: bool
     created_at: int
+    audit_retention_days: int
+    activity_retention_days: int
+    retention_purge_enabled: bool
 
 
 class TenantListResponse(base.APIBase):

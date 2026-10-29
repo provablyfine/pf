@@ -272,6 +272,9 @@ def _grant_to_schema(converter: GrantConverter, grant: model.grant.Grant) -> sch
                 else schemas.grant.TenantUpdatePermission(
                     display_name=grant.permission.update.display_name,
                     is_enabled=grant.permission.update.is_enabled,
+                    audit_retention_days=grant.permission.update.audit_retention_days,
+                    activity_retention_days=grant.permission.update.activity_retention_days,
+                    retention_purge_enabled=grant.permission.update.retention_purge_enabled,
                 ),
             )
             g = schemas.grant.TenantGrant(filter=filter, permission=permission)
@@ -428,6 +431,9 @@ def _grant_from_schema(converter: GrantConverter, grant: schemas.grant.Grant) ->
                 else model.grant.TenantUpdatePermission(
                     display_name=grant.permission.update.display_name,
                     is_enabled=grant.permission.update.is_enabled,
+                    audit_retention_days=grant.permission.update.audit_retention_days,
+                    activity_retention_days=grant.permission.update.activity_retention_days,
+                    retention_purge_enabled=grant.permission.update.retention_purge_enabled,
                 ),
             )
             g = model.grant.TenantGrant(filter=filter, permission=permission)

@@ -256,6 +256,9 @@ class AuditLogRow(typing.NamedTuple):
     object_type: str
     action: str
     by_identity_name: str | None
+    # Set when the author belongs to another tenant. Then by_identity_id is None, because it means nothing here.
+    by_tenant_id: int | None
+    by_tenant_name: str | None
 
 
 audit_log = orm.make_table(
@@ -264,6 +267,7 @@ audit_log = orm.make_table(
     AuditLogRow,
     sqlalchemy.Index("idx_audit_log_type", "type"),
     sqlalchemy.Index("idx_audit_log_by_identity_id", "by_identity_id"),
+    sqlalchemy.Index("idx_audit_log_by_tenant_id", "by_tenant_id"),
     sqlalchemy.Index("idx_audit_log_at", "at"),
     sqlalchemy.Index("idx_audit_log_object_type_action", "object_type", "action"),
     sqlite_autoincrement=True,

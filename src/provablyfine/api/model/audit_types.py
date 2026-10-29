@@ -26,6 +26,7 @@ class ObjectType(enum.StrEnum):
     IDENTITY_INVITATION = "identity-invitation"
     LIVE_SESSION = "live-session"
     PUBLIC_KEY = "public-key"
+    RETENTION = "retention"
     ROLE = "role"
     SESSION = "session"
     SIGNING_KEY = "signing-key"
@@ -51,7 +52,9 @@ class Action(enum.StrEnum):
     LOGOUT = "logout"
     REJECTED = "rejected"
     REMOVE_MEMBERS = "remove-members"
+    PURGE = "purge"
     REMOVE_TAGS = "remove-tags"
+    SET = "set"
     SET_ROLE = "set-role"
     TERMINATE = "terminate"
     UPDATE = "update"
@@ -150,6 +153,46 @@ PUBLIC_KEY_DENYLISTED = AuditType(
 PUBLIC_KEY_REJECTED = AuditType(
     ObjectType.PUBLIC_KEY, Action.REJECTED, app_db.AuditLogLevel.WARNING, target_key="public_key_id"
 )
+
+# Who changed a retention value, and what a purge deleted. The details name no one but the actor.
+RETENTION_SET = AuditType(ObjectType.RETENTION, Action.SET, target_key=None)
+RETENTION_PURGE = AuditType(ObjectType.RETENTION, Action.PURGE, target_key=None)
+
+
+@enum.unique
+class RetentionClass(enum.Enum):
+    """Which retention period applies to an entry."""
+
+    # Changes to the configuration. Anything not listed below.
+    AUDIT = "audit"
+    # Logins, rejections and connections.
+    ACTIVITY = "activity"
+    # The proof that retention ran. Never purged. It holds no personal data.
+    EXEMPT = "exempt"
+
+
+ACTIVITY_TYPES = (
+    SESSION_LOGIN,
+    SESSION_LOGOUT,
+    SESSION_SET_ROLE,
+    SESSION_REJECTED,
+    ACCOUNT_KEY_REJECTED,
+    PUBLIC_KEY_REJECTED,
+    LIVE_SESSION_TERMINATE,
+    CERTIFICATE_CREATE_USER,
+    CERTIFICATE_CREATE_HOST,
+)
+
+EXEMPT_TYPES = (RETENTION_SET, RETENTION_PURGE)
+
+
+def retention_class(entry_type: str) -> RetentionClass:
+    """The class of an entry, from its joined `type`. A type that is not listed is `AUDIT`."""
+    if entry_type in {t.type for t in EXEMPT_TYPES}:
+        return RetentionClass.EXEMPT
+    if entry_type in {t.type for t in ACTIVITY_TYPES}:
+        return RetentionClass.ACTIVITY
+    return RetentionClass.AUDIT
 
 
 def all_types() -> list[AuditType]:

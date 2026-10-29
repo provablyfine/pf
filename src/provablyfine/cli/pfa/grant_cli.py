@@ -108,6 +108,9 @@ def _tenant_function(args: argparse.Namespace) -> None:
                 {
                     "display_name": any("display_name" in entry for entry in args.update),
                     "is_enabled": any("is_enabled" in entry for entry in args.update),
+                    "audit_retention_days": any("audit_retention_days" in entry for entry in args.update),
+                    "activity_retention_days": any("activity_retention_days" in entry for entry in args.update),
+                    "retention_purge_enabled": any("retention_purge_enabled" in entry for entry in args.update),
                 },
             ),
         },
@@ -279,7 +282,13 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
         action="append",
         nargs="*",
         default=[],
-        choices=["display_name", "is_enabled"],
+        choices=[
+            "display_name",
+            "is_enabled",
+            "audit_retention_days",
+            "activity_retention_days",
+            "retention_purge_enabled",
+        ],
     )
     group.add_argument("--update-all", action="store_true")
     group.add_argument("-d", "--delete", action="store_true")

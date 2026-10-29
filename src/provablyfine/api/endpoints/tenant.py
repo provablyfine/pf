@@ -7,12 +7,56 @@ import fastapi
 import fastapi.requests
 import fastapi.responses
 
-from .. import dependencies, grant, migrate, registry_db, responses, schemas, signature
+from .. import app_db, db, dependencies, grant, migrate, model, registry_db, responses, schemas, signature
 from ..context import ctx
 
 router = fastapi.APIRouter(prefix="/tenant", dependencies=[fastapi.Depends(signature.verify_session)])
 
 _204 = fastapi.responses.Response(status_code=204)
+
+_RETENTION_FIELDS = ("audit_retention_days", "activity_retention_days", "retention_purge_enabled")
+
+
+def _check_retention_days(data: schemas.tenant.TenantUpdateRequest) -> None:
+    low, high = ctx.config.retention_min_days, ctx.config.retention_max_days
+    for field in ("audit_retention_days", "activity_retention_days"):
+        value = getattr(data, field)
+        if value is not None and not low <= value <= high:
+            raise responses.ProblemHTTPException(
+                responses.problem_response(
+                    status_code=400,
+                    title="Retention period out of range",
+                    detail=f"{field} must be between {low} and {high} days",
+                )
+            )
+
+
+def _record_retention_change(
+    request: fastapi.requests.Request,
+    row: registry_db.TenantRow,
+    changes: dict[str, dict[str, int | bool]],
+    caller_tenant_name: str,
+) -> None:
+    """Write the change in the audit log of the tenant that it is about.
+
+    The caller may belong to the tenant that owns this one. Its identity id means nothing there,
+    so the entry names the caller's tenant and identity instead.
+    The caller's own log gets an entry too, which says which tenant was changed.
+    """
+    if ctx.tenant_id == row.id:
+        model.audit_log.create(model.audit_types.RETENTION_SET, changes=changes)
+        return
+    author = model.audit_log.caller_as_foreign_author(caller_tenant_name)
+    model.audit_log.create(
+        model.audit_types.RETENTION_SET, changes=changes, tenant_id=row.id, tenant_name=row.display_name
+    )
+    # The request already holds the write transaction of its own tenant. This one is for the tenant that changed.
+    with (
+        db.begin(request.app.state.tenants.engine(row.uuid), write=True) as connection,
+        ctx.in_other_tenant(app_db.create(connection)),
+        model.audit_log.written_by(author),
+    ):
+        model.audit_log.create(model.audit_types.RETENTION_SET, changes=changes)
 
 
 def _row_to_schema(row: registry_db.TenantRow) -> schemas.tenant.TenantReadResponse:
@@ -26,6 +70,9 @@ def _row_to_schema(row: registry_db.TenantRow) -> schemas.tenant.TenantReadRespo
         is_initialized=row.is_initialized,
         is_deleted=row.is_deleted,
         created_at=row.created_at,
+        audit_retention_days=row.audit_retention_days,
+        activity_retention_days=row.activity_retention_days,
+        retention_purge_enabled=row.retention_purge_enabled,
     )
 
 
@@ -95,6 +142,9 @@ def create_endpoint(
         is_initialized=False,
         is_deleted=False,
         created_at=now,
+        audit_retention_days=ctx.config.default_retention_days,
+        activity_retention_days=ctx.config.default_retention_days,
+        retention_purge_enabled=True,
     )
     row = reg_db.tenant.read_one(id=new_id)
     assert row is not None
@@ -112,6 +162,7 @@ def create_endpoint(
 )
 @dependencies.writes_registry
 def update_endpoint(
+    request: fastapi.requests.Request,
     tenant_id: int,
     data: schemas.tenant.TenantUpdateRequest,
     reg_db: registry_db.RegistryDb = dependencies.REGISTRY,
@@ -128,9 +179,21 @@ def update_endpoint(
                 responses.problem_response(status_code=403, title="Not allowed to update tenant field", detail=field)
             )
 
+    _check_retention_days(data)
+
     update_kwargs = {f: getattr(data, f) for f in data.model_fields_set}
     if update_kwargs:
         reg_db.tenant.update(**update_kwargs).where(id=tenant_id)
+
+    changes = {
+        f: {"old": getattr(row, f), "new": update_kwargs[f]}
+        for f in _RETENTION_FIELDS
+        if f in update_kwargs and update_kwargs[f] != getattr(row, f)
+    }
+    if changes:
+        caller_row = reg_db.tenant.read_one(id=ctx.tenant_id)
+        assert caller_row is not None
+        _record_retention_change(request, row, changes, caller_row.display_name)
 
     return _204
 

@@ -289,7 +289,13 @@ class TenantChecker:
         return self._checker.can(check)
 
     def can_update(self, field: str) -> bool:
-        assert field in ["display_name", "is_enabled"]
+        assert field in [
+            "display_name",
+            "is_enabled",
+            "audit_retention_days",
+            "activity_retention_days",
+            "retention_purge_enabled",
+        ]
 
         def check(g: model.grant.TenantGrant):
             if g.permission.update is None:
