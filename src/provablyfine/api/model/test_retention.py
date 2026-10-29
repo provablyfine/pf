@@ -136,7 +136,7 @@ def test_a_run_that_deletes_something_is_recorded_and_the_record_survives(
     assert second.total == 0
     with db.begin(engine) as connection:
         entries = app_db.create(connection).audit_log.read_all()
-    assert [e.type for e in entries] == [audit_types.RETENTION_PURGE.type]
+    assert [e.type for e in entries] == [audit_types.TENANT_PURGE_EXPIRED.type]
     assert entries[0].details["highest_entry_id"] == old
     assert entries[0].details["audit_entries"] == 1
 

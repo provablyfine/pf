@@ -179,7 +179,10 @@ def update_endpoint(
 
     _check_retention_days(data)
 
-    update_kwargs = {f: getattr(data, f) for f in data.model_fields_set}
+    # Schema order, so that the entries of the audit log do not depend on set ordering.
+    update_kwargs = {
+        f: getattr(data, f) for f in schemas.tenant.TenantUpdateRequest.model_fields if f in data.model_fields_set
+    }
     if update_kwargs:
         reg_db.tenant.update(**update_kwargs).where(id=tenant_id)
 

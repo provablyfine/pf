@@ -26,7 +26,6 @@ class ObjectType(enum.StrEnum):
     IDENTITY_INVITATION = "identity-invitation"
     LIVE_SESSION = "live-session"
     PUBLIC_KEY = "public-key"
-    RETENTION = "retention"
     ROLE = "role"
     SESSION = "session"
     SIGNING_KEY = "signing-key"
@@ -53,7 +52,7 @@ class Action(enum.StrEnum):
     LOGOUT = "logout"
     REJECTED = "rejected"
     REMOVE_MEMBERS = "remove-members"
-    PURGE = "purge"
+    PURGE_EXPIRED = "purge-expired"
     REMOVE_TAGS = "remove-tags"
     SET = "set"
     SET_ROLE = "set-role"
@@ -161,7 +160,7 @@ PUBLIC_KEY_REJECTED = AuditType(
 TENANT_UPDATE = AuditType(ObjectType.TENANT, Action.UPDATE, target_key=None)
 
 # What a purge deleted. The details name no one but the actor.
-RETENTION_PURGE = AuditType(ObjectType.RETENTION, Action.PURGE, target_key=None)
+TENANT_PURGE_EXPIRED = AuditType(ObjectType.TENANT, Action.PURGE_EXPIRED, target_key=None)
 
 
 @enum.unique
@@ -188,7 +187,7 @@ ACTIVITY_TYPES = (
     CERTIFICATE_CREATE_HOST,
 )
 
-EXEMPT_TYPES = (TENANT_UPDATE, RETENTION_PURGE)
+EXEMPT_TYPES = (TENANT_UPDATE, TENANT_PURGE_EXPIRED)
 
 
 def retention_class(entry_type: str) -> RetentionClass:
