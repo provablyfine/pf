@@ -60,6 +60,19 @@ def test_reporting_twice_changes_nothing(api, tmp_path):
 
     [session] = sc.list_live().sessions
     assert session.ended_at == first_end
+    entries = [e for e in sc.list_audit_log().entries if e.type in ("live-session-start", "live-session-end")]
+    assert len(entries) == 2
+
+
+def test_start_and_end_are_audited(api, tmp_path):
+    _, sc, host = _signed_in(api, tmp_path)
+    connection_id = base._sign_cert(sc, host)
+
+    sc.report_live("start", _report(connection_id, session_id="1"))
+    assert any(e.type == "live-session-start" for e in sc.list_audit_log().entries)
+
+    sc.report_live("end", _report(connection_id, session_id="1"))
+    assert any(e.type == "live-session-end" for e in sc.list_audit_log().entries)
 
 
 def test_a_certificate_used_twice_gives_two_sessions(api, tmp_path):

@@ -54,6 +54,7 @@ def _deletion_snapshot(identity: Identity) -> dict[str, typing.Any]:
     live.sort(key=lambda s: s.created_at, reverse=True)
     invitations = app.identity_invitation_key.read_all(identity_id=identity.id)
     connections = app.ssh_connection.read_all(identity_id=identity.id)
+    live_sessions = app.live_session.read_all(identity_id=identity.id)
 
     return {
         "name": identity.name,
@@ -93,6 +94,12 @@ def _deletion_snapshot(identity: Identity) -> dict[str, typing.Any]:
             for c in connections
             if c.valid_before > now
         ],
+        # A session that is already open keeps running until its deadline. Only its record is removed.
+        "open_bastion_sessions": [
+            {"id": s.id, "hostname": s.hostname, "kind": s.kind, "started_at": s.started_at, "deadline": s.deadline}
+            for s in live_sessions
+            if s.ended_at is None
+        ],
     }
 
 
@@ -104,7 +111,7 @@ def delete(id: int) -> None:
     The grants that name the identity are removed by `identity_grants.remove`. Call it first.
 
     Certificates that were already issued cannot be revoked. They stay valid until they expire,
-    and an SSH session that is already open runs until its deadline.
+    and an SSH session that is already open runs until its deadline. Its record is removed anyway.
     """
     identity = read_one(id=id)
     assert identity is not None
@@ -116,6 +123,7 @@ def delete(id: int) -> None:
     ctx.app_db.identity_invitation_key.delete(identity_id=id)
     ctx.app_db.role_member.delete(identity_id=id)
     ctx.app_db.ssh_connection.delete(identity_id=id)
+    ctx.app_db.live_session.delete(identity_id=id)
     ctx.app_db.identity.delete(id=id)
     audit_log.create(
         audit_types.IDENTITY_DELETE,
