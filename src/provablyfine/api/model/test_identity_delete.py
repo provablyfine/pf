@@ -93,6 +93,39 @@ def test_certificates_that_are_still_valid_are_listed(tenant_app_db: app_db.AppD
     assert tenant_app_db.ssh_connection.read_all(identity_id=identity_id) == []
 
 
+def test_open_bastion_sessions_are_listed_and_their_records_are_removed(tenant_app_db: app_db.AppDb) -> None:
+    identity_id = _identity()
+    now = int(time.time())
+    tenant_app_db.live_session.create(
+        id="open",
+        connection_id="c1",
+        identity_id=identity_id,
+        hostname="web",
+        kind="host",
+        session_id="1",
+        started_at=now,
+        ended_at=None,
+        deadline=now + 60,
+    )
+    tenant_app_db.live_session.create(
+        id="ended",
+        connection_id="c2",
+        identity_id=identity_id,
+        hostname="web",
+        kind="host",
+        session_id="2",
+        started_at=now - 60,
+        ended_at=now,
+        deadline=now + 60,
+    )
+
+    identity.delete(identity_id)
+
+    details = _delete_entry(tenant_app_db)
+    assert [s["id"] for s in details["open_bastion_sessions"]] == ["open"]  # type: ignore[attr-defined,index]
+    assert tenant_app_db.live_session.read_all(identity_id=identity_id) == []
+
+
 def test_key_material_never_reaches_the_audit_log(tenant_app_db: app_db.AppDb) -> None:
     identity_id = _identity()
     tenant_app_db.identity_invitation_key.create(

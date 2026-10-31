@@ -48,6 +48,7 @@ class Action(enum.StrEnum):
     DELETE = "delete"
     DELETE_REFUSED = "delete-refused"
     DENYLISTED = "denylisted"
+    END = "end"
     LOGIN = "login"
     LOGOUT = "logout"
     REJECTED = "rejected"
@@ -56,6 +57,7 @@ class Action(enum.StrEnum):
     REMOVE_TAGS = "remove-tags"
     SET = "set"
     SET_ROLE = "set-role"
+    START = "start"
     TERMINATE = "terminate"
     UPDATE = "update"
     UPDATE_CEILING_LIST = "update-ceiling-list"
@@ -139,6 +141,8 @@ ACCOUNT_KEY_REJECTED = AuditType(
     ObjectType.ACCOUNT_KEY, Action.REJECTED, app_db.AuditLogLevel.WARNING, target_key="account_key_id"
 )
 
+LIVE_SESSION_START = AuditType(ObjectType.LIVE_SESSION, Action.START, target_key="live_session_id")
+LIVE_SESSION_END = AuditType(ObjectType.LIVE_SESSION, Action.END, target_key="live_session_id")
 LIVE_SESSION_TERMINATE = AuditType(ObjectType.LIVE_SESSION, Action.TERMINATE, target_key="live_session_id")
 
 SIGNING_KEY_CREATE = AuditType(ObjectType.SIGNING_KEY, Action.CREATE, target_key="signing_key_id")
