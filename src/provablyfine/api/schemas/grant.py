@@ -134,6 +134,10 @@ class SSHGrant(base.APIBase):
 class TenantUpdatePermission(base.APIBase):
     display_name: bool
     is_enabled: bool
+    # A grant written before these existed does not give them.
+    audit_retention_days: bool = False
+    activity_retention_days: bool = False
+    retention_purge_enabled: bool = False
 
 
 class TenantPermission(base.APIBase):

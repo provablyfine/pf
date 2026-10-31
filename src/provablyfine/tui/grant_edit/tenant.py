@@ -46,6 +46,21 @@ class TenantGrantEditWidget(base.GrantEditWidget):
                 ("Read", "read", p.read),
                 ("Update display name", "update.display_name", True if update is None else update.display_name),
                 ("Update is enabled", "update.is_enabled", True if update is None else update.is_enabled),
+                (
+                    "Update audit retention",
+                    "update.audit_retention_days",
+                    True if update is None else update.audit_retention_days,
+                ),
+                (
+                    "Update activity retention",
+                    "update.activity_retention_days",
+                    True if update is None else update.activity_retention_days,
+                ),
+                (
+                    "Update purge enabled",
+                    "update.retention_purge_enabled",
+                    True if update is None else update.retention_purge_enabled,
+                ),
                 ("Delete", "delete", p.delete),
                 compact=True,
             )
@@ -60,6 +75,9 @@ class TenantGrantEditWidget(base.GrantEditWidget):
         update_dict = {
             "display_name": "update.display_name" in selected,
             "is_enabled": "update.is_enabled" in selected,
+            "audit_retention_days": "update.audit_retention_days" in selected,
+            "activity_retention_days": "update.activity_retention_days" in selected,
+            "retention_purge_enabled": "update.retention_purge_enabled" in selected,
         }
         return pfc.schemas.TenantGrant(
             type="tenant",

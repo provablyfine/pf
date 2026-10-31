@@ -97,6 +97,9 @@ def _add_tenant(engine: sqlalchemy.Engine, tenant_uuid: str, is_enabled: bool = 
             is_initialized=True,
             is_deleted=False,
             created_at=0,
+            audit_retention_days=365,
+            activity_retention_days=365,
+            retention_purge_enabled=True,
         )
 
 

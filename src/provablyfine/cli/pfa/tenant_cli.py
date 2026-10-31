@@ -65,10 +65,18 @@ def _update_function(args: argparse.Namespace) -> None:
         is_enabled = True
     elif args.disable:
         is_enabled = False
+    retention_purge_enabled = None
+    if args.enable_purge:
+        retention_purge_enabled = True
+    elif args.disable_purge:
+        retention_purge_enabled = False
     sc.update_tenant(
         args.id,
         display_name=args.display_name,
         is_enabled=is_enabled,
+        audit_retention_days=args.audit_retention_days,
+        activity_retention_days=args.activity_retention_days,
+        retention_purge_enabled=retention_purge_enabled,
     )
 
 
@@ -104,6 +112,11 @@ def add_subparser(parser: argparse.ArgumentParser) -> None:
     enable_group = update_parser.add_mutually_exclusive_group()
     enable_group.add_argument("--enable", action="store_true", default=False)
     enable_group.add_argument("--disable", action="store_true", default=False)
+    update_parser.add_argument("--audit-retention-days", type=int, default=None)
+    update_parser.add_argument("--activity-retention-days", type=int, default=None)
+    purge_group = update_parser.add_mutually_exclusive_group()
+    purge_group.add_argument("--enable-purge", action="store_true", default=False)
+    purge_group.add_argument("--disable-purge", action="store_true", default=False)
     update_parser.set_defaults(func=_update_function)
 
     delete_parser = subparsers.add_parser("delete", help="Delete a tenant")

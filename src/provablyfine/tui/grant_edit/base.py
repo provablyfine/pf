@@ -172,7 +172,13 @@ def new_grant(grant_type: str) -> pfc.schemas.Grant:
                 permission=pfc.schemas.TenantPermission(
                     create=False,
                     read=False,
-                    update=pfc.schemas.TenantUpdatePermission(display_name=False, is_enabled=False),
+                    update=pfc.schemas.TenantUpdatePermission(
+                        display_name=False,
+                        is_enabled=False,
+                        audit_retention_days=False,
+                        activity_retention_days=False,
+                        retention_purge_enabled=False,
+                    ),
                     delete=False,
                 ),
             )

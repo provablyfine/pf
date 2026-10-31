@@ -93,7 +93,8 @@ def test_tenant_upgrade_runs_a_migration_inside_its_schema(
             if connection.dialect.name == "sqlite":
                 # SQLite cannot drop a column that an index uses.
                 connection.execute(sqlalchemy.text("DROP INDEX idx_audit_log_object_type_action"))
-            for column in ("object_type", "action", "by_identity_name"):
+                connection.execute(sqlalchemy.text("DROP INDEX idx_audit_log_by_tenant_id"))
+            for column in ("object_type", "action", "by_identity_name", "by_tenant_id", "by_tenant_name"):
                 connection.execute(sqlalchemy.text(f"ALTER TABLE audit_log DROP COLUMN {column}"))
     finally:
         old_engine.dispose()

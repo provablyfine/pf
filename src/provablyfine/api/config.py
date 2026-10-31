@@ -75,8 +75,23 @@ class Config(pydantic.BaseModel):
     oidc_key_rotation_period: int = 30 * 86400
     oidc_key_staging_period: int = 7 * 86400
 
+    # Bounds for the retention period that a tenant can choose, in days.
+    retention_min_days: int = 30
+    retention_max_days: int = 365
+
     default_bastion: DefaultBastion | None = None
     email: EmailConfig | None = None
+
+    @pydantic.model_validator(mode="after")
+    def _check_retention_bounds(self) -> Config:
+        if not 1 <= self.retention_min_days <= self.retention_max_days:
+            raise ValueError("retention_min_days and retention_max_days must satisfy 1 <= min <= max")
+        return self
+
+    @property
+    def default_retention_days(self) -> int:
+        """The period of a new tenant. It is a year, unless the operator allows less."""
+        return min(365, self.retention_max_days)
 
     @staticmethod
     def load(filename: str | None = None) -> Config:

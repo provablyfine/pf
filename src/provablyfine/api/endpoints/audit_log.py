@@ -72,6 +72,7 @@ def list_endpoint(
     action: typing.Annotated[list[model.audit_types.Action] | None, fastapi.Query()] = None,
     type_prefix: str | None = None,
     by_identity_id: str | None = None,
+    by_tenant_id: int | None = None,
     start_time: int | None = None,
     end_time: int | None = None,
     ref_type: model.audit_types.ObjectType | None = None,
@@ -84,7 +85,8 @@ def list_endpoint(
 ) -> schemas.audit.AuditLogListResponse:
     """List audit entries, newest first by default.
 
-    Filters apply together. `object_type` and `action` take several values.
+    Filters apply together. `by_tenant_id` finds the entries written by an author of that other tenant.
+    `object_type` and `action` take several values.
     `ref_type` with `ref_id` or `ref_name` finds the entries about one object.
     With `ref_follow`, `ref_name` finds every object that ever had that name, and all the entries about them,
     even if they were renamed or deleted.
@@ -104,6 +106,7 @@ def list_endpoint(
             action=action,
             type_prefix=type_prefix,
             by_identity_id=by_identity_id,
+            by_tenant_id=by_tenant_id,
             start_time=start_time,
             end_time=end_time,
             ref_type=ref_type,
@@ -126,6 +129,8 @@ def list_endpoint(
             action=model.audit_types.Action(r.action),
             by_identity_id=r.by_identity_id,
             by_identity_name=r.by_identity_name,
+            by_tenant_id=r.by_tenant_id,
+            by_tenant_name=r.by_tenant_name,
             refs=[
                 schemas.audit.AuditLogRef(
                     type=model.audit_types.ObjectType(ref.object_type), id=ref.object_id, name=ref.object_name
