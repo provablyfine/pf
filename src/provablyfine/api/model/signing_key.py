@@ -29,6 +29,7 @@ def read_all(*args: typing.Any, **kwargs: typing.Any) -> list[typing.Any]:
     for key in keys:
         decrypted_key = ctx.kek.decrypt(key.key)
         key_dict = json.loads(decrypted_key.decode("utf-8"))
+        # pyrefly: ignore[bad-argument-type]
         output.append(key._replace(key=jwk.Private.from_dict(key_dict)))
     return output
 

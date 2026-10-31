@@ -381,9 +381,11 @@ async def _handle_work_conn(
 
             async def pump() -> None:
                 gather_coro = asyncio.gather(frps_to_local(), local_to_frps())
+                # pyrefly: ignore[missing-attribute]
                 if request.deadline is None:
                     await gather_coro
                     return
+                # pyrefly: ignore[unsupported-operation]
                 remaining = max(0, request.deadline - int(time.time()))
                 try:
                     await asyncio.wait_for(gather_coro, timeout=remaining)

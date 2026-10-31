@@ -1,0 +1,4 @@
+project-includes = ["src/provablyfine/**/*darwin*"]
+project-excludes = ["**/__pycache__", "**/test_*.py", "**/_test_*.py"]
+python-platform = "darwin"
+infer-with-first-use = false

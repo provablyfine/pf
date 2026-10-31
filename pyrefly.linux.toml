@@ -1,0 +1,4 @@
+project-includes = ["src/provablyfine/**/*linux*"]
+project-excludes = ["**/__pycache__", "**/test_*.py", "**/_test_*.py"]
+python-platform = "linux"
+infer-with-first-use = false

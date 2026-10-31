@@ -1,0 +1,17 @@
+project-includes = [
+    "src/provablyfine",
+    "tests",
+    "packages/provablyfine-client/src/provablyfine_client",
+]
+project-excludes = [
+    "**/node_modules",
+    "**/__pycache__",
+    "tests/**/*",
+    "**/test_*.py",
+    "**/*linux*",
+    "**/*darwin*",
+    "**/*win32*",
+    "src/provablyfine/_w32",
+]
+python-platform = "linux"
+infer-with-first-use = false
