@@ -35,6 +35,7 @@ HANDSHAKE_TAG = "T"
 ACCEPT_TAG = "A"
 
 _MAX_CONNECT_RESPONSE = 16 * 1024
+RECV_CHUNK_SIZE = 65536
 
 
 class Decryptor(typing.Protocol):
@@ -84,7 +85,7 @@ class FrpReader:
         del self._buf[:n]
         return result
 
-    async def read_some(self, n: int = 65536) -> bytes:
+    async def read_some(self, n: int = RECV_CHUNK_SIZE) -> bytes:
         """Drain any buffered bytes first, then fall back to a fresh recv().
 
         Used once a handshake read is done and the connection switches to raw
@@ -182,7 +183,7 @@ async def open_tunnel(url: str, hostname: str, token: str) -> Tunnel:
             await writer.drain()
 
         async def raw_recv() -> bytes:
-            return await reader.read(65536)
+            return await reader.read(RECV_CHUNK_SIZE)
 
         await write_frame(raw_send, None, HANDSHAKE_TAG, {"token": token})
         frame_reader = FrpReader(raw_recv, cipher=None)
