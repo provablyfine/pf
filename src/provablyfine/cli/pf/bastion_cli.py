@@ -355,6 +355,7 @@ async def _handle_work_conn(
 
             # Each token is used once, so its id tells two tunnels of the same connection apart.
             connection_id = request.connection_id
+            deadline = request.deadline
             live_start: asyncio.Future[None] | None = None
             if live is not None:
                 live_start = asyncio.ensure_future(live("start", connection_id, request.token_id, int(time.time())))
@@ -381,12 +382,10 @@ async def _handle_work_conn(
 
             async def pump() -> None:
                 gather_coro = asyncio.gather(frps_to_local(), local_to_frps())
-                # pyrefly: ignore[missing-attribute]
-                if request.deadline is None:
+                if deadline is None:
                     await gather_coro
                     return
-                # pyrefly: ignore[unsupported-operation]
-                remaining = max(0, request.deadline - int(time.time()))
+                remaining = max(0, deadline - int(time.time()))
                 try:
                     await asyncio.wait_for(gather_coro, timeout=remaining)
                 except TimeoutError:

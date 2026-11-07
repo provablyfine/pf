@@ -23,14 +23,31 @@ def create(key_type: app_db.SigningKeyType, crypto_key_type: jwk.KeyType, valid_
     )
 
 
-def read_all(*args: typing.Any, **kwargs: typing.Any) -> list[typing.Any]:
-    output: list[typing.Any] = []
+class DecryptedSigningKey(typing.NamedTuple):
+    id: int
+    type: int
+    key: jwk.Private
+    serial_number: int
+    valid_after: int
+    valid_before: int
+
+
+def read_all(*args: typing.Any, **kwargs: typing.Any) -> list[DecryptedSigningKey]:
+    output: list[DecryptedSigningKey] = []
     keys = ctx.app_db.signing_key.read_all(*args, **kwargs)
     for key in keys:
         decrypted_key = ctx.kek.decrypt(key.key)
         key_dict = json.loads(decrypted_key.decode("utf-8"))
-        # pyrefly: ignore[bad-argument-type]
-        output.append(key._replace(key=jwk.Private.from_dict(key_dict)))
+        output.append(
+            DecryptedSigningKey(
+                id=key.id,
+                type=key.type,
+                key=jwk.Private.from_dict(key_dict),
+                serial_number=key.serial_number,
+                valid_after=key.valid_after,
+                valid_before=key.valid_before,
+            )
+        )
     return output
 
 
