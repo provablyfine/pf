@@ -16,7 +16,7 @@ Create a child tenant for testing (will get id=2)
   $ pfa -c config.json tenant create --name acme --display-name "Acme Corp"
   .*id +uuid +name .* (re)
   -+ .* (re)
-  \s+\d+\s+[0-9a-f-]{36}\s+acme\s+Acme Corp\s+1\s+True\s+False\s+False\s+\d+ (re)
+  \s+\d+\s+[0-9a-f-]{36}\s+acme\s+Acme Corp\s+1\s+True\s+False\s+False\s+\d+\s+365\s+365\s+True (re)
   $ TENANT_ID=$(pfa -c config.json tenant list -q | tail -1)
 
 Check that grant "--read" is actually enforcing access control
@@ -45,7 +45,7 @@ Check that grant "{{grant}}" is actually enforcing access control
   $ pfa -c user1.json tenant create --name beta --display-name "Beta Corp"
   .*id +uuid +name .* (re)
   -+ .* (re)
-  \s+\d+\s+[0-9a-f-]{36}\s+beta\s+Beta Corp\s+1\s+True\s+False\s+False\s+\d+ (re)
+  \s+\d+\s+[0-9a-f-]{36}\s+beta\s+Beta Corp\s+1\s+True\s+False\s+False\s+\d+\s+365\s+365\s+True (re)
 
   $ pfa -c config.json role read -i $ROLE_ID -f json | jq '.grant_list[-1]' | pfa -c config.json role grant -i $ROLE_ID --del
 {% endfor %}
@@ -71,7 +71,7 @@ Check that grant "--delete" is actually enforcing access control
   $ pfa -c config.json tenant create --name gamma --display-name "Gamma Corp"
   .*id +uuid +name .* (re)
   -+ .* (re)
-  \s+\d+\s+[0-9a-f-]{36}\s+gamma\s+Gamma Corp\s+1\s+True\s+False\s+False\s+\d+ (re)
+  \s+\d+\s+[0-9a-f-]{36}\s+gamma\s+Gamma Corp\s+1\s+True\s+False\s+False\s+\d+\s+365\s+365\s+True (re)
   $ GAMMA_ID=$(pfa -c config.json tenant list -q | tail -1)
   $ pfa -c user1.json tenant delete -i $GAMMA_ID
   Not allowed to delete tenant

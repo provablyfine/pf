@@ -243,7 +243,7 @@ class AuditLogListScreen(base.Screen):
         for entry in entries:
             level = "[bold red]WARN[/]" if entry.level == 2 else "INFO"
             at = datetime.datetime.fromtimestamp(entry.at).strftime("%Y-%m-%d %H:%M:%S")
-            by = entry.by_identity_name or entry.by_identity_id or ""
+            by = entry.author
             about = ", ".join(f"{r.type}:{r.name or r.id}" for r in entry.refs[:2])
             table.add_row(at, level, entry.type, by, about, key=str(entry.id))
 
@@ -295,9 +295,10 @@ class AuditLogListScreen(base.Screen):
         at = datetime.datetime.fromtimestamp(entry.at).strftime("%Y-%m-%d %H:%M:%S")
         level = "WARN" if entry.level == 2 else "INFO"
         lines = [f"{at}  {level}  {entry.type}  (entry {entry.id})"]
-        by = entry.by_identity_name or entry.by_identity_id
+        by = entry.author
         if by:
-            lines.append(f"by    {by}" + (f" (id {entry.by_identity_id})" if entry.by_identity_name else ""))
+            local_id = entry.by_identity_id is not None and entry.by_identity_name
+            lines.append(f"by    {by}" + (f" (id {entry.by_identity_id})" if local_id else ""))
         lines.extend(f"refs  {r.type} {r.name or ''} (id {r.id})" for r in entry.refs)
         skipped = {"refs", "old"}
         old = entry.details.get("old")

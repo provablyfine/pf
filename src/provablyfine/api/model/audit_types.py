@@ -30,6 +30,7 @@ class ObjectType(enum.StrEnum):
     SESSION = "session"
     SIGNING_KEY = "signing-key"
     TAG = "tag"
+    TENANT = "tenant"
     # An entry from an older version whose type is no longer written.
     UNKNOWN = "unknown"
 
@@ -47,12 +48,16 @@ class Action(enum.StrEnum):
     DELETE = "delete"
     DELETE_REFUSED = "delete-refused"
     DENYLISTED = "denylisted"
+    END = "end"
     LOGIN = "login"
     LOGOUT = "logout"
     REJECTED = "rejected"
     REMOVE_MEMBERS = "remove-members"
+    PURGE_EXPIRED = "purge-expired"
     REMOVE_TAGS = "remove-tags"
+    SET = "set"
     SET_ROLE = "set-role"
+    START = "start"
     TERMINATE = "terminate"
     UPDATE = "update"
     UPDATE_CEILING_LIST = "update-ceiling-list"
@@ -136,6 +141,8 @@ ACCOUNT_KEY_REJECTED = AuditType(
     ObjectType.ACCOUNT_KEY, Action.REJECTED, app_db.AuditLogLevel.WARNING, target_key="account_key_id"
 )
 
+LIVE_SESSION_START = AuditType(ObjectType.LIVE_SESSION, Action.START, target_key="live_session_id")
+LIVE_SESSION_END = AuditType(ObjectType.LIVE_SESSION, Action.END, target_key="live_session_id")
 LIVE_SESSION_TERMINATE = AuditType(ObjectType.LIVE_SESSION, Action.TERMINATE, target_key="live_session_id")
 
 SIGNING_KEY_CREATE = AuditType(ObjectType.SIGNING_KEY, Action.CREATE, target_key="signing_key_id")
@@ -150,6 +157,53 @@ PUBLIC_KEY_DENYLISTED = AuditType(
 PUBLIC_KEY_REJECTED = AuditType(
     ObjectType.PUBLIC_KEY, Action.REJECTED, app_db.AuditLogLevel.WARNING, target_key="public_key_id"
 )
+
+# A change to a tenant: its display name, whether it is enabled, or one of its retention values.
+# It is written in the tenant that changed and in the tenant of the caller when they differ.
+# It is never purged, because it holds the retention changes. A tenant changes rarely, so it stays small.
+TENANT_UPDATE = AuditType(ObjectType.TENANT, Action.UPDATE, target_key=None)
+
+# What a purge deleted. The details name no one but the actor.
+TENANT_PURGE_EXPIRED = AuditType(ObjectType.TENANT, Action.PURGE_EXPIRED, target_key=None)
+
+
+@enum.unique
+class RetentionClass(enum.Enum):
+    """Which retention period applies to an entry."""
+
+    # Changes to the configuration. Anything not listed below.
+    AUDIT = "audit"
+    # Logins, rejections and connections.
+    ACTIVITY = "activity"
+    # The proof that retention ran, and the changes to the tenant. Never purged.
+    # They name the identity that made the change. They hold no other data about a person.
+    EXEMPT = "exempt"
+
+
+ACTIVITY_TYPES = (
+    SESSION_LOGIN,
+    SESSION_LOGOUT,
+    SESSION_SET_ROLE,
+    SESSION_REJECTED,
+    ACCOUNT_KEY_REJECTED,
+    PUBLIC_KEY_REJECTED,
+    LIVE_SESSION_START,
+    LIVE_SESSION_END,
+    LIVE_SESSION_TERMINATE,
+    CERTIFICATE_CREATE_USER,
+    CERTIFICATE_CREATE_HOST,
+)
+
+EXEMPT_TYPES = (TENANT_UPDATE, TENANT_PURGE_EXPIRED)
+
+
+def retention_class(entry_type: str) -> RetentionClass:
+    """The class of an entry, from its joined `type`. A type that is not listed is `AUDIT`."""
+    if entry_type in {t.type for t in EXEMPT_TYPES}:
+        return RetentionClass.EXEMPT
+    if entry_type in {t.type for t in ACTIVITY_TYPES}:
+        return RetentionClass.ACTIVITY
+    return RetentionClass.AUDIT
 
 
 def all_types() -> list[AuditType]:

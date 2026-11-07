@@ -10,6 +10,7 @@ import uuid
 
 from .. import app_db
 from ..context import ctx
+from . import audit_log, audit_types
 
 # Certificate records are kept this long after the certificate expires.
 # A host that was offline can still report a session it saw, until then.
@@ -32,8 +33,9 @@ def _connection(connection_id: str, hostname: str) -> app_db.SshConnectionRow:
 def start(*, connection_id: str, hostname: str, kind: Kind, session_id: str, at: int) -> None:
     """Record that a session started. Reporting the same session again changes nothing."""
     row = _connection(connection_id, hostname)
-    ctx.app_db.live_session.create_if_absent(
-        id=str(uuid.uuid4()),
+    live_session_id = str(uuid.uuid4())
+    created = ctx.app_db.live_session.create_if_absent(
+        id=live_session_id,
         connection_id=connection_id,
         identity_id=row.identity_id,
         hostname=hostname,
@@ -43,6 +45,16 @@ def start(*, connection_id: str, hostname: str, kind: Kind, session_id: str, at:
         ended_at=None,
         deadline=row.deadline,
     )
+    if created:
+        audit_log.create(
+            audit_types.LIVE_SESSION_START,
+            live_session_id=live_session_id,
+            identity_id=row.identity_id,
+            connection_id=connection_id,
+            hostname=hostname,
+            kind=kind,
+            session_id=session_id,
+        )
 
 
 def end(*, connection_id: str, hostname: str, kind: Kind, session_id: str, at: int) -> None:
@@ -58,7 +70,20 @@ def end(*, connection_id: str, hostname: str, kind: Kind, session_id: str, at: i
         where["session_id"] = session_id
     rows = table.read_all(columns.ended_at.is_(None), **where)
     for row in rows:
-        table.update(ended_at=max(at, row.started_at)).where(id=row.id, ended_at=None)
+        ended_at = max(at, row.started_at)
+        updated = table.update(ended_at=ended_at).where(id=row.id, ended_at=None)
+        if updated == 1:
+            audit_log.create(
+                audit_types.LIVE_SESSION_END,
+                live_session_id=row.id,
+                identity_id=row.identity_id,
+                connection_id=row.connection_id,
+                hostname=row.hostname,
+                kind=row.kind,
+                session_id=row.session_id,
+                started_at=row.started_at,
+                ended_at=ended_at,
+            )
 
 
 def read_one(id: str) -> app_db.LiveSessionRow | None:

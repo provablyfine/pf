@@ -36,6 +36,9 @@ class TenantRow(typing.NamedTuple):
     is_initialized: bool
     is_deleted: bool
     created_at: int
+    audit_retention_days: int
+    activity_retention_days: int
+    retention_purge_enabled: bool
 
 
 tenant = orm.make_table("tenant", metadata, TenantRow, sqlite_autoincrement=True)

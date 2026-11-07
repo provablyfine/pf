@@ -9,6 +9,7 @@ from . import app_db, db, migrate
 from .context import ctx
 
 if typing.TYPE_CHECKING:
+    # pyrefly: ignore[missing-import]
     import conftest as root_conftest
 
 

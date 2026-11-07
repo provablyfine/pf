@@ -42,6 +42,7 @@ nav:
   - General administration:
       - Auditing: admin/audit.md
       - Tenants: admin/tenants.md
+      - Retention: admin/retention.md
       - Admin TUI: admin/tui.md
       - OIDC Authentication: admin/oidc.md
   - Self-hosting:

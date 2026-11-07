@@ -25,6 +25,10 @@ class AuditLogEntry(base.APIBase):
     action: model.audit_types.Action
     by_identity_id: str | None
     by_identity_name: str | None = None
+    # Set when the author belongs to another tenant. Then by_identity_id is None, because it means nothing here.
+    # The names are the ones the tenant and the identity had when the entry was written.
+    by_tenant_id: int | None = None
+    by_tenant_name: str | None = None
     refs: list[AuditLogRef] = pydantic.Field(default_factory=list[AuditLogRef])
     details: dict[str, typing.Any]
 

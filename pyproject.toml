@@ -67,6 +67,7 @@ pf = "provablyfine.cli.pf.main:pf"
 pfa = "provablyfine.cli.pfa.main:pfa"
 pfat = "provablyfine.tui.app:pfat"
 pf-api-rotate = "provablyfine.api.rotate:main"
+pf-api-purge = "provablyfine.api.purge:main"
 
 [tool.coverage.run]
 source = [
@@ -86,8 +87,7 @@ dev = [
     "coverage>=7.13.4",
     "hatchling",
     "jinja2>=3.1.6",
-    "pyright>=1.1.411",
-    "pytest>=9.0.2",
+    "pytest>=9.0.2,<9.2",  # mutmut 3.8.0 reads Item._nodeid, removed in 9.2
     "pytest-xdist>=3.8.0",
     "pytest-anyio",
     "ruff>=0.15.6",
@@ -106,6 +106,7 @@ dev = [
     "towncrier>=24.0.0",
     "mutmut>=3.7.0",
     "pyte>=0.8.2",
+    "pyrefly>=1.4.0",
 ]
 # Shared build group for the platform packaging jobs: pyinstaller payload for
 # the Windows installer (packaging/windows), the Linux deb/rpm packages
@@ -215,9 +216,6 @@ select = ["E", "F", "I", "UP", "RUF", "S"]
 "**" = ["S101", "S110", "S606"]
 "tests/**" = ["S"]
 #"**/conftest.py" = ["S101"]
-
-[tool.mypy]
-strict = true
 
 [tool.towncrier]
 package = "pf"

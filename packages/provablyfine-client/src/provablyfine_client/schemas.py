@@ -126,6 +126,9 @@ class Tenant(_Base):
     is_initialized: bool
     is_deleted: bool
     created_at: int
+    audit_retention_days: int = 365
+    activity_retention_days: int = 365
+    retention_purge_enabled: bool = True
 
 
 class TenantsResponse(_Base):
@@ -418,9 +421,18 @@ class SSHPermission(_Base):
 class TenantUpdatePermission(_Base):
     display_name: bool
     is_enabled: bool
+    audit_retention_days: bool = False
+    activity_retention_days: bool = False
+    retention_purge_enabled: bool = False
 
     def to_text(self) -> str:
-        output = _bool(self.display_name, "display_name") + _bool(self.is_enabled, "is_enabled")
+        output = (
+            _bool(self.display_name, "display_name")
+            + _bool(self.is_enabled, "is_enabled")
+            + _bool(self.audit_retention_days, "audit_retention_days")
+            + _bool(self.activity_retention_days, "activity_retention_days")
+            + _bool(self.retention_purge_enabled, "retention_purge_enabled")
+        )
         return " ".join(output)
 
 
@@ -731,8 +743,20 @@ class AuditLogEntry(_Base):
     action: str = ""
     by_identity_id: str | None = None
     by_identity_name: str | None = None
+    # Set when the author belongs to another tenant. Then by_identity_id is None.
+    by_tenant_id: int | None = None
+    by_tenant_name: str | None = None
     refs: list[AuditLogRef] = []
     details: dict[str, typing.Any] = {}
+
+    @property
+    def author(self) -> str:
+        """Who did it, with the tenant of an author who belongs to another one: `alice@corp.com (acme)`."""
+        name = self.by_identity_name or self.by_identity_id or ""
+        if self.by_tenant_id is None:
+            return name
+        tenant = f"({self.by_tenant_name or self.by_tenant_id})"
+        return f"{name} {tenant}" if name else tenant
 
 
 class AuditLogObjectTypeInfo(_Base):

@@ -31,6 +31,7 @@ def _free_port() -> int:
         "permission.t",
         "existence-oracle.t",
         "tenant-names.t",
+        "retention.t",
         "access-control-tag.t.jinja",
         "access-control-tenant.t.jinja",
         "access-control-bastion.t.jinja",

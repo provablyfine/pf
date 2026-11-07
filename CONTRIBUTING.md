@@ -18,7 +18,7 @@ Check any changes with:
 ```
 uv run ruff check
 uv run ruff format
-uv run pyright
+uv run pyrefly check
 ```
 
 Most notably, all code is expected to use python type annotations for
@@ -31,7 +31,7 @@ We use python type hints extensively so, the first order of business is to
 verify that your changes are still correct with regard to type hints:
 
 ```console
-$ uv run pyright
+$ uv run pyrefly check
 ```
 
 Both unit tests and end-to-end tests can be run with pytest:
