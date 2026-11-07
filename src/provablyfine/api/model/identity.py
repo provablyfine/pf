@@ -39,9 +39,9 @@ def create(name: str, boundary_id_list: list[int], tag_id_list: list[int], unix_
     return identity_id
 
 
-# Sessions that are still usable when an identity is deleted are listed one by one in the audit log.
-# A busy identity can have many, so the list is capped.
-_AUDIT_LIVE_SESSIONS = 50
+# Identity session keys that are still usable when an identity is deleted are listed one by one
+# in the audit log. A busy identity can have many, so the list is capped.
+_AUDIT_ACTIVE_SESSION_KEYS = 50
 
 
 def _deletion_snapshot(identity: Identity) -> dict[str, typing.Any]:
@@ -50,8 +50,8 @@ def _deletion_snapshot(identity: Identity) -> dict[str, typing.Any]:
     app = ctx.app_db
 
     sessions = app.identity_session_key.read_all(identity_id=identity.id)
-    live = [s for s in sessions if not s.is_revoked and s.logged_out_at is None and s.expires_at > now]
-    live.sort(key=lambda s: s.created_at, reverse=True)
+    active_session_keys = [s for s in sessions if not s.is_revoked and s.logged_out_at is None and s.expires_at > now]
+    active_session_keys.sort(key=lambda s: s.created_at, reverse=True)
     invitations = app.identity_invitation_key.read_all(identity_id=identity.id)
     connections = app.ssh_connection.read_all(identity_id=identity.id)
     live_sessions = app.live_session.read_all(identity_id=identity.id)
@@ -72,7 +72,7 @@ def _deletion_snapshot(identity: Identity) -> dict[str, typing.Any]:
         ],
         "session_count": len(sessions),
         "last_session_created_at": max((s.created_at for s in sessions), default=None),
-        "live_sessions": [
+        "active_session_keys": [
             {
                 "id": s.id,
                 "created_at": s.created_at,
@@ -80,9 +80,9 @@ def _deletion_snapshot(identity: Identity) -> dict[str, typing.Any]:
                 "login_ip": s.login_ip,
                 "role_id": s.role_id,
             }
-            for s in live[:_AUDIT_LIVE_SESSIONS]
+            for s in active_session_keys[:_AUDIT_ACTIVE_SESSION_KEYS]
         ],
-        "live_sessions_truncated": max(0, len(live) - _AUDIT_LIVE_SESSIONS),
+        "active_session_keys_truncated": max(0, len(active_session_keys) - _AUDIT_ACTIVE_SESSION_KEYS),
         # Certificates that were already issued stay valid until they expire. They cannot be revoked.
         "valid_ssh_connections": [
             {
@@ -95,7 +95,7 @@ def _deletion_snapshot(identity: Identity) -> dict[str, typing.Any]:
             if c.valid_before > now
         ],
         # A session that is already open keeps running until its deadline. Only its record is removed.
-        "open_bastion_sessions": [
+        "live_sessions": [
             {"id": s.id, "hostname": s.hostname, "kind": s.kind, "started_at": s.started_at, "deadline": s.deadline}
             for s in live_sessions
             if s.ended_at is None
@@ -130,7 +130,7 @@ def delete(id: int) -> None:
         refs=audit_log.refs(
             tags=snapshot["tag_id_list"],
             boundaries=snapshot["boundary_id_list"],
-            roles={*snapshot["role_id_list"], *(s["role_id"] for s in snapshot["live_sessions"] if s["role_id"])},
+            roles={*snapshot["role_id_list"], *(s["role_id"] for s in snapshot["active_session_keys"] if s["role_id"])},
         ),
         id=id,
         **snapshot,
