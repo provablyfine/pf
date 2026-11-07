@@ -90,7 +90,7 @@ def test_the_sessions_of_a_deleted_identity_stop_and_are_recorded(api, tmp_path)
     assert entry.details["id"] == second_id
     assert entry.details["name"] == "second"
     assert entry.details["session_count"] == 1
-    (session,) = entry.details["live_sessions"]
+    (session,) = entry.details["active_session_keys"]
     assert session["login_ip"] == "127.0.0.1"
 
 

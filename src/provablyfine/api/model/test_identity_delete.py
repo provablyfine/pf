@@ -47,7 +47,7 @@ def test_the_audit_entry_says_who_was_deleted(tenant_app_db: app_db.AppDb) -> No
     assert tenant_app_db.identity.read_one(id=identity_id) is None
 
 
-def test_live_sessions_are_listed_and_the_others_are_only_counted(tenant_app_db: app_db.AppDb) -> None:
+def test_active_session_keys_are_listed_and_the_others_are_only_counted(tenant_app_db: app_db.AppDb) -> None:
     identity_id = _identity()
     now = int(time.time())
     _session(tenant_app_db, identity_id, "live")
@@ -59,21 +59,21 @@ def test_live_sessions_are_listed_and_the_others_are_only_counted(tenant_app_db:
 
     details = _delete_entry(tenant_app_db)
     assert details["session_count"] == 4
-    assert [s["id"] for s in details["live_sessions"]] == ["live"]  # type: ignore[index]
-    assert details["live_sessions"][0]["login_ip"] == "10.0.0.1"  # type: ignore[index]
+    assert [s["id"] for s in details["active_session_keys"]] == ["live"]  # type: ignore[index]
+    assert details["active_session_keys"][0]["login_ip"] == "10.0.0.1"  # type: ignore[index]
     assert tenant_app_db.identity_session_key.read_all(identity_id=identity_id) == []
 
 
-def test_the_list_of_live_sessions_is_capped(tenant_app_db: app_db.AppDb) -> None:
+def test_the_list_of_active_session_keys_is_capped(tenant_app_db: app_db.AppDb) -> None:
     identity_id = _identity()
-    for i in range(identity._AUDIT_LIVE_SESSIONS + 5):
+    for i in range(identity._AUDIT_ACTIVE_SESSION_KEYS + 5):
         _session(tenant_app_db, identity_id, f"live-{i}")
 
     identity.delete(identity_id)
 
     details = _delete_entry(tenant_app_db)
-    assert len(details["live_sessions"]) == identity._AUDIT_LIVE_SESSIONS  # type: ignore[arg-type]
-    assert details["live_sessions_truncated"] == 5
+    assert len(details["active_session_keys"]) == identity._AUDIT_ACTIVE_SESSION_KEYS  # type: ignore[arg-type]
+    assert details["active_session_keys_truncated"] == 5
 
 
 def test_certificates_that_are_still_valid_are_listed(tenant_app_db: app_db.AppDb) -> None:
@@ -93,7 +93,7 @@ def test_certificates_that_are_still_valid_are_listed(tenant_app_db: app_db.AppD
     assert tenant_app_db.ssh_connection.read_all(identity_id=identity_id) == []
 
 
-def test_open_bastion_sessions_are_listed_and_their_records_are_removed(tenant_app_db: app_db.AppDb) -> None:
+def test_live_sessions_are_listed_and_their_records_are_removed(tenant_app_db: app_db.AppDb) -> None:
     identity_id = _identity()
     now = int(time.time())
     tenant_app_db.live_session.create(
@@ -122,7 +122,7 @@ def test_open_bastion_sessions_are_listed_and_their_records_are_removed(tenant_a
     identity.delete(identity_id)
 
     details = _delete_entry(tenant_app_db)
-    assert [s["id"] for s in details["open_bastion_sessions"]] == ["open"]  # type: ignore[attr-defined,index]
+    assert [s["id"] for s in details["live_sessions"]] == ["open"]  # type: ignore[attr-defined,index]
     assert tenant_app_db.live_session.read_all(identity_id=identity_id) == []
 
 
