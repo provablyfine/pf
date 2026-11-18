@@ -3,6 +3,7 @@ import collections
 import contextlib
 import json
 import logging
+import time
 
 import cryptography.fernet
 import fastapi
@@ -23,8 +24,11 @@ FIRST_MESSAGE_TIMEOUT = 10
 TUNNEL_OPEN_TIMEOUT = 15
 MAX_FIRST_MESSAGE = 8192
 MAX_FRAME = 65536
+PENDING = ("pending", 0)
 
 
+# TODO: counters live in this process. With several workers every limit is multiplied by the
+# worker count: share them across workers or divide the limits.
 class SessionCounter:
     def __init__(self) -> None:
         self._count: collections.Counter[tuple[str, int]] = collections.Counter()
@@ -78,7 +82,23 @@ async def _authorize(
     return claims, bastion
 
 
-async def _forward_up(websocket: fastapi.WebSocket, tunnel: bastion_visitor.Tunnel) -> None:
+class _Activity:
+    def __init__(self) -> None:
+        self.last = time.monotonic()
+
+    def touch(self) -> None:
+        self.last = time.monotonic()
+
+
+async def _watch_idle(activity: _Activity, timeout: int) -> None:
+    while True:
+        remaining = activity.last + timeout - time.monotonic()
+        if remaining <= 0:
+            return
+        await asyncio.sleep(remaining)
+
+
+async def _forward_up(websocket: fastapi.WebSocket, tunnel: bastion_visitor.Tunnel, activity: _Activity) -> None:
     while True:
         message = await websocket.receive()
         if message["type"] == "websocket.disconnect":
@@ -86,20 +106,27 @@ async def _forward_up(websocket: fastapi.WebSocket, tunnel: bastion_visitor.Tunn
         data = message.get("bytes")
         if data is None or len(data) > MAX_FRAME:
             return
+        activity.touch()
         tunnel.writer.write(data)
         await tunnel.writer.drain()
 
 
-async def _forward_down(websocket: fastapi.WebSocket, tunnel: bastion_visitor.Tunnel) -> None:
+async def _forward_down(websocket: fastapi.WebSocket, tunnel: bastion_visitor.Tunnel, activity: _Activity) -> None:
     while True:
         data = await tunnel.reader.read_some(MAX_FRAME)
         if len(data) == 0:
             return
+        activity.touch()
         await websocket.send_bytes(data)
 
 
-async def _forward(websocket: fastapi.WebSocket, tunnel: bastion_visitor.Tunnel) -> None:
-    tasks = [asyncio.create_task(_forward_up(websocket, tunnel)), asyncio.create_task(_forward_down(websocket, tunnel))]
+async def _forward(websocket: fastapi.WebSocket, tunnel: bastion_visitor.Tunnel, idle_timeout: int) -> None:
+    activity = _Activity()
+    tasks = [
+        asyncio.create_task(_forward_up(websocket, tunnel, activity)),
+        asyncio.create_task(_forward_down(websocket, tunnel, activity)),
+        asyncio.create_task(_watch_idle(activity, idle_timeout)),
+    ]
     try:
         await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
     finally:
@@ -109,25 +136,40 @@ async def _forward(websocket: fastapi.WebSocket, tunnel: bastion_visitor.Tunnel)
         tunnel.writer.close()
 
 
+async def _handshake(
+    websocket: fastapi.WebSocket, tenant_uuid: str
+) -> tuple[model.bastion.ConnectClaims, model.bastion.Bastion, str] | None:
+    sessions: SessionCounter = websocket.app.state.gateway_sessions
+    if not sessions.acquire(PENDING, websocket.app.state.config.gateway_max_unauthenticated_sockets):
+        await websocket.close(code=CLOSE_BUSY)
+        return None
+    try:
+        await websocket.accept()
+        first = await _read_first_message(websocket)
+        if first is None:
+            await websocket.close(code=CLOSE_UNAUTHORIZED)
+            return None
+        token, bastion_id = first
+        kek = cryptography.fernet.Fernet(websocket.app.state.kek)
+        with ctx.set_kek(kek), ctx.set_config(websocket.app.state.config):
+            authorized = await _authorize(websocket, tenant_uuid, token, bastion_id)
+        if authorized is None:
+            await websocket.close(code=CLOSE_UNAUTHORIZED)
+            return None
+        return authorized[0], authorized[1], token
+    finally:
+        sessions.release(PENDING)
+
+
 @router.websocket("/ws")
 async def gateway_websocket(websocket: fastapi.WebSocket, tenant_uuid: str) -> None:
     if not _origin_allowed(websocket):
         await websocket.close(code=fastapi.status.WS_1008_POLICY_VIOLATION)
         return
-    await websocket.accept()
-
-    first = await _read_first_message(websocket)
-    if first is None:
-        await websocket.close(code=CLOSE_UNAUTHORIZED)
+    authenticated = await _handshake(websocket, tenant_uuid)
+    if authenticated is None:
         return
-    token, bastion_id = first
-
-    with ctx.set_kek(cryptography.fernet.Fernet(websocket.app.state.kek)), ctx.set_config(websocket.app.state.config):
-        authorized = await _authorize(websocket, tenant_uuid, token, bastion_id)
-    if authorized is None:
-        await websocket.close(code=CLOSE_UNAUTHORIZED)
-        return
-    claims, bastion = authorized
+    claims, bastion, token = authenticated
 
     sessions: SessionCounter = websocket.app.state.gateway_sessions
     key = (tenant_uuid, claims.identity_id)
@@ -143,7 +185,7 @@ async def gateway_websocket(websocket: fastapi.WebSocket, tenant_uuid: str) -> N
             logger.info(f"gateway: bastion={bastion.url} unreachable connection_id={claims.connection_id}: {e}")
             await websocket.close(code=CLOSE_UNREACHABLE)
             return
-        await _forward(websocket, tunnel)
+        await _forward(websocket, tunnel, websocket.app.state.config.gateway_idle_timeout)
         with contextlib.suppress(Exception):
             await websocket.close()
     finally:

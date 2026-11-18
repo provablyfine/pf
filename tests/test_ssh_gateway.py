@@ -238,3 +238,51 @@ def test_an_identity_cannot_exceed_its_session_limit(api, tmp_path):
                 assert await _close_code(third) == 4429
 
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("api", [{"gateway_idle_timeout": 1}], indirect=True)
+def test_an_idle_session_is_closed(api, tmp_path):
+    sc, host = _signed_in(api, tmp_path)
+
+    async def scenario():
+        async with _fake_bastion() as port:
+            bastion_id = _register_bastion(sc, port)
+            async with websockets_client.connect(_url(api)) as ws:
+                await ws.send(_hello(_connect_token(sc, host), bastion_id))
+                await _echo(ws)
+                assert await _close_code(ws) == 1000
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("api", [{"gateway_idle_timeout": 1}], indirect=True)
+def test_a_session_with_traffic_stays_open(api, tmp_path):
+    sc, host = _signed_in(api, tmp_path)
+
+    async def scenario():
+        async with _fake_bastion() as port:
+            bastion_id = _register_bastion(sc, port)
+            async with websockets_client.connect(_url(api)) as ws:
+                await ws.send(_hello(_connect_token(sc, host), bastion_id))
+                for _ in range(5):
+                    await _echo(ws)
+                    await asyncio.sleep(0.5)
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("api", [{"gateway_max_unauthenticated_sockets": 2}], indirect=True)
+def test_unauthenticated_sockets_are_capped(api):
+    async def scenario():
+        async with contextlib.AsyncExitStack() as stack:
+            for _ in range(2):
+                await stack.enter_async_context(websockets_client.connect(_url(api)))
+            with pytest.raises(websockets_exceptions.InvalidStatus) as info:
+                async with websockets_client.connect(_url(api)):
+                    pass
+            assert info.value.response.status_code == 403
+        async with websockets_client.connect(_url(api)) as ws:
+            await ws.send("not json")
+            assert await _close_code(ws) == 4401
+
+    asyncio.run(scenario())
