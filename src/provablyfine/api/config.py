@@ -71,6 +71,11 @@ class Config(pydantic.BaseModel):
     user_certificate_lifetime: int = 60
     user_extra_trusted_keys_filename: str | None = None
 
+    gateway_allowed_origins: list[str] = pydantic.Field(default_factory=list[str])
+    gateway_max_sessions_per_identity: int = pydantic.Field(default=8, ge=1)
+    gateway_max_unauthenticated_sockets: int = pydantic.Field(default=256, ge=1)
+    gateway_idle_timeout: int = pydantic.Field(default=300, ge=1)
+
     oidc_key_grace_period: int = 7 * 86400
     oidc_key_rotation_period: int = 30 * 86400
     oidc_key_staging_period: int = 7 * 86400

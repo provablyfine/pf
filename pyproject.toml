@@ -38,6 +38,7 @@ dependencies = [
   "http-sfv",
   "fastapi>=0.115",
   "uvicorn>=0.34",
+  "websockets>=17.4",
   "tabulate>=0.9.0",
   "requests>=2.32.5",
   "pydantic",

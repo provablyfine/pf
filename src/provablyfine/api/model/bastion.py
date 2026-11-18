@@ -214,3 +214,37 @@ def generate_terminate_token(hostname: str, connection_id: str) -> str:
     The host takes the target from the signed `cid` claim and from nowhere else.
     """
     return _sign(hostname, "terminate", {"cid": connection_id})
+
+
+@dataclasses.dataclass(frozen=True)
+class ConnectClaims:
+    identity_id: int
+    connection_id: str
+    audience: str
+
+
+def verify_connect_token(token: str) -> ConnectClaims | None:
+    try:
+        kid = jwt.get_unverified_header(token).get("kid")
+    except jwt.exceptions.InvalidTokenError:
+        return None
+    key = next((k for k in oidc_key.get_public_keys() if k.thumbprint() == kid), None)
+    if key is None:
+        return None
+    try:
+        claims = jwt.decode(
+            token,
+            key.to_crypto(),
+            algorithms=["EdDSA"],
+            issuer=f"{ctx.config.base_url}/pf/t/{ctx.tenant_uuid}/public/oidc",
+            options={"require": ["sub", "aud", "exp", "iss", "cid"], "verify_aud": False},
+        )
+    except jwt.exceptions.InvalidTokenError:
+        return None
+    if claims.get("use") != "connect" or not str(claims["aud"]).endswith(f"-{_tenant_label()}"):
+        return None
+    try:
+        identity_id = int(claims["sub"])
+    except ValueError:
+        return None
+    return ConnectClaims(identity_id=identity_id, connection_id=str(claims["cid"]), audience=str(claims["aud"]))
