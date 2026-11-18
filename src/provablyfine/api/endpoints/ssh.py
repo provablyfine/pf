@@ -1,4 +1,3 @@
-import dataclasses
 import logging
 import time
 import typing
@@ -7,8 +6,8 @@ import uuid
 import fastapi
 import fastapi.responses
 
-from ... import jwk, ssh
-from .. import app_db, converters, grant, model, responses, schemas, shell_ticket, signature
+from ... import ssh
+from .. import app_db, converters, grant, model, responses, schemas, signature
 from ..context import ctx
 
 logger = logging.getLogger(__name__)
@@ -71,26 +70,22 @@ def sign_host_certificate(data: schemas.ssh.SSHHostCertificateRequest) -> schema
     return schemas.ssh.SSHHostCertificateResponse(certificates=[converters.cert_to_schema(c) for c in certificates])
 
 
-@dataclasses.dataclass
-class _IssuedCertificate:
-    cert: ssh.cert.Cert
-    connection_id: str
-    deadline: int | None
-    bastion_list: list[schemas.bastion.Bastion]
-    ip_address_list: list[str]
+@router.post(
+    "/user/certificate",
+    status_code=200,
+    dependencies=[fastapi.Depends(signature.verify_session)],
+    responses={400: responses.PROBLEM, 403: responses.PROBLEM, 404: responses.PROBLEM},
+)
+def sign_user_certificate(data: schemas.ssh.SSHUserCertificateRequest) -> schemas.ssh.SSHUserCertificateResponse:
+    caller = model.identity.read_one(id=ctx.identity_id)
+    assert caller is not None  # because we are authenticated
+    host = model.identity.read_one(name=data.hostname)
+    if host is None:
+        raise responses.ProblemHTTPException(responses.problem_response(status_code=404, title="Unknown host"))
 
-
-def _issue_user_certificate(
-    *,
-    caller: model.identity.Identity,
-    host: model.identity.Identity,
-    username: str,
-    public_key: jwk.Public,
-    action: typing.Literal["shell", "port-forwarding", "command"],
-    command: str | None = None,
-) -> _IssuedCertificate:
     checker = grant.Grants.create().ssh(host.id, host.tag_id_list, host.boundary_id_list)
-    decision = checker.decide(username, caller.unix_username)
+    decision = checker.decide(data.username, caller.unix_username)
+    public_key = converters.public_from_schema(data.public_key)
     signers = _read_current(app_db.SigningKeyType.USER, ctx.config.user_key_staging_period)
     signer = signers[0]
     # The certificate embeds its serial number: reserve it before signing.
@@ -98,7 +93,7 @@ def _issue_user_certificate(
     now = int(time.time())
     connection_id = str(uuid.uuid4())
 
-    match action:
+    match data.action:
         case "shell":
             if model.grant.SSHCapability.SHELL not in decision.capabilities:
                 raise responses.ProblemHTTPException(responses.problem_response(status_code=403, title="Forbidden"))
@@ -123,7 +118,7 @@ def _issue_user_certificate(
                 public_key=public_key,
                 serial_number=serial_number,
                 identifier=f"{ctx.identity_id}:{caller.name}",
-                principals=[f"{username}@{host.id}"],
+                principals=[f"{data.username}@{host.id}"],
                 valid_after=now - 10,
                 valid_before=now + ctx.config.user_certificate_lifetime,
                 critical_options=ssh.cert.CriticalOptions(force_command=None),
@@ -146,7 +141,7 @@ def _issue_user_certificate(
                 public_key=public_key,
                 serial_number=serial_number,
                 identifier=f"{ctx.identity_id}:{caller.name}",
-                principals=[f"{username}@{host.id}"],
+                principals=[f"{data.username}@{host.id}"],
                 valid_after=now - 10,
                 valid_before=now + ctx.config.user_certificate_lifetime,
                 critical_options=ssh.cert.CriticalOptions(force_command=None),
@@ -162,11 +157,11 @@ def _issue_user_certificate(
                 signer=signer.key,
             )
         case "command":
-            if command is None:
+            if data.command is None:
                 raise responses.ProblemHTTPException(
                     responses.problem_response(status_code=400, title="command required for action=command")
                 )
-            command_decision = decision.commands.permits(command)
+            command_decision = decision.commands.permits(data.command)
             if command_decision is None:
                 raise responses.ProblemHTTPException(responses.problem_response(status_code=403, title="Forbidden"))
             deadline = grant.deadline(now, [command_decision.ttl])
@@ -174,10 +169,10 @@ def _issue_user_certificate(
                 public_key=public_key,
                 serial_number=serial_number,
                 identifier=f"{ctx.identity_id}:{caller.name}",
-                principals=[f"{username}@{host.id}"],
+                principals=[f"{data.username}@{host.id}"],
                 valid_after=now - 10,
                 valid_before=now + ctx.config.user_certificate_lifetime,
-                critical_options=ssh.cert.CriticalOptions(force_command=command),
+                critical_options=ssh.cert.CriticalOptions(force_command=data.command),
                 extensions=ssh.cert.Extensions(
                     permit_pty=False,
                     permit_user_rc=False,
@@ -200,7 +195,7 @@ def _issue_user_certificate(
     ctx.app_db.ssh_connection.create(
         connection_id=connection_id,
         identity_id=ctx.identity_id,
-        hostname=host.name,
+        hostname=data.hostname,
         deadline=deadline,
         valid_before=now + ctx.config.user_certificate_lifetime,
     )
@@ -210,7 +205,7 @@ def _issue_user_certificate(
         signing_key_id=signer.id,
         host_id=host.id,
         hostname=host.name,
-        username=username,
+        username=data.username,
         public_key=public_key.to_dict(),
         serial_number=cert.serial_number,
         principals=cert.principals,
@@ -220,86 +215,31 @@ def _issue_user_certificate(
         critical_options=cert.critical_options.to_dict(),
     )
 
-    logger.info(f"Generated certificate for username={username} action={action} connection_id={connection_id}")
+    logger.info(
+        f"Generated certificate for username={data.username} action={data.action} connection_id={connection_id}"
+    )
 
-    sessions = ctx.app_db.identity_session_key.read_all(identity_id=ctx.identity_id, is_revoked=False)
+    matching_bastions = model.bastion.read_matching()
+    bastion_schema_list: list[schemas.bastion.Bastion] = []
+
+    sessions = ctx.app_db.identity_session_key.read_all(
+        identity_id=ctx.identity_id,
+        is_revoked=False,
+    )
     ip_address_list = [s.login_ip for s in sessions if s.login_ip and s.logged_out_at is None and s.expires_at > now]
-    grant_converter = converters.GrantConverter()
-    bastion_list = [converters.bastion_to_schema(grant_converter, bastion) for bastion in model.bastion.read_matching()]
 
-    return _IssuedCertificate(
-        cert=cert,
+    if matching_bastions:
+        grant_converter = converters.GrantConverter()
+        for bastion in matching_bastions:
+            bastion_schema = converters.bastion_to_schema(grant_converter, bastion)
+            bastion_schema_list.append(bastion_schema)
+
+    return schemas.ssh.SSHUserCertificateResponse(
+        certificates=[converters.cert_to_schema(cert)],
         connection_id=connection_id,
-        deadline=deadline,
-        bastion_list=bastion_list,
+        bastion_list=bastion_schema_list,
         ip_address_list=ip_address_list,
     )
-
-
-@router.post(
-    "/user/certificate",
-    status_code=200,
-    dependencies=[fastapi.Depends(signature.verify_session)],
-    responses={400: responses.PROBLEM, 403: responses.PROBLEM, 404: responses.PROBLEM},
-)
-def sign_user_certificate(data: schemas.ssh.SSHUserCertificateRequest) -> schemas.ssh.SSHUserCertificateResponse:
-    caller = model.identity.read_one(id=ctx.identity_id)
-    assert caller is not None  # because we are authenticated
-    host = model.identity.read_one(name=data.hostname)
-    if host is None:
-        raise responses.ProblemHTTPException(responses.problem_response(status_code=404, title="Unknown host"))
-
-    issued = _issue_user_certificate(
-        caller=caller,
-        host=host,
-        username=data.username,
-        public_key=converters.public_from_schema(data.public_key),
-        action=data.action,
-        command=data.command,
-    )
-    return schemas.ssh.SSHUserCertificateResponse(
-        certificates=[converters.cert_to_schema(issued.cert)],
-        connection_id=issued.connection_id,
-        bastion_list=issued.bastion_list,
-        ip_address_list=issued.ip_address_list,
-    )
-
-
-@router.post(
-    "/user/shell-ticket",
-    status_code=200,
-    dependencies=[fastapi.Depends(signature.verify_session)],
-    responses={403: responses.PROBLEM, 404: responses.PROBLEM},
-)
-def issue_shell_ticket(
-    data: schemas.ssh.SSHShellTicketRequest, request: fastapi.Request
-) -> schemas.ssh.SSHShellTicketResponse:
-    caller = model.identity.read_one(id=ctx.identity_id)
-    assert caller is not None  # because we are authenticated
-    host = model.identity.read_one(name=data.hostname)
-    if host is None:
-        raise responses.ProblemHTTPException(responses.problem_response(status_code=404, title="Unknown host"))
-
-    user_key = jwk.Private.generate_ed25519()
-    issued = _issue_user_certificate(
-        caller=caller, host=host, username=data.username, public_key=user_key.public(), action="shell"
-    )
-
-    ticket_id = request.app.state.shell_ticket_store.issue(
-        shell_ticket.Ticket(
-            identity_id=caller.id,
-            active_role_id=ctx.active_role_id,
-            hostname=data.hostname,
-            username=data.username,
-            connection_id=issued.connection_id,
-            certificate=issued.cert.to_openssh(),
-            private_key=user_key,
-            bastion_list=issued.bastion_list,
-            deadline=issued.deadline,
-            expires_at=int(time.time()) + ctx.config.user_shell_ticket_lifetime,
-        )
-    )
-    return schemas.ssh.SSHShellTicketResponse(ticket=ticket_id)
 
 
 def _capability_entries(
@@ -383,8 +323,15 @@ def read_user_trusted_keys(request: fastapi.Request) -> fastapi.responses.Respon
 
 @router.get("/host/trusted-keys", status_code=200)
 def read_host_trusted_keys() -> fastapi.responses.Response:
+    now = int(time.time())
+    signing_keys = model.signing_key.read_all(
+        ctx.app_db.signing_key.columns.valid_before > now,
+        type=app_db.SigningKeyType.HOST,
+    )
+    trusted_keys = [b"@cert-authority * " + signing_key.key.public().to_openssh() for signing_key in signing_keys]
+
     return fastapi.responses.Response(
-        content=model.signing_key.read_host_trusted_keys_text(),
+        content=b"\n".join(trusted_keys),
         status_code=200,
         media_type="text/plain",
     )

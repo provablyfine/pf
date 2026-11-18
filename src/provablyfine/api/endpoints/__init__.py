@@ -16,7 +16,7 @@ from . import (
     role,
     session,
     ssh,
-    ssh_shell,
+    ssh_gateway,
     tag,
     tenant,
 )
@@ -39,7 +39,7 @@ __all__ = [
     "role",
     "session",
     "ssh",
-    "ssh_shell",
+    "ssh_gateway",
     "tag",
     "tenant",
 ]

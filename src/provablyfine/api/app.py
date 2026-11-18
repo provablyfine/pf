@@ -14,19 +14,7 @@ import pydantic
 import sqlalchemy
 import sqlalchemy.exc
 
-from . import (
-    config,
-    db,
-    dependencies,
-    endpoints,
-    jwt_validator,
-    middleware,
-    migrate,
-    registry_db,
-    responses,
-    shell_ticket,
-    signature,
-)
+from . import config, db, dependencies, endpoints, jwt_validator, middleware, migrate, registry_db, responses, signature
 
 logger = logging.getLogger(__name__)
 
@@ -142,7 +130,7 @@ def create(conf: config.Config) -> fastapi.FastAPI:
         app.state.kek = kek
         app.state.debug_store = _InMemoryDebugStore()
         app.state.nonce_store = signature.NonceStore()
-        app.state.shell_ticket_store = shell_ticket.ShellTicketStore()
+        app.state.gateway_sessions = endpoints.ssh_gateway.SessionCounter()
 
         with registry_engine.connect() as registry_conn:
             tenant_rows = registry_db.create(registry_conn).tenant.read_all()
@@ -242,7 +230,7 @@ def create(conf: config.Config) -> fastapi.FastAPI:
     fastapi_app.include_router(endpoints.role.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
     fastapi_app.include_router(endpoints.tag.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
     fastapi_app.include_router(endpoints.ssh.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
-    fastapi_app.include_router(endpoints.ssh_shell.router, prefix=_tenant_prefix)
+    fastapi_app.include_router(endpoints.ssh_gateway.router, prefix=_tenant_prefix)
     fastapi_app.include_router(endpoints.bastion.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
     fastapi_app.include_router(endpoints.tenant.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])
     fastapi_app.include_router(endpoints.live.router, prefix=_tenant_prefix, dependencies=[_tenant_dep])

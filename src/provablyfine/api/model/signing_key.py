@@ -1,5 +1,4 @@
 import json
-import time
 import typing
 
 from ... import jwk
@@ -50,13 +49,6 @@ def read_all(*args: typing.Any, **kwargs: typing.Any) -> list[DecryptedSigningKe
             )
         )
     return output
-
-
-def read_host_trusted_keys_text() -> bytes:
-    now = int(time.time())
-    signing_keys = read_all(ctx.app_db.signing_key.columns.valid_before > now, type=app_db.SigningKeyType.HOST)
-    trusted_keys = [b"@cert-authority * " + signing_key.key.public().to_openssh() for signing_key in signing_keys]
-    return b"\n".join(trusted_keys)
 
 
 _SERIAL_ATTEMPTS = 5
